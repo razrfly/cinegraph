@@ -13,9 +13,6 @@ defmodule Cinegraph.Movies.Movie do
     field :overview, :string
     field :tagline, :string
     field :original_language, :string
-    field :popularity, :float
-    field :vote_average, :float
-    field :vote_count, :integer
     field :budget, :integer
     field :revenue, :integer
     field :status, :string
@@ -44,10 +41,6 @@ defmodule Cinegraph.Movies.Movie do
     field :tmdb_fetched_at, :utc_datetime
     field :tmdb_last_updated, :utc_datetime
     
-    # CRI fields
-    field :cri_score, :float
-    field :cri_components, :map
-    field :cri_last_calculated, :utc_datetime
     
     # Associations
     has_many :credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
@@ -61,12 +54,11 @@ defmodule Cinegraph.Movies.Movie do
     movie
     |> cast(attrs, [
       :tmdb_id, :imdb_id, :title, :original_title, :release_date,
-      :runtime, :overview, :tagline, :original_language, :popularity,
-      :vote_average, :vote_count, :budget, :revenue, :status,
+      :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
       :adult, :homepage, :collection_id, :poster_path, :backdrop_path,
       :images, :genre_ids, :spoken_languages, :production_countries,
       :production_company_ids, :external_ids, :tmdb_raw_data, :tmdb_fetched_at, 
-      :tmdb_last_updated, :cri_score, :cri_components, :cri_last_calculated
+      :tmdb_last_updated
     ])
     |> validate_required([:tmdb_id, :title])
     |> unique_constraint(:tmdb_id)
@@ -88,9 +80,6 @@ defmodule Cinegraph.Movies.Movie do
       overview: attrs["overview"],
       tagline: attrs["tagline"],
       original_language: attrs["original_language"],
-      popularity: attrs["popularity"],
-      vote_average: attrs["vote_average"],
-      vote_count: attrs["vote_count"],
       budget: normalize_money_value(attrs["budget"]),
       revenue: normalize_money_value(attrs["revenue"]),
       status: attrs["status"],

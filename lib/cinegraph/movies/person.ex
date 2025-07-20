@@ -13,7 +13,6 @@ defmodule Cinegraph.Movies.Person do
     field :deathday, :date
     field :place_of_birth, :string
     field :biography, :string
-    field :popularity, :float
     field :known_for_department, :string
     field :adult, :boolean, default: false
     field :homepage, :string
@@ -30,11 +29,6 @@ defmodule Cinegraph.Movies.Person do
     field :tmdb_fetched_at, :utc_datetime
     field :tmdb_last_updated, :utc_datetime
     
-    # CRI influence metrics
-    field :influence_score, :float
-    field :career_longevity_score, :float
-    field :cross_cultural_impact, :float
-    
     # Associations
     has_many :credits, Cinegraph.Movies.Credit, foreign_key: :person_id
     many_to_many :movies, Cinegraph.Movies.Movie, join_through: Cinegraph.Movies.Credit
@@ -48,10 +42,9 @@ defmodule Cinegraph.Movies.Person do
     |> cast(attrs, [
       :tmdb_id, :imdb_id, :name, :also_known_as, :gender,
       :birthday, :deathday, :place_of_birth, :biography,
-      :popularity, :known_for_department, :adult, :homepage,
+      :known_for_department, :adult, :homepage,
       :profile_path, :images, :external_ids, :tmdb_raw_data,
-      :tmdb_fetched_at, :tmdb_last_updated, :influence_score,
-      :career_longevity_score, :cross_cultural_impact
+      :tmdb_fetched_at, :tmdb_last_updated
     ])
     |> validate_required([:tmdb_id, :name])
     |> unique_constraint(:tmdb_id)
@@ -73,7 +66,6 @@ defmodule Cinegraph.Movies.Person do
       deathday: parse_date(attrs["deathday"]),
       place_of_birth: attrs["place_of_birth"],
       biography: attrs["biography"],
-      popularity: attrs["popularity"],
       known_for_department: attrs["known_for_department"],
       adult: attrs["adult"],
       homepage: attrs["homepage"],
