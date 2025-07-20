@@ -34,6 +34,28 @@ cinegraph-*.tar
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
+/node_modules/
+/package-lock.json
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Test output
+/test_results.txt
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDE configuration
+.vscode/
+.idea/
+.elixir_ls/
+*.sublime-*
 
 # MCP configuration with API keys
 .mcp.json
