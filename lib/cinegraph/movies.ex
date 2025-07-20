@@ -8,6 +8,7 @@ defmodule Cinegraph.Movies do
   alias Cinegraph.Movies.{Movie, Person, Genre, Credit, Collection, Keyword, 
                          ProductionCompany, MovieVideo, MovieReleaseDate}
   alias Cinegraph.Services.TMDb
+  alias Cinegraph.ExternalSources
 
   @doc """
   Returns the list of movies.
@@ -66,12 +67,15 @@ defmodule Cinegraph.Movies do
   def fetch_and_store_movie_comprehensive(tmdb_id) do
     with {:ok, tmdb_data} <- TMDb.get_movie_comprehensive(tmdb_id),
          {:ok, movie} <- create_or_update_movie_from_tmdb(tmdb_data),
+         :ok <- ExternalSources.store_tmdb_ratings(movie, tmdb_data),
          :ok <- process_movie_credits(movie, tmdb_data["credits"]),
          :ok <- process_movie_keywords(movie, tmdb_data["keywords"]),
          :ok <- process_movie_videos(movie, tmdb_data["videos"]),
          :ok <- process_movie_release_dates(movie, tmdb_data["release_dates"]),
          :ok <- process_movie_collection(movie, tmdb_data["belongs_to_collection"]),
-         :ok <- process_movie_companies(movie, tmdb_data["production_companies"]) do
+         :ok <- process_movie_companies(movie, tmdb_data["production_companies"]),
+         :ok <- process_movie_recommendations(movie, tmdb_data["recommendations"]),
+         :ok <- process_movie_similar(movie, tmdb_data["similar"]) do
       {:ok, movie}
     end
   end
@@ -236,7 +240,7 @@ defmodule Cinegraph.Movies do
       # Create movie_keyword association
       Repo.insert_all(
         "movie_keywords",
-        [[movie_id: movie.id, keyword_id: keyword.id, inserted_at: DateTime.utc_now(), updated_at: DateTime.utc_now()]],
+        [[movie_id: movie.id, keyword_id: keyword.id]],
         on_conflict: :nothing
       )
     end)
@@ -344,5 +348,17 @@ defmodule Cinegraph.Movies do
          {:ok, person} <- create_or_update_person_from_tmdb(person_data) do
       {:ok, person}
     end
+  end
+
+  # Process recommendations and similar movies
+  
+  defp process_movie_recommendations(_movie, nil), do: :ok
+  defp process_movie_recommendations(movie, %{"results" => results}) do
+    ExternalSources.store_tmdb_recommendations(movie, results, "recommended")
+  end
+
+  defp process_movie_similar(_movie, nil), do: :ok
+  defp process_movie_similar(movie, %{"results" => results}) do
+    ExternalSources.store_tmdb_recommendations(movie, results, "similar")
   end
 end
