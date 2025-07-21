@@ -6,8 +6,15 @@ defmodule Cinegraph.ExternalSources do
 
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
-  alias Cinegraph.ExternalSources.{Source, Rating, Recommendation, Trending}
+  alias Cinegraph.ExternalSources.{Source, Rating, Recommendation}
   alias Cinegraph.Movies.Movie
+
+  @doc """
+  Lists all external sources.
+  """
+  def list_sources do
+    Repo.all(Source)
+  end
 
   @doc """
   Gets or creates an external source by name.

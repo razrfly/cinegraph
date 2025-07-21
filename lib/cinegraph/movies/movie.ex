@@ -46,6 +46,24 @@ defmodule Cinegraph.Movies.Movie do
     has_many :credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
     many_to_many :people, Cinegraph.Movies.Person, join_through: Cinegraph.Movies.Credit
     
+    # Keywords and Production Companies (many-to-many through join tables)
+    many_to_many :keywords, Cinegraph.Movies.Keyword, join_through: "movie_keywords", join_keys: [movie_id: :id, keyword_id: :id]
+    many_to_many :production_companies, Cinegraph.Movies.ProductionCompany, join_through: "movie_production_companies", join_keys: [movie_id: :id, production_company_id: :id]
+    
+    # Videos and Release Dates
+    has_many :videos, Cinegraph.Movies.MovieVideo, foreign_key: :movie_id
+    has_many :release_dates, Cinegraph.Movies.MovieReleaseDate, foreign_key: :movie_id
+    
+    # Cultural associations
+    has_many :movie_list_items, Cinegraph.Cultural.MovieListItem, foreign_key: :movie_id
+    has_many :curated_lists, through: [:movie_list_items, :list]
+    has_many :cri_scores, Cinegraph.Cultural.CRIScore, foreign_key: :movie_id
+    has_many :movie_data_changes, Cinegraph.Cultural.MovieDataChange, foreign_key: :movie_id
+    
+    # External data associations  
+    has_many :external_ratings, Cinegraph.ExternalSources.Rating, foreign_key: :movie_id
+    has_many :external_recommendations, Cinegraph.ExternalSources.Recommendation, foreign_key: :source_movie_id
+    
     timestamps()
   end
 
