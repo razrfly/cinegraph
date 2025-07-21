@@ -23,7 +23,7 @@ defmodule Cinegraph.ExternalSources.Rating do
     |> cast(attrs, [:movie_id, :source_id, :rating_type, :value, 
                     :scale_min, :scale_max, :sample_size, :metadata, :fetched_at])
     |> validate_required([:movie_id, :source_id, :rating_type, :value])
-    |> validate_inclusion(:rating_type, ["user", "critic", "algorithm", "popularity"])
+    |> validate_inclusion(:rating_type, ["user", "critic", "algorithm", "popularity", "engagement", "list_appearances", "box_office", "imdb_votes"])
     |> validate_number(:value, greater_than_or_equal_to: 0.0)
     |> validate_number(:scale_min, greater_than_or_equal_to: 0.0)
     |> validate_number(:scale_max, greater_than: 0.0)
