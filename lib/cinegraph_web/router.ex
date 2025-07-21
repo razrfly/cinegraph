@@ -18,6 +18,10 @@ defmodule CinegraphWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    
+    # Movie routes
+    live "/movies", MovieLive.Index, :index
+    live "/movies/:id", MovieLive.Show, :show
   end
 
   # Other scopes may use custom stacks.

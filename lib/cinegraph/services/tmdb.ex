@@ -5,6 +5,7 @@ defmodule Cinegraph.Services.TMDb do
   """
 
   alias Cinegraph.Services.TMDb.Client
+  alias Cinegraph.Services.TMDb.Extended
 
   @doc """
   Fetches detailed information about a specific movie by ID.
@@ -37,6 +38,34 @@ defmodule Cinegraph.Services.TMDb do
   def get_movie_comprehensive(movie_id) do
     append = "credits,images,keywords,external_ids,release_dates,videos,recommendations,similar,alternative_titles,translations"
     get_movie(movie_id, append_to_response: append)
+  end
+
+  @doc """
+  Fetches ultra-comprehensive movie data including critical missing data like watch providers.
+  """
+  def get_movie_ultra_comprehensive(movie_id) do
+    Extended.get_movie_ultra_comprehensive(movie_id)
+  end
+
+  @doc """
+  Gets watch provider information for a movie.
+  """
+  def get_movie_watch_providers(movie_id) do
+    Extended.get_movie_watch_providers(movie_id)
+  end
+
+  @doc """
+  Gets trending movies.
+  """
+  def get_trending_movies(time_window \\ "day", opts \\ []) do
+    Extended.get_trending_movies(time_window, opts)
+  end
+
+  @doc """
+  Enhanced movie discovery with all available filters.
+  """
+  def discover_movies_enhanced(opts \\ []) do
+    Extended.discover_movies_enhanced(opts)
   end
 
   @doc """

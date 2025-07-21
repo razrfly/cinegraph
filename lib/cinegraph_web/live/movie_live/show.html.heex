@@ -1,0 +1,555 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Navigation -->
+  <div class="mb-6">
+    <.link navigate={~p"/movies"} class="inline-flex items-center text-blue-600 hover:text-blue-800">
+      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to Movies
+    </.link>
+  </div>
+
+  <!-- DATA COLLECTION STATUS -->
+  <div class="bg-red-50 border border-red-200 rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-bold text-red-800 mb-4">⚠️ Data Collection Status</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_keywords, do: "text-green-600", else: "text-red-600"}"}>
+          <%= @movie.missing_data.keywords_count %>
+        </div>
+        <div class="text-sm text-gray-600">Keywords</div>
+      </div>
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_videos, do: "text-green-600", else: "text-red-600"}"}>
+          <%= @movie.missing_data.videos_count %>
+        </div>
+        <div class="text-sm text-gray-600">Videos</div>
+      </div>
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_credits, do: "text-green-600", else: "text-red-600"}"}>
+          <%= @movie.missing_data.credits_count %>
+        </div>
+        <div class="text-sm text-gray-600">Credits</div>
+      </div>
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_external_ratings, do: "text-green-600", else: "text-red-600"}"}>
+          <%= @movie.missing_data.external_ratings_count %>
+        </div>
+        <div class="text-sm text-gray-600">External Ratings</div>
+      </div>
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_release_dates, do: "text-green-600", else: "text-red-600"}"}>
+          <%= @movie.missing_data.release_dates_count %>
+        </div>
+        <div class="text-sm text-gray-600">Release Dates</div>
+      </div>
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_production_companies, do: "text-green-600", else: "text-red-600"}"}>
+          <%= @movie.missing_data.production_companies_count %>
+        </div>
+        <div class="text-sm text-gray-600">Production Cos</div>
+      </div>
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_external_ids, do: "text-green-600", else: "text-red-600"}"}>
+          <%= if @movie.missing_data.has_external_ids, do: "✓", else: "✗" %>
+        </div>
+        <div class="text-sm text-gray-600">External IDs</div>
+      </div>
+      <div class="text-center">
+        <div class={"text-2xl font-bold #{if @movie.missing_data.has_images, do: "text-green-600", else: "text-red-600"}"}>
+          <%= if @movie.missing_data.has_images, do: "✓", else: "✗" %>
+        </div>
+        <div class="text-sm text-gray-600">Image Gallery</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Movie Header -->
+  <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
+    <div class="md:flex">
+      <!-- Poster -->
+      <div class="md:w-80 flex-shrink-0">
+        <%= if @movie.poster_path do %>
+          <img 
+            src={Cinegraph.Movies.Movie.poster_url(@movie, "w500")} 
+            alt={@movie.title}
+            class="w-full h-full object-cover"
+          />
+        <% else %>
+          <div class="w-full h-96 md:h-full bg-gray-200 flex items-center justify-center">
+            <span class="text-gray-400 text-lg">No Poster</span>
+          </div>
+        <% end %>
+      </div>
+      
+      <!-- Movie Details -->
+      <div class="p-6 flex-1">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900"><%= @movie.title %></h1>
+            <%= if @movie.tagline do %>
+              <p class="text-lg text-gray-600 italic mt-2">"<%= @movie.tagline %>"</p>
+            <% end %>
+          </div>
+          <div class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+            TMDB: <%= @movie.tmdb_id %>
+          </div>
+        </div>
+        
+        <!-- Compact Info Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <%= if @movie.release_date do %>
+            <div class="bg-gray-50 rounded p-2">
+              <span class="text-gray-500">Release</span>
+              <p class="font-medium"><%= Calendar.strftime(@movie.release_date, "%Y") %></p>
+            </div>
+          <% end %>
+          
+          <%= if @movie.runtime do %>
+            <div class="bg-gray-50 rounded p-2">
+              <span class="text-gray-500">Runtime</span>
+              <p class="font-medium"><%= @movie.runtime %> min</p>
+            </div>
+          <% end %>
+          
+          <%= if @movie.budget && @movie.budget > 0 do %>
+            <div class="bg-gray-50 rounded p-2">
+              <span class="text-gray-500">Budget</span>
+              <p class="font-medium">$<%= div(@movie.budget, 1_000_000) %>M</p>
+            </div>
+          <% end %>
+          
+          <%= if @movie.revenue && @movie.revenue > 0 do %>
+            <div class="bg-gray-50 rounded p-2">
+              <span class="text-gray-500">Revenue</span>
+              <p class="font-medium">$<%= div(@movie.revenue, 1_000_000) %>M</p>
+            </div>
+          <% end %>
+        </div>
+        
+        <!-- Overview -->
+        <%= if @movie.overview do %>
+          <div class="mt-4">
+            <p class="text-gray-700 text-sm leading-relaxed"><%= @movie.overview %></p>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALL DATA SECTIONS -->
+  <div class="space-y-8">
+    
+    <!-- KEYWORDS -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Keywords (<%= length(@movie.keywords) %>)</h3>
+      <%= if length(@movie.keywords) > 0 do %>
+        <div class="flex flex-wrap gap-1.5">
+          <%= for keyword <- @movie.keywords do %>
+            <span class="inline-flex items-center px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+              <%= keyword.name %>
+            </span>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No keywords collected</p>
+      <% end %>
+    </div>
+
+    <!-- VIDEOS -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Videos (<%= length(@movie.videos) %>)</h3>
+      <%= if length(@movie.videos) > 0 do %>
+        <div class="space-y-2">
+          <%= for video <- Enum.take(@movie.videos, 5) do %>
+            <div class="flex items-center justify-between text-sm">
+              <span class="truncate flex-1"><%= video.name %></span>
+              <span class="text-gray-500 ml-2"><%= video.type %></span>
+            </div>
+          <% end %>
+          <%= if length(@movie.videos) > 5 do %>
+            <p class="text-xs text-gray-500 italic">...and <%= length(@movie.videos) - 5 %> more</p>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No videos collected</p>
+      <% end %>
+    </div>
+
+    <!-- RELEASE DATES -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Release Dates (<%= length(@movie.release_dates) %>)</h3>
+      <%= if length(@movie.release_dates) > 0 do %>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+          <%= for release <- Enum.take(@movie.release_dates, 8) do %>
+            <div class="flex items-center">
+              <span class="font-medium"><%= release.country_code %></span>
+              <%= if release.certification do %>
+                <span class="ml-2 px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">
+                  <%= release.certification %>
+                </span>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No release dates collected</p>
+      <% end %>
+    </div>
+
+    <!-- PRODUCTION COMPANIES -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Production Companies (<%= length(@movie.production_companies) %>)</h3>
+      <%= if length(@movie.production_companies) > 0 do %>
+        <div class="flex flex-wrap gap-2">
+          <%= for company <- @movie.production_companies do %>
+            <span class="text-sm">
+              <%= company.name %><%= if company.origin_country, do: " (#{company.origin_country})" %>
+            </span>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No production companies collected</p>
+      <% end %>
+    </div>
+
+    <!-- IMAGE GALLERY -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Image Gallery</h3>
+      <%= if @movie.images && map_size(@movie.images) > 0 do %>
+        <div class="space-y-4">
+          <%= if @movie.images["backdrops"] && length(@movie.images["backdrops"]) > 0 do %>
+            <div>
+              <h4 class="text-sm font-medium text-gray-700 mb-2">Backdrops (<%= length(@movie.images["backdrops"]) %>)</h4>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <%= for backdrop <- Enum.take(@movie.images["backdrops"], 6) do %>
+                  <img 
+                    src={"https://image.tmdb.org/t/p/w300#{backdrop["file_path"]}"}
+                    alt="Backdrop"
+                    class="w-full h-auto rounded shadow-sm"
+                  />
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+          
+          <%= if @movie.images["posters"] && length(@movie.images["posters"]) > 0 do %>
+            <div>
+              <h4 class="text-sm font-medium text-gray-700 mb-2">Posters (<%= length(@movie.images["posters"]) %>)</h4>
+              <div class="grid grid-cols-3 md:grid-cols-4 gap-2">
+                <%= for poster <- Enum.take(@movie.images["posters"], 4) do %>
+                  <img 
+                    src={"https://image.tmdb.org/t/p/w200#{poster["file_path"]}"}
+                    alt="Poster"
+                    class="w-full h-auto rounded shadow-sm"
+                  />
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No images collected</p>
+      <% end %>
+    </div>
+
+    <!-- CREDITS -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <!-- Cast -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="text-lg font-bold text-gray-900 mb-3">Cast (<%= length(@movie.cast) %>)</h3>
+        <%= if length(@movie.cast) > 0 do %>
+          <div class="space-y-1 max-h-64 overflow-y-auto text-sm">
+            <%= for cast_member <- Enum.take(@movie.cast, 10) do %>
+              <div class="flex justify-between">
+                <span class="font-medium"><%= cast_member.person.name %></span>
+                <%= if cast_member.character do %>
+                  <span class="text-gray-500 text-xs"><%= String.slice(cast_member.character, 0, 30) %></span>
+                <% end %>
+              </div>
+            <% end %>
+            <%= if length(@movie.cast) > 10 do %>
+              <p class="text-xs text-gray-500 italic pt-2">...and <%= length(@movie.cast) - 10 %> more</p>
+            <% end %>
+          </div>
+        <% else %>
+          <p class="text-red-600 text-sm">❌ No cast data collected</p>
+        <% end %>
+      </div>
+      
+      <!-- Crew -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h3 class="text-lg font-bold text-gray-900 mb-3">Key Crew</h3>
+        <%= if length(@movie.crew) > 0 do %>
+          <div class="space-y-1 text-sm">
+            <%= for crew_member <- @movie.crew |> Enum.filter(& &1.job in ["Director", "Producer", "Screenplay", "Writer", "Director of Photography", "Composer"]) |> Enum.take(8) do %>
+              <div class="flex justify-between">
+                <span class="font-medium"><%= crew_member.person.name %></span>
+                <span class="text-gray-500 text-xs"><%= crew_member.job %></span>
+              </div>
+            <% end %>
+          </div>
+        <% else %>
+          <p class="text-red-600 text-sm">❌ No crew data collected</p>
+        <% end %>
+      </div>
+    </div>
+
+    <!-- CRI SCORE DETAILS -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Cultural Relevance Index (CRI)</h3>
+      <%= if @movie.cri_score do %>
+        <div class="flex items-center justify-between mb-4">
+          <div class="text-3xl font-bold text-blue-600">
+            <%= Float.round(@movie.cri_score.score, 1) %><span class="text-lg text-gray-500">/100</span>
+          </div>
+          <div class="text-xs text-gray-500">
+            Updated <%= Calendar.strftime(@movie.cri_score.calculated_at, "%m/%d/%Y") %>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <%= for {component, score} <- @movie.cri_score.components do %>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-600 w-24">
+                <%= String.replace(to_string(component), "_", " ") |> String.capitalize() %>
+              </span>
+              <div class="flex-1 bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-600 h-2 rounded-full" style={"width: #{score * 100}%"}></div>
+              </div>
+              <span class="text-xs font-medium w-10 text-right"><%= round(score * 100) %>%</span>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No CRI score calculated</p>
+      <% end %>
+    </div>
+    
+    <!-- CULTURAL LISTS DETAILS -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Cultural Lists & Awards</h3>
+      <%= if length(@movie.cultural_lists) > 0 do %>
+        <div class="space-y-2">
+          <%= for list_item <- @movie.cultural_lists do %>
+            <div class="border border-gray-200 rounded p-3">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h4 class="font-medium text-sm">
+                    <%= list_item.list.name %>
+                    <%= if list_item.list.year do %>
+                      (<%= list_item.list.year %>)
+                    <% end %>
+                  </h4>
+                  <p class="text-xs text-gray-600">Authority: <%= list_item.list.authority.name %></p>
+                  
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    <%= if list_item.rank do %>
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">
+                        #<%= list_item.rank %>
+                      </span>
+                    <% end %>
+                    
+                    <%= if list_item.award_category do %>
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-100 text-purple-800">
+                        <%= list_item.award_category %>
+                      </span>
+                    <% end %>
+                    
+                    <%= if list_item.award_result do %>
+                      <span class={"inline-flex items-center px-1.5 py-0.5 rounded text-xs #{if list_item.award_result == "winner", do: "bg-green-100 text-green-800", else: "bg-blue-100 text-blue-800"}"}>
+                        <%= String.capitalize(list_item.award_result) %>
+                      </span>
+                    <% end %>
+                  </div>
+                </div>
+                
+                <div class="text-right">
+                  <%= if list_item.list.prestige_score do %>
+                    <span class="text-xs text-gray-500">Prestige: <%= list_item.list.prestige_score %></span>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No cultural list data</p>
+      <% end %>
+    </div>
+    
+    
+    <!-- EXTERNAL RATINGS -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">External Ratings</h3>
+      <%= if length(@movie.external_ratings) > 0 do %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
+                <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Votes/Reviews</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for rating <- @movie.external_ratings do %>
+                <tr>
+                  <td class="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <div><%= rating.metadata["source_name"] || rating.source.name %></div>
+                    <div class="text-xs text-gray-500">via <%= rating.source.name %></div>
+                  </td>
+                  <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                    <%= case rating.rating_type do %>
+                      <% "user" -> %>User Score
+                      <% "critic" -> %>Critic Score
+                      <% "popularity" -> %>Popularity
+                      <% "engagement" -> %>Engagement
+                      <% _ -> %><%= String.capitalize(rating.rating_type) %>
+                    <% end %>
+                  </td>
+                  <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-semibold">
+                    <%= cond do %>
+                      <% rating.rating_type == "engagement" -> %>
+                        $<%= Float.round(rating.value / 1_000_000, 1) %>M
+                      <% rating.rating_type == "popularity" -> %>
+                        <%= Float.round(rating.value / 1000, 0) %>K votes
+                      <% rating.scale_max == 100.0 -> %>
+                        <%= round(rating.value) %>%
+                      <% true -> %>
+                        <%= rating.value %>/<%= round(rating.scale_max) %>
+                    <% end %>
+                  </td>
+                  <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 text-right">
+                    <%= cond do %>
+                      <% rating.sample_size -> %>
+                        <%= rating.sample_size |> to_string() |> String.replace(~r/\B(?=(\d{3})+(?!\d))/, ",") %>
+                      <% rating.metadata["total_reviews"] -> %>
+                        <%= rating.metadata["total_reviews"] %> reviews
+                      <% rating.metadata["review_count"] -> %>
+                        <%= rating.metadata["review_count"] |> to_string() |> String.replace(~r/\B(?=(\d{3})+(?!\d))/, ",") %> reviews
+                      <% true -> %>
+                        -
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No external ratings collected</p>
+      <% end %>
+    </div>
+    
+    <!-- AWARDS -->
+    <div class="bg-white rounded-lg shadow p-4">
+      <h3 class="text-lg font-bold text-gray-900 mb-3">Awards & Recognition</h3>
+      <%= if @movie.external_ids && @movie.external_ids["omdb_awards"] do %>
+        <% awards = @movie.external_ids["omdb_awards"] %>
+        <div class="space-y-4">
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p class="text-lg font-medium text-gray-900 mb-2"><%= awards["raw_text"] %></p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
+              <%= if awards["has_oscars"] do %>
+                <div class="text-center">
+                  <div class="text-2xl font-bold text-yellow-600">
+                    <%= awards["oscar_wins"] %>
+                  </div>
+                  <div class="text-sm text-gray-600">Oscar Wins</div>
+                </div>
+              <% end %>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-green-600">
+                  <%= awards["total_wins"] %>
+                </div>
+                <div class="text-sm text-gray-600">Total Wins</div>
+              </div>
+              <div class="text-center">
+                <div class="text-2xl font-bold text-blue-600">
+                  <%= awards["total_nominations"] %>
+                </div>
+                <div class="text-sm text-gray-600">Nominations</div>
+              </div>
+              <%= if awards["has_oscars"] && awards["oscar_wins"] == 0 do %>
+                <div class="text-center">
+                  <div class="text-2xl font-bold text-gray-500">
+                    ✓
+                  </div>
+                  <div class="text-sm text-gray-600">Oscar Nominated</div>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% else %>
+        <p class="text-red-600 text-sm">❌ No awards data collected</p>
+      <% end %>
+    </div>
+    
+    <!-- RAW DATA -->
+    <details class="bg-gray-100 rounded-lg p-4">
+      <summary class="cursor-pointer font-bold text-gray-900">Raw Database Fields</summary>
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div>
+          <h4 class="font-medium mb-2">Basic Fields:</h4>
+          <dl class="space-y-1">
+            <dt class="inline text-gray-600">ID:</dt>
+            <dd class="inline font-mono"><%= @movie.id %></dd>
+            <br>
+            <dt class="inline text-gray-600">TMDB ID:</dt>
+            <dd class="inline font-mono"><%= @movie.tmdb_id %></dd>
+            <br>
+            <dt class="inline text-gray-600">IMDb ID:</dt>
+            <dd class="inline font-mono"><%= @movie.imdb_id || "NULL" %></dd>
+            <br>
+            <dt class="inline text-gray-600">Adult:</dt>
+            <dd class="inline font-mono"><%= @movie.adult %></dd>
+            <br>
+            <dt class="inline text-gray-600">Collection ID:</dt>
+            <dd class="inline font-mono"><%= @movie.collection_id || "NULL" %></dd>
+          </dl>
+        </div>
+        <div>
+          <h4 class="font-medium mb-2">JSON Fields:</h4>
+          <dl class="space-y-1">
+            <dt class="text-gray-600">External IDs:</dt>
+            <dd class="font-mono text-xs">
+              <%= if @movie.external_ids && map_size(@movie.external_ids) > 0 do %>
+                <%= map_size(@movie.external_ids) %> IDs
+              <% else %>
+                None
+              <% end %>
+            </dd>
+            <dt class="text-gray-600">Genre IDs:</dt>
+            <dd class="font-mono text-xs">
+              <%= if @movie.genre_ids, do: length(@movie.genre_ids), else: 0 %> genres
+            </dd>
+            <dt class="text-gray-600">Production Countries:</dt>
+            <dd class="font-mono text-xs">
+              <%= if @movie.production_countries, do: length(@movie.production_countries), else: 0 %> countries
+            </dd>
+            <dt class="text-gray-600">Spoken Languages:</dt>
+            <dd class="font-mono text-xs">
+              <%= if @movie.spoken_languages, do: length(@movie.spoken_languages), else: 0 %> languages
+            </dd>
+          </dl>
+        </div>
+      </div>
+      <div class="mt-4">
+        <h4 class="font-medium mb-2 text-xs">Timestamps:</h4>
+        <dl class="text-xs space-y-1">
+          <dt class="inline text-gray-600">TMDB Fetched:</dt>
+          <dd class="inline font-mono">
+            <%= if @movie.tmdb_fetched_at, do: Calendar.strftime(@movie.tmdb_fetched_at, "%Y-%m-%d %H:%M"), else: "NULL" %>
+          </dd>
+          <br>
+          <dt class="inline text-gray-600">Updated:</dt>
+          <dd class="inline font-mono">
+            <%= Calendar.strftime(@movie.updated_at, "%Y-%m-%d %H:%M") %>
+          </dd>
+        </dl>
+      </div>
+    </details>
+  </div>
+</div>
