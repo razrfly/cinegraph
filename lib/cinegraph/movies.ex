@@ -65,7 +65,7 @@ defmodule Cinegraph.Movies do
   Fetches a movie from TMDB and stores it in the database with all related data.
   """
   def fetch_and_store_movie_comprehensive(tmdb_id) do
-    with {:ok, tmdb_data} <- TMDb.get_movie_comprehensive(tmdb_id),
+    with {:ok, tmdb_data} <- TMDb.get_movie_ultra_comprehensive(tmdb_id),
          {:ok, movie} <- create_or_update_movie_from_tmdb(tmdb_data),
          :ok <- ExternalSources.store_tmdb_ratings(movie, tmdb_data),
          :ok <- process_movie_credits(movie, tmdb_data["credits"]),
@@ -75,7 +75,9 @@ defmodule Cinegraph.Movies do
          :ok <- process_movie_collection(movie, tmdb_data["belongs_to_collection"]),
          :ok <- process_movie_companies(movie, tmdb_data["production_companies"]),
          :ok <- process_movie_recommendations(movie, tmdb_data["recommendations"]),
-         :ok <- process_movie_similar(movie, tmdb_data["similar"]) do
+         :ok <- process_movie_similar(movie, tmdb_data["similar"]),
+         :ok <- process_movie_reviews(movie, tmdb_data["reviews"]),
+         :ok <- process_movie_lists(movie, tmdb_data["lists"]) do
       {:ok, movie}
     end
   end
@@ -193,6 +195,52 @@ defmodule Cinegraph.Movies do
     |> where([c], c.person_id == ^person_id)
     |> preload(:movie)
     |> Repo.all()
+  end
+
+  @doc """
+  Gets movie keywords.
+  """
+  def get_movie_keywords(movie_id) do
+    movie = Repo.get(Movie, movie_id)
+    if movie do
+      movie
+      |> Repo.preload(:keywords)
+      |> Map.get(:keywords, [])
+    else
+      []
+    end
+  end
+
+  @doc """
+  Gets movie videos.
+  """
+  def get_movie_videos(movie_id) do
+    MovieVideo
+    |> where([v], v.movie_id == ^movie_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets movie release dates.
+  """
+  def get_movie_release_dates(movie_id) do
+    MovieReleaseDate
+    |> where([rd], rd.movie_id == ^movie_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets movie production companies.
+  """
+  def get_movie_production_companies(movie_id) do
+    movie = Repo.get(Movie, movie_id)
+    if movie do
+      movie
+      |> Repo.preload(:production_companies)
+      |> Map.get(:production_companies, [])
+    else
+      []
+    end
   end
 
   # Processing functions for comprehensive movie data
@@ -360,5 +408,102 @@ defmodule Cinegraph.Movies do
   defp process_movie_similar(_movie, nil), do: :ok
   defp process_movie_similar(movie, %{"results" => results}) do
     ExternalSources.store_tmdb_recommendations(movie, results, "similar")
+  end
+
+  defp process_movie_watch_providers(_movie, nil), do: :ok
+  defp process_movie_watch_providers(movie, %{"results" => providers}) do
+    # Store watch provider data
+    # TODO: Create schema and storage for watch providers
+    IO.puts("📺 Watch providers available in #{map_size(providers)} regions")
+    :ok
+  end
+
+  defp process_movie_reviews(_movie, nil), do: :ok
+  defp process_movie_reviews(movie, %{"results" => reviews}) do
+    # Store review count as engagement metric
+    review_count = length(reviews)
+    
+    # Calculate average rating if reviews have ratings
+    avg_rating = if review_count > 0 do
+      ratings = reviews 
+        |> Enum.filter(& &1["author_details"]["rating"])
+        |> Enum.map(& &1["author_details"]["rating"])
+      
+      if length(ratings) > 0 do
+        Enum.sum(ratings) / length(ratings)
+      else
+        nil
+      end
+    else
+      nil
+    end
+    
+    # Store as external rating
+    with {:ok, source} <- ExternalSources.get_or_create_source("tmdb") do
+      ExternalSources.upsert_rating(%{
+        movie_id: movie.id,
+        source_id: source.id,
+        rating_type: "engagement",
+        value: review_count,
+        scale_min: 0.0,
+        scale_max: 1000.0,  # Arbitrary max for count
+        sample_size: review_count,
+        metadata: %{
+          "average_rating" => avg_rating,
+          "rated_reviews" => length(Enum.filter(reviews, & &1["author_details"]["rating"]))
+        },
+        fetched_at: DateTime.utc_now()
+      })
+    end
+    
+    :ok
+  end
+
+  defp process_movie_lists(_movie, nil), do: :ok
+  defp process_movie_lists(movie, %{"results" => lists}) do
+    # Store list appearances as popularity metric
+    list_count = length(lists)
+    
+    # Count lists that might be culturally relevant
+    cultural_lists = lists |> Enum.filter(fn list ->
+      name = String.downcase(list["name"] || "")
+      String.contains?(name, ["award", "oscar", "academy", "cannes", "criterion", 
+                             "afi", "best", "greatest", "top", "essential", "classic"])
+    end)
+    
+    with {:ok, source} <- ExternalSources.get_or_create_source("tmdb") do
+      ExternalSources.upsert_rating(%{
+        movie_id: movie.id,
+        source_id: source.id,
+        rating_type: "list_appearances",
+        value: list_count,
+        scale_min: 0.0,
+        scale_max: 10000.0,  # Arbitrary max for count
+        sample_size: list_count,
+        metadata: %{
+          "cultural_list_count" => length(cultural_lists),
+          "cultural_list_names" => Enum.take(Enum.map(cultural_lists, & &1["name"]), 10)
+        },
+        fetched_at: DateTime.utc_now()
+      })
+    end
+    
+    :ok
+  end
+
+  defp process_movie_alternative_titles(_movie, nil), do: :ok
+  defp process_movie_alternative_titles(movie, %{"titles" => titles}) do
+    # Store alternative titles by country
+    # TODO: Create schema and storage for alternative titles
+    IO.puts("🌍 Found #{length(titles)} alternative titles")
+    :ok
+  end
+
+  defp process_movie_translations(_movie, nil), do: :ok
+  defp process_movie_translations(movie, %{"translations" => translations}) do
+    # Store translation data
+    # TODO: Create schema and storage for translations
+    IO.puts("🌐 Available in #{length(translations)} languages")
+    :ok
   end
 end
