@@ -34,7 +34,6 @@ defmodule CinegraphWeb.MovieLive.Show do
     
     # Load cultural data
     cultural_lists = Cultural.get_list_movies_for_movie(id)
-    latest_cri_score = Cultural.get_latest_cri_score(id)
     
     # Load external sources data
     external_ratings = ExternalSources.get_movie_ratings(id)
@@ -44,9 +43,6 @@ defmodule CinegraphWeb.MovieLive.Show do
     videos = Movies.get_movie_videos(id)
     release_dates = Movies.get_movie_release_dates(id)
     production_companies = Movies.get_movie_production_companies(id)
-    
-    # Load all authorities
-    all_authorities = Cultural.list_authorities()
     
     # Load all external sources
     all_external_sources = ExternalSources.list_sources()
@@ -72,13 +68,11 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:crew, crew) 
     |> Map.put(:directors, directors)
     |> Map.put(:cultural_lists, cultural_lists)
-    |> Map.put(:cri_score, latest_cri_score)
     |> Map.put(:external_ratings, external_ratings)
     |> Map.put(:keywords, keywords)
     |> Map.put(:videos, videos)
     |> Map.put(:release_dates, release_dates)
     |> Map.put(:production_companies, production_companies)
-    |> Map.put(:all_authorities, all_authorities)
     |> Map.put(:all_external_sources, all_external_sources)
     |> Map.put(:missing_data, missing_data)
   end
