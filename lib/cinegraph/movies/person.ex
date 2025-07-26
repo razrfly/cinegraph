@@ -7,7 +7,6 @@ defmodule Cinegraph.Movies.Person do
     field :tmdb_id, :integer
     field :imdb_id, :string
     field :name, :string
-    field :also_known_as, {:array, :string}, default: []
     field :gender, :integer
     field :birthday, :date
     field :deathday, :date
@@ -15,19 +14,10 @@ defmodule Cinegraph.Movies.Person do
     field :biography, :string
     field :known_for_department, :string
     field :adult, :boolean, default: false
-    field :homepage, :string
+    field :popularity, :float
     
     # Images
     field :profile_path, :string
-    field :images, :map, default: %{}
-    
-    # External IDs
-    field :external_ids, :map, default: %{}
-    
-    # Metadata
-    field :tmdb_raw_data, :map
-    field :tmdb_fetched_at, :utc_datetime
-    field :tmdb_last_updated, :utc_datetime
     
     # Associations
     has_many :credits, Cinegraph.Movies.Credit, foreign_key: :person_id
@@ -40,11 +30,9 @@ defmodule Cinegraph.Movies.Person do
   def changeset(person, attrs) do
     person
     |> cast(attrs, [
-      :tmdb_id, :imdb_id, :name, :also_known_as, :gender,
+      :tmdb_id, :imdb_id, :name, :gender,
       :birthday, :deathday, :place_of_birth, :biography,
-      :known_for_department, :adult, :homepage,
-      :profile_path, :images, :external_ids, :tmdb_raw_data,
-      :tmdb_fetched_at, :tmdb_last_updated
+      :known_for_department, :adult, :popularity, :profile_path
     ])
     |> validate_required([:tmdb_id, :name])
     |> unique_constraint(:tmdb_id)
@@ -54,13 +42,10 @@ defmodule Cinegraph.Movies.Person do
   Creates a changeset from TMDB API response data
   """
   def from_tmdb(attrs) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-    
     person_attrs = %{
       tmdb_id: attrs["id"],
       imdb_id: attrs["imdb_id"],
       name: attrs["name"],
-      also_known_as: attrs["also_known_as"] || [],
       gender: attrs["gender"],
       birthday: parse_date(attrs["birthday"]),
       deathday: parse_date(attrs["deathday"]),
@@ -68,12 +53,8 @@ defmodule Cinegraph.Movies.Person do
       biography: attrs["biography"],
       known_for_department: attrs["known_for_department"],
       adult: attrs["adult"],
-      homepage: attrs["homepage"],
-      profile_path: attrs["profile_path"],
-      external_ids: attrs["external_ids"] || %{},
-      tmdb_raw_data: attrs,
-      tmdb_fetched_at: now,
-      tmdb_last_updated: now
+      popularity: attrs["popularity"],
+      profile_path: attrs["profile_path"]
     }
     
     changeset(%__MODULE__{}, person_attrs)

@@ -38,53 +38,51 @@ defmodule Cinegraph.Services.OMDb.Transformer do
   """
   def transform_to_ratings(omdb_data, movie_id, source_id) do
     # Parse Ratings array
-    ratings = parse_ratings_array(omdb_data["Ratings"] || [], movie_id, source_id)
+    base_ratings = parse_ratings_array(omdb_data["Ratings"] || [], movie_id, source_id)
     
     # Add IMDb votes as a rating
-    if imdb_votes = parse_imdb_votes(omdb_data["imdbVotes"]) do
-      ratings = ratings ++ [
-        %{
-          movie_id: movie_id,
-          source_id: source_id,
-          rating_type: "popularity",
-          value: imdb_votes,
-          scale_min: 0.0,
-          scale_max: 10_000_000.0,
-          metadata: %{
-            "source_name" => "IMDb",
-            "metric" => "vote_count",
-            "raw_value" => omdb_data["imdbVotes"]
-          },
-          fetched_at: DateTime.utc_now()
-        }
-      ]
+    imdb_votes_rating = if imdb_votes = parse_imdb_votes(omdb_data["imdbVotes"]) do
+      [%{
+        movie_id: movie_id,
+        source_id: source_id,
+        rating_type: "popularity",
+        value: imdb_votes,
+        scale_min: 0.0,
+        scale_max: 10_000_000.0,
+        metadata: %{
+          "source_name" => "IMDb",
+          "metric" => "vote_count",
+          "raw_value" => omdb_data["imdbVotes"]
+        },
+        fetched_at: DateTime.utc_now()
+      }]
+    else
+      []
     end
     
     # Add Box Office if available
-    if box_office = parse_box_office(omdb_data["BoxOffice"]) do
-      ratings = ratings ++ [
-        %{
-          movie_id: movie_id,
-          source_id: source_id,
-          rating_type: "engagement",
-          value: box_office,
-          scale_min: 0.0,
-          scale_max: 1_000_000_000.0,
-          metadata: %{
-            "source_name" => "Box Office",
-            "currency" => "USD",
-            "market" => "domestic",
-            "raw_value" => omdb_data["BoxOffice"]
-          },
-          fetched_at: DateTime.utc_now()
-        }
-      ]
+    box_office_rating = if box_office = parse_box_office(omdb_data["BoxOffice"]) do
+      [%{
+        movie_id: movie_id,
+        source_id: source_id,
+        rating_type: "engagement",
+        value: box_office,
+        scale_min: 0.0,
+        scale_max: 1_000_000_000.0,
+        metadata: %{
+          "source_name" => "Box Office",
+          "currency" => "USD",
+          "market" => "domestic",
+          "raw_value" => omdb_data["BoxOffice"]
+        },
+        fetched_at: DateTime.utc_now()
+      }]
+    else
+      []
     end
     
-    # Add Rotten Tomatoes extended data if available
-    ratings = ratings ++ parse_tomato_data(omdb_data, movie_id, source_id)
-    
-    ratings
+    # Combine all ratings
+    base_ratings ++ imdb_votes_rating ++ box_office_rating ++ parse_tomato_data(omdb_data, movie_id, source_id)
   end
   
   defp parse_ratings_array(ratings_array, movie_id, source_id) do
@@ -175,7 +173,6 @@ defmodule Cinegraph.Services.OMDb.Transformer do
           value: tomato_meter,
           scale_min: 0.0,
           scale_max: 100.0,
-          sample_size: metadata["total_reviews"],
           metadata: metadata,
           fetched_at: DateTime.utc_now()
         }]
@@ -198,7 +195,6 @@ defmodule Cinegraph.Services.OMDb.Transformer do
           value: user_meter,
           scale_min: 0.0,
           scale_max: 100.0,
-          sample_size: metadata["review_count"],
           metadata: metadata,
           fetched_at: DateTime.utc_now()
         }]

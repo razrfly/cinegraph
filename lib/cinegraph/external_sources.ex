@@ -105,7 +105,7 @@ defmodule Cinegraph.ExternalSources do
       join: m in assoc(r, :recommended_movie),
       join: s in assoc(r, :source),
       where: r.source_movie_id == ^movie_id and r.score >= ^min_score,
-      order_by: [desc: r.score, asc: r.rank],
+      order_by: [desc: r.score],
       limit: ^limit,
       preload: [recommended_movie: m, source: s]
     )
@@ -184,7 +184,7 @@ defmodule Cinegraph.ExternalSources do
     with {:ok, source} <- get_or_create_source("tmdb") do
       recommendations_data
       |> Enum.with_index(1)
-      |> Enum.each(fn {rec_data, rank} ->
+      |> Enum.each(fn {rec_data, _rank} ->
         # First ensure the recommended movie exists
         case Repo.get_by(Movie, tmdb_id: rec_data["id"]) do
           nil ->
@@ -197,8 +197,7 @@ defmodule Cinegraph.ExternalSources do
               source_id: source.id,
               recommendation_type: recommendation_type,
               score: rec_data["vote_average"] || 0.0,
-              rank: rank,
-              algorithm_data: %{
+              metadata: %{
                 "popularity" => rec_data["popularity"],
                 "vote_count" => rec_data["vote_count"]
               },
