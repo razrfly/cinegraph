@@ -9,8 +9,7 @@ defmodule Cinegraph.ExternalSources.Recommendation do
     
     field :recommendation_type, :string
     field :score, :float
-    field :rank, :integer
-    field :algorithm_data, :map, default: %{}
+    field :metadata, :map, default: %{}
     field :fetched_at, :utc_datetime
     
     timestamps()
@@ -20,11 +19,10 @@ defmodule Cinegraph.ExternalSources.Recommendation do
   def changeset(recommendation, attrs) do
     recommendation
     |> cast(attrs, [:source_movie_id, :recommended_movie_id, :source_id,
-                    :recommendation_type, :score, :rank, :algorithm_data, :fetched_at])
+                    :recommendation_type, :score, :metadata, :fetched_at])
     |> validate_required([:source_movie_id, :recommended_movie_id, :source_id, :recommendation_type])
     |> validate_inclusion(:recommendation_type, ["similar", "recommended"])
     |> validate_number(:score, greater_than_or_equal_to: 0.0)
-    |> validate_number(:rank, greater_than: 0)
     |> foreign_key_constraint(:source_movie_id)
     |> foreign_key_constraint(:recommended_movie_id)
     |> foreign_key_constraint(:source_id)

@@ -6,9 +6,9 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
     belongs_to :movie, Cinegraph.Movies.Movie
     
     field :country_code, :string
-    field :release_date, :utc_datetime
+    field :release_date, :naive_datetime
     field :certification, :string
-    field :type, :integer
+    field :release_type, :integer
     field :note, :string
     
     timestamps()
@@ -17,10 +17,10 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
   @doc false
   def changeset(release_date, attrs) do
     release_date
-    |> cast(attrs, [:movie_id, :country_code, :release_date, :certification, :type, :note])
+    |> cast(attrs, [:movie_id, :country_code, :release_date, :certification, :release_type, :note])
     |> validate_required([:movie_id, :country_code])
-    |> validate_inclusion(:type, 1..6)
-    |> unique_constraint([:movie_id, :country_code, :type])
+    |> validate_inclusion(:release_type, 1..6)
+    |> unique_constraint([:movie_id, :country_code, :release_type])
     |> foreign_key_constraint(:movie_id)
   end
 
@@ -37,7 +37,7 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
         country_code: country_code,
         release_date: parse_datetime(release["release_date"]),
         certification: release["certification"],
-        type: release["type"],
+        release_type: release["type"],
         note: release["note"]
       }
       
@@ -47,9 +47,14 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
 
   defp parse_datetime(nil), do: nil
   defp parse_datetime(datetime_string) do
-    case DateTime.from_iso8601(datetime_string) do
-      {:ok, datetime, _} -> datetime
-      {:error, _} -> nil
+    case NaiveDateTime.from_iso8601(datetime_string) do
+      {:ok, datetime} -> datetime
+      {:error, _} -> 
+        # Try parsing as date only
+        case Date.from_iso8601(datetime_string) do
+          {:ok, date} -> NaiveDateTime.new!(date, ~T[00:00:00])
+          {:error, _} -> nil
+        end
     end
   end
 end

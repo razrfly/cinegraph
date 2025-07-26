@@ -18,6 +18,9 @@ defmodule Cinegraph.Movies.Movie do
     field :status, :string
     field :adult, :boolean, default: false
     field :homepage, :string
+    field :vote_average, :float
+    field :vote_count, :integer
+    field :popularity, :float
     
     # Collection/Franchise
     field :collection_id, :integer
@@ -25,25 +28,13 @@ defmodule Cinegraph.Movies.Movie do
     # Images
     field :poster_path, :string
     field :backdrop_path, :string
-    field :images, :map, default: %{}
     
-    # Arrays
-    field :genre_ids, {:array, :integer}, default: []
-    field :spoken_languages, {:array, :string}, default: []
-    field :production_countries, {:array, :string}, default: []
-    field :production_company_ids, {:array, :integer}, default: []
-    
-    # External IDs
-    field :external_ids, :map, default: %{}
-    
-    # Metadata
-    field :tmdb_raw_data, :map
-    field :tmdb_fetched_at, :utc_datetime
-    field :tmdb_last_updated, :utc_datetime
+    # TMDb raw data storage
+    field :tmdb_data, :map
     
     
-    # Associations
-    has_many :credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
+    # Associations  
+    has_many :movie_credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
     many_to_many :people, Cinegraph.Movies.Person, join_through: Cinegraph.Movies.Credit
     
     # Keywords and Production Companies (many-to-many through join tables)
@@ -51,14 +42,13 @@ defmodule Cinegraph.Movies.Movie do
     many_to_many :production_companies, Cinegraph.Movies.ProductionCompany, join_through: "movie_production_companies", join_keys: [movie_id: :id, production_company_id: :id]
     
     # Videos and Release Dates
-    has_many :videos, Cinegraph.Movies.MovieVideo, foreign_key: :movie_id
-    has_many :release_dates, Cinegraph.Movies.MovieReleaseDate, foreign_key: :movie_id
+    has_many :movie_videos, Cinegraph.Movies.MovieVideo, foreign_key: :movie_id
+    has_many :movie_release_dates, Cinegraph.Movies.MovieReleaseDate, foreign_key: :movie_id
     
     # Cultural associations
     has_many :movie_list_items, Cinegraph.Cultural.MovieListItem, foreign_key: :movie_id
     has_many :curated_lists, through: [:movie_list_items, :list]
     has_many :cri_scores, Cinegraph.Cultural.CRIScore, foreign_key: :movie_id
-    has_many :movie_data_changes, Cinegraph.Cultural.MovieDataChange, foreign_key: :movie_id
     
     # External data associations  
     has_many :external_ratings, Cinegraph.ExternalSources.Rating, foreign_key: :movie_id
@@ -73,10 +63,8 @@ defmodule Cinegraph.Movies.Movie do
     |> cast(attrs, [
       :tmdb_id, :imdb_id, :title, :original_title, :release_date,
       :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
-      :adult, :homepage, :collection_id, :poster_path, :backdrop_path,
-      :images, :genre_ids, :spoken_languages, :production_countries,
-      :production_company_ids, :external_ids, :tmdb_raw_data, :tmdb_fetched_at, 
-      :tmdb_last_updated
+      :adult, :homepage, :collection_id, :poster_path, :backdrop_path, :vote_average,
+      :vote_count, :popularity, :tmdb_data
     ])
     |> validate_required([:tmdb_id, :title])
     |> unique_constraint(:tmdb_id)
@@ -86,8 +74,6 @@ defmodule Cinegraph.Movies.Movie do
   Creates a changeset from TMDB API response data
   """
   def from_tmdb(attrs) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
-    
     movie_attrs = %{
       tmdb_id: attrs["id"],
       imdb_id: attrs["imdb_id"],
@@ -103,18 +89,13 @@ defmodule Cinegraph.Movies.Movie do
       status: attrs["status"],
       adult: attrs["adult"],
       homepage: attrs["homepage"],
+      vote_average: attrs["vote_average"],
+      vote_count: attrs["vote_count"],
+      popularity: attrs["popularity"],
       collection_id: extract_collection_id(attrs["belongs_to_collection"]),
       poster_path: attrs["poster_path"],
       backdrop_path: attrs["backdrop_path"],
-      images: extract_images(attrs["images"]),
-      genre_ids: extract_genre_ids(attrs["genres"]),
-      spoken_languages: extract_language_codes(attrs["spoken_languages"]),
-      production_countries: extract_country_codes(attrs["production_countries"]),
-      production_company_ids: extract_company_ids(attrs["production_companies"]),
-      external_ids: attrs["external_ids"] || %{},
-      tmdb_raw_data: attrs,
-      tmdb_fetched_at: now,
-      tmdb_last_updated: now
+      tmdb_data: attrs
     }
     
     changeset(%__MODULE__{}, movie_attrs)
@@ -129,41 +110,12 @@ defmodule Cinegraph.Movies.Movie do
     end
   end
 
-  defp extract_genre_ids(nil), do: []
-  defp extract_genre_ids(genres) when is_list(genres) do
-    Enum.map(genres, & &1["id"])
-  end
-
-  defp extract_language_codes(nil), do: []
-  defp extract_language_codes(languages) when is_list(languages) do
-    Enum.map(languages, & &1["iso_639_1"])
-  end
-
-  defp extract_country_codes(nil), do: []
-  defp extract_country_codes(countries) when is_list(countries) do
-    Enum.map(countries, & &1["iso_3166_1"])
-  end
-
   defp normalize_money_value(nil), do: nil
   defp normalize_money_value(0), do: nil
   defp normalize_money_value(value) when is_integer(value), do: value
 
   defp extract_collection_id(nil), do: nil
   defp extract_collection_id(%{"id" => id}), do: id
-
-  defp extract_company_ids(nil), do: []
-  defp extract_company_ids(companies) when is_list(companies) do
-    Enum.map(companies, & &1["id"])
-  end
-
-  defp extract_images(nil), do: %{}
-  defp extract_images(images_data) when is_map(images_data) do
-    %{
-      "posters" => images_data["posters"] || [],
-      "backdrops" => images_data["backdrops"] || [],
-      "logos" => images_data["logos"] || []
-    }
-  end
 
   @doc """
   Builds the full URL for an image

@@ -29,6 +29,12 @@ if System.get_env("PHX_SERVER") do
   config :cinegraph, CinegraphWeb.Endpoint, server: true
 end
 
+# Configure database URL for all environments that have it set
+if database_url = System.get_env("SUPABASE_DATABASE_URL") || System.get_env("DATABASE_URL") do
+  config :cinegraph, Cinegraph.Repo,
+    url: database_url
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("SUPABASE_DATABASE_URL") ||

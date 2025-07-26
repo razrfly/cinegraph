@@ -4,7 +4,7 @@ defmodule Cinegraph.Cultural.AwardFetcher do
   """
 
   alias Cinegraph.{Repo, Cultural, Movies}
-  alias Cinegraph.Cultural.{Authority, CuratedList, MovieListItem}
+  alias Cinegraph.Cultural.CuratedList
   alias Cinegraph.Services.Wikidata
   
   require Logger
@@ -25,7 +25,7 @@ defmodule Cinegraph.Cultural.AwardFetcher do
           {:error, reason}
       end
     else
-      Logger.warn("Movie #{movie.title} has no IMDb ID - cannot fetch awards")
+      Logger.warning("Movie #{movie.title} has no IMDb ID - cannot fetch awards")
       {:error, :no_imdb_id}
     end
   end
