@@ -32,6 +32,8 @@ defmodule Cinegraph.Movies.Movie do
     # TMDb raw data storage
     field :tmdb_data, :map
     
+    # OMDb raw data storage
+    field :omdb_data, :map
     
     # Associations  
     has_many :movie_credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
@@ -64,7 +66,7 @@ defmodule Cinegraph.Movies.Movie do
       :tmdb_id, :imdb_id, :title, :original_title, :release_date,
       :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
       :adult, :homepage, :collection_id, :poster_path, :backdrop_path, :vote_average,
-      :vote_count, :popularity, :tmdb_data
+      :vote_count, :popularity, :tmdb_data, :omdb_data
     ])
     |> validate_required([:tmdb_id, :title])
     |> unique_constraint(:tmdb_id)
