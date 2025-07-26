@@ -70,9 +70,23 @@ To ensure our algorithm captures true cultural relevance:
 ### Prerequisites
 
 - Elixir & Erlang
-- PostgreSQL
+- PostgreSQL (we use Supabase local development)
 - Node.js
-- TMDb API key
+- TMDb API key (free at https://www.themoviedb.org/settings/api)
+- OMDb API key (free at http://www.omdbapi.com/apikey.aspx)
+
+### Environment Setup
+
+Create a `.env` file in the project root:
+
+```bash
+# Required API keys
+TMDB_API_KEY=your_tmdb_api_key_here
+OMDB_API_KEY=your_omdb_api_key_here
+
+# Database URL (for Supabase local development)
+SUPABASE_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+```
 
 ### Install
 
@@ -92,12 +106,66 @@ mix ecto.create
 
 # Run migrations
 mix ecto.migrate
-
-# Start server
-mix phx.server
 ```
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+### Database Population
+
+CineGraph requires movie data to function properly. We provide several methods for populating your database:
+
+#### Quick Start (40 movies)
+```bash
+# Import 2 pages (40 movies) with all associations
+./scripts/import_with_env.sh --pages 2
+```
+
+#### Standard Import (200 movies)
+```bash
+# Import 10 pages (200 movies) - recommended for development
+./scripts/import_with_env.sh --pages 10
+```
+
+#### Complete Reset and Import
+```bash
+# Drop database, recreate, and import 200 movies
+./scripts/import_with_env.sh --reset --pages 10
+```
+
+#### Import Specific Movies
+```bash
+# Import specific movies by TMDb ID
+./scripts/import_with_env.sh --ids 550,278,238
+```
+
+#### Enrich with OMDb Data
+```bash
+# Add OMDb ratings to existing movies
+./scripts/enrich_with_omdb.sh
+```
+
+### Import Process Details
+
+The import process fetches comprehensive data from TMDb and OMDb:
+
+- **TMDb Data**: Movies, cast, crew, keywords, videos, release dates, production companies
+- **OMDb Data**: IMDb ratings, Rotten Tomatoes scores, Metacritic scores, box office data
+
+**Time Estimates**:
+- 2 pages (40 movies): ~2-3 minutes
+- 10 pages (200 movies): ~10-15 minutes
+- 25 pages (500 movies): ~25-35 minutes
+
+**Note**: OMDb has a free tier limit of 1,000 requests/day, so the import includes a 1-second delay between OMDb requests.
+
+### Start Server
+
+```bash
+# Start Phoenix server with environment variables
+./start.sh
+```
+
+Now you can visit [`localhost:4001`](http://localhost:4001) from your browser.
+
+**Note**: The application runs on port 4001 by default to avoid conflicts with other Phoenix apps.
 
 ---
 
