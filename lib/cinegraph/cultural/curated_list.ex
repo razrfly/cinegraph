@@ -11,9 +11,8 @@ defmodule Cinegraph.Cultural.CuratedList do
     field :year, :integer
     field :total_items, :integer
     field :description, :string
-    field :selection_criteria, :string
-    field :prestige_score, :float
-    field :cultural_impact, :float
+    field :source_url, :string
+    field :metadata, :map
 
     belongs_to :authority, Cinegraph.Cultural.Authority, foreign_key: :authority_id
     has_many :movie_list_items, Cinegraph.Cultural.MovieListItem, foreign_key: :list_id
@@ -28,13 +27,11 @@ defmodule Cinegraph.Cultural.CuratedList do
     curated_list
     |> cast(attrs, [
       :authority_id, :name, :list_type, :year, :total_items,
-      :description, :selection_criteria, :prestige_score, :cultural_impact
+      :description, :source_url, :metadata
     ])
-    |> validate_required([:authority_id, :name])
+    |> validate_required([:authority_id, :name, :list_type])
     |> validate_inclusion(:list_type, @list_types)
     |> validate_number(:year, greater_than: 1900, less_than_or_equal_to: 2030)
-    |> validate_number(:prestige_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
-    |> validate_number(:cultural_impact, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
     |> foreign_key_constraint(:authority_id)
     |> unique_constraint([:authority_id, :name, :year])
   end

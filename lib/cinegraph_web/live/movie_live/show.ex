@@ -58,8 +58,6 @@ defmodule CinegraphWeb.MovieLive.Show do
       has_release_dates: length(release_dates) > 0,
       has_credits: length(credits) > 0,
       has_production_companies: length(production_companies) > 0,
-      has_external_ids: movie.external_ids != %{} && movie.external_ids != nil,
-      has_images: movie.images != %{} && movie.images != nil,
       has_external_ratings: length(external_ratings) > 0,
       keywords_count: length(keywords),
       videos_count: length(videos),
