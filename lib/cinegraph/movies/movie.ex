@@ -35,9 +35,19 @@ defmodule Cinegraph.Movies.Movie do
     # OMDb raw data storage
     field :omdb_data, :map
     
+    # New high-priority fields
+    field :awards_text, :string
+    field :box_office_domestic, :integer
+    field :origin_country, {:array, :string}, default: []
+    
     # Associations  
     has_many :movie_credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
     many_to_many :people, Cinegraph.Movies.Person, join_through: Cinegraph.Movies.Credit
+    
+    # New associations for genres, countries, and languages
+    many_to_many :genres, Cinegraph.Movies.Genre, join_through: "movie_genres", join_keys: [movie_id: :id, genre_id: :id]
+    many_to_many :production_countries, Cinegraph.Movies.ProductionCountry, join_through: "movie_production_countries", join_keys: [movie_id: :id, production_country_id: :id]
+    many_to_many :spoken_languages, Cinegraph.Movies.SpokenLanguage, join_through: "movie_spoken_languages", join_keys: [movie_id: :id, spoken_language_id: :id]
     
     # Keywords and Production Companies (many-to-many through join tables)
     many_to_many :keywords, Cinegraph.Movies.Keyword, join_through: "movie_keywords", join_keys: [movie_id: :id, keyword_id: :id]
@@ -46,11 +56,6 @@ defmodule Cinegraph.Movies.Movie do
     # Videos and Release Dates
     has_many :movie_videos, Cinegraph.Movies.MovieVideo, foreign_key: :movie_id
     has_many :movie_release_dates, Cinegraph.Movies.MovieReleaseDate, foreign_key: :movie_id
-    
-    # Cultural associations
-    has_many :movie_list_items, Cinegraph.Cultural.MovieListItem, foreign_key: :movie_id
-    has_many :curated_lists, through: [:movie_list_items, :list]
-    has_many :cri_scores, Cinegraph.Cultural.CRIScore, foreign_key: :movie_id
     
     # External data associations  
     has_many :external_ratings, Cinegraph.ExternalSources.Rating, foreign_key: :movie_id
@@ -66,7 +71,8 @@ defmodule Cinegraph.Movies.Movie do
       :tmdb_id, :imdb_id, :title, :original_title, :release_date,
       :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
       :adult, :homepage, :collection_id, :poster_path, :backdrop_path, :vote_average,
-      :vote_count, :popularity, :tmdb_data, :omdb_data
+      :vote_count, :popularity, :tmdb_data, :omdb_data, :awards_text, 
+      :box_office_domestic, :origin_country
     ])
     |> validate_required([:tmdb_id, :title])
     |> unique_constraint(:tmdb_id)
@@ -97,6 +103,7 @@ defmodule Cinegraph.Movies.Movie do
       collection_id: extract_collection_id(attrs["belongs_to_collection"]),
       poster_path: attrs["poster_path"],
       backdrop_path: attrs["backdrop_path"],
+      origin_country: attrs["origin_country"] || [],
       tmdb_data: attrs
     }
     

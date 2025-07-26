@@ -161,12 +161,19 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
   end
   
   defp store_omdb_data(omdb_data, movie, omdb_source) do
-    # First, store the complete OMDb response in the movie record
+    # Extract additional fields from OMDb
+    movie_updates = %{
+      omdb_data: omdb_data,
+      awards_text: omdb_data["Awards"],
+      box_office_domestic: parse_box_office(omdb_data["BoxOffice"])
+    }
+    
+    # First, store the complete OMDb response and extracted fields in the movie record
     case movie
-         |> Movie.changeset(%{omdb_data: omdb_data})
+         |> Movie.changeset(movie_updates)
          |> Repo.update() do
       {:ok, updated_movie} ->
-        Logger.debug("Stored complete OMDb response for #{updated_movie.title}")
+        Logger.debug("Stored complete OMDb response and extracted fields for #{updated_movie.title}")
         
         # Transform and store ratings
         ratings = OMDb.Transformer.transform_to_ratings(omdb_data, movie.id, omdb_source.id)
@@ -208,6 +215,23 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
         existing
         |> Rating.changeset(attrs)
         |> Repo.update()
+    end
+  end
+  
+  defp parse_box_office(nil), do: nil
+  defp parse_box_office("N/A"), do: nil
+  defp parse_box_office(box_office_string) do
+    # Remove $ and commas, then convert to integer
+    box_office_string
+    |> String.replace(~r/[\$,]/, "")
+    |> String.trim()
+    |> case do
+      "" -> nil
+      num_str -> 
+        case Integer.parse(num_str) do
+          {num, _} -> num
+          :error -> nil
+        end
     end
   end
   
