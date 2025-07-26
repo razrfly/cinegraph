@@ -130,13 +130,13 @@ defmodule Cinegraph.Cultural.AwardFetcher do
 
   defp default_trust_score(authority_name) do
     cond do
-      String.contains?(authority_name, "Academy") -> 0.95
-      String.contains?(authority_name, "Golden Globe") -> 0.85
-      String.contains?(authority_name, "BAFTA") -> 0.85
-      String.contains?(authority_name, "Cannes") -> 0.90
-      String.contains?(authority_name, "Berlin") -> 0.85
-      String.contains?(authority_name, "Venice") -> 0.85
-      true -> 0.70
+      String.contains?(authority_name, "Academy") -> 9.5
+      String.contains?(authority_name, "Golden Globe") -> 8.5
+      String.contains?(authority_name, "BAFTA") -> 8.5
+      String.contains?(authority_name, "Cannes") -> 9.0
+      String.contains?(authority_name, "Berlin") -> 8.5
+      String.contains?(authority_name, "Venice") -> 8.5
+      true -> 7.0
     end
   end
 
