@@ -11,10 +11,8 @@ defmodule Cinegraph.Movies.MovieVideo do
     field :site, :string
     field :type, :string
     field :size, :integer
-    field :iso_639_1, :string
-    field :iso_3166_1, :string
-    field :official, :boolean
-    field :published_at, :utc_datetime
+    field :official, :boolean, default: false
+    field :published_at, :naive_datetime
     
     timestamps()
   end
@@ -24,7 +22,7 @@ defmodule Cinegraph.Movies.MovieVideo do
     video
     |> cast(attrs, [
       :movie_id, :tmdb_id, :name, :key, :site, :type, 
-      :size, :iso_639_1, :iso_3166_1, :official, :published_at
+      :size, :official, :published_at
     ])
     |> validate_required([:movie_id, :tmdb_id, :key, :site, :type])
     |> unique_constraint(:tmdb_id)
@@ -43,8 +41,6 @@ defmodule Cinegraph.Movies.MovieVideo do
       site: attrs["site"],
       type: attrs["type"],
       size: attrs["size"],
-      iso_639_1: attrs["iso_639_1"],
-      iso_3166_1: attrs["iso_3166_1"],
       official: attrs["official"],
       published_at: parse_datetime(attrs["published_at"])
     }

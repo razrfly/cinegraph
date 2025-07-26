@@ -313,7 +313,7 @@ defmodule Cinegraph.Movies do
       changesets = MovieReleaseDate.from_tmdb_country(country_data, movie.id)
       
       Enum.each(changesets, fn changeset ->
-        Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:movie_id, :country_code, :type])
+        Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:movie_id, :country_code, :release_type])
       end)
     end)
     
@@ -340,7 +340,7 @@ defmodule Cinegraph.Movies do
       # Create movie_production_companies association
       Repo.insert_all(
         "movie_production_companies",
-        [[movie_id: movie.id, production_company_id: company.id, inserted_at: DateTime.utc_now(), updated_at: DateTime.utc_now()]],
+        [[movie_id: movie.id, production_company_id: company.id]],
         on_conflict: :nothing
       )
     end)
@@ -410,13 +410,6 @@ defmodule Cinegraph.Movies do
     ExternalSources.store_tmdb_recommendations(movie, results, "similar")
   end
 
-  defp process_movie_watch_providers(_movie, nil), do: :ok
-  defp process_movie_watch_providers(movie, %{"results" => providers}) do
-    # Store watch provider data
-    # TODO: Create schema and storage for watch providers
-    IO.puts("📺 Watch providers available in #{map_size(providers)} regions")
-    :ok
-  end
 
   defp process_movie_reviews(_movie, nil), do: :ok
   defp process_movie_reviews(movie, %{"results" => reviews}) do
@@ -491,19 +484,5 @@ defmodule Cinegraph.Movies do
     :ok
   end
 
-  defp process_movie_alternative_titles(_movie, nil), do: :ok
-  defp process_movie_alternative_titles(movie, %{"titles" => titles}) do
-    # Store alternative titles by country
-    # TODO: Create schema and storage for alternative titles
-    IO.puts("🌍 Found #{length(titles)} alternative titles")
-    :ok
-  end
 
-  defp process_movie_translations(_movie, nil), do: :ok
-  defp process_movie_translations(movie, %{"translations" => translations}) do
-    # Store translation data
-    # TODO: Create schema and storage for translations
-    IO.puts("🌐 Available in #{length(translations)} languages")
-    :ok
-  end
 end

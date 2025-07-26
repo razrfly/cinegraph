@@ -10,7 +10,6 @@ defmodule Cinegraph.ExternalSources.Rating do
     field :value, :float
     field :scale_min, :float, default: 0.0
     field :scale_max, :float, default: 10.0
-    field :sample_size, :integer
     field :metadata, :map, default: %{}
     field :fetched_at, :utc_datetime
     
@@ -21,7 +20,7 @@ defmodule Cinegraph.ExternalSources.Rating do
   def changeset(rating, attrs) do
     rating
     |> cast(attrs, [:movie_id, :source_id, :rating_type, :value, 
-                    :scale_min, :scale_max, :sample_size, :metadata, :fetched_at])
+                    :scale_min, :scale_max, :metadata, :fetched_at])
     |> validate_required([:movie_id, :source_id, :rating_type, :value])
     |> validate_inclusion(:rating_type, ["user", "critic", "algorithm", "popularity", "engagement", "list_appearances", "box_office", "imdb_votes"])
     |> validate_number(:value, greater_than_or_equal_to: 0.0)

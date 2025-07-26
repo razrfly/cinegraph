@@ -5,6 +5,7 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
   """
   
   alias Cinegraph.Repo
+  alias Cinegraph.Movies
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Services.{TMDb, OMDb}
   alias Cinegraph.ExternalSources.Rating
@@ -61,8 +62,7 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
   def import_single_movie(tmdb_id, omdb_source \\ nil) do
     omdb_source = omdb_source || OMDb.Transformer.get_or_create_source!()
     
-    with {:ok, tmdb_data} <- TMDb.get_movie(tmdb_id),
-         {:ok, movie} <- create_or_update_movie(tmdb_data),
+    with {:ok, movie} <- Movies.fetch_and_store_movie_comprehensive(tmdb_id),
          :ok <- fetch_and_store_omdb_data(movie, omdb_source) do
       {:ok, movie}
     end
@@ -107,12 +107,20 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
       case TMDb.get_popular_movies(page: page) do
         {:ok, %{"results" => movies}} ->
           movies
-          |> Enum.map(&create_or_update_movie/1)
-          |> Enum.filter(fn
-            {:ok, movie} -> movie
-            _ -> nil
+          |> Enum.map(fn basic_movie ->
+            # Use the Movies context to fetch and store comprehensive data
+            movie_id = basic_movie["id"]
+            Logger.debug("Fetching comprehensive data for movie ID #{movie_id}...")
+            
+            case Movies.fetch_and_store_movie_comprehensive(movie_id) do
+              {:ok, movie} -> 
+                movie
+              {:error, reason} ->
+                Logger.warning("Failed to fetch comprehensive data for movie #{movie_id}: #{inspect(reason)}")
+                nil
+            end
           end)
-          |> Enum.map(fn {:ok, movie} -> movie end)
+          |> Enum.filter(& &1)
           
         {:error, reason} ->
           Logger.error("Failed to fetch TMDb page #{page}: #{inspect(reason)}")
@@ -121,26 +129,7 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
     end)
   end
   
-  defp create_or_update_movie(tmdb_data) do
-    # Check if movie exists
-    case Repo.get_by(Movie, tmdb_id: tmdb_data["id"]) do
-      nil ->
-        # Create new movie
-        Logger.info("Creating movie: #{tmdb_data["title"]}")
-        
-        changeset = Movie.from_tmdb(tmdb_data)
-        Repo.insert(changeset)
-        
-      existing_movie ->
-        # Update existing movie
-        Logger.debug("Updating movie: #{existing_movie.title}")
-        
-        changeset = Movie.from_tmdb(tmdb_data)
-        # Need to apply changeset changes to existing movie
-        changeset = %{changeset | data: existing_movie}
-        Repo.update(changeset)
-    end
-  end
+  # OMDb functions
   
   defp fetch_and_store_omdb_data(movie, omdb_source) do
     # Check if we already have OMDb data
@@ -184,31 +173,11 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
       end
     end)
     
-    # Store awards data and additional OMDb metadata
-    awards_data = OMDb.Transformer.parse_awards(omdb_data["Awards"])
+    # TODO: Store awards data and additional OMDb metadata when external_ids field is added
+    # awards_data = OMDb.Transformer.parse_awards(omdb_data["Awards"])
     
-    # Store additional OMDb data
-    omdb_metadata = %{
-      "mpaa_rating" => omdb_data["Rated"],
-      "director" => omdb_data["Director"],
-      "writer" => omdb_data["Writer"],  
-      "actors" => omdb_data["Actors"],
-      "poster_url" => omdb_data["Poster"],
-      "production" => omdb_data["Production"],
-      "dvd_release" => omdb_data["DVD"],
-      "website" => omdb_data["Website"],
-      "fetched_at" => DateTime.utc_now() |> DateTime.to_iso8601()
-    } |> Enum.filter(fn {_, v} -> v != nil && v != "N/A" end) |> Map.new()
-    
-    updated_external_ids = movie.external_ids || %{}
-    updated_external_ids = if awards_data, do: Map.put(updated_external_ids, "omdb_awards", awards_data), else: updated_external_ids
-    updated_external_ids = Map.put(updated_external_ids, "omdb_metadata", omdb_metadata)
-    
-    movie
-    |> Ecto.Changeset.change(external_ids: updated_external_ids)
-    |> Repo.update()
-    
-    Logger.debug("Stored OMDb data for #{movie.title}")
+    # For now, just log that we've stored the ratings
+    Logger.debug("Stored OMDb ratings for #{movie.title}")
     
     :ok
   end
@@ -231,4 +200,5 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
         |> Repo.update()
     end
   end
+  
 end
