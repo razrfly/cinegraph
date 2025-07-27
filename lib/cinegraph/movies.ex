@@ -6,7 +6,8 @@ defmodule Cinegraph.Movies do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, Person, Genre, Credit, Collection, Keyword, 
-                         ProductionCompany, MovieVideo, MovieReleaseDate}
+                         ProductionCompany, ProductionCountry, SpokenLanguage,
+                         MovieVideo, MovieReleaseDate}
   alias Cinegraph.Services.TMDb
   alias Cinegraph.ExternalSources
 
@@ -69,6 +70,9 @@ defmodule Cinegraph.Movies do
          {:ok, movie} <- create_or_update_movie_from_tmdb(tmdb_data),
          :ok <- ExternalSources.store_tmdb_ratings(movie, tmdb_data),
          :ok <- process_movie_credits(movie, tmdb_data["credits"]),
+         :ok <- process_movie_genres(movie, tmdb_data["genres"]),
+         :ok <- process_movie_production_countries(movie, tmdb_data["production_countries"]),
+         :ok <- process_movie_spoken_languages(movie, tmdb_data["spoken_languages"]),
          :ok <- process_movie_keywords(movie, tmdb_data["keywords"]),
          :ok <- process_movie_videos(movie, tmdb_data["videos"]),
          :ok <- process_movie_release_dates(movie, tmdb_data["release_dates"]),
@@ -484,5 +488,112 @@ defmodule Cinegraph.Movies do
     :ok
   end
 
+  # Process genres
+  defp process_movie_genres(_movie, nil), do: :ok
+  defp process_movie_genres(movie, genres) when is_list(genres) do
+    # First ensure all genres exist
+    genre_records = Enum.map(genres, fn genre_data ->
+      attrs = %{
+        tmdb_id: genre_data["id"],
+        name: genre_data["name"]
+      }
+      
+      case Repo.get_by(Genre, tmdb_id: genre_data["id"]) do
+        nil ->
+          {:ok, genre} = Repo.insert(Genre.changeset(%Genre{}, attrs))
+          genre
+        existing_genre ->
+          existing_genre
+      end
+    end)
+    
+    # Clear existing associations
+    Repo.delete_all(from(mg in "movie_genres", where: mg.movie_id == ^movie.id))
+    
+    # Create new associations
+    Enum.each(genre_records, fn genre ->
+      Repo.insert_all("movie_genres", [[movie_id: movie.id, genre_id: genre.id]], 
+        on_conflict: :nothing,
+        conflict_target: [:movie_id, :genre_id]
+      )
+    end)
+    
+    :ok
+  end
+  
+  # Process production countries
+  defp process_movie_production_countries(_movie, nil), do: :ok
+  defp process_movie_production_countries(movie, countries) when is_list(countries) do
+    # First ensure all countries exist
+    country_records = Enum.map(countries, fn country_data ->
+      attrs = %{
+        iso_3166_1: country_data["iso_3166_1"],
+        name: country_data["name"]
+      }
+      
+      case Repo.get_by(ProductionCountry, iso_3166_1: country_data["iso_3166_1"]) do
+        nil ->
+          {:ok, country} = Repo.insert(ProductionCountry.changeset(%ProductionCountry{}, attrs))
+          country
+        existing_country ->
+          existing_country
+      end
+    end)
+    
+    # Clear existing associations
+    Repo.delete_all(from(mpc in "movie_production_countries", where: mpc.movie_id == ^movie.id))
+    
+    # Create new associations
+    Enum.each(country_records, fn country ->
+      Repo.insert_all("movie_production_countries", 
+        [[movie_id: movie.id, production_country_id: country.id]], 
+        on_conflict: :nothing,
+        conflict_target: [:movie_id, :production_country_id]
+      )
+    end)
+    
+    :ok
+  end
+  
+  # Process spoken languages
+  defp process_movie_spoken_languages(_movie, nil), do: :ok
+  defp process_movie_spoken_languages(movie, languages) when is_list(languages) do
+    # First ensure all languages exist
+    language_records = Enum.map(languages, fn lang_data ->
+      attrs = %{
+        iso_639_1: lang_data["iso_639_1"],
+        name: lang_data["name"] || lang_data["english_name"] || lang_data["iso_639_1"],
+        english_name: lang_data["english_name"]
+      }
+      
+      case Repo.get_by(SpokenLanguage, iso_639_1: lang_data["iso_639_1"]) do
+        nil ->
+          case Repo.insert(SpokenLanguage.changeset(%SpokenLanguage{}, attrs)) do
+            {:ok, language} -> language
+            {:error, _changeset} -> 
+              # If insert fails, skip this language
+              nil
+          end
+        existing_language ->
+          existing_language
+      end
+    end)
+    
+    # Clear existing associations
+    Repo.delete_all(from(msl in "movie_spoken_languages", where: msl.movie_id == ^movie.id))
+    
+    # Create new associations (skip nil records)
+    language_records
+    |> Enum.reject(&is_nil/1)
+    |> Enum.each(fn language ->
+      Repo.insert_all("movie_spoken_languages", 
+        [[movie_id: movie.id, spoken_language_id: language.id]], 
+        on_conflict: :nothing,
+        conflict_target: [:movie_id, :spoken_language_id]
+      )
+    end)
+    
+    :ok
+  end
 
 end

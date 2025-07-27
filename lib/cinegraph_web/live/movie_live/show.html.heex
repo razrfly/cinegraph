@@ -245,35 +245,6 @@
       </div>
     </div>
 
-    <!-- CRI SCORE DETAILS -->
-    <div class="bg-white rounded-lg shadow p-4">
-      <h3 class="text-lg font-bold text-gray-900 mb-3">Cultural Relevance Index (CRI)</h3>
-      <%= if @movie.cri_score do %>
-        <div class="flex items-center justify-between mb-4">
-          <div class="text-3xl font-bold text-blue-600">
-            <%= Float.round(@movie.cri_score.score, 1) %><span class="text-lg text-gray-500">/100</span>
-          </div>
-          <div class="text-xs text-gray-500">
-            Updated <%= Calendar.strftime(@movie.cri_score.calculated_at, "%m/%d/%Y") %>
-          </div>
-        </div>
-        <div class="space-y-2">
-          <%= for {component, score} <- @movie.cri_score.components do %>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-600 w-24">
-                <%= String.replace(to_string(component), "_", " ") |> String.capitalize() %>
-              </span>
-              <div class="flex-1 bg-gray-200 rounded-full h-2">
-                <div class="bg-blue-600 h-2 rounded-full" style={"width: #{score * 100}%"}></div>
-              </div>
-              <span class="text-xs font-medium w-10 text-right"><%= round(score * 100) %>%</span>
-            </div>
-          <% end %>
-        </div>
-      <% else %>
-        <p class="text-red-600 text-sm">❌ No CRI score calculated</p>
-      <% end %>
-    </div>
     
     <!-- CULTURAL LISTS DETAILS -->
     <div class="bg-white rounded-lg shadow p-4">
