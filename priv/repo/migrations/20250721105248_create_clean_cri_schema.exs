@@ -25,6 +25,10 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :poster_path, :string
       add :collection_id, :integer
       add :tmdb_data, :map
+      add :omdb_data, :map
+      add :awards_text, :text
+      add :box_office_domestic, :bigint
+      add :origin_country, {:array, :string}, default: []
       timestamps()
     end
     
@@ -32,6 +36,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
     create index(:movies, [:imdb_id])
     create index(:movies, [:release_date])
     create index(:movies, [:collection_id])
+    create index(:movies, [:origin_country], using: :gin)
 
     # People (directors, actors, etc.)
     create table(:people) do
@@ -92,6 +97,25 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
     create index(:production_companies, [:name])
     create index(:production_companies, [:origin_country])
 
+    # Production countries
+    create table(:production_countries) do
+      add :iso_3166_1, :string, null: false
+      add :name, :string, null: false
+      timestamps()
+    end
+    
+    create unique_index(:production_countries, [:iso_3166_1])
+    
+    # Spoken languages
+    create table(:spoken_languages) do
+      add :iso_639_1, :string, null: false
+      add :name, :string, null: false
+      add :english_name, :string
+      timestamps()
+    end
+    
+    create unique_index(:spoken_languages, [:iso_639_1])
+
     # Keywords
     create table(:keywords) do
       add :tmdb_id, :integer, null: false
@@ -101,6 +125,16 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
     
     create unique_index(:keywords, [:tmdb_id])
     create index(:keywords, [:name])
+
+    # Movie-Genre junction table
+    create table(:movie_genres, primary_key: false) do
+      add :movie_id, references(:movies, on_delete: :delete_all), null: false
+      add :genre_id, references(:genres, on_delete: :delete_all), null: false
+    end
+    
+    create unique_index(:movie_genres, [:movie_id, :genre_id])
+    create index(:movie_genres, [:movie_id])
+    create index(:movie_genres, [:genre_id])
 
     # Movie credits (cast and crew)
     create table(:movie_credits) do
@@ -137,6 +171,26 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
     end
     
     create unique_index(:movie_production_companies, [:movie_id, :production_company_id])
+
+    # Movie-Production Country junction table
+    create table(:movie_production_countries, primary_key: false) do
+      add :movie_id, references(:movies, on_delete: :delete_all), null: false
+      add :production_country_id, references(:production_countries, on_delete: :delete_all), null: false
+    end
+    
+    create unique_index(:movie_production_countries, [:movie_id, :production_country_id])
+    create index(:movie_production_countries, [:movie_id])
+    create index(:movie_production_countries, [:production_country_id])
+    
+    # Movie-Spoken Language junction table
+    create table(:movie_spoken_languages, primary_key: false) do
+      add :movie_id, references(:movies, on_delete: :delete_all), null: false
+      add :spoken_language_id, references(:spoken_languages, on_delete: :delete_all), null: false
+    end
+    
+    create unique_index(:movie_spoken_languages, [:movie_id, :spoken_language_id])
+    create index(:movie_spoken_languages, [:movie_id])
+    create index(:movie_spoken_languages, [:spoken_language_id])
 
     # Movie videos (trailers, etc.)
     create table(:movie_videos) do
@@ -220,71 +274,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
     create index(:external_recommendations, [:source_id])
     create unique_index(:external_recommendations, [:source_movie_id, :recommended_movie_id, :source_id, :recommendation_type], name: :external_recs_unique_idx)
 
-    # Cultural authorities (critics, institutions)
-    create table(:cultural_authorities) do
-      add :name, :string, null: false
-      add :authority_type, :string, null: false
-      add :description, :text
-      add :website, :string
-      add :trust_score, :float, default: 5.0
-      add :active, :boolean, default: true
-      add :metadata, :map
-      timestamps()
-    end
-    
-    create index(:cultural_authorities, [:name])
-    create index(:cultural_authorities, [:authority_type])
-    create index(:cultural_authorities, [:trust_score])
-
-    # Curated lists from cultural authorities
-    create table(:curated_lists) do
-      add :authority_id, references(:cultural_authorities, on_delete: :delete_all), null: false
-      add :name, :string, null: false
-      add :description, :text
-      add :list_type, :string, null: false
-      add :year, :integer
-      add :total_items, :integer
-      add :source_url, :string
-      add :metadata, :map
-      timestamps()
-    end
-    
-    create unique_index(:curated_lists, [:authority_id, :name, :year])
-    create index(:curated_lists, [:list_type])
-    create index(:curated_lists, [:year])
-
-    # Movie appearances in curated lists
-    create table(:movie_list_items) do
-      add :movie_id, references(:movies, on_delete: :delete_all), null: false
-      add :list_id, references(:curated_lists, on_delete: :delete_all), null: false
-      add :position, :integer
-      add :award_category, :string
-      add :award_result, :string
-      add :year_awarded, :integer
-      add :metadata, :map
-      timestamps()
-    end
-    
-    create unique_index(:movie_list_items, [:movie_id, :list_id, :award_category])
-    create index(:movie_list_items, [:list_id])
-    create index(:movie_list_items, [:movie_id])
-
-    # CRI scores (calculated periodically)
-    create table(:cri_scores) do
-      add :movie_id, references(:movies, on_delete: :delete_all), null: false
-      add :overall_score, :float, null: false
-      add :timelessness_score, :float, null: false
-      add :cultural_penetration_score, :float, null: false
-      add :artistic_impact_score, :float, null: false
-      add :institutional_recognition_score, :float, null: false
-      add :public_reception_score, :float, null: false
-      add :calculation_version, :string, null: false
-      add :calculated_at, :utc_datetime, null: false
-      add :metadata, :map
-      timestamps()
-    end
-    
-    create index(:cri_scores, [:movie_id])
-    create index(:cri_scores, [:calculated_at])
+    # Note: Removed cultural_authorities, curated_lists, movie_list_items, and cri_scores tables
+    # These will be added back when we implement the CRI scoring system
   end
 end
