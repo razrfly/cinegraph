@@ -1,0 +1,71 @@
+defmodule Cinegraph.Jobs.ProcessApiJob do
+  @moduledoc """
+  Oban job for processing a single API for a movie.
+  
+  This job is useful for:
+  - Selective API updates
+  - Retrying failed API calls
+  - Adding new API data to existing movies
+  """
+  
+  use Oban.Worker,
+    queue: :api_processing,
+    max_attempts: 5,
+    tags: ["api_processing"],
+    unique: [period: 300, fields: [:args, :queue]]  # Prevent duplicate API calls
+  
+  alias Cinegraph.ApiProcessors
+  require Logger
+  
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"movie_id" => movie_id, "api" => api} = args}) do
+    opts = Map.get(args, "opts", %{}) |> atomize_keys()
+    
+    Logger.info("Processing API '#{api}' for movie ID #{movie_id}")
+    
+    processor = get_processor(api)
+    
+    if processor do
+      case processor.process_movie(movie_id, opts) do
+        {:ok, movie} ->
+          Logger.info("Successfully processed #{api} for movie: #{movie.title}")
+          :ok
+          
+        {:error, reason} ->
+          Logger.error("Failed to process #{api} for movie ID #{movie_id}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    else
+      Logger.error("Unknown API processor: #{api}")
+      {:error, :unknown_api}
+    end
+  end
+  
+  @impl Oban.Worker
+  def timeout(%Oban.Job{args: %{"api" => api}}) do
+    case api do
+      "tmdb" -> :timer.minutes(2)
+      "omdb" -> :timer.minutes(1)
+      _ -> :timer.minutes(3)
+    end
+  end
+  
+  # Get the processor module for the given API
+  defp get_processor("tmdb"), do: ApiProcessors.TMDb
+  defp get_processor("omdb"), do: ApiProcessors.OMDb
+  defp get_processor(_), do: nil
+  
+  # Helper function to convert string keys to atoms
+  defp atomize_keys(map) when is_map(map) do
+    Map.new(map, fn
+      {key, value} when is_binary(key) -> 
+        try do
+          {String.to_existing_atom(key), value}
+        rescue
+          ArgumentError -> {key, value}
+        end
+      {key, value} -> {key, value}
+    end)
+  end
+  defp atomize_keys(other), do: other
+end
