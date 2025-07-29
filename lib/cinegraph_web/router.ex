@@ -22,6 +22,10 @@ defmodule CinegraphWeb.Router do
     # Movie routes
     live "/movies", MovieLive.Index, :index
     live "/movies/:id", MovieLive.Show, :show
+    
+    # People routes
+    live "/people", PersonLive.Index, :index
+    live "/people/:id", PersonLive.Show, :show
   end
 
   # Other scopes may use custom stacks.
