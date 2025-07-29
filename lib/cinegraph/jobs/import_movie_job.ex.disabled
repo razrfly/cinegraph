@@ -1,0 +1,48 @@
+defmodule Cinegraph.Jobs.ImportMovieJob do
+  @moduledoc """
+  Oban job for importing a movie from multiple APIs in a single job.
+  
+  This job is useful for initial imports where we want to fetch data
+  from all configured APIs for a movie.
+  """
+  
+  use Oban.Worker, 
+    queue: :imports, 
+    max_attempts: 3,
+    tags: ["movie_import"],
+    unique: [period: 300]  # Prevent duplicate imports within 5 minutes
+  
+  alias Cinegraph.MovieImporter
+  require Logger
+  
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"tmdb_id" => tmdb_id} = args}) do
+    apis = Map.get(args, "apis", ["tmdb", "omdb"])
+    opts = Map.get(args, "opts", %{}) |> atomize_keys()
+    
+    Logger.info("Starting import for TMDb ID #{tmdb_id} with APIs: #{inspect(apis)}")
+    
+    case MovieImporter.import_movie_from_tmdb(tmdb_id, apis: apis, opts: opts) do
+      {:ok, movie} ->
+        Logger.info("Successfully imported movie: #{movie.title} (ID: #{movie.id})")
+        :ok
+        
+      {:error, reason} ->
+        Logger.error("Failed to import movie with TMDb ID #{tmdb_id}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+  
+  @impl Oban.Worker
+  def timeout(_job), do: :timer.minutes(5)
+  
+  # Helper function to convert string keys to atoms
+  defp atomize_keys(map) when is_map(map) do
+    Map.new(map, fn
+      {key, value} when is_binary(key) -> {String.to_existing_atom(key), value}
+      {key, value} -> {key, value}
+    end)
+  rescue
+    ArgumentError -> map  # If atom doesn't exist, return original map
+  end
+end

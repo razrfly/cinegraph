@@ -35,6 +35,22 @@ defmodule Mix.Tasks.ImportMovies do
       
       # Show progress during import
       mix import_movies --pages 10 --verbose
+  
+  ## Modular System Options (when Oban is available)
+  
+      # Queue imports as Oban jobs instead of processing immediately
+      mix import_movies --pages 5 --queue
+      
+      # Import with specific APIs only
+      mix import_movies --pages 5 --apis tmdb
+      mix import_movies --pages 5 --apis tmdb,omdb
+      
+      # Enrich with a specific API
+      mix import_movies --enrich --api omdb
+      mix import_movies --enrich --api tmdb --queue
+      
+      # Import specific movies with selected APIs
+      mix import_movies --ids 550,551 --apis tmdb --queue
   """
   
   def run(args) do
@@ -45,7 +61,10 @@ defmodule Mix.Tasks.ImportMovies do
         enrich: :boolean,
         fresh: :boolean,
         reset: :boolean,
-        verbose: :boolean
+        verbose: :boolean,
+        queue: :boolean,
+        api: :string,
+        apis: :string
       ]
     )
     
@@ -64,14 +83,27 @@ defmodule Mix.Tasks.ImportMovies do
     # Start app after potential reset
     Mix.Task.run("app.start")
     
+    # Determine if we should use the new modular system
+    use_queue = opts[:queue] || false
+    
     cond do
       opts[:fresh] || opts[:reset] ->
         clear_data()
-        import_pages(opts[:pages] || 5, opts[:verbose] || false)
+        if use_new_system?() do
+          import_pages_modular(opts[:pages] || 5, opts)
+        else
+          import_pages(opts[:pages] || 5, opts[:verbose] || false)
+        end
         
       opts[:enrich] ->
-        Mix.shell().info("Enriching existing movies with OMDb data...")
-        ComprehensiveMovieImporter.enrich_existing_movies_with_omdb()
+        api = opts[:api] || "omdb"
+        Mix.shell().info("Enriching existing movies with #{String.upcase(api)} data...")
+        
+        if use_new_system?() do
+          Cinegraph.MovieImporter.reprocess_missing_api_data(api, queue: use_queue)
+        else
+          ComprehensiveMovieImporter.enrich_existing_movies_with_omdb()
+        end
         
       opts[:ids] ->
         ids = opts[:ids]
@@ -79,15 +111,96 @@ defmodule Mix.Tasks.ImportMovies do
         |> Enum.map(&String.to_integer/1)
         
         Mix.shell().info("Importing specific movies: #{inspect(ids)}")
-        ComprehensiveMovieImporter.import_specific_movies(ids)
+        
+        if use_new_system?() do
+          apis = parse_apis(opts[:apis])
+          Enum.each(ids, fn tmdb_id ->
+            Cinegraph.MovieImporter.import_movie_from_tmdb(tmdb_id, 
+              apis: apis, 
+              queue: use_queue
+            )
+          end)
+        else
+          ComprehensiveMovieImporter.import_specific_movies(ids)
+        end
         
       true ->
         # Default to importing 5 pages = 100 movies
-        import_pages(opts[:pages] || 5, opts[:verbose] || false)
+        if use_new_system?() do
+          import_pages_modular(opts[:pages] || 5, opts)
+        else
+          import_pages(opts[:pages] || 5, opts[:verbose] || false)
+        end
     end
     
     # Print summary after import
     print_summary()
+  end
+  
+  # Check if we should use the new modular system
+  defp use_new_system? do
+    # For now, check if Oban is configured
+    # In the future, this could be a config option
+    Code.ensure_loaded?(Oban)
+  end
+  
+  defp parse_apis(nil), do: ["tmdb", "omdb"]
+  defp parse_apis(apis_string) do
+    apis_string
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.map(&String.downcase/1)
+  end
+  
+  defp import_pages_modular(pages, opts) do
+    total_movies = pages * 20
+    apis = parse_apis(opts[:apis])
+    use_queue = opts[:queue] || false
+    
+    Mix.shell().info("Importing #{pages} pages of popular movies (~#{total_movies} movies)...")
+    Mix.shell().info("Using modular system with APIs: #{inspect(apis)}")
+    Mix.shell().info("Queue mode: #{use_queue}")
+    
+    start_time = System.monotonic_time(:second)
+    
+    # Get popular movies from TMDb
+    movie_ids = 1..pages
+    |> Enum.flat_map(fn page ->
+      case Cinegraph.Services.TMDb.get_popular_movies(page: page) do
+        {:ok, %{"results" => movies}} ->
+          Enum.map(movies, & &1["id"])
+        {:error, reason} ->
+          Mix.shell().error("Failed to fetch page #{page}: #{inspect(reason)}")
+          []
+      end
+    end)
+    
+    Mix.shell().info("Found #{length(movie_ids)} movies to import")
+    
+    # Import each movie using the modular system
+    Enum.with_index(movie_ids, 1)
+    |> Enum.each(fn {tmdb_id, index} ->
+      if opts[:verbose] do
+        Mix.shell().info("[#{index}/#{length(movie_ids)}] Importing TMDb ID #{tmdb_id}...")
+      end
+      
+      Cinegraph.MovieImporter.import_movie_from_tmdb(tmdb_id, 
+        apis: apis,
+        queue: use_queue
+      )
+      
+      # Small delay to avoid overwhelming the APIs
+      unless use_queue, do: Process.sleep(100)
+    end)
+    
+    elapsed = System.monotonic_time(:second) - start_time
+    
+    if use_queue do
+      Mix.shell().info("✓ Queued #{length(movie_ids)} movies for import in #{elapsed}s")
+      Mix.shell().info("Jobs will be processed by Oban workers")
+    else
+      Mix.shell().info("✓ Import completed in #{elapsed}s")
+    end
   end
   
   defp import_pages(pages, verbose) do
