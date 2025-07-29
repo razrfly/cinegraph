@@ -39,10 +39,13 @@ defmodule Cinegraph.Jobs.ImportMovieJob do
   # Helper function to convert string keys to atoms
   defp atomize_keys(map) when is_map(map) do
     Map.new(map, fn
-      {key, value} when is_binary(key) -> {String.to_existing_atom(key), value}
+      {key, value} when is_binary(key) -> 
+        try do
+          {String.to_existing_atom(key), value}
+        rescue
+          ArgumentError -> {key, value}
+        end
       {key, value} -> {key, value}
     end)
-  rescue
-    ArgumentError -> map  # If atom doesn't exist, return original map
   end
 end
