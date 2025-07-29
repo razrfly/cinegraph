@@ -71,7 +71,7 @@ defmodule Cinegraph.MovieImporter do
     
     if queue do
       Enum.each(movies, &queue_api_job(&1.id, api, []))
-      {:ok, count}
+      {:ok, count, count}  # All queued successfully
     else
       results = Enum.map(movies, fn movie ->
         case process_api_immediately(movie.id, api, []) do
@@ -145,7 +145,10 @@ defmodule Cinegraph.MovieImporter do
     case Movies.get_movie_by_tmdb_id(tmdb_id) do
       nil ->
         # Create a basic movie record first
-        case Movies.create_movie(%{tmdb_id: tmdb_id, title: "Loading..."}) do
+        case Movies.create_movie(%{
+          tmdb_id: tmdb_id, 
+          title: "Pending Import - TMDb ID: #{tmdb_id}"
+        }) do
           {:ok, movie} -> {:ok, movie}
           error -> error
         end
@@ -206,14 +209,4 @@ defmodule Cinegraph.MovieImporter do
   defp get_processor("tmdb"), do: ApiProcessors.TMDb
   defp get_processor("omdb"), do: ApiProcessors.OMDb
   defp get_processor(_), do: nil
-  
-  defp stringify_keys(map) when is_map(map) do
-    Map.new(map, fn
-      {key, value} when is_atom(key) -> {Atom.to_string(key), value}
-      {key, value} -> {key, value}
-    end)
-  end
-  defp stringify_keys(keyword) when is_list(keyword) do
-    keyword |> Enum.into(%{}) |> stringify_keys()
-  end
 end
