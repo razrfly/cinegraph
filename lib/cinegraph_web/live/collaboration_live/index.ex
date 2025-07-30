@@ -27,8 +27,10 @@ defmodule CinegraphWeb.CollaborationLive.Index do
       case params["person_id"] do
         nil -> socket
         person_id -> 
-          person = People.get_person!(person_id)
-          assign(socket, :highlighted_person, person)
+          case People.get_person(person_id) do
+            nil -> socket
+            person -> assign(socket, :highlighted_person, person)
+          end
       end
     
     {:noreply, socket}
@@ -38,8 +40,21 @@ defmodule CinegraphWeb.CollaborationLive.Index do
   def handle_event("search_collaborations", params, socket) do
     socket = assign(socket, :loading, true)
     
-    actor_id = if params["actor_id"] != "", do: String.to_integer(params["actor_id"]), else: nil
-    director_id = if params["director_id"] != "", do: String.to_integer(params["director_id"]), else: nil
+    actor_id = case params["actor_id"] do
+      "" -> nil
+      id -> case Integer.parse(id) do
+        {int_id, ""} -> int_id
+        _ -> nil
+      end
+    end
+    
+    director_id = case params["director_id"] do
+      "" -> nil
+      id -> case Integer.parse(id) do
+        {int_id, ""} -> int_id
+        _ -> nil
+      end
+    end
     
     socket = 
       socket
@@ -82,8 +97,8 @@ defmodule CinegraphWeb.CollaborationLive.Index do
           if length(movies) > 0 do
             [%{
               type: :actor_director,
-              person_a: People.get_person!(actor_id),
-              person_b: People.get_person!(director_id),
+              person_a: safe_get_person(actor_id),
+              person_b: safe_get_person(director_id),
               movies: movies,
               collaboration_count: length(movies)
             }]
@@ -102,7 +117,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
             %{
               type: :director_actor,
               person_a: result.person,
-              person_b: People.get_person!(director_id),
+              person_b: safe_get_person(director_id),
               collaboration_count: result.movie_count,
               avg_rating: result.avg_rating,
               total_revenue: result.total_revenue
@@ -122,6 +137,13 @@ defmodule CinegraphWeb.CollaborationLive.Index do
   end
   
   # Private functions
+  
+  defp safe_get_person(id) do
+    case People.get_person(id) do
+      nil -> %{id: id, name: "Unknown Person"}
+      person -> person
+    end
+  end
   
   defp get_trending_collaborations do
     # Get collaborations from the last 2 years
@@ -192,10 +214,10 @@ defmodule CinegraphWeb.CollaborationLive.Index do
     
     case Cinegraph.Repo.query(query, [person_id]) do
       {:ok, %{rows: rows}} ->
-        person = People.get_person!(person_id)
+        person = safe_get_person(person_id)
         
         Enum.map(rows, fn [collab_id, count, rating, revenue, latest_date, types] ->
-          collaborator = People.get_person!(collab_id)
+          collaborator = safe_get_person(collab_id)
           
           %{
             type: determine_primary_type(types),

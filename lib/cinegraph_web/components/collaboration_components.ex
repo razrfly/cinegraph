@@ -12,4 +12,19 @@ defmodule CinegraphWeb.CollaborationComponents do
   def humanize_strength(:strong), do: "Strong"
   def humanize_strength(:moderate), do: "Moderate"
   def humanize_strength(_), do: "Moderate"
+  
+  @doc """
+  Formats a number with its ordinal suffix (1st, 2nd, 3rd, etc.)
+  """
+  def format_ordinal(n) when is_integer(n) do
+    suffix = cond do
+      rem(n, 100) in [11, 12, 13] -> "th"
+      rem(n, 10) == 1 -> "st"
+      rem(n, 10) == 2 -> "nd"
+      rem(n, 10) == 3 -> "rd"
+      true -> "th"
+    end
+    "#{n}#{suffix}"
+  end
+  def format_ordinal(_), do: ""
 end

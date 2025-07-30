@@ -25,7 +25,7 @@
       </div>
       <div class="bg-white rounded-lg shadow p-4 text-center">
         <div class="text-2xl font-bold text-green-600">
-          $<%= div(@director_stats.total_revenue, 1_000_000) %>M
+          $<%= div(@director_stats.total_revenue || 0, 1_000_000) %>M
         </div>
         <div class="text-sm text-gray-600">Total Box Office</div>
       </div>
@@ -194,7 +194,7 @@
             <div class="flex items-center space-x-2">
               <div class="w-32 bg-gray-200 rounded-full h-4">
                 <div class="bg-yellow-500 h-4 rounded-full" 
-                     style={"width: #{(decade_data.avg_rating / 10) * 100}%"}></div>
+                     style={"width: #{((decade_data.avg_rating || 0) / 10) * 100}%"}></div>
               </div>
               <span class="text-sm font-medium text-gray-900 w-8 text-right">
                 <%= decade_data.avg_rating %>
