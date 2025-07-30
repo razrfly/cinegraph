@@ -178,97 +178,98 @@
   <div class="bg-white rounded-lg shadow">
     <div class="border-b border-gray-200">
       <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-        <button class="border-b-2 border-blue-500 py-4 px-1 text-sm font-medium text-blue-600">
+        <button 
+          phx-click="change_tab" 
+          phx-value-tab="acting"
+          class={"py-4 px-1 text-sm font-medium border-b-2 #{if @active_tab == :acting, do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}>
           Acting (<%= length(@person.cast_credits) %>)
         </button>
-        <button class="border-b-2 border-transparent py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300">
+        <button 
+          phx-click="change_tab" 
+          phx-value-tab="crew"
+          class={"py-4 px-1 text-sm font-medium border-b-2 #{if @active_tab == :crew, do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}>
           Crew (<%= length(@person.crew_credits) %>)
         </button>
       </nav>
     </div>
     
-    <!-- Acting Credits -->
+    <!-- Tab Content -->
     <div class="p-6">
-      <div class="space-y-4">
-        <%= for credit <- @person.cast_credits do %>
-          <.link navigate={~p"/movies/#{credit.movie.id}"} 
-                 class="flex items-start space-x-4 p-4 rounded-lg hover:bg-gray-50 transition-colors">
-            <div class="flex-shrink-0">
-              <%= if credit.movie.poster_path do %>
-                <img 
-                  src={Cinegraph.Movies.Movie.poster_url(credit.movie, "w92")} 
-                  alt={credit.movie.title}
-                  class="w-16 h-24 object-cover rounded"
-                />
-              <% else %>
-                <div class="w-16 h-24 bg-gray-200 rounded flex items-center justify-center">
-                  <span class="text-gray-400 text-xs">No Poster</span>
+      <%= if @active_tab == :acting do %>
+        <!-- Acting Credits -->
+        <div class="space-y-4">
+          <%= for credit <- @person.cast_credits do %>
+            <.link navigate={~p"/movies/#{credit.movie.id}"} 
+                   class="flex items-start space-x-4 p-4 rounded-lg hover:bg-gray-50 transition-colors">
+              <div class="flex-shrink-0">
+                <%= if credit.movie.poster_path do %>
+                  <img 
+                    src={Cinegraph.Movies.Movie.poster_url(credit.movie, "w92")} 
+                    alt={credit.movie.title}
+                    class="w-16 h-24 object-cover rounded"
+                  />
+                <% else %>
+                  <div class="w-16 h-24 bg-gray-200 rounded flex items-center justify-center">
+                    <span class="text-gray-400 text-xs">No Poster</span>
+                  </div>
+                <% end %>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="font-medium text-gray-900 hover:text-blue-600">
+                  <%= credit.movie.title %>
+                  <%= if credit.movie.release_date do %>
+                    <span class="text-gray-500 font-normal">
+                      (<%= credit.movie.release_date.year %>)
+                    </span>
+                  <% end %>
+                </h3>
+                <%= if credit.character do %>
+                  <p class="text-sm text-gray-600 mt-1">as <%= credit.character %></p>
+                <% end %>
+                <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                  <%= if credit.movie.vote_average do %>
+                    <span>★ <%= Float.round(credit.movie.vote_average, 1) %></span>
+                  <% end %>
+                  <%= if credit.movie.revenue && credit.movie.revenue > 0 do %>
+                    <span>$<%= div(credit.movie.revenue, 1_000_000) %>M</span>
+                  <% end %>
                 </div>
-              <% end %>
-            </div>
-            <div class="flex-1 min-w-0">
-              <h3 class="font-medium text-gray-900 hover:text-blue-600">
-                <%= credit.movie.title %>
-                <%= if credit.movie.release_date do %>
-                  <span class="text-gray-500 font-normal">
-                    (<%= credit.movie.release_date.year %>)
-                  </span>
-                <% end %>
+              </div>
+            </.link>
+          <% end %>
+        </div>
+      <% else %>
+        <!-- Crew Credits by Department -->
+        <%= if length(@person.crew_credits) > 0 do %>
+          <%= for {department, credits} <- @person.crew_by_department do %>
+            <div class="mb-6">
+              <h3 class="font-semibold text-gray-900 mb-3">
+                <%= department %> (<%= length(credits) %>)
               </h3>
-              <%= if credit.character do %>
-                <p class="text-sm text-gray-600 mt-1">as <%= credit.character %></p>
-              <% end %>
-              <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                <%= if credit.movie.vote_average do %>
-                  <span>★ <%= Float.round(credit.movie.vote_average, 1) %></span>
-                <% end %>
-                <%= if credit.movie.revenue && credit.movie.revenue > 0 do %>
-                  <span>$<%= div(credit.movie.revenue, 1_000_000) %>M</span>
+              <div class="space-y-2">
+                <%= for credit <- credits do %>
+                  <.link navigate={~p"/movies/#{credit.movie.id}"} 
+                         class="flex items-center justify-between p-3 rounded hover:bg-gray-50 transition-colors">
+                    <div>
+                      <span class="font-medium text-gray-900 hover:text-blue-600">
+                        <%= credit.movie.title %>
+                      </span>
+                      <%= if credit.movie.release_date do %>
+                        <span class="text-gray-500 ml-2">
+                          (<%= credit.movie.release_date.year %>)
+                        </span>
+                      <% end %>
+                    </div>
+                    <span class="text-sm text-gray-600"><%= credit.job %></span>
+                  </.link>
                 <% end %>
               </div>
             </div>
-          </.link>
+          <% end %>
+        <% else %>
+          <p class="text-gray-500">No crew credits found.</p>
         <% end %>
-      </div>
+      <% end %>
     </div>
   </div>
-
-  <!-- Crew Credits by Department -->
-  <%= if length(@person.crew_credits) > 0 do %>
-    <div class="bg-white rounded-lg shadow mt-8">
-      <div class="p-6">
-        <h2 class="text-xl font-bold text-gray-900 mb-4">Crew Work</h2>
-        <%= for {department, credits} <- @person.crew_by_department do %>
-          <div class="mb-6">
-            <h3 class="font-semibold text-gray-900 mb-3">
-              <%= department %> (<%= length(credits) %>)
-            </h3>
-            <div class="space-y-2">
-              <%= for credit <- Enum.take(credits, 5) do %>
-                <.link navigate={~p"/movies/#{credit.movie.id}"} 
-                       class="flex items-center justify-between p-3 rounded hover:bg-gray-50 transition-colors">
-                  <div>
-                    <span class="font-medium text-gray-900 hover:text-blue-600">
-                      <%= credit.movie.title %>
-                    </span>
-                    <%= if credit.movie.release_date do %>
-                      <span class="text-gray-500 ml-2">
-                        (<%= credit.movie.release_date.year %>)
-                      </span>
-                    <% end %>
-                  </div>
-                  <span class="text-sm text-gray-600"><%= credit.job %></span>
-                </.link>
-              <% end %>
-              <%= if length(credits) > 5 do %>
-                <p class="text-sm text-gray-500 italic pl-3">
-                  ...and <%= length(credits) - 5 %> more
-                </p>
-              <% end %>
-            </div>
-          </div>
-        <% end %>
-      </div>
-    </div>
-  <% end %>
 </div>
