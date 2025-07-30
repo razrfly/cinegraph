@@ -172,7 +172,7 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
             time_ms: elapsed_time
           }
         
-        {:error, :no_path} ->
+        {:error, :no_path_found} ->
           elapsed_time = System.monotonic_time(:millisecond) - start_time
           
           %{

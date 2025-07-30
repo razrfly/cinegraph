@@ -13,11 +13,16 @@ defmodule Cinegraph.Collaborations do
   This should be run after importing movies.
   """
   def populate_collaborations do
-    # Clear existing data
-    Repo.delete_all(CollaborationDetail)
-    Repo.delete_all(Collaboration)
-    
-    populate_key_collaborations_only()
+    Repo.transaction(fn ->
+      # Clear existing data
+      Repo.delete_all(CollaborationDetail)
+      Repo.delete_all(Collaboration)
+      
+      case populate_key_collaborations_only() do
+        {:ok, count} -> count
+        other -> Repo.rollback(other)
+      end
+    end)
   end
   
   @doc """

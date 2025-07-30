@@ -142,7 +142,7 @@
                   <span class="text-gray-900 font-medium"><%= collab.person_a.name %></span>
                 </div>
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-200 text-blue-800">
-                  <%= collab.collaboration_count %><%= if collab.collaboration_count == 2, do: "nd", else: "th" %> collaboration
+                  <%= format_ordinal(collab.collaboration_count) %> collaboration
                 </span>
               </div>
             <% end %>

@@ -12,32 +12,41 @@ defmodule CinegraphWeb.DirectorLive.Show do
 
   @impl true
   def handle_params(%{"id" => id}, _url, socket) do
-    director = People.get_person_with_credits!(id)
-    
-    # Verify this person is actually a director
-    is_director = director.known_for_department == "Directing" || 
-                  Enum.any?(director.crew_credits, & &1.job == "Director")
-    
-    if is_director do
-      socket =
-        socket
-        |> assign(:page_title, "Director Analysis: #{director.name}")
-        |> assign(:director, director)
-        |> assign(:director_stats, get_director_stats(director))
-        |> assign(:frequent_actors, get_frequent_actors(id))
-        |> assign(:genre_analysis, analyze_genres(director))
-        |> assign(:rating_trends, get_rating_trends(director))
-        |> assign(:box_office_trends, get_box_office_trends(director))
-        |> assign(:collaboration_network, get_collaboration_network(id))
+    case People.get_person_with_credits(id) do
+      nil ->
+        socket =
+          socket
+          |> put_flash(:error, "Person not found")
+          |> push_navigate(to: ~p"/people")
+        
+        {:noreply, socket}
       
-      {:noreply, socket}
-    else
-      socket =
-        socket
-        |> put_flash(:error, "This person is not a director")
-        |> redirect(to: ~p"/people/#{id}")
-      
-      {:noreply, socket}
+      director ->
+        # Verify this person is actually a director
+        is_director = director.known_for_department == "Directing" || 
+                      Enum.any?(director.crew_credits, & &1.job == "Director")
+        
+        if is_director do
+          socket =
+            socket
+            |> assign(:page_title, "Director Analysis: #{director.name}")
+            |> assign(:director, director)
+            |> assign(:director_stats, get_director_stats(director))
+            |> assign(:frequent_actors, get_frequent_actors(id))
+            |> assign(:genre_analysis, analyze_genres(director))
+            |> assign(:rating_trends, get_rating_trends(director))
+            |> assign(:box_office_trends, get_box_office_trends(director))
+            |> assign(:collaboration_network, get_collaboration_network(id))
+          
+          {:noreply, socket}
+        else
+          socket =
+            socket
+            |> put_flash(:error, "This person is not a director")
+            |> push_navigate(to: ~p"/people/#{id}")
+          
+          {:noreply, socket}
+        end
     end
   end
 
@@ -222,7 +231,9 @@ defmodule CinegraphWeb.DirectorLive.Show do
     LIMIT 20
     """
     
-    case Cinegraph.Repo.query(query, [String.to_integer(director_id)]) do
+    director_id_int = if is_binary(director_id), do: String.to_integer(director_id), else: director_id
+    
+    case Cinegraph.Repo.query(query, [director_id_int]) do
       {:ok, %{rows: rows}} ->
         Enum.map(rows, fn [id, name, job, department, collaborations, avg_rating] ->
           %{
