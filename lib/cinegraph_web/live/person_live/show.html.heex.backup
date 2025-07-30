@@ -8,20 +8,8 @@
       Back to People
     </.link>
     
-    <div class="flex items-center space-x-3">
-      <%= if @person.known_for_department == "Directing" || Enum.any?(@person.crew_credits || [], & &1.job == "Director") do %>
-        <.link navigate={~p"/directors/#{@person.id}"} 
-               class="inline-flex items-center px-3 py-1 border border-blue-600 text-blue-600 rounded-full text-sm font-medium hover:bg-blue-50">
-          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          Director Analysis
-        </.link>
-      <% end %>
-      
-      <div class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-        TMDB: <%= @person.tmdb_id %>
-      </div>
+    <div class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
+      TMDB: <%= @person.tmdb_id %>
     </div>
   </div>
 
@@ -153,112 +141,14 @@
     <% end %>
   </div>
 
-  <!-- Collaboration Network Statistics -->
-  <div class="bg-white rounded-lg shadow p-6 mb-8">
-    <h2 class="text-xl font-bold text-gray-900 mb-4">Collaboration Network</h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="text-center">
-        <div class="text-3xl font-bold text-indigo-600"><%= @collaboration_stats.total_collaborators %></div>
-        <div class="text-sm text-gray-600">Total Collaborators</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-pink-600"><%= @collaboration_stats.unique_directors %></div>
-        <div class="text-sm text-gray-600">Unique Directors</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-yellow-600"><%= @collaboration_stats.recurring_partners %></div>
-        <div class="text-sm text-gray-600">Recurring Partners</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-teal-600">
-          <%= @collaboration_stats.peak_year || "-" %>
-        </div>
-        <div class="text-sm text-gray-600">Peak Collaboration Year</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Six Degrees Challenge Widget -->
-  <div class="bg-white rounded-lg shadow p-6 mb-8">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold text-gray-900">Six Degrees Challenge</h2>
-      <button phx-click="toggle_six_degrees" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-        <%= if @show_six_degrees do %>
-          Hide
-        <% else %>
-          Show
-        <% end %>
-      </button>
-    </div>
-    
-    <%= if @show_six_degrees do %>
-      <div class="space-y-4">
-        <div class="flex items-center space-x-4">
-          <label class="text-sm font-medium text-gray-700">Connect to:</label>
-          <form phx-submit="search_six_degrees" class="flex-1 flex space-x-2">
-            <input type="text" 
-                   name="target_person_id" 
-                   placeholder="Enter person ID..."
-                   class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                   disabled={@six_degrees_loading} />
-            <button type="submit" 
-                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    disabled={@six_degrees_loading}>
-              <%= if @six_degrees_loading do %>
-                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Finding...
-              <% else %>
-                Find Path
-              <% end %>
-            </button>
-          </form>
-        </div>
-        
-        <%= if @six_degrees_path do %>
-          <%= if @six_degrees_path == :no_path do %>
-            <div class="mt-4 p-4 bg-yellow-50 rounded-lg">
-              <p class="text-sm text-yellow-800">No path found within 6 degrees.</p>
-            </div>
-          <% else %>
-            <div class="mt-4 p-4 bg-green-50 rounded-lg">
-              <p class="text-sm font-medium text-green-800 mb-2">
-                Path found! (<%= length(@six_degrees_path) %> degrees)
-              </p>
-              <div class="space-y-2">
-                <%= for {person_a_id, movie, person_b_id} <- @six_degrees_path do %>
-                  <div class="flex items-center text-sm text-gray-700">
-                    <span class="font-medium">Person <%= person_a_id %></span>
-                    <span class="mx-2">→</span>
-                    <span class="text-blue-600">[<%= movie.title %>]</span>
-                    <span class="mx-2">→</span>
-                    <span class="font-medium">Person <%= person_b_id %></span>
-                  </div>
-                <% end %>
-              </div>
-            </div>
-          <% end %>
-        <% end %>
-      </div>
-    <% end %>
-  </div>
-
-  <!-- Enhanced Frequent Collaborators -->
-  <%= if length(@frequent_collaborators) > 0 do %>
+  <!-- Frequent Collaborators -->
+  <%= if length(@person.collaborators) > 0 do %>
     <div class="bg-white rounded-lg shadow p-6 mb-8">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-gray-900">Frequent Collaborators</h2>
-        <.link navigate={~p"/collaborations?person_id=#{@person.id}"} 
-               class="text-blue-600 hover:text-blue-800 text-sm font-medium">
-          View Full Network →
-        </.link>
-      </div>
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Frequent Collaborators</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <%= for collab <- @frequent_collaborators do %>
+        <%= for collab <- Enum.take(@person.collaborators, 12) do %>
           <.link navigate={~p"/people/#{collab.person.id}"} 
-                 class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
+                 class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
             <%= if collab.person.profile_path do %>
               <img 
                 src={Cinegraph.Movies.Person.profile_url(collab.person, "w185")} 
@@ -275,13 +165,7 @@
             <div class="flex-1 min-w-0">
               <p class="font-medium text-gray-900 truncate"><%= collab.person.name %></p>
               <p class="text-sm text-gray-600">
-                <%= collab.collaboration_count %> films • 
-                <span class={"inline-flex px-2 py-0.5 text-xs font-medium rounded-full #{strength_color(collab.strength)}"}>
-                  <%= humanize_strength(collab.strength) %>
-                </span>
-              </p>
-              <p class="text-xs text-gray-500 mt-1">
-                <%= collab.first_date.year %> - <%= collab.latest_date.year %>
+                <%= collab.movies_together %> movies • <%= Enum.join(collab.roles, ", ") %>
               </p>
             </div>
           </.link>

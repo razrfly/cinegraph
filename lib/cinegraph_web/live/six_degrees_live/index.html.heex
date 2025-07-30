@@ -1,0 +1,402 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Game Header -->
+  <div class="text-center mb-8">
+    <h1 class="text-4xl font-bold text-gray-900 mb-2">🎬 Six Degrees Game</h1>
+    <p class="text-lg text-gray-600">
+      Can you connect any two actors through their movie appearances?
+    </p>
+  </div>
+
+  <!-- Game Stats Banner -->
+  <div class="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-lg p-6 mb-8 text-white">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+      <div>
+        <div class="text-3xl font-bold"><%= @game_stats.total_games %></div>
+        <div class="text-sm opacity-90">Games Played</div>
+      </div>
+      <div>
+        <div class="text-3xl font-bold"><%= Float.round(@game_stats.avg_degrees, 1) %></div>
+        <div class="text-sm opacity-90">Avg Degrees</div>
+      </div>
+      <div>
+        <div class="text-3xl font-bold"><%= Float.round(@game_stats.success_rate, 1) %>%</div>
+        <div class="text-sm opacity-90">Success Rate</div>
+      </div>
+      <div>
+        <div class="text-3xl font-bold"><%= @game_stats.avg_time_ms %>ms</div>
+        <div class="text-sm opacity-90">Avg Time</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Interface -->
+  <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <!-- Player 1 Selection -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          Player 1 (Start)
+        </label>
+        <div class="relative">
+          <input type="text"
+                 phx-keyup="search_player1"
+                 phx-debounce="300"
+                 value={@player1_search}
+                 placeholder="Search for an actor..."
+                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pr-10"
+                 disabled={@player1_selected != nil} />
+          
+          <%= if @player1_selected do %>
+            <button phx-click="clear_player1"
+                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          <% end %>
+          
+          <%= if @searching_player1 do %>
+            <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+              <svg class="animate-spin h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+          <% end %>
+        </div>
+        
+        <!-- Search Results for Player 1 -->
+        <%= if length(@player1_results) > 0 && !@player1_selected do %>
+          <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md py-1 max-h-60 overflow-auto">
+            <%= for person <- @player1_results do %>
+              <button phx-click="select_player1"
+                      phx-value-person_id={person.id}
+                      class="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-3">
+                <%= if person.profile_path do %>
+                  <img src={Cinegraph.Movies.Person.profile_url(person, "w92")} 
+                       alt={person.name}
+                       class="w-10 h-10 rounded-full object-cover" />
+                <% else %>
+                  <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                  </div>
+                <% end %>
+                <div>
+                  <div class="font-medium"><%= person.name %></div>
+                  <div class="text-xs text-gray-500"><%= person.known_for_department %></div>
+                </div>
+              </button>
+            <% end %>
+          </div>
+        <% end %>
+        
+        <!-- Selected Player 1 Display -->
+        <%= if @player1_selected do %>
+          <div class="mt-3 p-3 bg-blue-50 rounded-md flex items-center space-x-3">
+            <%= if @player1_selected.profile_path do %>
+              <img src={Cinegraph.Movies.Person.profile_url(@player1_selected, "w92")} 
+                   alt={@player1_selected.name}
+                   class="w-12 h-12 rounded-full object-cover" />
+            <% else %>
+              <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </div>
+            <% end %>
+            <div class="flex-1">
+              <div class="font-medium text-gray-900"><%= @player1_selected.name %></div>
+              <div class="text-sm text-gray-600"><%= @player1_selected.known_for_department %></div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+
+      <!-- Player 2 Selection -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          Player 2 (Destination)
+        </label>
+        <div class="relative">
+          <input type="text"
+                 phx-keyup="search_player2"
+                 phx-debounce="300"
+                 value={@player2_search}
+                 placeholder="Search for an actor..."
+                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pr-10"
+                 disabled={@player2_selected != nil} />
+          
+          <%= if @player2_selected do %>
+            <button phx-click="clear_player2"
+                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          <% end %>
+          
+          <%= if @searching_player2 do %>
+            <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+              <svg class="animate-spin h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+          <% end %>
+        </div>
+        
+        <!-- Search Results for Player 2 -->
+        <%= if length(@player2_results) > 0 && !@player2_selected do %>
+          <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md py-1 max-h-60 overflow-auto">
+            <%= for person <- @player2_results do %>
+              <button phx-click="select_player2"
+                      phx-value-person_id={person.id}
+                      class="w-full text-left px-4 py-2 hover:bg-gray-100 flex items-center space-x-3">
+                <%= if person.profile_path do %>
+                  <img src={Cinegraph.Movies.Person.profile_url(person, "w92")} 
+                       alt={person.name}
+                       class="w-10 h-10 rounded-full object-cover" />
+                <% else %>
+                  <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                  </div>
+                <% end %>
+                <div>
+                  <div class="font-medium"><%= person.name %></div>
+                  <div class="text-xs text-gray-500"><%= person.known_for_department %></div>
+                </div>
+              </button>
+            <% end %>
+          </div>
+        <% end %>
+        
+        <!-- Selected Player 2 Display -->
+        <%= if @player2_selected do %>
+          <div class="mt-3 p-3 bg-purple-50 rounded-md flex items-center space-x-3">
+            <%= if @player2_selected.profile_path do %>
+              <img src={Cinegraph.Movies.Person.profile_url(@player2_selected, "w92")} 
+                   alt={@player2_selected.name}
+                   class="w-12 h-12 rounded-full object-cover" />
+            <% else %>
+              <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                </svg>
+              </div>
+            <% end %>
+            <div class="flex-1">
+              <div class="font-medium text-gray-900"><%= @player2_selected.name %></div>
+              <div class="text-sm text-gray-600"><%= @player2_selected.known_for_department %></div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+    <!-- Find Path Button -->
+    <div class="text-center">
+      <button phx-click="find_path"
+              disabled={!@player1_selected || !@player2_selected || @finding_path}
+              class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
+        <%= if @finding_path do %>
+          <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Finding Connection...
+        <% else %>
+          Find Connection!
+        <% end %>
+      </button>
+    </div>
+  </div>
+
+  <!-- Path Result -->
+  <%= if @path_result do %>
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+      <%= if @path_result.success do %>
+        <div class="text-center mb-6">
+          <h2 class="text-2xl font-bold text-green-600 mb-2">
+            🎉 Connection Found!
+          </h2>
+          <p class="text-lg text-gray-700">
+            <%= @player1_selected.name %> and <%= @player2_selected.name %> are connected in 
+            <span class="font-bold text-2xl text-blue-600"><%= @path_result.degrees %></span> degrees!
+          </p>
+          <p class="text-sm text-gray-500 mt-1">
+            Found in <%= @path_result.time_ms %>ms
+          </p>
+        </div>
+
+        <!-- Path Visualization -->
+        <div class="space-y-4">
+          <%= for {step, index} <- Enum.with_index(@path_result.path) do %>
+            <div class="flex items-center">
+              <!-- Person A -->
+              <div class="flex-shrink-0 text-center">
+                <.link navigate={~p"/people/#{step.person_a.id}"} 
+                       class="block hover:opacity-80 transition-opacity">
+                  <%= if step.person_a.profile_path do %>
+                    <img src={Cinegraph.Movies.Person.profile_url(step.person_a, "w185")} 
+                         alt={step.person_a.name}
+                         class="w-20 h-20 rounded-full object-cover mx-auto mb-1" />
+                  <% else %>
+                    <div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-1">
+                      <svg class="w-10 h-10 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                      </svg>
+                    </div>
+                  <% end %>
+                  <p class="text-sm font-medium text-gray-900"><%= step.person_a.name %></p>
+                </.link>
+              </div>
+
+              <!-- Movie Connection -->
+              <div class="flex-1 px-4">
+                <div class="relative">
+                  <div class="absolute inset-0 flex items-center" aria-hidden="true">
+                    <div class="w-full border-t-2 border-gray-300 border-dashed"></div>
+                  </div>
+                  <div class="relative flex justify-center">
+                    <.link navigate={~p"/movies/#{step.movie.id}"}
+                           class="px-4 py-2 bg-white border-2 border-blue-500 rounded-lg text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors">
+                      <%= step.movie.title %>
+                      <%= if step.movie.release_date do %>
+                        (<%= step.movie.release_date.year %>)
+                      <% end %>
+                    </.link>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Person B -->
+              <div class="flex-shrink-0 text-center">
+                <.link navigate={~p"/people/#{step.person_b.id}"} 
+                       class="block hover:opacity-80 transition-opacity">
+                  <%= if step.person_b.profile_path do %>
+                    <img src={Cinegraph.Movies.Person.profile_url(step.person_b, "w185")} 
+                         alt={step.person_b.name}
+                         class="w-20 h-20 rounded-full object-cover mx-auto mb-1" />
+                  <% else %>
+                    <div class="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-1">
+                      <svg class="w-10 h-10 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                      </svg>
+                    </div>
+                  <% end %>
+                  <p class="text-sm font-medium text-gray-900"><%= step.person_b.name %></p>
+                </.link>
+              </div>
+            </div>
+
+            <%= if index < length(@path_result.path) - 1 do %>
+              <div class="flex justify-center">
+                <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="text-center">
+          <h2 class="text-2xl font-bold text-red-600 mb-2">
+            😔 No Connection Found
+          </h2>
+          <p class="text-lg text-gray-700">
+            <%= @path_result.message %>
+          </p>
+          <p class="text-sm text-gray-500 mt-1">
+            Search completed in <%= @path_result.time_ms %>ms
+          </p>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <!-- Recent Games & Leaderboard -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Recent Games -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">🕐 Recent Games</h2>
+      <div class="space-y-3">
+        <%= for game <- @recent_games do %>
+          <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-gray-900">
+                <.link navigate={~p"/people/#{game.player1.id}"} class="hover:text-blue-600">
+                  <%= game.player1.name %>
+                </.link>
+                →
+                <.link navigate={~p"/people/#{game.player2.id}"} class="hover:text-blue-600">
+                  <%= game.player2.name %>
+                </.link>
+              </p>
+              <p class="text-xs text-gray-500"><%= game.time_ago %></p>
+            </div>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              <%= game.degrees %> degrees
+            </span>
+          </div>
+        <% end %>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-900">🏆 Leaderboard</h2>
+        <button phx-click="toggle_leaderboard"
+                class="text-sm text-blue-600 hover:text-blue-800 font-medium">
+          <%= if @show_leaderboard, do: "Hide", else: "Show All" %>
+        </button>
+      </div>
+      
+      <%= if @show_leaderboard do %>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connection</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Degrees</th>
+                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Player</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for entry <- @leaderboard do %>
+                <tr>
+                  <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <%= case entry.rank do %>
+                      <% 1 -> %>🥇
+                      <% 2 -> %>🥈
+                      <% 3 -> %>🥉
+                      <% _ -> %><%= entry.rank %>
+                    <% end %>
+                  </td>
+                  <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                    <%= entry.player1 %> → <%= entry.player2 %>
+                  </td>
+                  <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                    <%= entry.degrees %>
+                  </td>
+                  <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                    <%= entry.players %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      <% else %>
+        <p class="text-sm text-gray-600">
+          Think you can find the shortest path? Play the game and compete for the top spot!
+        </p>
+      <% end %>
+    </div>
+  </div>
+</div>
