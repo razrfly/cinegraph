@@ -46,12 +46,26 @@ defmodule Cinegraph.People do
   Raises if the person does not exist.
   """
   def get_person_with_credits!(id) do
-    person = Repo.get!(Person, id)
-    
+    Repo.get!(Person, id) 
+    |> enrich_person_with_credits()
+  end
+  
+  @doc """
+  Gets a person with all their movies and credits preloaded.
+  Returns nil if the person does not exist.
+  """
+  def get_person_with_credits(id) do
+    case Repo.get(Person, id) do
+      nil -> nil
+      person -> enrich_person_with_credits(person)
+    end
+  end
+  
+  defp enrich_person_with_credits(person) do
     # Get all credits for this person with movie details
     credits = 
       Credit
-      |> where([c], c.person_id == ^id)
+      |> where([c], c.person_id == ^person.id)
       |> join(:inner, [c], m in Movie, on: c.movie_id == m.id)
       |> preload([c, m], movie: m)
       |> order_by([c, m], desc: m.release_date)
@@ -65,7 +79,7 @@ defmodule Cinegraph.People do
     crew_by_department = Enum.group_by(crew_credits, & &1.department)
     
     # Find frequent collaborators
-    collaborators = find_frequent_collaborators(id, credits)
+    collaborators = find_frequent_collaborators(person.id, credits)
     
     person
     |> Map.put(:cast_credits, cast_credits)
@@ -73,42 +87,6 @@ defmodule Cinegraph.People do
     |> Map.put(:crew_by_department, crew_by_department)
     |> Map.put(:collaborators, collaborators)
     |> Map.put(:total_movies, length(Enum.uniq_by(credits, & &1.movie_id)))
-  end
-  
-  @doc """
-  Gets a person with all their movies and credits preloaded.
-  Returns nil if the person does not exist.
-  """
-  def get_person_with_credits(id) do
-    case Repo.get(Person, id) do
-      nil -> nil
-      person ->
-        # Get all credits for this person with movie details
-        credits = 
-          Credit
-          |> where([c], c.person_id == ^id)
-          |> join(:inner, [c], m in Movie, on: c.movie_id == m.id)
-          |> preload([c, m], movie: m)
-          |> order_by([c, m], desc: m.release_date)
-          |> Repo.all()
-        
-        # Separate cast and crew credits
-        cast_credits = Enum.filter(credits, & &1.credit_type == "cast")
-        crew_credits = Enum.filter(credits, & &1.credit_type == "crew")
-        
-        # Group crew credits by department
-        crew_by_department = Enum.group_by(crew_credits, & &1.department)
-        
-        # Find frequent collaborators
-        collaborators = find_frequent_collaborators(id, credits)
-        
-        person
-        |> Map.put(:cast_credits, cast_credits)
-        |> Map.put(:crew_credits, crew_credits)
-        |> Map.put(:crew_by_department, crew_by_department)
-        |> Map.put(:collaborators, collaborators)
-        |> Map.put(:total_movies, length(Enum.uniq_by(credits, & &1.movie_id)))
-    end
   end
 
   @doc """

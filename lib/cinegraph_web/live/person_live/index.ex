@@ -15,8 +15,15 @@ defmodule CinegraphWeb.PersonLive.Index do
 
   @impl true
   def handle_params(params, _url, socket) do
-    page = String.to_integer(params["page"] || "1")
-    per_page = String.to_integer(params["per_page"] || "20")
+    page = case Integer.parse(params["page"] || "1") do
+      {page_num, _} when page_num > 0 -> page_num
+      _ -> 1
+    end
+    
+    per_page = case Integer.parse(params["per_page"] || "20") do
+      {per_page_num, _} when per_page_num > 0 and per_page_num <= 100 -> per_page_num
+      _ -> 20
+    end
     
     people = People.list_people(%{"page" => to_string(page), "per_page" => to_string(per_page)})
     
