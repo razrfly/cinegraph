@@ -12,6 +12,25 @@
     </script>
   </head>
   <body class="bg-white">
+    <header class="px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-7xl">
+        <div class="flex items-center justify-between border-b border-zinc-100 py-3">
+          <div class="flex items-center gap-6">
+            <a href="/" class="text-lg font-bold text-zinc-900">
+              Cinegraph
+            </a>
+            <nav class="flex items-center gap-4 text-sm font-medium">
+              <.link navigate={~p"/movies"} class="text-zinc-700 hover:text-zinc-900">
+                Movies
+              </.link>
+              <.link navigate={~p"/people"} class="text-zinc-700 hover:text-zinc-900">
+                People
+              </.link>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </header>
     {@inner_content}
   </body>
 </html>
