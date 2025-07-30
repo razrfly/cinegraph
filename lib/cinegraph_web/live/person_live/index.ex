@@ -45,7 +45,7 @@ defmodule CinegraphWeb.PersonLive.Index do
   end
   
   # Helper function for pagination range
-  def pagination_range(current_page, total_pages) when total_pages <= 7 do
+  def pagination_range(_current_page, total_pages) when total_pages <= 7 do
     1..total_pages |> Enum.to_list()
   end
   

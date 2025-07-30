@@ -1,0 +1,199 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <h1 class="text-3xl font-bold text-gray-900 mb-8">🔍 Explore Collaborations</h1>
+  
+  <!-- Search Section -->
+  <div class="bg-white rounded-lg shadow p-6 mb-8">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">Search Collaborations</h2>
+    <form phx-submit="search_collaborations" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="actor_id" class="block text-sm font-medium text-gray-700 mb-1">
+            Actor ID (optional)
+          </label>
+          <input type="text" 
+                 name="actor_id" 
+                 id="actor_id"
+                 value={@search_actor_id}
+                 placeholder="Enter actor ID..."
+                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                 disabled={@loading} />
+        </div>
+        <div>
+          <label for="director_id" class="block text-sm font-medium text-gray-700 mb-1">
+            Director ID (optional)
+          </label>
+          <input type="text" 
+                 name="director_id" 
+                 id="director_id"
+                 value={@search_director_id}
+                 placeholder="Enter director ID..."
+                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                 disabled={@loading} />
+        </div>
+      </div>
+      <button type="submit" 
+              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={@loading}>
+        <%= if @loading do %>
+          <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Searching...
+        <% else %>
+          Search
+        <% end %>
+      </button>
+    </form>
+    
+    <%= if assigns[:highlighted_person] do %>
+      <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+        <p class="text-sm text-blue-800">
+          Showing collaborations for: <span class="font-medium"><%= @highlighted_person.name %></span>
+        </p>
+      </div>
+    <% end %>
+  </div>
+  
+  <!-- Search Results -->
+  <%= if @search_results do %>
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">
+        Search Results (<%= length(@search_results) %>)
+      </h2>
+      <%= if length(@search_results) > 0 do %>
+        <div class="space-y-4">
+          <%= for result <- @search_results do %>
+            <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center space-x-3">
+                  <.link navigate={~p"/people/#{result.person_a.id}"} 
+                         class="font-medium text-gray-900 hover:text-blue-600">
+                    <%= result.person_a.name %>
+                  </.link>
+                  <span class="text-gray-500">&</span>
+                  <.link navigate={~p"/people/#{result.person_b.id}"} 
+                         class="font-medium text-gray-900 hover:text-blue-600">
+                    <%= result.person_b.name %>
+                  </.link>
+                </div>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                  <%= result.collaboration_count %> <%= if result.collaboration_count == 1, do: "film", else: "films" %>
+                </span>
+              </div>
+              
+              <div class="flex items-center space-x-4 text-sm text-gray-600">
+                <%= if result[:avg_rating] do %>
+                  <span>Avg Rating: ★ <%= Float.round(result.avg_rating || 0, 1) %></span>
+                <% end %>
+                <%= if result[:total_revenue] && result.total_revenue > 0 do %>
+                  <span>Total Revenue: $<%= div(result.total_revenue, 1_000_000) %>M</span>
+                <% end %>
+                <%= if result[:latest_date] do %>
+                  <span>Latest: <%= result.latest_date.year %></span>
+                <% end %>
+              </div>
+              
+              <%= if result[:movies] do %>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <%= for movie <- Enum.take(result.movies, 5) do %>
+                    <.link navigate={~p"/movies/#{movie.id}"} 
+                           class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+                      <%= movie.title %> (<%= movie.release_date.year %>)
+                    </.link>
+                  <% end %>
+                  <%= if length(result.movies) > 5 do %>
+                    <span class="text-xs text-gray-500 px-2 py-1">
+                      +<%= length(result.movies) - 5 %> more
+                    </span>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% else %>
+        <p class="text-gray-500">No collaborations found for the given search criteria.</p>
+      <% end %>
+    </div>
+  <% end %>
+  
+  <!-- Trending Collaborations -->
+  <div class="bg-white rounded-lg shadow p-6 mb-8">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">
+      🔥 Trending Collaborations (2023-2025)
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <%= for collab <- @trending_collaborations do %>
+        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div class="mb-2">
+            <.link navigate={~p"/people/#{collab.person_a.id}"} 
+                   class="font-medium text-gray-900 hover:text-blue-600">
+              <%= collab.person_a.name %>
+            </.link>
+            <span class="text-gray-500 mx-1">&</span>
+            <.link navigate={~p"/people/#{collab.person_b.id}"} 
+                   class="font-medium text-gray-900 hover:text-blue-600">
+              <%= collab.person_b.name %>
+            </.link>
+          </div>
+          
+          <div class="space-y-1 text-xs text-gray-600">
+            <div class="flex justify-between">
+              <span>Films:</span>
+              <span class="font-medium"><%= collab.collaboration_count %></span>
+            </div>
+            <%= if collab[:avg_rating] do %>
+              <div class="flex justify-between">
+                <span>Avg Rating:</span>
+                <span class="font-medium">★ <%= Float.round(collab.avg_rating || 0, 1) %></span>
+              </div>
+            <% end %>
+            <%= if collab[:total_revenue] && collab.total_revenue > 0 do %>
+              <div class="flex justify-between">
+                <span>Revenue:</span>
+                <span class="font-medium">$<%= div(collab.total_revenue, 1_000_000) %>M</span>
+              </div>
+            <% end %>
+          </div>
+          
+          <button phx-click="find_similar" 
+                  phx-value-collaboration_id={collab.id}
+                  class="mt-3 w-full text-xs py-1 px-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors">
+            Find Similar →
+          </button>
+        </div>
+      <% end %>
+    </div>
+  </div>
+  
+  <!-- Similar Collaborations -->
+  <%= if @similar_collaborations do %>
+    <div class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">
+        Similar to: <%= @selected_collaboration.person_a.name %> & <%= @selected_collaboration.person_b.name %>
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <%= for similar <- @similar_collaborations do %>
+          <div class="border border-gray-200 rounded-lg p-4">
+            <div class="font-medium text-gray-900 mb-2">
+              <.link navigate={~p"/people/#{similar.person_a.id}"} class="hover:text-blue-600">
+                <%= similar.person_a.name %>
+              </.link>
+              <span class="text-gray-500 mx-1">&</span>
+              <.link navigate={~p"/people/#{similar.person_b.id}"} class="hover:text-blue-600">
+                <%= similar.person_b.name %>
+              </.link>
+            </div>
+            <div class="text-sm text-gray-600">
+              <%= similar.collaboration_count %> films together
+              <%= if similar.avg_movie_rating do %>
+                • ★ <%= Float.round(similar.avg_movie_rating || 0, 1) %>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

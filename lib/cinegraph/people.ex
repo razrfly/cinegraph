@@ -138,13 +138,14 @@ defmodule Cinegraph.People do
   @doc """
   Searches for people by name.
   """
-  def search_people(query) do
+  def search_people(query, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
     search_term = "%#{query}%"
     
     Person
     |> where([p], ilike(p.name, ^search_term))
     |> order_by([p], desc: p.popularity)
-    |> limit(20)
+    |> limit(^limit)
     |> Repo.all()
   end
 

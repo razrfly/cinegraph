@@ -125,6 +125,53 @@
     </div>
   </div>
 
+  <!-- KEY COLLABORATIONS -->
+  <%= if @movie.key_collaborations.total_reunions > 0 do %>
+    <div class="bg-white rounded-lg shadow p-6 my-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">🎬 Notable Collaborations</h2>
+      
+      <%= if length(@movie.key_collaborations.director_actor_reunions) > 0 do %>
+        <div class="mb-6">
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Director-Actor Reunions</h3>
+          <div class="space-y-3">
+            <%= for collab <- @movie.key_collaborations.director_actor_reunions do %>
+              <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                <div class="flex items-center space-x-3">
+                  <span class="text-gray-900 font-medium"><%= collab.person_b.name %></span>
+                  <span class="text-gray-500">&</span>
+                  <span class="text-gray-900 font-medium"><%= collab.person_a.name %></span>
+                </div>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-200 text-blue-800">
+                  <%= collab.collaboration_count %><%= if collab.collaboration_count == 2, do: "nd", else: "th" %> collaboration
+                </span>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+      
+      <%= if length(@movie.key_collaborations.actor_partnerships) > 0 do %>
+        <div>
+          <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Actor Partnerships</h3>
+          <div class="space-y-3">
+            <%= for collab <- @movie.key_collaborations.actor_partnerships do %>
+              <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                <div class="flex items-center space-x-3">
+                  <span class="text-gray-900 font-medium"><%= collab.person_a.name %></span>
+                  <span class="text-gray-500">&</span>
+                  <span class="text-gray-900 font-medium"><%= collab.person_b.name %></span>
+                </div>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-200 text-green-800">
+                  <%= collab.collaboration_count %> films together
+                </span>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
   <!-- ALL DATA SECTIONS -->
   <div class="space-y-8">
     
