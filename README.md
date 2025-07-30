@@ -110,7 +110,7 @@ mix ecto.migrate
 
 ### Database Population
 
-CineGraph requires movie data to function properly. We provide several methods for populating your database:
+CineGraph requires movie data to function properly. We use a modular import system that allows you to drop and re-import data multiple times during development as we iterate on the data model.
 
 #### Quick Start (40 movies)
 ```bash
@@ -128,33 +128,88 @@ CineGraph requires movie data to function properly. We provide several methods f
 ```bash
 # Drop database, recreate, and import 200 movies
 ./scripts/import_with_env.sh --reset --pages 10
+
+# The --reset flag performs:
+# 1. mix ecto.drop (removes the database)
+# 2. mix ecto.create (creates fresh database)
+# 3. mix ecto.migrate (runs all migrations)
+# 4. Imports the specified number of pages
 ```
 
 #### Import Specific Movies
 ```bash
 # Import specific movies by TMDb ID
 ./scripts/import_with_env.sh --ids 550,278,238
+
+# Import specific movies with selected APIs only
+./scripts/import_with_env.sh --ids 550,278,238 --apis tmdb
 ```
 
-#### Enrich with OMDb Data
+#### Modular API Import (when Oban is available)
+```bash
+# Import using only TMDb data
+./scripts/import_with_env.sh --pages 5 --apis tmdb
+
+# Import using both TMDb and OMDb
+./scripts/import_with_env.sh --pages 5 --apis tmdb,omdb
+
+# Queue imports as background jobs instead of immediate processing
+./scripts/import_with_env.sh --pages 5 --queue
+
+# Combine options for maximum control
+./scripts/import_with_env.sh --reset --pages 10 --apis tmdb,omdb --queue --verbose
+```
+
+#### Enrich Existing Data
 ```bash
 # Add OMDb ratings to existing movies
 ./scripts/enrich_with_omdb.sh
+
+# Or use the mix task directly for specific enrichment
+mix import_movies --enrich --api omdb
+mix import_movies --enrich --api tmdb --queue
+```
+
+#### Additional Options
+```bash
+# Fresh start - clear all data first (without dropping database)
+./scripts/import_with_env.sh --fresh --pages 10
+
+# Show detailed progress during import
+./scripts/import_with_env.sh --pages 10 --verbose
 ```
 
 ### Import Process Details
 
-The import process fetches comprehensive data from TMDb and OMDb:
+The import process uses a comprehensive, modular approach:
 
-- **TMDb Data**: Movies, cast, crew, keywords, videos, release dates, production companies
-- **OMDb Data**: IMDb ratings, Rotten Tomatoes scores, Metacritic scores, box office data
+1. **Data Sources**:
+   - **TMDb Data**: Movies, cast, crew, keywords, videos, release dates, production companies
+   - **OMDb Data**: IMDb ratings, Rotten Tomatoes scores, Metacritic scores, box office data
+
+2. **Modular System Features**:
+   - Selective API usage (import from specific sources)
+   - Queue-based processing with Oban (when available)
+   - Progress tracking with `--verbose` flag
+   - Automatic retry logic for failed imports
+
+3. **Database Reset Strategy**:
+   - We frequently drop and re-import during development
+   - The `--reset` flag handles the complete cycle
+   - Data is cleared in proper order respecting foreign keys
+   - All associations are properly maintained
 
 **Time Estimates**:
 - 2 pages (40 movies): ~2-3 minutes
 - 10 pages (200 movies): ~10-15 minutes
 - 25 pages (500 movies): ~25-35 minutes
+- With `--queue`: Initial queueing takes seconds, processing happens in background
 
-**Note**: OMDb has a free tier limit of 1,000 requests/day, so the import includes a 1-second delay between OMDb requests.
+**Important Notes**:
+- OMDb has a free tier limit of 1,000 requests/day
+- The import includes a 1-second delay between OMDb requests
+- TMDb allows 40 requests/10 seconds
+- When using `--queue`, jobs are processed by Oban workers with rate limiting
 
 ### Start Server
 
