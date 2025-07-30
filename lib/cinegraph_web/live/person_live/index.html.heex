@@ -1,7 +1,12 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="mb-6">
-    <h1 class="text-3xl font-bold text-gray-900">People</h1>
-    <p class="text-gray-600 mt-2">Browse actors, directors, and crew members</p>
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900">People</h1>
+      <p class="text-gray-600 mt-2">Browse <%= @total_people %> actors, directors, and crew members</p>
+    </div>
+    <div class="text-sm text-gray-600">
+      Page <%= @page %> of <%= @total_pages %>
+    </div>
   </div>
 
   <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -42,4 +47,46 @@
       </.link>
     <% end %>
   </div>
+  
+  <!-- Pagination Controls -->
+  <%= if @total_pages > 1 do %>
+    <div class="mt-8 flex items-center justify-center space-x-2">
+      <%= if @page > 1 do %>
+        <.link 
+          navigate={~p"/people?#{[page: @page - 1, per_page: @per_page]}"} 
+          class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+          Previous
+        </.link>
+      <% else %>
+        <span class="px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-300 rounded-md cursor-not-allowed">
+          Previous
+        </span>
+      <% end %>
+      
+      <!-- Page Numbers -->
+      <%= for page_num <- pagination_range(@page, @total_pages) do %>
+        <%= if page_num == "..." do %>
+          <span class="px-3 py-2 text-sm text-gray-700">...</span>
+        <% else %>
+          <.link 
+            navigate={~p"/people?#{[page: page_num, per_page: @per_page]}"} 
+            class={"px-3 py-2 text-sm font-medium rounded-md #{if page_num == @page, do: "bg-blue-600 text-white", else: "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"}"}>
+            <%= page_num %>
+          </.link>
+        <% end %>
+      <% end %>
+      
+      <%= if @page < @total_pages do %>
+        <.link 
+          navigate={~p"/people?#{[page: @page + 1, per_page: @per_page]}"} 
+          class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+          Next
+        </.link>
+      <% else %>
+        <span class="px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-300 rounded-md cursor-not-allowed">
+          Next
+        </span>
+      <% end %>
+    </div>
+  <% end %>
 </div>
