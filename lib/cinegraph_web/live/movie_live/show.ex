@@ -65,7 +65,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     }
     
     # Get key collaborations for this movie
-    key_collaborations = get_key_collaborations(id, cast, crew)
+    key_collaborations = get_key_collaborations(cast, crew)
     
     movie
     |> Map.put(:cast, cast)
@@ -82,7 +82,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:key_collaborations, key_collaborations)
   end
   
-  defp get_key_collaborations(_movie_id, cast, crew) do
+  defp get_key_collaborations(cast, crew) do
     # Get directors
     directors = Enum.filter(crew, & &1.job == "Director")
     

@@ -83,28 +83,28 @@
               </div>
               
               <div class="flex items-center space-x-4 text-sm text-gray-600">
-                <%= if result[:avg_rating] do %>
-                  <span>Avg Rating: ★ <%= Float.round(result.avg_rating || 0, 1) %></span>
+                <%= if Map.get(result, :avg_rating) do %>
+                  <span>Avg Rating: ★ <%= Float.round(Map.get(result, :avg_rating) || 0, 1) %></span>
                 <% end %>
-                <%= if result[:total_revenue] && result.total_revenue > 0 do %>
-                  <span>Total Revenue: $<%= div(result.total_revenue, 1_000_000) %>M</span>
+                <%= if Map.get(result, :total_revenue) && Map.get(result, :total_revenue) > 0 do %>
+                  <span>Total Revenue: $<%= div(Map.get(result, :total_revenue), 1_000_000) %>M</span>
                 <% end %>
-                <%= if result[:latest_date] do %>
-                  <span>Latest: <%= result.latest_date.year %></span>
+                <%= if Map.get(result, :latest_date) do %>
+                  <span>Latest: <%= Map.get(result, :latest_date).year %></span>
                 <% end %>
               </div>
               
-              <%= if result[:movies] do %>
+              <%= if Map.get(result, :movies) do %>
                 <div class="mt-3 flex flex-wrap gap-2">
-                  <%= for movie <- Enum.take(result.movies, 5) do %>
+                  <%= for movie <- Enum.take(Map.get(result, :movies), 5) do %>
                     <.link navigate={~p"/movies/#{movie.id}"} 
                            class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
                       <%= movie.title %> (<%= movie.release_date.year %>)
                     </.link>
                   <% end %>
-                  <%= if length(result.movies) > 5 do %>
+                  <%= if length(Map.get(result, :movies)) > 5 do %>
                     <span class="text-xs text-gray-500 px-2 py-1">
-                      +<%= length(result.movies) - 5 %> more
+                      +<%= length(Map.get(result, :movies)) - 5 %> more
                     </span>
                   <% end %>
                 </div>
@@ -121,7 +121,7 @@
   <!-- Trending Collaborations -->
   <div class="bg-white rounded-lg shadow p-6 mb-8">
     <h2 class="text-xl font-bold text-gray-900 mb-4">
-      🔥 Trending Collaborations (2023-2025)
+      🔥 Trending Collaborations (Last 2 Years)
     </h2>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <%= for collab <- @trending_collaborations do %>
@@ -143,13 +143,13 @@
               <span>Films:</span>
               <span class="font-medium"><%= collab.collaboration_count %></span>
             </div>
-            <%= if collab[:avg_rating] do %>
+            <%= if Map.get(collab, :avg_rating) do %>
               <div class="flex justify-between">
                 <span>Avg Rating:</span>
                 <span class="font-medium">★ <%= Float.round(collab.avg_rating || 0, 1) %></span>
               </div>
             <% end %>
-            <%= if collab[:total_revenue] && collab.total_revenue > 0 do %>
+            <%= if Map.get(collab, :total_revenue) && collab.total_revenue > 0 do %>
               <div class="flex justify-between">
                 <span>Revenue:</span>
                 <span class="font-medium">$<%= div(collab.total_revenue, 1_000_000) %>M</span>

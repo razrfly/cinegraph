@@ -130,7 +130,7 @@
       </div>
       <div class="text-center">
         <div class="text-3xl font-bold text-orange-600">
-          <%= if @career_stats.years_active[:years], do: @career_stats.years_active[:years], else: "-" %>
+          <%= if @career_stats.years_active && Map.get(@career_stats.years_active, :years), do: Map.get(@career_stats.years_active, :years), else: "-" %>
         </div>
         <div class="text-sm text-gray-600">Years Active</div>
       </div>

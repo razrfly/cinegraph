@@ -2,9 +2,6 @@ defmodule Cinegraph.Repo.Migrations.CreateSimpleMaterializedView do
   use Ecto.Migration
 
   def up do
-    # First, let's try to complete the previous migration if it's stuck
-    execute "ROLLBACK", ""
-    
     # Create a simpler materialized view that's more performant
     execute """
     CREATE MATERIALIZED VIEW IF NOT EXISTS person_collaboration_trends AS

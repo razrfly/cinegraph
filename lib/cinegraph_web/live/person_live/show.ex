@@ -54,9 +54,14 @@ defmodule CinegraphWeb.PersonLive.Show do
   
   @impl true
   def handle_event("search_six_degrees", %{"target_person_id" => target_id}, socket) when target_id != "" do
-    socket = assign(socket, :six_degrees_loading, true)
-    send(self(), {:find_path, String.to_integer(target_id)})
-    {:noreply, socket}
+    case Integer.parse(target_id) do
+      {int_id, ""} -> 
+        socket = assign(socket, :six_degrees_loading, true)
+        send(self(), {:find_path, int_id})
+        {:noreply, socket}
+      _ -> 
+        {:noreply, put_flash(socket, :error, "Invalid target person ID")}
+    end
   end
   
   def handle_event("search_six_degrees", _params, socket) do
