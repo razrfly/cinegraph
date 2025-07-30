@@ -4,6 +4,7 @@ defmodule CinegraphWeb.MovieLive.Show do
   alias Cinegraph.Movies
   alias Cinegraph.Cultural
   alias Cinegraph.ExternalSources
+  alias Cinegraph.Collaborations
 
   @impl true
   def mount(_params, _session, socket) do
@@ -63,6 +64,9 @@ defmodule CinegraphWeb.MovieLive.Show do
       external_ratings_count: length(external_ratings)
     }
     
+    # Get key collaborations for this movie
+    key_collaborations = get_key_collaborations(id, cast, crew)
+    
     movie
     |> Map.put(:cast, cast)
     |> Map.put(:crew, crew) 
@@ -75,5 +79,70 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:production_companies, production_companies)
     |> Map.put(:all_external_sources, all_external_sources)
     |> Map.put(:missing_data, missing_data)
+    |> Map.put(:key_collaborations, key_collaborations)
+  end
+  
+  defp get_key_collaborations(_movie_id, cast, crew) do
+    # Get directors
+    directors = Enum.filter(crew, & &1.job == "Director")
+    
+    # Get top actors
+    top_actors = Enum.take(cast, 10)
+    
+    # Director-Actor reunions
+    director_actor_reunions = 
+      for director <- directors,
+          actor <- top_actors do
+        case Collaborations.find_actor_director_movies(actor.person_id, director.person_id) do
+          movies when length(movies) > 1 ->
+            %{
+              type: :director_actor,
+              person_a: actor.person,
+              person_b: director.person,
+              collaboration_count: length(movies),
+              is_reunion: true
+            }
+          _ ->
+            nil
+        end
+      end
+      |> Enum.reject(&is_nil/1)
+    
+    # Actor-Actor partnerships
+    actor_partnerships = 
+      for {actor1, idx} <- Enum.with_index(top_actors),
+          actor2 <- Enum.slice(top_actors, (idx + 1)..-1) do
+        query = """
+        SELECT c.collaboration_count
+        FROM collaborations c
+        WHERE (c.person_a_id = $1 AND c.person_b_id = $2)
+           OR (c.person_a_id = $2 AND c.person_b_id = $1)
+        """
+        
+        case Cinegraph.Repo.query(query, [actor1.person_id, actor2.person_id]) do
+          {:ok, %{rows: [[count]]}} when count > 1 ->
+            %{
+              type: :actor_actor,
+              person_a: actor1.person,
+              person_b: actor2.person,
+              collaboration_count: count,
+              is_reunion: true
+            }
+          _ ->
+            nil
+        end
+      end
+      |> Enum.reject(&is_nil/1)
+    
+    # Combine and sort by collaboration count
+    all_collaborations = director_actor_reunions ++ actor_partnerships
+    |> Enum.sort_by(& &1.collaboration_count, :desc)
+    |> Enum.take(6)
+    
+    %{
+      director_actor_reunions: Enum.filter(all_collaborations, & &1.type == :director_actor),
+      actor_partnerships: Enum.filter(all_collaborations, & &1.type == :actor_actor),
+      total_reunions: length(all_collaborations)
+    }
   end
 end
