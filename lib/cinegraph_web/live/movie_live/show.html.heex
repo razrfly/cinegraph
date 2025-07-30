@@ -212,7 +212,9 @@
           <div class="space-y-1 max-h-64 overflow-y-auto text-sm">
             <%= for cast_member <- Enum.take(@movie.cast, 10) do %>
               <div class="flex justify-between">
-                <span class="font-medium"><%= cast_member.person.name %></span>
+                <.link navigate={~p"/people/#{cast_member.person.id}"} class="font-medium hover:text-blue-600">
+                  <%= cast_member.person.name %>
+                </.link>
                 <%= if cast_member.character do %>
                   <span class="text-gray-500 text-xs"><%= String.slice(cast_member.character, 0, 30) %></span>
                 <% end %>
@@ -234,7 +236,9 @@
           <div class="space-y-1 text-sm">
             <%= for crew_member <- @movie.crew |> Enum.filter(& &1.job in ["Director", "Producer", "Screenplay", "Writer", "Director of Photography", "Composer"]) |> Enum.take(8) do %>
               <div class="flex justify-between">
-                <span class="font-medium"><%= crew_member.person.name %></span>
+                <.link navigate={~p"/people/#{crew_member.person.id}"} class="font-medium hover:text-blue-600">
+                  <%= crew_member.person.name %>
+                </.link>
                 <span class="text-gray-500 text-xs"><%= crew_member.job %></span>
               </div>
             <% end %>
