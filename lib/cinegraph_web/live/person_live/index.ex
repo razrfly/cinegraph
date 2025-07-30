@@ -5,21 +5,53 @@ defmodule CinegraphWeb.PersonLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :people, list_people())}
+    {:ok, 
+     socket
+     |> assign(:page, 1)
+     |> assign(:per_page, 20)
+     |> assign(:people, [])
+     |> assign(:total_people, 0)}
   end
 
   @impl true
   def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+    page = String.to_integer(params["page"] || "1")
+    per_page = String.to_integer(params["per_page"] || "20")
+    
+    people = People.list_people(%{"page" => to_string(page), "per_page" => to_string(per_page)})
+    
+    # Get total count for pagination
+    total_people = People.count_people()
+    total_pages = ceil(total_people / per_page)
+    
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:per_page, per_page)
+      |> assign(:people, people)
+      |> assign(:total_people, total_people)
+      |> assign(:total_pages, total_pages)
+      |> assign(:page_title, "People")
+      |> assign(:person, nil)
+    
+    {:noreply, socket}
   end
-
-  defp apply_action(socket, :index, _params) do
-    socket
-    |> assign(:page_title, "People")
-    |> assign(:person, nil)
+  
+  # Helper function for pagination range
+  def pagination_range(current_page, total_pages) when total_pages <= 7 do
+    1..total_pages |> Enum.to_list()
   end
-
-  defp list_people do
-    People.list_people()
+  
+  def pagination_range(current_page, total_pages) do
+    cond do
+      current_page <= 3 ->
+        [1, 2, 3, 4, "...", total_pages]
+        
+      current_page >= total_pages - 2 ->
+        [1, "...", total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
+        
+      true ->
+        [1, "...", current_page - 1, current_page, current_page + 1, "...", total_pages]
+    end
   end
 end

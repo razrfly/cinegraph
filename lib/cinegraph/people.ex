@@ -10,30 +10,40 @@ defmodule Cinegraph.People do
   alias Cinegraph.Movies.Movie
 
   @doc """
-  Returns the list of people.
-  """
-  def list_people do
-    Repo.all(Person)
-  end
-
-  @doc """
-  Returns the list of people with pagination.
+  Returns the list of people with optional pagination.
   """
   def list_people(params \\ %{}) do
     Person
     |> order_by(desc: :popularity)
     |> paginate(params)
   end
+  
+  @doc """
+  Returns the count of all people.
+  """
+  def count_people do
+    Repo.aggregate(Person, :count, :id)
+  end
 
   @doc """
   Gets a single person.
+  Raises if the person does not exist.
   """
   def get_person!(id) do
     Repo.get!(Person, id)
   end
+  
+  @doc """
+  Gets a single person.
+  Returns nil if the person does not exist.
+  """
+  def get_person(id) do
+    Repo.get(Person, id)
+  end
 
   @doc """
   Gets a person with all their movies and credits preloaded.
+  Raises if the person does not exist.
   """
   def get_person_with_credits!(id) do
     person = Repo.get!(Person, id)
@@ -63,6 +73,42 @@ defmodule Cinegraph.People do
     |> Map.put(:crew_by_department, crew_by_department)
     |> Map.put(:collaborators, collaborators)
     |> Map.put(:total_movies, length(Enum.uniq_by(credits, & &1.movie_id)))
+  end
+  
+  @doc """
+  Gets a person with all their movies and credits preloaded.
+  Returns nil if the person does not exist.
+  """
+  def get_person_with_credits(id) do
+    case Repo.get(Person, id) do
+      nil -> nil
+      person ->
+        # Get all credits for this person with movie details
+        credits = 
+          Credit
+          |> where([c], c.person_id == ^id)
+          |> join(:inner, [c], m in Movie, on: c.movie_id == m.id)
+          |> preload([c, m], movie: m)
+          |> order_by([c, m], desc: m.release_date)
+          |> Repo.all()
+        
+        # Separate cast and crew credits
+        cast_credits = Enum.filter(credits, & &1.credit_type == "cast")
+        crew_credits = Enum.filter(credits, & &1.credit_type == "crew")
+        
+        # Group crew credits by department
+        crew_by_department = Enum.group_by(crew_credits, & &1.department)
+        
+        # Find frequent collaborators
+        collaborators = find_frequent_collaborators(id, credits)
+        
+        person
+        |> Map.put(:cast_credits, cast_credits)
+        |> Map.put(:crew_credits, crew_credits)
+        |> Map.put(:crew_by_department, crew_by_department)
+        |> Map.put(:collaborators, collaborators)
+        |> Map.put(:total_movies, length(Enum.uniq_by(credits, & &1.movie_id)))
+    end
   end
 
   @doc """
@@ -160,7 +206,7 @@ defmodule Cinegraph.People do
       %{
         first_movie: min_date,
         latest_movie: max_date,
-        years: Date.diff(max_date, min_date) |> div(365)
+        years: max_date.year - min_date.year
       }
     else
       %{first_movie: nil, latest_movie: nil, years: 0}
@@ -181,13 +227,18 @@ defmodule Cinegraph.People do
   end
 
   defp paginate(query, %{"page" => page, "per_page" => per_page}) do
-    page = String.to_integer(page)
-    per_page = String.to_integer(per_page)
-    
-    query
-    |> limit(^per_page)
-    |> offset(^((page - 1) * per_page))
-    |> Repo.all()
+    with {page_num, _} <- Integer.parse(page || "1"),
+         {per_page_num, _} <- Integer.parse(per_page || "50") do
+      page_num = max(page_num, 1)
+      per_page_num = per_page_num |> min(100) |> max(1)
+      
+      query
+      |> limit(^per_page_num)
+      |> offset(^((page_num - 1) * per_page_num))
+      |> Repo.all()
+    else
+      _ -> paginate(query, %{})
+    end
   end
 
   defp paginate(query, _params) do
