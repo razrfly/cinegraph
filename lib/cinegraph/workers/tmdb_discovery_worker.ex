@@ -87,13 +87,9 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
         |> TMDbDetailsWorker.new()
       end)
     
-    case Oban.insert_all(jobs) do
-      {:ok, results} ->
-        Logger.info("Queued #{length(results)} movie detail jobs")
-        {:ok, results}
-      error ->
-        error
-    end
+    results = Oban.insert_all(jobs)
+    Logger.info("Queued #{length(results)} movie detail jobs")
+    {:ok, results}
   end
   
   defp calculate_priority(%{"popularity" => popularity}) when popularity > 100, do: 0

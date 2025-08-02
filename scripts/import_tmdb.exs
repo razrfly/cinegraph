@@ -89,9 +89,15 @@ import_type = opts[:type] || "popular"
     Cinegraph.Imports.TMDbImporter.start_daily_update()
     
   "decade" ->
-    decade = opts[:decade] || raise ArgumentError, "--decade is required for decade imports"
-    Logger.info("Starting import for the #{decade}s...")
-    Cinegraph.Imports.TMDbImporter.start_decade_import(decade)
+    case opts[:decade] do
+      nil ->
+        Logger.error("❌ --decade is required for decade imports")
+        Logger.error("Example: mix run scripts/import_tmdb.exs --type decade --decade 1990")
+        System.halt(1)
+      decade ->
+        Logger.info("Starting import for the #{decade}s...")
+        Cinegraph.Imports.TMDbImporter.start_decade_import(decade)
+    end
     
   "popular" ->
     Logger.info("Starting popular movies import...")
