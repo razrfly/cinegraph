@@ -10,11 +10,12 @@ defmodule Cinegraph.MovieImporter do
   alias Cinegraph.Repo
   alias Cinegraph.Movies
   alias Cinegraph.Movies.Movie
-  alias Cinegraph.ApiProcessors
+  alias Cinegraph.ApiProcessors.{TMDb, OMDb}
   import Ecto.Query
   require Logger
   
   @default_apis ["tmdb", "omdb"]
+  @processors %{"tmdb" => TMDb, "omdb" => OMDb}
   
   @doc """
   Import a movie by TMDb ID, processing all configured APIs.
@@ -92,17 +93,21 @@ defmodule Cinegraph.MovieImporter do
     total_movies = Repo.aggregate(Movie, :count)
     
     coverage = Enum.map(@default_apis, fn api ->
-      processor = get_processor(api)
-      data_field = processor.data_field()
+      case get_processor(api) do
+        nil -> 
+          {api, %{count: 0, percentage: 0.0}}
+        processor ->
+          data_field = processor.data_field()
+          
+          query = from m in Movie,
+            where: not is_nil(field(m, ^data_field)),
+            select: count(m.id)
       
-      query = from m in Movie,
-        where: not is_nil(field(m, ^data_field)),
-        select: count(m.id)
-      
-      count = Repo.one(query)
-      percentage = if total_movies > 0, do: Float.round(count / total_movies * 100, 1), else: 0.0
-      
-      {api, %{count: count, percentage: percentage}}
+          count = Repo.one(query)
+          percentage = if total_movies > 0, do: Float.round(count / total_movies * 100, 1), else: 0.0
+          
+          {api, %{count: count, percentage: percentage}}
+      end
     end)
     
     %{
@@ -113,14 +118,34 @@ defmodule Cinegraph.MovieImporter do
   
   # Private functions
   
-  defp queue_import_job(_tmdb_id, _apis, _opts) do
-    # Oban not available yet
-    {:error, :oban_not_configured}
+  defp queue_import_job(tmdb_id, _apis, opts) do
+    # Queue a TMDb details job
+    %{
+      tmdb_id: tmdb_id,
+      title: opts[:title],
+      import_progress_id: opts[:import_progress_id]
+    }
+    |> Cinegraph.Workers.TMDbDetailsWorker.new()
+    |> Oban.insert()
   end
   
-  defp queue_api_job(_movie_id, _api, _options) do
-    # Oban not available yet
-    {:error, :oban_not_configured}
+  defp queue_api_job(movie_id, "omdb", _options) do
+    try do
+      movie = Movies.get_movie!(movie_id)
+      %{
+        movie_id: movie.id,
+        imdb_id: movie.imdb_id,
+        title: movie.title
+      }
+      |> Cinegraph.Workers.OMDbEnrichmentWorker.new()
+      |> Oban.insert()
+    rescue
+      Ecto.NoResultsError ->
+        {:error, :movie_not_found}
+    end
+  end
+  defp queue_api_job(_movie_id, api, _options) do
+    {:error, {:unsupported_api, api}}
   end
   
   defp process_import_immediately(tmdb_id, apis, opts) do
@@ -132,12 +157,11 @@ defmodule Cinegraph.MovieImporter do
   end
   
   defp process_api_immediately(movie_id, api, options) do
-    processor = get_processor(api)
-    
-    if processor do
-      processor.process_movie(movie_id, options)
-    else
-      {:error, :unknown_api}
+    case get_processor(api) do
+      nil ->
+        {:error, :unknown_api}
+      processor ->
+        processor.process_movie(movie_id, options)
     end
   end
   
@@ -159,20 +183,23 @@ defmodule Cinegraph.MovieImporter do
   
   defp process_apis_for_movie(movie, apis, opts) do
     results = Enum.map(apis, fn api ->
-      processor = get_processor(api)
-      
-      if processor && processor.can_process?(movie) do
-        Logger.info("Processing #{api} for movie ID #{movie.id}")
-        
-        # Apply rate limiting
-        Process.sleep(processor.rate_limit_ms())
-        
-        case processor.process_movie(movie.id, opts) do
-          {:ok, updated_movie} -> {:ok, api, updated_movie}
-          error -> {:error, api, error}
-        end
-      else
-        {:skipped, api, :cannot_process}
+      case get_processor(api) do
+        nil ->
+          {:skipped, api, :unknown_api}
+        processor ->
+          if processor.can_process?(movie) do
+            Logger.info("Processing #{api} for movie ID #{movie.id}")
+            
+            # Apply rate limiting
+            Process.sleep(processor.rate_limit_ms())
+            
+            case processor.process_movie(movie.id, opts) do
+              {:ok, updated_movie} -> {:ok, api, updated_movie}
+              error -> {:error, api, error}
+            end
+          else
+            {:skipped, api, :cannot_process}
+          end
       end
     end)
     
@@ -192,21 +219,25 @@ defmodule Cinegraph.MovieImporter do
   end
   
   defp find_movies_missing_api_data(api, limit) do
-    processor = get_processor(api)
-    data_field = processor.data_field()
-    required_field = processor.required_identifier()
-    
-    query = from m in Movie,
-      where: is_nil(field(m, ^data_field)) and not is_nil(field(m, ^required_field)),
-      order_by: [desc: m.popularity],
-      preload: []
-    
-    query = if limit, do: limit(query, ^limit), else: query
-    
-    Repo.all(query)
+    case get_processor(api) do
+      nil ->
+        []
+      processor ->
+        data_field = processor.data_field()
+        required_field = processor.required_identifier()
+        
+        query = from m in Movie,
+          where: is_nil(field(m, ^data_field)) and not is_nil(field(m, ^required_field)),
+          order_by: [desc: m.popularity],
+          preload: []
+        
+        query = if limit, do: limit(query, ^limit), else: query
+        
+        Repo.all(query)
+    end
   end
   
-  defp get_processor("tmdb"), do: ApiProcessors.TMDb
-  defp get_processor("omdb"), do: ApiProcessors.OMDb
-  defp get_processor(_), do: nil
+  defp get_processor(api) do
+    Map.get(@processors, api)
+  end
 end
