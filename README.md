@@ -77,15 +77,28 @@ To ensure our algorithm captures true cultural relevance:
 
 ### Environment Setup
 
-Create a `.env` file in the project root:
+1. Copy the example environment file:
 
 ```bash
-# Required API keys
+cp .env.example .env
+```
+
+2. Edit `.env` and add your API keys:
+   - Get TMDB API key from https://www.themoviedb.org/settings/api
+   - Get OMDb API key from http://www.omdbapi.com/apikey.aspx
+   - Use default Supabase values for local development
+
+The `.env` file will contain:
+
+```bash
+# Supabase Configuration
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+SUPABASE_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+# API Keys
 TMDB_API_KEY=your_tmdb_api_key_here
 OMDB_API_KEY=your_omdb_api_key_here
-
-# Database URL (for Supabase local development)
-SUPABASE_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ```
 
 ### Install
@@ -110,7 +123,44 @@ mix ecto.migrate
 
 ### Database Population
 
-CineGraph requires movie data to function properly. We use a modular import system that allows you to drop and re-import data multiple times during development as we iterate on the data model.
+CineGraph requires movie data to function properly. We use an **Oban-based background job system** that provides rate-limited, resumable imports.
+
+#### Quick Start Import
+
+```bash
+# 1. Ensure your .env file has API keys configured (see Environment Setup above)
+
+# 2. Start the Phoenix server
+mix phx.server
+
+# 3. Visit the import dashboard
+open http://localhost:4001/imports
+
+# 4. Click "Import Popular Movies" to start with ~2,000 highly-rated films
+```
+
+#### Import Options
+
+| Import Type | Movies | Time | Description |
+|------------|--------|------|-------------|
+| **Popular Movies** | ~2,000 | 20 min | Top-rated movies with 100+ votes |
+| **Daily Update** | 50-200 | 5 min | Movies from last 7 days |
+| **By Decade** | 2k-5k | 2-4 hrs | All movies from a decade |
+| **Full Catalog** | 900k+ | 5-7 days | Complete TMDb database |
+
+#### 📚 Comprehensive Import Guide
+
+For detailed instructions, troubleshooting, and advanced usage, see our **[Import Guide](IMPORT_GUIDE.md)**.
+
+The guide covers:
+- Environment setup and API keys
+- All import methods and options
+- Progress monitoring
+- Troubleshooting common issues
+- API rate limits and best practices
+- Example import scenarios
+
+For development and testing, use the direct import scripts:
 
 #### Quick Start (40 movies)
 ```bash
@@ -214,13 +264,62 @@ The import process uses a comprehensive, modular approach:
 ### Start Server
 
 ```bash
-# Start Phoenix server with environment variables
+# Start Phoenix server with environment variables loaded from .env
 ./start.sh
+
+# Or manually:
+source .env && mix phx.server
 ```
 
 Now you can visit [`localhost:4001`](http://localhost:4001) from your browser.
 
 **Note**: The application runs on port 4001 by default to avoid conflicts with other Phoenix apps.
+
+### Running Commands with Environment Variables
+
+**Important**: The API keys from `.env` must be loaded for most operations. Use these methods:
+
+```bash
+# Method 1: Use the helper scripts (recommended)
+./start.sh                                    # Start server
+./scripts/import_with_env.sh --pages 10      # Import movies
+./scripts/run_with_env.sh mix run test_import.exs  # Run test import
+
+# Method 2: Source .env manually
+source .env && mix phx.server
+source .env && mix run test_import.exs
+
+# Method 3: For one-off commands
+export $(cat .env | xargs) && mix some_command
+```
+
+### Admin Dashboards
+
+After starting the server, you have access to several dashboards:
+
+#### Import Dashboard
+Visit [`localhost:4001/imports`](http://localhost:4001/imports) to:
+- Monitor import progress in real-time
+- Start popular movie imports
+- Run daily updates
+- Import movies by decade
+- See database statistics and queue status
+
+#### Oban Web Dashboard
+Visit [`localhost:4001/dev/oban`](http://localhost:4001/dev/oban) to:
+- View all queued, executing, and completed jobs in real-time
+- Monitor job performance across all queues
+- Retry or cancel jobs with one click
+- View detailed job arguments and stack traces
+- Filter jobs by state, queue, or worker
+- See job execution timeline and metrics
+- Monitor queue throughput and latency
+
+#### Phoenix LiveDashboard
+Visit [`localhost:4001/dev/dashboard`](http://localhost:4001/dev/dashboard) to:
+- Monitor application performance
+- View system metrics and resources
+- Debug live processes
 
 ---
 
@@ -314,6 +413,54 @@ Now you can visit [`localhost:4001`](http://localhost:4001) from your browser.
 - **Golden Globes**: [https://www.goldenglobes.com/](https://www.goldenglobes.com/)
 - **BAFTA**: [https://www.bafta.org/](https://www.bafta.org/)
 - **Venice Film Festival**: [https://www.labiennale.org/en/cinema](https://www.labiennale.org/en/cinema)
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### "missing_api_key" Error in Oban Jobs
+If you see errors like `Cinegraph.Workers.TMDbDiscoveryWorker failed with {:error, :missing_api_key}`:
+
+1. **Ensure `.env` file exists** with your API keys:
+   ```bash
+   TMDB_API_KEY=your_actual_tmdb_key
+   OMDB_API_KEY=your_actual_omdb_key
+   ```
+
+2. **Always start the server with `./start.sh`** (not `mix phx.server` directly):
+   ```bash
+   ./start.sh  # This loads .env variables
+   ```
+
+3. **For import scripts**, use the helper scripts:
+   ```bash
+   ./scripts/run_with_env.sh mix run scripts/import_tmdb.exs
+   # OR
+   ./scripts/import_with_env.sh --pages 10
+   ```
+
+4. **Verify keys are loaded** by running:
+   ```bash
+   source .env && iex -S mix
+   iex> Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)[:api_key]
+   # Should show your API key, not nil
+   ```
+
+#### Rate Limiting
+- TMDb allows 40 requests per 10 seconds
+- OMDb free tier allows 1,000 requests per day
+- The application automatically handles rate limiting, but imports may be slow
+
+#### Database Connection Issues
+If using Supabase local development:
+```bash
+# Start Supabase
+supabase start
+# Check status
+supabase status
+```
 
 ---
 

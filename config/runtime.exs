@@ -1,13 +1,27 @@
 import Config
+import Dotenvy
+
+# Load .env files only in development
+if config_env() == :dev do
+  source!([
+    ".env",
+    ".env.dev",      # Optional: dev-specific overrides
+    System.get_env() # System env vars take precedence
+  ])
+end
 
 # Configure Supabase
 config :supabase_potion,
-  base_url: System.get_env("SUPABASE_URL"),
-  api_key: System.get_env("SUPABASE_ANON_KEY")
+  base_url: env!("SUPABASE_URL", :string!),
+  api_key: env!("SUPABASE_ANON_KEY", :string!)
 
 # Configure TMDb
 config :cinegraph, Cinegraph.Services.TMDb.Client,
-  api_key: System.get_env("TMDB_API_KEY")
+  api_key: env!("TMDB_API_KEY", :string!)
+
+# Configure OMDb (if used)
+config :cinegraph, Cinegraph.Services.OMDb.Client,
+  api_key: env!("OMDB_API_KEY", :string, "")  # Optional with default
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -30,9 +44,14 @@ if System.get_env("PHX_SERVER") do
 end
 
 # Configure database URL for all environments that have it set
-if database_url = System.get_env("SUPABASE_DATABASE_URL") || System.get_env("DATABASE_URL") do
+if config_env() == :dev do
   config :cinegraph, Cinegraph.Repo,
-    url: database_url
+    url: env!("SUPABASE_DATABASE_URL", :string, "postgresql://postgres:postgres@127.0.0.1:54322/postgres")
+else
+  if database_url = System.get_env("SUPABASE_DATABASE_URL") || System.get_env("DATABASE_URL") do
+    config :cinegraph, Cinegraph.Repo,
+      url: database_url
+  end
 end
 
 if config_env() == :prod do

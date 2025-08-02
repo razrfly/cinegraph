@@ -84,8 +84,7 @@ defmodule Cinegraph.Services.OMDb.Client do
   end
   
   defp api_key do
-    System.get_env("OMDB_API_KEY") || 
-      Application.get_env(:cinegraph, :omdb_api_key) ||
+    Application.get_env(:cinegraph, __MODULE__)[:api_key] ||
       raise "OMDB_API_KEY not configured"
   end
 end

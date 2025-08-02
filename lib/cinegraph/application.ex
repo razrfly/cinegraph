@@ -14,6 +14,10 @@ defmodule Cinegraph.Application do
       {Phoenix.PubSub, name: Cinegraph.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Cinegraph.Finch},
+      # Start Oban
+      {Oban, Application.fetch_env!(:cinegraph, Oban)},
+      # Start Rate Limiter
+      Cinegraph.RateLimiter,
       # Start a worker by calling: Cinegraph.Worker.start_link(arg)
       # {Cinegraph.Worker, arg},
       # Start to serve requests, typically the last entry
