@@ -43,11 +43,17 @@ defmodule Cinegraph.Imports.TMDbImporter do
       |> maybe_add_arg("primary_release_date.lte", format_date(opts[:end_date]))
     
     # Queue the first discovery job
-    args
-    |> TMDbDiscoveryWorker.new()
-    |> Oban.insert()
-    
-    {:ok, progress}
+    case args
+         |> TMDbDiscoveryWorker.new()
+         |> Oban.insert() do
+      {:ok, _job} ->
+        {:ok, progress}
+      {:error, reason} ->
+        Logger.error("Failed to queue discovery job: #{inspect(reason)}")
+        # Clean up the progress record
+        ImportProgress.update(progress, %{status: "failed", error_message: inspect(reason)})
+        {:error, reason}
+    end
   end
   
   @doc """
@@ -75,21 +81,30 @@ defmodule Cinegraph.Imports.TMDbImporter do
       "max_pages" => 10  # Daily updates should be small
     }
     
-    args
-    |> TMDbDiscoveryWorker.new()
-    |> Oban.insert()
-    
-    {:ok, progress}
+    case args
+         |> TMDbDiscoveryWorker.new()
+         |> Oban.insert() do
+      {:ok, _job} ->
+        {:ok, progress}
+      {:error, reason} ->
+        Logger.error("Failed to queue daily update job: #{inspect(reason)}")
+        ImportProgress.update(progress, %{status: "failed", error_message: inspect(reason)})
+        {:error, reason}
+    end
   end
   
   @doc """
   Starts an import by decade.
   """
   def start_decade_import(decade) when is_integer(decade) do
-    Logger.info("Starting TMDB import for decade: #{decade}s")
-    
-    start_year = decade
-    end_year = decade + 9
+    # Validate decade is reasonable (e.g., 1900-2020)
+    unless decade >= 1900 and decade <= 2020 and rem(decade, 10) == 0 do
+      {:error, :invalid_decade}
+    else
+      Logger.info("Starting TMDB import for decade: #{decade}s")
+      
+      start_year = decade
+      end_year = decade + 9
     
     {:ok, progress} = ImportProgress.start_import("backfill", %{
       metadata: %{
@@ -108,12 +123,18 @@ defmodule Cinegraph.Imports.TMDbImporter do
         "max_pages" => 50
       }
       
-      args
-      |> TMDbDiscoveryWorker.new(schedule_in: (year - start_year) * 60)  # Space out by 1 minute per year
-      |> Oban.insert()
-    end)
-    
-    {:ok, progress}
+        case args
+             |> TMDbDiscoveryWorker.new(schedule_in: calculate_year_delay(year - start_year))
+             |> Oban.insert() do
+          {:ok, _job} ->
+            :ok
+          {:error, reason} ->
+            Logger.error("Failed to queue job for year #{year}: #{inspect(reason)}")
+        end
+      end)
+      
+      {:ok, progress}
+    end
   end
   
   @doc """
@@ -137,11 +158,16 @@ defmodule Cinegraph.Imports.TMDbImporter do
       "max_pages" => opts[:max_pages] || 100
     }
     
-    args
-    |> TMDbDiscoveryWorker.new()
-    |> Oban.insert()
-    
-    {:ok, progress}
+    case args
+         |> TMDbDiscoveryWorker.new()
+         |> Oban.insert() do
+      {:ok, _job} ->
+        {:ok, progress}
+      {:error, reason} ->
+        Logger.error("Failed to queue popular import job: #{inspect(reason)}")
+        ImportProgress.update(progress, %{status: "failed", error_message: inspect(reason)})
+        {:error, reason}
+    end
   end
   
   @doc """
@@ -199,11 +225,16 @@ defmodule Cinegraph.Imports.TMDbImporter do
         }
         |> Map.merge(progress.metadata["options"] || %{})
         
-        %{args: args}
-        |> TMDbDiscoveryWorker.new()
-        |> Oban.insert()
-        
-        {:ok, updated}
+        case %{args: args}
+             |> TMDbDiscoveryWorker.new()
+             |> Oban.insert() do
+          {:ok, _job} ->
+            {:ok, updated}
+          {:error, reason} ->
+            Logger.error("Failed to queue resume job: #{inspect(reason)}")
+            ImportProgress.update(updated, %{status: "paused"})
+            {:error, reason}
+        end
       progress ->
         {:error, {:invalid_status, progress.status}}
     end
@@ -228,5 +259,11 @@ defmodule Cinegraph.Imports.TMDbImporter do
     else
       0.0
     end
+  end
+  
+  defp calculate_year_delay(year_offset) do
+    # Start immediately, then add progressive delays
+    # This prevents overwhelming the queue while respecting rate limits
+    year_offset * 30 + :rand.uniform(30)
   end
 end
