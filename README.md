@@ -123,15 +123,15 @@ mix ecto.migrate
 
 ### Database Population
 
-CineGraph requires movie data to function properly. We use an **Oban-based background job system** that provides rate-limited, resumable imports.
+CineGraph uses an **Oban-based background job system** for importing movie data. This provides rate-limited, resumable, and parallelized imports from multiple data sources.
 
 #### Quick Start Import
 
 ```bash
 # 1. Ensure your .env file has API keys configured (see Environment Setup above)
 
-# 2. Start the Phoenix server
-mix phx.server
+# 2. Start the Phoenix server with environment variables
+./start.sh
 
 # 3. Visit the import dashboard
 open http://localhost:4001/imports
@@ -143,8 +143,8 @@ open http://localhost:4001/imports
 
 | Import Type | Movies | Time | Description |
 |------------|--------|------|-------------|
-| **Popular Movies** | ~2,000 | 20 min | Top-rated movies with 100+ votes |
-| **Daily Update** | 50-200 | 5 min | Movies from last 7 days |
+| **Popular Movies** | ~2,000 | 20-30 min | Top-rated movies with 100+ votes |
+| **Daily Update** | 50-200 | 5-10 min | Movies from last 7 days |
 | **By Decade** | 2k-5k | 2-4 hrs | All movies from a decade |
 | **Full Catalog** | 900k+ | 5-7 days | Complete TMDb database |
 
@@ -155,10 +155,28 @@ For detailed instructions, troubleshooting, and advanced usage, see our **[Impor
 The guide covers:
 - Environment setup and API keys
 - All import methods and options
-- Progress monitoring
+- Import process flow and architecture
+- Real-time progress monitoring
 - Troubleshooting common issues
 - API rate limits and best practices
+- Advanced filtering and custom imports
 - Example import scenarios
+
+#### Import via IEx Console
+
+```elixir
+# Start popular movies import
+Cinegraph.Imports.TMDbImporter.start_popular_import(max_pages: 100)
+
+# Import movies from a specific decade
+Cinegraph.Imports.TMDbImporter.start_decade_import(1990)
+
+# Run daily update for recent releases
+Cinegraph.Imports.TMDbImporter.start_daily_update()
+
+# Check import status
+Cinegraph.Imports.TMDbImporter.get_import_status()
+```
 
 For development and testing, use the direct import scripts:
 
@@ -299,11 +317,11 @@ After starting the server, you have access to several dashboards:
 
 #### Import Dashboard
 Visit [`localhost:4001/imports`](http://localhost:4001/imports) to:
-- Monitor import progress in real-time
-- Start popular movie imports
-- Run daily updates
-- Import movies by decade
-- See database statistics and queue status
+- **Start Imports**: Popular movies, daily updates, or by decade
+- **Monitor Progress**: Real-time updates on import status
+- **View Statistics**: Total movies, TMDb coverage, OMDb enrichment
+- **Queue Status**: See pending, running, and completed jobs
+- **Import History**: Review past import sessions
 
 #### Oban Web Dashboard
 Visit [`localhost:4001/dev/oban`](http://localhost:4001/dev/oban) to:
@@ -419,6 +437,38 @@ Visit [`localhost:4001/dev/dashboard`](http://localhost:4001/dev/dashboard) to:
 ## 🔧 Troubleshooting
 
 ### Common Issues
+
+#### Import Not Increasing Movie Count
+If imports are running but the movie count isn't increasing:
+
+1. **Check for duplicates**: The system skips movies that already exist
+   ```elixir
+   # See what movies are being processed
+   Oban.Job
+   |> where([j], j.worker == "Cinegraph.Workers.TMDbDetailsWorker")
+   |> where([j], j.state == "completed")
+   |> limit(10)
+   |> Cinegraph.Repo.all()
+   |> Enum.map(& &1.args["tmdb_id"])
+   ```
+
+2. **Try importing different movies**:
+   ```elixir
+   # Import older movies that likely don't exist yet
+   Cinegraph.Imports.TMDbImporter.start_decade_import(1980)
+   ```
+
+3. **Check the import dashboard** at http://localhost:4001/imports for real-time status
+
+#### Resetting Oban Queues
+To reset all Oban queues and delete all jobs:
+
+```elixir
+# In IEx console (iex -S mix)
+Cinegraph.Repo.delete_all(Oban.Job)
+```
+
+This will remove all jobs from all queues, including completed, failed, and pending jobs.
 
 #### "missing_api_key" Error in Oban Jobs
 If you see errors like `Cinegraph.Workers.TMDbDiscoveryWorker failed with {:error, :missing_api_key}`:

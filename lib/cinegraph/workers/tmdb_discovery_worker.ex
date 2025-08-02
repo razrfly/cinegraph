@@ -87,13 +87,14 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
         |> TMDbDetailsWorker.new()
       end)
     
+    # Oban.insert_all returns a list of jobs directly
     case Oban.insert_all(jobs) do
-      {:ok, results} ->
+      results when is_list(results) ->
         Logger.info("Queued #{length(results)} movie detail jobs")
         {:ok, results}
-      {:error, reason} ->
-        Logger.error("Failed to queue movie detail jobs: #{inspect(reason)}")
-        {:error, reason}
+      error ->
+        Logger.error("Failed to queue movie detail jobs: #{inspect(error)}")
+        {:error, error}
     end
   end
   
