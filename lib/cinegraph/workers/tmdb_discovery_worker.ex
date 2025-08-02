@@ -13,9 +13,8 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
     
   alias Cinegraph.Workers.TMDbDetailsWorker
   alias Cinegraph.Imports.ImportProgress
+  alias Cinegraph.Services.TMDb.Client
   require Logger
-  
-  @tmdb_base_url "https://api.themoviedb.org/3"
   
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"page" => page, "import_progress_id" => progress_id} = args}) do
@@ -43,54 +42,33 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
   end
   
   defp fetch_movies_page(page, args) do
-    api_key = Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)[:api_key]
+    endpoint = args["endpoint"] || "discover/movie"
+    params = build_query_params(page, args)
     
-    if !api_key do
-      {:error, :missing_api_key}
-    else
-      # Wait for rate limit token
-      Cinegraph.RateLimiter.wait_for_token(:tmdb)
-      endpoint = args["endpoint"] || "discover/movie"
-      params = build_query_params(page, args)
-      
-      url = "#{@tmdb_base_url}/#{endpoint}?api_key=#{api_key}&#{params}"
-      
-      case HTTPoison.get(url) do
-        {:ok, %{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, %{"results" => results, "total_pages" => total_pages}} ->
-              {:ok, %{results: results, total_pages: total_pages}}
-            error ->
-              {:error, {:decode_error, error}}
-          end
-        {:ok, %{status_code: 429}} ->
-          # Rate limited - retry with backoff
-          {:error, :rate_limited}
-        {:ok, %{status_code: status_code}} ->
-          {:error, {:http_error, status_code}}
-        {:error, error} ->
-          {:error, {:network_error, error}}
-      end
+    case Client.get(endpoint, params) do
+      {:ok, %{"results" => results, "total_pages" => total_pages}} ->
+        {:ok, %{results: results, total_pages: total_pages}}
+      {:error, reason} ->
+        Logger.error("Failed to fetch movies page: #{inspect(reason)}")
+        {:error, reason}
     end
   end
   
   defp build_query_params(page, args) do
     base_params = %{
-      "page" => page,
-      "language" => "en-US"
+      page: page,
+      language: "en-US"
     }
     
     # Add optional filters
-    params = 
-      base_params
-      |> maybe_add_param("sort_by", args["sort_by"] || "popularity.desc")
-      |> maybe_add_param("primary_release_year", args["year"])
-      |> maybe_add_param("primary_release_date.gte", args["release_date_gte"])
-      |> maybe_add_param("primary_release_date.lte", args["release_date_lte"])
-      |> maybe_add_param("with_genres", args["genres"])
-      |> maybe_add_param("region", args["region"])
-    
-    URI.encode_query(params)
+    base_params
+    |> maybe_add_param(:sort_by, args["sort_by"] || "popularity.desc")
+    |> maybe_add_param(:primary_release_year, args["year"])
+    |> maybe_add_param("primary_release_date.gte", args["release_date_gte"])
+    |> maybe_add_param("primary_release_date.lte", args["release_date_lte"])
+    |> maybe_add_param(:with_genres, args["genres"])
+    |> maybe_add_param(:region, args["region"])
+    |> maybe_add_param("vote_count.gte", args["vote_count.gte"])
   end
   
   defp maybe_add_param(params, _key, nil), do: params

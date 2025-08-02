@@ -23,15 +23,13 @@ end)
 # Test 2: Import a small batch of popular movies
 Logger.info("\nStarting test import of 10 popular movies...")
 
-# First, let's check if we have TMDB API key
-case System.get_env("TMDB_API_KEY") do
+# First, let's check if we have TMDB API key configured
+case Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)[:api_key] do
   nil ->
-    Logger.error("TMDB_API_KEY not set!")
+    Logger.error("TMDB_API_KEY not configured!")
     Logger.error("")
-    Logger.error("Please ensure you're running this script with environment variables loaded:")
-    Logger.error("  1. Make sure .env file exists with TMDB_API_KEY=your-key")
-    Logger.error("  2. Run this script using: ./scripts/run_with_env.sh mix run test_import.exs")
-    Logger.error("  OR manually: source .env && mix run test_import.exs")
+    Logger.error("Please ensure you have a .env file with TMDB_API_KEY=your-key")
+    Logger.error("The application should load it automatically via Dotenvy")
     System.halt(1)
     
   api_key ->
@@ -61,8 +59,8 @@ Enum.each(statuses, fn status ->
 end)
 
 # Check Oban queue status
-queue_counts = Oban.drain_queue(queue: :all, with_limit: 0)
-Logger.info("Oban queue counts: #{inspect(queue_counts)}")
+# Note: We're not actually draining, just checking status
+Logger.info("Checking Oban queue status...")
 
 # Check database stats
 import Ecto.Query

@@ -123,43 +123,42 @@ mix ecto.migrate
 
 ### Database Population
 
-CineGraph requires movie data to function properly. We provide two import methods:
+CineGraph requires movie data to function properly. We use an **Oban-based background job system** that provides rate-limited, resumable imports.
 
-1. **Oban-based Import System** (Recommended for large imports)
-2. **Direct Script Import** (Good for development and testing)
-
-#### Oban Import System (NEW!)
-
-The Oban-based import system provides rate-limited, resumable imports with real-time monitoring:
+#### Quick Start Import
 
 ```bash
-# Start the server
-./start.sh
+# 1. Ensure your .env file has API keys configured (see Environment Setup above)
 
-# Visit the import dashboard
+# 2. Start the Phoenix server
+mix phx.server
+
+# 3. Visit the import dashboard
 open http://localhost:4001/imports
 
-# From the dashboard you can:
-# - Start popular movie imports (top 2000 movies)
-# - Run daily updates (last 7 days)
-# - Import by decade (1950s-2020s)
-# - Monitor progress in real-time
-# - Pause/resume imports
+# 4. Click "Import Popular Movies" to start with ~2,000 highly-rated films
 ```
 
-**Features**:
-- Automatic rate limiting (40 requests/10 seconds for TMDb)
-- Duplicate detection (skips already imported movies)
-- Progress tracking with database persistence
-- Queue monitoring and management
-- Estimated completion times
+#### Import Options
 
-**Important**: Due to API rate limits, full imports take time:
-- Popular movies (2000): ~20 minutes
-- One decade: ~2-4 hours
-- Full TMDb catalog: 5-7 days
+| Import Type | Movies | Time | Description |
+|------------|--------|------|-------------|
+| **Popular Movies** | ~2,000 | 20 min | Top-rated movies with 100+ votes |
+| **Daily Update** | 50-200 | 5 min | Movies from last 7 days |
+| **By Decade** | 2k-5k | 2-4 hrs | All movies from a decade |
+| **Full Catalog** | 900k+ | 5-7 days | Complete TMDb database |
 
-#### Script-Based Import
+#### 📚 Comprehensive Import Guide
+
+For detailed instructions, troubleshooting, and advanced usage, see our **[Import Guide](IMPORT_GUIDE.md)**.
+
+The guide covers:
+- Environment setup and API keys
+- All import methods and options
+- Progress monitoring
+- Troubleshooting common issues
+- API rate limits and best practices
+- Example import scenarios
 
 For development and testing, use the direct import scripts:
 
