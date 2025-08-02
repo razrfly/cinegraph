@@ -37,8 +37,14 @@ case Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)[:api_key] d
 end
 
 # Start a small popular movies import with only 1 page
-{:ok, progress} = Cinegraph.Imports.TMDbImporter.start_popular_import(max_pages: 1)
-Logger.info("Started import with progress ID: #{progress.id}")
+progress = case Cinegraph.Imports.TMDbImporter.start_popular_import(max_pages: 1) do
+  {:ok, progress} ->
+    Logger.info("Started import with progress ID: #{progress.id}")
+    progress
+  {:error, reason} ->
+    Logger.error("Failed to start import: #{inspect(reason)}")
+    System.halt(1)
+end
 
 # Wait a bit for jobs to process
 Logger.info("Waiting 30 seconds for jobs to process...")
@@ -67,14 +73,19 @@ import Ecto.Query
 alias Cinegraph.Repo
 alias Cinegraph.Movies.Movie
 
-movie_count = Repo.aggregate(Movie, :count)
-tmdb_count = Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count)
-
-Logger.info("""
-Database Stats:
-  Total Movies: #{movie_count}
-  With TMDB Data: #{tmdb_count}
-""")
+try do
+  movie_count = Repo.aggregate(Movie, :count)
+  tmdb_count = Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count)
+  
+  Logger.info("""
+  Database Stats:
+    Total Movies: #{movie_count}
+    With TMDB Data: #{tmdb_count}
+  """)
+rescue
+  e ->
+    Logger.error("Failed to query database stats: #{inspect(e)}")
+end
 
 Logger.info("\nTest import complete!")
 Logger.info("Check the import dashboard at http://localhost:4000/imports")

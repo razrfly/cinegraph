@@ -37,44 +37,63 @@ defmodule CinegraphWeb.ImportDashboardLive do
   
   @impl true
   def handle_event("start_popular_import", _params, socket) do
-    {:ok, _progress} = TMDbImporter.start_popular_import()
-    
-    socket =
-      socket
-      |> put_flash(:info, "Started popular movies import")
-      |> load_imports()
-    
-    {:noreply, socket}
+    case TMDbImporter.start_popular_import() do
+      {:ok, _progress} ->
+        socket =
+          socket
+          |> put_flash(:info, "Started popular movies import")
+          |> load_imports()
+        
+        {:noreply, socket}
+      {:error, reason} ->
+        socket = put_flash(socket, :error, "Failed to start import: #{inspect(reason)}")
+        {:noreply, socket}
+    end
   end
   
   @impl true
   def handle_event("start_daily_update", _params, socket) do
-    {:ok, _progress} = TMDbImporter.start_daily_update()
-    
-    socket =
-      socket
-      |> put_flash(:info, "Started daily update")
-      |> load_imports()
-    
-    {:noreply, socket}
+    case TMDbImporter.start_daily_update() do
+      {:ok, _progress} ->
+        socket =
+          socket
+          |> put_flash(:info, "Started daily update")
+          |> load_imports()
+        
+        {:noreply, socket}
+      {:error, reason} ->
+        socket = put_flash(socket, :error, "Failed to start daily update: #{inspect(reason)}")
+        {:noreply, socket}
+    end
   end
   
   @impl true
   def handle_event("start_decade_import", %{"decade" => decade_str}, socket) do
-    decade = String.to_integer(decade_str)
-    {:ok, _progress} = TMDbImporter.start_decade_import(decade)
-    
-    socket =
-      socket
-      |> put_flash(:info, "Started import for #{decade}s")
-      |> load_imports()
-    
-    {:noreply, socket}
+    case Integer.parse(decade_str) do
+      {decade, ""} when decade > 0 ->
+        case TMDbImporter.start_decade_import(decade) do
+          {:ok, _progress} ->
+            socket =
+              socket
+              |> put_flash(:info, "Started import for #{decade}s")
+              |> load_imports()
+            
+            {:noreply, socket}
+          {:error, reason} ->
+            socket = put_flash(socket, :error, "Failed to start decade import: #{inspect(reason)}")
+            {:noreply, socket}
+        end
+      _ ->
+        socket = put_flash(socket, :error, "Invalid decade value")
+        {:noreply, socket}
+    end
   end
   
   @impl true
   def handle_event("pause_import", %{"id" => id}, socket) do
-    case TMDbImporter.pause_import(String.to_integer(id)) do
+    case Integer.parse(id) do
+      {parsed_id, ""} when parsed_id > 0 ->
+        case TMDbImporter.pause_import(parsed_id) do
       {:ok, _} ->
         socket =
           socket
@@ -82,15 +101,21 @@ defmodule CinegraphWeb.ImportDashboardLive do
           |> load_imports()
         
         {:noreply, socket}
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to pause import: #{inspect(reason)}")
+          {:error, reason} ->
+            socket = put_flash(socket, :error, "Failed to pause import: #{inspect(reason)}")
+            {:noreply, socket}
+        end
+      _ ->
+        socket = put_flash(socket, :error, "Invalid import ID")
         {:noreply, socket}
     end
   end
   
   @impl true
   def handle_event("resume_import", %{"id" => id}, socket) do
-    case TMDbImporter.resume_import(String.to_integer(id)) do
+    case Integer.parse(id) do
+      {parsed_id, ""} when parsed_id > 0 ->
+        case TMDbImporter.resume_import(parsed_id) do
       {:ok, _} ->
         socket =
           socket
@@ -98,8 +123,12 @@ defmodule CinegraphWeb.ImportDashboardLive do
           |> load_imports()
         
         {:noreply, socket}
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to resume import: #{inspect(reason)}")
+          {:error, reason} ->
+            socket = put_flash(socket, :error, "Failed to resume import: #{inspect(reason)}")
+            {:noreply, socket}
+        end
+      _ ->
+        socket = put_flash(socket, :error, "Invalid import ID")
         {:noreply, socket}
     end
   end

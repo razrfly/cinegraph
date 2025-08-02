@@ -84,8 +84,8 @@ cp .env.example .env
 ```
 
 2. Edit `.env` and add your API keys:
-   - Get TMDB API key from https://www.themoviedb.org/settings/api
-   - Get OMDb API key from http://www.omdbapi.com/apikey.aspx
+   - Get TMDB API key from <https://www.themoviedb.org/settings/api>
+   - Get OMDb API key from <http://www.omdbapi.com/apikey.aspx>
    - Use default Supabase values for local development
 
 The `.env` file will contain:

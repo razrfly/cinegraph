@@ -206,11 +206,12 @@ tail -f log/dev.log  # If file logging is enabled
 ### Common Issues
 
 #### 1. "Missing API Key" Error
-**Symptom**: Jobs fail with `{:error, :missing_api_key}`
+**Symptom**: Jobs fail with `{:error, :missing_api_key}` or `OMDB_API_KEY not configured`
 
 **Solution**:
 - Ensure `.env` file exists with valid API keys
-- Restart the Phoenix server after adding keys
+- **IMPORTANT**: Restart the Phoenix server after adding/changing keys
+- The server needs to be restarted to reload environment variables
 - Verify with: `Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)`
 
 #### 2. Rate Limiting
@@ -239,20 +240,31 @@ Oban.retry_all_jobs(queue: :tmdb_details)
 # Or retry specific job from Oban Web UI
 ```
 
-#### 5. Import Stuck
-**Symptom**: No progress for extended period
+#### 5. Import Stuck / No New Movies
+**Symptom**: Import appears to run but movie count doesn't increase
+
+**Common Causes**:
+1. **Already imported**: Popular movies may already exist in database
+2. **Duplicate detection**: System skips movies that already exist
 
 **Solution**:
-1. Check Oban Web for failed jobs
-2. Check rate limiter: `Cinegraph.RateLimiter.status(:tmdb)`
-3. Restart import if needed:
+1. Check if movies already exist:
    ```elixir
-   # Cancel current import
-   Cinegraph.Imports.TMDbImporter.cancel_import(import_id)
-   
-   # Start fresh
-   Cinegraph.Imports.TMDbImporter.start_popular_import()
+   # In IEx console
+   Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
    ```
+2. Try importing different movies:
+   ```elixir
+   # Import movies from a specific decade
+   Cinegraph.Imports.TMDbImporter.start_decade_import(2020)
+   
+   # Or import less popular but quality movies
+   Cinegraph.Imports.TMDbImporter.start_full_import(
+     sort_by: "vote_average.desc",
+     max_pages: 10
+   )
+   ```
+3. Check Oban Web UI at `/dev/oban` for job details
 
 ## API Rate Limits
 
