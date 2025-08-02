@@ -60,3 +60,9 @@ Thumbs.db
 # MCP configuration with API keys
 .mcp.json
 
+
+# Archive directories
+/docs/archive/
+/scripts/analysis/
+/scripts/testing/
+/scripts/data_import/

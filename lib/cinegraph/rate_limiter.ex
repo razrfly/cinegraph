@@ -97,7 +97,10 @@ defmodule Cinegraph.RateLimiter do
     new_bucket = %{bucket | tokens: new_tokens}
     new_state = Map.put(state, api, new_bucket)
     
-    Logger.debug("Rate limiter refilled #{api} bucket to #{new_tokens} tokens")
+    # Only log if tokens were actually consumed (not at max)
+    if bucket.tokens < bucket.max_tokens do
+      Logger.debug("Rate limiter refilled #{api} bucket from #{bucket.tokens} to #{new_tokens} tokens")
+    end
     
     # Schedule next refill
     schedule_refill(api, bucket.refill_interval)
