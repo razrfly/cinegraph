@@ -22,7 +22,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
     # Create import progress record
     {:ok, progress} = ImportProgress.start_import("full", %{
       metadata: %{
-        "options" => opts,
+        "options" => Enum.into(opts, %{}),
         "started_by" => "system"
       }
     })
