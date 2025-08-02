@@ -7,6 +7,9 @@ defmodule Cinegraph.Services.TMDb.Client do
   @timeout 30_000
 
   def get(endpoint, params \\ %{}) do
+    # Wait for rate limit token before making request
+    Cinegraph.RateLimiter.wait_for_token(:tmdb)
+    
     api_key = get_api_key()
     
     params = Map.put(params, :api_key, api_key)

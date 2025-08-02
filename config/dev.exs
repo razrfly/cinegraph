@@ -82,12 +82,6 @@ config :phoenix_live_view,
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 
-# TMDb API configuration
-# Set TMDB_API_KEY in your .env file
-config :cinegraph, Cinegraph.Services.TMDb.Client,
-  api_key: System.get_env("TMDB_API_KEY")
-
-# OMDb API configuration
-# Set OMDB_API_KEY in your .env file
-config :cinegraph, Cinegraph.Services.OMDb.Client,
-  api_key: System.get_env("OMDB_API_KEY")
+# TMDb and OMDb API configuration
+# These are now configured in config/runtime.exs using Dotenvy
+# Set TMDB_API_KEY and OMDB_API_KEY in your .env file

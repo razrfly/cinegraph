@@ -1,0 +1,194 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <h1 class="text-3xl font-bold text-gray-900 mb-8">🎬 TMDB Import Dashboard</h1>
+  
+  <!-- Database Statistics -->
+  <div class="bg-white rounded-lg shadow p-6 mb-8">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">Database Statistics</h2>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="text-center">
+        <div class="text-3xl font-bold text-blue-600"><%= @stats.total_movies %></div>
+        <div class="text-sm text-gray-600">Total Movies</div>
+      </div>
+      <div class="text-center">
+        <div class="text-3xl font-bold text-green-600"><%= @stats.movies_with_tmdb %></div>
+        <div class="text-sm text-gray-600">With TMDB Data</div>
+      </div>
+      <div class="text-center">
+        <div class="text-3xl font-bold text-purple-600"><%= @stats.movies_with_omdb %></div>
+        <div class="text-sm text-gray-600">With OMDB Data</div>
+      </div>
+      <div class="text-center">
+        <div class="text-3xl font-bold text-orange-600"><%= @stats.total_people %></div>
+        <div class="text-sm text-gray-600">Total People</div>
+      </div>
+      <div class="text-center">
+        <div class="text-3xl font-bold text-red-600"><%= @stats.total_credits %></div>
+        <div class="text-sm text-gray-600">Total Credits</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Queue Status -->
+  <div class="bg-white rounded-lg shadow p-6 mb-8">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">Queue Status</h2>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <%= for queue <- @queue_stats do %>
+        <div class="border rounded-lg p-4">
+          <h3 class="font-medium text-gray-900"><%= queue.name %></h3>
+          <div class="mt-2 space-y-1 text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-600">Available:</span>
+              <span class="font-medium"><%= queue.available %></span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600">Executing:</span>
+              <span class="font-medium text-green-600"><%= queue.executing %></span>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+  
+  <!-- Active Imports -->
+  <%= if length(@active_imports) > 0 do %>
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Active Imports</h2>
+      <div class="space-y-4">
+        <%= for import <- @active_imports do %>
+          <div class="border rounded-lg p-4">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-medium text-gray-900">
+                <%= String.capitalize(import.type) %> Import
+              </h3>
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                <%= import.status %>
+              </span>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span class="text-gray-600">Progress:</span>
+                <span class="font-medium">
+                  <%= import.current_page %><%= if import.total_pages, do: " / #{import.total_pages}" %>
+                </span>
+              </div>
+              <div>
+                <span class="text-gray-600">Movies Found:</span>
+                <span class="font-medium"><%= import.movies_found %></span>
+              </div>
+              <div>
+                <span class="text-gray-600">Imported:</span>
+                <span class="font-medium text-green-600"><%= import.movies_imported %></span>
+              </div>
+              <div>
+                <span class="text-gray-600">Failed:</span>
+                <span class="font-medium text-red-600"><%= import.movies_failed %></span>
+              </div>
+            </div>
+            
+            <div class="mt-2 flex items-center justify-between">
+              <div class="text-sm text-gray-600">
+                Rate: <%= import.rate %> movies/min | 
+                Duration: <%= format_duration(import.duration) %>
+              </div>
+              <div class="space-x-2">
+                <%= if import.status == "running" do %>
+                  <button phx-click="pause_import" phx-value-id={import.id}
+                          class="text-sm px-3 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200">
+                    Pause
+                  </button>
+                <% else %>
+                  <button phx-click="resume_import" phx-value-id={import.id}
+                          class="text-sm px-3 py-1 bg-green-100 text-green-800 rounded hover:bg-green-200">
+                    Resume
+                  </button>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+  
+  <!-- Import Controls -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-xl font-bold text-gray-900 mb-4">Start New Import</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Popular Movies -->
+      <div class="border rounded-lg p-4">
+        <h3 class="font-medium text-gray-900 mb-2">Popular Movies</h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Import the most popular movies from TMDB (top 2000)
+        </p>
+        <button phx-click="start_popular_import"
+                class="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          Start Popular Import
+        </button>
+      </div>
+      
+      <!-- Daily Update -->
+      <div class="border rounded-lg p-4">
+        <h3 class="font-medium text-gray-900 mb-2">Daily Update</h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Import movies released in the last 7 days
+        </p>
+        <button phx-click="start_daily_update"
+                class="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+          Start Daily Update
+        </button>
+      </div>
+      
+      <!-- Decade Import -->
+      <div class="border rounded-lg p-4">
+        <h3 class="font-medium text-gray-900 mb-2">Import by Decade</h3>
+        <p class="text-sm text-gray-600 mb-2">
+          Import all movies from a specific decade
+        </p>
+        <select id="decade_select" class="w-full mb-2 rounded border-gray-300">
+          <option value="2020">2020s</option>
+          <option value="2010">2010s</option>
+          <option value="2000">2000s</option>
+          <option value="1990">1990s</option>
+          <option value="1980">1980s</option>
+          <option value="1970">1970s</option>
+          <option value="1960">1960s</option>
+          <option value="1950">1950s</option>
+        </select>
+        <button phx-click="start_decade_import" 
+                phx-value-decade="2020"
+                onclick="this.setAttribute('phx-value-decade', document.getElementById('decade_select').value)"
+                class="w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+          Start Decade Import
+        </button>
+      </div>
+    </div>
+    
+    <div class="mt-6 p-4 bg-yellow-50 rounded-lg">
+      <p class="text-sm text-yellow-800">
+        <strong>Note:</strong> TMDB API has rate limits of 40 requests per 10 seconds. 
+        Large imports will take time. The popular import (~2000 movies) will take approximately 
+        2-3 hours to complete.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Helper function for duration formatting
+  window.formatDuration = function(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
+  }
+</script>

@@ -31,6 +31,9 @@ defmodule CinegraphWeb.Router do
     live "/collaborations", CollaborationLive.Index, :index
     live "/six-degrees", SixDegreesLive.Index, :index
     live "/directors/:id", DirectorLive.Show, :show
+    
+    # Import dashboard
+    live "/imports", ImportDashboardLive, :index
   end
 
   # Other scopes may use custom stacks.
@@ -46,12 +49,16 @@ defmodule CinegraphWeb.Router do
     # you can use Plug.BasicAuth to set up some basic authentication
     # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
+    import Oban.Web.Router
 
     scope "/dev" do
       pipe_through :browser
 
       live_dashboard "/dashboard", metrics: CinegraphWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
+      
+      # Oban Web dashboard
+      oban_dashboard "/oban"
     end
   end
 end

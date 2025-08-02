@@ -59,7 +59,10 @@ defmodule Cinegraph.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
-      {:httpoison, "~> 2.2"}
+      {:httpoison, "~> 2.2"},
+      {:oban, "~> 2.17"},
+      {:oban_web, "~> 2.11"},
+      {:dotenvy, "~> 0.8.0"}
     ]
   end
 
