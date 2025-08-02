@@ -46,9 +46,9 @@ defmodule Cinegraph.ApiProcessors.OMDb do
   
   @impl true
   def validate_config() do
-    case System.get_env("OMDB_API_KEY") do
-      nil -> {:error, "OMDB_API_KEY environment variable not set"}
-      "" -> {:error, "OMDB_API_KEY environment variable is empty"}
+    case Application.get_env(:cinegraph, Cinegraph.Services.OMDb.Client)[:api_key] do
+      nil -> {:error, "OMDB_API_KEY not configured"}
+      "" -> {:error, "OMDB_API_KEY is empty"}
       _ -> :ok
     end
   end

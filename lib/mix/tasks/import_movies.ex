@@ -36,10 +36,13 @@ defmodule Mix.Tasks.ImportMovies do
       # Show progress during import
       mix import_movies --pages 10 --verbose
   
-  ## Modular System Options (when Oban is available)
+  ## Modular System Options (automatically uses Oban when available)
   
-      # Queue imports as Oban jobs instead of processing immediately
-      mix import_movies --pages 5 --queue
+      # Import using Oban job queue (default when Oban is loaded)
+      mix import_movies --pages 5
+      
+      # Force immediate processing without queue
+      mix import_movies --pages 5 --queue false
       
       # Import with specific APIs only
       mix import_movies --pages 5 --apis tmdb
@@ -47,10 +50,10 @@ defmodule Mix.Tasks.ImportMovies do
       
       # Enrich with a specific API
       mix import_movies --enrich --api omdb
-      mix import_movies --enrich --api tmdb --queue
+      mix import_movies --enrich --api tmdb
       
       # Import specific movies with selected APIs
-      mix import_movies --ids 550,551 --apis tmdb --queue
+      mix import_movies --ids 550,551 --apis tmdb
   """
   
   def run(args) do
@@ -84,7 +87,8 @@ defmodule Mix.Tasks.ImportMovies do
     Mix.Task.run("app.start")
     
     # Determine if we should use the new modular system
-    use_queue = opts[:queue] || false
+    # Default to using queue when Oban is available
+    use_queue = if opts[:queue] == false, do: false, else: use_new_system?()
     
     cond do
       opts[:fresh] || opts[:reset] ->

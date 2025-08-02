@@ -61,6 +61,21 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Configure Oban
+config :cinegraph, Oban,
+  repo: Cinegraph.Repo,
+  queues: [
+    tmdb_discovery: 10,     # Movie discovery from TMDb
+    tmdb_details: 20,       # Movie details fetching  
+    omdb_enrichment: 5,     # OMDb data enrichment
+    media_processing: 10,   # Keywords, videos, etc.
+    collaboration: 5        # Collaboration processing
+  ],
+  plugins: [
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7}, # Keep jobs for 7 days
+    {Oban.Plugins.Reindexer, schedule: "@daily"}
+  ]
+
 # Supabase configuration will be set in runtime.exs
 
 # Import movie import configuration
