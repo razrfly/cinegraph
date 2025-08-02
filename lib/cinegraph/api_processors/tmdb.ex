@@ -43,9 +43,9 @@ defmodule Cinegraph.ApiProcessors.TMDb do
   
   @impl true
   def validate_config() do
-    case System.get_env("TMDB_API_KEY") do
-      nil -> {:error, "TMDB_API_KEY environment variable not set"}
-      "" -> {:error, "TMDB_API_KEY environment variable is empty"}
+    case Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)[:api_key] do
+      nil -> {:error, "TMDB_API_KEY not configured"}
+      "" -> {:error, "TMDB_API_KEY is empty"}
       _ -> :ok
     end
   end
