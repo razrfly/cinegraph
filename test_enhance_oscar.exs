@@ -12,7 +12,12 @@ case Dotenvy.source([".env"]) do
 end
 
 # Get the 2023 ceremony
-ceremony = Cinegraph.Repo.get_by!(Cinegraph.Cultural.OscarCeremony, year: 2023)
+ceremony = case Cinegraph.Repo.get_by(Cinegraph.Cultural.OscarCeremony, year: 2023) do
+  nil -> 
+    Logger.error("No ceremony found for year 2023")
+    System.halt(1)
+  ceremony -> ceremony
+end
 
 Logger.info("Testing enhance_ceremony_with_imdb for 2023...")
 Logger.info("Original categories: #{length(ceremony.data["categories"])}")

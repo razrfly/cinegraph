@@ -17,7 +17,12 @@ stats = Cinegraph.Cultural.OscarImporter.import_stats()
 Logger.info(inspect(stats, pretty: true))
 
 # Import just the 2023 ceremony as a test
-ceremony = Cinegraph.Repo.get_by!(Cinegraph.Cultural.OscarCeremony, year: 2023)
+ceremony = case Cinegraph.Repo.get_by(Cinegraph.Cultural.OscarCeremony, year: 2023) do
+  nil -> 
+    Logger.error("No ceremony found for year 2023")
+    System.halt(1)
+  ceremony -> ceremony
+end
 
 Logger.info("\n=== Importing 2023 Oscar Ceremony ===")
 

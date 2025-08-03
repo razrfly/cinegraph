@@ -39,6 +39,17 @@ defmodule Cinegraph.Movies.Person do
   end
 
   @doc """
+  Changeset for creating person records from IMDb data only.
+  Used when we only have IMDb ID and name, without TMDb data.
+  """
+  def imdb_changeset(person, attrs) do
+    person
+    |> cast(attrs, [:imdb_id, :name])
+    |> validate_required([:imdb_id, :name])
+    |> unique_constraint(:imdb_id)
+  end
+
+  @doc """
   Creates a changeset from TMDB API response data
   """
   def from_tmdb(attrs) do

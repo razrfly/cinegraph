@@ -297,55 +297,128 @@
     </div>
 
     
-    <!-- CULTURAL LISTS DETAILS -->
+    <!-- CULTURAL LISTS & AWARDS -->
     <div class="bg-white rounded-lg shadow p-4">
       <h3 class="text-lg font-bold text-gray-900 mb-3">Cultural Lists & Awards</h3>
-      <%= if length(@movie.cultural_lists) > 0 do %>
-        <div class="space-y-2">
-          <%= for list_item <- @movie.cultural_lists do %>
-            <div class="border border-gray-200 rounded p-3">
-              <div class="flex items-start justify-between">
-                <div>
-                  <h4 class="font-medium text-sm">
-                    <%= list_item.list.name %>
-                    <%= if list_item.list.year do %>
-                      (<%= list_item.list.year %>)
+      
+      <!-- OMDb Awards Summary -->
+      <%= if @movie.omdb_data && @movie.omdb_data["Awards"] && @movie.omdb_data["Awards"] != "N/A" do %>
+        <div class="mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg">
+          <div class="flex items-start gap-3">
+            <div class="text-2xl">🏆</div>
+            <div>
+              <h4 class="text-md font-semibold text-amber-900 mb-1">Awards Summary</h4>
+              <p class="text-amber-800 font-medium"><%= @movie.omdb_data["Awards"] %></p>
+              <p class="text-xs text-amber-700 mt-1">Source: OMDb / IMDb</p>
+            </div>
+          </div>
+        </div>
+      <% end %>
+      
+      <!-- Oscar Nominations -->
+      <%= if length(@movie.oscar_nominations) > 0 do %>
+        <div class="mb-6">
+          <h4 class="text-md font-semibold text-gray-800 mb-3 flex items-center">
+            🏆 Academy Awards
+            <span class="ml-2 text-xs text-gray-500">(<%= length(@movie.oscar_nominations) %> nominations)</span>
+          </h4>
+          <div class="space-y-2">
+            <%= for nomination <- @movie.oscar_nominations do %>
+              <div class="border border-gray-200 rounded-lg p-3 bg-gradient-to-r from-yellow-50 to-amber-50">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                      <h5 class="font-medium text-sm text-gray-900">
+                        <%= nomination.category.name %>
+                      </h5>
+                      <%= if nomination.won do %>
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-yellow-200 text-yellow-900 border border-yellow-300">
+                          ✅ WINNER
+                        </span>
+                      <% else %>
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Nominee
+                        </span>
+                      <% end %>
+                    </div>
+                    
+                    <%= if nomination.person do %>
+                      <p class="text-xs text-gray-600 mb-1">
+                        Person: <span class="font-medium"><%= nomination.person.name %></span>
+                      </p>
                     <% end %>
-                  </h4>
-                  <p class="text-xs text-gray-600">Authority: <%= list_item.list.authority.name %></p>
+                    
+                    <%= if nomination.details["nominee_names"] && nomination.details["nominee_names"] != @movie.title do %>
+                      <p class="text-xs text-gray-600">
+                        Nominee: <span class="font-medium"><%= nomination.details["nominee_names"] %></span>
+                      </p>
+                    <% end %>
+                  </div>
                   
-                  <div class="mt-1 flex flex-wrap gap-1">
-                    <%= if list_item.rank do %>
-                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">
-                        #<%= list_item.rank %>
-                      </span>
-                    <% end %>
+                  <div class="text-right">
+                    <span class="text-sm font-bold text-gray-700"><%= nomination.ceremony.year %></span>
+                    <p class="text-xs text-gray-500"><%= nomination.ceremony.ceremony_number %><%= ordinal_suffix(nomination.ceremony.ceremony_number) %> Ceremony</p>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+      
+      <!-- Cultural Lists -->
+      <%= if length(@movie.cultural_lists) > 0 do %>
+        <div class="mb-4">
+          <h4 class="text-md font-semibold text-gray-800 mb-3">📚 Cultural Lists</h4>
+          <div class="space-y-2">
+            <%= for list_item <- @movie.cultural_lists do %>
+              <div class="border border-gray-200 rounded p-3">
+                <div class="flex items-start justify-between">
+                  <div>
+                    <h4 class="font-medium text-sm">
+                      <%= list_item.list.name %>
+                      <%= if list_item.list.year do %>
+                        (<%= list_item.list.year %>)
+                      <% end %>
+                    </h4>
+                    <p class="text-xs text-gray-600">Authority: <%= list_item.list.authority.name %></p>
                     
-                    <%= if list_item.award_category do %>
-                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-100 text-purple-800">
-                        <%= list_item.award_category %>
-                      </span>
-                    <% end %>
-                    
-                    <%= if list_item.award_result do %>
-                      <span class={"inline-flex items-center px-1.5 py-0.5 rounded text-xs #{if list_item.award_result == "winner", do: "bg-green-100 text-green-800", else: "bg-blue-100 text-blue-800"}"}>
-                        <%= String.capitalize(list_item.award_result) %>
-                      </span>
+                    <div class="mt-1 flex flex-wrap gap-1">
+                      <%= if list_item.rank do %>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">
+                          #<%= list_item.rank %>
+                        </span>
+                      <% end %>
+                      
+                      <%= if list_item.award_category do %>
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-100 text-purple-800">
+                          <%= list_item.award_category %>
+                        </span>
+                      <% end %>
+                      
+                      <%= if list_item.award_result do %>
+                        <span class={"inline-flex items-center px-1.5 py-0.5 rounded text-xs #{if list_item.award_result == "winner", do: "bg-green-100 text-green-800", else: "bg-blue-100 text-blue-800"}"}>
+                          <%= String.capitalize(list_item.award_result) %>
+                        </span>
+                      <% end %>
+                    </div>
+                  </div>
+                  
+                  <div class="text-right">
+                    <%= if list_item.list.prestige_score do %>
+                      <span class="text-xs text-gray-500">Prestige: <%= list_item.list.prestige_score %></span>
                     <% end %>
                   </div>
                 </div>
-                
-                <div class="text-right">
-                  <%= if list_item.list.prestige_score do %>
-                    <span class="text-xs text-gray-500">Prestige: <%= list_item.list.prestige_score %></span>
-                  <% end %>
-                </div>
               </div>
-            </div>
-          <% end %>
+            <% end %>
+          </div>
         </div>
-      <% else %>
-        <p class="text-red-600 text-sm">❌ No cultural list data</p>
+      <% end %>
+      
+      <!-- No awards/lists message -->
+      <%= if length(@movie.oscar_nominations) == 0 && length(@movie.cultural_lists) == 0 && (!@movie.omdb_data || !@movie.omdb_data["Awards"] || @movie.omdb_data["Awards"] == "N/A") do %>
+        <p class="text-gray-600 text-sm">No awards or cultural list appearances recorded.</p>
       <% end %>
     </div>
     
