@@ -15,8 +15,11 @@ defmodule Cinegraph.Imports.TMDbImporter do
   @doc """
   Starts a systematic import of all TMDB movies.
   Uses pagination to go through every movie in TMDB.
+  
+  ## Options
+    - :pages - Number of pages to import (default: 500)
   """
-  def start_full_import do
+  def start_full_import(opts \\ []) do
     Logger.info("Starting systematic TMDB import")
     
     # Get total movies from TMDB
@@ -26,16 +29,23 @@ defmodule Cinegraph.Imports.TMDbImporter do
         
         # Start from page 1 (or resume from last page)
         start_page = ImportState.last_page_processed() + 1
-        Logger.info("Starting from page #{start_page}")
+        pages_to_import = Keyword.get(opts, :pages, 500)
+        end_page = start_page + pages_to_import - 1
         
-        # Queue first discovery job
-        queue_discovery_job(start_page)
+        Logger.info("Queueing pages #{start_page} to #{end_page}")
         
-        {:ok, %{
-          tmdb_total: total,
-          our_total: count_our_movies(),
-          starting_page: start_page
-        }}
+        # Queue all pages at once for better concurrency
+        case queue_pages(start_page, end_page) do
+          {:ok, queued_count} ->
+            {:ok, %{
+              tmdb_total: total,
+              our_total: count_our_movies(),
+              starting_page: start_page,
+              pages_queued: queued_count
+            }}
+          error ->
+            error
+        end
         
       error ->
         Logger.error("Failed to get TMDB total: #{inspect(error)}")
@@ -245,36 +255,23 @@ defmodule Cinegraph.Imports.TMDbImporter do
     Repo.aggregate(Movies.Movie, :count)
   end
   
-  defp queue_discovery_job(page) do
-    args = %{
-      "page" => page,
-      "import_type" => "full"
-    }
-    
-    case args
-         |> TMDbDiscoveryWorker.new()
-         |> Oban.insert() do
-      {:ok, job} ->
-        Logger.info("Queued discovery job for page #{page}")
-        {:ok, job}
-      error ->
-        Logger.error("Failed to queue discovery job: #{inspect(error)}")
-        error
-    end
-  end
   
   defp calculate_discovery_delay(page_position) do
     # TMDB rate limit: 40 requests per 10 seconds = 4/second
-    # Each discovery spawns ~20 detail jobs
-    # So we need to space out discovery jobs
+    # We can have multiple discovery jobs running since Oban controls concurrency
+    # With queue concurrency of 10, we can handle bursts better
     
-    # Base delay increases with page position to spread load
-    # For the first page, minimal delay. Then increase.
-    base_delay = min((page_position - 1) * 10, 300)  # Cap at 5 minutes
+    # Group pages into waves - 10 pages per wave
+    # This allows 10 discovery jobs to run concurrently
+    wave = div(page_position - 1, 10)
     
-    # Add some jitter to avoid thundering herd
-    jitter = :rand.uniform(30)
+    # Each wave starts 30 seconds after the previous one
+    # This gives time for the previous wave's detail jobs to process
+    wave_delay = wave * 30
     
-    base_delay + jitter
+    # Add small jitter within the wave to avoid exact simultaneity
+    jitter = :rand.uniform(5)
+    
+    wave_delay + jitter
   end
 end
