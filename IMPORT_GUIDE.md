@@ -1,385 +1,373 @@
 # 🎬 CineGraph Import Guide
 
-This guide provides comprehensive instructions for importing movie data into CineGraph using the Oban-based import system.
+A comprehensive guide to importing movie data into CineGraph using the Oban-based background job system.
 
 ## Table of Contents
-- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
 - [Environment Setup](#environment-setup)
-- [Import System Overview](#import-system-overview)
+- [Import Dashboard](#import-dashboard)
 - [Import Methods](#import-methods)
+- [Import Process Flow](#import-process-flow)
 - [Monitoring Progress](#monitoring-progress)
 - [Troubleshooting](#troubleshooting)
 - [API Rate Limits](#api-rate-limits)
-- [Best Practices](#best-practices)
+- [Advanced Usage](#advanced-usage)
 
-## Prerequisites
+## Quick Start
 
-1. **API Keys Required**:
-   - **TMDb API Key**: Get it free from [TMDb API Settings](https://www.themoviedb.org/settings/api)
-   - **OMDb API Key** (Optional): Get it from [OMDb API](http://www.omdbapi.com/apikey.aspx)
+The fastest way to populate your database with movies:
 
-2. **Database Setup**:
-   - PostgreSQL running (locally via Supabase or remote)
-   - Database migrations applied: `mix ecto.migrate`
+```bash
+# 1. Ensure your .env file has API keys configured
+cp .env.example .env
+# Edit .env and add your TMDB_API_KEY and OMDB_API_KEY
 
-3. **Dependencies Installed**:
-   - Run `mix deps.get` to install all Elixir dependencies
+# 2. Start the Phoenix server
+./start.sh
+
+# 3. Visit the import dashboard
+open http://localhost:4001/imports
+
+# 4. Click "Import Popular Movies" to start with ~2,000 highly-rated films
+```
 
 ## Environment Setup
 
-1. **Copy the environment template**:
-   ```bash
-   cp .env.example .env
-   ```
+### Required API Keys
 
-2. **Edit `.env` and add your API keys**:
-   ```bash
-   # For local Supabase development
-   SUPABASE_URL=http://127.0.0.1:54321
-   SUPABASE_ANON_KEY=your_supabase_anon_key_here
-   SUPABASE_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+1. **TMDb API Key**
+   - Get it free from: https://www.themoviedb.org/settings/api
+   - Add to `.env`: `TMDB_API_KEY=your_key_here`
 
-   # Required API Keys
-   TMDB_API_KEY=your_tmdb_api_key_here
-   OMDB_API_KEY=your_omdb_api_key_here  # Optional
-   ```
+2. **OMDb API Key** (Optional but recommended)
+   - Get it free from: http://www.omdbapi.com/apikey.aspx
+   - Add to `.env`: `OMDB_API_KEY=your_key_here`
 
-3. **Start the Phoenix server**:
-   ```bash
-   mix phx.server
-   # Or use the start script if available
-   ./start.sh
-   ```
+### Starting the Server
 
-## Import System Overview
+Always use the start script to ensure environment variables are loaded:
 
-CineGraph uses an **Oban-based background job system** that provides:
+```bash
+./start.sh  # Loads .env and starts Phoenix server
+```
 
-- ✅ **Rate-limited API calls** (40 requests per 10 seconds for TMDb)
-- ✅ **Resumable imports** that survive server restarts
-- ✅ **Progress tracking** with real-time updates
-- ✅ **Duplicate detection** to avoid re-importing movies
-- ✅ **Automatic retries** for failed requests
-- ✅ **Queue management** with priority levels
+## Import Dashboard
 
-### Import Workflow
+Visit http://localhost:4001/imports to access the import dashboard, which provides:
 
-1. **Discovery Worker** (`TMDbDiscoveryWorker`):
-   - Fetches pages of movies from TMDb's discover endpoint
-   - Queues individual movie detail jobs
-   - Updates import progress
-
-2. **Details Worker** (`TMDbDetailsWorker`):
-   - Fetches complete movie details, cast, crew, keywords
-   - Stores data in PostgreSQL
-   - Optionally queues OMDb enrichment
-
-3. **OMDb Enrichment Worker** (`OMDbEnrichmentWorker`):
-   - Fetches additional data from OMDb (awards, box office)
-   - Enriches existing movie records
+- **Real-time Statistics**: Total movies, import progress, queue status
+- **Import Controls**: Start different types of imports with one click
+- **Progress Monitoring**: Live updates on running imports
+- **Database Stats**: Current movie counts and data coverage
 
 ## Import Methods
 
-### 1. Web UI Import (Recommended)
-
-Navigate to the import dashboard:
-```
-http://localhost:4001/imports
-```
-
-Available import options:
-
-#### Popular Movies Import
-- Imports top-rated movies with significant vote counts
-- Quick way to populate database with quality content
-- ~2,000 movies, takes ~20 minutes
+### 1. Popular Movies Import (Recommended for First Run)
+- **Movies**: ~2,000 highly-rated films
+- **Time**: 20-30 minutes
+- **Best for**: Initial database population
 
 ```elixir
-# Triggered via UI or programmatically:
+# Via dashboard: Click "Import Popular Movies"
+# Via console:
 Cinegraph.Imports.TMDbImporter.start_popular_import(max_pages: 100)
 ```
 
-#### Daily Updates
-- Imports movies from the last 7 days
-- Great for keeping database current
-- ~50-200 movies, takes ~5 minutes
+### 2. Daily Update Import
+- **Movies**: 50-200 recent releases
+- **Time**: 5-10 minutes
+- **Best for**: Keeping database current
 
 ```elixir
+# Via dashboard: Click "Run Daily Update"
+# Via console:
 Cinegraph.Imports.TMDbImporter.start_daily_update()
 ```
 
-#### Import by Decade
-- Import movies from specific decades (1950s-2020s)
-- Useful for historical coverage
-- ~2,000-5,000 movies per decade
+### 3. Decade Import
+- **Movies**: 2,000-5,000 per decade
+- **Time**: 2-4 hours
+- **Best for**: Historical coverage
 
 ```elixir
-Cinegraph.Imports.TMDbImporter.start_decade_import(2020)
+# Via console:
+Cinegraph.Imports.TMDbImporter.start_decade_import(1990)  # 1990s movies
+Cinegraph.Imports.TMDbImporter.start_decade_import(2000)  # 2000s movies
 ```
 
-#### Full Catalog Import
-- Imports entire TMDb catalog
-- **WARNING**: Takes 5-7 days due to rate limits
-- ~900,000+ movies
+### 4. Full Catalog Import
+- **Movies**: 900,000+ (entire TMDb database)
+- **Time**: 5-7 days
+- **Best for**: Complete coverage
 
 ```elixir
-Cinegraph.Imports.TMDbImporter.start_full_import()
+# Via console (use with caution):
+Cinegraph.Imports.TMDbImporter.start_full_import(max_pages: 500)
 ```
 
-### 2. Programmatic Import
+## Import Process Flow
 
-Use IEx console or scripts:
+The import system uses a sophisticated pipeline:
 
-```elixir
-# Start a custom import with filters
-Cinegraph.Imports.TMDbImporter.start_import("custom", %{
-  max_pages: 50,
-  sort_by: "vote_average.desc",
-  "vote_count.gte" => 1000,
-  "primary_release_date.gte" => "2020-01-01",
-  "primary_release_date.lte" => "2023-12-31"
-})
 ```
-
-### 3. Test Import Script
-
-Run a small test import to verify setup:
-
-```bash
-mix run test_import.exs
+1. Import Initiated
+   └─> ImportProgress record created
+   
+2. TMDbDiscoveryWorker
+   ├─> Fetches movie lists from TMDb API (20 movies/page)
+   ├─> Queues TMDbDetailsWorker jobs for each movie
+   └─> Updates ImportProgress with movies_found count
+   
+3. TMDbDetailsWorker (per movie)
+   ├─> Checks if movie already exists (by tmdb_id)
+   ├─> Fetches detailed movie data from TMDb
+   ├─> Creates/updates movie record
+   ├─> Queues enrichment workers
+   └─> Updates ImportProgress with movies_imported count
+   
+4. Enrichment Workers (parallel)
+   ├─> CastCrewWorker: Fetches cast and crew
+   ├─> KeywordsWorker: Fetches keywords and tags
+   ├─> VideosWorker: Fetches trailers and clips
+   └─> ProductionWorker: Fetches production companies
+   
+5. OMDb Enrichment (if API key configured)
+   └─> Adds IMDb ratings, Rotten Tomatoes scores, box office data
 ```
-
-This will:
-- Test rate limiting
-- Import 1 page (20 movies)
-- Show progress updates
-- Verify database writes
 
 ## Monitoring Progress
 
-### 1. Import Dashboard UI
+### Live Dashboard Metrics
+The import dashboard shows:
+- **Current Page**: Progress through TMDb pages
+- **Movies Found**: Total discovered in TMDb
+- **Movies Imported**: Successfully added to database
+- **Import Rate**: Movies per minute
+- **Queue Status**: Pending vs completed jobs
 
-Visit `http://localhost:4001/imports` to see:
-- Current import status
-- Movies imported vs. found
-- Queue depths for each worker
-- Estimated completion time
-- Rate of import (movies/minute)
-
-### 2. Oban Web Dashboard
-
-Visit `http://localhost:4001/dev/oban` to see:
-- Individual job status
-- Failed jobs with error details
-- Queue performance metrics
-- Job history
-
-### 3. Database Queries
-
-Check import progress directly:
+### Database Queries
 
 ```elixir
-# Total movies in database
+# Check import progress
+Cinegraph.Imports.ImportProgress.get_running()
+
+# Get specific import status
+progress = Cinegraph.Imports.ImportProgress.get(import_id)
+
+# Check movie count
 Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
 
-# Movies with TMDb data
-import Ecto.Query
-Cinegraph.Repo.aggregate(
-  from(m in Cinegraph.Movies.Movie, where: not is_nil(m.tmdb_data)), 
-  :count
-)
-
-# Recent import status
-Cinegraph.Imports.TMDbImporter.get_import_status()
+# Check movies with TMDb data
+Cinegraph.Movies.Movie
+|> where([m], not is_nil(m.tmdb_data))
+|> Cinegraph.Repo.aggregate(:count)
 ```
 
-### 4. Logs
+### Oban Dashboard
 
-Monitor server logs for detailed information:
-```bash
-tail -f log/dev.log  # If file logging is enabled
-# Or just watch the console output
-```
+Visit http://localhost:4001/dev/oban to see:
+- All queued, executing, and completed jobs
+- Job performance metrics
+- Failed jobs with stack traces
+- Queue throughput statistics
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### 1. "Missing API Key" Error
-**Symptom**: Jobs fail with `{:error, :missing_api_key}` or `OMDB_API_KEY not configured`
+#### 1. "missing_api_key" Error
+**Problem**: Jobs failing with `{:error, :missing_api_key}`
 
 **Solution**:
-- Ensure `.env` file exists with valid API keys
-- **IMPORTANT**: Restart the Phoenix server after adding/changing keys
-- The server needs to be restarted to reload environment variables
-- Verify with: `Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)`
+```bash
+# 1. Verify .env file has keys
+cat .env | grep API_KEY
 
-#### 2. Rate Limiting
-**Symptom**: 429 errors or slow imports
+# 2. Restart server with ./start.sh (not mix phx.server)
+./start.sh
 
-**Solution**:
-- The system automatically handles rate limits
-- Default: 40 requests per 10 seconds
-- Adjust in `config/config.exs` if needed
+# 3. Verify in console
+source .env && iex -S mix
+iex> Application.get_env(:cinegraph, Cinegraph.Services.TMDb.Client)[:api_key]
+```
 
-#### 3. Duplicate Movies
-**Symptom**: Same movie appears multiple times
+#### 2. Import Not Increasing Movie Count
+**Problem**: Jobs running but movie count stays the same
 
-**Solution**:
-- System checks for duplicates by TMDb ID
-- Run deduplication: `Cinegraph.Movies.deduplicate()`
+**Possible Causes**:
+- Importing movies that already exist (duplicates)
+- Jobs failing silently
+- Rate limit exhaustion
 
-#### 4. Failed Jobs
-**Symptom**: Jobs in "retryable" or "discarded" state
+**Debugging Steps**:
+```elixir
+# Check for duplicate attempts
+Oban.Job
+|> where([j], j.worker == "Cinegraph.Workers.TMDbDetailsWorker")
+|> where([j], j.state == "completed")
+|> limit(10)
+|> Cinegraph.Repo.all()
+|> Enum.map(& &1.args)
+
+# Check for failed jobs
+Oban.Job
+|> where([j], j.state in ["failed", "discarded"])
+|> Cinegraph.Repo.all()
+```
+
+#### 3. Rate Limit Errors
+**Problem**: TMDb API returning 429 errors
+
+**Solution**: The system automatically handles rate limiting, but you can:
+- Reduce concurrent workers in config
+- Increase delays between requests
+- Check rate limiter status in logs
+
+#### 4. Stuck Imports
+**Problem**: Import shows as "running" but no progress
 
 **Solution**:
 ```elixir
-# Retry all failed jobs
-Oban.retry_all_jobs(queue: :tmdb_details)
+# Find stuck imports
+Cinegraph.Repo.query!("""
+UPDATE import_progress 
+SET status = 'failed' 
+WHERE status = 'running' 
+AND updated_at < NOW() - INTERVAL '1 hour'
+""")
 
-# Or retry specific job from Oban Web UI
+# Clear all Oban jobs and start fresh
+Cinegraph.Repo.delete_all(Oban.Job)
 ```
-
-#### 5. Import Stuck / No New Movies
-**Symptom**: Import appears to run but movie count doesn't increase
-
-**Common Causes**:
-1. **Already imported**: Popular movies may already exist in database
-2. **Duplicate detection**: System skips movies that already exist
-
-**Solution**:
-1. Check if movies already exist:
-   ```elixir
-   # In IEx console
-   Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
-   ```
-2. Try importing different movies:
-   ```elixir
-   # Import movies from a specific decade
-   Cinegraph.Imports.TMDbImporter.start_decade_import(2020)
-   
-   # Or import less popular but quality movies
-   Cinegraph.Imports.TMDbImporter.start_full_import(
-     sort_by: "vote_average.desc",
-     max_pages: 10
-   )
-   ```
-3. Check Oban Web UI at `/dev/oban` for job details
 
 ## API Rate Limits
 
-### TMDb Limits
-- **40 requests per 10 seconds**
-- Automatically managed by rate limiter
-- Burst capacity allows fast initial requests
+### TMDb
+- **Limit**: 40 requests per 10 seconds
+- **Handled by**: Built-in token bucket rate limiter
+- **Logs**: Debug messages show token consumption
 
-### OMDb Limits
-- **1,000 requests per day** (free tier)
-- **100,000 requests per day** (paid tier)
-- Set appropriate delay in worker config
+### OMDb
+- **Free Tier**: 1,000 requests per day
+- **Handled by**: 1-second delay between requests
+- **Note**: May take longer for large imports
 
-### Adjusting Rate Limits
+## Advanced Usage
 
-In `lib/cinegraph/rate_limiter.ex`:
+### Custom Import Filters
+
 ```elixir
-@bucket_configs %{
-  tmdb: %{
-    capacity: 40,        # Max tokens
-    refill_amount: 40,   # Tokens added each interval
-    refill_interval: 10  # Seconds
-  }
-}
+# Import movies from specific year
+Cinegraph.Imports.TMDbImporter.start_full_import(
+  year: 2023,
+  max_pages: 50
+)
+
+# Import by genre (genre IDs from TMDb)
+Cinegraph.Imports.TMDbImporter.start_full_import(
+  genres: "28,12",  # Action and Adventure
+  max_pages: 50
+)
+
+# Import by minimum vote count
+Cinegraph.Imports.TMDbImporter.start_popular_import(
+  min_vote_count: 500,
+  max_pages: 200
+)
+```
+
+### Pause and Resume Imports
+
+```elixir
+# Pause a running import
+{:ok, _} = Cinegraph.Imports.TMDbImporter.pause_import(import_id)
+
+# Resume a paused import
+{:ok, _} = Cinegraph.Imports.TMDbImporter.resume_import(import_id)
+```
+
+### Direct Script Usage
+
+For development and testing:
+
+```bash
+# Import specific movies by ID
+./scripts/run_with_env.sh mix run -e 'Cinegraph.Workers.TMDbDetailsWorker.new(%{tmdb_id: 550}) |> Oban.insert()'
+
+# Run a test import of older movies
+./scripts/run_with_env.sh mix run scripts/import_tmdb.exs -- --decade 1980
+```
+
+### Monitoring Rate Limiter
+
+```elixir
+# Check rate limiter status
+GenServer.call(Cinegraph.RateLimiter, {:check_tokens, :tmdb})
+GenServer.call(Cinegraph.RateLimiter, {:check_tokens, :omdb})
 ```
 
 ## Best Practices
 
-### 1. Start Small
-- Begin with popular movies import
-- Test with 1-2 pages first
-- Gradually increase scope
-
-### 2. Monitor Resources
-- Watch database size
-- Monitor memory usage
-- Check disk space for logs
-
-### 3. Schedule Imports
-- Run large imports during off-hours
-- Use daily updates to stay current
-- Implement incremental imports
-
-### 4. Data Quality
-- Verify critical data after import
-- Check for missing fields
-- Validate relationships (cast, crew)
-
-### 5. Backup Strategy
-- Backup database before large imports
-- Keep import logs for debugging
-- Document custom import parameters
-
-### 6. Performance Tips
-- Increase Oban concurrency for faster imports:
-  ```elixir
-  # In config/config.exs
-  config :cinegraph, Oban,
-    queues: [
-      tmdb_discovery: 10,
-      tmdb_details: 50,    # Increase for faster imports
-      omdb_enrichment: 5
-    ]
-  ```
-- Use database indexes for better query performance
-- Consider partitioning for very large datasets
+1. **Start Small**: Begin with popular movies import to verify setup
+2. **Monitor Progress**: Use the dashboard to track imports
+3. **Check Logs**: Look for rate limit warnings or API errors
+4. **Incremental Imports**: Import by decade or genre to avoid overwhelming the system
+5. **Daily Updates**: Set up scheduled daily imports to keep data fresh
 
 ## Example Import Scenarios
 
-### Scenario 1: Fresh Installation
+### New Installation
 ```bash
-# 1. Setup environment
-cp .env.example .env
-# Edit .env with your API keys
+# 1. Import popular movies first (2,000 movies, 30 min)
+# Via dashboard: Click "Import Popular Movies"
 
-# 2. Start server
-mix phx.server
+# 2. Add recent releases (200 movies, 10 min)
+# Via dashboard: Click "Run Daily Update"
 
-# 3. Import popular movies first
-# Visit http://localhost:4001/imports
-# Click "Import Popular Movies"
-
-# 4. Monitor progress
-# Refresh the page to see updates
+# 3. Fill in historical data by decade
+# Via console:
+Cinegraph.Imports.TMDbImporter.start_decade_import(2010)
+Cinegraph.Imports.TMDbImporter.start_decade_import(2000)
 ```
 
-### Scenario 2: Daily Maintenance
+### Development Testing
+```bash
+# Quick test with 40 movies
+./scripts/import_with_env.sh --pages 2
+
+# Medium test with 200 movies
+./scripts/import_with_env.sh --pages 10
+
+# Reset and import fresh
+./scripts/import_with_env.sh --reset --pages 10
+```
+
+### Production Deployment
 ```elixir
-# Run in IEx console
+# 1. Start with high-quality movies
+Cinegraph.Imports.TMDbImporter.start_popular_import(
+  min_vote_count: 100,
+  max_pages: 200
+)
+
+# 2. Schedule daily updates (in config or cron)
 Cinegraph.Imports.TMDbImporter.start_daily_update()
 
-# Or schedule with cron/systemd
+# 3. Gradually backfill by decade
+Cinegraph.Imports.TMDbImporter.start_decade_import(2020)
+# Wait for completion...
+Cinegraph.Imports.TMDbImporter.start_decade_import(2010)
 ```
 
-### Scenario 3: Research Project
-```elixir
-# Import specific criteria for research
-Cinegraph.Imports.TMDbImporter.start_import("research_2020s_drama", %{
-  max_pages: 200,
-  with_genres: "18",  # Drama genre ID
-  "primary_release_date.gte" => "2020-01-01",
-  "vote_count.gte" => 50,
-  sort_by: "vote_average.desc"
-})
-```
+## Import Statistics
 
-## Next Steps
+Typical import performance:
+- **Discovery**: ~20 movies/page, 1-2 seconds per page
+- **Details**: ~2-3 seconds per movie (with all associations)
+- **Throughput**: ~15-20 movies/minute with default settings
+- **Storage**: ~10-15 KB per movie (including all metadata)
 
-After successful import:
-1. Explore the movie data at `/movies`
-2. Use the search functionality
-3. Build custom queries for analysis
-4. Set up regular import schedules
-5. Contribute improvements back to the project!
-
----
-
-For additional help, check the [main README](README.md) or open an issue on GitHub.
+With a full import:
+- **Popular Movies** (2,000): ~2 hours, ~30 MB
+- **Per Decade** (3,000-5,000): ~3-4 hours, ~50-75 MB
+- **Full Catalog** (900,000+): ~5-7 days, ~10-15 GB
