@@ -73,7 +73,10 @@ defmodule Cinegraph.Imports.ImportStats do
     current_time = DateTime.utc_now()
     current_movie_count = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
     
-    [{:current_stats, prev_stats}] = :ets.lookup(@table_name, :current_stats)
+    prev_stats = case :ets.lookup(@table_name, :current_stats) do
+      [{:current_stats, stats}] -> stats
+      [] -> %{movies_per_minute: 0.0, last_movie_count: 0, last_check_time: current_time}
+    end
     
     # Calculate rate
     time_diff = DateTime.diff(current_time, prev_stats.last_check_time, :second)
