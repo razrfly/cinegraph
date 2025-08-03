@@ -189,8 +189,13 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     # Handle any post-creation tasks for movies
     # This is useful for Oscar imports where we need to create nominations
     if args["source"] == "oscar_import" && args["metadata"] do
-      Logger.info("Creating Oscar nomination for movie with TMDb ID #{tmdb_id}")
-      create_oscar_nomination(tmdb_id, args["metadata"])
+      metadata = args["metadata"]
+      if metadata["ceremony_year"] && metadata["category"] do
+        Logger.info("Creating Oscar nomination for movie with TMDb ID #{tmdb_id}")
+        create_oscar_nomination(tmdb_id, metadata)
+      else
+        Logger.error("Invalid Oscar metadata: missing ceremony_year or category")
+      end
     end
     :ok
   end
@@ -210,37 +215,30 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         category = Repo.get_by(Cinegraph.Cultural.OscarCategory, name: category_name)
         
         if ceremony && category do
-          # Check if nomination already exists
-          existing = Repo.get_by(Cinegraph.Cultural.OscarNomination,
+          # Use insert with on_conflict option for idempotent operation
+          attrs = %{
             ceremony_id: ceremony.id,
             category_id: category.id,
-            movie_id: movie.id
-          )
-          
-          if existing do
-            Logger.debug("Oscar nomination already exists for #{movie.title} in #{category_name}")
-          else
-            # Create the nomination
-            attrs = %{
-              ceremony_id: ceremony.id,
-              category_id: category.id,
-              movie_id: movie.id,
-              person_id: nil,  # Could be enhanced later
-              won: metadata["winner"] || false,
-              details: %{
-                "nominee_names" => metadata["film_title"],
-                "person_imdb_ids" => []
-              }
+            movie_id: movie.id,
+            person_id: nil,
+            won: metadata["winner"] || false,
+            details: %{
+              "nominee_names" => metadata["film_title"],
+              "person_imdb_ids" => []
             }
-            
-            case %Cinegraph.Cultural.OscarNomination{}
-                 |> Cinegraph.Cultural.OscarNomination.changeset(attrs)
-                 |> Repo.insert() do
-              {:ok, _} ->
-                Logger.info("Created Oscar nomination for #{movie.title} in #{category_name}")
-              {:error, changeset} ->
-                Logger.error("Failed to create Oscar nomination: #{inspect(changeset.errors)}")
-            end
+          }
+
+          %Cinegraph.Cultural.OscarNomination{}
+          |> Cinegraph.Cultural.OscarNomination.changeset(attrs)
+          |> Repo.insert(
+            on_conflict: :nothing,
+            conflict_target: [:ceremony_id, :category_id, :movie_id]
+          )
+          |> case do
+            {:ok, _} ->
+              Logger.info("Created Oscar nomination for #{movie.title} in #{category_name}")
+            {:error, changeset} ->
+              Logger.error("Failed to create Oscar nomination: #{inspect(changeset.errors)}")
           end
         else
           Logger.error("Ceremony (#{ceremony_year}) or category (#{category_name}) not found")

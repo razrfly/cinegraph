@@ -4,7 +4,12 @@
 require Logger
 
 # Get the 2024 ceremony
-ceremony = Cinegraph.Repo.get_by!(Cinegraph.Cultural.OscarCeremony, year: 2024)
+ceremony = case Cinegraph.Repo.get_by(Cinegraph.Cultural.OscarCeremony, year: 2024) do
+  nil -> 
+    Logger.error("No ceremony found for year 2024")
+    System.halt(1)
+  ceremony -> ceremony
+end
 
 Logger.info("=== 2024 (96th) Academy Awards Data ===")
 Logger.info("Categories: #{length(ceremony.data["categories"])}")

@@ -307,7 +307,7 @@ defmodule Cinegraph.Cultural.OscarImporter do
       |> Repo.insert()
     else
       Logger.error("Category not found: #{category_name}")
-      {:error, "Category not found"}
+      {:error, :category_not_found}
     end
   end
   
@@ -332,7 +332,9 @@ defmodule Cinegraph.Cultural.OscarImporter do
             
             case Repo.insert(%Person{} |> Person.changeset(attrs)) do
               {:ok, person} -> person.id
-              {:error, _} -> nil
+              {:error, changeset} -> 
+                Logger.error("Failed to create person #{person_name}: #{inspect(changeset.errors)}")
+                nil
             end
             
           person -> 
