@@ -11,18 +11,9 @@ case Dotenvy.source([".env"]) do
     Logger.error("Failed to load .env: #{inspect(reason)}")
 end
 
-# For the 95th Academy Awards (2023), we need to fetch 2022 data
-# Since IMDb uses the ceremony year (2023) in the URL
+# Test the scraper's year mapping for 2022 ceremony (held in 2023)
 ceremony_year = 2022
-url_year = 2023  # 95th Academy Awards held in 2023
-
-Logger.info("Fetching IMDb data for ceremony year #{ceremony_year} (URL year: #{url_year})...")
-
-# Manually fetch with the correct URL
-url = "https://www.imdb.com/event/ev0000003/#{url_year}/1"
-Logger.info("URL: #{url}")
-
-# Use the scraper with a custom year mapping
+Logger.info("Testing scraper's year mapping for ceremony year #{ceremony_year}...")
 case Cinegraph.Scrapers.ImdbOscarScraper.fetch_ceremony_imdb_data(ceremony_year) do
   {:ok, imdb_data} ->
     Logger.info("✅ Successfully fetched IMDb data!")
@@ -41,18 +32,22 @@ case Cinegraph.Scrapers.ImdbOscarScraper.fetch_ceremony_imdb_data(ceremony_year)
     end
     
     # Now compare with our 2023 ceremony data
-    ceremony = Cinegraph.Repo.get_by!(Cinegraph.Cultural.OscarCeremony, year: 2023)
-    our_best_picture = 
-      ceremony.data["categories"]
-      |> Enum.find(fn cat -> cat["category"] == "Best Picture" end)
-    
-    if our_best_picture do
-      Logger.info("\nOur Best Picture nominees (from 2023 ceremony):")
-      our_best_picture["nominees"]
-      |> Enum.each(fn nom ->
-        winner = if nom["winner"], do: "WINNER", else: "      "
-        Logger.info("  #{winner} #{nom["film"]}")
-      end)
+    case Cinegraph.Repo.get_by(Cinegraph.Cultural.OscarCeremony, year: 2023) do
+      nil ->
+        Logger.warn("No local ceremony data found for 2023")
+      ceremony ->
+        our_best_picture = 
+          ceremony.data["categories"]
+          |> Enum.find(fn cat -> cat["category"] == "Best Picture" end)
+        
+        if our_best_picture do
+          Logger.info("\nOur Best Picture nominees (from 2023 ceremony):")
+          our_best_picture["nominees"]
+          |> Enum.each(fn nom ->
+            winner = if nom["winner"], do: "WINNER", else: "      "
+            Logger.info("  #{winner} #{nom["film"]}")
+          end)
+        end
     end
     
   {:error, reason} ->

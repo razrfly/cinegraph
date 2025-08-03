@@ -4,9 +4,14 @@
 require Logger
 
 # Load environment variables
+# Load only the required environment variable
 case Dotenvy.source([".env"]) do
   {:ok, env} -> 
-    Enum.each(env, fn {key, value} -> System.put_env(key, value) end)
+    if api_key = Map.get(env, "ZYTE_API_KEY") do
+      System.put_env("ZYTE_API_KEY", api_key)
+    else
+      Logger.error("ZYTE_API_KEY not found in .env file")
+    end
   {:error, reason} -> 
     Logger.error("Failed to load .env: #{inspect(reason)}")
 end
@@ -27,7 +32,11 @@ end
 defmodule DebugFetch do
   def get_raw_html(year) do
     api_key = System.get_env("ZYTE_API_KEY")
-    url = "https://www.oscars.org/oscars/ceremonies/#{year}"
+    
+    if is_nil(api_key) or api_key == "" do
+      {:error, "ZYTE_API_KEY environment variable not set"}
+    else
+      url = "https://www.oscars.org/oscars/ceremonies/#{year}"
     
     headers = [
       {"Authorization", "Basic #{Base.encode64(api_key <> ":")}"},
@@ -63,6 +72,7 @@ defmodule DebugFetch do
       {:error, reason} ->
         {:error, reason}
     end
+    end
   end
 end
 
@@ -71,8 +81,12 @@ case DebugFetch.get_raw_html(2024) do
   {:ok, html} ->
     # Save to file for inspection
     filename = "oscar_2024_zyte.html"
-    File.write!(filename, html)
-    Logger.info("✅ Saved HTML to #{filename}")
+    case File.write(filename, html) do
+      :ok ->
+        Logger.info("✅ Saved HTML to #{filename}")
+      {:error, reason} ->
+        Logger.error("Failed to save HTML: #{inspect(reason)}")
+    end
     
     # Let's look for common patterns
     doc = Floki.parse_document!(html)

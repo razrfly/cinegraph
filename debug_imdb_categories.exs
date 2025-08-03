@@ -63,13 +63,17 @@ end
 Logger.info("\n" <> String.duplicate("-", 50))
 Logger.info("Checking our Oscar ceremony data...")
 
-ceremony = Cinegraph.Repo.get_by!(Cinegraph.Cultural.OscarCeremony, year: 2023)
-our_categories = 
-  ceremony.data["categories"]
-  |> Enum.map(& &1["category"])
-  |> Enum.sort()
-
-Logger.info("Our categories (#{length(our_categories)}):")
-Enum.each(our_categories, fn cat ->
-  Logger.info("- #{cat}")
-end)
+case Cinegraph.Repo.get_by(Cinegraph.Cultural.OscarCeremony, year: 2023) do
+  nil ->
+    Logger.warn("No local ceremony data found for 2023")
+  ceremony ->
+    our_categories = 
+      ceremony.data["categories"]
+      |> Enum.map(& &1["category"])
+      |> Enum.sort()
+    
+    Logger.info("Our categories (#{length(our_categories)}):")
+    Enum.each(our_categories, fn cat ->
+      Logger.info("- #{cat}")
+    end)
+end

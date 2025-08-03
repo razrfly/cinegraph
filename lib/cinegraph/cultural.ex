@@ -270,6 +270,21 @@ defmodule Cinegraph.Cultural do
     |> Repo.all()
   end
 
+  @doc """
+  Gets Oscar nominations for a movie.
+  """
+  def get_movie_oscar_nominations(movie_id) do
+    from(nomination in Cinegraph.Cultural.OscarNomination,
+      join: ceremony in assoc(nomination, :ceremony),
+      join: category in assoc(nomination, :category),
+      left_join: person in assoc(nomination, :person),
+      where: nomination.movie_id == ^movie_id,
+      order_by: [desc: ceremony.year, asc: category.name],
+      preload: [ceremony: ceremony, category: category, person: person]
+    )
+    |> Repo.all()
+  end
+
   # ========================================
   # OSCAR CEREMONIES
   # ========================================
@@ -365,12 +380,15 @@ defmodule Cinegraph.Cultural do
       {:ok, %{movies_created: 45, movies_updated: 78, ...}}
       
   """
-  def import_oscar_year(year, _options \\ []) do
+  def import_oscar_year(year, options \\ []) do
     Logger.info("Starting Oscar import for year #{year}")
     
     with {:ok, ceremony} <- fetch_or_create_ceremony(year) do
       # Queue the discovery worker to process the ceremony
-      job_args = %{"ceremony_id" => ceremony.id}
+      job_args = %{
+        "ceremony_id" => ceremony.id,
+        "options" => Enum.into(options, %{})
+      }
       
       case Cinegraph.Workers.OscarDiscoveryWorker.new(job_args) |> Oban.insert() do
         {:ok, job} ->
@@ -427,10 +445,12 @@ defmodule Cinegraph.Cultural do
       # Insert jobs individually and collect results
       results = Enum.map(jobs, &Oban.insert/1)
       
-      successful_jobs = Enum.count(results, fn
+      {successes, failures} = Enum.split_with(results, fn
         {:ok, _} -> true
-        _ -> false
+        {:error, _} -> false
       end)
+      
+      successful_jobs = length(successes)
       
       if successful_jobs == length(years) do
         {:ok, %{
@@ -439,7 +459,12 @@ defmodule Cinegraph.Cultural do
           status: :queued
         }}
       else
-        {:error, "Failed to queue some jobs"}
+        failed_years = failures 
+          |> Enum.zip(years)
+          |> Enum.filter(fn {{:error, _}, _} -> true; _ -> false end)
+          |> Enum.map(fn {_, year} -> year end)
+        
+        {:error, "Failed to queue jobs for years: #{inspect(failed_years)}"}
       end
     else
       # Sequential processing (original behavior)
