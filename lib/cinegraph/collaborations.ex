@@ -26,6 +26,181 @@ defmodule Cinegraph.Collaborations do
   end
   
   @doc """
+  Populates collaborations for a single movie.
+  This is more efficient for incremental updates.
+  """
+  def populate_movie_collaborations(movie_id) do
+    Repo.transaction(fn ->
+      # Define key crew roles we care about
+      key_crew_jobs = [
+        "Director", 
+        "Producer", 
+        "Executive Producer", 
+        "Screenplay", 
+        "Writer",
+        "Director of Photography",
+        "Original Music Composer",
+        "Editor"
+      ]
+      
+      # Find all unique person pairs who worked together on this movie
+      collaborations_query = """
+      WITH person_pairs AS (
+        SELECT DISTINCT
+          LEAST(mc1.person_id, mc2.person_id) as person_a_id,
+          GREATEST(mc1.person_id, mc2.person_id) as person_b_id,
+          mc1.movie_id,
+          m.release_date,
+          m.vote_average,
+          m.revenue,
+          EXTRACT(YEAR FROM m.release_date)::INTEGER as year,
+          CASE 
+            WHEN mc1.credit_type = 'cast' AND mc2.credit_type = 'cast' THEN 'actor-actor'
+            WHEN mc1.credit_type = 'cast' AND mc2.job = 'Director' THEN 'actor-director'
+            WHEN mc1.job = 'Director' AND mc2.credit_type = 'cast' THEN 'actor-director'
+            WHEN mc1.job = 'Director' AND mc2.job = 'Director' THEN 'director-director'
+            WHEN mc1.job = 'Director' AND mc2.job IN ($2, $3, $4, $5, $6, $7, $8, $9) THEN 'director-crew'
+            WHEN mc1.job IN ($2, $3, $4, $5, $6, $7, $8, $9) AND mc2.job = 'Director' THEN 'director-crew'
+            WHEN mc1.job IN ($2, $3, $4, $5, $6, $7, $8, $9) AND mc2.job IN ($2, $3, $4, $5, $6, $7, $8, $9) THEN 'crew-crew'
+            ELSE 'other'
+          END as collaboration_type
+        FROM movie_credits mc1
+        JOIN movie_credits mc2 ON mc1.movie_id = mc2.movie_id
+        JOIN movies m ON mc1.movie_id = m.id
+        WHERE mc1.person_id != mc2.person_id
+          AND m.release_date IS NOT NULL
+          AND m.id = $1
+          AND (
+            -- Top 20 cast members with each other
+            (mc1.credit_type = 'cast' AND mc2.credit_type = 'cast' 
+             AND mc1.cast_order <= 20 AND mc2.cast_order <= 20)
+            OR
+            -- Top 20 cast with directors
+            (mc1.credit_type = 'cast' AND mc1.cast_order <= 20 AND mc2.job = 'Director')
+            OR
+            (mc1.job = 'Director' AND mc2.credit_type = 'cast' AND mc2.cast_order <= 20)
+            OR
+            -- Directors with other directors
+            (mc1.job = 'Director' AND mc2.job = 'Director')
+            OR
+            -- Directors with key crew
+            (mc1.job = 'Director' AND mc2.job IN ($2, $3, $4, $5, $6, $7, $8, $9))
+            OR
+            (mc1.job IN ($2, $3, $4, $5, $6, $7, $8, $9) AND mc2.job = 'Director')
+            OR
+            -- Key crew with each other (same movie)
+            (mc1.job IN ($2, $3, $4, $5, $6, $7, $8, $9) AND mc2.job IN ($2, $3, $4, $5, $6, $7, $8, $9))
+          )
+      )
+      SELECT 
+        person_a_id,
+        person_b_id,
+        movie_id,
+        collaboration_type,
+        year,
+        vote_average,
+        revenue,
+        release_date
+      FROM person_pairs
+      """
+      
+      params = [movie_id | key_crew_jobs]
+      
+      case Repo.query(collaborations_query, params) do
+        {:ok, %{rows: rows}} ->
+          count = Enum.reduce(rows, 0, fn row, acc ->
+            [person_a_id, person_b_id, movie_id, collaboration_type, 
+             year, vote_average, revenue, release_date] = row
+            
+            # Update or create collaboration
+            existing_collab = Repo.get_by(Collaboration, 
+              person_a_id: person_a_id, 
+              person_b_id: person_b_id
+            )
+            
+            collaboration = if existing_collab do
+              # Update existing collaboration
+              years = Enum.uniq([year | existing_collab.years_active || []])
+              total_revenue = (existing_collab.total_revenue || 0) + (revenue || 0)
+              
+              updated_attrs = %{
+                collaboration_count: existing_collab.collaboration_count + 1,
+                latest_collaboration_date: max_date(existing_collab.latest_collaboration_date, release_date),
+                avg_movie_rating: update_average(
+                  existing_collab.avg_movie_rating, 
+                  existing_collab.collaboration_count, 
+                  vote_average
+                ),
+                total_revenue: total_revenue,
+                years_active: years
+              }
+              
+              {:ok, updated} = existing_collab
+              |> Collaboration.changeset(updated_attrs)
+              |> Repo.update()
+              
+              updated
+            else
+              # Create new collaboration
+              attrs = %{
+                person_a_id: person_a_id,
+                person_b_id: person_b_id,
+                collaboration_count: 1,
+                first_collaboration_date: release_date,
+                latest_collaboration_date: release_date,
+                avg_movie_rating: vote_average,
+                total_revenue: revenue || 0,
+                years_active: [year]
+              }
+              
+              {:ok, new_collab} = %Collaboration{}
+              |> Collaboration.changeset(attrs)
+              |> Repo.insert()
+              
+              new_collab
+            end
+            
+            # Create collaboration detail
+            detail_attrs = %{
+              collaboration_id: collaboration.id,
+              movie_id: movie_id,
+              year: year,
+              collaboration_type: collaboration_type,
+              movie_rating: vote_average,
+              movie_revenue: revenue
+            }
+            
+            %CollaborationDetail{}
+            |> CollaborationDetail.changeset(detail_attrs)
+            |> Repo.insert(on_conflict: :nothing)
+            
+            acc + 1
+          end)
+          
+          count
+          
+        {:error, error} ->
+          Repo.rollback({:query_error, error})
+      end
+    end)
+  end
+  
+  defp max_date(nil, date), do: date
+  defp max_date(date, nil), do: date
+  defp max_date(date1, date2) when date1 > date2, do: date1
+  defp max_date(_date1, date2), do: date2
+  
+  defp update_average(nil, _count, new_value), do: new_value
+  defp update_average(_old_avg, _count, nil), do: nil
+  defp update_average(old_avg, count, new_value) do
+    # Convert to float for arithmetic operations
+    old_avg_float = if is_struct(old_avg, Decimal), do: Decimal.to_float(old_avg), else: old_avg
+    new_value_float = if is_struct(new_value, Decimal), do: Decimal.to_float(new_value), else: new_value
+    
+    ((old_avg_float * count) + new_value_float) / (count + 1)
+  end
+  
+  @doc """
   Populates only key collaborations: top 20 cast + directors + key crew.
   This prevents exponential explosion from movies with 1000+ credits.
   """

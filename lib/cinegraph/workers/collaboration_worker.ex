@@ -8,32 +8,29 @@ defmodule Cinegraph.Workers.CollaborationWorker do
   use Oban.Worker, 
     queue: :collaboration,
     max_attempts: 3,
-    unique: [period: 300]  # Only one collaboration job every 5 minutes
+    unique: [period: 60, fields: [:args]]  # Unique per movie_id for 60 seconds
     
   alias Cinegraph.Collaborations
   require Logger
   
   @impl Oban.Worker
-  def perform(%Oban.Job{args: _args}) do
-    Logger.info("Collaboration Worker starting")
+  def perform(%Oban.Job{args: %{"movie_id" => movie_id}}) do
+    Logger.info("Processing collaborations for movie #{movie_id}")
     
-    case Collaborations.populate_collaborations() do
+    case Collaborations.populate_movie_collaborations(movie_id) do
       {:ok, count} ->
-        Logger.info("Successfully processed #{count} collaborations")
-        
-        # Refresh materialized view
-        case Collaborations.refresh_collaboration_trends() do
-          :ok ->
-            Logger.info("Refreshed collaboration trends materialized view")
-          error ->
-            Logger.warning("Failed to refresh materialized view: #{inspect(error)}")
-        end
-        
+        Logger.info("Successfully processed #{count} collaborations for movie #{movie_id}")
         :ok
         
       {:error, reason} ->
-        Logger.error("Failed to process collaborations: #{inspect(reason)}")
+        Logger.error("Failed to process collaborations for movie #{movie_id}: #{inspect(reason)}")
         {:error, reason}
     end
+  end
+  
+  # Legacy handler for jobs without movie_id
+  def perform(%Oban.Job{args: _args}) do
+    Logger.info("Skipping legacy collaboration job without movie_id")
+    :ok
   end
 end

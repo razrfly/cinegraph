@@ -40,6 +40,9 @@ defmodule Cinegraph.Movies.Movie do
     field :box_office_domestic, :integer
     field :origin_country, {:array, :string}, default: []
     
+    # Import tracking
+    field :import_status, :string, default: "full"
+    
     # Associations  
     has_many :movie_credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
     many_to_many :people, Cinegraph.Movies.Person, join_through: Cinegraph.Movies.Credit
@@ -72,7 +75,7 @@ defmodule Cinegraph.Movies.Movie do
       :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
       :adult, :homepage, :collection_id, :poster_path, :backdrop_path, :vote_average,
       :vote_count, :popularity, :tmdb_data, :omdb_data, :awards_text, 
-      :box_office_domestic, :origin_country
+      :box_office_domestic, :origin_country, :import_status
     ])
     |> validate_required([:tmdb_id, :title])
     |> unique_constraint(:tmdb_id)
