@@ -91,15 +91,26 @@ if connection do
   IO.puts("Direct collaboration exists: ✓")
   
   # Test finding a 2-degree connection
+  # First, get all unique intermediaries (people directly connected to person1)
+  intermediaries = 
+    from c in Cinegraph.Collaborations.Collaboration,
+    where: c.person_a_id == ^connection.person1_id or c.person_b_id == ^connection.person1_id,
+    select: fragment(
+      "CASE WHEN ? = ? THEN ? ELSE ? END", 
+      c.person_a_id, ^connection.person1_id, c.person_b_id, c.person_a_id
+    ),
+    distinct: true
+  
+  # Then count unique second-degree connections through those intermediaries
   two_degree_count = Repo.one(
-    from c1 in Cinegraph.Collaborations.Collaboration,
-    join: c2 in Cinegraph.Collaborations.Collaboration, 
-      on: (c1.person_b_id == c2.person_a_id or c1.person_b_id == c2.person_b_id or
-           c1.person_a_id == c2.person_a_id or c1.person_a_id == c2.person_b_id),
-    where: c1.person_a_id == ^connection.person1_id and 
-           c2.person_b_id != ^connection.person1_id and
-           c2.person_a_id != ^connection.person1_id,
-    select: count(c2.id, :distinct)
+    from i in subquery(intermediaries),
+    join: c in Cinegraph.Collaborations.Collaboration,
+      on: c.person_a_id == i.id or c.person_b_id == i.id,
+    where: c.person_a_id != ^connection.person1_id and c.person_b_id != ^connection.person1_id,
+    select: count(fragment(
+      "DISTINCT CASE WHEN ? = ? THEN ? ELSE ? END",
+      c.person_a_id, i.id, c.person_b_id, c.person_a_id
+    ))
   )
   
   IO.puts("\n2-degree connections found: #{two_degree_count}")
