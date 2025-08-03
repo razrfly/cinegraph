@@ -2,7 +2,7 @@
 IO.puts("Testing new batch queue approach...\n")
 
 # Let's queue pages 6-20 as a test (15 pages)
-{:ok, count} = Cinegraph.Imports.TMDbImporter.queue_pages(6, 20)
+{:ok, count} = Cinegraph.Imports.TMDbImporter.queue_pages(6, 20, "test")
 IO.puts("Queued #{count} discovery jobs")
 
 # Check the queue
