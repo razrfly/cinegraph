@@ -15,7 +15,14 @@ case Client.get("/discover/movie", %{"page" => 1}) do
       IO.puts("\nFirst movie on page 1:")
       IO.puts("  ID: #{first["id"]}")
       IO.puts("  Title: #{first["title"]}")
-      IO.puts("  Already exists: #{Cinegraph.Movies.movie_exists?(first["id"])}")
+      exists = try do
+        Cinegraph.Movies.movie_exists?(first["id"])
+      rescue
+        e -> 
+          IO.puts("  Error checking existence: #{inspect(e)}")
+          "unknown"
+      end
+      IO.puts("  Already exists: #{exists}")
     end
     
   {:error, reason} ->
