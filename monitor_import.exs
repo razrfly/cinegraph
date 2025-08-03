@@ -9,7 +9,6 @@ defmodule ImportMonitor do
     progress = Cinegraph.Imports.TMDbImporter.get_progress()
     
     # Calculate rates
-    movies_per_page = 20
     pages_processed = case Integer.parse(to_string(progress.last_page_processed || "0")) do
       {num, _} -> num
       :error -> 0
