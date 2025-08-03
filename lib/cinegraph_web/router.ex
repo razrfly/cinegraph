@@ -1,6 +1,7 @@
 defmodule CinegraphWeb.Router do
   use CinegraphWeb, :router
 
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -61,4 +62,5 @@ defmodule CinegraphWeb.Router do
       oban_dashboard "/oban"
     end
   end
+
 end
