@@ -322,6 +322,79 @@ The import process uses a comprehensive, modular approach:
 - TMDb allows 40 requests/10 seconds
 - When using `--queue`, jobs are processed by Oban workers with rate limiting
 
+### Importing Oscar Data
+
+Import Oscar ceremony data and create/update all nominated movies using Oban job queue for reliable, rate-limited processing.
+
+#### Primary Import Functions (Recommended)
+
+```elixir
+# Import Oscar ceremony for specific year
+Cinegraph.Cultural.import_oscar_year(2024)
+# Returns: {:ok, %{ceremony_id: 12, year: 2024, job_id: 1234, status: :queued}}
+
+# Import multiple years (parallel processing via Oban)
+Cinegraph.Cultural.import_oscar_years(2020..2024)
+# Returns: {:ok, %{years: 2020..2024, job_count: 5, status: :queued}}
+
+# Import all available years (2016-2024)
+Cinegraph.Cultural.import_all_oscar_years()
+
+# Sequential processing (slower but immediate feedback)
+Cinegraph.Cultural.import_oscar_years(2020..2024, async: false)
+```
+
+#### Monitor Import Progress
+
+```elixir
+# Check Oscar import job status
+Cinegraph.Cultural.get_oscar_import_status()
+# Returns: %{running_jobs: 2, queued_jobs: 3, completed_jobs: 5, failed_jobs: 0}
+
+# Monitor via Oban dashboard
+# Visit: http://localhost:4001/dev/oban
+```
+
+#### Legacy Mix Tasks (Available but not recommended)
+
+```bash
+# Import a single year
+mix import_oscars --year 2024
+
+# Import a range of years
+mix import_oscars --years 2020-2024
+
+# Import all available years (2016-2024)
+mix import_oscars --all
+```
+
+#### Oscar Import Process
+
+The Oscar import system uses a comprehensive job pipeline:
+
+1. **OscarDiscoveryWorker**: Processes ceremony data and queues movie creation jobs
+2. **TMDbDetailsWorker**: Handles IMDb→TMDb lookup and comprehensive movie import
+3. **OMDbEnrichmentWorker**: Adds external ratings and metadata
+4. **CollaborationWorker**: Builds cast/crew collaboration networks
+
+**Features**:
+- **Race condition handling**: Prevents duplicate movie creation during concurrent processing
+- **Automatic retry logic**: Failed API calls are retried with exponential backoff
+- **Rate limiting**: Respects TMDb and OMDb API rate limits
+- **Progress monitoring**: Real-time job status via Oban dashboard
+- **Data integrity**: All foreign key relationships properly maintained
+
+**Integration with Existing Data**:
+- Oscar import safely checks for existing movies before creating
+- Updates are additive (only adds award data)
+- Uses same TMDb data structure as regular imports
+- Can be run alongside other import processes
+
+**Time Estimates**:
+- Single year: 3-5 minutes (queued processing)
+- All years (2016-2024): 30-45 minutes (parallel processing)
+- Zero job failures after comprehensive race condition fixes
+
 ### Start Server
 
 ```bash
