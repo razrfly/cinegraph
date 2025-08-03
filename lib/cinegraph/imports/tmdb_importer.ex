@@ -1,269 +1,219 @@
 defmodule Cinegraph.Imports.TMDbImporter do
   @moduledoc """
-  Main module for orchestrating TMDB imports using Oban workers.
+  Simplified TMDB importer using state tracking instead of complex progress records.
+  
+  Progress is tracked by: TMDB Total Movies - Our Total Movies
   """
   
-  alias Cinegraph.Imports.ImportProgress
-  alias Cinegraph.Workers.TMDbDiscoveryWorker
+  alias Cinegraph.Imports.ImportState
+  alias Cinegraph.Workers.{TMDbDiscoveryWorker, TMDbDetailsWorker}
+  alias Cinegraph.Services.TMDb
+  alias Cinegraph.Movies
+  alias Cinegraph.Repo
   require Logger
   
   @doc """
-  Starts a full TMDB import, discovering all movies.
-  
-  ## Options
-    - :sort_by - How to sort results (default: "popularity.desc")
-    - :max_pages - Maximum pages to import (default: 500)
-    - :start_year - Starting year for import
-    - :end_year - Ending year for import
+  Starts a systematic import of all TMDB movies.
+  Uses pagination to go through every movie in TMDB.
   """
-  def start_full_import(opts \\ []) do
-    Logger.info("Starting full TMDB import with options: #{inspect(opts)}")
+  def start_full_import do
+    Logger.info("Starting systematic TMDB import")
     
-    # Create import progress record
-    {:ok, progress} = ImportProgress.start_import("full", %{
-      metadata: %{
-        "options" => Enum.into(opts, %{}),
-        "started_by" => "system"
-      }
-    })
-    
-    # Start discovery with first page
-    args = %{
-      "page" => 1,
-      "import_progress_id" => progress.id,
-      "sort_by" => opts[:sort_by] || "popularity.desc",
-      "max_pages" => opts[:max_pages] || 500
-    }
-    
-    # Add date filters if provided
-    args = 
-      args
-      |> maybe_add_arg("primary_release_year", opts[:year])
-      |> maybe_add_arg("primary_release_date.gte", format_date(opts[:start_date]))
-      |> maybe_add_arg("primary_release_date.lte", format_date(opts[:end_date]))
-    
-    # Queue the first discovery job
-    case args
-         |> TMDbDiscoveryWorker.new()
-         |> Oban.insert() do
-      {:ok, _job} ->
-        {:ok, progress}
-      {:error, reason} ->
-        Logger.error("Failed to queue discovery job: #{inspect(reason)}")
-        # Clean up the progress record
-        ImportProgress.update(progress, %{status: "failed", error_message: inspect(reason)})
-        {:error, reason}
+    # Get total movies from TMDB
+    case update_tmdb_total() do
+      {:ok, total} ->
+        Logger.info("TMDB has #{total} total movies")
+        
+        # Start from page 1 (or resume from last page)
+        start_page = ImportState.last_page_processed() + 1
+        Logger.info("Starting from page #{start_page}")
+        
+        # Queue first discovery job
+        queue_discovery_job(start_page)
+        
+        {:ok, %{
+          tmdb_total: total,
+          our_total: count_our_movies(),
+          starting_page: start_page
+        }}
+        
+      error ->
+        Logger.error("Failed to get TMDB total: #{inspect(error)}")
+        error
     end
   end
   
   @doc """
-  Starts a daily update import for new movies.
+  Starts a daily update to fetch new movies.
   """
   def start_daily_update do
     Logger.info("Starting daily TMDB update")
     
-    # Get movies released in the last 7 days
+    # Get movies from the last 7 days
     end_date = Date.utc_today()
     start_date = Date.add(end_date, -7)
     
-    {:ok, progress} = ImportProgress.start_import("daily_update", %{
-      metadata: %{
-        "date_range" => "#{start_date} to #{end_date}"
-      }
-    })
+    # Update TMDB total count
+    update_tmdb_total()
     
+    # Queue discovery for recent movies
     args = %{
       "page" => 1,
-      "import_progress_id" => progress.id,
-      "sort_by" => "release_date.desc",
+      "import_type" => "daily_update",
       "primary_release_date.gte" => Date.to_string(start_date),
       "primary_release_date.lte" => Date.to_string(end_date),
-      "max_pages" => 10  # Daily updates should be small
+      "sort_by" => "release_date.desc"
     }
     
     case args
          |> TMDbDiscoveryWorker.new()
          |> Oban.insert() do
-      {:ok, _job} ->
-        {:ok, progress}
-      {:error, reason} ->
-        Logger.error("Failed to queue daily update job: #{inspect(reason)}")
-        ImportProgress.update(progress, %{status: "failed", error_message: inspect(reason)})
-        {:error, reason}
+      {:ok, job} ->
+        ImportState.set_last_update_check()
+        {:ok, job}
+      error ->
+        error
     end
   end
   
   @doc """
-  Starts an import by decade.
+  Gets current import progress.
   """
-  def start_decade_import(decade) when is_integer(decade) do
-    # Validate decade is reasonable (e.g., 1900-2020)
-    unless decade >= 1900 and decade <= 2020 and rem(decade, 10) == 0 do
-      {:error, :invalid_decade}
-    else
-      Logger.info("Starting TMDB import for decade: #{decade}s")
-      
-      start_year = decade
-      end_year = decade + 9
+  def get_progress do
+    tmdb_total = ImportState.tmdb_total_movies()
+    our_total = count_our_movies()
+    last_page = ImportState.last_page_processed()
     
-    {:ok, progress} = ImportProgress.start_import("backfill", %{
-      metadata: %{
-        "decade" => "#{decade}s",
-        "year_range" => "#{start_year}-#{end_year}"
-      }
-    })
-    
-    # Process year by year to avoid huge result sets
-    Enum.each(start_year..end_year, fn year ->
-      args = %{
-        "page" => 1,
-        "import_progress_id" => progress.id,
-        "sort_by" => "popularity.desc",
-        "primary_release_year" => year,
-        "max_pages" => 50
-      }
-      
-        case args
-             |> TMDbDiscoveryWorker.new(schedule_in: calculate_year_delay(year - start_year))
-             |> Oban.insert() do
-          {:ok, _job} ->
-            :ok
-          {:error, reason} ->
-            Logger.error("Failed to queue job for year #{year}: #{inspect(reason)}")
-        end
-      end)
-      
-      {:ok, progress}
-    end
-  end
-  
-  @doc """
-  Starts an import for popular movies only.
-  """
-  def start_popular_import(opts \\ []) do
-    Logger.info("Starting popular movies import")
-    
-    {:ok, progress} = ImportProgress.start_import("discovery", %{
-      metadata: %{
-        "type" => "popular",
-        "min_vote_count" => opts[:min_vote_count] || 100
-      }
-    })
-    
-    args = %{
-      "page" => 1,
-      "import_progress_id" => progress.id,
-      "sort_by" => "popularity.desc",
-      "vote_count.gte" => opts[:min_vote_count] || 100,
-      "max_pages" => opts[:max_pages] || 100
+    %{
+      tmdb_total_movies: tmdb_total,
+      our_total_movies: our_total,
+      movies_remaining: max(0, tmdb_total - our_total),
+      completion_percentage: if(tmdb_total > 0, do: Float.round(our_total / tmdb_total * 100, 2), else: 0.0),
+      last_page_processed: last_page,
+      last_full_sync: ImportState.last_full_sync(),
+      last_update_check: ImportState.last_update_check()
     }
-    
-    case args
-         |> TMDbDiscoveryWorker.new()
-         |> Oban.insert() do
-      {:ok, _job} ->
-        {:ok, progress}
-      {:error, reason} ->
-        Logger.error("Failed to queue popular import job: #{inspect(reason)}")
-        ImportProgress.update(progress, %{status: "failed", error_message: inspect(reason)})
-        {:error, reason}
+  end
+  
+  @doc """
+  Updates the total movie count from TMDB.
+  """
+  def update_tmdb_total do
+    case TMDb.get_total_movie_count() do
+      {:ok, total} ->
+        ImportState.set_tmdb_total_movies(total)
+        {:ok, total}
+      error ->
+        error
     end
   end
   
   @doc """
-  Gets the current status of all imports.
+  Checks if we should import a movie (deduplication).
   """
-  def get_import_status do
-    running = ImportProgress.get_running()
+  def should_import_movie?(tmdb_id) do
+    !Movies.movie_exists?(tmdb_id)
+  end
+  
+  @doc """
+  Processes a discovery page and queues detail jobs for new movies.
+  """
+  def process_discovery_page(page, results) do
+    Logger.info("Processing discovery page #{page} with #{length(results)} movies")
     
-    Enum.map(running, fn progress ->
-      %{
-        id: progress.id,
-        type: progress.import_type,
-        status: progress.status,
-        current_page: progress.current_page,
-        total_pages: progress.total_pages,
-        movies_found: progress.movies_found,
-        movies_imported: progress.movies_imported,
-        movies_failed: progress.movies_failed,
-        started_at: progress.started_at,
-        duration: calculate_duration(progress.started_at),
-        rate: calculate_import_rate(progress)
-      }
+    # Filter out movies we already have
+    new_movies = Enum.filter(results, fn movie ->
+      should_import_movie?(movie["id"])
     end)
-  end
-  
-  @doc """
-  Pauses a running import.
-  """
-  def pause_import(progress_id) do
-    case ImportProgress.get(progress_id) do
-      nil ->
-        {:error, :not_found}
-      %{status: "running"} = progress ->
-        ImportProgress.update(progress, %{status: "paused"})
-      progress ->
-        {:error, {:invalid_status, progress.status}}
-    end
-  end
-  
-  @doc """
-  Resumes a paused import.
-  """
-  def resume_import(progress_id) do
-    case ImportProgress.get(progress_id) do
-      nil ->
-        {:error, :not_found}
-      %{status: "paused"} = progress ->
-        # Update status
-        {:ok, updated} = ImportProgress.update(progress, %{status: "running"})
-        
-        # Queue next page
-        args = %{
-          "page" => progress.current_page + 1,
-          "import_progress_id" => progress.id
-        }
-        |> Map.merge(progress.metadata["options"] || %{})
-        
-        case %{args: args}
-             |> TMDbDiscoveryWorker.new()
-             |> Oban.insert() do
-          {:ok, _job} ->
-            {:ok, updated}
-          {:error, reason} ->
-            Logger.error("Failed to queue resume job: #{inspect(reason)}")
-            ImportProgress.update(updated, %{status: "paused"})
-            {:error, reason}
-        end
-      progress ->
-        {:error, {:invalid_status, progress.status}}
-    end
-  end
-  
-  defp maybe_add_arg(args, _key, nil), do: args
-  defp maybe_add_arg(args, key, value), do: Map.put(args, key, value)
-  
-  defp format_date(nil), do: nil
-  defp format_date(%Date{} = date), do: Date.to_string(date)
-  defp format_date(date_string) when is_binary(date_string), do: date_string
-  
-  defp calculate_duration(started_at) do
-    DateTime.diff(DateTime.utc_now(), started_at)
-  end
-  
-  defp calculate_import_rate(%{movies_imported: imported, started_at: started_at}) do
-    duration_minutes = calculate_duration(started_at) / 60
     
-    if duration_minutes > 0 do
-      Float.round(imported / duration_minutes, 2)
-    else
-      0.0
+    Logger.info("Found #{length(new_movies)} new movies to import")
+    
+    # Queue detail jobs for new movies
+    jobs = Enum.map(new_movies, fn movie ->
+      %{
+        "tmdb_id" => movie["id"],
+        "title" => movie["title"],
+        "release_date" => movie["release_date"]
+      }
+      |> TMDbDetailsWorker.new()
+    end)
+    
+    case Oban.insert_all(jobs) do
+      results when is_list(results) ->
+        # Update last processed page
+        ImportState.set_last_page_processed(page)
+        {:ok, length(results)}
+      error ->
+        Logger.error("Failed to queue detail jobs: #{inspect(error)}")
+        {:error, error}
     end
   end
   
-  defp calculate_year_delay(year_offset) do
-    # Start immediately, then add progressive delays
-    # This prevents overwhelming the queue while respecting rate limits
-    year_offset * 30 + :rand.uniform(30)
+  @doc """
+  Queues the next discovery job with smart delays.
+  """
+  def queue_next_discovery(current_page, total_pages, import_type \\ "full") do
+    if current_page < total_pages do
+      next_page = current_page + 1
+      delay = calculate_discovery_delay(next_page)
+      
+      args = %{
+        "page" => next_page,
+        "import_type" => import_type
+      }
+      
+      case args
+           |> TMDbDiscoveryWorker.new(schedule_in: delay)
+           |> Oban.insert() do
+        {:ok, _job} ->
+          Logger.info("Queued discovery for page #{next_page} with #{delay}s delay")
+          :ok
+        error ->
+          Logger.error("Failed to queue next discovery: #{inspect(error)}")
+          error
+      end
+    else
+      Logger.info("Import complete! Processed all #{total_pages} pages")
+      ImportState.set_last_full_sync()
+      :ok
+    end
+  end
+  
+  # Private functions
+  
+  defp count_our_movies do
+    Repo.aggregate(Movies.Movie, :count)
+  end
+  
+  defp queue_discovery_job(page) do
+    args = %{
+      "page" => page,
+      "import_type" => "full"
+    }
+    
+    case args
+         |> TMDbDiscoveryWorker.new()
+         |> Oban.insert() do
+      {:ok, job} ->
+        Logger.info("Queued discovery job for page #{page}")
+        {:ok, job}
+      error ->
+        Logger.error("Failed to queue discovery job: #{inspect(error)}")
+        error
+    end
+  end
+  
+  defp calculate_discovery_delay(page_number) do
+    # TMDB rate limit: 40 requests per 10 seconds = 4/second
+    # Each discovery spawns ~20 detail jobs
+    # So we need to space out discovery jobs
+    
+    # Base delay increases with page number to spread load
+    base_delay = min(page_number * 10, 300)  # Cap at 5 minutes
+    
+    # Add some jitter to avoid thundering herd
+    jitter = :rand.uniform(30)
+    
+    base_delay + jitter
   end
 end
