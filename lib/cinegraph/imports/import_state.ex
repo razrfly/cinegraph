@@ -52,7 +52,11 @@ defmodule Cinegraph.Imports.ImportState do
   def get_date(key) do
     case get(key) do
       nil -> nil
-      value -> Date.from_iso8601!(value)
+      value -> 
+        case Date.from_iso8601(value) do
+          {:ok, date} -> date
+          {:error, _} -> nil
+        end
     end
   end
   

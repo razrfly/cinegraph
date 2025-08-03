@@ -23,7 +23,13 @@ discovery_jobs = Repo.all(
 IO.puts("\nPage 2 discovery job exists: #{length(discovery_jobs) > 0}")
 
 # Check the last processed page
-last_page = Cinegraph.Imports.ImportState.get("last_page_processed")
+last_page = try do
+  Cinegraph.Imports.ImportState.get("last_page_processed")
+rescue
+  e -> 
+    IO.puts("Error accessing import state: #{inspect(e)}")
+    "unknown"
+end
 IO.puts("\nLast page processed: #{inspect(last_page)}")
 
 # Check total movies in our DB
