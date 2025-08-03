@@ -44,6 +44,65 @@ defmodule Cinegraph.Imports.TMDbImporter do
   end
   
   @doc """
+  Queues multiple pages for import at once.
+  This is the better approach - queue all jobs upfront and let Oban handle scheduling.
+  
+  ## Examples
+      # Queue 500 pages (approximately 10,000 movies)
+      TMDbImporter.queue_pages(1, 500)
+      
+      # Queue pages 100-200
+      TMDbImporter.queue_pages(100, 200)
+  """
+  def queue_pages(start_page, end_page, import_type \\ "full") when start_page <= end_page do
+    Logger.info("Queueing pages #{start_page} to #{end_page}")
+    
+    jobs = for page <- start_page..end_page do
+      delay = calculate_discovery_delay(page - start_page + 1)
+      
+      %{
+        "page" => page,
+        "import_type" => import_type
+      }
+      |> TMDbDiscoveryWorker.new(schedule_in: delay)
+    end
+    
+    case Oban.insert_all(jobs) do
+      results when is_list(results) ->
+        Logger.info("Successfully queued #{length(results)} discovery jobs")
+        {:ok, length(results)}
+        
+      error ->
+        Logger.error("Failed to queue discovery jobs: #{inspect(error)}")
+        {:error, error}
+    end
+  end
+  
+  @doc """
+  Starts import for a specific number of pages.
+  
+  ## Examples
+      # Import approximately 10,000 movies (500 pages)
+      TMDbImporter.import_pages(500)
+      
+      # Import 100 pages (approximately 2,000 movies)
+      TMDbImporter.import_pages(100)
+  """
+  def import_pages(num_pages) do
+    # Get or update TMDB total
+    update_tmdb_total()
+    
+    # Start from where we left off
+    start_page = ImportState.last_page_processed() + 1
+    end_page = start_page + num_pages - 1
+    
+    Logger.info("Importing #{num_pages} pages (#{start_page} to #{end_page})")
+    Logger.info("This will import approximately #{num_pages * 20} movies")
+    
+    queue_pages(start_page, end_page)
+  end
+  
+  @doc """
   Starts a daily update to fetch new movies.
   """
   def start_daily_update do
@@ -151,6 +210,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
   
   @doc """
   Queues the next discovery job with smart delays.
+  DEPRECATED: Use queue_pages/3 instead for better queue management.
   """
   def queue_next_discovery(current_page, total_pages, import_type \\ "full") do
     if current_page < total_pages do
@@ -203,13 +263,14 @@ defmodule Cinegraph.Imports.TMDbImporter do
     end
   end
   
-  defp calculate_discovery_delay(page_number) do
+  defp calculate_discovery_delay(page_position) do
     # TMDB rate limit: 40 requests per 10 seconds = 4/second
     # Each discovery spawns ~20 detail jobs
     # So we need to space out discovery jobs
     
-    # Base delay increases with page number to spread load
-    base_delay = min(page_number * 10, 300)  # Cap at 5 minutes
+    # Base delay increases with page position to spread load
+    # For the first page, minimal delay. Then increase.
+    base_delay = min((page_position - 1) * 10, 300)  # Cap at 5 minutes
     
     # Add some jitter to avoid thundering herd
     jitter = :rand.uniform(30)
