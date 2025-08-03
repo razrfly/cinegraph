@@ -37,6 +37,7 @@ defmodule Cinegraph.Movies.Movie do
     
     # New high-priority fields
     field :awards_text, :string
+    field :awards, :map
     field :box_office_domestic, :integer
     field :origin_country, {:array, :string}, default: []
     
@@ -74,11 +75,12 @@ defmodule Cinegraph.Movies.Movie do
       :tmdb_id, :imdb_id, :title, :original_title, :release_date,
       :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
       :adult, :homepage, :collection_id, :poster_path, :backdrop_path, :vote_average,
-      :vote_count, :popularity, :tmdb_data, :omdb_data, :awards_text, 
+      :vote_count, :popularity, :tmdb_data, :omdb_data, :awards_text, :awards,
       :box_office_domestic, :origin_country, :import_status
     ])
-    |> validate_required([:tmdb_id, :title])
+    |> validate_required([:title])
     |> unique_constraint(:tmdb_id)
+    |> unique_constraint(:imdb_id)
   end
 
   @doc """
@@ -110,7 +112,7 @@ defmodule Cinegraph.Movies.Movie do
       tmdb_data: attrs
     }
     
-    changeset(%__MODULE__{}, movie_attrs)
+    movie_attrs
   end
 
   defp parse_date(nil), do: nil

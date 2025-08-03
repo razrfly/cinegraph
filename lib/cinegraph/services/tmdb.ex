@@ -159,6 +159,19 @@ defmodule Cinegraph.Services.TMDb do
   end
 
   @doc """
+  Finds a movie by IMDb ID using TMDb's find endpoint.
+  
+  ## Examples
+  
+      iex> Cinegraph.Services.TMDb.find_by_imdb_id("tt0137523")
+      {:ok, %{"movie_results" => [%{"id" => 550, "title" => "Fight Club", ...}], ...}}
+  """
+  def find_by_imdb_id(imdb_id) when is_binary(imdb_id) do
+    params = %{external_source: "imdb_id"}
+    Client.get("/find/#{imdb_id}", params)
+  end
+
+  @doc """
   Fetches detailed information about a person by ID.
   """
   def get_person(person_id, opts \\ []) when is_integer(person_id) or is_binary(person_id) do

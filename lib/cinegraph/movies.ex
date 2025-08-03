@@ -10,6 +10,7 @@ defmodule Cinegraph.Movies do
                          MovieVideo, MovieReleaseDate}
   alias Cinegraph.Services.TMDb
   alias Cinegraph.ExternalSources
+  require Logger
 
   @doc """
   Returns the list of movies with pagination.
@@ -171,14 +172,36 @@ defmodule Cinegraph.Movies do
   Creates or updates a movie from TMDB data.
   """
   def create_or_update_movie_from_tmdb(tmdb_data) do
-    changeset = Movie.from_tmdb(tmdb_data)
+    movie_attrs = Movie.from_tmdb(tmdb_data)
     
     case get_movie_by_tmdb_id(tmdb_data["id"]) do
       nil ->
-        Repo.insert(changeset)
+        # Try to insert, but handle race condition where another process inserted it
+        %Movie{}
+        |> Movie.changeset(movie_attrs)
+        |> Repo.insert()
+        |> case do
+          {:ok, movie} -> {:ok, movie}
+          {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
+            # Race condition - movie was inserted by another process, fetch it
+            case get_movie_by_tmdb_id(tmdb_data["id"]) do
+              nil -> 
+                # Still doesn't exist somehow, return the original error
+                %Movie{}
+                |> Movie.changeset(movie_attrs)
+                |> Repo.insert()
+              existing_movie ->
+                # Found the movie inserted by another process, update it instead
+                existing_movie
+                |> Movie.changeset(movie_attrs)
+                |> Repo.update()
+            end
+          error -> 
+            error
+        end
       existing_movie ->
         existing_movie
-        |> Movie.changeset(changeset.changes)
+        |> Movie.changeset(movie_attrs)
         |> Repo.update()
     end
   end
@@ -190,14 +213,35 @@ defmodule Cinegraph.Movies do
   def create_soft_import_movie(tmdb_data) do
     # Create movie with minimal data and soft import status
     movie_attrs = 
-      Movie.from_tmdb(tmdb_data).changes
+      Movie.from_tmdb(tmdb_data)
       |> Map.put(:import_status, "soft")
     
     changeset = Movie.changeset(%Movie{}, movie_attrs)
     
     case get_movie_by_tmdb_id(tmdb_data["id"]) do
       nil ->
+        # Try to insert, but handle race condition
         Repo.insert(changeset)
+        |> case do
+          {:ok, movie} -> {:ok, movie}
+          {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
+            # Race condition - movie was inserted by another process, fetch it
+            case get_movie_by_tmdb_id(tmdb_data["id"]) do
+              nil -> 
+                # Still doesn't exist somehow, return the original error
+                Repo.insert(changeset)
+              %Movie{import_status: "soft"} = existing_movie ->
+                # Re-soft-import if it was already soft
+                existing_movie
+                |> Movie.changeset(%{import_status: "soft"})
+                |> Repo.update()
+              existing_movie ->
+                # Leave full imports untouched
+                {:ok, existing_movie}
+            end
+          error -> 
+            error
+        end
       %Movie{import_status: "soft"} = existing_movie ->
         # Only re-soft-import if it was already soft
         existing_movie
@@ -402,14 +446,17 @@ defmodule Cinegraph.Movies do
   defp process_movie_keywords(_movie, nil), do: :ok
   defp process_movie_keywords(movie, %{"keywords" => keywords}) do
     Enum.each(keywords, fn keyword_data ->
-      {:ok, keyword} = create_or_update_keyword(keyword_data)
-      
-      # Create movie_keyword association
-      Repo.insert_all(
-        "movie_keywords",
-        [[movie_id: movie.id, keyword_id: keyword.id]],
-        on_conflict: :nothing
-      )
+      case create_or_update_keyword(keyword_data) do
+        {:ok, keyword} ->
+          # Create movie_keyword association
+          Repo.insert_all(
+            "movie_keywords",
+            [[movie_id: movie.id, keyword_id: keyword.id]],
+            on_conflict: :nothing
+          )
+        {:error, reason} ->
+          Logger.warning("Failed to create/update keyword #{keyword_data["name"]}: #{inspect(reason)}")
+      end
     end)
     
     :ok
@@ -454,14 +501,17 @@ defmodule Cinegraph.Movies do
     Enum.each(companies, fn company_data ->
       # For now, just create basic company record
       # Could fetch full details with TMDb.get_company(company_data["id"])
-      {:ok, company} = create_or_update_company_basic(company_data)
-      
-      # Create movie_production_companies association
-      Repo.insert_all(
-        "movie_production_companies",
-        [[movie_id: movie.id, production_company_id: company.id]],
-        on_conflict: :nothing
-      )
+      case create_or_update_company_basic(company_data) do
+        {:ok, company} ->
+          # Create movie_production_companies association
+          Repo.insert_all(
+            "movie_production_companies",
+            [[movie_id: movie.id, production_company_id: company.id]],
+            on_conflict: :nothing
+          )
+        {:error, reason} ->
+          Logger.warning("Failed to create/update company #{company_data["name"]}: #{inspect(reason)}")
+      end
     end)
     
     :ok
@@ -472,9 +522,26 @@ defmodule Cinegraph.Movies do
   defp create_or_update_keyword(keyword_data) do
     case Repo.get_by(Keyword, tmdb_id: keyword_data["id"]) do
       nil ->
+        # Try to insert, but handle race condition
         keyword_data
         |> Keyword.from_tmdb()
         |> Repo.insert()
+        |> case do
+          {:ok, keyword} -> {:ok, keyword}
+          {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
+            # Race condition - keyword was inserted by another process, fetch it
+            case Repo.get_by(Keyword, tmdb_id: keyword_data["id"]) do
+              nil -> 
+                # Still doesn't exist somehow, return the original error
+                keyword_data
+                |> Keyword.from_tmdb()
+                |> Repo.insert()
+              existing_keyword ->
+                {:ok, existing_keyword}
+            end
+          error -> 
+            error
+        end
       existing ->
         {:ok, existing}
     end
@@ -483,9 +550,26 @@ defmodule Cinegraph.Movies do
   defp create_or_update_collection(collection_data) do
     case Repo.get_by(Collection, tmdb_id: collection_data["id"]) do
       nil ->
+        # Try to insert, but handle race condition
         collection_data
         |> Collection.from_tmdb()
         |> Repo.insert()
+        |> case do
+          {:ok, collection} -> {:ok, collection}
+          {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
+            # Race condition - collection was inserted by another process, fetch it
+            case Repo.get_by(Collection, tmdb_id: collection_data["id"]) do
+              nil -> 
+                # Still doesn't exist somehow, return the original error
+                collection_data
+                |> Collection.from_tmdb()
+                |> Repo.insert()
+              existing_collection ->
+                {:ok, existing_collection}
+            end
+          error -> 
+            error
+        end
       existing ->
         {:ok, existing}
     end
@@ -494,6 +578,7 @@ defmodule Cinegraph.Movies do
   defp create_or_update_company_basic(company_data) do
     case Repo.get_by(ProductionCompany, tmdb_id: company_data["id"]) do
       nil ->
+        # Try to insert, but handle race condition
         %ProductionCompany{}
         |> ProductionCompany.changeset(%{
           tmdb_id: company_data["id"],
@@ -502,6 +587,27 @@ defmodule Cinegraph.Movies do
           origin_country: company_data["origin_country"]
         })
         |> Repo.insert()
+        |> case do
+          {:ok, company} -> {:ok, company}
+          {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
+            # Race condition - company was inserted by another process, fetch it
+            case Repo.get_by(ProductionCompany, tmdb_id: company_data["id"]) do
+              nil -> 
+                # Still doesn't exist somehow, return the original error
+                %ProductionCompany{}
+                |> ProductionCompany.changeset(%{
+                  tmdb_id: company_data["id"],
+                  name: company_data["name"],
+                  logo_path: company_data["logo_path"],
+                  origin_country: company_data["origin_country"]
+                })
+                |> Repo.insert()
+              existing_company ->
+                {:ok, existing_company}
+            end
+          error -> 
+            error
+        end
       existing ->
         {:ok, existing}
     end
