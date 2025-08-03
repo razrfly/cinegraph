@@ -9,8 +9,7 @@ defmodule ImportMonitor do
     progress = Cinegraph.Imports.TMDbImporter.get_progress()
     
     # Calculate rates
-    movies_per_page = 20
-    pages_processed = String.to_integer(progress.last_page_processed || "0")
+    pages_processed = progress.last_page_processed || 0
     minutes_elapsed = if pages_processed > 0, do: pages_processed * 0.7, else: 1  # ~40-45 seconds per page
     import_rate = if minutes_elapsed > 0, do: Float.round(progress.our_total_movies / minutes_elapsed, 2), else: 0
     
