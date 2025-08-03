@@ -198,11 +198,14 @@ defmodule Cinegraph.Movies do
     case get_movie_by_tmdb_id(tmdb_data["id"]) do
       nil ->
         Repo.insert(changeset)
-      existing_movie ->
-        # If movie exists but was soft imported, we could upgrade it later
+      %Movie{import_status: "soft"} = existing_movie ->
+        # Only re-soft-import if it was already soft
         existing_movie
         |> Movie.changeset(%{import_status: "soft"})
         |> Repo.update()
+      existing_movie ->
+        # Leave full imports untouched
+        {:ok, existing_movie}
     end
   end
 
