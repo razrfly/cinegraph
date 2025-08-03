@@ -1,6 +1,6 @@
 defmodule CinegraphWeb.MovieLive.Show do
   use CinegraphWeb, :live_view
-  import CinegraphWeb.CollaborationComponents, only: [format_ordinal: 1]
+  import CinegraphWeb.CollaborationComponents, only: [format_ordinal: 1, ordinal_suffix: 1]
 
   alias Cinegraph.Movies
   alias Cinegraph.Cultural
@@ -149,19 +149,4 @@ defmodule CinegraphWeb.MovieLive.Show do
     }
   end
   
-  # Helper functions for template
-  defp ordinal_suffix(number) do
-    case rem(number, 100) do
-      11 -> "th"
-      12 -> "th" 
-      13 -> "th"
-      _ ->
-        case rem(number, 10) do
-          1 -> "st"
-          2 -> "nd"
-          3 -> "rd"
-          _ -> "th"
-        end
-    end
-  end
 end
