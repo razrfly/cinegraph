@@ -9,9 +9,15 @@ defmodule ImportMonitor do
     progress = Cinegraph.Imports.TMDbImporter.get_progress()
     
     # Calculate rates
-    pages_processed = progress.last_page_processed || 0
-    minutes_elapsed = if pages_processed > 0, do: pages_processed * 0.7, else: 1  # ~40-45 seconds per page
-    import_rate = if minutes_elapsed > 0, do: Float.round(progress.our_total_movies / minutes_elapsed, 2), else: 0
+    movies_per_page = 20
+    pages_processed = case Integer.parse(to_string(progress.last_page_processed || "0")) do
+      {num, _} -> num
+      :error -> 0
+    end
+    # Assuming ~42 seconds (0.7 minutes) per page based on rate limiting
+    minutes_per_page = 0.7
+    minutes_elapsed = Kernel.max(pages_processed * minutes_per_page, 1)
+    import_rate = Float.round(progress.our_total_movies / minutes_elapsed, 2)
     
     # Job stats
     job_stats = Repo.all(
@@ -48,7 +54,7 @@ defmodule ImportMonitor do
     IO.puts("  Movies: #{progress.our_total_movies} / #{progress.tmdb_total_movies} (#{progress.completion_percentage}%)")
     IO.puts("  Pages: #{progress.last_page_processed} / ~51,749")
     IO.puts("  Rate: ~#{import_rate} movies/minute")
-    IO.puts("  ETA for 10k: ~#{Float.round((10_000 - progress.our_total_movies) / max(import_rate, 1), 1)} minutes")
+    IO.puts("  ETA for 10k: ~#{Float.round((10_000 - progress.our_total_movies) / Kernel.max(import_rate, 1), 1)} minutes")
     
     IO.puts("\nQUEUES:")
     Enum.each(job_stats, fn {queue, count} ->
@@ -57,7 +63,7 @@ defmodule ImportMonitor do
     IO.puts("  Failed jobs: #{failed_count}")
     
     IO.puts("\nDATA QUALITY:")
-    IO.puts("  With OMDb data: #{with_omdb} (#{Float.round(with_omdb / max(progress.our_total_movies, 1) * 100, 1)}%)")
+    IO.puts("  With OMDb data: #{with_omdb} (#{Float.round(with_omdb / Kernel.max(progress.our_total_movies, 1) * 100, 1)}%)")
     IO.puts("  With genres: #{with_genres}")
     IO.puts("  With credits: #{with_credits}")
     

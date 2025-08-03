@@ -3,10 +3,10 @@ IO.puts("=== Phase 2: Systematic Import Testing ===\n")
 # Check current progress
 progress = Cinegraph.Imports.TMDbImporter.get_progress()
 IO.puts("Current Status:")
-IO.puts("  Total movies in DB: #{progress.our_total_movies}")
-IO.puts("  Last page processed: #{progress.last_page_processed}")
-IO.puts("  TMDB total: #{progress.tmdb_total_movies}")
-IO.puts("  Completion: #{progress.completion_percentage}%")
+IO.puts("  Total movies in DB: #{progress.our_total_movies || 0}")
+IO.puts("  Last page processed: #{progress.last_page_processed || "0"}")
+IO.puts("  TMDB total: #{progress.tmdb_total_movies || "Unknown"}")
+IO.puts("  Completion: #{progress.completion_percentage || 0}%")
 
 # Check Oban status
 import Ecto.Query
@@ -41,6 +41,6 @@ running_discovery = Repo.exists?(
 IO.puts("\nImport currently running: #{running_discovery}")
 
 if progress.our_total_movies < 100 and not running_discovery do
-  IO.puts("\nReady to start Phase 2 import\!")
+  IO.puts("\nReady to start Phase 2 import!")
   IO.puts("Run: Cinegraph.Imports.TMDbImporter.start_full_import()")
 end
