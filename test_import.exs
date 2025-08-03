@@ -3,8 +3,13 @@ IO.puts("=== Testing Import System ===\n")
 
 # 1. First check and set TMDB total
 IO.puts("1. Updating TMDB total count...")
-{:ok, total} = Cinegraph.Imports.TMDbImporter.update_tmdb_total()
-IO.puts("   TMDB Total: #{total} movies")
+case Cinegraph.Imports.TMDbImporter.update_tmdb_total() do
+  {:ok, total} ->
+    IO.puts("   TMDB Total: #{total} movies")
+  {:error, reason} ->
+    IO.puts("   ❌ Failed to update TMDB total: #{inspect(reason)}")
+    System.halt(1)
+end
 
 # 2. Check initial progress
 IO.puts("\n2. Initial progress:")
@@ -13,8 +18,13 @@ IO.inspect(progress, pretty: true)
 
 # 3. Start import
 IO.puts("\n3. Starting import...")
-{:ok, info} = Cinegraph.Imports.TMDbImporter.start_full_import()
-IO.puts("   Started from page: #{info.starting_page}")
+case Cinegraph.Imports.TMDbImporter.start_full_import() do
+  {:ok, info} ->
+    IO.puts("   Started from page: #{info.starting_page}")
+  {:error, reason} ->
+    IO.puts("   ❌ Failed to start import: #{inspect(reason)}")
+    System.halt(1)
+end
 
 # 4. Wait a moment for the first job to process
 IO.puts("\n4. Waiting 5 seconds for first job to process...")
