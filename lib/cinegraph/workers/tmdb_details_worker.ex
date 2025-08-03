@@ -8,6 +8,17 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     max_attempts: 5,
     unique: [fields: [:args], keys: [:tmdb_id], period: 300]
     
+  # Custom backoff for network errors - exponential with jitter
+  def backoff(%Oban.Job{attempt: attempt}) do
+    base_delay = :timer.seconds(5)
+    max_delay = :timer.minutes(5)
+    
+    delay = min(base_delay * :math.pow(2, attempt - 1), max_delay)
+    jitter = :rand.uniform_real() * 0.3 * delay
+    
+    trunc(delay + jitter)
+  end
+    
   alias Cinegraph.Movies
   alias Cinegraph.Workers.{OMDbEnrichmentWorker, CollaborationWorker}
   alias Cinegraph.Imports.QualityFilter

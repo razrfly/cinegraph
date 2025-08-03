@@ -13,11 +13,30 @@ defmodule Cinegraph.Application do
       {DNSCluster, query: Application.get_env(:cinegraph, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Cinegraph.PubSub},
       # Start the Finch HTTP client for sending emails
-      {Finch, name: Cinegraph.Finch},
+      {Finch, 
+       name: Cinegraph.Finch,
+       pools: %{
+         :default => [size: 10, count: 2],
+         "https://api.themoviedb.org" => [
+           size: 10,
+           count: 2,
+           conn_opts: [
+             transport_opts: [
+               timeout: 30_000,
+               # Keep connections alive longer
+               keepalive: :timer.minutes(5),
+               # Reuse connections
+               reuse_sessions: true
+             ]
+           ]
+         ]
+       }},
       # Start Oban
       {Oban, Application.fetch_env!(:cinegraph, Oban)},
       # Start Rate Limiter
       Cinegraph.RateLimiter,
+      # Start Import Stats
+      Cinegraph.Import.ImportStats,
       # Start a worker by calling: Cinegraph.Worker.start_link(arg)
       # {Cinegraph.Worker, arg},
       # Start to serve requests, typically the last entry

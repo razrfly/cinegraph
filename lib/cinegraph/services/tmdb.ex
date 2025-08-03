@@ -130,17 +130,29 @@ defmodule Cinegraph.Services.TMDb do
   @doc """
   Gets popular movies.
   """
-  def get_popular_movies(opts \\ []) do
-    params = opts |> Keyword.take([:page]) |> Enum.into(%{})
-    Client.get("/movie/popular", params)
+  def get_popular_movies(page \\ 1) when is_integer(page) do
+    Client.get("/movie/popular", %{page: page})
   end
 
   @doc """
   Gets top rated movies.
   """
-  def get_top_rated_movies(opts \\ []) do
-    params = opts |> Keyword.take([:page]) |> Enum.into(%{})
-    Client.get("/movie/top_rated", params)
+  def get_top_rated_movies(page \\ 1) when is_integer(page) do
+    Client.get("/movie/top_rated", %{page: page})
+  end
+  
+  @doc """
+  Gets now playing movies.
+  """
+  def get_now_playing_movies(page \\ 1) when is_integer(page) do
+    Client.get("/movie/now_playing", %{page: page})
+  end
+  
+  @doc """
+  Gets upcoming movies.
+  """
+  def get_upcoming_movies(page \\ 1) when is_integer(page) do
+    Client.get("/movie/upcoming", %{page: page})
   end
 
   @doc """

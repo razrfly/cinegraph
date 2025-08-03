@@ -65,6 +65,7 @@ config :phoenix, :json_library, Jason
 config :cinegraph, Oban,
   repo: Cinegraph.Repo,
   queues: [
+    imports: 5,             # Concurrent imports coordinator
     tmdb_discovery: 10,     # Movie discovery from TMDb
     tmdb_details: 20,       # Movie details fetching  
     omdb_enrichment: 5,     # OMDb data enrichment

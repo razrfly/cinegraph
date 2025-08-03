@@ -6,6 +6,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   use CinegraphWeb, :live_view
   
   alias Cinegraph.Imports.TMDbImporter
+  alias Cinegraph.Import.{ImportStats, ImportCoordinator}
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
   import Ecto.Query
@@ -32,6 +33,24 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> schedule_refresh()
     
     {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_event("start_concurrent_import", %{"type" => type, "pages" => pages}, socket) do
+    pages = String.to_integer(pages)
+    
+    case ImportCoordinator.start_import(type, pages) do
+      {:ok, import_id} ->
+        socket =
+          socket
+          |> put_flash(:info, "Started concurrent #{type} import (ID: #{import_id}) for #{pages} pages")
+          |> load_data()
+        
+        {:noreply, socket}
+      {:error, reason} ->
+        socket = Phoenix.LiveView.put_flash(socket, :error, "Failed to start concurrent import: #{inspect(reason)}")
+        {:noreply, socket}
+    end
   end
   
   @impl true
@@ -86,6 +105,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Get progress
     progress = TMDbImporter.get_progress()
     
+    # Get runtime import stats from ETS
+    runtime_stats = ImportStats.get_dashboard_stats()
+    
     # Get database stats
     stats = %{
       total_movies: Repo.aggregate(Movie, :count),
@@ -100,14 +122,20 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Get Oban queue stats
     queue_stats = get_oban_stats()
     
-    # Calculate import rate
-    import_rate = calculate_import_rate(socket.assigns[:stats], stats)
+    # Use runtime import rate if available, otherwise calculate from DB
+    import_rate = if runtime_stats.total_movies_per_minute > 0 do
+      runtime_stats.total_movies_per_minute
+    else
+      calculate_import_rate(socket.assigns[:stats], stats)
+    end
     
     socket
     |> assign(:progress, progress)
     |> assign(:stats, stats)
     |> assign(:queue_stats, queue_stats)
     |> assign(:import_rate, import_rate)
+    |> assign(:runtime_stats, runtime_stats)
+    |> assign(:active_imports, ImportStats.get_all_active_imports())
   end
   
   defp get_oban_stats do

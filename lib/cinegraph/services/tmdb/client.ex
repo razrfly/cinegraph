@@ -43,6 +43,15 @@ defmodule Cinegraph.Services.TMDb.Client do
       {:ok, %Finch.Response{status: status, body: body}} ->
         {:error, {:api_error, status, body}}
         
+      {:error, %Mint.TransportError{reason: :closed}} ->
+        # Connection was closed, this often happens with keep-alive connections
+        # Log and retry at the worker level
+        {:error, {:network_error, :connection_closed}}
+        
+      {:error, %Mint.TransportError{reason: :timeout}} ->
+        # Request timed out
+        {:error, {:network_error, :timeout}}
+        
       {:error, reason} ->
         {:error, {:network_error, reason}}
     end

@@ -16,7 +16,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
   Starts a systematic import of all TMDB movies.
   Uses pagination to go through every movie in TMDB.
   """
-  def start_full_import do
+  def start_full_import(opts \\ []) do
     Logger.info("Starting systematic TMDB import")
     
     # Get total movies from TMDB
@@ -26,16 +26,23 @@ defmodule Cinegraph.Imports.TMDbImporter do
         
         # Start from page 1 (or resume from last page)
         start_page = ImportState.last_page_processed() + 1
-        Logger.info("Starting from page #{start_page}")
+        max_pages = Keyword.get(opts, :max_pages, 500) # Default to 500 pages (~10k movies)
+        end_page = min(start_page + max_pages - 1, 51749) # TMDb's approximate max
         
-        # Queue first discovery job
-        queue_discovery_job(start_page)
+        Logger.info("Starting from page #{start_page}, will process up to page #{end_page}")
         
-        {:ok, %{
-          tmdb_total: total,
-          our_total: count_our_movies(),
-          starting_page: start_page
-        }}
+        # Queue pages in batches for better concurrency
+        case queue_pages(start_page, end_page, "full") do
+          {:ok, count} ->
+            {:ok, %{
+              tmdb_total: total,
+              our_total: count_our_movies(),
+              starting_page: start_page,
+              pages_queued: count
+            }}
+          error -> 
+            error
+        end
         
       error ->
         Logger.error("Failed to get TMDB total: #{inspect(error)}")
@@ -57,8 +64,13 @@ defmodule Cinegraph.Imports.TMDbImporter do
   def queue_pages(start_page, end_page, import_type \\ "full") when start_page <= end_page do
     Logger.info("Queueing pages #{start_page} to #{end_page}")
     
+    # Queue discovery jobs with smart scheduling for concurrency
+    # We can have ~5-10 discovery jobs running concurrently since each spawns ~20 detail jobs
     jobs = for page <- start_page..end_page do
-      delay = calculate_discovery_delay(page - start_page + 1)
+      # Stagger the jobs in waves for better concurrency
+      # First 10 pages immediate, next 10 after 30s, etc.
+      wave = div(page - start_page, 10)
+      delay = wave * 30  # 30 seconds between waves
       
       %{
         "page" => page,

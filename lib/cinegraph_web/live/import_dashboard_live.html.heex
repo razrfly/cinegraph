@@ -48,7 +48,13 @@
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div>
         <span class="text-gray-500">Import Rate:</span>
-        <span class="font-medium"><%= @import_rate %> movies/min</span>
+        <span class="font-medium">
+          <%= if @runtime_stats.total_movies_per_minute > 0 do %>
+            <span class="text-green-600"><%= @runtime_stats.total_movies_per_minute %> movies/min</span>
+          <% else %>
+            <%= @import_rate %> movies/min
+          <% end %>
+        </span>
       </div>
       <div>
         <span class="text-gray-500">Last Page:</span>
@@ -57,7 +63,11 @@
       <div>
         <span class="text-gray-500">Time to Complete:</span>
         <span class="font-medium">
-          <%= estimate_completion_time(@progress.movies_remaining, @import_rate) %>
+          <%= if @runtime_stats.estimated_completion_time do %>
+            <%= estimate_completion_time(@progress.movies_remaining, @runtime_stats.total_movies_per_minute) %>
+          <% else %>
+            <%= estimate_completion_time(@progress.movies_remaining, @import_rate) %>
+          <% end %>
         </span>
       </div>
       <div>
@@ -69,25 +79,108 @@
     </div>
   </div>
 
+  <!-- Active Imports -->
+  <%= if length(@active_imports) > 0 do %>
+    <div class="bg-white shadow rounded-lg p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Active Concurrent Imports</h2>
+      
+      <div class="space-y-4">
+        <%= for import <- @active_imports do %>
+          <div class="border border-gray-200 rounded-lg p-4">
+            <div class="flex justify-between items-start">
+              <div>
+                <div class="font-medium text-gray-900"><%= import.import_id %></div>
+                <div class="text-sm text-gray-500">
+                  Started: <%= Calendar.strftime(import.started_at, "%H:%M:%S") %>
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-lg font-medium text-blue-600">
+                  <%= import.current_rate %> movies/min
+                </div>
+                <div class="text-sm text-gray-500">
+                  <%= import.pages_processed %>/<%= import.total_pages %> pages
+                </div>
+              </div>
+            </div>
+            
+            <div class="mt-3">
+              <div class="flex justify-between text-sm mb-1">
+                <span><%= import.movies_imported %> movies imported</span>
+                <span><%= Float.round((import.pages_processed / import.total_pages) * 100, 1) %>%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div class="bg-blue-600 h-2 rounded-full transition-all duration-500" 
+                     style={"width: #{Float.round((import.pages_processed / import.total_pages) * 100, 1)}%"}></div>
+              </div>
+            </div>
+            
+            <%= if import.estimated_completion do %>
+              <div class="mt-2 text-sm text-gray-500">
+                Est. completion: <%= Calendar.strftime(import.estimated_completion, "%H:%M:%S") %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
   <!-- Actions -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">Actions</h2>
     
-    <div class="flex flex-wrap gap-4">
-      <button phx-click="start_full_import" 
-              class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-        Start Full Import
-      </button>
+    <div class="space-y-4">
+      <!-- Concurrent Import Section -->
+      <div class="border-t pt-4">
+        <h3 class="font-medium mb-3">Fast Concurrent Import (New!)</h3>
+        <form phx-submit="start_concurrent_import" class="flex flex-wrap gap-3 items-end">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Import Type</label>
+            <select name="type" class="rounded border-gray-300">
+              <option value="popular">Popular Movies</option>
+              <option value="top_rated">Top Rated</option>
+              <option value="now_playing">Now Playing</option>
+              <option value="upcoming">Upcoming</option>
+            </select>
+          </div>
+          
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Pages</label>
+            <input type="number" name="pages" value="100" min="1" max="500" 
+                   class="rounded border-gray-300 w-24">
+          </div>
+          
+          <button type="submit" 
+                  class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+            Start Concurrent Import
+          </button>
+        </form>
+        <p class="text-sm text-gray-500 mt-2">
+          Processes multiple pages simultaneously (10x-50x faster than sequential)
+        </p>
+      </div>
       
-      <button phx-click="start_daily_update" 
-              class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-        Start Daily Update
-      </button>
-      
-      <button phx-click="update_tmdb_total" 
-              class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
-        Update TMDB Total
-      </button>
+      <!-- Original Actions -->
+      <div class="border-t pt-4">
+        <h3 class="font-medium mb-3">Sequential Import (Old)</h3>
+        <div class="flex flex-wrap gap-3">
+          <button phx-click="start_full_import" 
+                  class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Start Full Import
+          </button>
+          
+          <button phx-click="start_daily_update" 
+                  class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+            Start Daily Update
+          </button>
+          
+          <button phx-click="update_tmdb_total" 
+                  class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+            Update TMDB Total
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
