@@ -218,36 +218,6 @@ defmodule Cinegraph.Imports.TMDbImporter do
     end
   end
   
-  @doc """
-  Queues the next discovery job with smart delays.
-  DEPRECATED: Use queue_pages/3 instead for better queue management.
-  """
-  def queue_next_discovery(current_page, total_pages, import_type \\ "full") do
-    if current_page < total_pages do
-      next_page = current_page + 1
-      delay = calculate_discovery_delay(next_page)
-      
-      args = %{
-        "page" => next_page,
-        "import_type" => import_type
-      }
-      
-      case args
-           |> TMDbDiscoveryWorker.new(schedule_in: delay)
-           |> Oban.insert() do
-        {:ok, _job} ->
-          Logger.info("Queued discovery for page #{next_page} with #{delay}s delay")
-          :ok
-        error ->
-          Logger.error("Failed to queue next discovery: #{inspect(error)}")
-          error
-      end
-    else
-      Logger.info("Import complete! Processed all #{total_pages} pages")
-      ImportState.set_last_full_sync()
-      :ok
-    end
-  end
   
   # Private functions
   
