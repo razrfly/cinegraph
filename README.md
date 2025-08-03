@@ -164,19 +164,62 @@ The guide covers:
 
 #### Import via IEx Console
 
+##### Option 1: Import Popular Movies (Recommended)
+
 ```elixir
-# Start popular movies import
-Cinegraph.Imports.TMDbImporter.start_popular_import(max_pages: 100)
+# Import top-rated popular movies (about 2,000-5,000 movies)
+{:ok, progress} = Cinegraph.Imports.TMDbImporter.start_popular_import(max_pages: 200)
+```
 
-# Import movies from a specific decade
-Cinegraph.Imports.TMDbImporter.start_decade_import(1990)
+##### Option 2: Import by Decade
 
-# Run daily update for recent releases
-Cinegraph.Imports.TMDbImporter.start_daily_update()
+Import decade by decade to avoid overwhelming the system:
 
+```elixir
+# Import each decade separately
+{:ok, p1} = Cinegraph.Imports.TMDbImporter.start_decade_import(2020)  # 2020s
+{:ok, p2} = Cinegraph.Imports.TMDbImporter.start_decade_import(2010)  # 2010s
+{:ok, p3} = Cinegraph.Imports.TMDbImporter.start_decade_import(2000)  # 2000s
+{:ok, p4} = Cinegraph.Imports.TMDbImporter.start_decade_import(1990)  # 1990s
+# ... continue with earlier decades as needed
+```
+
+##### Option 3: Full Import (Use with Caution)
+
+This will attempt to import the entire TMDb database (900,000+ movies):
+
+```elixir
+# Full import - will take 5-7 days to complete!
+{:ok, progress} = Cinegraph.Imports.TMDbImporter.start_full_import(max_pages: 500)
+```
+
+##### Option 4: Via the Dashboard (Easiest)
+
+Just use the web interface:
+
+1. Visit http://localhost:4001/imports
+2. Click "Import Popular Movies" to start with the most popular
+3. Or use "Import by Decade" section to import specific decades
+
+##### Monitor Progress
+
+Watch the import progress at http://localhost:4001/imports or check in IEx:
+
+```elixir
 # Check import status
 Cinegraph.Imports.TMDbImporter.get_import_status()
+
+# Get current movie count
+Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
 ```
+
+##### Recommendations
+
+1. **Start with Popular Movies** - Gets you 2,000-5,000 highly rated films
+2. **Then do Recent Decades** - 2020s, 2010s, 2000s have the most relevant content
+3. **Skip Full Import** unless you really need all 900k+ movies
+
+The popular movies import should take about 2-3 hours and give you a solid database to work with. The full import would take 5-7 days and might not be necessary for most use cases.
 
 For development and testing, use the direct import scripts:
 
