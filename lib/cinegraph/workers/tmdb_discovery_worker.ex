@@ -28,11 +28,6 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
         case TMDbImporter.process_discovery_page(page, results) do
           {:ok, queued_count} ->
             Logger.info("Queued #{queued_count} new movies for import")
-            
-            # Queue next page if needed
-            import_type = Map.get(args, "import_type", "full")
-            TMDbImporter.queue_next_discovery(page, total_pages, import_type)
-            
             :ok
             
           error ->
