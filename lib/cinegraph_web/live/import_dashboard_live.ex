@@ -1,25 +1,25 @@
 defmodule CinegraphWeb.ImportDashboardLive do
+  @moduledoc """
+  Simplified import dashboard using state tracking.
+  Shows real progress: TMDB Total - Our Total = Remaining
+  """
   use CinegraphWeb, :live_view
   
-  alias Cinegraph.Imports.{TMDbImporter, ImportProgress}
+  alias Cinegraph.Imports.TMDbImporter
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
   import Ecto.Query
   
-  @refresh_interval 2000  # 2 seconds
+  @refresh_interval 5000  # 5 seconds
   
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket) do
-      :timer.send_interval(@refresh_interval, self(), :refresh)
-    end
-    
     socket =
       socket
       |> assign(:page_title, "Import Dashboard")
-      |> load_stats()
-      |> load_imports()
-      |> load_oban_stats()
+      |> assign(:refresh_timer, nil)
+      |> load_data()
+      |> schedule_refresh()
     
     {:ok, socket}
   end
@@ -28,25 +28,24 @@ defmodule CinegraphWeb.ImportDashboardLive do
   def handle_info(:refresh, socket) do
     socket =
       socket
-      |> load_stats()
-      |> load_imports()
-      |> load_oban_stats()
+      |> load_data()
+      |> schedule_refresh()
     
     {:noreply, socket}
   end
   
   @impl true
-  def handle_event("start_popular_import", _params, socket) do
-    case TMDbImporter.start_popular_import() do
-      {:ok, _progress} ->
+  def handle_event("start_full_import", _params, socket) do
+    case TMDbImporter.start_full_import() do
+      {:ok, info} ->
         socket =
           socket
-          |> put_flash(:info, "Started popular movies import")
-          |> load_imports()
+          |> put_flash(:info, "Started full import from page #{info.starting_page}")
+          |> load_data()
         
         {:noreply, socket}
       {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to start import: #{inspect(reason)}")
+        socket = Phoenix.LiveView.put_flash(socket, :error, "Failed to start import: #{inspect(reason)}")
         {:noreply, socket}
     end
   end
@@ -54,144 +53,141 @@ defmodule CinegraphWeb.ImportDashboardLive do
   @impl true
   def handle_event("start_daily_update", _params, socket) do
     case TMDbImporter.start_daily_update() do
-      {:ok, _progress} ->
+      {:ok, _job} ->
         socket =
           socket
-          |> put_flash(:info, "Started daily update")
-          |> load_imports()
+          |> put_flash(:info, "Started daily update for recent movies")
+          |> load_data()
         
         {:noreply, socket}
       {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to start daily update: #{inspect(reason)}")
+        socket = Phoenix.LiveView.put_flash(socket, :error, "Failed to start daily update: #{inspect(reason)}")
         {:noreply, socket}
     end
   end
   
   @impl true
-  def handle_event("start_decade_import", %{"decade" => decade_str}, socket) do
-    case Integer.parse(decade_str) do
-      {decade, ""} when decade > 0 ->
-        case TMDbImporter.start_decade_import(decade) do
-          {:ok, _progress} ->
-            socket =
-              socket
-              |> put_flash(:info, "Started import for #{decade}s")
-              |> load_imports()
-            
-            {:noreply, socket}
-          {:error, reason} ->
-            socket = put_flash(socket, :error, "Failed to start decade import: #{inspect(reason)}")
-            {:noreply, socket}
-        end
-      _ ->
-        socket = put_flash(socket, :error, "Invalid decade value")
-        {:noreply, socket}
-    end
-  end
-  
-  @impl true
-  def handle_event("pause_import", %{"id" => id}, socket) do
-    case Integer.parse(id) do
-      {parsed_id, ""} when parsed_id > 0 ->
-        case TMDbImporter.pause_import(parsed_id) do
-      {:ok, _} ->
+  def handle_event("update_tmdb_total", _params, socket) do
+    case TMDbImporter.update_tmdb_total() do
+      {:ok, total} ->
         socket =
           socket
-          |> put_flash(:info, "Import paused")
-          |> load_imports()
+          |> Phoenix.LiveView.put_flash(:info, "Updated TMDB total: #{format_number(total)} movies")
+          |> load_data()
         
         {:noreply, socket}
-          {:error, reason} ->
-            socket = put_flash(socket, :error, "Failed to pause import: #{inspect(reason)}")
-            {:noreply, socket}
-        end
-      _ ->
-        socket = put_flash(socket, :error, "Invalid import ID")
+      {:error, reason} ->
+        socket = Phoenix.LiveView.put_flash(socket, :error, "Failed to update TMDB total: #{inspect(reason)}")
         {:noreply, socket}
     end
   end
   
-  @impl true
-  def handle_event("resume_import", %{"id" => id}, socket) do
-    case Integer.parse(id) do
-      {parsed_id, ""} when parsed_id > 0 ->
-        case TMDbImporter.resume_import(parsed_id) do
-      {:ok, _} ->
-        socket =
-          socket
-          |> put_flash(:info, "Import resumed")
-          |> load_imports()
-        
-        {:noreply, socket}
-          {:error, reason} ->
-            socket = put_flash(socket, :error, "Failed to resume import: #{inspect(reason)}")
-            {:noreply, socket}
-        end
-      _ ->
-        socket = put_flash(socket, :error, "Invalid import ID")
-        {:noreply, socket}
-    end
-  end
-  
-  defp load_stats(socket) do
+  defp load_data(socket) do
+    # Get progress
+    progress = TMDbImporter.get_progress()
+    
+    # Get database stats
     stats = %{
       total_movies: Repo.aggregate(Movie, :count),
       movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count),
       movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count),
       total_people: Repo.aggregate(Cinegraph.Movies.Person, :count),
-      total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count)
+      total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count),
+      total_genres: Repo.aggregate(Cinegraph.Movies.Genre, :count),
+      total_keywords: Repo.aggregate(Cinegraph.Movies.Keyword, :count)
     }
     
-    assign(socket, :stats, stats)
-  end
-  
-  defp load_imports(socket) do
-    imports = TMDbImporter.get_import_status()
-    recent_imports = ImportProgress.get_latest("full") |> List.wrap()
+    # Get Oban queue stats
+    queue_stats = get_oban_stats()
+    
+    # Calculate import rate
+    import_rate = calculate_import_rate(socket.assigns[:stats], stats)
     
     socket
-    |> assign(:active_imports, imports)
-    |> assign(:recent_imports, recent_imports)
+    |> assign(:progress, progress)
+    |> assign(:stats, stats)
+    |> assign(:queue_stats, queue_stats)
+    |> assign(:import_rate, import_rate)
   end
   
-  defp load_oban_stats(socket) do
-    queue_stats = 
-      Oban.config()
-      |> Map.get(:queues)
-      |> Enum.map(fn {queue, _limit} ->
-        jobs = Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "available"),
-          :count
-        )
-        
-        executing = Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "executing"),
-          :count
-        )
-        
-        %{
-          name: queue,
-          available: jobs,
-          executing: executing
-        }
-      end)
+  defp get_oban_stats do
+    queues = [:tmdb_discovery, :tmdb_details, :omdb_enrichment]
     
-    assign(socket, :queue_stats, queue_stats)
+    Enum.map(queues, fn queue ->
+      available = Repo.aggregate(
+        from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "available"),
+        :count
+      )
+      
+      executing = Repo.aggregate(
+        from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "executing"),
+        :count
+      )
+      
+      completed = Repo.aggregate(
+        from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "completed"),
+        :count
+      )
+      
+      %{
+        name: queue,
+        available: available,
+        executing: executing,
+        completed: completed
+      }
+    end)
+  end
+  
+  defp calculate_import_rate(nil, _), do: 0.0
+  defp calculate_import_rate(old_stats, new_stats) do
+    # Calculate movies imported per minute
+    time_diff = @refresh_interval / 1000 / 60  # Convert to minutes
+    movies_diff = new_stats.total_movies - old_stats.total_movies
+    
+    if time_diff > 0 do
+      Float.round(movies_diff / time_diff, 2)
+    else
+      0.0
+    end
+  end
+  
+  defp schedule_refresh(socket) do
+    if connected?(socket) do
+      timer = Process.send_after(self(), :refresh, @refresh_interval)
+      assign(socket, :refresh_timer, timer)
+    else
+      socket
+    end
   end
   
   @doc """
-  Formats duration in seconds to a human-readable string.
+  Formats a number with thousand separators.
   """
-  def format_duration(seconds) when is_number(seconds) do
-    hours = div(seconds, 3600)
-    minutes = div(rem(seconds, 3600), 60)
-    secs = rem(seconds, 60)
+  def format_number(nil), do: "0"
+  def format_number(num) when is_integer(num) do
+    num
+    |> Integer.to_string()
+    |> String.reverse()
+    |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
+    |> String.reverse()
+  end
+  def format_number(num) when is_float(num) do
+    format_number(round(num))
+  end
+  
+  @doc """
+  Estimates time to completion based on current rate.
+  """
+  def estimate_completion_time(remaining, rate) when rate > 0 do
+    minutes = remaining / rate
+    hours = minutes / 60
+    days = hours / 24
     
     cond do
-      hours > 0 -> "#{hours}h #{minutes}m"
-      minutes > 0 -> "#{minutes}m #{secs}s"
-      true -> "#{secs}s"
+      days >= 1 -> "~#{Float.round(days, 1)} days"
+      hours >= 1 -> "~#{Float.round(hours, 1)} hours"
+      true -> "~#{Float.round(minutes, 0)} minutes"
     end
   end
-  def format_duration(_), do: "0s"
+  def estimate_completion_time(_, _), do: "Unknown"
 end
