@@ -31,6 +31,15 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Checks if a movie exists by TMDB ID.
+  Used for deduplication during imports.
+  """
+  def movie_exists?(tmdb_id) do
+    from(m in Movie, where: m.tmdb_id == ^tmdb_id, select: true)
+    |> Repo.exists?()
+  end
+
+  @doc """
   Creates a movie.
   """
   def create_movie(attrs \\ %{}) do
