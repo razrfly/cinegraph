@@ -36,11 +36,11 @@ defmodule CinegraphWeb.ImportDashboardLive do
   
   @impl true
   def handle_event("start_full_import", _params, socket) do
-    case TMDbImporter.start_full_import() do
+    case TMDbImporter.start_full_import(pages: 100) do
       {:ok, info} ->
         socket =
           socket
-          |> put_flash(:info, "Started full import from page #{info.starting_page}")
+          |> put_flash(:info, "Queued #{info.pages_queued} pages starting from page #{info.starting_page}")
           |> load_data()
         
         {:noreply, socket}
@@ -82,6 +82,28 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end
   end
   
+  @impl true
+  def handle_event("import_pages", %{"pages" => pages_str}, socket) do
+    case Integer.parse(pages_str) do
+      {pages, _} when pages > 0 ->
+        case TMDbImporter.import_pages(pages) do
+          {:ok, count} ->
+            socket =
+              socket
+              |> put_flash(:info, "Queued #{count} pages for import")
+              |> load_data()
+            
+            {:noreply, socket}
+          {:error, reason} ->
+            socket = Phoenix.LiveView.put_flash(socket, :error, "Failed to queue pages: #{inspect(reason)}")
+            {:noreply, socket}
+        end
+      _ ->
+        socket = Phoenix.LiveView.put_flash(socket, :error, "Invalid number of pages")
+        {:noreply, socket}
+    end
+  end
+  
   defp load_data(socket) do
     # Get progress
     progress = TMDbImporter.get_progress()
@@ -94,24 +116,26 @@ defmodule CinegraphWeb.ImportDashboardLive do
       total_people: Repo.aggregate(Cinegraph.Movies.Person, :count),
       total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count),
       total_genres: Repo.aggregate(Cinegraph.Movies.Genre, :count),
-      total_keywords: Repo.aggregate(Cinegraph.Movies.Keyword, :count)
+      total_keywords: Repo.aggregate(Cinegraph.Movies.Keyword, :count),
+      unique_collaborations: Repo.aggregate(Cinegraph.Collaborations.Collaboration, :count),
+      multi_collaborations: Repo.aggregate(from(c in Cinegraph.Collaborations.Collaboration, where: c.collaboration_count > 1), :count)
     }
     
     # Get Oban queue stats
     queue_stats = get_oban_stats()
     
-    # Calculate import rate
-    import_rate = calculate_import_rate(socket.assigns[:stats], stats)
+    # Get runtime stats from ImportStats
+    runtime_stats = Cinegraph.Imports.ImportStats.get_stats()
     
     socket
     |> assign(:progress, progress)
     |> assign(:stats, stats)
     |> assign(:queue_stats, queue_stats)
-    |> assign(:import_rate, import_rate)
+    |> assign(:import_rate, runtime_stats.movies_per_minute)
   end
   
   defp get_oban_stats do
-    queues = [:tmdb_discovery, :tmdb_details, :omdb_enrichment]
+    queues = [:tmdb_discovery, :tmdb_details, :omdb_enrichment, :collaboration]
     
     Enum.map(queues, fn queue ->
       available = Repo.aggregate(
@@ -138,18 +162,6 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end)
   end
   
-  defp calculate_import_rate(nil, _), do: 0.0
-  defp calculate_import_rate(old_stats, new_stats) do
-    # Calculate movies imported per minute
-    time_diff = @refresh_interval / 1000 / 60  # Convert to minutes
-    movies_diff = new_stats.total_movies - old_stats.total_movies
-    
-    if time_diff > 0 do
-      Float.round(movies_diff / time_diff, 2)
-    else
-      0.0
-    end
-  end
   
   defp schedule_refresh(socket) do
     if connected?(socket) do
@@ -190,4 +202,14 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end
   end
   def estimate_completion_time(_, _), do: "Unknown"
+  
+  @doc """
+  Formats queue names for display.
+  """
+  def format_queue_name(:tmdb_discovery), do: "TMDb Discovery"
+  def format_queue_name(:tmdb_details), do: "TMDb Details"
+  def format_queue_name(:omdb_enrichment), do: "OMDb Enrichment"
+  def format_queue_name(:collaboration), do: "Collaboration"
+  def format_queue_name(queue) when is_atom(queue), do: queue |> to_string() |> String.capitalize()
+  def format_queue_name(queue), do: String.capitalize(queue)
 end

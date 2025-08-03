@@ -18,6 +18,8 @@ defmodule Cinegraph.Application do
       {Oban, Application.fetch_env!(:cinegraph, Oban)},
       # Start Rate Limiter
       Cinegraph.RateLimiter,
+      # Start Import Stats
+      Cinegraph.Imports.ImportStats,
       # Start a worker by calling: Cinegraph.Worker.start_link(arg)
       # {Cinegraph.Worker, arg},
       # Start to serve requests, typically the last entry
