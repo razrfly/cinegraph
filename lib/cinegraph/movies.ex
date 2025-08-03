@@ -12,10 +12,59 @@ defmodule Cinegraph.Movies do
   alias Cinegraph.ExternalSources
 
   @doc """
-  Returns the list of movies.
+  Returns the list of movies with pagination.
   """
-  def list_movies do
-    Repo.all(Movie)
+  def list_movies(params \\ %{}) do
+    Movie
+    |> apply_sorting(params)
+    |> paginate(params)
+  end
+
+  @doc """
+  Counts total movies for pagination.
+  """
+  def count_movies(_params \\ %{}) do
+    Repo.aggregate(Movie, :count, :id)
+  end
+
+  # Sorting helper
+  defp apply_sorting(query, params) do
+    case params["sort"] do
+      "title" -> order_by(query, [m], asc: m.title)
+      "title_desc" -> order_by(query, [m], desc: m.title)
+      "release_date" -> order_by(query, [m], asc: m.release_date)
+      "release_date_desc" -> order_by(query, [m], desc: m.release_date)
+      "rating" -> order_by(query, [m], desc: m.vote_average)
+      "popularity" -> order_by(query, [m], desc: m.popularity)
+      _ -> order_by(query, [m], desc: m.release_date) # default
+    end
+  end
+
+  # Pagination helper
+  defp paginate(query, params) do
+    page = parse_page(params["page"])
+    per_page = parse_per_page(params["per_page"])
+    
+    offset_val = (page - 1) * per_page
+    
+    query
+    |> limit(^per_page)
+    |> offset(^offset_val)
+    |> Repo.all()
+  end
+
+  defp parse_page(page_param) do
+    case Integer.parse(page_param || "1") do
+      {page, _} when page > 0 -> page
+      _ -> 1
+    end
+  end
+
+  defp parse_per_page(per_page_param) do
+    case Integer.parse(per_page_param || "50") do
+      {per_page, _} when per_page > 0 and per_page <= 100 -> per_page
+      _ -> 50
+    end
   end
 
   @doc """

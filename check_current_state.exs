@@ -19,12 +19,17 @@ Enum.each(active_jobs, fn {queue, state, count} ->
 end)
 
 # Check highest page
-highest_page = Repo.one(
-  from j in Oban.Job,
-  where: j.queue == "tmdb_discovery",
-  order_by: [desc: fragment("(args->>'page')::int")],
-  limit: 1,
-  select: j.args["page"]
-)
+highest_page = 
+  try do
+    Repo.one(
+      from j in Oban.Job,
+      where: j.queue == "tmdb_discovery" and not is_nil(fragment("args->>'page'")),
+      order_by: [desc: fragment("COALESCE((args->>'page')::int, 0)")],
+      limit: 1,
+      select: fragment("(args->>'page')::int")
+    )
+  rescue
+    _ -> nil
+  end
 
-IO.puts("\nHighest page queued: #{highest_page}")
+IO.puts("\nHighest page queued: #{highest_page || "N/A"}")
