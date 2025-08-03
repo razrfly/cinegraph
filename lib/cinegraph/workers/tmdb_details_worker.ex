@@ -81,13 +81,19 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   
   defp maybe_queue_omdb(%Movie{imdb_id: nil}), do: {:ok, nil}
   defp maybe_queue_omdb(%Movie{imdb_id: imdb_id, omdb_data: nil} = movie) do
-    %{
-      movie_id: movie.id,
-      imdb_id: imdb_id,
-      title: movie.title
-    }
-    |> OMDbEnrichmentWorker.new(priority: 2)
-    |> Oban.insert()
+    # Validate IMDb ID format (tt followed by 7+ digits)
+    if Regex.match?(~r/^tt\d{7,}$/, imdb_id) do
+      %{
+        movie_id: movie.id,
+        imdb_id: imdb_id,
+        title: movie.title
+      }
+      |> OMDbEnrichmentWorker.new(priority: 2)
+      |> Oban.insert()
+    else
+      Logger.warning("Invalid IMDb ID format for movie #{movie.id} (#{movie.title}): #{imdb_id}")
+      {:ok, nil}
+    end
   end
   defp maybe_queue_omdb(_), do: {:ok, nil}
   
@@ -96,22 +102,25 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       nil ->
         {:ok, nil}
       progress ->
-        current_stats = progress.metadata || %{}
-        
-        new_stats = case status do
+        updates = case status do
           :imported ->
-            Map.update(current_stats, "movies_imported", 1, &(&1 + 1))
+            %{
+              movies_imported: (progress.movies_imported || 0) + 1
+            }
           :failed ->
-            Map.update(current_stats, "movies_failed", 1, &(&1 + 1))
+            %{
+              movies_failed: (progress.movies_failed || 0) + 1
+            }
           :already_processed ->
-            Map.update(current_stats, "movies_skipped", 1, &(&1 + 1))
+            # Track skipped movies in metadata since there's no field for it
+            metadata = progress.metadata || %{}
+            skipped = Map.get(metadata, "movies_skipped", 0) + 1
+            %{
+              metadata: Map.put(metadata, "movies_skipped", skipped)
+            }
         end
         
-        ImportProgress.update(progress, %{
-          movies_imported: new_stats["movies_imported"] || 0,
-          movies_failed: new_stats["movies_failed"] || 0,
-          metadata: new_stats
-        })
+        ImportProgress.update(progress, updates)
     end
   end
   defp update_import_progress(_, _), do: {:ok, nil}

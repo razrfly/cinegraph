@@ -66,20 +66,26 @@ defmodule Cinegraph.ApiProcessors.OMDb do
     force_refresh = Keyword.get(opts, :force_refresh, false)
     omdb_source = OMDb.Transformer.get_or_create_source!()
     
-    if should_skip_processing?(movie, omdb_source, force_refresh) do
-      Logger.info("OMDb data already exists for #{movie.title} (ID: #{movie.id})")
-      {:ok, movie}
+    # Validate IMDb ID format
+    if not valid_imdb_id?(movie.imdb_id) do
+      Logger.warning("Invalid IMDb ID format for #{movie.title}: #{movie.imdb_id}")
+      {:error, :invalid_imdb_id}
     else
-      Logger.info("Fetching OMDb data for #{movie.title} (IMDb ID: #{movie.imdb_id})")
-      
-      case fetch_and_store_omdb_data(movie, omdb_source) do
-        {:ok, updated_movie} ->
-          Logger.info("Successfully processed OMDb data for #{movie.title}")
-          {:ok, updated_movie}
-          
-        {:error, reason} = error ->
-          Logger.error("Failed to fetch OMDb data for #{movie.title}: #{inspect(reason)}")
-          error
+      if should_skip_processing?(movie, omdb_source, force_refresh) do
+        Logger.info("OMDb data already exists for #{movie.title} (ID: #{movie.id})")
+        {:ok, movie}
+      else
+        Logger.info("Fetching OMDb data for #{movie.title} (IMDb ID: #{movie.imdb_id})")
+        
+        case fetch_and_store_omdb_data(movie, omdb_source) do
+          {:ok, updated_movie} ->
+            Logger.info("Successfully processed OMDb data for #{movie.title}")
+            {:ok, updated_movie}
+            
+          {:error, reason} = error ->
+            Logger.error("Failed to fetch OMDb data for #{movie.title}: #{inspect(reason)}")
+            error
+        end
       end
     end
   end
@@ -162,5 +168,11 @@ defmodule Cinegraph.ApiProcessors.OMDb do
     |> String.to_integer()
   rescue
     _ -> nil
+  end
+  
+  # Validate IMDb ID format (tt followed by 7+ digits)
+  defp valid_imdb_id?(nil), do: false
+  defp valid_imdb_id?(imdb_id) do
+    Regex.match?(~r/^tt\d{7,}$/, imdb_id)
   end
 end
