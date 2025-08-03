@@ -69,6 +69,18 @@ defmodule Cinegraph.Services.TMDb do
   end
 
   @doc """
+  Gets the total number of movies in TMDb.
+  This is useful for tracking import progress.
+  """
+  def get_total_movie_count do
+    # Get the first page to see total_results
+    case discover_movies(page: 1) do
+      {:ok, %{"total_results" => total}} -> {:ok, total}
+      error -> error
+    end
+  end
+
+  @doc """
   Searches for movies by title.
   
   ## Options
