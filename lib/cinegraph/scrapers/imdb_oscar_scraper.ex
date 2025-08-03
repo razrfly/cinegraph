@@ -16,6 +16,19 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
   # IMDb Oscar event ID
   @oscar_event_id "ev0000003"
   
+  @category_mappings [
+    {"best motion picture of the year", "best picture"},
+    {"best performance by an actor", "actor"},
+    {"best performance by an actress", "actress"},
+    {"best achievement in", ""},
+    {"music written for motion pictures original score", "music original score"},
+    {"music written for motion pictures original song", "music original song"},
+    {"best animated short film", "short film animated"},
+    {"best live action short film", "short film live action"},
+    {"best adapted screenplay", "writing adapted screenplay"},
+    {"best original screenplay", "writing original screenplay"}
+  ]
+
   # Year mapping for early ceremonies (from oscar_data)
   @year_map %{
     1927 => 1929,
@@ -46,7 +59,7 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
     
     if is_nil(api_key) || api_key == "" do
       Logger.error("No ZYTE_API_KEY configured")
-      {:error, "Missing ZYTE_API_KEY"}
+      {:error, :missing_zyte_api_key}
     else
       headers = [
         {"Authorization", "Basic #{Base.encode64(api_key <> ":")}"},
@@ -131,7 +144,7 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
     try do
       awards = 
         next_data
-        |> get_in(["props", "pageProps", "edition", "awards"])
+        |> get_in(["props", "pageProps", "edition", "awards"]) || []
       
       if awards do
         nominations = parse_awards(awards)
@@ -317,17 +330,9 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
       |> String.trim()
     
     # Handle common variations
-    normalized
-    |> String.replace("best motion picture of the year", "best picture")
-    |> String.replace("best performance by an actor", "actor")
-    |> String.replace("best performance by an actress", "actress")
-    |> String.replace("best achievement in", "")
-    |> String.replace("music written for motion pictures original score", "music original score")
-    |> String.replace("music written for motion pictures original song", "music original song")
-    |> String.replace("best animated short film", "short film animated")
-    |> String.replace("best live action short film", "short film live action")
-    |> String.replace("best adapted screenplay", "writing adapted screenplay")
-    |> String.replace("best original screenplay", "writing original screenplay")
+    Enum.reduce(@category_mappings, normalized, fn {from, to}, acc ->
+      String.replace(acc, from, to)
+    end)
     |> String.trim()
   end
   

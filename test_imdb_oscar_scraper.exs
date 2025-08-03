@@ -55,36 +55,41 @@ Logger.info("\n" <> String.duplicate("-", 50))
 Logger.info("Testing ceremony enhancement with IMDb data...")
 
 # Get our existing 2024 ceremony
-ceremony = Cinegraph.Repo.get_by!(Cinegraph.Cultural.OscarCeremony, year: 2024)
-
-case Cinegraph.Scrapers.ImdbOscarScraper.enhance_ceremony_with_imdb(ceremony) do
-  {:ok, enhanced_data} ->
-    Logger.info("✅ Successfully enhanced ceremony data!")
-    
-    # Check how many nominees got IMDb IDs
-    enhanced_count = 
-      enhanced_data["categories"]
-      |> Enum.flat_map(fn cat -> cat["nominees"] || [] end)
-      |> Enum.count(fn nom -> Map.has_key?(nom, "film_imdb_id") end)
-    
-    Logger.info("Nominees with IMDb film IDs: #{enhanced_count}")
-    
-    # Show Best Picture with IMDb IDs
-    best_picture = Enum.find(enhanced_data["categories"], fn cat -> 
-      cat["category"] == "Best Picture"
-    end)
-    
-    if best_picture do
-      Logger.info("\nBest Picture nominees with IMDb IDs:")
-      Enum.each(best_picture["nominees"] || [], fn nom ->
-        imdb_id = nom["film_imdb_id"] || "not found"
-        status = if nom["winner"], do: "🏆", else: "  "
-        Logger.info("#{status} #{nom["film"]} - IMDb: #{imdb_id}")
-      end)
+case Cinegraph.Repo.get_by(Cinegraph.Cultural.OscarCeremony, year: 2024) do
+  nil ->
+    Logger.error("❌ 2024 ceremony not found in database")
+    Logger.info("Please run the Oscar import first")
+    System.halt(1)
+  ceremony ->
+    case Cinegraph.Scrapers.ImdbOscarScraper.enhance_ceremony_with_imdb(ceremony) do
+      {:ok, enhanced_data} ->
+        Logger.info("✅ Successfully enhanced ceremony data!")
+        
+        # Check how many nominees got IMDb IDs
+        enhanced_count = 
+          enhanced_data["categories"]
+          |> Enum.flat_map(fn cat -> cat["nominees"] || [] end)
+          |> Enum.count(fn nom -> Map.has_key?(nom, "film_imdb_id") end)
+        
+        Logger.info("Nominees with IMDb film IDs: #{enhanced_count}")
+        
+        # Show Best Picture with IMDb IDs
+        best_picture = Enum.find(enhanced_data["categories"], fn cat -> 
+          cat["category"] == "Best Picture"
+        end)
+        
+        if best_picture do
+          Logger.info("\nBest Picture nominees with IMDb IDs:")
+          Enum.each(best_picture["nominees"] || [], fn nom ->
+            imdb_id = nom["film_imdb_id"] || "not found"
+            status = if nom["winner"], do: "🏆", else: "  "
+            Logger.info("#{status} #{nom["film"]} - IMDb: #{imdb_id}")
+          end)
+        end
+        
+      {:error, reason} ->
+        Logger.error("❌ Failed to enhance ceremony: #{inspect(reason)}")
     end
-    
-  {:error, reason} ->
-    Logger.error("❌ Failed to enhance ceremony: #{inspect(reason)}")
 end
 
 Logger.info("\n" <> String.duplicate("=", 50))

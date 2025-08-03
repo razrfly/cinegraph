@@ -1,5 +1,6 @@
 defmodule CinegraphWeb.MovieLive.Show do
   use CinegraphWeb, :live_view
+  import CinegraphWeb.CollaborationComponents, only: [format_ordinal: 1]
 
   alias Cinegraph.Movies
   alias Cinegraph.Cultural
@@ -35,6 +36,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     
     # Load cultural data
     cultural_lists = Cultural.get_list_movies_for_movie(id)
+    oscar_nominations = Cultural.get_movie_oscar_nominations(id)
     
     # Load external sources data
     external_ratings = ExternalSources.get_movie_ratings(id)
@@ -72,6 +74,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:crew, crew) 
     |> Map.put(:directors, directors)
     |> Map.put(:cultural_lists, cultural_lists)
+    |> Map.put(:oscar_nominations, oscar_nominations)
     |> Map.put(:external_ratings, external_ratings)
     |> Map.put(:keywords, keywords)
     |> Map.put(:videos, videos)
@@ -144,5 +147,21 @@ defmodule CinegraphWeb.MovieLive.Show do
       actor_partnerships: Enum.filter(all_collaborations, & &1.type == :actor_actor),
       total_reunions: length(all_collaborations)
     }
+  end
+  
+  # Helper functions for template
+  defp ordinal_suffix(number) do
+    case rem(number, 100) do
+      11 -> "th"
+      12 -> "th" 
+      13 -> "th"
+      _ ->
+        case rem(number, 10) do
+          1 -> "st"
+          2 -> "nd"
+          3 -> "rd"
+          _ -> "th"
+        end
+    end
   end
 end

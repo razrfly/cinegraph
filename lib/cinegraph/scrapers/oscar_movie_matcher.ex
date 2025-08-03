@@ -111,9 +111,12 @@ defmodule Cinegraph.Scrapers.OscarMovieMatcher do
   
   # Find movie by exact title and year
   defp find_movie_by_title_and_year(title, year) do
-    # Look for movies released in the given year
+    # Look for movies released in the given year using date range for better index usage
+    start_date = Date.new!(year, 1, 1)
+    end_date = Date.new!(year + 1, 1, 1)
+    
     from(m in Movies.Movie,
-      where: m.title == ^title and fragment("EXTRACT(YEAR FROM ?)", m.release_date) == ^year,
+      where: m.title == ^title and m.release_date >= ^start_date and m.release_date < ^end_date,
       limit: 1
     )
     |> Repo.one()
@@ -233,13 +236,19 @@ defmodule Cinegraph.Scrapers.OscarMovieMatcher do
       import_status: "oscar_match"
     }
     
-    case Movies.create_movie(attrs) do
-      {:ok, movie} ->
-        Logger.info("Created movie: #{movie.title} (TMDb ID: #{movie.tmdb_id})")
-        movie
-      {:error, changeset} ->
-        Logger.error("Failed to create movie: #{inspect(changeset.errors)}")
-        nil
+    Repo.transaction(fn ->
+      case Movies.create_movie(attrs) do
+        {:ok, movie} ->
+          Logger.info("Created movie: #{movie.title} (TMDb ID: #{movie.tmdb_id})")
+          movie
+        {:error, changeset} ->
+          Logger.error("Failed to create movie: #{inspect(changeset.errors)}")
+          Repo.rollback(:movie_creation_failed)
+      end
+    end)
+    |> case do
+      {:ok, movie} -> movie
+      {:error, _} -> nil
     end
   end
   

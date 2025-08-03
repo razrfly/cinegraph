@@ -24,23 +24,27 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
   
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"ceremony_id" => ceremony_id}}) do
-    ceremony = Repo.get!(OscarCeremony, ceremony_id)
-    
-    Logger.info("Processing Oscar ceremony #{ceremony.year}")
-    
-    # First ensure ceremony is enhanced with IMDb data
-    ceremony = ensure_imdb_enhancement(ceremony)
-    
-    # Process each category
-    results = ceremony.data["categories"]
-      |> Enum.flat_map(fn category ->
-        process_category(category, ceremony)
-      end)
-    
-    summary = summarize_results(results)
-    Logger.info("Oscar discovery complete for #{ceremony.year}: #{inspect(summary)}")
-    
-    :ok
+    case Repo.get(OscarCeremony, ceremony_id) do
+      nil ->
+        Logger.error("Ceremony #{ceremony_id} not found")
+        {:error, :ceremony_not_found}
+      ceremony ->
+        Logger.info("Processing Oscar ceremony #{ceremony.year}")
+        
+        # First ensure ceremony is enhanced with IMDb data
+        ceremony = ensure_imdb_enhancement(ceremony)
+        
+        # Process each category
+        results = ceremony.data["categories"]
+        |> Enum.flat_map(fn category ->
+          process_category(category, ceremony)
+        end)
+        
+        summary = summarize_results(results)
+        Logger.info("Oscar discovery complete for #{ceremony.year}: #{inspect(summary)}")
+        
+        :ok
+    end
   end
   
   defp ensure_imdb_enhancement(ceremony) do
@@ -201,7 +205,7 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
               imdb_id: imdb_id
             }
             
-            case Repo.insert(%Person{} |> Person.changeset(attrs)) do
+            case Repo.insert(%Person{} |> Person.imdb_changeset(attrs)) do
               {:ok, person} -> person.id
               {:error, _} -> nil
             end

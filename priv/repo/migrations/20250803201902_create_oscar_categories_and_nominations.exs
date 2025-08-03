@@ -1,7 +1,7 @@
 defmodule Cinegraph.Repo.Migrations.CreateOscarCategoriesAndNominations do
   use Ecto.Migration
 
-  def change do
+  def up do
     # Create oscar_categories table
     create table(:oscar_categories) do
       add :name, :text, null: false
@@ -71,5 +71,42 @@ defmodule Cinegraph.Repo.Migrations.CreateOscarCategoriesAndNominations do
     ('Writing (Adapted Screenplay)', 'technical', false, false, NOW(), NOW()),
     ('Writing (Original Screenplay)', 'technical', false, false, NOW(), NOW())
     """
+  end
+
+  def down do
+    # Remove seeded data by deleting the categories we inserted
+    execute """
+    DELETE FROM oscar_categories WHERE name IN (
+      'Actor in a Leading Role',
+      'Actor in a Supporting Role',
+      'Actress in a Leading Role',
+      'Actress in a Supporting Role',
+      'Directing',
+      'Best Picture',
+      'Animated Feature Film',
+      'Animated Short Film',
+      'Cinematography',
+      'Costume Design',
+      'Documentary Feature Film',
+      'Documentary Short Film',
+      'Film Editing',
+      'International Feature Film',
+      'Live Action Short Film',
+      'Makeup and Hairstyling',
+      'Music (Original Score)',
+      'Music (Original Song)',
+      'Production Design',
+      'Short Film (Animated)',
+      'Short Film (Live Action)',
+      'Sound',
+      'Visual Effects',
+      'Writing (Adapted Screenplay)',
+      'Writing (Original Screenplay)'
+    )
+    """
+    
+    # Drop tables in reverse order
+    drop table(:oscar_nominations)
+    drop table(:oscar_categories)
   end
 end
