@@ -13,18 +13,41 @@ defmodule Cinegraph.Movies do
 
   @doc """
   Returns the list of movies with pagination.
+  Only returns fully imported movies by default.
   """
   def list_movies(params \\ %{}) do
     Movie
+    |> where([m], m.import_status == "full")
     |> apply_sorting(params)
     |> paginate(params)
   end
 
   @doc """
   Counts total movies for pagination.
+  Only counts fully imported movies by default.
   """
   def count_movies(_params \\ %{}) do
-    Repo.aggregate(Movie, :count, :id)
+    from(m in Movie, where: m.import_status == "full")
+    |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
+  Returns the list of soft imported movies.
+  These are movies that didn't meet quality criteria but are tracked.
+  """
+  def list_soft_imports(params \\ %{}) do
+    Movie
+    |> where([m], m.import_status == "soft")
+    |> apply_sorting(params)
+    |> paginate(params)
+  end
+
+  @doc """
+  Counts soft imported movies.
+  """
+  def count_soft_imports do
+    from(m in Movie, where: m.import_status == "soft")
+    |> Repo.aggregate(:count, :id)
   end
 
   # Sorting helper
@@ -156,6 +179,29 @@ defmodule Cinegraph.Movies do
       existing_movie ->
         existing_movie
         |> Movie.changeset(changeset.changes)
+        |> Repo.update()
+    end
+  end
+  
+  @doc """
+  Creates a soft import movie record with minimal data.
+  This is used for movies that don't meet quality criteria.
+  """
+  def create_soft_import_movie(tmdb_data) do
+    # Create movie with minimal data and soft import status
+    movie_attrs = 
+      Movie.from_tmdb(tmdb_data).changes
+      |> Map.put(:import_status, "soft")
+    
+    changeset = Movie.changeset(%Movie{}, movie_attrs)
+    
+    case get_movie_by_tmdb_id(tmdb_data["id"]) do
+      nil ->
+        Repo.insert(changeset)
+      existing_movie ->
+        # If movie exists but was soft imported, we could upgrade it later
+        existing_movie
+        |> Movie.changeset(%{import_status: "soft"})
         |> Repo.update()
     end
   end
@@ -309,33 +355,41 @@ defmodule Cinegraph.Movies do
 
   defp process_movie_credits(_movie, nil), do: :ok
   defp process_movie_credits(movie, %{"cast" => cast, "crew" => crew}) do
+    alias Cinegraph.Imports.QualityFilter
+    
     # Process cast
     Enum.each(cast, fn cast_member ->
-      with {:ok, person} <- create_or_update_person_from_tmdb(cast_member),
-           credit_attrs <- %{
-             movie_id: movie.id,
-             person_id: person.id,
-             credit_type: "cast",
-             character: cast_member["character"],
-             cast_order: cast_member["order"],
-             credit_id: cast_member["credit_id"]
-           } do
-        create_credit(credit_attrs)
+      # Check if person meets quality criteria
+      if QualityFilter.should_import_person?(cast_member) do
+        with {:ok, person} <- create_or_update_person_from_tmdb(cast_member),
+             credit_attrs <- %{
+               movie_id: movie.id,
+               person_id: person.id,
+               credit_type: "cast",
+               character: cast_member["character"],
+               cast_order: cast_member["order"],
+               credit_id: cast_member["credit_id"]
+             } do
+          create_credit(credit_attrs)
+        end
       end
     end)
 
     # Process crew
     Enum.each(crew, fn crew_member ->
-      with {:ok, person} <- create_or_update_person_from_tmdb(crew_member),
-           credit_attrs <- %{
-             movie_id: movie.id,
-             person_id: person.id,
-             credit_type: "crew",
-             department: crew_member["department"],
-             job: crew_member["job"],
-             credit_id: crew_member["credit_id"]
-           } do
-        create_credit(credit_attrs)
+      # Check if person meets quality criteria
+      if QualityFilter.should_import_person?(crew_member) do
+        with {:ok, person} <- create_or_update_person_from_tmdb(crew_member),
+             credit_attrs <- %{
+               movie_id: movie.id,
+               person_id: person.id,
+               credit_type: "crew",
+               department: crew_member["department"],
+               job: crew_member["job"],
+               credit_id: crew_member["credit_id"]
+             } do
+          create_credit(credit_attrs)
+        end
       end
     end)
 
