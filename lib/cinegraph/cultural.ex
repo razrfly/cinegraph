@@ -12,8 +12,12 @@ defmodule Cinegraph.Cultural do
     CuratedList,
     MovieListItem,
     MovieDataChange,
-    CRIScore
+    CRIScore,
+    OscarCeremony
   }
+  
+  alias Cinegraph.Scrapers.OscarScraper
+  require Logger
 
   # ========================================
   # CULTURAL AUTHORITIES
@@ -264,6 +268,266 @@ defmodule Cinegraph.Cultural do
       order_by: [desc: change.period_end]
     )
     |> Repo.all()
+  end
+
+  # ========================================
+  # OSCAR CEREMONIES
+  # ========================================
+  
+  @doc """
+  Returns the list of Oscar ceremonies.
+  """
+  def list_oscar_ceremonies do
+    Repo.all(from c in OscarCeremony, order_by: [desc: c.year])
+  end
+  
+  @doc """
+  Gets a single Oscar ceremony by year.
+  """
+  def get_oscar_ceremony_by_year(year) do
+    Repo.get_by(OscarCeremony, year: year)
+  end
+  
+  @doc """
+  Gets a single Oscar ceremony by ceremony number.
+  """
+  def get_oscar_ceremony_by_number(ceremony_number) do
+    Repo.get_by(OscarCeremony, ceremony_number: ceremony_number)
+  end
+  
+  @doc """
+  Creates or updates an Oscar ceremony.
+  """
+  def upsert_oscar_ceremony(attrs) do
+    case get_oscar_ceremony_by_year(attrs[:year] || attrs["year"]) do
+      nil ->
+        %OscarCeremony{}
+        |> OscarCeremony.changeset(attrs)
+        |> Repo.insert()
+      
+      existing ->
+        existing
+        |> OscarCeremony.changeset(attrs)
+        |> Repo.update()
+    end
+  end
+  
+  @doc """
+  Imports Oscar ceremony data from scraped content.
+  """
+  def import_oscar_ceremony(year) do
+    case Cinegraph.Scrapers.OscarScraper.fetch_ceremony(year) do
+      {:ok, ceremony_data} ->
+        attrs = %{
+          year: year,
+          ceremony_number: ceremony_data.ceremony_number,
+          ceremony_date: ceremony_data[:ceremony_date],
+          data: ceremony_data
+        }
+        
+        upsert_oscar_ceremony(attrs)
+        
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+  
+  @doc """
+  Imports Oscar ceremony data from HTML file.
+  """
+  def import_oscar_ceremony_from_file(file_path, year) do
+    with {:ok, html_content} <- Cinegraph.Scrapers.OscarScraper.load_html_from_file(file_path),
+         {:ok, ceremony_data} <- Cinegraph.Scrapers.OscarScraper.parse_ceremony_html(html_content, year) do
+      
+      attrs = %{
+        year: year,
+        ceremony_number: ceremony_data.ceremony_number,
+        ceremony_date: ceremony_data[:ceremony_date],
+        data: ceremony_data
+      }
+      
+      upsert_oscar_ceremony(attrs)
+    end
+  end
+  
+  @doc """
+  Import Oscar data for a specific year.
+  This fetches the ceremony, enhances with IMDb IDs, and imports all movies.
+  
+  ## Options
+    * `:create_movies` - whether to create new movie records (default: true)
+    * `:create_partial` - whether to create partial records for movies not in TMDb (default: false)
+    * `:queue_enrichment` - whether to queue OMDb enrichment jobs (default: true)
+  
+  ## Examples
+  
+      iex> Cinegraph.Cultural.import_oscar_year(2024)
+      {:ok, %{movies_created: 45, movies_updated: 78, ...}}
+      
+  """
+  def import_oscar_year(year, _options \\ []) do
+    Logger.info("Starting Oscar import for year #{year}")
+    
+    with {:ok, ceremony} <- fetch_or_create_ceremony(year) do
+      # Queue the discovery worker to process the ceremony
+      job_args = %{"ceremony_id" => ceremony.id}
+      
+      case Cinegraph.Workers.OscarDiscoveryWorker.new(job_args) |> Oban.insert() do
+        {:ok, job} ->
+          {:ok, %{
+            ceremony_id: ceremony.id,
+            year: year,
+            job_id: job.id,
+            status: :queued
+          }}
+          
+        {:error, reason} ->
+          Logger.error("Failed to queue Oscar discovery for year #{year}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    else
+      {:error, reason} -> 
+        Logger.error("Failed to prepare Oscar year #{year}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+  
+  @doc """
+  Import Oscar data for a range of years.
+  
+  By default, this queues jobs for parallel processing. Use `async: false` for sequential processing.
+  
+  ## Options
+    * `:async` - whether to use job queue (default: true)
+    * All other options are passed to `import_oscar_year/2`
+  
+  ## Examples
+  
+      # Queue jobs for parallel processing (default)
+      iex> Cinegraph.Cultural.import_oscar_years(2020..2024)
+      {:ok, %{years: 2020..2024, job_count: 5, status: :queued}}
+      
+      # Sequential processing
+      iex> Cinegraph.Cultural.import_oscar_years(2020..2024, async: false)
+      %{2020 => {:ok, %{...}}, 2021 => {:ok, %{...}}, ...}
+      
+  """
+  def import_oscar_years(start_year..end_year//_, options \\ []) do
+    {async, import_options} = Keyword.pop(options, :async, true)
+    
+    if async do
+      # Queue jobs for parallel processing
+      years = start_year..end_year |> Enum.to_list()
+      
+      jobs = Enum.map(years, fn year ->
+        %{year: year, options: import_options}
+        |> Cinegraph.Workers.OscarImportWorker.new()
+      end)
+      
+      # Insert jobs individually and collect results
+      results = Enum.map(jobs, &Oban.insert/1)
+      
+      successful_jobs = Enum.count(results, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
+      
+      if successful_jobs == length(years) do
+        {:ok, %{
+          years: start_year..end_year,
+          job_count: successful_jobs,
+          status: :queued
+        }}
+      else
+        {:error, "Failed to queue some jobs"}
+      end
+    else
+      # Sequential processing (original behavior)
+      start_year..end_year
+      |> Enum.map(fn year ->
+        {year, import_oscar_year(year, import_options)}
+      end)
+      |> Enum.into(%{})
+    end
+  end
+  
+  @doc """
+  Import all available Oscar years (2016-2024).
+  Note: Oscars.org has data from 2016 onwards in the current format.
+  
+  ## Examples
+  
+      iex> Cinegraph.Cultural.import_all_oscar_years()
+      %{2016 => {:ok, %{...}}, 2017 => {:ok, %{...}}, ...}
+      
+  """
+  def import_all_oscar_years(options \\ []) do
+    # Oscars.org has data from 2016 onwards in the current format
+    import_oscar_years(2016..2024, options)
+  end
+  
+  defp fetch_or_create_ceremony(year) do
+    case Repo.get_by(OscarCeremony, year: year) do
+      nil -> 
+        Logger.info("Fetching Oscar ceremony data for #{year}")
+        
+        case OscarScraper.fetch_ceremony(year) do
+          {:ok, data} ->
+            attrs = %{
+              year: year,
+              ceremony_number: calculate_ceremony_number(year),
+              data: data
+            }
+            
+            %OscarCeremony{}
+            |> OscarCeremony.changeset(attrs)
+            |> Repo.insert()
+            
+          {:error, reason} ->
+            {:error, reason}
+        end
+        
+      ceremony -> 
+        {:ok, ceremony}
+    end
+  end
+  
+  defp calculate_ceremony_number(year) do
+    # First ceremony was in 1929 for 1927-1928 films
+    year - 1927
+  end
+  
+  @doc """
+  Get the status of Oscar import jobs.
+  
+  ## Examples
+  
+      iex> Cinegraph.Cultural.get_oscar_import_status()
+      %{
+        running_jobs: 2,
+        queued_jobs: 3,
+        completed_jobs: 5,
+        failed_jobs: 0
+      }
+      
+  """
+  def get_oscar_import_status do
+    import Ecto.Query
+    
+    # Count jobs by state
+    job_counts = Oban.Job
+      |> where([j], j.worker == "Cinegraph.Workers.OscarImportWorker")
+      |> group_by([j], j.state)
+      |> select([j], {j.state, count(j.id)})
+      |> Repo.all()
+      |> Enum.into(%{})
+    
+    %{
+      running_jobs: Map.get(job_counts, "executing", 0),
+      queued_jobs: Map.get(job_counts, "available", 0) + Map.get(job_counts, "scheduled", 0),
+      completed_jobs: Map.get(job_counts, "completed", 0),
+      failed_jobs: Map.get(job_counts, "retryable", 0) + Map.get(job_counts, "discarded", 0)
+    }
   end
 
   # ========================================
