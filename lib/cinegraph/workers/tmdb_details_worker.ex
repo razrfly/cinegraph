@@ -22,7 +22,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   end
   
   # Handle IMDb ID lookup (e.g., from Oscar import)
-  def perform(%Oban.Job{args: %{"imdb_id" => imdb_id} = args}) do
+  def perform(%Oban.Job{args: %{"imdb_id" => imdb_id} = args} = job) do
     Logger.info("Processing movie details for IMDb ID #{imdb_id}")
     
     # Check if movie already exists by IMDb ID
@@ -36,11 +36,11 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
             Logger.info("Found TMDb ID #{tmdb_id} for IMDb ID #{imdb_id}")
             
             # Process the movie creation directly instead of recursive call
-            process_tmdb_movie(tmdb_id, args)
+            process_tmdb_movie(tmdb_id, args, job)
             
           {:ok, %{"movie_results" => []}} ->
             Logger.warning("No TMDb match for IMDb ID #{imdb_id}")
-            handle_no_tmdb_match(imdb_id, args)
+            handle_no_tmdb_match(imdb_id, args, job)
             
           {:error, reason} ->
             Logger.error("TMDb API error for IMDb ID #{imdb_id}: #{inspect(reason)}")
@@ -49,19 +49,35 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         
       existing_movie ->
         Logger.info("Movie already exists for IMDb ID #{imdb_id}: #{existing_movie.title}")
+        # Still need to add canonical sources if this is a canonical import
+        if args["source"] == "canonical_import" && args["canonical_sources"] do
+          canonical_sources = args["canonical_sources"]
+          Enum.each(canonical_sources, fn {source_key, canonical_data} ->
+            Logger.info("Adding canonical source #{source_key} to existing movie #{existing_movie.id}")
+            mark_movie_canonical(existing_movie.tmdb_id, source_key, canonical_data)
+          end)
+        end
         handle_post_creation_tasks(existing_movie.tmdb_id, args)
     end
   end
   
   def perform(%Oban.Job{args: %{"tmdb_id" => tmdb_id}} = job) do
     Logger.info("Processing movie details for TMDb ID #{tmdb_id}")
-    process_tmdb_movie(tmdb_id, job.args)
+    process_tmdb_movie(tmdb_id, job.args, job)
   end
   
-  defp process_tmdb_movie(tmdb_id, args) do
+  defp process_tmdb_movie(tmdb_id, args, job) do
     # Skip if already exists
     if Movies.movie_exists?(tmdb_id) do
-      Logger.info("Movie #{tmdb_id} already exists, skipping")
+      Logger.info("Movie #{tmdb_id} already exists, skipping creation")
+      # Still need to add canonical sources if this is a canonical import
+      if args["source"] == "canonical_import" && args["canonical_sources"] do
+        canonical_sources = args["canonical_sources"]
+        Enum.each(canonical_sources, fn {source_key, canonical_data} ->
+          Logger.info("Adding canonical source #{source_key} to existing movie with TMDb ID #{tmdb_id}")
+          mark_movie_canonical(tmdb_id, source_key, canonical_data)
+        end)
+      end
       handle_post_creation_tasks(tmdb_id, args)
     else
       # First, get basic movie info to evaluate quality
@@ -71,13 +87,13 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
           case QualityFilter.evaluate_movie(movie_data) do
             {:full_import, met_criteria} ->
               Logger.info("Movie #{movie_data["title"]} meets quality criteria: #{inspect(met_criteria)}")
-              result = perform_full_import(tmdb_id, movie_data)
+              result = perform_full_import(tmdb_id, movie_data, job)
               handle_post_creation_tasks(tmdb_id, args)
               result
               
             {:soft_import, failed_criteria} ->
               Logger.info("Movie #{movie_data["title"]} failed quality criteria: #{inspect(failed_criteria)}")
-              result = perform_soft_import(tmdb_id, movie_data)
+              result = perform_soft_import(tmdb_id, movie_data, failed_criteria, job)
               handle_post_creation_tasks(tmdb_id, args)
               result
           end
@@ -89,7 +105,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     end
   end
   
-  defp perform_full_import(tmdb_id, _basic_data) do
+  defp perform_full_import(tmdb_id, _basic_data, job) do
     # Fetch and store comprehensive movie data with all relationships
     case Movies.fetch_and_store_movie_comprehensive(tmdb_id) do
       {:ok, movie} ->
@@ -105,6 +121,18 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         # Queue collaboration building
         queue_collaboration_building(movie)
         
+        # Update job metadata
+        update_job_meta(job, %{
+          status: "imported",
+          import_type: "full",
+          movie_id: movie.id,
+          movie_title: movie.title,
+          imdb_id: movie.imdb_id,
+          tmdb_id: movie.tmdb_id,
+          enrichment_queued: not is_nil(movie.imdb_id),
+          collaboration_queued: true
+        })
+        
         :ok
         
       {:error, reason} ->
@@ -113,14 +141,22 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     end
   end
   
-  defp perform_soft_import(tmdb_id, movie_data) do
+  defp perform_soft_import(tmdb_id, movie_data, failed_criteria, job) do
     # Create minimal movie record with basic data only
     case Movies.create_soft_import_movie(movie_data) do
       {:ok, movie} ->
         Logger.info("Successfully soft imported movie: #{movie.title} (#{movie.tmdb_id})")
         
-        # Track the soft import for analytics
-        track_soft_import(movie, movie_data)
+        # Update job metadata with soft import details
+        update_job_meta(job, %{
+          status: "imported",
+          import_type: "soft",
+          movie_id: movie.id,
+          movie_title: movie.title,
+          tmdb_id: movie.tmdb_id,
+          quality_criteria_failed: failed_criteria,
+          reason: "quality_criteria"
+        })
         
         :ok
         
@@ -165,25 +201,6 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     end
   end
   
-  defp track_soft_import(movie, movie_data) do
-    # Track why this movie was soft imported
-    analysis = QualityFilter.analyze_movie_failure(movie_data)
-    
-    Ecto.Multi.new()
-    |> Ecto.Multi.insert(:skipped_import, %Cinegraph.Imports.SkippedImport{
-      tmdb_id: movie.tmdb_id,
-      title: movie.title,
-      reason: "quality_criteria",
-      criteria_failed: analysis
-    })
-    |> Cinegraph.Repo.transaction()
-    |> case do
-      {:ok, _} -> :ok
-      {:error, _, _, _} -> 
-        Logger.warning("Failed to track soft import for movie #{movie.id}")
-        :ok
-    end
-  end
   
   defp handle_post_creation_tasks(tmdb_id, args) do
     Logger.info("Post-creation tasks for TMDb ID #{tmdb_id}, args: #{inspect(args)}")
@@ -303,24 +320,46 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
           
         movie ->
           current_sources = movie.canonical_sources || %{}
+          Logger.info("Current canonical sources for #{movie.title}: #{inspect(Map.keys(current_sources))}")
+          
+          if Map.has_key?(current_sources, source_key) do
+            Logger.warning("Movie #{movie.title} already has canonical source #{source_key}, updating...")
+          end
+          
           updated_sources = Map.put(current_sources, source_key, canonical_data)
+          Logger.info("Updating movie #{movie.id} with canonical source #{source_key}: #{inspect(canonical_data)}")
           
           case movie
                |> Movies.Movie.changeset(%{canonical_sources: updated_sources})
                |> Repo.update() do
-            {:ok, _updated_movie} ->
+            {:ok, updated_movie} ->
               Logger.info("Successfully marked #{movie.title} as canonical in #{source_key}")
+              # Verify the update
+              final_sources = updated_movie.canonical_sources || %{}
+              if Map.has_key?(final_sources, source_key) do
+                Logger.info("Verified: #{source_key} is now in canonical_sources")
+              else
+                Logger.error("ERROR: #{source_key} was NOT added to canonical_sources!")
+              end
               :ok
               
             {:error, changeset} ->
               Logger.error("Failed to mark #{movie.title} as canonical: #{inspect(changeset.errors)}")
+              # Queue a retry
+              Logger.info("Queueing retry for canonical source addition")
+              case Cinegraph.Workers.CanonicalRetryWorker.queue_retry(movie.id, source_key, canonical_data) do
+                {:ok, _job} ->
+                  Logger.info("Retry queued successfully")
+                {:error, reason} ->
+                  Logger.error("Failed to queue retry: #{inspect(reason)}")
+              end
               {:error, changeset}
           end
       end
     end)
   end
 
-  defp handle_no_tmdb_match(imdb_id, args) do
+  defp handle_no_tmdb_match(imdb_id, args, job) do
     # Extract relevant information based on source
     {title, year, source_key, metadata} = case args["source"] do
       "oscar_import" ->
@@ -346,34 +385,32 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         {"Unknown", nil, args["source"] || "unknown", %{}}
     end
     
-    # Create a skipped import record
-    skipped_attrs = %{
+    # Update job metadata with failure details
+    update_job_meta(job, %{
+      status: "failed",
+      failure_reason: "no_tmdb_match",
       imdb_id: imdb_id,
       title: title,
       year: year,
       source: args["source"] || "unknown",
       source_key: source_key,
-      reason: "no_tmdb_match",
       metadata: metadata
-    }
+    })
     
-    case Repo.insert(Cinegraph.Movies.FailedImdbLookup.changeset(%Cinegraph.Movies.FailedImdbLookup{}, skipped_attrs)) do
-      {:ok, skipped_import} ->
-        Logger.warning("Created skipped import record for '#{title}' (#{imdb_id}) - not found in TMDb")
-        # Return an error so the job fails and is visible in Oban
-        {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb - recorded as skipped import ##{skipped_import.id}"}
-        
-      {:error, changeset} ->
-        # If it's a duplicate constraint error, still fail the job
-        if Enum.any?(changeset.errors, fn {_field, {_msg, opts}} -> 
-          Keyword.get(opts, :constraint) == :unique 
-        end) do
-          Logger.info("Skipped import already recorded for #{imdb_id}")
-          {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb - already tracked as skipped"}
-        else
-          Logger.error("Failed to create skipped import record: #{inspect(changeset.errors)}")
-          {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb and failed to track: #{inspect(changeset.errors)}"}
-        end
-    end
+    Logger.warning("Movie '#{title}' (#{imdb_id}) not found in TMDb")
+    {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb"}
+  end
+  
+  defp update_job_meta(job, meta) do
+    import Ecto.Query
+    
+    from(j in "oban_jobs",
+      where: j.id == ^job.id,
+      update: [set: [meta: ^meta]]
+    )
+    |> Repo.update_all([])
+  rescue
+    error ->
+      Logger.warning("Failed to update job meta: #{inspect(error)}")
   end
 end
