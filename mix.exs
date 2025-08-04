@@ -63,7 +63,8 @@ defmodule Cinegraph.MixProject do
       {:httpoison, "~> 2.2"},
       {:oban, "~> 2.17"},
       {:oban_web, "~> 2.11"},
-      {:dotenvy, "~> 0.8.0"}
+      {:dotenvy, "~> 0.8.0"},
+      {:number, "~> 1.0"}
     ]
   end
 

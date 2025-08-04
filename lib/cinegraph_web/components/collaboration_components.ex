@@ -14,24 +14,10 @@ defmodule CinegraphWeb.CollaborationComponents do
   def humanize_strength(_), do: "Moderate"
   
   @doc """
-  Returns the ordinal suffix for a number (st, nd, rd, th)
-  """
-  def ordinal_suffix(n) when is_integer(n) do
-    cond do
-      rem(n, 100) in [11, 12, 13] -> "th"
-      rem(n, 10) == 1 -> "st"
-      rem(n, 10) == 2 -> "nd"
-      rem(n, 10) == 3 -> "rd"
-      true -> "th"
-    end
-  end
-  def ordinal_suffix(_), do: ""
-
-  @doc """
-  Formats a number with its ordinal suffix (1st, 2nd, 3rd, etc.)
+  Formats a number with its ordinal suffix (1st, 2nd, 3rd, etc.) using the Number library
   """
   def format_ordinal(n) when is_integer(n) do
-    "#{n}#{ordinal_suffix(n)}"
+    Number.Human.number_to_ordinal(n)
   end
   def format_ordinal(_), do: ""
 end
