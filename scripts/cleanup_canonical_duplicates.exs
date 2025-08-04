@@ -55,14 +55,16 @@ Enum.each(canonical_sources, fn source_key ->
         IO.puts("  Keeping: #{keep_movie.title} (ID: #{keep_movie.id}, votes: #{keep_movie.vote_count})")
         
         # Remove the canonical source from the duplicate movies
-        Enum.each(remove_movies, fn movie ->
-          IO.puts("  Removing from: #{movie.title} (ID: #{movie.id})")
-          
-          updated_sources = Map.delete(movie.canonical_sources || %{}, source_key)
-          
-          movie
-          |> Movie.changeset(%{canonical_sources: updated_sources})
-          |> Repo.update!()
+        Repo.transaction(fn ->
+          Enum.each(remove_movies, fn movie ->
+            IO.puts("  Removing from: #{movie.title} (ID: #{movie.id})")
+            
+            updated_sources = Map.delete(movie.canonical_sources || %{}, source_key)
+            
+            movie
+            |> Movie.changeset(%{canonical_sources: updated_sources})
+            |> Repo.update!()
+          end)
         end)
       end)
       
