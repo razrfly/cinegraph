@@ -29,6 +29,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:oscar_import_running, false)
       |> assign(:oscar_import_progress, nil)
       |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+      |> assign(:oscar_decades, generate_oscar_decades())
       |> load_data()
       |> schedule_refresh()
     
@@ -197,14 +198,18 @@ defmodule CinegraphWeb.ImportDashboardLive do
         %{"action" => "import_all_years"}
       
       String.contains?(year_range, "-") ->
-        [start_year, end_year] = String.split(year_range, "-")
-        %{"action" => "import_range", "start_year" => start_year, "end_year" => end_year}
+        [start_year_str, end_year_str] = String.split(year_range, "-")
+        case {Integer.parse(start_year_str), Integer.parse(end_year_str)} do
+          {{start_year, ""}, {end_year, ""}} ->
+            %{"action" => "import_range", "start_year" => start_year, "end_year" => end_year}
+          _ ->
+            {:error, :invalid_year_range}
+        end
       
       true ->
         case Integer.parse(year_range) do
           {year, ""} -> %{"action" => "import_single", "year" => year}
           _ -> 
-            # Return error to be handled below
             {:error, :invalid_year}
         end
     end
@@ -213,6 +218,10 @@ defmodule CinegraphWeb.ImportDashboardLive do
     case job_args do
       {:error, :invalid_year} ->
         socket = put_flash(socket, :error, "Invalid year format")
+        {:noreply, socket}
+        
+      {:error, :invalid_year_range} ->
+        socket = put_flash(socket, :error, "Invalid year range format")
         {:noreply, socket}
         
       _ ->
@@ -245,8 +254,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
       total_movies: Repo.aggregate(Movie, :count),
       movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count),
       movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count),
-      canonical_movies: Repo.aggregate(from(m in Movie, where: fragment("? \\?| array[?]", m.canonical_sources, ["1001_movies", "criterion"])), :count),
-      oscar_movies: Repo.aggregate(from(n in Cinegraph.Cultural.OscarNomination, select: count(n.movie_id, :distinct)), :count),
+      canonical_movies: Repo.aggregate(from(m in Movie, where: fragment("? \\?| array[?]", m.canonical_sources, ["1001_movies", "criterion", "sight_sound_critics_2022", "national_film_registry"])), :count),
+      oscar_movies: get_oscar_movies_count(),
       total_people: Repo.aggregate(Cinegraph.Movies.Person, :count),
       total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count),
       total_genres: Repo.aggregate(Cinegraph.Movies.Genre, :count),
@@ -254,6 +263,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
       unique_collaborations: Repo.aggregate(Cinegraph.Collaborations.Collaboration, :count),
       multi_collaborations: Repo.aggregate(from(c in Cinegraph.Collaborations.Collaboration, where: c.collaboration_count > 1), :count)
     }
+    
+    # Get canonical list stats
+    canonical_stats = get_canonical_list_stats()
     
     # Get Oban queue stats
     queue_stats = get_oban_stats()
@@ -264,10 +276,88 @@ defmodule CinegraphWeb.ImportDashboardLive do
     socket
     |> assign(:progress, progress)
     |> assign(:stats, stats)
+    |> assign(:canonical_stats, canonical_stats)
     |> assign(:queue_stats, queue_stats)
     |> assign(:import_rate, runtime_stats.movies_per_minute)
   end
   
+  defp get_oscar_movies_count do
+    # Count movies that have IMDb IDs matching those in Oscar ceremony data
+    # Since nominations haven't been processed into oscar_nominations table yet,
+    # we'll count from the JSON data in oscar_ceremonies
+    
+    # First try the oscar_nominations table (proper way)
+    nominations_count = Repo.aggregate(
+      from(n in Cinegraph.Cultural.OscarNomination, select: count(n.movie_id, :distinct)), 
+      :count
+    )
+    
+    if nominations_count > 0 do
+      nominations_count
+    else
+      # Fallback: count movies that exist in our database and match Oscar ceremony IMDb IDs
+      ceremony_imdb_ids = get_oscar_ceremony_imdb_ids()
+      
+      if length(ceremony_imdb_ids) > 0 do
+        Repo.aggregate(
+          from(m in Movie, where: m.imdb_id in ^ceremony_imdb_ids),
+          :count
+        )
+      else
+        0
+      end
+    end
+  end
+  
+  defp get_oscar_ceremony_imdb_ids do
+    # Extract all IMDb IDs from Oscar ceremony JSON data
+    case Repo.all(from(c in Cinegraph.Cultural.OscarCeremony, select: c.data, where: not is_nil(c.data))) do
+      [] -> []
+      ceremony_data_list ->
+        ceremony_data_list
+        |> Enum.flat_map(fn data ->
+          case data["categories"] do
+            nil -> []
+            categories when is_list(categories) ->
+              categories
+              |> Enum.flat_map(fn category ->
+                case category["nominees"] do
+                  nil -> []
+                  nominees when is_list(nominees) ->
+                    nominees
+                    |> Enum.filter(fn nominee -> is_binary(nominee["film_imdb_id"]) end)
+                    |> Enum.map(fn nominee -> nominee["film_imdb_id"] end)
+                  _ -> []
+                end
+              end)
+            _ -> []
+          end
+        end)
+        |> Enum.uniq()
+    end
+  end
+
+  defp get_canonical_list_stats do
+    alias Cinegraph.CanonicalLists
+    
+    # Get all canonical lists and their counts
+    CanonicalLists.all()
+    |> Enum.map(fn {list_key, config} ->
+      count = Repo.one(
+        from m in Movie,
+        where: fragment("? \\? ?", m.canonical_sources, ^list_key),
+        select: count(m.id)
+      )
+      
+      %{
+        key: list_key,
+        name: config.name,
+        count: count
+      }
+    end)
+    |> Enum.sort_by(& &1.count, :desc)  # Sort by count descending
+  end
+
   defp get_oban_stats do
     queues = [:tmdb_discovery, :tmdb_details, :omdb_enrichment, :collaboration, :imdb_scraping, :oscar_imports]
     
@@ -365,5 +455,24 @@ defmodule CinegraphWeb.ImportDashboardLive do
       %{year: year} -> "Importing Oscar data for #{year}..."
       _ -> "Processing Oscar import..."
     end
+  end
+
+  defp generate_oscar_decades do
+    current_year = Date.utc_today().year
+    current_decade_start = div(current_year, 10) * 10
+    start_decade = 1930  # First practical Oscar ceremony data available
+    
+    # Generate decades from start_decade to current_decade in reverse order (newest first)
+    current_decade_start
+    |> then(fn decade -> decade..start_decade//-10 end)
+    |> Enum.map(fn decade_start ->
+      decade_end = min(decade_start + 9, current_year)
+      decade_name = "#{decade_start}s"
+      
+      %{
+        value: "#{decade_start}-#{decade_end}",
+        label: "#{decade_name} (#{decade_start}-#{decade_end})"
+      }
+    end)
   end
 end
