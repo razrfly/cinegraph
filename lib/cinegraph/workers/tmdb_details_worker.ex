@@ -186,16 +186,23 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   end
   
   defp handle_post_creation_tasks(tmdb_id, args) do
+    Logger.info("Post-creation tasks for TMDb ID #{tmdb_id}, args: #{inspect(args)}")
+    
     # Handle any post-creation tasks for movies
     cond do
       # Oscar import - create nominations
       args["source"] == "oscar_import" && args["metadata"] ->
         metadata = args["metadata"]
+        Logger.info("Oscar import detected - metadata: #{inspect(metadata)}")
+        
         if metadata["ceremony_year"] && metadata["category"] do
           Logger.info("Creating Oscar nomination for movie with TMDb ID #{tmdb_id}")
-          create_oscar_nomination(tmdb_id, metadata)
+          result = create_oscar_nomination(tmdb_id, metadata)
+          Logger.info("Oscar nomination creation result: #{inspect(result)}")
+          result
         else
-          Logger.error("Invalid Oscar metadata: missing ceremony_year or category")
+          Logger.error("Invalid Oscar metadata: missing ceremony_year or category. Metadata: #{inspect(metadata)}")
+          {:error, :invalid_metadata}
         end
       
       # Canonical import - mark as canonical source  
@@ -209,27 +216,38 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       
       true ->
         # No special post-processing needed
+        Logger.debug("No post-processing needed for TMDb ID #{tmdb_id}, source: #{args["source"]}")
         :ok
     end
-    
-    :ok
   end
   
   defp create_oscar_nomination(tmdb_id, metadata) do
+    Logger.info("Creating Oscar nomination for TMDb ID #{tmdb_id} with metadata: #{inspect(metadata)}")
+    
     # Find the movie by TMDb ID
     case Repo.get_by(Movies.Movie, tmdb_id: tmdb_id) do
       nil ->
         Logger.error("Movie with TMDb ID #{tmdb_id} not found for Oscar nomination")
+        {:error, :movie_not_found}
         
       movie ->
+        Logger.info("Found movie: #{movie.title} (ID: #{movie.id})")
+        
         # Find the ceremony and category
         ceremony_year = metadata["ceremony_year"]
         category_name = metadata["category"]
         
+        Logger.info("Looking up ceremony year #{ceremony_year} and category '#{category_name}'")
+        
         ceremony = Repo.get_by(Cinegraph.Cultural.OscarCeremony, year: ceremony_year)
         category = Repo.get_by(Cinegraph.Cultural.OscarCategory, name: category_name)
         
+        Logger.info("Ceremony lookup result: #{inspect(ceremony)}")
+        Logger.info("Category lookup result: #{inspect(category)}")
+        
         if ceremony && category do
+          Logger.info("Both ceremony and category found, creating nomination...")
+          
           # Use insert with on_conflict option for idempotent operation
           attrs = %{
             ceremony_id: ceremony.id,
@@ -242,6 +260,8 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
               "person_imdb_ids" => []
             }
           }
+          
+          Logger.info("Nomination attributes: #{inspect(attrs)}")
 
           %Cinegraph.Cultural.OscarNomination{}
           |> Cinegraph.Cultural.OscarNomination.changeset(attrs)
@@ -250,13 +270,19 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
             conflict_target: [:ceremony_id, :category_id, :movie_id]
           )
           |> case do
-            {:ok, _} ->
-              Logger.info("Created Oscar nomination for #{movie.title} in #{category_name}")
+            {:ok, nomination} ->
+              Logger.info("Successfully created Oscar nomination for #{movie.title} in #{category_name} (ID: #{nomination.id})")
+              {:ok, nomination}
             {:error, changeset} ->
               Logger.error("Failed to create Oscar nomination: #{inspect(changeset.errors)}")
+              {:error, changeset}
           end
         else
-          Logger.error("Ceremony (#{ceremony_year}) or category (#{category_name}) not found")
+          ceremony_status = if ceremony, do: "found (ID: #{ceremony.id})", else: "NOT FOUND"
+          category_status = if category, do: "found (ID: #{category.id})", else: "NOT FOUND"
+          
+          Logger.error("Lookup failed - Ceremony (#{ceremony_year}): #{ceremony_status}, Category (#{category_name}): #{category_status}")
+          {:error, :lookup_failed}
         end
     end
   end

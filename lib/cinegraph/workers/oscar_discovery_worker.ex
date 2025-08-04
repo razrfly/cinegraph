@@ -72,6 +72,9 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
   defp process_category(category, ceremony) do
     category_name = category["category"]
     
+    # Ensure the category exists before processing nominees
+    ensure_category_exists(category_name)
+    
     category["nominees"]
     |> Enum.map(fn nominee ->
       process_nominee(nominee, category_name, ceremony)
@@ -199,16 +202,10 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
         imdb_id = hd(person_imdb_ids)
         case Repo.get_by(Person, imdb_id: imdb_id) do
           nil -> 
-            # Create a basic person record
-            attrs = %{
-              name: person_name,
-              imdb_id: imdb_id
-            }
-            
-            case Repo.insert(%Person{} |> Person.imdb_changeset(attrs)) do
-              {:ok, person} -> person.id
-              {:error, _} -> nil
-            end
+            # Skip person creation for now - we don't have TMDb ID
+            # Person will be created later when TMDb data is processed
+            Logger.debug("Skipping person creation for #{person_name} (#{imdb_id}) - no TMDb data")
+            nil
             
           person -> 
             person.id
@@ -220,6 +217,69 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
     end
   end
   
+  defp ensure_category_exists(category_name) do
+    case Repo.get_by(OscarCategory, name: category_name) do
+      nil ->
+        # Category doesn't exist - create it dynamically
+        Logger.info("Creating new Oscar category: #{category_name}")
+        
+        attrs = %{
+          name: category_name,
+          category_type: classify_category_type(category_name),
+          is_major: is_major_category?(category_name),
+          tracks_person: tracks_person?(category_name)
+        }
+        
+        case %OscarCategory{}
+             |> OscarCategory.changeset(attrs)
+             |> Repo.insert() do
+          {:ok, category} ->
+            Logger.info("Successfully created category: #{category_name}")
+            category
+          {:error, changeset} ->
+            Logger.error("Failed to create category #{category_name}: #{inspect(changeset.errors)}")
+            nil
+        end
+        
+      category ->
+        # Category already exists
+        category
+    end
+  end
+  
+  defp classify_category_type(category_name) do
+    cond do
+      String.contains?(category_name, ["Actor", "Actress", "Directing"]) -> "person"
+      String.contains?(category_name, ["Technical", "Sound", "Visual Effects", "Cinematography", "Editing", "Makeup", "Music", "Costume"]) -> "technical"
+      true -> "film"
+    end
+  end
+  
+  defp is_major_category?(category_name) do
+    major_categories = [
+      "Best Picture",
+      "Actor in a Leading Role", 
+      "Actress in a Leading Role",
+      "Actor in a Supporting Role",
+      "Actress in a Supporting Role", 
+      "Directing"
+    ]
+    
+    category_name in major_categories
+  end
+  
+  defp tracks_person?(category_name) do
+    person_categories = [
+      "Actor in a Leading Role",
+      "Actor in a Supporting Role", 
+      "Actress in a Leading Role",
+      "Actress in a Supporting Role",
+      "Directing"
+    ]
+    
+    category_name in person_categories
+  end
+
   defp summarize_results(results) do
     Enum.reduce(results, %{
       updated: 0,
