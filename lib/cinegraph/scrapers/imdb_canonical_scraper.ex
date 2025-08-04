@@ -120,15 +120,26 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
   
   @doc """
-  Convenience function to scrape the 1001 Movies list.
+  Scrape a canonical list by its key using the centralized configuration.
+  
+  ## Examples
+      scrape_list_by_key("1001_movies")
+      scrape_list_by_key("criterion")
   """
-  def scrape_1001_movies do
-    scrape_imdb_list(
-      "ls024863935", 
-      "1001_movies", 
-      "1001 Movies You Must See Before You Die",
-      %{"edition" => "2024"}
-    )
+  def scrape_list_by_key(list_key) when is_binary(list_key) do
+    case Cinegraph.CanonicalLists.get(list_key) do
+      {:ok, config} ->
+        scrape_imdb_list(
+          config.list_id,
+          config.source_key,
+          config.name,
+          config.metadata || %{}
+        )
+        
+      {:error, reason} ->
+        Logger.error("Failed to scrape list #{list_key}: #{reason}")
+        {:error, reason}
+    end
   end
   
   @doc """
@@ -979,9 +990,31 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   Discover all canonical source keys currently in the database.
   """
   def discover_canonical_sources do
-    # This would require a custom query to extract keys from JSONB
-    # For now, return common expected sources
-    ["1001_movies", "sight_sound", "criterion", "afi", "bfi"]
+    query = """
+    SELECT DISTINCT jsonb_object_keys(canonical_sources) as source_key
+    FROM movies
+    WHERE canonical_sources IS NOT NULL
+      AND jsonb_typeof(canonical_sources) = 'object'
+    """
+    
+    case Repo.query(query) do
+      {:ok, %{rows: rows}} -> 
+        # Extract the first (and only) element from each row
+        discovered_keys = Enum.map(rows, &List.first/1)
+        
+        # If no keys found, return default list
+        if length(discovered_keys) > 0 do
+          discovered_keys
+        else
+          # Fallback to common expected sources
+          ["1001_movies", "sight_sound", "criterion", "afi", "bfi"]
+        end
+        
+      {:error, reason} ->
+        Logger.warning("Failed to discover canonical sources: #{inspect(reason)}")
+        # Fallback to common expected sources
+        ["1001_movies", "sight_sound", "criterion", "afi", "bfi"]
+    end
   end
   
   @doc """

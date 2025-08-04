@@ -262,48 +262,89 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   end
   
   defp mark_movie_canonical(tmdb_id, source_key, metadata) do
-    case Repo.get_by(Movies.Movie, tmdb_id: tmdb_id) do
-      nil ->
-        Logger.error("Movie with TMDb ID #{tmdb_id} not found for canonical marking")
-        
-      movie ->
-        current_sources = movie.canonical_sources || %{}
-        
-        updated_sources = Map.put(current_sources, source_key, Map.merge(%{
-          "included" => true
-        }, metadata))
-        
-        case movie
-             |> Movies.Movie.changeset(%{canonical_sources: updated_sources})
-             |> Repo.update() do
-          {:ok, _updated_movie} ->
-            Logger.info("Successfully marked #{movie.title} as canonical in #{source_key}")
-            
-          {:error, changeset} ->
-            Logger.error("Failed to mark #{movie.title} as canonical: #{inspect(changeset.errors)}")
-        end
-    end
+    # Use a transaction to handle concurrent updates safely
+    canonical_data = Map.merge(%{"included" => true}, metadata)
+    
+    Repo.transaction(fn ->
+      case Repo.get_by(Movies.Movie, tmdb_id: tmdb_id) do
+        nil ->
+          Logger.error("Movie with TMDb ID #{tmdb_id} not found for canonical marking")
+          {:error, :not_found}
+          
+        movie ->
+          current_sources = movie.canonical_sources || %{}
+          updated_sources = Map.put(current_sources, source_key, canonical_data)
+          
+          case movie
+               |> Movies.Movie.changeset(%{canonical_sources: updated_sources})
+               |> Repo.update() do
+            {:ok, _updated_movie} ->
+              Logger.info("Successfully marked #{movie.title} as canonical in #{source_key}")
+              :ok
+              
+            {:error, changeset} ->
+              Logger.error("Failed to mark #{movie.title} as canonical: #{inspect(changeset.errors)}")
+              {:error, changeset}
+          end
+      end
+    end)
   end
 
   defp handle_no_tmdb_match(imdb_id, args) do
-    # For Oscar imports without TMDb match, we might want to track this
-    if args["source"] == "oscar_import" && args["metadata"] do
-      metadata = args["metadata"]
-      Logger.warning("Oscar nominee '#{metadata["film_title"]}' (#{imdb_id}) not found in TMDb")
-      # Could create a skipped import record here
+    # Extract relevant information based on source
+    {title, year, source_key, metadata} = case args["source"] do
+      "oscar_import" ->
+        if is_map(args["metadata"]) do
+          metadata = args["metadata"]
+          {metadata["film_title"], nil, "oscar", metadata}
+        else
+          {"Unknown", nil, "oscar", %{}}
+        end
+        
+      "canonical_import" ->
+        if is_map(args["canonical_source"]) do
+          canonical_source = args["canonical_source"]
+          source_key = canonical_source["source_key"]
+          metadata = canonical_source["metadata"] || %{}
+          scraped_title = metadata["scraped_title"] || "Unknown"
+          scraped_year = metadata["scraped_year"]
+          {scraped_title, scraped_year, source_key, metadata}
+        else
+          {"Unknown", nil, "canonical", %{}}
+        end
+        
+      _ ->
+        {"Unknown", nil, args["source"] || "unknown", %{}}
     end
     
-    # For canonical imports without TMDb match, log it  
-    if args["source"] == "canonical_import" && args["canonical_source"] do
-      canonical_source = args["canonical_source"]
-      source_key = canonical_source["source_key"]
-      metadata = canonical_source["metadata"]
-      scraped_title = metadata["scraped_title"] || "Unknown"
-      
-      Logger.warning("Canonical movie '#{scraped_title}' (#{imdb_id}) from #{source_key} not found in TMDb")
-      # Could create a skipped import record here for canonical movies too
-    end
+    # Create a skipped import record
+    skipped_attrs = %{
+      imdb_id: imdb_id,
+      title: title,
+      year: year,
+      source: args["source"] || "unknown",
+      source_key: source_key,
+      reason: "no_tmdb_match",
+      metadata: metadata
+    }
     
-    :ok
+    case Repo.insert(Cinegraph.Movies.FailedImdbLookup.changeset(%Cinegraph.Movies.FailedImdbLookup{}, skipped_attrs)) do
+      {:ok, skipped_import} ->
+        Logger.warning("Created skipped import record for '#{title}' (#{imdb_id}) - not found in TMDb")
+        # Return an error so the job fails and is visible in Oban
+        {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb - recorded as skipped import ##{skipped_import.id}"}
+        
+      {:error, changeset} ->
+        # If it's a duplicate constraint error, still fail the job
+        if Enum.any?(changeset.errors, fn {_field, {_msg, opts}} -> 
+          Keyword.get(opts, :constraint) == :unique 
+        end) do
+          Logger.info("Skipped import already recorded for #{imdb_id}")
+          {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb - already tracked as skipped"}
+        else
+          Logger.error("Failed to create skipped import record: #{inspect(changeset.errors)}")
+          {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb and failed to track: #{inspect(changeset.errors)}"}
+        end
+    end
   end
 end
