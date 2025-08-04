@@ -6,7 +6,12 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
   
   use Oban.Worker, 
     queue: :imdb_scraping,
-    max_attempts: 3
+    max_attempts: 3,
+    unique: [
+      keys: [:list_key],
+      period: 300,  # 5 minutes
+      states: [:available, :scheduled, :executing, :retryable]
+    ]
   
   alias Cinegraph.Workers.CanonicalPageWorker
   alias Cinegraph.Scrapers.ImdbCanonicalScraper

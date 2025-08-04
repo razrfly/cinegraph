@@ -34,6 +34,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
               year: year,
               job_id: result.job_id,
               ceremony_id: result.ceremony_id,
+              jobs_queued: 1,
               status: "Queued Oscar discovery job for #{year}"
             })
             
@@ -89,6 +90,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
               year: year,
               job_id: result.job_id,
               ceremony_id: result.ceremony_id,
+              jobs_queued: 1,
               status: "Queued Oscar discovery job for #{year}"
             })
             
