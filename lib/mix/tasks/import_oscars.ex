@@ -173,7 +173,8 @@ defmodule Mix.Tasks.ImportOscars do
   end
   
   defp show_year_preview(year) do
-    ceremony_number = year - 1927
+    # First ceremony was in 1929 (for 1927-1928 films), so 1929 - 1928 = 1
+    ceremony_number = year - 1928
     Mix.shell().info("  • Year #{year} (#{Number.Human.number_to_ordinal(ceremony_number)} Academy Awards)")
     Mix.shell().info("    URL: https://www.oscars.org/oscars/ceremonies/#{year}")
   end
