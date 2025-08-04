@@ -38,22 +38,8 @@ defmodule Mix.Tasks.ImportCanonical do
       
   """
   
-  # Predefined canonical lists
-  @predefined_lists %{
-    "1001_movies" => %{
-      list_id: "ls024863935",
-      source_key: "1001_movies",
-      name: "1001 Movies You Must See Before You Die",
-      metadata: %{"edition" => "2024"}
-    }
-    # Add more predefined lists here as they're discovered
-    # "sight_sound" => %{
-    #   list_id: "ls123456789",
-    #   source_key: "sight_sound",
-    #   name: "Sight & Sound Greatest Films of All Time",
-    #   metadata: %{"edition" => "2022"}
-    # }
-  }
+  # Get lists from centralized configuration
+  defp predefined_lists, do: Cinegraph.CanonicalLists.all()
   
   def run(args) do
     # Start the application
@@ -96,10 +82,10 @@ defmodule Mix.Tasks.ImportCanonical do
   end
   
   defp import_predefined_list(list_key, options, dry_run) do
-    case Map.get(@predefined_lists, list_key) do
+    case Map.get(predefined_lists(), list_key) do
       nil ->
         Mix.shell().error("Unknown list: #{list_key}")
-        Mix.shell().info("Available lists: #{Map.keys(@predefined_lists) |> Enum.join(", ")}")
+        Mix.shell().info("Available lists: #{Map.keys(predefined_lists()) |> Enum.join(", ")}")
         
       list_config ->
         Mix.shell().info("#{if dry_run, do: "[DRY RUN] ", else: ""}Importing #{list_config.name}...")
@@ -145,11 +131,11 @@ defmodule Mix.Tasks.ImportCanonical do
     Mix.shell().info("#{if dry_run, do: "[DRY RUN] ", else: ""}Importing all predefined canonical lists...")
     
     if dry_run do
-      Enum.each(@predefined_lists, fn {_key, config} ->
+      Enum.each(predefined_lists(), fn {_key, config} ->
         show_list_preview(config)
       end)
     else
-      list_configs = Map.values(@predefined_lists)
+      list_configs = Map.values(predefined_lists())
       
       results = Cinegraph.Cultural.CanonicalImporter.import_multiple_lists(list_configs, options)
       

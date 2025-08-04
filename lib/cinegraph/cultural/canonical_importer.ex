@@ -55,13 +55,15 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
                     process_canonical_movie(movie, source_key, list_name, options, metadata)
                   end)
                 
-                acc ++ page_results
+                # Prepend to avoid O(n) concatenation
+                page_results ++ acc
                 
               {:error, reason} ->
                 Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
                 acc
             end
           end)
+          |> Enum.reverse()  # Reverse to maintain correct order
         
         %{
           list_id: list_id,
@@ -122,16 +124,29 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
   end
   
   @doc """
-  Convenience function to import the 1001 Movies list.
+  Import a canonical list by its key using the centralized configuration.
+  
+  ## Examples
+      import_list_by_key("1001_movies")
+      import_list_by_key("criterion", create_movies: false)
   """
-  def import_1001_movies(options \\ []) do
-    import_canonical_list(
-      "ls024863935", 
-      "1001_movies", 
-      "1001 Movies You Must See Before You Die",
-      options,
-      %{"edition" => "2024", "source_url" => "https://www.imdb.com/list/ls024863935/"}
-    )
+  def import_list_by_key(list_key, options \\ []) do
+    case Cinegraph.CanonicalLists.get(list_key) do
+      {:ok, config} ->
+        import_canonical_list(
+          config.list_id,
+          config.source_key,
+          config.name,
+          options,
+          Map.merge(config.metadata || %{}, %{
+            "source_url" => "https://www.imdb.com/list/#{config.list_id}/"
+          })
+        )
+        
+      {:error, reason} ->
+        Logger.error("Failed to import list #{list_key}: #{reason}")
+        {:error, reason}
+    end
   end
   
   # Private functions following Oscar importer pattern

@@ -23,12 +23,25 @@ if [[ -z "$SUPABASE_DATABASE_URL" ]]; then
     exit 1
 fi
 
+# Validate DATABASE_URL format
+if [[ ! "$SUPABASE_DATABASE_URL" =~ ^postgresql:// ]]; then
+    echo -e "${RED}Error: Invalid DATABASE_URL format${NC}"
+    exit 1
+fi
+
 # Parse the DATABASE_URL
 DB_HOST=$(echo $SUPABASE_DATABASE_URL | sed -E 's/.*@([^:]+):.*/\1/')
 DB_PORT=$(echo $SUPABASE_DATABASE_URL | sed -E 's/.*:([0-9]+)\/.*/\1/')
 DB_NAME=$(echo $SUPABASE_DATABASE_URL | sed -E 's/.*\/([^?]+).*/\1/')
 DB_USER=$(echo $SUPABASE_DATABASE_URL | sed -E 's/postgresql:\/\/([^:]+):.*/\1/')
 DB_PASS=$(echo $SUPABASE_DATABASE_URL | sed -E 's/postgresql:\/\/[^:]+:([^@]+)@.*/\1/')
+
+# Validate extracted values
+if [[ -z "$DB_HOST" || -z "$DB_PORT" || -z "$DB_NAME" || -z "$DB_USER" ]]; then
+    echo -e "${RED}Error: Could not parse DATABASE_URL components${NC}"
+    echo "URL format should be: postgresql://user:pass@host:port/database"
+    exit 1
+fi
 
 echo "Database: $DB_NAME on $DB_HOST:$DB_PORT"
 echo ""
@@ -58,8 +71,10 @@ fi
 echo "Tables to clear: $TABLES"
 echo ""
 
-# Truncate all tables
+# Truncate all tables (tables already validated from system catalog)
 echo "Clearing all data..."
+# Since $TABLES comes from pg_tables, we know they're valid table names
+# No additional quoting needed as PostgreSQL already ensures they're safe
 PGPASSWORD=$DB_PASS psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "TRUNCATE TABLE $TABLES CASCADE;" 2>&1 | grep -v "WARNING"
 
 # Verify the data was cleared

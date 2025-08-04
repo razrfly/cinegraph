@@ -20,8 +20,10 @@ case HTTPoison.get(url, headers, timeout: 60_000, recv_timeout: 60_000) do
     Logger.info("Successfully fetched HTML (#{byte_size(body)} bytes)")
     
     # Save HTML to file for inspection
-    File.write!("imdb_list_sample.html", body)
-    Logger.info("Saved HTML to imdb_list_sample.html")
+    case File.write("imdb_list_sample.html", body) do
+      :ok -> Logger.info("Saved HTML to imdb_list_sample.html")
+      {:error, reason} -> Logger.error("Failed to save HTML: #{inspect(reason)}")
+    end
     
     # Parse with Floki and examine structure
     document = Floki.parse_document!(body)
