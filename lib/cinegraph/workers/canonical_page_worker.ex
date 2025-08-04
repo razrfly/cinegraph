@@ -6,7 +6,12 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
   
   use Oban.Worker, 
     queue: :imdb_scraping,
-    max_attempts: 3
+    max_attempts: 3,
+    unique: [
+      keys: [:list_key, :page],
+      period: :infinity,
+      states: [:available, :scheduled, :executing, :retryable]
+    ]
   
   alias Cinegraph.Scrapers.ImdbCanonicalScraper
   alias Cinegraph.Movies
@@ -15,7 +20,7 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
   require Logger
   
   @impl Oban.Worker
-  def perform(%Oban.Job{args: args}) do
+  def perform(%Oban.Job{args: args} = job) do
     %{
       "list_id" => list_id,
       "page" => page,
@@ -72,14 +77,21 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
         # Check if this was the last page
         check_completion(list_key, list_name, page, total_pages)
         
-        # Return with metadata about movies processed
-        {:ok, %{
+        # Save job metadata
+        job_meta = %{
           page: page,
           movies_found: length(movies),
           movies_queued: queued,
           movies_updated: updated,
-          movies_skipped: skipped
-        }}
+          movies_skipped: skipped,
+          movies_created: created
+        }
+        
+        # Update the job's meta field
+        update_job_meta(job, job_meta)
+        
+        # Return success
+        :ok
         
       {:error, reason} ->
         Logger.error("Failed to process page #{page} for #{list_name}: #{inspect(reason)}")
@@ -132,16 +144,39 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
         end
         
       movie ->
-        # Movie exists - update canonical sources
-        Logger.info("Updating movie #{movie.id} with canonical source")
+        # Movie exists - check if already has this canonical source
+        existing_sources = movie.canonical_sources || %{}
         
-        updated_sources = Map.put(movie.canonical_sources || %{}, source_key, canonical_data)
-        
-        case Movies.update_movie(movie, %{canonical_sources: updated_sources}) do
-          {:ok, _updated} -> {:updated, movie.id}
-          {:error, changeset} ->
-            Logger.error("Failed to update movie: #{inspect(changeset)}")
+        if Map.has_key?(existing_sources, source_key) do
+          # Already has this source - check if position matches
+          existing_position = get_in(existing_sources, [source_key, "list_position"])
+          
+          if existing_position == position do
+            Logger.info("Movie #{movie.id} already has #{source_key} at position #{position}, skipping")
             {:skipped, movie.id}
+          else
+            Logger.warning("Movie #{movie.id} has #{source_key} but at different position (existing: #{existing_position}, new: #{position})")
+            # Update with new position
+            updated_sources = Map.put(existing_sources, source_key, canonical_data)
+            
+            case Movies.update_movie(movie, %{canonical_sources: updated_sources}) do
+              {:ok, _updated} -> {:updated, movie.id}
+              {:error, changeset} ->
+                Logger.error("Failed to update movie: #{inspect(changeset)}")
+                {:skipped, movie.id}
+            end
+          end
+        else
+          # Doesn't have this source yet - add it
+          Logger.info("Adding #{source_key} to movie #{movie.id}")
+          updated_sources = Map.put(existing_sources, source_key, canonical_data)
+          
+          case Movies.update_movie(movie, %{canonical_sources: updated_sources}) do
+            {:ok, _updated} -> {:updated, movie.id}
+            {:error, changeset} ->
+              Logger.error("Failed to update movie: #{inspect(changeset)}")
+              {:skipped, movie.id}
+          end
         end
       end
     end
@@ -200,5 +235,21 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
         )
       end)
     end
+  end
+  
+  defp update_job_meta(job, meta) do
+    # Update the job record with the metadata
+    import Ecto.Query
+    
+    from(j in "oban_jobs",
+      where: j.id == ^job.id,
+      update: [set: [meta: ^meta]]
+    )
+    |> Repo.update_all([])
+    
+    Logger.debug("Updated job #{job.id} with meta: #{inspect(meta)}")
+  rescue
+    error ->
+      Logger.warning("Failed to update job meta: #{inspect(error)}")
   end
 end
