@@ -6,7 +6,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   use Oban.Worker, 
     queue: :tmdb_details,
     max_attempts: 5,
-    unique: [fields: [:args], keys: [:tmdb_id], period: 300]
+    unique: [fields: [:args], keys: [:tmdb_id, :imdb_id], period: 300]
     
   alias Cinegraph.{Repo, Movies}
   alias Cinegraph.Workers.{OMDbEnrichmentWorker, CollaborationWorker}
@@ -332,13 +332,12 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         end
         
       "canonical_import" ->
-        if is_map(args["canonical_source"]) do
-          canonical_source = args["canonical_source"]
-          source_key = canonical_source["source_key"]
-          metadata = canonical_source["metadata"] || %{}
-          scraped_title = metadata["scraped_title"] || "Unknown"
-          scraped_year = metadata["scraped_year"]
-          {scraped_title, scraped_year, source_key, metadata}
+        if is_map(args["canonical_sources"]) do
+          # Get the first canonical source (there should only be one)
+          {source_key, canonical_data} = args["canonical_sources"] |> Map.to_list() |> List.first()
+          scraped_title = canonical_data["scraped_title"] || "Unknown"
+          scraped_year = canonical_data["scraped_year"]
+          {scraped_title, scraped_year, source_key, canonical_data}
         else
           {"Unknown", nil, "canonical", %{}}
         end

@@ -550,10 +550,17 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       
       Logger.info("Found #{length(list_items)} potential movie items")
       
+      # Calculate base position based on page number
+      # Page 1: positions 1-250, Page 2: positions 251-500, etc.
+      base_position = (page - 1) * 250
+      
       movies = 
         list_items
         |> Enum.with_index(1)
-        |> Enum.map(fn {item, position} -> parse_movie_from_list_item(item, position) end)
+        |> Enum.map(fn {item, index} -> 
+          position = base_position + index
+          parse_movie_from_list_item(item, position) 
+        end)
         |> Enum.reject(&is_nil/1)
         |> Enum.uniq_by(& &1.imdb_id)  # Remove duplicates
       

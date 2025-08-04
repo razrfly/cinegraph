@@ -34,7 +34,7 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
   @major_categories @person_tracking_categories ++ ["Best Picture"]
   
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"ceremony_id" => ceremony_id}}) do
+  def perform(%Oban.Job{args: %{"ceremony_id" => ceremony_id}} = job) do
     case Repo.get(OscarCeremony, ceremony_id) do
       nil ->
         Logger.error("Ceremony #{ceremony_id} not found")
@@ -61,6 +61,15 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
         Logger.info("Total results from all categories: #{length(results)}")
         summary = summarize_results(results)
         Logger.info("Oscar discovery complete for #{ceremony.year}: #{inspect(summary)}")
+        
+        # Save job metadata
+        job_meta = Map.merge(summary, %{
+          ceremony_year: ceremony.year,
+          categories_processed: length(categories),
+          total_nominees: length(results)
+        })
+        
+        update_job_meta(job, job_meta)
         
         :ok
     end
@@ -662,5 +671,21 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
         Logger.error("Failed to queue fuzzy matched movie creation for #{film_title} (TMDb ID: #{tmdb_id}): #{inspect(reason)}")
         %{action: :error, reason: reason, title: film_title}
     end
+  end
+  
+  defp update_job_meta(job, meta) do
+    # Update the job record with the metadata
+    import Ecto.Query
+    
+    from(j in "oban_jobs",
+      where: j.id == ^job.id,
+      update: [set: [meta: ^meta]]
+    )
+    |> Repo.update_all([])
+    
+    Logger.debug("Updated job #{job.id} with meta: #{inspect(meta)}")
+  rescue
+    error ->
+      Logger.warning("Failed to update job meta: #{inspect(error)}")
   end
 end

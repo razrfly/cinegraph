@@ -14,8 +14,7 @@ defmodule Cinegraph.Services.OMDb.Transformer do
   def get_or_create_source! do
     case Repo.get_by(Source, name: "OMDb") do
       nil ->
-        %Source{}
-        |> Source.changeset(%{
+        attrs = %{
           name: "OMDb",
           source_type: "api",
           base_url: "http://www.omdbapi.com",
@@ -26,8 +25,18 @@ defmodule Cinegraph.Services.OMDb.Transformer do
             "tier" => "free",
             "includes" => ["imdb", "rotten_tomatoes", "metacritic"]
           }
-        })
-        |> Repo.insert!()
+        }
+        
+        %Source{}
+        |> Source.changeset(attrs)
+        |> Repo.insert(on_conflict: :nothing, conflict_target: :name)
+        |> case do
+          {:ok, source} -> 
+            source
+          {:error, _} ->
+            # Another process created it, fetch it
+            Repo.get_by!(Source, name: "OMDb")
+        end
       
       source -> source
     end

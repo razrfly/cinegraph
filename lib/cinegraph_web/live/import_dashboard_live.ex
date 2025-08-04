@@ -166,6 +166,36 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
   
   @impl true
+  def handle_event("import_canonical_list", %{"list_key" => "all"}, socket) do
+    # Queue imports for all canonical lists
+    alias Cinegraph.CanonicalLists
+    
+    jobs = CanonicalLists.all()
+    |> Enum.map(fn {list_key, _config} ->
+      %{
+        "action" => "orchestrate_import",
+        "list_key" => list_key
+      }
+      |> Cinegraph.Workers.CanonicalImportOrchestrator.new()
+    end)
+    
+    # Insert all jobs
+    case Oban.insert_all(jobs) do
+      jobs_list when is_list(jobs_list) and length(jobs_list) > 0 ->
+        socket =
+          socket
+          |> put_flash(:info, "Queued import for all #{length(jobs_list)} canonical lists")
+          |> assign(:canonical_import_running, true)
+          |> assign(:canonical_import_progress, "Starting import of all lists...")
+        
+        {:noreply, socket}
+        
+      _ ->
+        socket = put_flash(socket, :error, "Failed to queue canonical imports")
+        {:noreply, socket}
+    end
+  end
+  
   def handle_event("import_canonical_list", %{"list_key" => list_key}, socket) do
     # Queue the canonical import orchestrator job
     %{
