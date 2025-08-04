@@ -206,13 +206,17 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         end
       
       # Canonical import - mark as canonical source  
-      args["source"] == "canonical_import" && args["canonical_source"] ->
-        canonical_source = args["canonical_source"]
-        source_key = canonical_source["source_key"]
-        metadata = canonical_source["metadata"]
+      args["source"] == "canonical_import" && args["canonical_sources"] ->
+        # canonical_sources is a map with source_key => canonical_data
+        canonical_sources = args["canonical_sources"]
         
-        Logger.info("Marking movie with TMDb ID #{tmdb_id} as canonical in #{source_key}")
-        mark_movie_canonical(tmdb_id, source_key, metadata)
+        # Process each canonical source (usually just one)
+        Enum.each(canonical_sources, fn {source_key, canonical_data} ->
+          Logger.info("Marking movie with TMDb ID #{tmdb_id} as canonical in #{source_key}")
+          mark_movie_canonical(tmdb_id, source_key, canonical_data)
+        end)
+        
+        :ok
       
       true ->
         # No special post-processing needed
