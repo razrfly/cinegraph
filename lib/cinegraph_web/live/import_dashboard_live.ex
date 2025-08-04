@@ -347,10 +347,10 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Get all canonical lists and their counts
     CanonicalLists.all()
     |> Enum.map(fn {list_key, config} ->
-      count = Repo.one(
-        from m in Movie,
-        where: fragment("? \\? ?", m.canonical_sources, ^list_key),
-        select: count(m.id)
+      # Use raw SQL to avoid Ecto escaping issues with the ? operator
+      {:ok, %{rows: [[count]]}} = Repo.query(
+        "SELECT COUNT(*) FROM movies WHERE canonical_sources ? $1",
+        [list_key]
       )
       
       %{
