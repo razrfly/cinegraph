@@ -171,8 +171,7 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
     if current_page == total_pages do
       # This was the last page - calculate totals
       Task.start(fn ->
-        # Wait a moment for all updates to complete
-        Process.sleep(1000)
+        # No need to wait - database queries will reflect current state
         
         # Count total canonical movies for this source
         import Ecto.Query

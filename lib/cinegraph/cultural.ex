@@ -438,7 +438,7 @@ defmodule Cinegraph.Cultural do
       years = start_year..end_year |> Enum.to_list()
       
       jobs = Enum.map(years, fn year ->
-        %{year: year, options: import_options}
+        %{year: year, options: Enum.into(import_options, %{})}
         |> Cinegraph.Workers.OscarImportWorker.new()
       end)
       

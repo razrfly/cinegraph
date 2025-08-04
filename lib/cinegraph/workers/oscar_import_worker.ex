@@ -11,6 +11,65 @@ defmodule Cinegraph.Workers.OscarImportWorker do
   require Logger
   
   @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"year" => year, "options" => options}}) do
+    year = ensure_integer(year)
+    Logger.info("Starting Oscar import for year #{year} (from Cultural module)")
+    
+    # Convert options map back to keyword list
+    import_options = Enum.map(options, fn {key, value} -> {String.to_atom(key), value} end)
+    
+    # Broadcast start
+    broadcast_progress(:single, :started, %{
+      year: year,
+      status: "Importing Oscar data for #{year}..."
+    })
+    
+    # Perform import
+    case Cultural.import_oscar_year(year, import_options) do
+      {:ok, result} ->
+        case result do
+          %{status: :queued} ->
+            # Job was queued, not processed directly
+            broadcast_progress(:single, :queued, %{
+              year: year,
+              job_id: result.job_id,
+              ceremony_id: result.ceremony_id,
+              status: "Queued Oscar discovery job for #{year}"
+            })
+            
+            Logger.info("Queued Oscar discovery job for #{year}: job_id=#{result.job_id}")
+            :ok
+            
+          %{movies_created: _} ->
+            # Direct processing results (has statistics)
+            broadcast_progress(:single, :completed, %{
+              year: year,
+              movies_created: result.movies_created,
+              movies_updated: result.movies_updated,
+              movies_queued: result.movies_queued,
+              movies_skipped: result.movies_skipped,
+              total_nominees: result.total_nominees
+            })
+            
+            Logger.info("Completed Oscar import for #{year}: #{result.total_nominees} nominees processed")
+            :ok
+            
+          _ ->
+            # Unknown result format
+            Logger.warning("Unexpected result format from Cultural.import_oscar_year: #{inspect(result)}")
+            broadcast_progress(:single, :completed, %{
+              year: year,
+              status: "Oscar import completed with unknown result format"
+            })
+            :ok
+        end
+        
+      {:error, reason} ->
+        Logger.error("Failed to import Oscar year #{year}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
   def perform(%Oban.Job{args: %{"action" => "import_single", "year" => year}}) do
     Logger.info("Starting Oscar import for year #{year}")
     
@@ -21,20 +80,44 @@ defmodule Cinegraph.Workers.OscarImportWorker do
     })
     
     # Perform import
-    case Cultural.import_oscar_year(year, create_movies: true) do
+    case Cultural.import_oscar_year(year, [create_movies: true]) do
       {:ok, result} ->
-        # Broadcast completion
-        broadcast_progress(:single, :completed, %{
-          year: year,
-          movies_created: result.movies_created,
-          movies_updated: result.movies_updated,
-          movies_queued: result.movies_queued,
-          movies_skipped: result.movies_skipped,
-          total_nominees: result.total_nominees
-        })
-        
-        Logger.info("Completed Oscar import for #{year}: #{result.total_nominees} nominees processed")
-        :ok
+        case result do
+          %{status: :queued} ->
+            # Job was queued, not processed directly
+            broadcast_progress(:single, :queued, %{
+              year: year,
+              job_id: result.job_id,
+              ceremony_id: result.ceremony_id,
+              status: "Queued Oscar discovery job for #{year}"
+            })
+            
+            Logger.info("Queued Oscar discovery job for #{year}: job_id=#{result.job_id}")
+            :ok
+            
+          %{movies_created: _} ->
+            # Direct processing results (has statistics)
+            broadcast_progress(:single, :completed, %{
+              year: year,
+              movies_created: result.movies_created,
+              movies_updated: result.movies_updated,
+              movies_queued: result.movies_queued,
+              movies_skipped: result.movies_skipped,
+              total_nominees: result.total_nominees
+            })
+            
+            Logger.info("Completed Oscar import for #{year}: #{result.total_nominees} nominees processed")
+            :ok
+            
+          _ ->
+            # Unknown result format
+            Logger.warning("Unexpected result format from Cultural.import_oscar_year: #{inspect(result)}")
+            broadcast_progress(:single, :completed, %{
+              year: year,
+              status: "Oscar import completed with unknown result format"
+            })
+            :ok
+        end
         
       {:error, reason} ->
         Logger.error("Failed to import Oscar year #{year}: #{inspect(reason)}")
@@ -56,7 +139,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
     })
     
     # Queue individual year jobs
-    case Cultural.import_oscar_years(start_year..end_year, create_movies: true) do
+    case Cultural.import_oscar_years(start_year..end_year, [create_movies: true]) do
       {:ok, %{job_count: count, status: :queued}} ->
         broadcast_progress(:range, :queued, %{
           start_year: start_year,
@@ -100,7 +183,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
     })
     
     # Import all years
-    case Cultural.import_all_oscar_years(create_movies: true) do
+    case Cultural.import_all_oscar_years([create_movies: true]) do
       {:ok, %{job_count: count, status: :queued}} ->
         broadcast_progress(:all, :queued, %{
           jobs_queued: count
