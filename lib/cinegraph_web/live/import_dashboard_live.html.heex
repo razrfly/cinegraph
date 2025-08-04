@@ -138,6 +138,19 @@
         </div>
       </div>
     <% end %>
+    
+    <!-- Canonical List Stats -->
+    <div class="mt-6 p-4 bg-gray-50 rounded">
+      <h3 class="text-lg font-medium text-gray-900 mb-3">List Statistics</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <%= for list_stat <- @canonical_stats do %>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-600"><%= list_stat.name %></span>
+            <span class="text-sm font-semibold text-gray-900"><%= format_number(list_stat.count) %> movies</span>
+          </div>
+        <% end %>
+      </div>
+    </div>
   </div>
 
   <!-- Oscar Import -->
@@ -147,18 +160,15 @@
     <form phx-submit="import_oscars" class="flex gap-4 items-end mb-4">
       <div class="flex-1">
         <label class="block text-sm font-medium text-gray-700 mb-1">
-          Select years to import
+          Select decades to import
         </label>
         <select name="year_range" required
                 class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">Select years...</option>
-          <option value="2024">2024 Only</option>
-          <option value="2023">2023 Only</option>
-          <option value="2022">2022 Only</option>
-          <option value="2021">2021 Only</option>
-          <option value="2020">2020 Only</option>
-          <option value="2020-2024">2020-2024</option>
-          <option value="all">All Years (2016-2024)</option>
+          <option value="">Select decades...</option>
+          <%= for decade <- @oscar_decades do %>
+            <option value={decade.value}><%= decade.label %></option>
+          <% end %>
+          <option value="all">All Available Years</option>
         </select>
       </div>
       <button type="submit" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
