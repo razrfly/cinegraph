@@ -45,22 +45,22 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
         |> CanonicalPageWorker.new()
       end)
       
-      # Insert all jobs - Oban.insert_all returns a list of jobs, not a tuple
-      case Oban.insert_all(jobs) do
-        jobs_list when is_list(jobs_list) ->
-          Logger.info("Successfully queued #{length(jobs_list)} page jobs for #{list_config.name}")
-          
-          broadcast_progress(list_key, :queued, %{
-            list_name: list_config.name,
-            pages_queued: length(jobs_list),
-            status: "#{length(jobs_list)} page jobs queued"
-          })
-          
-          :ok
-          
-        error ->
-          Logger.error("Failed to queue page jobs: #{inspect(error)}")
-          {:error, error}
+      # Insert all jobs
+      jobs_list = Oban.insert_all(jobs)
+      
+      if is_list(jobs_list) and length(jobs_list) > 0 do
+        Logger.info("Successfully queued #{length(jobs_list)} page jobs for #{list_config.name}")
+        
+        broadcast_progress(list_key, :queued, %{
+          list_name: list_config.name,
+          pages_queued: length(jobs_list),
+          status: "#{length(jobs_list)} page jobs queued"
+        })
+        
+        :ok
+      else
+        Logger.error("Failed to queue page jobs - no jobs inserted")
+        {:error, "No jobs inserted"}
       end
       
     else

@@ -63,4 +63,6 @@ total_failed = failed_lookups |> Enum.map(fn {_, _, count} -> count end) |> Enum
 IO.puts("\n=== Summary ===")
 IO.puts("Total canonical movies imported: #{total_canonical}")
 IO.puts("Total failed lookups: #{total_failed}")
-IO.puts("Success rate: #{Float.round(total_canonical / (total_canonical + total_failed) * 100, 2)}%")
+total = total_canonical + total_failed
+success_rate = if total > 0, do: Float.round(total_canonical / total * 100, 2), else: 0.0
+IO.puts("Success rate: #{success_rate}%")
