@@ -8,35 +8,19 @@ defmodule Cinegraph.Workers.CanonicalImportWorker do
     max_attempts: 3
   
   alias Cinegraph.Cultural.CanonicalImporter
+  alias Cinegraph.CanonicalLists
   require Logger
-  
-  # Predefined canonical lists
-  @lists %{
-    "1001_movies" => %{
-      list_id: "ls024863935",
-      source_key: "1001_movies", 
-      name: "1001 Movies You Must See Before You Die",
-      metadata: %{"edition" => "2024"}
-    }
-    # Future lists can be added here:
-    # "sight_sound" => %{
-    #   list_id: "ls123456789",
-    #   source_key: "sight_sound",
-    #   name: "Sight & Sound Greatest Films of All Time",
-    #   metadata: %{"edition" => "2022"}
-    # }
-  }
   
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "import_canonical_list", "list_key" => list_key}}) do
     Logger.info("Starting canonical import for #{list_key}")
     
-    case Map.get(@lists, list_key) do
-      nil ->
+    case CanonicalLists.get(list_key) do
+      {:error, reason} ->
         Logger.error("Unknown canonical list: #{list_key}")
-        {:error, "Unknown list: #{list_key}"}
+        {:error, reason}
         
-      list_config ->
+      {:ok, list_config} ->
         # Broadcast start of import
         broadcast_progress(list_key, :started, %{
           list_name: list_config.name,
@@ -70,7 +54,7 @@ defmodule Cinegraph.Workers.CanonicalImportWorker do
   
   # Get available lists for UI
   def available_lists do
-    @lists
+    CanonicalLists.all()
   end
   
   defp broadcast_progress(list_key, status, data) do

@@ -7,6 +7,8 @@ alias Cinegraph.Scrapers.ImdbCanonicalScraper
 
 # Test fetching pages until no more movies found
 defmodule PageTest do
+  # IMDb typically shows 250 movies per page, but this can vary
+  @movies_per_page 250
   def count_pages(list_id) do
     IO.puts("Checking pages for list #{list_id}...")
     count_pages_recursive(list_id, 1, 0)
@@ -24,7 +26,7 @@ defmodule PageTest do
     case fetch_and_count(url) do
       {:ok, count} when count > 0 ->
         IO.puts("#{count} movies (total so far: #{total_movies + count})")
-        if count >= 250 do
+        if count >= @movies_per_page do
           # Likely more pages
           count_pages_recursive(list_id, page + 1, total_movies + count)
         else

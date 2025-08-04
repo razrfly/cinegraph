@@ -8,7 +8,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   alias Cinegraph.Imports.TMDbImporter
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
-  alias Cinegraph.Workers.{CanonicalImportWorker, OscarImportWorker}
+  alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker}
   import Ecto.Query
   
   @refresh_interval 5000  # 5 seconds
@@ -28,7 +28,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:canonical_import_progress, nil)
       |> assign(:oscar_import_running, false)
       |> assign(:oscar_import_progress, nil)
-      |> assign(:canonical_lists, CanonicalImportWorker.available_lists())
+      |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
       |> load_data()
       |> schedule_refresh()
     
@@ -166,12 +166,12 @@ defmodule CinegraphWeb.ImportDashboardLive do
   
   @impl true
   def handle_event("import_canonical_list", %{"list_key" => list_key}, socket) do
-    # Queue the canonical import job
+    # Queue the canonical import orchestrator job
     %{
-      "action" => "import_canonical_list",
+      "action" => "orchestrate_import",
       "list_key" => list_key
     }
-    |> CanonicalImportWorker.new()
+    |> Cinegraph.Workers.CanonicalImportOrchestrator.new()
     |> Oban.insert()
     |> case do
       {:ok, _job} ->
@@ -201,26 +201,38 @@ defmodule CinegraphWeb.ImportDashboardLive do
         %{"action" => "import_range", "start_year" => start_year, "end_year" => end_year}
       
       true ->
-        %{"action" => "import_single", "year" => String.to_integer(year_range)}
+        case Integer.parse(year_range) do
+          {year, ""} -> %{"action" => "import_single", "year" => year}
+          _ -> 
+            # Return error to be handled below
+            {:error, :invalid_year}
+        end
     end
     
     # Queue the Oscar import job
-    job_args
-    |> OscarImportWorker.new()
-    |> Oban.insert()
-    |> case do
-      {:ok, _job} ->
-        socket =
-          socket
-          |> put_flash(:info, "Queued Oscar import")
-          |> assign(:oscar_import_running, true)
-          |> assign(:oscar_import_progress, "Starting import...")
-        
+    case job_args do
+      {:error, :invalid_year} ->
+        socket = put_flash(socket, :error, "Invalid year format")
         {:noreply, socket}
         
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to queue Oscar import: #{inspect(reason)}")
-        {:noreply, socket}
+      _ ->
+        job_args
+        |> OscarImportWorker.new()
+        |> Oban.insert()
+        |> case do
+          {:ok, _job} ->
+            socket =
+              socket
+              |> put_flash(:info, "Queued Oscar import")
+              |> assign(:oscar_import_running, true)
+              |> assign(:oscar_import_progress, "Starting import...")
+            
+            {:noreply, socket}
+            
+          {:error, reason} ->
+            socket = put_flash(socket, :error, "Failed to queue Oscar import: #{inspect(reason)}")
+            {:noreply, socket}
+        end
     end
   end
   
@@ -233,7 +245,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       total_movies: Repo.aggregate(Movie, :count),
       movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count),
       movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count),
-      canonical_movies: Repo.aggregate(from(m in Movie, where: fragment("? \\? ?", m.canonical_sources, "1001_movies")), :count),
+      canonical_movies: Repo.aggregate(from(m in Movie, where: fragment("? \\?| array[?]", m.canonical_sources, ["1001_movies", "criterion"])), :count),
       oscar_movies: Repo.aggregate(from(n in Cinegraph.Cultural.OscarNomination, select: count(n.movie_id, :distinct)), :count),
       total_people: Repo.aggregate(Cinegraph.Movies.Person, :count),
       total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count),
@@ -340,6 +352,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
   defp format_canonical_progress(progress) do
     case progress do
       %{status: status} when is_binary(status) -> status
+      %{progress_percent: percent} -> "Processing pages... #{percent}% complete"
+      %{pages_queued: pages} -> "Queued #{pages} page jobs"
       %{list_name: name} -> "Importing #{name}..."
       _ -> "Processing canonical list..."
     end
