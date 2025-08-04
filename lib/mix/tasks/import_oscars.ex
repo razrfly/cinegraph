@@ -174,7 +174,7 @@ defmodule Mix.Tasks.ImportOscars do
   
   defp show_year_preview(year) do
     ceremony_number = year - 1927
-    Mix.shell().info("  • Year #{year} (#{ceremony_number}#{ordinal_suffix(ceremony_number)} Academy Awards)")
+    Mix.shell().info("  • Year #{year} (#{Number.Human.number_to_ordinal(ceremony_number)} Academy Awards)")
     Mix.shell().info("    URL: https://www.oscars.org/oscars/ceremonies/#{year}")
   end
   
@@ -212,18 +212,4 @@ defmodule Mix.Tasks.ImportOscars do
     Mix.shell().info("  • Total movies updated: #{total_updated}")
   end
   
-  defp ordinal_suffix(number) do
-    case rem(number, 100) do
-      11 -> "th"
-      12 -> "th"
-      13 -> "th"
-      _ ->
-        case rem(number, 10) do
-          1 -> "st"
-          2 -> "nd"
-          3 -> "rd"
-          _ -> "th"
-        end
-    end
-  end
 end

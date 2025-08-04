@@ -44,6 +44,9 @@ defmodule Cinegraph.Movies.Movie do
     # Import tracking
     field :import_status, :string, default: "full"
     
+    # Canonical sources for backtesting (1001 Movies, Sight & Sound, etc.)
+    field :canonical_sources, :map, default: %{}
+    
     # Associations  
     has_many :movie_credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
     many_to_many :people, Cinegraph.Movies.Person, join_through: Cinegraph.Movies.Credit
@@ -76,7 +79,7 @@ defmodule Cinegraph.Movies.Movie do
       :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
       :adult, :homepage, :collection_id, :poster_path, :backdrop_path, :vote_average,
       :vote_count, :popularity, :tmdb_data, :omdb_data, :awards_text, :awards,
-      :box_office_domestic, :origin_country, :import_status
+      :box_office_domestic, :origin_country, :import_status, :canonical_sources
     ])
     |> validate_required([:title])
     |> unique_constraint(:tmdb_id)
@@ -146,5 +149,36 @@ defmodule Cinegraph.Movies.Movie do
 
   def backdrop_url(%__MODULE__{backdrop_path: path}, size \\ "w1280") do
     image_url(path, size)
+  end
+
+  @doc """
+  Checks if a movie is in a canonical source (e.g., "1001_movies", "sight_and_sound")
+  """
+  def is_canonical?(%__MODULE__{canonical_sources: sources}, source_key \\ "1001_movies") do
+    case Map.get(sources || %{}, source_key) do
+      %{"included" => true} -> true
+      _ -> false
+    end
+  end
+
+  @doc """
+  Gets canonical metadata for a specific source
+  """
+  def canonical_metadata(%__MODULE__{canonical_sources: sources}, source_key) do
+    Map.get(sources || %{}, source_key, %{})
+  end
+
+  @doc """
+  Checks if movie is canonical in any source
+  """
+  def is_canonical_any?(%__MODULE__{canonical_sources: sources}) do
+    sources != %{} && sources != nil
+  end
+
+  @doc """
+  Lists all canonical sources for this movie
+  """
+  def canonical_source_keys(%__MODULE__{canonical_sources: sources}) do
+    Map.keys(sources || %{})
   end
 end

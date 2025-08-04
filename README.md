@@ -235,16 +235,30 @@ For development and testing, use the direct import scripts:
 ./scripts/import_with_env.sh --pages 10
 ```
 
+#### Clearing Database Data
+
+Since we use Supabase's default `postgres` database, we can't drop it directly. Use our helper script to clear all data:
+
+```bash
+# Clear all data from the database (keeps schema/migrations)
+./scripts/clear_database.sh
+
+# This script will:
+# 1. Attempt to close idle connections
+# 2. Find all tables (except schema_migrations)
+# 3. TRUNCATE all tables with CASCADE
+# 4. Verify the database is empty
+```
+
+**Note**: This is much faster than drop/create and preserves your migrations. We use this frequently during development and testing.
+
 #### Complete Reset and Import
 ```bash
-# Drop database, recreate, and import 200 movies
-./scripts/import_with_env.sh --reset --pages 10
+# Clear database and import 200 movies
+./scripts/clear_database.sh && ./scripts/import_with_env.sh --pages 10
 
-# The --reset flag performs:
-# 1. mix ecto.drop (removes the database)
-# 2. mix ecto.create (creates fresh database)
-# 3. mix ecto.migrate (runs all migrations)
-# 4. Imports the specified number of pages
+# For a full reset including migrations (rarely needed):
+./scripts/import_with_env.sh --reset --pages 10
 ```
 
 #### Import Specific Movies
@@ -626,6 +640,24 @@ If using Supabase local development:
 supabase start
 # Check status
 supabase status
+```
+
+#### "Cannot Drop Database" Errors
+When trying to drop the database with `mix ecto.drop`, you might see:
+```
+ERROR 55006 (object_in_use) cannot drop the currently open database
+```
+
+This happens because:
+1. We use Supabase's default `postgres` database which can't be dropped
+2. There might be active connections from ElixirLS, IEx sessions, or the Phoenix server
+
+**Solution**: Use our database clearing script instead:
+```bash
+# Clear all data (much faster than drop/create)
+./scripts/clear_database.sh
+
+# This preserves your schema/migrations and just clears the data
 ```
 
 ---
