@@ -36,6 +36,19 @@ defmodule Cinegraph.CanonicalLists do
         "reliability" => "95%",
         "note" => "Updated annually after official announcements"
       }
+    },
+    "cannes_winners" => %{
+      list_id: "ls527026601",
+      source_key: "cannes_winners",
+      name: "Cannes Film Festival Award Winners: 2023-1939",
+      metadata: %{
+        "festival" => "Cannes Film Festival",
+        "source" => "IMDB User List",
+        "awards_included" => "Palme d'Or, Grand Prix, Jury Prize, Caméra d'Or, Best Director, Best Actor, Best Actress",
+        "data_extraction" => "Enhanced extraction required for award details",
+        "reliability" => "85%",
+        "note" => "Winners only - no nominees. Award details mixed in descriptions."
+      }
     }
   }
 

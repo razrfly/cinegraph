@@ -188,6 +188,19 @@
         </div>
       </div>
     <% end %>
+    
+    <!-- Academy Awards Statistics -->
+    <div class="mt-6 p-4 bg-gray-50 rounded">
+      <h3 class="text-lg font-medium text-gray-900 mb-3">Academy Awards Statistics</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <%= for oscar_stat <- @oscar_stats do %>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-600"><%= oscar_stat.label %></span>
+            <span class="text-sm font-semibold text-gray-900"><%= oscar_stat.value %></span>
+          </div>
+        <% end %>
+      </div>
+    </div>
   </div>
 
   <!-- Database Stats -->

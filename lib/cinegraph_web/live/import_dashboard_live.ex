@@ -267,6 +267,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Get canonical list stats
     canonical_stats = get_canonical_list_stats()
     
+    # Get Oscar statistics
+    oscar_stats = get_oscar_stats()
+    
     # Get Oban queue stats
     queue_stats = get_oban_stats()
     
@@ -277,6 +280,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:progress, progress)
     |> assign(:stats, stats)
     |> assign(:canonical_stats, canonical_stats)
+    |> assign(:oscar_stats, oscar_stats)
     |> assign(:queue_stats, queue_stats)
     |> assign(:import_rate, runtime_stats.movies_per_minute)
   end
@@ -356,6 +360,43 @@ defmodule CinegraphWeb.ImportDashboardLive do
       }
     end)
     |> Enum.sort_by(& &1.count, :desc)  # Sort by count descending
+  end
+
+  defp get_oscar_stats do
+    # Get ceremony years and their nomination/win counts
+    ceremony_stats = Repo.all(
+      from oc in Cinegraph.Cultural.OscarCeremony,
+      left_join: on_table in Cinegraph.Cultural.OscarNomination, on: on_table.ceremony_id == oc.id,
+      group_by: [oc.year, oc.id],
+      select: {oc.year, count(on_table.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", on_table.won))},
+      order_by: [desc: oc.year]
+    )
+    
+    # Calculate totals (ceremony_stats now returns tuples: {year, nominations, wins})
+    total_nominations = Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
+    total_wins = Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
+    total_ceremonies = length(ceremony_stats)
+    total_categories = Repo.aggregate(Cinegraph.Cultural.OscarCategory, :count)
+    
+    # Build stats list
+    base_stats = [
+      %{label: "Ceremonies Imported", value: "#{total_ceremonies} (2016-2024)"},
+      %{label: "Total Nominations", value: format_number(total_nominations)},
+      %{label: "Total Wins", value: format_number(total_wins)},
+      %{label: "Categories", value: format_number(total_categories)}
+    ]
+    
+    # Add year-by-year breakdown
+    year_stats = ceremony_stats
+    |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)  # Only show years with data
+    |> Enum.map(fn {year, nominations, wins} ->
+      %{
+        label: "#{year} Wins", 
+        value: "#{wins || 0}/#{nominations}"
+      }
+    end)
+    
+    base_stats ++ year_stats
   end
 
   defp get_oban_stats do
