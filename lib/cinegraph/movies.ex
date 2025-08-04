@@ -398,6 +398,54 @@ defmodule Cinegraph.Movies do
     end
   end
 
+  @doc """
+  Gets a movie by IMDb ID.
+  """
+  def get_movie_by_imdb_id(imdb_id) do
+    Repo.get_by(Movie, imdb_id: imdb_id)
+  end
+
+  @doc """
+  Counts movies that are canonical in a specific source.
+  """
+  def count_canonical_movies(source_key \\ "1001_movies") do
+    from(m in Movie, where: fragment("? \\? ?", m.canonical_sources, ^source_key))
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Counts movies that are canonical in any source.
+  """
+  def count_any_canonical_movies do
+    from(m in Movie, where: m.canonical_sources != ^%{})
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Gets all canonical movies for a specific source.
+  """
+  def list_canonical_movies(source_key \\ "1001_movies", params \\ %{}) do
+    Movie
+    |> where([m], fragment("? \\? ?", m.canonical_sources, ^source_key))
+    |> apply_sorting(params)
+    |> paginate(params)
+  end
+
+  @doc """
+  Updates canonical sources for a movie.
+  """
+  def update_canonical_sources(%Movie{} = movie, source_key, metadata) do
+    current_sources = movie.canonical_sources || %{}
+    
+    updated_sources = Map.put(current_sources, source_key, Map.merge(%{
+      "included" => true
+    }, metadata))
+    
+    movie
+    |> Movie.changeset(%{canonical_sources: updated_sources})
+    |> Repo.update()
+  end
+
   # Processing functions for comprehensive movie data
 
   defp process_movie_credits(_movie, nil), do: :ok

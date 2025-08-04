@@ -187,16 +187,31 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   
   defp handle_post_creation_tasks(tmdb_id, args) do
     # Handle any post-creation tasks for movies
-    # This is useful for Oscar imports where we need to create nominations
-    if args["source"] == "oscar_import" && args["metadata"] do
-      metadata = args["metadata"]
-      if metadata["ceremony_year"] && metadata["category"] do
-        Logger.info("Creating Oscar nomination for movie with TMDb ID #{tmdb_id}")
-        create_oscar_nomination(tmdb_id, metadata)
-      else
-        Logger.error("Invalid Oscar metadata: missing ceremony_year or category")
-      end
+    cond do
+      # Oscar import - create nominations
+      args["source"] == "oscar_import" && args["metadata"] ->
+        metadata = args["metadata"]
+        if metadata["ceremony_year"] && metadata["category"] do
+          Logger.info("Creating Oscar nomination for movie with TMDb ID #{tmdb_id}")
+          create_oscar_nomination(tmdb_id, metadata)
+        else
+          Logger.error("Invalid Oscar metadata: missing ceremony_year or category")
+        end
+      
+      # Canonical import - mark as canonical source  
+      args["source"] == "canonical_import" && args["canonical_source"] ->
+        canonical_source = args["canonical_source"]
+        source_key = canonical_source["source_key"]
+        metadata = canonical_source["metadata"]
+        
+        Logger.info("Marking movie with TMDb ID #{tmdb_id} as canonical in #{source_key}")
+        mark_movie_canonical(tmdb_id, source_key, metadata)
+      
+      true ->
+        # No special post-processing needed
+        :ok
     end
+    
     :ok
   end
   
@@ -246,6 +261,30 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     end
   end
   
+  defp mark_movie_canonical(tmdb_id, source_key, metadata) do
+    case Repo.get_by(Movies.Movie, tmdb_id: tmdb_id) do
+      nil ->
+        Logger.error("Movie with TMDb ID #{tmdb_id} not found for canonical marking")
+        
+      movie ->
+        current_sources = movie.canonical_sources || %{}
+        
+        updated_sources = Map.put(current_sources, source_key, Map.merge(%{
+          "included" => true
+        }, metadata))
+        
+        case movie
+             |> Movies.Movie.changeset(%{canonical_sources: updated_sources})
+             |> Repo.update() do
+          {:ok, _updated_movie} ->
+            Logger.info("Successfully marked #{movie.title} as canonical in #{source_key}")
+            
+          {:error, changeset} ->
+            Logger.error("Failed to mark #{movie.title} as canonical: #{inspect(changeset.errors)}")
+        end
+    end
+  end
+
   defp handle_no_tmdb_match(imdb_id, args) do
     # For Oscar imports without TMDb match, we might want to track this
     if args["source"] == "oscar_import" && args["metadata"] do
@@ -253,6 +292,18 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       Logger.warning("Oscar nominee '#{metadata["film_title"]}' (#{imdb_id}) not found in TMDb")
       # Could create a skipped import record here
     end
+    
+    # For canonical imports without TMDb match, log it  
+    if args["source"] == "canonical_import" && args["canonical_source"] do
+      canonical_source = args["canonical_source"]
+      source_key = canonical_source["source_key"]
+      metadata = canonical_source["metadata"]
+      scraped_title = metadata["scraped_title"] || "Unknown"
+      
+      Logger.warning("Canonical movie '#{scraped_title}' (#{imdb_id}) from #{source_key} not found in TMDb")
+      # Could create a skipped import record here for canonical movies too
+    end
+    
     :ok
   end
 end

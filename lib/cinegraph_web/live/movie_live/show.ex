@@ -1,6 +1,6 @@
 defmodule CinegraphWeb.MovieLive.Show do
   use CinegraphWeb, :live_view
-  import CinegraphWeb.CollaborationComponents, only: [format_ordinal: 1, ordinal_suffix: 1]
+  import CinegraphWeb.CollaborationComponents, only: [format_ordinal: 1]
 
   alias Cinegraph.Movies
   alias Cinegraph.Cultural

@@ -357,7 +357,7 @@
                   
                   <div class="text-right">
                     <span class="text-sm font-bold text-gray-700"><%= nomination.ceremony.year %></span>
-                    <p class="text-xs text-gray-500"><%= nomination.ceremony.ceremony_number %><%= ordinal_suffix(nomination.ceremony.ceremony_number) %> Ceremony</p>
+                    <p class="text-xs text-gray-500"><%= format_ordinal(nomination.ceremony.ceremony_number) %> Ceremony</p>
                   </div>
                 </div>
               </div>

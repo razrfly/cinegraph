@@ -71,7 +71,8 @@ config :cinegraph, Oban,
     media_processing: 10,   # Keywords, videos, etc.
     collaboration: 5,       # Collaboration processing
     movie_enrichment: 10,   # Movie enrichment from Oscar imports
-    oscar_imports: 3        # Oscar ceremony imports
+    oscar_imports: 3,       # Oscar ceremony imports
+    imdb_scraping: 5        # IMDb website scraping (canonical lists, user lists, etc.)
   ],
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7}, # Keep jobs for 7 days
