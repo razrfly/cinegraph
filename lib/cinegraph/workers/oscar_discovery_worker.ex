@@ -22,6 +22,16 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
   import Ecto.Query
   require Logger
   
+  @person_tracking_categories [
+    "Actor in a Leading Role",
+    "Actor in a Supporting Role", 
+    "Actress in a Leading Role",
+    "Actress in a Supporting Role",
+    "Directing"
+  ]
+  
+  @major_categories @person_tracking_categories ++ ["Best Picture"]
+  
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"ceremony_id" => ceremony_id}}) do
     case Repo.get(OscarCeremony, ceremony_id) do
@@ -35,11 +45,19 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
         ceremony = ensure_imdb_enhancement(ceremony)
         
         # Process each category
-        results = ceremony.data["categories"]
-        |> Enum.flat_map(fn category ->
-          process_category(category, ceremony)
+        categories = ceremony.data["categories"] || []
+        Logger.info("Processing #{length(categories)} categories for ceremony #{ceremony.year}")
+        
+        results = categories
+        |> Enum.with_index()
+        |> Enum.flat_map(fn {category, index} ->
+          Logger.info("Processing category #{index + 1}/#{length(categories)}: #{category["category"] || "Unknown"}")
+          category_results = process_category(category, ceremony)
+          Logger.info("Category #{index + 1} processed with #{length(category_results)} results")
+          category_results
         end)
         
+        Logger.info("Total results from all categories: #{length(results)}")
         summary = summarize_results(results)
         Logger.info("Oscar discovery complete for #{ceremony.year}: #{inspect(summary)}")
         
@@ -71,19 +89,31 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
   
   defp process_category(category, ceremony) do
     category_name = category["category"]
+    nominees = category["nominees"] || []
+    
+    Logger.info("Processing category '#{category_name}' with #{length(nominees)} nominees for ceremony #{ceremony.year}")
     
     # Ensure the category exists before processing nominees
     ensure_category_exists(category_name)
     
-    category["nominees"]
-    |> Enum.map(fn nominee ->
-      process_nominee(nominee, category_name, ceremony)
+    results = nominees
+    |> Enum.with_index()
+    |> Enum.map(fn {nominee, index} ->
+      Logger.info("Processing nominee #{index + 1}/#{length(nominees)} in #{category_name}: #{nominee["film"] || "Unknown"}")
+      result = process_nominee(nominee, category_name, ceremony)
+      Logger.info("Nominee #{index + 1} result: #{inspect(result)}")
+      result
     end)
+    
+    Logger.info("Completed processing category '#{category_name}' - Results summary: #{inspect(results)}")
+    results
   end
   
   defp process_nominee(nominee, category_name, ceremony) do
     film_imdb_id = nominee["film_imdb_id"]
     film_title = nominee["film"]
+    
+    Logger.info("Processing nominee: #{film_title} (IMDb: #{film_imdb_id}) in #{category_name} for #{ceremony.year}")
     
     cond do
       # Skip if no IMDb ID
@@ -93,25 +123,38 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
       
       # Process the movie
       true ->
-        process_movie_nominee(film_imdb_id, nominee, category_name, ceremony)
+        Logger.info("Processing movie nominee: #{film_title} (#{film_imdb_id})")
+        result = process_movie_nominee(film_imdb_id, nominee, category_name, ceremony)
+        Logger.info("Movie nominee processing result for #{film_title}: #{inspect(result)}")
+        result
     end
   end
   
   defp process_movie_nominee(imdb_id, nominee, category_name, ceremony) do
+    film_title = nominee["film"]
+    Logger.info("Checking if movie exists for IMDb ID #{imdb_id} (#{film_title})")
+    
     # Check if movie exists by IMDb ID
     existing_movie = Repo.get_by(Movie, imdb_id: imdb_id)
     
     if existing_movie do
       # Movie exists - just create/update nomination record
+      Logger.info("Movie #{film_title} (#{imdb_id}) already exists in database (ID: #{existing_movie.id})")
       create_nomination_record(existing_movie, nominee, category_name, ceremony)
       %{action: :updated, movie_id: existing_movie.id, title: existing_movie.title}
     else
       # Movie doesn't exist - queue creation via TMDb
-      queue_movie_creation(imdb_id, nominee, category_name, ceremony)
+      Logger.info("Movie #{film_title} (#{imdb_id}) does not exist - queuing for creation")
+      result = queue_movie_creation(imdb_id, nominee, category_name, ceremony)
+      Logger.info("Queue creation result for #{film_title} (#{imdb_id}): #{inspect(result)}")
+      result
     end
   end
   
   defp queue_movie_creation(imdb_id, nominee, category_name, ceremony) do
+    film_title = nominee["film"]
+    Logger.info("Creating job args for #{film_title} (#{imdb_id})")
+    
     # Queue TMDbDetailsWorker with IMDb ID
     # The details worker will handle the lookup and creation
     job_args = %{
@@ -125,19 +168,26 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
       }
     }
     
-    case job_args
+    Logger.info("Job args created for #{film_title}: #{inspect(job_args)}")
+    
+    Logger.info("Creating TMDbDetailsWorker job for #{film_title} (#{imdb_id})")
+    job_result = job_args
          |> TMDbDetailsWorker.new()
-         |> Oban.insert() do
+         |> Oban.insert()
+    
+    Logger.info("Oban.insert result for #{film_title}: #{inspect(job_result)}")
+    
+    case job_result do
       {:ok, job} ->
-        Logger.info("Queued movie creation for #{nominee["film"]} (#{imdb_id})")
+        Logger.info("Successfully queued movie creation for #{film_title} (#{imdb_id}) - Job ID: #{job.id}")
         
         # We'll create the nomination record later when the movie exists
         # For now, track that we queued it
-        %{action: :queued, imdb_id: imdb_id, title: nominee["film"], job_id: job.id}
+        %{action: :queued, imdb_id: imdb_id, title: film_title, job_id: job.id}
         
       {:error, reason} ->
-        Logger.error("Failed to queue movie creation: #{inspect(reason)}")
-        %{action: :error, reason: reason, title: nominee["film"]}
+        Logger.error("Failed to queue movie creation for #{film_title} (#{imdb_id}): #{inspect(reason)}")
+        %{action: :error, reason: reason, title: film_title}
     end
   end
   
@@ -249,35 +299,19 @@ defmodule Cinegraph.Workers.OscarDiscoveryWorker do
   
   defp classify_category_type(category_name) do
     cond do
-      String.contains?(category_name, ["Actor", "Actress", "Directing"]) -> "person"
+      String.contains?(category_name, ["Actor", "Actress", "Directing", "Writing", "Screenplay"]) -> "person"
       String.contains?(category_name, ["Technical", "Sound", "Visual Effects", "Cinematography", "Editing", "Makeup", "Music", "Costume"]) -> "technical"
       true -> "film"
     end
   end
   
   defp is_major_category?(category_name) do
-    major_categories = [
-      "Best Picture",
-      "Actor in a Leading Role", 
-      "Actress in a Leading Role",
-      "Actor in a Supporting Role",
-      "Actress in a Supporting Role", 
-      "Directing"
-    ]
-    
-    category_name in major_categories
+    category_name in @major_categories
   end
   
   defp tracks_person?(category_name) do
-    person_categories = [
-      "Actor in a Leading Role",
-      "Actor in a Supporting Role", 
-      "Actress in a Leading Role",
-      "Actress in a Supporting Role",
-      "Directing"
-    ]
-    
-    category_name in person_categories
+    category_name in @person_tracking_categories or
+      String.contains?(category_name, ["Writing", "Screenplay"])
   end
 
   defp summarize_results(results) do
