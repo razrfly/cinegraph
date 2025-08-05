@@ -56,8 +56,23 @@ defmodule CinegraphWeb.ImportDashboardLive do
         assign(socket, :canonical_import_progress, progress.status)
         
       :completed ->
+        # Build a more accurate completion message
+        message = cond do
+          # We have expected count to compare against
+          Map.has_key?(progress, :expected_movies) && progress.expected_movies ->
+            "Canonical import completed: #{progress.total_movies} of #{progress.expected_movies} movies imported"
+            
+          # We have queued info from the old worker
+          Map.has_key?(progress, :movies_queued) && progress.movies_queued > 0 ->
+            "Canonical import queued #{progress.movies_queued} movies for processing"
+            
+          # Default message with just the count
+          true ->
+            "Canonical import completed: #{progress.total_movies} movies in database"
+        end
+        
         socket
-        |> put_flash(:info, "Canonical import completed: #{progress.total_movies} movies processed")
+        |> put_flash(:info, message)
         |> assign(:canonical_import_running, false)
         |> assign(:canonical_import_progress, nil)
         |> load_data()
@@ -711,7 +726,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
     case progress do
       %{status: status} when is_binary(status) -> status
       %{progress_percent: percent} -> "Processing pages... #{percent}% complete"
-      %{pages_queued: pages} -> "Queued #{pages} page jobs"
+      %{pages_queued: pages, total_pages: total} -> "Queued #{pages} of #{total} page jobs for processing"
+      %{pages_queued: pages} -> "Queued #{pages} page jobs for processing"
+      %{list_name: name, expected_count: count} when count -> "Importing #{name} (#{count} movies expected)..."
       %{list_name: name} -> "Importing #{name}..."
       _ -> "Processing canonical list..."
     end
