@@ -119,6 +119,9 @@ mix ecto.create
 
 # Run migrations
 mix ecto.migrate
+
+# Seed default movie lists (canonical lists)
+mix run priv/repo/seeds.exs
 ```
 
 ### Database Population
@@ -248,6 +251,7 @@ Since we use Supabase's default `postgres` database, we can't drop it directly. 
 # 2. Find all tables (except schema_migrations)
 # 3. TRUNCATE all tables with CASCADE
 # 4. Verify the database is empty
+# 5. Prompt to reseed default movie lists (recommended)
 ```
 
 **Note**: This is much faster than drop/create and preserves your migrations. We use this frequently during development and testing.
@@ -335,6 +339,72 @@ The import process uses a comprehensive, modular approach:
 - The import includes a 1-second delay between OMDb requests
 - TMDb allows 40 requests/10 seconds
 - When using `--queue`, jobs are processed by Oban workers with rate limiting
+
+### Managing Movie Lists
+
+CineGraph includes a dynamic movie lists management system for importing curated lists from various sources (IMDB, TMDb, Letterboxd, etc.).
+
+#### Default Canonical Lists
+
+The system comes with 5 pre-configured canonical lists:
+- **1001 Movies You Must See Before You Die**
+- **The Criterion Collection**
+- **BFI's Sight & Sound Critics 2022**
+- **National Film Registry**
+- **Cannes Film Festival Award Winners**
+
+#### Managing Lists via UI
+
+Visit [`localhost:4001/imports`](http://localhost:4001/imports) and find the "Manage Movie Lists" section:
+
+- **Add New List**: Click "+ Add New List" to add any movie list by URL
+- **Edit Lists**: Modify name, category, or description (source_key is immutable)
+- **Delete Lists**: Remove lists with confirmation
+- **Enable/Disable**: Temporarily disable lists without deleting
+
+#### Adding Lists Programmatically
+
+```elixir
+# In IEx console
+Cinegraph.Movies.MovieLists.create_movie_list(%{
+  source_key: "afi_100",
+  name: "AFI's 100 Greatest American Films",
+  source_url: "https://www.imdb.com/list/ls123456789/",
+  source_type: "imdb",  # Auto-detected from URL
+  category: "critics",   # awards, critics, curated, festivals, personal, registry
+  active: true
+})
+```
+
+#### Importing Canonical Lists
+
+```bash
+# Import a specific list
+mix import_canonical --list 1001_movies
+
+# Import all active lists
+mix import_canonical --list all
+```
+
+Or use the Import Dashboard dropdown to select and import any list.
+
+#### Reseeding Default Lists
+
+If you clear the database, you can restore the default lists:
+
+```bash
+# Method 1: During database clear
+./scripts/clear_database.sh  # Will prompt to reseed
+
+# Method 2: Mix task
+mix seed_movie_lists
+
+# Method 3: Database seeds
+mix run priv/repo/seeds.exs
+
+# Method 4: Convenience script
+./scripts/reseed_movie_lists.sh
+```
 
 ### Importing Oscar Data
 
@@ -452,6 +522,9 @@ Visit [`localhost:4001/imports`](http://localhost:4001/imports) to:
 - **View Statistics**: Total movies, TMDb coverage, OMDb enrichment
 - **Queue Status**: See pending, running, and completed jobs
 - **Import History**: Review past import sessions
+- **Manage Movie Lists**: Add, edit, delete canonical lists for import
+- **Import Canonical Lists**: Select from dropdown to import curated lists
+- **Import Oscar Data**: Import Academy Awards data by year or decade
 
 #### Oban Web Dashboard
 Visit [`localhost:4001/dev/oban`](http://localhost:4001/dev/oban) to:

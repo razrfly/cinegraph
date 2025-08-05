@@ -38,8 +38,15 @@ defmodule Mix.Tasks.ImportCanonical do
       
   """
   
-  # Get lists from centralized configuration
-  defp predefined_lists, do: Cinegraph.CanonicalLists.all()
+  # Get lists from database and hardcoded configuration
+  defp predefined_lists do
+    # Get from database first, fallback to hardcoded
+    db_lists = Cinegraph.Movies.MovieLists.all_as_config()
+    hardcoded_lists = Cinegraph.CanonicalLists.all()
+    
+    # Merge with database taking precedence
+    Map.merge(hardcoded_lists, db_lists)
+  end
   
   def run(args) do
     # Start the application

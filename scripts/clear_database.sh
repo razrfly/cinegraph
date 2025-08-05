@@ -91,6 +91,18 @@ echo "Oscar ceremonies count: $OSCAR_COUNT"
 if [[ "$MOVIE_COUNT" -eq 0 ]] && [[ "$PEOPLE_COUNT" -eq 0 ]] && [[ "$OSCAR_COUNT" -eq 0 ]]; then
     echo ""
     echo -e "${GREEN}✅ Database cleared successfully!${NC}"
+    
+    # Ask if user wants to reseed default movie lists
+    echo ""
+    echo "Would you like to reseed the default movie lists? (y/n)"
+    read -r reseed_response
+    
+    if [[ "$reseed_response" == "y" ]] || [[ "$reseed_response" == "Y" ]]; then
+        echo ""
+        echo -e "${YELLOW}🌱 Reseeding default movie lists...${NC}"
+        mix run priv/repo/seeds.exs
+    fi
+    
     echo ""
     echo "You can now run imports with a clean database:"
     echo "  - Start the server: ./start.sh"
