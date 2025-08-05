@@ -121,13 +121,14 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   
   @doc """
   Scrape a canonical list by its key using the centralized configuration.
+  Database lists take precedence over hardcoded ones.
   
   ## Examples
       scrape_list_by_key("1001_movies")
       scrape_list_by_key("criterion")
   """
   def scrape_list_by_key(list_key) when is_binary(list_key) do
-    case Cinegraph.CanonicalLists.get(list_key) do
+    case Cinegraph.Movies.MovieLists.get_config(list_key) do
       {:ok, config} ->
         scrape_imdb_list(
           config.list_id,
