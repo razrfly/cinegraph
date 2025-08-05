@@ -33,11 +33,15 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
     
     Logger.info("Processing page #{page}/#{total_pages} for #{list_name}")
     
+    # Check if this list tracks awards
+    tracks_awards = get_in(metadata, ["tracks_awards"]) == true
+    Logger.info("🎯 CanonicalPageWorker: tracks_awards = #{tracks_awards}")
+    
     # Broadcast page start
     broadcast_page_progress(list_key, page, total_pages, :processing)
     
     # Fetch and process the page
-    case ImdbCanonicalScraper.fetch_single_page(list_id, page) do
+    case ImdbCanonicalScraper.fetch_single_page(list_id, page, tracks_awards) do
       {:ok, movies} ->
         Logger.info("Found #{length(movies)} movies on page #{page}")
         
@@ -112,7 +116,19 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
       Logger.warning("Skipping movie without IMDb ID: #{title} at position #{position}")
       {:skipped, nil}
     else
-      # Build canonical data
+      # Build canonical data - include enhanced award information
+      enhanced_data = 
+        if movie_data[:extracted_awards] && movie_data[:award_text] do
+          Logger.info("🏆 Including enhanced award data for #{title}")
+          %{
+            "extracted_awards" => movie_data[:extracted_awards],
+            "award_text" => movie_data[:award_text]
+          }
+        else
+          Logger.info("ℹ️  No enhanced award data for #{title}")
+          %{}
+        end
+      
       canonical_data = %{
         "included" => true,
         "source_name" => list_name,
@@ -122,6 +138,7 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
         "scraped_at" => DateTime.utc_now()
       }
       |> Map.merge(metadata || %{})
+      |> Map.merge(enhanced_data)
       
       # Check if movie exists by IMDb ID
       Logger.info("Checking if movie exists with IMDb ID: #{imdb_id}")
