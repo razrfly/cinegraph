@@ -15,7 +15,6 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
   
   alias Cinegraph.Scrapers.ImdbCanonicalScraper
   alias Cinegraph.Movies
-  alias Cinegraph.Movies.MovieLists
   alias Cinegraph.Repo
   alias Cinegraph.Workers.TMDbDetailsWorker
   require Logger
@@ -207,8 +206,8 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
         
         Logger.info("Import complete for #{list_name}: #{count} total movies")
         
-        # Update database with final statistics
-        update_import_completed(list_key, count)
+        # Don't update statistics here - let the orchestrator handle it
+        # update_import_completed(list_key, count)
         
         Phoenix.PubSub.broadcast(
           Cinegraph.PubSub,
@@ -241,22 +240,4 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
       Logger.warning("Failed to update job meta: #{inspect(error)}")
   end
   
-  defp update_import_completed(list_key, movie_count) do
-    case MovieLists.get_active_by_source_key(list_key) do
-      nil -> 
-        Logger.warning("No database record found for list #{list_key} to update completion stats")
-        :ok
-      list ->
-        # Update with final statistics
-        case MovieLists.update_import_stats(list, "success", movie_count) do
-          {:ok, updated_list} ->
-            Logger.info("Updated import stats for #{list_key} - completed with #{movie_count} movies")
-            Logger.info("Stats now: last_import_at=#{updated_list.last_import_at}, total_imports=#{updated_list.total_imports}")
-            :ok
-          {:error, changeset} ->
-            Logger.error("Failed to update import stats for #{list_key}: #{inspect(changeset.errors)}")
-            :error
-        end
-    end
-  end
 end
