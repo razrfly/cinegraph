@@ -110,16 +110,59 @@ defmodule Cinegraph.Movies.MovieLists do
   end
   
   @doc """
-  Get a specific list configuration by source_key.
-  Falls back to hardcoded canonical lists if not found in database.
+  Get a specific list configuration by source_key from database only.
+  No longer falls back to hardcoded canonical lists.
   """
   def get_config(source_key) do
     case get_active_by_source_key(source_key) do
       %MovieList{} = list -> 
         {:ok, MovieList.to_config(list)}
       nil ->
-        # Fallback to hardcoded lists during transition
-        Cinegraph.CanonicalLists.get(source_key)
+        {:error, "List not found in database: #{source_key}"}
+    end
+  end
+
+  @doc """
+  Get all active source keys, optionally filtered by category.
+  This replaces hardcoded arrays throughout the codebase.
+  """
+  def get_active_source_keys(opts \\ []) do
+    query = from ml in MovieList, 
+            where: ml.active == true, 
+            select: ml.source_key
+
+    query = case Keyword.get(opts, :category) do
+      nil -> query
+      category -> from ml in query, where: ml.category == ^category
+    end
+
+    query = case Keyword.get(opts, :tracks_awards) do
+      nil -> query
+      tracks_awards -> from ml in query, where: ml.tracks_awards == ^tracks_awards
+    end
+
+    Repo.all(query)
+  end
+
+  @doc """
+  Get category for a specific source key from database.
+  Returns nil if not found.
+  """
+  def get_category_for_source_key(source_key) do
+    case get_active_by_source_key(source_key) do
+      %MovieList{category: category} -> category
+      nil -> nil
+    end
+  end
+
+  @doc """
+  Check if a source key tracks awards from database.
+  Returns false if not found.
+  """
+  def tracks_awards_for_source_key?(source_key) do
+    case get_active_by_source_key(source_key) do
+      %MovieList{tracks_awards: tracks_awards} -> tracks_awards
+      nil -> false
     end
   end
   
@@ -144,7 +187,6 @@ defmodule Cinegraph.Movies.MovieLists do
             category: determine_category(source_key, config),
             active: true,
             tracks_awards: tracks_awards?(source_key, config),
-            award_types: extract_award_types(config),
             metadata: config.metadata || %{}
           }
           
@@ -173,28 +215,39 @@ defmodule Cinegraph.Movies.MovieLists do
   
   # Private helper functions
   
-  defp determine_category(source_key, _config) do
-    cond do
-      source_key == "cannes_winners" -> "awards"
-      source_key == "sight_sound_critics_2022" -> "critics"
-      source_key == "national_film_registry" -> "registry"
-      source_key == "criterion" -> "curated"
-      true -> "curated"
+  defp determine_category(_source_key, config) do
+    # Try to determine category from metadata first
+    case get_in(config, [:metadata, "category"]) do
+      category when is_binary(category) -> category
+      _ ->
+        # Intelligent fallback based on content analysis
+        cond do
+          String.contains?(config.name, ["Award", "Winners", "Festival"]) -> "awards"
+          String.contains?(config.name, ["Critics", "Poll", "Sight"]) -> "critics"
+          String.contains?(config.name, ["Registry", "Archive", "Library"]) -> "registry"
+          String.contains?(config.name, ["Collection", "Must See"]) -> "curated"
+          true -> "curated"
+        end
     end
   end
   
-  defp tracks_awards?(source_key, config) do
-    source_key == "cannes_winners" || 
-    get_in(config, [:metadata, "awards_included"]) != nil
-  end
-  
-  defp extract_award_types(config) do
-    case get_in(config, [:metadata, "awards_included"]) do
-      nil -> []
-      awards_string -> 
-        awards_string
-        |> String.split(",")
-        |> Enum.map(&String.trim/1)
+  defp tracks_awards?(_source_key, config) do
+    # Check if explicitly set in metadata
+    case get_in(config, [:metadata, "tracks_awards"]) do
+      true -> true
+      false -> false
+      _ ->
+        # Intelligent fallback - detect award-related lists by name/content
+        has_award_keywords = String.contains?(config.name, [
+          "Award", "Winners", "Festival", "Golden", "Bear", "Lion", 
+          "Palme", "Academy", "Oscar", "Cannes", "Berlin", "Venice"
+        ])
+        
+        has_award_metadata = get_in(config, [:metadata, "awards_included"]) != nil ||
+                            get_in(config, [:metadata, "festival"]) != nil
+        
+        has_award_keywords || has_award_metadata
     end
   end
+  
 end
