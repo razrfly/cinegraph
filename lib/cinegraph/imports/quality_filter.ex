@@ -9,12 +9,17 @@ defmodule Cinegraph.Imports.QualityFilter do
   require Logger
   
   # Movie quality criteria configuration
-  @movie_min_required 2  # Require 2 out of 4 criteria for full import
+  # Requires 2 out of 4 criteria for full import (lowered from 4 to increase data inclusion)
+  # This balanced approach captures both mainstream and niche cinema while filtering out 
+  # low-quality entries. Criteria: poster, votes, popularity, release_date
+  @movie_min_required 2
   
-  # Configurable quality thresholds
+  # Configurable quality thresholds - relaxed to improve data coverage
+  # These thresholds were lowered after analysis showed overly restrictive filtering
+  # was excluding valuable content, particularly international and independent films
   @quality_thresholds %{
-    min_votes: 10,      # Lowered from 25
-    min_popularity: 0.5 # Lowered from 5.0
+    min_votes: 10,      # Lowered from 25 - captures indie films with engaged audiences
+    min_popularity: 0.5 # Lowered from 5.0 - includes art house and foreign cinema
   }
   
   # Person quality criteria configuration

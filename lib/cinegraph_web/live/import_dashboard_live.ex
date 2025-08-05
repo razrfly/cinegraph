@@ -331,22 +331,14 @@ defmodule CinegraphWeb.ImportDashboardLive do
         socket = 
           socket
           |> put_flash(:info, "List '#{list.name}' added successfully!")
-          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:all_movie_lists, get_movie_list_with_real_counts())
           |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
           |> assign(:show_modal, false)
         
         {:noreply, socket}
         
       {:error, changeset} ->
-        errors = 
-          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-            Enum.reduce(opts, msg, fn {key, value}, acc ->
-              String.replace(acc, "%{#{key}}", to_string(value))
-            end)
-          end)
-          |> Enum.map(fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
-          |> Enum.join("; ")
-        
+        errors = format_changeset_errors(changeset)
         socket = put_flash(socket, :error, "Failed to add list: #{errors}")
         {:noreply, socket}
     end
@@ -373,7 +365,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
         socket = 
           socket
           |> put_flash(:info, "List '#{updated_list.name}' updated successfully!")
-          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:all_movie_lists, get_movie_list_with_real_counts())
           |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
           |> assign(:show_modal, false)
           |> assign(:editing_list, nil)
@@ -381,15 +373,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
         {:noreply, socket}
         
       {:error, changeset} ->
-        errors = 
-          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-            Enum.reduce(opts, msg, fn {key, value}, acc ->
-              String.replace(acc, "%{#{key}}", to_string(value))
-            end)
-          end)
-          |> Enum.map(fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
-          |> Enum.join("; ")
-        
+        errors = format_changeset_errors(changeset)
         socket = put_flash(socket, :error, "Failed to update list: #{errors}")
         {:noreply, socket}
     end
@@ -404,7 +388,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
         socket = 
           socket
           |> put_flash(:info, "List '#{list.name}' deleted successfully!")
-          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:all_movie_lists, get_movie_list_with_real_counts())
           |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
         
         {:noreply, socket}
@@ -424,7 +408,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
         socket = 
           socket
           |> put_flash(:info, "List #{if list.active, do: "disabled", else: "enabled"} successfully")
-          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:all_movie_lists, get_movie_list_with_real_counts())
           |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
         
         {:noreply, socket}
@@ -435,6 +419,16 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end
   end
   
+  defp format_changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+    |> Enum.map(fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
+    |> Enum.join("; ")
+  end
+
   defp detect_source_type(url) do
     cond do
       String.contains?(url, "imdb.com") -> "imdb"
@@ -482,7 +476,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:oscar_stats, oscar_stats)
     |> assign(:queue_stats, queue_stats)
     |> assign(:import_rate, runtime_stats.movies_per_minute)
-    |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+    |> assign(:all_movie_lists, get_movie_list_with_real_counts())
     |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
   end
   
@@ -554,13 +548,35 @@ defmodule CinegraphWeb.ImportDashboardLive do
         [list_key]
       )
       
+      # Get expected count from database metadata if available
+      expected_count = case MovieLists.get_active_by_source_key(list_key) do
+        nil -> nil
+        list -> list.metadata["expected_movie_count"]
+      end
+      
       %{
         key: list_key,
         name: config.name,
-        count: count
+        count: count,
+        expected_count: expected_count
       }
     end)
     |> Enum.sort_by(& &1.count, :desc)  # Sort by count descending
+  end
+  
+  defp get_movie_list_with_real_counts do
+    # Get all movie lists with real database counts instead of last_movie_count
+    MovieLists.list_all_movie_lists()
+    |> Enum.map(fn list ->
+      # Get real count from database
+      real_count = case Repo.query("SELECT COUNT(*) FROM movies WHERE canonical_sources ? $1", [list.source_key]) do
+        {:ok, %{rows: [[count]]}} -> count
+        _ -> 0
+      end
+      
+      # Add real count to the list struct
+      Map.put(list, :real_movie_count, real_count)
+    end)
   end
 
   defp get_oscar_stats do
