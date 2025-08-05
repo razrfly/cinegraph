@@ -63,6 +63,7 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
       broadcast_progress(list_key, :orchestrating, %{
         list_name: list_config.name,
         total_pages: total_pages,
+        expected_count: expected_count,
         status: "Queueing page jobs..."
       })
       
@@ -90,6 +91,8 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
         broadcast_progress(list_key, :queued, %{
           list_name: list_config.name,
           pages_queued: length(jobs_list),
+          total_pages: total_pages,
+          expected_count: expected_count,
           status: "#{length(jobs_list)} page jobs queued"
         })
         

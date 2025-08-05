@@ -1498,9 +1498,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     job_args = %{
       "imdb_id" => movie_data.imdb_id,
       "source" => "canonical_import",
-      "canonical_source" => %{
-        "source_key" => source_key,
-        "metadata" => metadata
+      "canonical_sources" => %{
+        source_key => metadata
       }
     }
     
