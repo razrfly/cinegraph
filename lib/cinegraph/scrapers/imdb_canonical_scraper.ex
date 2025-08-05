@@ -155,13 +155,13 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   Fetch a single page of an IMDb list.
   Returns just the movie data without processing.
   """
-  def fetch_single_page(list_id, page \\ 1) do
+  def fetch_single_page(list_id, page \\ 1, tracks_awards \\ false) do
     url = build_imdb_list_url(list_id, page)
     
-    Logger.info("Fetching page #{page} from IMDb list #{list_id}")
+    Logger.info("Fetching page #{page} from IMDb list #{list_id} (tracks_awards: #{tracks_awards})")
     
     with {:ok, html} <- fetch_html(url),
-         {:ok, movies} <- parse_single_page(html, page) do
+         {:ok, movies} <- parse_single_page(html, page, tracks_awards) do
       {:ok, movies}
     else
       {:error, reason} ->
@@ -336,12 +336,15 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
   
   # Helper function for fetch_single_page
-  defp parse_single_page(html, page) do
+  defp parse_single_page(html, page, tracks_awards) do
     # Reuse existing parsing logic
     list_config = %{
       name: "Single page",
-      metadata: %{}  # Empty metadata to avoid key errors
+      metadata: %{
+        "tracks_awards" => tracks_awards
+      }
     }
+    Logger.info("🔧 parse_single_page: Creating config with tracks_awards = #{tracks_awards}")
     parse_imdb_list_html(html, list_config, page)
   end
   
@@ -604,6 +607,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     
     # Check if this list tracks awards
     tracks_awards = get_in(list_config.metadata, ["tracks_awards"]) == true
+    Logger.info("=== parse_imdb_list_html: tracks_awards = #{tracks_awards} ===")
     
     try do
       # Parse with Floki
@@ -720,7 +724,16 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   
   defp parse_movie_from_list_item(item, position, tracks_awards) do
     # Check if it's a .lister-item (page 1 format)
-    if Floki.attribute(item, "class") |> Enum.any?(&String.contains?(&1, "lister-item")) do
+    item_classes = Floki.attribute(item, "class")
+    is_lister = Enum.any?(item_classes, &String.contains?(&1, "lister-item"))
+    
+    Logger.info("🎭 === parse_movie_from_list_item ===")
+    Logger.info("   Position: #{position}")
+    Logger.info("   tracks_awards: #{tracks_awards}")
+    Logger.info("   Item classes: #{inspect(item_classes)}")
+    Logger.info("   Format detected: #{if is_lister, do: "LISTER (old)", else: "IPC (new)"}")
+    
+    if is_lister do
       parse_lister_item(item, position, tracks_awards)
     else
       # Otherwise, it's probably the newer format (page 2+)
@@ -754,9 +767,13 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
         
         # Extract enhanced data only if this list tracks awards
         if tracks_awards do
+          Logger.info("   🏆 Extracting enhanced data for: #{title}")
           enhanced_data = extract_enhanced_lister_data(item)
-          Map.merge(base_data, enhanced_data)
+          result = Map.merge(base_data, enhanced_data)
+          Logger.info("   Enhanced result has extracted_awards: #{Map.has_key?(result, :extracted_awards)}")
+          result
         else
+          Logger.info("   ⏭️  Skipping enhanced data for: #{title} (tracks_awards = false)")
           base_data
         end
       else
@@ -795,9 +812,13 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
         
         # Extract enhanced data only if this list tracks awards
         if tracks_awards do
+          Logger.info("   🏆 IPC: Extracting enhanced data for: #{title}")
           enhanced_data = extract_enhanced_ipc_data(item)
-          Map.merge(base_data, enhanced_data)
+          result = Map.merge(base_data, enhanced_data)
+          Logger.info("   IPC: Enhanced result has extracted_awards: #{Map.has_key?(result, :extracted_awards)}")
+          result
         else
+          Logger.info("   ⏭️  IPC: Skipping enhanced data for: #{title} (tracks_awards = false)")
           base_data
         end
       else
@@ -916,67 +937,174 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
   
   defp extract_enhanced_lister_data(item) do
+    Logger.info("🔍 === extract_enhanced_lister_data START ===")
+    
     # Extract all text content from the item
     full_text = Floki.text(item)
+    Logger.info("📝 Full text length: #{String.length(full_text)}")
     
     # Extract description/plot text
     description = extract_description_text(item)
+    Logger.info("📄 Description extracted: #{String.slice(description || "", 0, 50)}...")
     
-    # Extract award text (lines containing award keywords)
-    award_text = extract_award_text(full_text)
+    # CRITICAL FIX: Look for award text in the specific HTML element FIRST
+    Logger.info("🎯 Looking for award element with data-testid='title-list-item-description'")
+    
+    # Try multiple selectors to find the award element
+    award_element_selectors = [
+      "[data-testid='title-list-item-description'] .ipc-html-content-inner-div",
+      "[data-testid='title-list-item-description']",
+      ".ipc-html-content-inner-div",
+      ".ipc-bq .ipc-html-content-inner-div"
+    ]
+    
+    award_text = Enum.find_value(award_element_selectors, fn selector ->
+      Logger.info("🔎 Trying selector: #{selector}")
+      elements = Floki.find(item, selector)
+      Logger.info("   Found #{length(elements)} elements")
+      
+      if length(elements) > 0 do
+        text = Floki.text(List.first(elements)) |> String.trim()
+        if text != "" do
+          Logger.info("✅ Award text found in element: '#{text}'")
+          text
+        else
+          nil
+        end
+      else
+        nil
+      end
+    end)
+    
+    # Fallback to pattern search if no element found
+    if award_text == nil do
+      Logger.info("⚠️  No award element found, falling back to pattern search")
+      award_text = extract_award_text(full_text)
+      if award_text && award_text != "" do
+        Logger.info("📍 Award text found via pattern: '#{award_text}'")
+      else
+        Logger.info("❌ No award text found via patterns")
+      end
+    end
     
     # Extract metadata (rating, runtime, genre, etc.)
     metadata = extract_movie_metadata_lister(item)
+    Logger.info("📊 Metadata extracted: #{map_size(metadata)} fields")
     
     # Extract director and stars
     credits = extract_credits_lister(item)
+    Logger.info("🎬 Credits extracted: #{map_size(credits)} fields")
     
     # Parse award text into structured data if awards exist
     extracted_awards = if award_text && award_text != "" do
-      parse_award_text_to_structured(award_text)
+      Logger.info("🏆 Parsing award text: '#{award_text}'")
+      awards = parse_award_text_to_structured(award_text)
+      Logger.info("🏅 Parsed #{length(awards)} awards")
+      awards
     else
+      Logger.info("🚫 No award text to parse, returning empty array")
       []
     end
     
-    %{
+    result = %{
       raw_description: description,
       award_text: award_text,
       extracted_awards: extracted_awards,
       full_text: full_text,
       extracted_metadata: Map.merge(metadata, credits)
     }
+    
+    Logger.info("✨ extract_enhanced_lister_data COMPLETE")
+    Logger.info("   - award_text: #{if award_text, do: "'#{award_text}'", else: "nil"}")
+    Logger.info("   - extracted_awards: #{length(extracted_awards)} items")
+    
+    result
   end
   
   defp extract_enhanced_ipc_data(item) do
+    Logger.info("🔍 === extract_enhanced_ipc_data START ===")
+    
     # Extract all text content from the item
     full_text = Floki.text(item)
+    Logger.info("📝 Full text length: #{String.length(full_text)}")
     
     # Extract description/plot text
     description = extract_description_text_ipc(item)
+    Logger.info("📄 Description extracted: #{String.slice(description || "", 0, 50)}...")
     
-    # Extract award text
-    award_text = extract_award_text(full_text)
+    # CRITICAL FIX: Look for award text in the specific HTML element FIRST
+    Logger.info("🎯 Looking for award element in IPC format")
+    
+    # Try multiple selectors for IPC format
+    award_element_selectors = [
+      "[data-testid='title-list-item-description'] .ipc-html-content-inner-div",
+      "[data-testid='title-list-item-description']",
+      ".ipc-html-content-inner-div",
+      ".ipc-bq .ipc-html-content-inner-div",
+      ".ipc-html-content--base .ipc-html-content-inner-div"
+    ]
+    
+    award_text = Enum.find_value(award_element_selectors, fn selector ->
+      Logger.info("🔎 Trying IPC selector: #{selector}")
+      elements = Floki.find(item, selector)
+      Logger.info("   Found #{length(elements)} elements")
+      
+      if length(elements) > 0 do
+        text = Floki.text(List.first(elements)) |> String.trim()
+        if text != "" do
+          Logger.info("✅ Award text found in IPC element: '#{text}'")
+          text
+        else
+          nil
+        end
+      else
+        nil
+      end
+    end)
+    
+    # Fallback to pattern search if no element found
+    if award_text == nil do
+      Logger.info("⚠️  No award element found in IPC format, falling back to pattern search")
+      award_text = extract_award_text(full_text)
+      if award_text && award_text != "" do
+        Logger.info("📍 Award text found via pattern: '#{award_text}'")
+      else
+        Logger.info("❌ No award text found via patterns")
+      end
+    end
     
     # Extract metadata for newer format
     metadata = extract_movie_metadata_ipc(item)
+    Logger.info("📊 Metadata extracted: #{map_size(metadata)} fields")
     
     # Extract credits info
     credits = extract_credits_ipc(item)
+    Logger.info("🎬 Credits extracted: #{map_size(credits)} fields")
     
     # Parse award text into structured data if awards exist
     extracted_awards = if award_text && award_text != "" do
-      parse_award_text_to_structured(award_text)
+      Logger.info("🏆 Parsing award text: '#{award_text}'")
+      awards = parse_award_text_to_structured(award_text)
+      Logger.info("🏅 Parsed #{length(awards)} awards")
+      awards
     else
+      Logger.info("🚫 No award text to parse, returning empty array")
       []
     end
     
-    %{
+    result = %{
       raw_description: description,
       award_text: award_text,
       extracted_awards: extracted_awards,
       full_text: full_text,
       extracted_metadata: Map.merge(metadata, credits)
     }
+    
+    Logger.info("✨ extract_enhanced_ipc_data COMPLETE")
+    Logger.info("   - award_text: #{if award_text, do: "'#{award_text}'", else: "nil"}")
+    Logger.info("   - extracted_awards: #{length(extracted_awards)} items")
+    
+    result
   end
   
   defp extract_description_text(item) do
@@ -1098,95 +1226,143 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   
   # Parse raw award text into structured award data for database storage.
   defp parse_award_text_to_structured(award_text) when is_binary(award_text) and award_text != "" do
+    Logger.info("🎨 === parse_award_text_to_structured START ===")
+    Logger.info("   Input: '#{award_text}'")
+    
     # Split by separator if multiple awards
     award_parts = String.split(award_text, " | ")
+    Logger.info("   Split into #{length(award_parts)} parts")
     
-    award_parts
+    awards = award_parts
     |> Enum.map(&parse_single_award/1)
     |> Enum.reject(&is_nil/1)
+    
+    Logger.info("   Parsed #{length(awards)} valid awards")
+    Logger.info("🎨 === parse_award_text_to_structured END ===")
+    
+    awards
   end
   defp parse_award_text_to_structured(_), do: []
   
   defp parse_single_award(award_text) do
     trimmed = String.trim(award_text)
+    Logger.info("🏆 Parsing single award: '#{trimmed}'")
     
     # Pattern 1: [YYYY]: Award Name (Category).
     case Regex.run(~r/\[(\d{4})\]:\s*([^(]+?)(?:\s*\(([^)]+)\))?\s*\.?$/i, trimmed) do
       [_, year, award_name, category] ->
         # Clean up award name by removing "winner" suffix
         clean_award_name = String.trim(award_name) |> String.replace(~r/\s+winner\s*$/i, "")
-        %{
+        result = %{
           award_name: clean_award_name,
           award_category: if(category && category != "", do: String.trim(category), else: nil),
           award_year: year,
           raw_text: trimmed
         }
+        Logger.info("   ✅ Pattern 1 match: #{inspect(result)}")
+        result
         
       [_, year, award_name] ->
         # Clean up award name by removing "winner" suffix
         clean_award_name = String.trim(award_name) |> String.replace(~r/\s+winner\s*$/i, "")
-        %{
+        result = %{
           award_name: clean_award_name,
           award_category: nil,
           award_year: year,
           raw_text: trimmed
         }
+        Logger.info("   ✅ Pattern 1 match (no category): #{inspect(result)}")
+        result
         
       _ ->
+        Logger.info("   ❌ Pattern 1 no match, trying pattern 2")
         # Pattern 2: Award Name winner (Category).
         case Regex.run(~r/^([^(]+?)\s+winner(?:\s*\(([^)]+)\))?\s*\.?$/i, trimmed) do
           [_, award_name, category] ->
-            %{
+            result = %{
               award_name: String.trim(award_name),
               award_category: if(category && category != "", do: String.trim(category), else: nil),
               award_year: nil,
               raw_text: trimmed
             }
+            Logger.info("   ✅ Pattern 2 match: #{inspect(result)}")
+            result
             
           [_, award_name] ->
-            %{
+            result = %{
               award_name: String.trim(award_name),
               award_category: nil,
               award_year: nil,
               raw_text: trimmed
             }
+            Logger.info("   ✅ Pattern 2 match (no category): #{inspect(result)}")
+            result
             
           _ ->
+            Logger.info("   ❌ Pattern 2 no match, trying pattern 3")
             # Pattern 3: Simple award name
             if Regex.match?(~r/^(Palme d'Or|Grand Prix|Jury Prize|Caméra d'Or|Camera d'Or|Best Director|Best Actor|Best Actress)$/i, trimmed) do
-              %{
+              result = %{
                 award_name: String.trim(trimmed),
                 award_category: nil,
                 award_year: nil,
                 raw_text: trimmed
               }
+              Logger.info("   ✅ Pattern 3 match: #{inspect(result)}")
+              result
             else
+              Logger.info("   ❌ Pattern 3 no match, trying pattern 4")
               # Pattern 4: Won [something] format
               case Regex.run(~r/Won\s+(.+?)(?:\s*\(([^)]+)\))?\s*\.?$/i, trimmed) do
                 [_, award_name, category] ->
-                  %{
+                  result = %{
                     award_name: String.trim(award_name),
                     award_category: if(category && category != "", do: String.trim(category), else: nil),
                     award_year: nil,
                     raw_text: trimmed
                   }
+                  Logger.info("   ✅ Pattern 4 match: #{inspect(result)}")
+                  result
                   
                 [_, award_name] ->
-                  %{
+                  result = %{
                     award_name: String.trim(award_name),
                     award_category: nil,
                     award_year: nil,
                     raw_text: trimmed
                   }
+                  Logger.info("   ✅ Pattern 4 match (no category): #{inspect(result)}")
+                  result
                   
                 _ ->
-                  # Fallback: store as-is for manual review
-                  %{
-                    award_name: trimmed,
-                    award_category: nil,
-                    award_year: nil,
-                    raw_text: trimmed
-                  }
+                  Logger.info("   ❌ Pattern 4 no match, trying pattern 5")
+                  # Pattern 5: Festival name format (e.g., "2nd Berlin International Film Festival")
+                  if Regex.match?(~r/(Festival|Awards?|Prize|Competition)/i, trimmed) do
+                    # Extract year if present
+                    year = case Regex.run(~r/\b(19\d{2}|20\d{2})\b/, trimmed) do
+                      [_, year_str] -> year_str
+                      _ -> nil
+                    end
+                    
+                    result = %{
+                      award_name: trimmed,
+                      award_category: nil,
+                      award_year: year,
+                      raw_text: trimmed
+                    }
+                    Logger.info("   ✅ Pattern 5 (festival) match: #{inspect(result)}")
+                    result
+                  else
+                    # Fallback: store as-is for manual review
+                    result = %{
+                      award_name: trimmed,
+                      award_category: nil,
+                      award_year: nil,
+                      raw_text: trimmed
+                    }
+                    Logger.info("   ⚠️  Fallback - storing as-is: #{inspect(result)}")
+                    result
+                  end
               end
             end
         end
@@ -1456,7 +1632,19 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     min(base_confidence + frequency_boost, 1.0)
   end
   
+  # Helper function to conditionally add non-nil, non-empty values to a map
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, _key, ""), do: map
+  # Special case: always include extracted_awards even if empty
+  defp maybe_put(map, "extracted_awards", []), do: Map.put(map, "extracted_awards", [])
+  defp maybe_put(map, _key, []), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+  
   defp process_canonical_movie(movie_data, source_key, metadata_base) do
+    Logger.info("📦 === process_canonical_movie START ===")
+    Logger.info("   Movie: #{movie_data.title} (#{movie_data.imdb_id})")
+    Logger.info("   Source key: #{source_key}")
+    
     # Add movie-specific metadata
     base_movie_metadata = %{
       "list_position" => movie_data.position,
@@ -1464,36 +1652,56 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       "scraped_year" => movie_data.year
     }
     
-    # Include all enhanced data if available
-    enhanced_metadata = if Map.has_key?(movie_data, :raw_description) do
-      %{
-        "raw_description" => movie_data[:raw_description],
-        "award_text" => movie_data[:award_text],
-        "extracted_awards" => movie_data[:extracted_awards] || [],
-        "full_text" => movie_data[:full_text],
-        "extracted_metadata" => movie_data[:extracted_metadata] || %{}
-      }
-    else
-      %{}
-    end
+    # Log what enhanced data we have
+    Logger.info("   Enhanced data available:")
+    Logger.info("     - raw_description: #{if Map.get(movie_data, :raw_description), do: "YES", else: "NO"}")
+    Logger.info("     - award_text: #{if Map.get(movie_data, :award_text), do: "YES - '#{Map.get(movie_data, :award_text)}'", else: "NO"}")
+    Logger.info("     - extracted_awards: #{length(Map.get(movie_data, :extracted_awards, []))} items")
+    
+    # Include all enhanced data that exists, not just when raw_description is present
+    enhanced_metadata = %{}
+      |> maybe_put("raw_description", Map.get(movie_data, :raw_description))
+      |> maybe_put("award_text", Map.get(movie_data, :award_text))
+      |> maybe_put("extracted_awards", Map.get(movie_data, :extracted_awards, []))
+      |> maybe_put("full_text", Map.get(movie_data, :full_text))
+      |> maybe_put("extracted_metadata", Map.get(movie_data, :extracted_metadata, %{}))
+    
+    Logger.info("   Enhanced metadata keys: #{inspect(Map.keys(enhanced_metadata))}")
     
     metadata = metadata_base
       |> Map.merge(base_movie_metadata)
       |> Map.merge(enhanced_metadata)
     
+    Logger.info("   Final metadata has extracted_awards: #{Map.has_key?(metadata, "extracted_awards")}")
+    
     case Repo.get_by(Movies.Movie, imdb_id: movie_data.imdb_id) do
       nil ->
         # Movie doesn't exist, queue for import
+        Logger.info("   🆕 Movie not found, queuing for import")
         queue_canonical_movie_import(movie_data, source_key, metadata)
         
       existing_movie ->
         # Movie exists, update canonical sources
+        Logger.info("   ♻️  Movie exists, updating canonical sources")
         update_canonical_sources(existing_movie, source_key, metadata)
     end
+    
+    Logger.info("📦 === process_canonical_movie END ===")
   end
   
   defp queue_canonical_movie_import(movie_data, source_key, metadata) do
-    Logger.info("Queuing import for #{movie_data.title} (#{movie_data.imdb_id})")
+    Logger.info("🚀 === queue_canonical_movie_import START ===")
+    Logger.info("   Movie: #{movie_data.title} (#{movie_data.imdb_id})")
+    Logger.info("   Source key: #{source_key}")
+    Logger.info("   Metadata has extracted_awards: #{Map.has_key?(metadata, "extracted_awards")}")
+    
+    if Map.has_key?(metadata, "extracted_awards") do
+      awards = Map.get(metadata, "extracted_awards")
+      Logger.info("   extracted_awards count: #{length(awards)}")
+      if length(awards) > 0 do
+        Logger.info("   First award: #{inspect(List.first(awards))}")
+      end
+    end
     
     job_args = %{
       "imdb_id" => movie_data.imdb_id,
@@ -1503,9 +1711,12 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       }
     }
     
+    Logger.info("   Job args canonical_sources.#{source_key} keys: #{inspect(get_in(job_args, ["canonical_sources", source_key]) |> Map.keys())}")
+    
     case TMDbDetailsWorker.new(job_args) |> Oban.insert() do
       {:ok, _job} ->
-        Logger.info("Successfully queued import for #{movie_data.title}")
+        Logger.info("✅ Successfully queued import for #{movie_data.title}")
+        Logger.info("🚀 === queue_canonical_movie_import END ===")
         %{
           action: :queued,
           imdb_id: movie_data.imdb_id,
@@ -1514,7 +1725,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
         }
         
       {:error, reason} ->
-        Logger.error("Failed to queue import for #{movie_data.title}: #{inspect(reason)}")
+        Logger.error("❌ Failed to queue import for #{movie_data.title}: #{inspect(reason)}")
+        Logger.info("🚀 === queue_canonical_movie_import END ===")
         %{
           action: :error,
           imdb_id: movie_data.imdb_id,
@@ -1525,19 +1737,44 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
   
   defp update_canonical_sources(movie, source_key, metadata) do
-    Logger.info("Marking #{movie.title} as canonical in #{source_key}")
+    Logger.info("🔄 === update_canonical_sources START ===")
+    Logger.info("   Movie: #{movie.title} (ID: #{movie.id})")
+    Logger.info("   Source key: #{source_key}")
+    Logger.info("   Metadata has extracted_awards: #{Map.has_key?(metadata, "extracted_awards")}")
+    
+    if Map.has_key?(metadata, "extracted_awards") do
+      awards = Map.get(metadata, "extracted_awards")
+      Logger.info("   extracted_awards count: #{length(awards)}")
+      if length(awards) > 0 do
+        Logger.info("   First award: #{inspect(List.first(awards))}")
+      end
+    end
     
     current_sources = movie.canonical_sources || %{}
+    
+    # Log what we're merging
+    Logger.info("   Current canonical_sources keys: #{inspect(Map.keys(current_sources))}")
+    Logger.info("   Metadata keys being added: #{inspect(Map.keys(metadata))}")
     
     updated_sources = Map.put(current_sources, source_key, Map.merge(%{
       "included" => true
     }, metadata))
     
+    Logger.info("   Updated canonical_sources.#{source_key} keys: #{inspect(get_in(updated_sources, [source_key]) |> Map.keys())}")
+    
     case movie
          |> Movies.Movie.changeset(%{canonical_sources: updated_sources})
          |> Repo.update() do
-      {:ok, _updated_movie} ->
-        Logger.info("Successfully marked #{movie.title} as canonical")
+      {:ok, updated_movie} ->
+        Logger.info("✅ Successfully marked #{movie.title} as canonical")
+        
+        # Verify the update
+        stored_metadata = get_in(updated_movie.canonical_sources, [source_key])
+        if stored_metadata do
+          Logger.info("   Verification: stored metadata has extracted_awards: #{Map.has_key?(stored_metadata, "extracted_awards")}")
+        end
+        
+        Logger.info("🔄 === update_canonical_sources END ===")
         %{
           action: :updated,
           movie_id: movie.id,
@@ -1546,7 +1783,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
         }
         
       {:error, changeset} ->
-        Logger.error("Failed to update canonical sources for #{movie.title}: #{inspect(changeset.errors)}")
+        Logger.error("❌ Failed to update canonical sources for #{movie.title}: #{inspect(changeset.errors)}")
+        Logger.info("🔄 === update_canonical_sources END ===")
         %{
           action: :error,
           movie_id: movie.id,
