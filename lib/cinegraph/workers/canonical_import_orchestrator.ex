@@ -15,23 +15,16 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
   
   alias Cinegraph.Workers.{CanonicalPageWorker, CanonicalImportCompletionWorker}
   alias Cinegraph.Scrapers.ImdbCanonicalScraper
-  alias Cinegraph.CanonicalLists
   alias Cinegraph.Movies.{MovieLists, MovieList}
   require Logger
   
   @doc """
-  Returns all available lists from both database and hardcoded sources.
-  Database lists take precedence over hardcoded ones.
+  Returns all available lists from the database only.
+  This replaces the previous hardcoded approach with database-managed lists.
   """
   def available_lists do
-    # Get active lists from database
-    db_lists = MovieLists.all_as_config()
-    
-    # Get hardcoded lists
-    hardcoded_lists = CanonicalLists.all()
-    
-    # Merge with database lists taking precedence
-    Map.merge(hardcoded_lists, db_lists)
+    # Get active lists from database only
+    MovieLists.all_as_config()
   end
   
   @impl Oban.Worker

@@ -931,9 +931,17 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     # Extract director and stars
     credits = extract_credits_lister(item)
     
+    # Parse award text into structured data if awards exist
+    extracted_awards = if award_text && award_text != "" do
+      parse_award_text_to_structured(award_text)
+    else
+      []
+    end
+    
     %{
       raw_description: description,
       award_text: award_text,
+      extracted_awards: extracted_awards,
       full_text: full_text,
       extracted_metadata: Map.merge(metadata, credits)
     }
@@ -955,9 +963,17 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     # Extract credits info
     credits = extract_credits_ipc(item)
     
+    # Parse award text into structured data if awards exist
+    extracted_awards = if award_text && award_text != "" do
+      parse_award_text_to_structured(award_text)
+    else
+      []
+    end
+    
     %{
       raw_description: description,
       award_text: award_text,
+      extracted_awards: extracted_awards,
       full_text: full_text,
       extracted_metadata: Map.merge(metadata, credits)
     }
@@ -1077,6 +1093,103 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       else
         ""
       end
+    end
+  end
+  
+  # Parse raw award text into structured award data for database storage.
+  defp parse_award_text_to_structured(award_text) when is_binary(award_text) and award_text != "" do
+    # Split by separator if multiple awards
+    award_parts = String.split(award_text, " | ")
+    
+    award_parts
+    |> Enum.map(&parse_single_award/1)
+    |> Enum.reject(&is_nil/1)
+  end
+  defp parse_award_text_to_structured(_), do: []
+  
+  defp parse_single_award(award_text) do
+    trimmed = String.trim(award_text)
+    
+    # Pattern 1: [YYYY]: Award Name (Category).
+    case Regex.run(~r/\[(\d{4})\]:\s*([^(]+?)(?:\s*\(([^)]+)\))?\s*\.?$/i, trimmed) do
+      [_, year, award_name, category] ->
+        # Clean up award name by removing "winner" suffix
+        clean_award_name = String.trim(award_name) |> String.replace(~r/\s+winner\s*$/i, "")
+        %{
+          award_name: clean_award_name,
+          award_category: if(category && category != "", do: String.trim(category), else: nil),
+          award_year: year,
+          raw_text: trimmed
+        }
+        
+      [_, year, award_name] ->
+        # Clean up award name by removing "winner" suffix
+        clean_award_name = String.trim(award_name) |> String.replace(~r/\s+winner\s*$/i, "")
+        %{
+          award_name: clean_award_name,
+          award_category: nil,
+          award_year: year,
+          raw_text: trimmed
+        }
+        
+      _ ->
+        # Pattern 2: Award Name winner (Category).
+        case Regex.run(~r/^([^(]+?)\s+winner(?:\s*\(([^)]+)\))?\s*\.?$/i, trimmed) do
+          [_, award_name, category] ->
+            %{
+              award_name: String.trim(award_name),
+              award_category: if(category && category != "", do: String.trim(category), else: nil),
+              award_year: nil,
+              raw_text: trimmed
+            }
+            
+          [_, award_name] ->
+            %{
+              award_name: String.trim(award_name),
+              award_category: nil,
+              award_year: nil,
+              raw_text: trimmed
+            }
+            
+          _ ->
+            # Pattern 3: Simple award name
+            if Regex.match?(~r/^(Palme d'Or|Grand Prix|Jury Prize|Caméra d'Or|Camera d'Or|Best Director|Best Actor|Best Actress)$/i, trimmed) do
+              %{
+                award_name: String.trim(trimmed),
+                award_category: nil,
+                award_year: nil,
+                raw_text: trimmed
+              }
+            else
+              # Pattern 4: Won [something] format
+              case Regex.run(~r/Won\s+(.+?)(?:\s*\(([^)]+)\))?\s*\.?$/i, trimmed) do
+                [_, award_name, category] ->
+                  %{
+                    award_name: String.trim(award_name),
+                    award_category: if(category && category != "", do: String.trim(category), else: nil),
+                    award_year: nil,
+                    raw_text: trimmed
+                  }
+                  
+                [_, award_name] ->
+                  %{
+                    award_name: String.trim(award_name),
+                    award_category: nil,
+                    award_year: nil,
+                    raw_text: trimmed
+                  }
+                  
+                _ ->
+                  # Fallback: store as-is for manual review
+                  %{
+                    award_name: trimmed,
+                    award_category: nil,
+                    award_year: nil,
+                    raw_text: trimmed
+                  }
+              end
+            end
+        end
     end
   end
   
@@ -1207,6 +1320,13 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     source_key = list_config.source_key
     Logger.info("Processing #{length(movie_data)} canonical movies for #{source_key}")
     
+    # Dynamic award discovery - extract all awards found across all movies
+    discovered_awards = if get_in(list_config.metadata, ["tracks_awards"]) == true do
+      discover_awards_from_movies(movie_data, list_config)
+    else
+      %{}
+    end
+    
     # Build base metadata from list config
     metadata_base = %{
       "scraped_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
@@ -1215,6 +1335,20 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       "list_id" => list_config.list_id
     }
     |> Map.merge(list_config.metadata || %{})  # Add any custom metadata
+    
+    # Add discovered awards to base metadata
+    metadata_base = if map_size(discovered_awards) > 0 do
+      Map.merge(metadata_base, %{
+        "festival_info" => %{
+          "festival_name" => extract_festival_name(list_config.name),
+          "discovered_awards" => Map.keys(discovered_awards),
+          "award_statistics" => discovered_awards,
+          "discovery_completed_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        }
+      })
+    else
+      metadata_base
+    end
     
     results = 
       movie_data
@@ -1231,18 +1365,95 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     
     Logger.info("Processing complete for #{list_config.name}: #{created} created, #{updated} updated, #{queued} queued, #{skipped} skipped, #{errors} errors")
     
+    if map_size(discovered_awards) > 0 do
+      Logger.info("Award discovery complete: #{map_size(discovered_awards)} unique awards found")
+      Enum.each(discovered_awards, fn {award, stats} ->
+        Logger.info("  - #{award}: #{stats.count} movies, years #{inspect(stats.years)}")
+      end)
+    end
+    
     {:ok, %{
       list_config: list_config,
       results: results,
+      discovered_awards: discovered_awards,
       summary: %{
         created: created,
         updated: updated,
         queued: queued,
         skipped: skipped,
         errors: errors,
-        total: length(results)
+        total: length(results),
+        awards_discovered: map_size(discovered_awards)
       }
     }}
+  end
+  
+  # Dynamically discover awards from movie data across the entire list.
+  # This replaces the need for manual award_types configuration.
+  defp discover_awards_from_movies(movie_data, list_config) do
+    Logger.info("Starting dynamic award discovery for #{list_config.name}")
+    
+    # Extract all awards from movies that have award data
+    all_awards = movie_data
+    |> Enum.filter(fn movie -> Map.has_key?(movie, :extracted_awards) && movie.extracted_awards != [] end)
+    |> Enum.flat_map(fn movie -> movie.extracted_awards end)
+    
+    # Build statistics for each discovered award
+    award_stats = all_awards
+    |> Enum.reduce(%{}, fn award, acc ->
+      award_name = award.award_name
+      award_year = award.award_year
+      
+      existing = Map.get(acc, award_name, %{count: 0, years: [], categories: []})
+      
+      updated_years = if award_year && award_year not in existing.years do
+        [award_year | existing.years]
+      else
+        existing.years
+      end
+      
+      updated_categories = if award.award_category && award.award_category not in existing.categories do
+        [award.award_category | existing.categories]
+      else
+        existing.categories
+      end
+      
+      Map.put(acc, award_name, %{
+        count: existing.count + 1,
+        years: updated_years |> Enum.sort(:desc),
+        categories: updated_categories |> Enum.sort(),
+        confidence: calculate_award_confidence(award_name, existing.count + 1)
+      })
+    end)
+    
+    Logger.info("Discovered #{map_size(award_stats)} unique awards from movie data")
+    award_stats
+  end
+  
+  defp extract_festival_name(list_name) do
+    cond do
+      String.contains?(list_name, "Cannes") -> "Cannes Film Festival"
+      String.contains?(list_name, "Venice") -> "Venice International Film Festival"
+      String.contains?(list_name, "Berlin") -> "Berlin International Film Festival"
+      String.contains?(list_name, "Sundance") -> "Sundance Film Festival"
+      String.contains?(list_name, "Oscar") -> "Academy Awards"
+      true -> list_name
+    end
+  end
+  
+  defp calculate_award_confidence(award_name, count) do
+    # Higher confidence for well-known awards and higher occurrence counts
+    base_confidence = cond do
+      award_name in ["Palme d'Or", "Grand Prix", "Golden Lion", "Golden Bear"] -> 0.95
+      award_name =~ ~r/(Best|Prix|Prize|Award)/i -> 0.85
+      count >= 5 -> 0.90
+      count >= 2 -> 0.80
+      true -> 0.70
+    end
+    
+    # Boost confidence based on frequency
+    frequency_boost = min(count * 0.02, 0.1)
+    min(base_confidence + frequency_boost, 1.0)
   end
   
   defp process_canonical_movie(movie_data, source_key, metadata_base) do
@@ -1258,6 +1469,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       %{
         "raw_description" => movie_data[:raw_description],
         "award_text" => movie_data[:award_text],
+        "extracted_awards" => movie_data[:extracted_awards] || [],
         "full_text" => movie_data[:full_text],
         "extracted_metadata" => movie_data[:extracted_metadata] || %{}
       }
