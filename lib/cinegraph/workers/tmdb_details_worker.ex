@@ -6,7 +6,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   use Oban.Worker, 
     queue: :tmdb_details,
     max_attempts: 5,
-    unique: [fields: [:args], keys: [:tmdb_id, :imdb_id], period: 300]
+    unique: [fields: [:args], keys: [:tmdb_id, :imdb_id, :source_key], period: 300]
     
   alias Cinegraph.{Repo, Movies}
   alias Cinegraph.Workers.{OMDbEnrichmentWorker, CollaborationWorker}
