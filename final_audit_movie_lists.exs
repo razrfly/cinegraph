@@ -48,16 +48,15 @@ if list do
     {:updated_at, list.updated_at, "✓ Used - Timestamps"}
   ]
   
-  unused_count = 0
-  partially_used_count = 0
-  
-  Enum.each(columns, fn {field, value, usage} ->
-    IO.puts("  #{field}: #{inspect(value, limit: 50)}")
-    IO.puts("    → #{usage}")
-    
-    if String.starts_with?(usage, "✗"), do: unused_count = unused_count + 1
-    if String.starts_with?(usage, "△"), do: partially_used_count = partially_used_count + 1
-  end)
+  {unused_count, partially_used_count} = 
+    Enum.reduce(columns, {0, 0}, fn {field, value, usage}, {unused, partial} ->
+      IO.puts("  #{field}: #{inspect(value, limit: 50)}")
+      IO.puts("    → #{usage}")
+      
+      unused = if String.starts_with?(usage, "✗"), do: unused + 1, else: unused
+      partial = if String.starts_with?(usage, "△"), do: partial + 1, else: partial
+      {unused, partial}
+    end)
   
   IO.puts("\nSummary:")
   IO.puts("  Fully used: #{length(columns) - unused_count - partially_used_count}")

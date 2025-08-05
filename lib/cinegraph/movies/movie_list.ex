@@ -32,7 +32,6 @@ defmodule Cinegraph.Movies.MovieList do
     # Import Tracking
     field :last_import_at, :utc_datetime
     field :last_import_status, :string
-    field :last_movie_count, :integer, default: 0
     field :total_imports, :integer, default: 0
     
     # Metadata
@@ -47,7 +46,7 @@ defmodule Cinegraph.Movies.MovieList do
     |> cast(attrs, [
       :source_key, :name, :description, :source_type, :source_url, :source_id,
       :category, :active, :tracks_awards, :award_types, :last_import_at,
-      :last_import_status, :last_movie_count, :total_imports, :metadata
+      :last_import_status, :total_imports, :metadata
     ])
     |> validate_required([:source_key, :name, :source_type, :source_url])
     |> validate_inclusion(:source_type, @source_types)
@@ -65,7 +64,7 @@ defmodule Cinegraph.Movies.MovieList do
   """
   def import_stats_changeset(movie_list, attrs) do
     movie_list
-    |> cast(attrs, [:last_import_at, :last_import_status, :last_movie_count, :total_imports])
+    |> cast(attrs, [:last_import_at, :last_import_status, :total_imports, :metadata])
     |> validate_inclusion(:last_import_status, @import_statuses)
   end
   

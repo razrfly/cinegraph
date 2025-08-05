@@ -71,11 +71,10 @@ defmodule Cinegraph.Movies.MovieLists do
   @doc """
   Updates import statistics for a movie list.
   """
-  def update_import_stats(%MovieList{} = movie_list, status, movie_count) do
+  def update_import_stats(%MovieList{} = movie_list, status, _movie_count) do
     attrs = %{
       last_import_at: DateTime.utc_now(),
       last_import_status: status,
-      last_movie_count: movie_count,
       total_imports: movie_list.total_imports + 1
     }
     
