@@ -4,7 +4,7 @@ alias Cinegraph.Repo
 alias Cinegraph.Movies.{Movie, Person, Credit, Genre, Keyword, ProductionCompany}
 alias Cinegraph.Collaborations.{Collaboration, CollaborationDetail}
 alias Cinegraph.ExternalSources.Rating
-alias Cinegraph.Imports.SkippedImport
+# alias Cinegraph.Imports.SkippedImport  # Removed - using Oban metadata now
 
 IO.puts("=== COMPREHENSIVE CINEGRAPH AUDIT ===")
 IO.puts("Date: #{DateTime.utc_now()}\n")
@@ -198,8 +198,14 @@ if soft_imports > 0 do
   end)
 end
 
-skipped_count = Repo.aggregate(SkippedImport, :count)
-IO.puts("\nSkipped imports tracked: #{skipped_count}")
+# Now tracking skipped imports in Oban job metadata
+skipped_count = Repo.one(
+  from j in "oban_jobs",
+  where: j.worker == "Elixir.Cinegraph.Workers.TMDbDetailsWorker",
+  where: fragment("? ->> 'import_type' = ?", j.meta, "soft"),
+  select: count(j.id)
+)
+IO.puts("\nSoft imports tracked (via Oban metadata): #{skipped_count}")
 
 # 7. OBAN JOB STATUS
 IO.puts("\n7. OBAN JOB STATUS")
