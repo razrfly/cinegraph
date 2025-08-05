@@ -27,7 +27,6 @@ defmodule Cinegraph.Movies.MovieList do
     
     # Award Tracking
     field :tracks_awards, :boolean, default: false
-    field :award_types, {:array, :string}, default: []
     
     # Import Tracking
     field :last_import_at, :utc_datetime
@@ -45,7 +44,7 @@ defmodule Cinegraph.Movies.MovieList do
     movie_list
     |> cast(attrs, [
       :source_key, :name, :description, :source_type, :source_url, :source_id,
-      :category, :active, :tracks_awards, :award_types, :last_import_at,
+      :category, :active, :tracks_awards, :last_import_at,
       :last_import_status, :total_imports, :metadata
     ])
     |> validate_required([:source_key, :name, :source_type, :source_url])
@@ -111,13 +110,13 @@ defmodule Cinegraph.Movies.MovieList do
       list_id: list.source_id,
       source_key: list.source_key,
       name: list.name,
+      category: list.category,
       metadata: list.metadata || %{}
     }
     
     # Add award-specific metadata if applicable
-    if list.tracks_awards && list.award_types != [] do
+    if list.tracks_awards do
       Map.put(base_config, :metadata, Map.merge(base_config.metadata, %{
-        "awards_included" => Enum.join(list.award_types, ", "),
         "tracks_awards" => true
       }))
     else

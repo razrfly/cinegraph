@@ -152,9 +152,9 @@ defmodule Cinegraph.Movies.Movie do
   end
 
   @doc """
-  Checks if a movie is in a canonical source (e.g., "1001_movies", "sight_and_sound")
+  Checks if a movie is in a canonical source. source_key is required.
   """
-  def is_canonical?(%__MODULE__{canonical_sources: sources}, source_key \\ "1001_movies") do
+  def is_canonical?(%__MODULE__{canonical_sources: sources}, source_key) do
     case Map.get(sources || %{}, source_key) do
       %{"included" => true} -> true
       _ -> false

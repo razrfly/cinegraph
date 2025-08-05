@@ -44,10 +44,30 @@ defmodule Cinegraph.CanonicalLists do
       metadata: %{
         "festival" => "Cannes Film Festival",
         "source" => "IMDB User List",
-        "awards_included" => "Palme d'Or, Grand Prix, Jury Prize, Caméra d'Or, Best Director, Best Actor, Best Actress",
-        "data_extraction" => "Enhanced extraction required for award details",
         "reliability" => "85%",
         "note" => "Winners only - no nominees. Award details mixed in descriptions."
+      }
+    },
+    "venice_golden_lion" => %{
+      list_id: "ls020806626",
+      source_key: "venice_golden_lion",
+      name: "Venice Film Festival Golden Lion Winners",
+      metadata: %{
+        "festival" => "Venice Film Festival",
+        "source" => "IMDB User List",
+        "reliability" => "90%",
+        "note" => "World's oldest film festival, prestigious European cinema"
+      }
+    },
+    "berlin_golden_bear" => %{
+      list_id: "ls073833905",
+      source_key: "berlin_golden_bear",
+      name: "Berlin International Film Festival Golden Bear Winners",
+      metadata: %{
+        "festival" => "Berlin International Film Festival",
+        "source" => "IMDB User List",
+        "reliability" => "90%",
+        "note" => "One of 'Big Three' European festivals, established 1951"
       }
     }
   }

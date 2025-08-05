@@ -408,7 +408,7 @@ defmodule Cinegraph.Movies do
   @doc """
   Counts movies that are canonical in a specific source.
   """
-  def count_canonical_movies(source_key \\ "1001_movies") do
+  def count_canonical_movies(source_key) do
     from(m in Movie, where: fragment("? \\? ?", m.canonical_sources, ^source_key))
     |> Repo.aggregate(:count)
   end
@@ -424,7 +424,7 @@ defmodule Cinegraph.Movies do
   @doc """
   Gets all canonical movies for a specific source.
   """
-  def list_canonical_movies(source_key \\ "1001_movies", params \\ %{}) do
+  def list_canonical_movies(source_key, params \\ %{}) do
     Movie
     |> where([m], fragment("? \\? ?", m.canonical_sources, ^source_key))
     |> apply_sorting(params)
