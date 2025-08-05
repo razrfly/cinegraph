@@ -133,7 +133,8 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
         job_args = %{
           "imdb_id" => imdb_id,
           "canonical_sources" => %{source_key => canonical_data},
-          "source" => "canonical_import"
+          "source" => "canonical_import",
+          "source_key" => source_key  # Add this for the unique constraint
         }
         
         case TMDbDetailsWorker.new(job_args) |> Oban.insert() do
@@ -144,39 +145,22 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
         end
         
       movie ->
-        # Movie exists - check if already has this canonical source
-        existing_sources = movie.canonical_sources || %{}
+        # Movie exists - queue job to update canonical sources
+        # This ensures proper handling even when multiple lists contain the same movie
+        Logger.info("Movie found for IMDb ID #{imdb_id}, queueing canonical source update")
         
-        if Map.has_key?(existing_sources, source_key) do
-          # Already has this source - check if position matches
-          existing_position = get_in(existing_sources, [source_key, "list_position"])
-          
-          if existing_position == position do
-            Logger.info("Movie #{movie.id} already has #{source_key} at position #{position}, skipping")
+        job_args = %{
+          "imdb_id" => imdb_id,
+          "canonical_sources" => %{source_key => canonical_data},
+          "source" => "canonical_import",
+          "source_key" => source_key  # Add this for the unique constraint
+        }
+        
+        case TMDbDetailsWorker.new(job_args) |> Oban.insert() do
+          {:ok, _job} -> {:updated, movie.id}
+          {:error, reason} -> 
+            Logger.error("Failed to queue canonical update: #{inspect(reason)}")
             {:skipped, movie.id}
-          else
-            Logger.warning("Movie #{movie.id} has #{source_key} but at different position (existing: #{existing_position}, new: #{position})")
-            # Update with new position
-            updated_sources = Map.put(existing_sources, source_key, canonical_data)
-            
-            case Movies.update_movie(movie, %{canonical_sources: updated_sources}) do
-              {:ok, _updated} -> {:updated, movie.id}
-              {:error, changeset} ->
-                Logger.error("Failed to update movie: #{inspect(changeset)}")
-                {:skipped, movie.id}
-            end
-          end
-        else
-          # Doesn't have this source yet - add it
-          Logger.info("Adding #{source_key} to movie #{movie.id}")
-          updated_sources = Map.put(existing_sources, source_key, canonical_data)
-          
-          case Movies.update_movie(movie, %{canonical_sources: updated_sources}) do
-            {:ok, _updated} -> {:updated, movie.id}
-            {:error, changeset} ->
-              Logger.error("Failed to update movie: #{inspect(changeset)}")
-              {:skipped, movie.id}
-          end
         end
       end
     end
