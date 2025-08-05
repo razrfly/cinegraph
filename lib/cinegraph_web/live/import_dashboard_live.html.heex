@@ -148,7 +148,12 @@
         <%= for list_stat <- @canonical_stats do %>
           <div class="flex justify-between items-center">
             <span class="text-sm text-gray-600"><%= list_stat.name %></span>
-            <span class="text-sm font-semibold text-gray-900"><%= format_number(list_stat.count) %> movies</span>
+            <span class="text-sm font-semibold text-gray-900">
+              <%= format_number(list_stat.count) %> movies
+              <%= if list_stat[:expected_count] do %>
+                <span class="text-xs font-normal text-gray-500">(of <%= format_number(list_stat.expected_count) %>)</span>
+              <% end %>
+            </span>
           </div>
         <% end %>
       </div>
@@ -193,8 +198,18 @@
                   <%= list.category %>
                 </span>
               </td>
-              <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                <%= format_number(list.last_movie_count) %>
+              <td class="px-4 py-4 whitespace-nowrap">
+                <div class="text-sm text-gray-900">
+                  <%= format_number(list.real_movie_count) %>
+                  <%= if list.metadata["expected_movie_count"] do %>
+                    <span class="text-xs text-gray-500">/ <%= format_number(list.metadata["expected_movie_count"]) %></span>
+                  <% end %>
+                </div>
+                <%= if list.metadata["expected_movie_count"] && list.real_movie_count > 0 do %>
+                  <div class="text-xs text-gray-500">
+                    <%= Float.round(list.real_movie_count / list.metadata["expected_movie_count"] * 100, 1) %>% complete
+                  </div>
+                <% end %>
               </td>
               <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                 <%= if list.last_import_at do %>

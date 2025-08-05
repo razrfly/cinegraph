@@ -47,6 +47,10 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     
     Logger.info("Scraping IMDb list: #{list_name} (#{list_id})")
     
+    # First, get the expected count from the first page
+    expected_count = get_expected_movie_count(list_id)
+    Logger.info("Expected movie count: #{expected_count || "unknown"}")
+    
     # Scrape all pages
     all_movies = scrape_all_pages(list_id, list_config)
     
@@ -54,8 +58,12 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     
     if length(all_movies) > 0 do
       {:ok, processed_results} = process_canonical_movies(all_movies, list_config)
+      
+      # Add expected count to the results
+      results_with_expected = Map.put(processed_results, :expected_count, expected_count)
+      
       Logger.info("Successfully scraped #{list_name}: #{length(all_movies)} movies total")
-      {:ok, processed_results}
+      {:ok, results_with_expected}
     else
       Logger.error("No movies found for #{list_name}")
       {:error, "No movies found"}
@@ -205,10 +213,13 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
   
   defp find_total_count_text(document) do
-    # Various selectors where IMDb might show total count
+    # Target the specific element that contains the total count
+    # Based on HTML: <ul data-testid="list-page-mc-total-items"><li>297 titles</li></ul>
     count_selectors = [
+      "[data-testid='list-page-mc-total-items'] .ipc-inline-list__item",  # Most specific - targets the exact location
+      ".ipc-inline-list__item",  # Fallback - broader search
       ".desc",
-      ".list-description",
+      ".list-description", 
       ".lister-current-last-item",
       ".lister-total-num-results",
       "span.lister-current-last-item",
@@ -221,8 +232,13 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       case Floki.find(document, selector) do
         [] -> nil
         elements -> 
-          text = Floki.text(elements) |> String.trim()
-          if String.match?(text, ~r/\d+/), do: text, else: nil
+          # For each element, check if it contains title count text
+          elements
+          |> Enum.find_value(fn element ->
+            text = Floki.text(element) |> String.trim()
+            # Look for patterns like "297 titles" or "1,260 titles"
+            if String.match?(text, ~r/^\d+,?\d*\s+titles?$/i), do: text, else: nil
+          end)
       end
     end)
   end
@@ -236,6 +252,48 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     
     # Calculate pages (250 items per page)
     div(total - 1, 250) + 1
+  end
+  
+  @doc """
+  Get the expected movie count for a list by checking the first page.
+  Returns the count or nil if unable to determine.
+  """
+  def get_expected_movie_count(list_id) do
+    url = build_imdb_list_url(list_id, 1)
+    
+    case fetch_html(url) do
+      {:ok, html} ->
+        document = Floki.parse_document!(html)
+        count_text = find_total_count_text(document)
+        
+        if count_text do
+          # Parse patterns looking for title counts
+          # First try to find "X titles" pattern directly
+          case Regex.run(~r/(\d+,?\d*)\s+titles?/i, count_text) do
+            [_, total] when is_binary(total) ->
+              total
+              |> String.replace(",", "")
+              |> String.trim()
+              |> String.to_integer()
+            _ ->
+              # Try "of X" pattern
+              case Regex.run(~r/of\s+([\d,]+)/i, count_text) do
+                [_, total] when is_binary(total) ->
+                  total
+                  |> String.replace(",", "")
+                  |> String.trim()
+                  |> String.to_integer()
+                _ ->
+                  nil
+              end
+          end
+        else
+          nil
+        end
+        
+      {:error, _reason} ->
+        nil
+    end
   end
   
   defp estimate_pages_from_first_page(document) do
@@ -280,7 +338,10 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   # Helper function for fetch_single_page
   defp parse_single_page(html, page) do
     # Reuse existing parsing logic
-    list_config = %{name: "Single page"}
+    list_config = %{
+      name: "Single page",
+      metadata: %{}  # Empty metadata to avoid key errors
+    }
     parse_imdb_list_html(html, list_config, page)
   end
   
@@ -541,6 +602,9 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   defp parse_imdb_list_html(html, list_config, page) do
     Logger.info("Parsing IMDb list HTML for #{list_config.name} (page #{page})")
     
+    # Check if this list tracks awards
+    tracks_awards = get_in(list_config.metadata, ["tracks_awards"]) == true
+    
     try do
       # Parse with Floki
       document = Floki.parse_document!(html)
@@ -560,7 +624,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
         |> Enum.with_index(1)
         |> Enum.map(fn {item, index} -> 
           position = base_position + index
-          parse_movie_from_list_item(item, position) 
+          parse_movie_from_list_item(item, position, tracks_awards) 
         end)
         |> Enum.reject(&is_nil/1)
         |> Enum.uniq_by(& &1.imdb_id)  # Remove duplicates
@@ -654,17 +718,17 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end
   end
   
-  defp parse_movie_from_list_item(item, position) do
+  defp parse_movie_from_list_item(item, position, tracks_awards) do
     # Check if it's a .lister-item (page 1 format)
     if Floki.attribute(item, "class") |> Enum.any?(&String.contains?(&1, "lister-item")) do
-      parse_lister_item(item, position)
+      parse_lister_item(item, position, tracks_awards)
     else
       # Otherwise, it's probably the newer format (page 2+)
-      parse_ipc_item(item, position)
+      parse_ipc_item(item, position, tracks_awards)
     end
   end
   
-  defp parse_lister_item(item, position) do
+  defp parse_lister_item(item, position, tracks_awards) do
     # Extract title link
     title_link = Floki.find(item, "a[href*='/title/tt']") |> List.first()
     
@@ -680,12 +744,21 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       year = extract_year_from_item(item)
       
       if imdb_id && title != "" do
-        %{
+        # Basic data that we always extract
+        base_data = %{
           imdb_id: imdb_id,
           title: title,
           year: year,
           position: position
         }
+        
+        # Extract enhanced data only if this list tracks awards
+        if tracks_awards do
+          enhanced_data = extract_enhanced_lister_data(item)
+          Map.merge(base_data, enhanced_data)
+        else
+          base_data
+        end
       else
         nil
       end
@@ -694,7 +767,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end
   end
   
-  defp parse_ipc_item(item, position) do
+  defp parse_ipc_item(item, position, tracks_awards) do
     # For the newer format, find the title link within the item
     title_link = Floki.find(item, ".ipc-title-link-wrapper a[href*='/title/tt']") |> List.first() ||
                  Floki.find(item, "a[href*='/title/tt']") |> List.first()
@@ -712,12 +785,21 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       year = extract_year_from_ipc_item(item)
       
       if imdb_id && title != "" do
-        %{
+        # Basic data
+        base_data = %{
           imdb_id: imdb_id,
           title: title,
           year: year,
           position: position
         }
+        
+        # Extract enhanced data only if this list tracks awards
+        if tracks_awards do
+          enhanced_data = extract_enhanced_ipc_data(item)
+          Map.merge(base_data, enhanced_data)
+        else
+          base_data
+        end
       else
         nil
       end
@@ -833,6 +915,294 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end
   end
   
+  defp extract_enhanced_lister_data(item) do
+    # Extract all text content from the item
+    full_text = Floki.text(item)
+    
+    # Extract description/plot text
+    description = extract_description_text(item)
+    
+    # Extract award text (lines containing award keywords)
+    award_text = extract_award_text(full_text)
+    
+    # Extract metadata (rating, runtime, genre, etc.)
+    metadata = extract_movie_metadata_lister(item)
+    
+    # Extract director and stars
+    credits = extract_credits_lister(item)
+    
+    %{
+      raw_description: description,
+      award_text: award_text,
+      full_text: full_text,
+      extracted_metadata: Map.merge(metadata, credits)
+    }
+  end
+  
+  defp extract_enhanced_ipc_data(item) do
+    # Extract all text content from the item
+    full_text = Floki.text(item)
+    
+    # Extract description/plot text
+    description = extract_description_text_ipc(item)
+    
+    # Extract award text
+    award_text = extract_award_text(full_text)
+    
+    # Extract metadata for newer format
+    metadata = extract_movie_metadata_ipc(item)
+    
+    # Extract credits info
+    credits = extract_credits_ipc(item)
+    
+    %{
+      raw_description: description,
+      award_text: award_text,
+      full_text: full_text,
+      extracted_metadata: Map.merge(metadata, credits)
+    }
+  end
+  
+  defp extract_description_text(item) do
+    # Look for description/plot text in lister format, avoiding metadata
+    description_selectors = [
+      ".text-muted:not(.text-small)",
+      ".plot",
+      ".overview",
+      "p"
+    ]
+    
+    description_selectors
+    |> Enum.find_value(fn selector ->
+      case Floki.find(item, selector) do
+        [] -> nil
+        elements ->
+          text = elements
+          |> Enum.map(&Floki.text/1)
+          |> Enum.map(&String.trim/1)
+          |> Enum.reject(&(&1 == ""))
+          |> Enum.find(fn text ->
+            # Only include text that looks like a plot description
+            String.length(text) > 50 &&
+            !String.match?(text, ~r/^\d+\s*min/) &&
+            !String.match?(text, ~r/^(G|PG|PG-13|R|NC-17)/) &&
+            !String.match?(text, ~r/Director:|Stars:/) &&
+            !String.match?(text, ~r/^\d+\.\d+$/)
+          end)
+          
+          if text && text != "", do: text, else: nil
+      end
+    end) || ""
+  end
+  
+  defp extract_description_text_ipc(item) do
+    # Look for description in newer IPC format
+    description_selectors = [
+      ".ipc-html-content-inner-div",
+      "[data-testid='plot']",
+      ".cli-plot",
+      ".dli-plot-container"
+    ]
+    
+    description_selectors
+    |> Enum.find_value(fn selector ->
+      case Floki.find(item, selector) do
+        [] -> nil
+        elements ->
+          text = Floki.text(elements) |> String.trim()
+          if text != "", do: text, else: nil
+      end
+    end) || ""
+  end
+  
+  defp extract_award_text(full_text) do
+    # Look for award-specific elements first, then fall back to text patterns
+    # This approach is more precise than just splitting by lines
+    
+    # More precise patterns for award text - match the exact award phrases
+    award_patterns = [
+      ~r/\[20\d{2}\]:\s*Palme d'Or[^.]*\./i,
+      ~r/\[20\d{2}\]:\s*Grand Prix[^.]*\./i,
+      ~r/\[20\d{2}\]:\s*Jury Prize[^.]*\./i,
+      ~r/\[20\d{2}\]:\s*Caméra d'Or[^.]*\./i,
+      ~r/\[20\d{2}\]:\s*Camera d'Or[^.]*\./i,
+      ~r/\[20\d{2}\]:\s*Best Director[^.]*\./i,
+      ~r/\[20\d{2}\]:\s*Best Actor[^.]*\./i,
+      ~r/\[20\d{2}\]:\s*Best Actress[^.]*\./i,
+      ~r/Palme d'Or winner[^.]*\./i,
+      ~r/Grand Prix winner[^.]*\./i,
+      ~r/Jury Prize winner[^.]*\./i,
+      ~r/Won.*?Palme d'Or[^.]*\./i,
+      ~r/Won.*?Grand Prix[^.]*\./i
+    ]
+    
+    # Extract all matching award phrases
+    award_matches = award_patterns
+    |> Enum.flat_map(fn pattern ->
+      Regex.scan(pattern, full_text, capture: :all)
+      |> Enum.map(fn [match] -> String.trim(match) end)
+    end)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    
+    if length(award_matches) > 0 do
+      Enum.join(award_matches, " | ")
+    else
+      # Fallback: look for simple award mentions without full sentences
+      simple_patterns = [
+        ~r/Palme d'Or/i,
+        ~r/Grand Prix/i,
+        ~r/Jury Prize/i,
+        ~r/Caméra d'Or/i,
+        ~r/Camera d'Or/i
+      ]
+      
+      lines = String.split(full_text, ~r/[\n\r\t]+/)
+      award_lines = lines
+      |> Enum.filter(fn line ->
+        trimmed = String.trim(line)
+        String.length(trimmed) < 100 &&  # Keep lines short
+        !String.match?(trimmed, ~r/^\d+\.\d+$/) &&  # Not ratings
+        !String.match?(trimmed, ~r/^\d+h?\s*\d*m?$/) &&  # Not runtime
+        !String.match?(trimmed, ~r/^[A-Z]+$/) &&  # Not ratings like R, PG
+        !String.match?(trimmed, ~r/Director:|Stars:/) &&  # Not credits
+        Enum.any?(simple_patterns, &String.match?(trimmed, &1))
+      end)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+      
+      if length(award_lines) > 0 do
+        Enum.join(award_lines, " | ")
+      else
+        ""
+      end
+    end
+  end
+  
+  defp extract_movie_metadata_lister(item) do
+    metadata = %{}
+    
+    # Extract runtime
+    runtime = case Floki.find(item, ".runtime") do
+      [] -> nil
+      elements -> Floki.text(elements) |> String.trim()
+    end
+    
+    # Extract certificate/rating
+    certificate = case Floki.find(item, ".certificate") do
+      [] -> nil
+      elements -> Floki.text(elements) |> String.trim()
+    end
+    
+    # Extract genre
+    genre = case Floki.find(item, ".genre") do
+      [] -> nil
+      elements -> Floki.text(elements) |> String.trim()
+    end
+    
+    # Extract metascore
+    metascore = case Floki.find(item, ".metascore") do
+      [] -> nil
+      elements -> Floki.text(elements) |> String.trim()
+    end
+    
+    # Extract rating info
+    rating_bar = Floki.find(item, ".ratings-bar")
+    rating = case Floki.find(rating_bar, "strong") do
+      [] -> nil
+      elements -> Floki.text(elements) |> String.trim()
+    end
+    
+    # Extract vote count
+    votes = case Floki.find(item, ".text-muted:last-child") do
+      [] -> nil
+      elements -> 
+        text = Floki.text(elements)
+        case Regex.run(~r/\(([\d,]+)\)/, text) do
+          [_, count] -> count
+          _ -> nil
+        end
+    end
+    
+    metadata
+    |> Map.put_new("runtime", runtime)
+    |> Map.put_new("certificate", certificate)
+    |> Map.put_new("genre", genre)
+    |> Map.put_new("metascore", metascore)
+    |> Map.put_new("imdb_rating", rating)
+    |> Map.put_new("vote_count", votes)
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Enum.into(%{})
+  end
+  
+  defp extract_movie_metadata_ipc(item) do
+    metadata = %{}
+    
+    # Extract metadata from inline list items
+    metadata_items = Floki.find(item, ".ipc-inline-list__item")
+    
+    # Process each metadata item
+    metadata_values = metadata_items
+    |> Enum.map(&Floki.text/1)
+    |> Enum.map(&String.trim/1)
+    
+    # Try to identify runtime, rating, etc from the values
+    runtime = Enum.find(metadata_values, &String.match?(&1, ~r/\d+h\s*\d*m?|\d+m/))
+    rating = Enum.find(metadata_values, &String.match?(&1, ~r/^(G|PG|PG-13|R|NC-17|TV-)/))
+    
+    # Extract IMDb rating
+    imdb_rating = case Floki.find(item, "[data-testid='ratingGroup'] span") do
+      [] -> nil
+      elements -> 
+        elements
+        |> Enum.map(&Floki.text/1)
+        |> Enum.find(&String.match?(&1, ~r/^\d+\.\d+$/))
+    end
+    
+    metadata
+    |> Map.put_new("runtime", runtime)
+    |> Map.put_new("certificate", rating)
+    |> Map.put_new("imdb_rating", imdb_rating)
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Enum.into(%{})
+  end
+  
+  defp extract_credits_lister(item) do
+    credits = %{}
+    
+    # Look for director and stars
+    credits_p = Floki.find(item, "p.text-muted")
+    
+    credits_text = credits_p
+    |> Enum.map(&Floki.text/1)
+    |> Enum.join(" ")
+    
+    # Extract director
+    director = case Regex.run(~r/Director?s?:\s*([^|]+)/, credits_text) do
+      [_, dir] -> String.trim(dir)
+      _ -> nil
+    end
+    
+    # Extract stars
+    stars = case Regex.run(~r/Stars?:\s*(.+)/, credits_text) do
+      [_, stars_text] -> String.trim(stars_text)
+      _ -> nil
+    end
+    
+    credits
+    |> Map.put_new("director", director)
+    |> Map.put_new("stars", stars)
+    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+    |> Enum.into(%{})
+  end
+  
+  defp extract_credits_ipc(_item) do
+    # In IPC format, credits might be in different structure
+    # This is a placeholder - would need to inspect actual HTML
+    %{}
+  end
+  
   defp process_canonical_movies(movie_data, list_config) do
     source_key = list_config.source_key
     Logger.info("Processing #{length(movie_data)} canonical movies for #{source_key}")
@@ -877,11 +1247,27 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   
   defp process_canonical_movie(movie_data, source_key, metadata_base) do
     # Add movie-specific metadata
-    metadata = Map.merge(metadata_base, %{
+    base_movie_metadata = %{
       "list_position" => movie_data.position,
       "scraped_title" => movie_data.title,
       "scraped_year" => movie_data.year
-    })
+    }
+    
+    # Include all enhanced data if available
+    enhanced_metadata = if Map.has_key?(movie_data, :raw_description) do
+      %{
+        "raw_description" => movie_data[:raw_description],
+        "award_text" => movie_data[:award_text],
+        "full_text" => movie_data[:full_text],
+        "extracted_metadata" => movie_data[:extracted_metadata] || %{}
+      }
+    else
+      %{}
+    end
+    
+    metadata = metadata_base
+      |> Map.merge(base_movie_metadata)
+      |> Map.merge(enhanced_metadata)
     
     case Repo.get_by(Movies.Movie, imdb_id: movie_data.imdb_id) do
       nil ->

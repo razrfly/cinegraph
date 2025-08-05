@@ -13,10 +13,10 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
       states: [:available, :scheduled, :executing, :retryable]
     ]
   
-  alias Cinegraph.Workers.CanonicalPageWorker
+  alias Cinegraph.Workers.{CanonicalPageWorker, CanonicalImportCompletionWorker}
   alias Cinegraph.Scrapers.ImdbCanonicalScraper
   alias Cinegraph.CanonicalLists
-  alias Cinegraph.Movies.MovieLists
+  alias Cinegraph.Movies.{MovieLists, MovieList}
   require Logger
   
   @doc """
@@ -41,6 +41,27 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
       
       Logger.info("Starting canonical import orchestration for #{list_config.name}")
       Logger.info("Total pages to process: #{total_pages}")
+      
+      # Get expected movie count
+      expected_count = ImdbCanonicalScraper.get_expected_movie_count(list_config.list_id)
+      Logger.info("Expected movie count: #{expected_count || "unknown"}")
+      
+      # Store expected count in movie list metadata if we got it
+      if expected_count do
+        case MovieLists.get_by_source_key(list_key) do
+          %MovieList{} = movie_list ->
+            updated_metadata = Map.put(movie_list.metadata, "expected_movie_count", expected_count)
+            changeset = Ecto.Changeset.change(movie_list, metadata: updated_metadata)
+            case Cinegraph.Repo.update(changeset) do
+              {:ok, _} -> 
+                Logger.info("Updated expected count for #{list_key}: #{expected_count}")
+              {:error, error} -> 
+                Logger.warning("Failed to update expected count for #{list_key}: #{inspect(error)}")
+            end
+          nil ->
+            Logger.warning("Movie list not found for key: #{list_key}")
+        end
+      end
       
       # Update import stats to mark as started
       update_import_started(list_key)
@@ -78,6 +99,9 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
           pages_queued: length(jobs_list),
           status: "#{length(jobs_list)} page jobs queued"
         })
+        
+        # Schedule completion check worker
+        schedule_completion_check(list_key, expected_count, total_pages)
         
         :ok
       else
@@ -138,9 +162,28 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
         :ok
       list ->
         # Update to show import is in progress
-        MovieLists.update_import_stats(list, "in_progress", 0)
-        Logger.info("Updated import stats for #{list_key} - marked as in progress")
+        case MovieLists.update_import_stats(list, "pending", 0) do
+          {:ok, _} ->
+            Logger.info("Updated import stats for #{list_key} - marked as in progress")
+            :ok
+          {:error, reason} ->
+            Logger.error("Failed to update import stats for #{list_key}: #{inspect(reason)}")
+            :ok  # Don't fail the import due to stats update failure
+        end
     end
+  end
+  
+  defp schedule_completion_check(list_key, expected_count, total_pages) do
+    # Schedule the completion check to run in 30 seconds
+    %{
+      "list_key" => list_key,
+      "expected_count" => expected_count,
+      "total_pages" => total_pages
+    }
+    |> CanonicalImportCompletionWorker.new(schedule_in: 30)
+    |> Oban.insert()
+    
+    Logger.info("Scheduled completion check for #{list_key}")
   end
   
   defp update_import_failed(list_key, reason) do
@@ -150,8 +193,14 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
         :ok
       list ->
         # Update to show import failed
-        MovieLists.update_import_stats(list, "failed: #{reason}", 0)
-        Logger.info("Updated import stats for #{list_key} - marked as failed")
+        case MovieLists.update_import_stats(list, "failed: #{reason}", 0) do
+          {:ok, _} ->
+            Logger.info("Updated import stats for #{list_key} - marked as failed: #{reason}")
+            :ok
+          {:error, update_error} ->
+            Logger.error("Failed to update import stats for #{list_key}: #{inspect(update_error)}")
+            :ok  # Don't fail the import due to stats update failure
+        end
     end
   end
 end
