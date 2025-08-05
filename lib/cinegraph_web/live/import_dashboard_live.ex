@@ -7,7 +7,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   
   alias Cinegraph.Imports.TMDbImporter
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.{Movie, MovieLists}
   alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker}
   import Ecto.Query
   
@@ -30,6 +30,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:oscar_import_progress, nil)
       |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
       |> assign(:oscar_decades, generate_oscar_decades())
+      |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+      |> assign(:show_modal, false)
+      |> assign(:editing_list, nil)
       |> load_data()
       |> schedule_refresh()
     
@@ -275,6 +278,172 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end
   end
   
+  @impl true
+  def handle_event("show_add_modal", _params, socket) do
+    socket = 
+      socket
+      |> assign(:show_modal, true)
+      |> assign(:editing_list, nil)
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_event("show_edit_modal", %{"id" => id}, socket) do
+    list = MovieLists.get_movie_list!(String.to_integer(id))
+    
+    socket = 
+      socket
+      |> assign(:show_modal, true)
+      |> assign(:editing_list, list)
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_event("hide_modal", _params, socket) do
+    socket = 
+      socket
+      |> assign(:show_modal, false)
+      |> assign(:editing_list, nil)
+    
+    {:noreply, socket}
+  end
+  
+  @impl true
+  def handle_event("add_movie_list", params, socket) do
+    # Auto-detect source type from URL
+    source_type = detect_source_type(params["source_url"])
+    
+    attrs = %{
+      source_url: params["source_url"],
+      name: params["name"],
+      source_key: params["source_key"],
+      category: params["category"],
+      description: params["description"],
+      source_type: source_type,
+      tracks_awards: params["tracks_awards"] == "on",
+      active: true
+    }
+    
+    case MovieLists.create_movie_list(attrs) do
+      {:ok, list} ->
+        socket = 
+          socket
+          |> put_flash(:info, "List '#{list.name}' added successfully!")
+          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+          |> assign(:show_modal, false)
+        
+        {:noreply, socket}
+        
+      {:error, changeset} ->
+        errors = 
+          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+            Enum.reduce(opts, msg, fn {key, value}, acc ->
+              String.replace(acc, "%{#{key}}", to_string(value))
+            end)
+          end)
+          |> Enum.map(fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
+          |> Enum.join("; ")
+        
+        socket = put_flash(socket, :error, "Failed to add list: #{errors}")
+        {:noreply, socket}
+    end
+  end
+  
+  @impl true
+  def handle_event("update_movie_list", params, socket) do
+    list = MovieLists.get_movie_list!(String.to_integer(params["list_id"]))
+    
+    # Auto-detect source type from URL
+    source_type = detect_source_type(params["source_url"])
+    
+    attrs = %{
+      source_url: params["source_url"],
+      name: params["name"],
+      category: params["category"],
+      description: params["description"],
+      source_type: source_type,
+      tracks_awards: params["tracks_awards"] == "on"
+    }
+    
+    case MovieLists.update_movie_list(list, attrs) do
+      {:ok, updated_list} ->
+        socket = 
+          socket
+          |> put_flash(:info, "List '#{updated_list.name}' updated successfully!")
+          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+          |> assign(:show_modal, false)
+          |> assign(:editing_list, nil)
+        
+        {:noreply, socket}
+        
+      {:error, changeset} ->
+        errors = 
+          Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+            Enum.reduce(opts, msg, fn {key, value}, acc ->
+              String.replace(acc, "%{#{key}}", to_string(value))
+            end)
+          end)
+          |> Enum.map(fn {field, msgs} -> "#{field}: #{Enum.join(msgs, ", ")}" end)
+          |> Enum.join("; ")
+        
+        socket = put_flash(socket, :error, "Failed to update list: #{errors}")
+        {:noreply, socket}
+    end
+  end
+  
+  @impl true
+  def handle_event("delete_list", %{"id" => id}, socket) do
+    list = MovieLists.get_movie_list!(String.to_integer(id))
+    
+    case MovieLists.delete_movie_list(list) do
+      {:ok, _deleted_list} ->
+        socket = 
+          socket
+          |> put_flash(:info, "List '#{list.name}' deleted successfully!")
+          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+        
+        {:noreply, socket}
+        
+      {:error, _changeset} ->
+        socket = put_flash(socket, :error, "Failed to delete list")
+        {:noreply, socket}
+    end
+  end
+  
+  @impl true
+  def handle_event("toggle_list_active", %{"id" => id}, socket) do
+    list = MovieLists.get_movie_list!(String.to_integer(id))
+    
+    case MovieLists.update_movie_list(list, %{active: !list.active}) do
+      {:ok, _updated_list} ->
+        socket = 
+          socket
+          |> put_flash(:info, "List #{if list.active, do: "disabled", else: "enabled"} successfully")
+          |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+        
+        {:noreply, socket}
+        
+      {:error, _changeset} ->
+        socket = put_flash(socket, :error, "Failed to update list")
+        {:noreply, socket}
+    end
+  end
+  
+  defp detect_source_type(url) do
+    cond do
+      String.contains?(url, "imdb.com") -> "imdb"
+      String.contains?(url, "themoviedb.org") || String.contains?(url, "tmdb.org") -> "tmdb"
+      String.contains?(url, "letterboxd.com") -> "letterboxd"
+      true -> "custom"
+    end
+  end
+  
   defp load_data(socket) do
     # Get progress
     progress = TMDbImporter.get_progress()
@@ -313,6 +482,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:oscar_stats, oscar_stats)
     |> assign(:queue_stats, queue_stats)
     |> assign(:import_rate, runtime_stats.movies_per_minute)
+    |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
+    |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
   end
   
   defp get_oscar_movies_count do

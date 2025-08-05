@@ -9,20 +9,26 @@ defmodule Cinegraph.Imports.QualityFilter do
   require Logger
   
   # Movie quality criteria configuration
-  @movie_min_required 4  # Require ALL criteria for full import
+  @movie_min_required 2  # Require 2 out of 4 criteria for full import
+  
+  # Configurable quality thresholds
+  @quality_thresholds %{
+    min_votes: 10,      # Lowered from 25
+    min_popularity: 0.5 # Lowered from 5.0
+  }
   
   # Person quality criteria configuration
   @key_departments ["Acting", "Directing", "Writing"]
   
   # Movie criteria check functions
   defp check_has_poster(movie), do: !is_nil(movie["poster_path"])
-  defp check_has_votes(movie), do: (movie["vote_count"] || 0) >= 25  # Increased threshold
-  defp check_has_popularity(movie), do: (movie["popularity"] || 0) >= 5.0  # Increased threshold
+  defp check_has_votes(movie), do: (movie["vote_count"] || 0) >= @quality_thresholds.min_votes
+  defp check_has_popularity(movie), do: (movie["popularity"] || 0) >= @quality_thresholds.min_popularity
   defp check_has_release_date(movie), do: !is_nil(movie["release_date"])
   
   # Person criteria check functions
   defp check_person_has_profile(person), do: !is_nil(person["profile_path"])
-  defp check_person_has_popularity(person), do: (person["popularity"] || 0) >= 0.5  # Increased threshold
+  defp check_person_has_popularity(person), do: (person["popularity"] || 0) >= 0.5
   
   @doc """
   Determines if a movie should be fully imported.
@@ -95,7 +101,8 @@ defmodule Cinegraph.Imports.QualityFilter do
         :has_votes,
         :has_popularity,
         :has_release_date
-      ]
+      ],
+      thresholds: @quality_thresholds
     }
   end
   
@@ -117,8 +124,8 @@ defmodule Cinegraph.Imports.QualityFilter do
           failed_criteria: failed_criteria,
           missing_data: %{
             poster: is_nil(movie_data["poster_path"]),
-            votes: (movie_data["vote_count"] || 0) < 25,
-            popularity: (movie_data["popularity"] || 0) < 5.0,
+            votes: (movie_data["vote_count"] || 0) < @quality_thresholds.min_votes,
+            popularity: (movie_data["popularity"] || 0) < @quality_thresholds.min_popularity,
             release_date: is_nil(movie_data["release_date"])
           }
         }

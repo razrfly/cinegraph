@@ -16,9 +16,23 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
   alias Cinegraph.Workers.CanonicalPageWorker
   alias Cinegraph.Scrapers.ImdbCanonicalScraper
   alias Cinegraph.CanonicalLists
+  alias Cinegraph.Movies.MovieLists
   require Logger
   
-  def available_lists, do: CanonicalLists.all()
+  @doc """
+  Returns all available lists from both database and hardcoded sources.
+  Database lists take precedence over hardcoded ones.
+  """
+  def available_lists do
+    # Get active lists from database
+    db_lists = MovieLists.all_as_config()
+    
+    # Get hardcoded lists
+    hardcoded_lists = CanonicalLists.all()
+    
+    # Merge with database lists taking precedence
+    Map.merge(hardcoded_lists, db_lists)
+  end
   
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "orchestrate_import", "list_key" => list_key}}) do
@@ -27,6 +41,9 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
       
       Logger.info("Starting canonical import orchestration for #{list_config.name}")
       Logger.info("Total pages to process: #{total_pages}")
+      
+      # Update import stats to mark as started
+      update_import_started(list_key)
       
       # Broadcast start of import
       broadcast_progress(list_key, :orchestrating, %{
@@ -71,16 +88,19 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
     else
       {:error, :list_not_found} ->
         Logger.error("List configuration not found for key: #{list_key}")
+        update_import_failed(list_key, "List configuration not found")
         {:error, "List not found: #{list_key}"}
         
       {:error, reason} ->
         Logger.error("Failed to orchestrate import: #{inspect(reason)}")
+        update_import_failed(list_key, inspect(reason))
         {:error, reason}
     end
   end
   
   defp get_list_config(list_key) do
-    case CanonicalLists.get(list_key) do
+    # Try database first, then fallback to hardcoded
+    case MovieLists.get_config(list_key) do
       {:ok, config} -> {:ok, Map.put(config, :list_key, list_key)}
       {:error, _reason} -> {:error, :list_not_found}
     end
@@ -109,5 +129,29 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
         timestamp: DateTime.utc_now()
       })}
     )
+  end
+  
+  defp update_import_started(list_key) do
+    case MovieLists.get_active_by_source_key(list_key) do
+      nil -> 
+        Logger.warning("No database record found for list #{list_key}")
+        :ok
+      list ->
+        # Update to show import is in progress
+        MovieLists.update_import_stats(list, "in_progress", 0)
+        Logger.info("Updated import stats for #{list_key} - marked as in progress")
+    end
+  end
+  
+  defp update_import_failed(list_key, reason) do
+    case MovieLists.get_active_by_source_key(list_key) do
+      nil -> 
+        Logger.warning("No database record found for list #{list_key}")
+        :ok
+      list ->
+        # Update to show import failed
+        MovieLists.update_import_stats(list, "failed: #{reason}", 0)
+        Logger.info("Updated import stats for #{list_key} - marked as failed")
+    end
   end
 end
