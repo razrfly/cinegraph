@@ -282,12 +282,9 @@ defmodule Cinegraph.Cultural.OscarImporter do
     category = Repo.get_by(OscarCategory, name: category_name)
     
     if category do
-      # Determine if we should track person
-      person_id = if category.tracks_person do
-        find_or_create_person(nominee, category_name)
-      else
-        nil
-      end
+      # TODO: Fix person creation after database migration
+      # For now, skip person_id population to focus on fixing nominee_names  
+      person_id = nil
       
       # Create the nomination
       attrs = %{
@@ -330,7 +327,7 @@ defmodule Cinegraph.Cultural.OscarImporter do
               imdb_id: imdb_id
             }
             
-            case Repo.insert(%Person{} |> Person.changeset(attrs)) do
+            case Repo.insert(%Person{} |> Person.imdb_changeset(attrs)) do
               {:ok, person} -> person.id
               {:error, changeset} -> 
                 Logger.error("Failed to create person #{person_name}: #{inspect(changeset.errors)}")
@@ -343,6 +340,7 @@ defmodule Cinegraph.Cultural.OscarImporter do
       
       # Otherwise skip person tracking for now
       true ->
+        Logger.info("Skipping person creation - either no IMDb ID or multiple people per nomination")
         nil
     end
   end
