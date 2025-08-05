@@ -19,7 +19,6 @@ defmodule Cinegraph.Repo.Migrations.CreateMovieLists do
       
       # Award Tracking (Simple)
       add :tracks_awards, :boolean, default: false
-      add :award_types, {:array, :string}, default: []
       
       # Import Tracking
       add :last_import_at, :utc_datetime

@@ -170,10 +170,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
   
   @impl true
   def handle_event("import_canonical_list", %{"list_key" => "all"}, socket) do
-    # Queue imports for all canonical lists
-    alias Cinegraph.CanonicalLists
-    
-    jobs = CanonicalLists.all()
+    # Queue imports for all canonical lists from database
+    jobs = MovieLists.all_as_config()
     |> Enum.map(fn {list_key, _config} ->
       %{
         "action" => "orchestrate_import",
@@ -447,7 +445,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       total_movies: Repo.aggregate(Movie, :count),
       movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count),
       movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count),
-      canonical_movies: Repo.aggregate(from(m in Movie, where: fragment("? \\?| array[?]", m.canonical_sources, ["1001_movies", "criterion", "sight_sound_critics_2022", "national_film_registry"])), :count),
+      canonical_movies: get_canonical_movies_count(),
       oscar_movies: get_oscar_movies_count(),
       total_people: Repo.aggregate(Cinegraph.Movies.Person, :count),
       total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count),
@@ -480,6 +478,20 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
   end
   
+  defp get_canonical_movies_count do
+    # Get all active canonical source keys dynamically from database
+    active_source_keys = MovieLists.get_active_source_keys()
+    
+    if length(active_source_keys) > 0 do
+      Repo.aggregate(
+        from(m in Movie, where: fragment("? \\?| ?", m.canonical_sources, ^active_source_keys)), 
+        :count
+      )
+    else
+      0
+    end
+  end
+
   defp get_oscar_movies_count do
     # Count movies that have IMDb IDs matching those in Oscar ceremony data
     # Since nominations haven't been processed into oscar_nominations table yet,
@@ -537,10 +549,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp get_canonical_list_stats do
-    alias Cinegraph.CanonicalLists
-    
-    # Get all canonical lists and their counts
-    CanonicalLists.all()
+    # Get all canonical lists from database and their counts
+    MovieLists.all_as_config()
     |> Enum.map(fn {list_key, config} ->
       # Use raw SQL to avoid Ecto escaping issues with the ? operator
       {:ok, %{rows: [[count]]}} = Repo.query(
