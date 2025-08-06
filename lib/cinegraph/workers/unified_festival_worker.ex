@@ -12,10 +12,11 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
   require Logger
   alias Cinegraph.Scrapers.UnifiedFestivalScraper
   alias Cinegraph.Festivals
-  alias Cinegraph.Workers.{TMDbDetailsWorker, FestivalDiscoveryWorker}
+  alias Cinegraph.Events
+  alias Cinegraph.Workers.FestivalDiscoveryWorker
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"festival" => festival, "year" => year} = args}) do
+  def perform(%Oban.Job{args: %{"festival" => festival, "year" => year}}) do
     Logger.info("Starting #{festival} import for year #{year}")
 
     with {:ok, festival_config} <- get_festival_config(festival),
@@ -113,13 +114,16 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
   end
 
   defp create_or_update_ceremony(organization, year, festival_data) do
+    # Get the event configuration from database to build proper source URL
+    event_id = get_event_id_from_database(organization)
+    
     attrs = %{
       organization_id: organization.id,
       year: year,
       name: "#{year} #{organization.name}",
       data: festival_data,
       data_source: "imdb",
-      source_url: "https://www.imdb.com/event/#{get_event_id(organization)}/#{year}/1/",
+      source_url: build_source_url(event_id, year),
       scraped_at: DateTime.utc_now(),
       source_metadata: %{
         "scraper" => "UnifiedFestivalScraper",
@@ -131,20 +135,28 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
     Festivals.upsert_ceremony(attrs)
   end
 
-  defp get_event_id(organization) do
-    # Map organization back to IMDb event ID
-    case organization.abbreviation do
-      # Cannes
-      "CFF" -> "ev0000147"
-      # BAFTA
-      "BAFTA" -> "ev0000123"
-      # Berlin
-      "BIFF" -> "ev0000091"
-      # Venice
-      "VIFF" -> "ev0000681"
-      _ -> nil
+  defp get_event_id_from_database(organization) do
+    # Look up the festival event in the database by organization abbreviation
+    case Events.list_active_events() do
+      events when is_list(events) ->
+        event = Enum.find(events, fn e -> 
+          e.abbreviation == organization.abbreviation
+        end)
+        
+        if event && event.source_config do
+          # Get the IMDb event ID from the database configuration
+          event.source_config["event_id"] || event.source_config["imdb_event_id"]
+        else
+          Logger.warning("No event configuration found for organization: #{organization.abbreviation}")
+          nil
+        end
+      _ ->
+        nil
     end
   end
+  
+  defp build_source_url(nil, year), do: "https://www.imdb.com/event/unknown/#{year}/1/"
+  defp build_source_url(event_id, year), do: "https://www.imdb.com/event/#{event_id}/#{year}/1/"
 
   defp queue_festival_discovery_job(ceremony) do
     job_args = %{

@@ -182,19 +182,18 @@ defmodule Cinegraph.Collaborations.PathFinder do
       )
 
     total = length(popular_people) * (length(popular_people) - 1)
-    count = 0
 
     # Calculate paths between all pairs
-    for from_id <- popular_people,
-        to_id <- popular_people,
-        from_id != to_id do
+    popular_people
+    |> Enum.flat_map(fn from_id ->
+      Enum.map(popular_people, &{from_id, &1})
+    end)
+    |> Enum.reject(fn {a, b} -> a == b end)
+    |> Enum.with_index(1)
+    |> Enum.each(fn {{from_id, to_id}, idx} ->
       find_shortest_path(from_id, to_id)
-      count = count + 1
-
-      if rem(count, 100) == 0 do
-        IO.puts("Calculated #{count}/#{total} paths...")
-      end
-    end
+      if rem(idx, 100) == 0, do: IO.puts("Calculated #{idx}/#{total} paths...")
+    end)
 
     IO.puts("✓ Pre-calculated #{total} paths")
   end

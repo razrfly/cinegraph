@@ -5,16 +5,19 @@ IO.puts("Checking Oban jobs...")
 all_jobs = Oban.Job |> Cinegraph.Repo.all()
 IO.puts("Total jobs in database: #{length(all_jobs)}")
 
-# Check by state
+# Check by state - batch query for efficiency
 states = ["available", "executing", "completed", "cancelled", "discarded", "retryable"]
 
-Enum.each(states, fn state ->
-  count =
-    Cinegraph.Repo.aggregate(
-      Ecto.Query.from(j in Oban.Job, where: j.state == ^state),
-      :count
-    )
+counts =
+  Oban.Job
+  |> Ecto.Query.where([j], j.state in ^states)
+  |> Ecto.Query.group_by([j], j.state)
+  |> Ecto.Query.select([j], {j.state, count(j.id)})
+  |> Cinegraph.Repo.all()
+  |> Map.new()
 
+Enum.each(states, fn state ->
+  count = Map.get(counts, state, 0)
   if count > 0, do: IO.puts("  #{state}: #{count}")
 end)
 

@@ -5,45 +5,11 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   """
 
   require Logger
+  
+  alias Cinegraph.Events
+  alias Cinegraph.Events.FestivalEvent
 
   @timeout 30_000
-  @max_retries 3
-
-  # Festival/Award event mappings
-  @event_mappings %{
-    "cannes" => %{
-      event_id: "ev0000147",
-      name: "Cannes Film Festival",
-      abbreviation: "CFF",
-      country: "France",
-      founded_year: 1946,
-      website: "https://www.festival-cannes.com"
-    },
-    "bafta" => %{
-      event_id: "ev0000123",
-      name: "BAFTA Film Awards",
-      abbreviation: "BAFTA",
-      country: "United Kingdom",
-      founded_year: 1947,
-      website: "https://www.bafta.org"
-    },
-    "berlin" => %{
-      event_id: "ev0000091",
-      name: "Berlin International Film Festival",
-      abbreviation: "BIFF",
-      country: "Germany",
-      founded_year: 1951,
-      website: "https://www.berlinale.de"
-    },
-    "venice" => %{
-      event_id: "ev0000681",
-      name: "Venice International Film Festival",
-      abbreviation: "VIFF",
-      country: "Italy",
-      founded_year: 1932,
-      website: "https://www.labiennale.org/en/cinema"
-    }
-  }
 
   @doc """
   Fetch festival data for a specific festival and year.
@@ -57,11 +23,12 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     * {:error, reason} - Error details
   """
   def fetch_festival_data(festival_key, year) when is_binary(festival_key) do
-    case Map.get(@event_mappings, festival_key) do
+    case Events.get_active_by_source_key(festival_key) do
       nil ->
         {:error, "Unknown festival: #{festival_key}"}
 
-      festival_config ->
+      festival_event ->
+        festival_config = FestivalEvent.to_scraper_config(festival_event)
         url = build_imdb_url(festival_config.event_id, year)
         Logger.info("Fetching #{festival_config.name} data for #{year} from: #{url}")
 
@@ -80,14 +47,18 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   Get all supported festival keys.
   """
   def supported_festivals do
-    Map.keys(@event_mappings)
+    Events.list_active_events()
+    |> Enum.map(& &1.source_key)
   end
 
   @doc """
   Get festival configuration by key.
   """
   def get_festival_config(festival_key) do
-    Map.get(@event_mappings, festival_key)
+    case Events.get_active_by_source_key(festival_key) do
+      nil -> nil
+      festival_event -> FestivalEvent.to_scraper_config(festival_event)
+    end
   end
 
   defp build_imdb_url(event_id, year) do
@@ -326,40 +297,21 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     apply_festival_mappings(normalized, festival_config)
   end
 
-  defp apply_festival_mappings(name, %{abbreviation: "CFF"}) do
-    # Cannes-specific mappings
-    case name do
-      "palme_dor" -> "palme_dor"
-      "grand_prix" -> "grand_prix"
-      "prix_du_jury" -> "jury_prize"
-      "prix_de_la_mise_en_scene" -> "best_director"
-      _ -> name
+  defp apply_festival_mappings(name, festival_config) do
+    # Try to get category mappings from database metadata
+    case get_festival_event_by_config(festival_config) do
+      %{metadata: %{"category_mappings" => mappings}} when is_map(mappings) ->
+        Map.get(mappings, name, name)
+      _ ->
+        # No mapping found, return name as-is
+        name
     end
   end
-
-  defp apply_festival_mappings(name, %{abbreviation: "BIFF"}) do
-    # Berlin-specific mappings
-    case name do
-      "golden_bear" -> "golden_bear"
-      "silver_bear" -> "silver_bear"
-      "alfred_bauer_prize" -> "alfred_bauer_prize"
-      _ -> name
-    end
+  
+  defp get_festival_event_by_config(festival_config) do
+    Events.list_active_events()
+    |> Enum.find(fn event -> event.abbreviation == festival_config.abbreviation end)
   end
-
-  defp apply_festival_mappings(name, %{abbreviation: "BAFTA"}) do
-    # BAFTA-specific mappings
-    case name do
-      "best_film" -> "best_film"
-      "outstanding_british_film" -> "outstanding_british_film"
-      "best_director" -> "best_director"
-      "best_actor" -> "best_actor"
-      "best_actress" -> "best_actress"
-      _ -> name
-    end
-  end
-
-  defp apply_festival_mappings(name, _), do: name
 
   defp extract_imdb_id(nil), do: nil
 
@@ -371,21 +323,23 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   end
 
   defp get_festival_key(festival_config) do
-    @event_mappings
-    |> Enum.find(fn {_key, config} ->
-      config.abbreviation == festival_config.abbreviation
-    end)
-    |> case do
-      {key, _} -> key
-      nil -> String.downcase(festival_config.abbreviation)
+    # Try to find the festival by abbreviation in the database
+    case get_festival_event_by_config(festival_config) do
+      %{source_key: source_key} -> source_key
+      nil -> String.downcase(festival_config.abbreviation || "unknown")
     end
   end
 
-  defp get_default_category(%{abbreviation: "CFF"}), do: "cannes_award"
-  defp get_default_category(%{abbreviation: "BIFF"}), do: "berlin_award"
-  defp get_default_category(%{abbreviation: "BAFTA"}), do: "bafta_award"
-  defp get_default_category(%{abbreviation: "VIFF"}), do: "venice_award"
-  defp get_default_category(_), do: "festival_award"
+  defp get_default_category(festival_config) do
+    # Try to get default category from database metadata
+    case get_festival_event_by_config(festival_config) do
+      %{metadata: %{"default_category" => default_category}} when is_binary(default_category) ->
+        default_category
+      _ ->
+        # Fallback to a generic category
+        "festival_award"
+    end
+  end
 
   defp empty_festival_data(year, festival_config) do
     %{
