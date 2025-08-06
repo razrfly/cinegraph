@@ -117,13 +117,21 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
     # Get the event configuration from database to build proper source URL
     event_id = get_event_id_from_database(organization)
     
+    # Build source URL or use a fallback for missing event IDs
+    source_url = case build_source_url(event_id, year) do
+      {:ok, url} -> url
+      {:error, :missing_event_id} -> 
+        Logger.warning("Missing IMDb event ID for #{organization.abbreviation}, using fallback URL")
+        nil
+    end
+    
     attrs = %{
       organization_id: organization.id,
       year: year,
       name: "#{year} #{organization.name}",
       data: festival_data,
       data_source: "imdb",
-      source_url: build_source_url(event_id, year),
+      source_url: source_url,
       scraped_at: DateTime.utc_now(),
       source_metadata: %{
         "scraper" => "UnifiedFestivalScraper",
@@ -155,8 +163,8 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
     end
   end
   
-  defp build_source_url(nil, year), do: "https://www.imdb.com/event/unknown/#{year}/1/"
-  defp build_source_url(event_id, year), do: "https://www.imdb.com/event/#{event_id}/#{year}/1/"
+  defp build_source_url(nil, _year), do: {:error, :missing_event_id}
+  defp build_source_url(event_id, year), do: {:ok, "https://www.imdb.com/event/#{event_id}/#{year}/1/"}
 
   defp queue_festival_discovery_job(ceremony) do
     job_args = %{
