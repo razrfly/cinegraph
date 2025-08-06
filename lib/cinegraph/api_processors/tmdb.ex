@@ -39,8 +39,8 @@ defmodule Cinegraph.ApiProcessors.TMDb do
   def has_data?(_), do: false
 
   @impl true
-  # TMDb allows 40 requests per 10 seconds
-  def rate_limit_ms(), do: 100
+  # TMDb allows 40 requests per 10 seconds → ≈250 ms between calls
+  def rate_limit_ms(), do: 250
 
   @impl true
   def validate_config() do

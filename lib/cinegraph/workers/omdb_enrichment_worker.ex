@@ -45,7 +45,7 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
       {:error, :rate_limited} ->
         # OMDb has strict rate limits (1000/day for free tier)
         # Reschedule for later
-        Logger.warning("OMDb rate limited, rescheduling movie #{movie.id}")
+        Logger.warn("OMDb rate limited, rescheduling movie #{movie.id}")
         # Retry in 1 hour
         {:snooze, 3600}
 

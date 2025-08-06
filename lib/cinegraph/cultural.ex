@@ -18,7 +18,141 @@ defmodule Cinegraph.Cultural do
   alias Cinegraph.Festivals
 
   alias Cinegraph.Scrapers.OscarScraper
+  alias Cinegraph.Events
+  alias Cinegraph.Workers.UnifiedFestivalWorker
   require Logger
+
+  # ========================================
+  # UNIVERSAL FESTIVAL IMPORTS
+  # ========================================
+
+  @doc """
+  Import any festival data for a specific year using the unified system.
+  
+  ## Parameters
+    * `festival_key` - The festival source key (e.g., "cannes", "venice", "berlin")
+    * `year` - The year to import
+    * `options` - Import options
+    
+  ## Examples
+  
+      iex> Cinegraph.Cultural.import_festival_year("cannes", 2024)
+      {:ok, %{year: 2024, job_id: 456, status: :queued}}
+      
+  """
+  def import_festival_year(festival_key, year, options \\ []) do
+    # Validate festival exists in database
+    case Events.get_active_by_source_key(festival_key) do
+      nil ->
+        {:error, "Unknown festival: #{festival_key}"}
+        
+      festival_event ->
+        Logger.info("Starting #{festival_event.name} import for year #{year}")
+        
+        job_args = %{
+          "festival" => festival_key,
+          "year" => year,
+          "options" => Enum.into(options, %{})
+        }
+        
+        # Use unique args to prevent duplicate jobs
+        case UnifiedFestivalWorker.new(job_args,
+               unique: [period: 60, fields: [:args, :worker]]
+             )
+             |> Oban.insert() do
+          {:ok, job} ->
+            {:ok,
+             %{
+               festival: festival_key,
+               year: year,
+               job_id: job.id,
+               status: :queued,
+               worker: "UnifiedFestivalWorker"
+             }}
+             
+          {:error, %Ecto.Changeset{errors: [unique: {"has already been taken", _}]}} ->
+            Logger.info("#{festival_event.name} import for year #{year} already queued or running")
+            
+            {:ok,
+             %{
+               festival: festival_key,
+               year: year,
+               status: :already_queued,
+               worker: "UnifiedFestivalWorker"
+             }}
+             
+          {:error, reason} ->
+            Logger.error("Failed to queue #{festival_event.name} import for year #{year}: #{inspect(reason)}")
+            {:error, reason}
+        end
+    end
+  end
+  
+  @doc """
+  Import any festival data for a range of years.
+  
+  ## Examples
+  
+      iex> Cinegraph.Cultural.import_festival_years("berlin", 2020..2024)
+      {:ok, %{years: 2020..2024, job_id: 123, status: :queued}}
+      
+  """
+  def import_festival_years(festival_key, start_year..end_year//_, options \\ []) do
+    years = start_year..end_year |> Enum.to_list()
+    
+    # Validate festival exists
+    case Events.get_active_by_source_key(festival_key) do
+      nil ->
+        {:error, "Unknown festival: #{festival_key}"}
+        
+      festival_event ->
+        job_args = %{
+          "festival" => festival_key,
+          "years" => years,
+          "options" => Enum.into(options, %{})
+        }
+        
+        Logger.info(
+          "Starting #{festival_event.name} import for #{length(years)} years: #{inspect(years)}"
+        )
+        
+        # Use unique args to prevent duplicate jobs
+        case UnifiedFestivalWorker.new(job_args,
+               unique: [period: 60, fields: [:args, :worker]]
+             )
+             |> Oban.insert() do
+          {:ok, job} ->
+            {:ok,
+             %{
+               festival: festival_key,
+               years: start_year..end_year,
+               year_count: length(years),
+               job_id: job.id,
+               status: :queued,
+               worker: "UnifiedFestivalWorker"
+             }}
+             
+          {:error, %Ecto.Changeset{errors: [unique: {"has already been taken", _}]}} ->
+            Logger.info("#{festival_event.name} import for years #{inspect(years)} already queued or running")
+            
+            {:ok,
+             %{
+               festival: festival_key,
+               years: start_year..end_year,
+               year_count: length(years),
+               status: :already_queued,
+               worker: "UnifiedFestivalWorker"
+             }}
+             
+          {:error, reason} ->
+            Logger.error(
+              "Failed to queue #{festival_event.name} import for years #{inspect(years)}: #{inspect(reason)}"
+            )
+            
+            {:error, reason}
+        end
+    end
+  end
 
   # ========================================
   # CULTURAL AUTHORITIES
@@ -593,12 +727,13 @@ defmodule Cinegraph.Cultural do
     Logger.info("Starting Venice Film Festival import for year #{year}")
 
     job_args = %{
+      "festival" => "venice",
       "year" => year,
       "options" => Enum.into(options, %{})
     }
 
     # Use unique args to prevent duplicate jobs for the same year
-    case Cinegraph.Workers.VeniceFestivalWorker.new(job_args,
+    case Cinegraph.Workers.UnifiedFestivalWorker.new(job_args,
            unique: [period: 60, fields: [:args, :worker]]
          )
          |> Oban.insert() do
@@ -608,7 +743,7 @@ defmodule Cinegraph.Cultural do
            year: year,
            job_id: job.id,
            status: :queued,
-           worker: "VeniceFestivalWorker"
+           worker: "UnifiedFestivalWorker"
          }}
 
       {:error, %Ecto.Changeset{errors: [unique: {"has already been taken", _}]}} ->
@@ -618,7 +753,7 @@ defmodule Cinegraph.Cultural do
          %{
            year: year,
            status: :already_queued,
-           worker: "VeniceFestivalWorker"
+           worker: "UnifiedFestivalWorker"
          }}
 
       {:error, reason} ->
@@ -644,6 +779,7 @@ defmodule Cinegraph.Cultural do
     years = start_year..end_year |> Enum.to_list()
 
     job_args = %{
+      "festival" => "venice",
       "years" => years,
       "options" => Enum.into(options, %{})
     }
@@ -653,7 +789,7 @@ defmodule Cinegraph.Cultural do
     )
 
     # Use unique args to prevent duplicate jobs for the same years
-    case Cinegraph.Workers.VeniceFestivalWorker.new(job_args,
+    case Cinegraph.Workers.UnifiedFestivalWorker.new(job_args,
            unique: [period: 60, fields: [:args, :worker]]
          )
          |> Oban.insert() do
@@ -664,7 +800,7 @@ defmodule Cinegraph.Cultural do
            year_count: length(years),
            job_id: job.id,
            status: :queued,
-           worker: "VeniceFestivalWorker"
+           worker: "UnifiedFestivalWorker"
          }}
 
       {:error, %Ecto.Changeset{errors: [unique: {"has already been taken", _}]}} ->
@@ -675,7 +811,7 @@ defmodule Cinegraph.Cultural do
            years: start_year..end_year,
            year_count: length(years),
            status: :already_queued,
-           worker: "VeniceFestivalWorker"
+           worker: "UnifiedFestivalWorker"
          }}
 
       {:error, reason} ->
@@ -730,7 +866,8 @@ defmodule Cinegraph.Cultural do
     # Count jobs by state
     job_counts =
       Oban.Job
-      |> where([j], j.worker == "Cinegraph.Workers.VeniceFestivalWorker")
+      |> where([j], j.worker == "Cinegraph.Workers.UnifiedFestivalWorker")
+      |> where([j], fragment("? ->> 'festival' = ?", j.args, "venice"))
       |> group_by([j], j.state)
       |> select([j], {j.state, count(j.id)})
       |> Repo.all()
@@ -818,44 +955,6 @@ defmodule Cinegraph.Cultural do
     end
   end
 
-  @doc """
-  Import festival data for multiple years.
-
-  ## Examples
-
-      iex> Cinegraph.Cultural.import_festival_years("cannes", 2020..2024)
-      {:ok, %{festival: "cannes", years: 2020..2024, job_id: 123, status: :queued}}
-      
-  """
-  def import_festival_years(festival, start_year..end_year//_, options \\ []) do
-    years = start_year..end_year |> Enum.to_list()
-
-    job_args = %{
-      "festival" => festival,
-      "years" => years,
-      "options" => Enum.into(options, %{})
-    }
-
-    case Cinegraph.Workers.UnifiedFestivalWorker.new(job_args) |> Oban.insert() do
-      {:ok, job} ->
-        {:ok,
-         %{
-           festival: festival,
-           years: start_year..end_year,
-           year_count: length(years),
-           job_id: job.id,
-           status: :queued,
-           worker: "UnifiedFestivalWorker"
-         }}
-
-      {:error, reason} ->
-        Logger.error(
-          "Failed to queue #{festival} import for years #{inspect(years)}: #{inspect(reason)}"
-        )
-
-        {:error, reason}
-    end
-  end
 
   @doc """
   Import all supported festivals for a specific year.

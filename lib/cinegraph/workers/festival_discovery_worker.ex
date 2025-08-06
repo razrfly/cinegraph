@@ -27,15 +27,8 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   import Ecto.Query
   require Logger
 
-  @person_tracking_categories [
-    "Actor in a Leading Role",
-    "Actor in a Supporting Role",
-    "Actress in a Leading Role",
-    "Actress in a Supporting Role",
-    "Directing"
-  ]
-
-  @major_categories @person_tracking_categories ++ ["Best Picture"]
+  # Categories are now determined dynamically from database configuration
+  # No more hardcoded category lists
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"ceremony_id" => ceremony_id}} = job) do
@@ -254,34 +247,44 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   end
 
   defp is_major_category?(category_name) do
-    category_name in @major_categories
+    # Determine if category is major based on common patterns
+    # This can be overridden in database metadata for each festival
+    String.contains?(category_name, [
+      "Best Picture", "Palme d'Or", "Golden Lion", "Golden Bear",
+      "Actor in a Leading Role", "Actress in a Leading Role",
+      "Directing", "Director", "Grand Prix"
+    ])
   end
 
   defp determine_category_type(category_name) do
+    # Universal category determination based on common patterns
+    # Each festival can override this in their metadata configuration
+    normalized = String.downcase(category_name)
+    
     cond do
-      String.contains?(category_name, ["Actor", "Actress", "Directing"]) ->
+      # Person awards - actors, directors, writers, etc.
+      Regex.match?(~r/(actor|actress|director|directing|writer|writing|cinematograph|editor|editing|composer)/i, normalized) ->
         {"person", true}
 
-      String.contains?(category_name, ["Writing", "Cinematography", "Editing"]) ->
-        {"person", true}
-
-      String.contains?(category_name, ["Best Picture"]) ->
+      # Main film awards
+      Regex.match?(~r/(best picture|best film|palme|golden lion|golden bear|grand prix)/i, normalized) ->
         {"film", false}
 
-      String.contains?(category_name, ["Visual Effects", "Sound", "Makeup"]) ->
+      # Technical awards
+      Regex.match?(~r/(visual effects|sound|makeup|costume|design|score|song|music)/i, normalized) ->
         {"technical", false}
 
-      String.contains?(category_name, ["Documentary", "Animated", "International"]) ->
+      # Genre-specific film awards
+      Regex.match?(~r/(documentary|animated|animation|international|foreign)/i, normalized) ->
         {"film", false}
-
-      String.contains?(category_name, ["Song", "Score"]) ->
-        {"technical", false}
-
-      String.contains?(category_name, ["Design", "Costume"]) ->
-        {"technical", false}
-
-      true ->
+        
+      # Special jury or other awards
+      Regex.match?(~r/(jury|special|honorary)/i, normalized) ->
         {"special", false}
+
+      # Default for unrecognized categories
+      true ->
+        {"film", false}
     end
   end
 

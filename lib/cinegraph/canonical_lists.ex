@@ -36,39 +36,6 @@ defmodule Cinegraph.CanonicalLists do
         "reliability" => "95%",
         "note" => "Updated annually after official announcements"
       }
-    },
-    "cannes_winners" => %{
-      list_id: "ls527026601",
-      source_key: "cannes_winners",
-      name: "Cannes Film Festival Award Winners: 2023-1939",
-      metadata: %{
-        "festival" => "Cannes Film Festival",
-        "source" => "IMDB User List",
-        "reliability" => "85%",
-        "note" => "Winners only - no nominees. Award details mixed in descriptions."
-      }
-    },
-    "venice_golden_lion" => %{
-      list_id: "ls020806626",
-      source_key: "venice_golden_lion",
-      name: "Venice Film Festival Golden Lion Winners",
-      metadata: %{
-        "festival" => "Venice Film Festival",
-        "source" => "IMDB User List",
-        "reliability" => "90%",
-        "note" => "World's oldest film festival, prestigious European cinema"
-      }
-    },
-    "berlin_golden_bear" => %{
-      list_id: "ls073833905",
-      source_key: "berlin_golden_bear",
-      name: "Berlin International Film Festival Golden Bear Winners",
-      metadata: %{
-        "festival" => "Berlin International Film Festival",
-        "source" => "IMDB User List",
-        "reliability" => "90%",
-        "note" => "One of 'Big Three' European festivals, established 1951"
-      }
     }
   }
 
