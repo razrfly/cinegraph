@@ -1,0 +1,349 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-8">
+    <div class="flex justify-between items-center">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Festival Events Management</h1>
+        <p class="mt-2 text-gray-600">Manage film festival configurations and import settings</p>
+      </div>
+      <button
+        phx-click="new"
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
+        + Add New Festival
+      </button>
+    </div>
+  </div>
+
+  <!-- Festival Events Table -->
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Festival
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Country
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Founded
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Source
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Year Range
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Priority
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Status
+          </th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Actions
+          </th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <%= for festival <- @festival_events do %>
+          <tr class={if festival.active, do: "", else: "opacity-50"}>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div>
+                <div class="text-sm font-medium text-gray-900"><%= festival.name %></div>
+                <div class="text-xs text-gray-500"><%= festival.abbreviation %> | <%= festival.source_key %></div>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <%= festival.country %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <%= festival.founded_year %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                <%= String.upcase(festival.primary_source) %>
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <%= festival.min_available_year %> - <%= festival.max_available_year %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <%= festival.import_priority %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <%= if festival.active do %>
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                  Active
+                </span>
+              <% else %>
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                  Inactive
+                </span>
+              <% end %>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <button
+                phx-click="edit"
+                phx-value-id={festival.source_key}
+                class="text-indigo-600 hover:text-indigo-900 mr-3"
+              >
+                Edit
+              </button>
+              <button
+                phx-click="toggle_active"
+                phx-value-source-key={festival.source_key}
+                class="text-gray-600 hover:text-gray-900"
+              >
+                <%= if festival.active, do: "Deactivate", else: "Activate" %>
+              </button>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal for Add/Edit Festival Event -->
+<%= if @show_modal do %>
+  <div class="fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+      
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+        <form phx-submit="save">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <div class="mb-4">
+              <h3 class="text-lg leading-6 font-medium text-gray-900">
+                <%= if @modal_action == :new, do: "Add New Festival Event", else: "Edit Festival Event" %>
+              </h3>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Basic Information -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Source Key *
+                </label>
+                <input
+                  type="text"
+                  name="festival_event[source_key]"
+                  value={@festival_event.source_key}
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  readonly={@modal_action == :edit}
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Name *
+                </label>
+                <input
+                  type="text"
+                  name="festival_event[name]"
+                  value={@festival_event.name}
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Abbreviation
+                </label>
+                <input
+                  type="text"
+                  name="festival_event[abbreviation]"
+                  value={@festival_event.abbreviation}
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Country
+                </label>
+                <input
+                  type="text"
+                  name="festival_event[country]"
+                  value={@festival_event.country}
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Founded Year
+                </label>
+                <input
+                  type="number"
+                  name="festival_event[founded_year]"
+                  value={@festival_event.founded_year}
+                  min="1900"
+                  max="2025"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Website
+                </label>
+                <input
+                  type="url"
+                  name="festival_event[website]"
+                  value={@festival_event.website}
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <!-- Source Configuration -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Primary Source *
+                </label>
+                <select
+                  name="festival_event[primary_source]"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="imdb" selected={@festival_event.primary_source == "imdb"}>IMDb</option>
+                  <option value="official" selected={@festival_event.primary_source == "official"}>Official</option>
+                  <option value="api" selected={@festival_event.primary_source == "api"}>API</option>
+                  <option value="custom" selected={@festival_event.primary_source == "custom"}>Custom</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Import Priority
+                </label>
+                <input
+                  type="number"
+                  name="festival_event[import_priority]"
+                  value={@festival_event.import_priority || 50}
+                  min="0"
+                  max="100"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <!-- Year Range -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Min Available Year
+                </label>
+                <input
+                  type="number"
+                  name="festival_event[min_available_year]"
+                  value={@festival_event.min_available_year}
+                  min="1900"
+                  max="2025"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Max Available Year
+                </label>
+                <input
+                  type="number"
+                  name="festival_event[max_available_year]"
+                  value={@festival_event.max_available_year}
+                  min="1900"
+                  max="2025"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <!-- Event Type -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Event Type
+                </label>
+                <select
+                  name="festival_event[ceremony_vs_festival]"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="ceremony" selected={@festival_event.ceremony_vs_festival == "ceremony"}>Ceremony</option>
+                  <option value="festival" selected={@festival_event.ceremony_vs_festival == "festival"}>Festival</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Reliability Score
+                </label>
+                <input
+                  type="number"
+                  name="festival_event[reliability_score]"
+                  value={@festival_event.reliability_score || 0.80}
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <!-- Checkboxes -->
+              <div class="col-span-2 space-y-2">
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="festival_event[active]"
+                    value="true"
+                    checked={@festival_event.active}
+                    class="mr-2"
+                  />
+                  <span class="text-sm text-gray-700">Active</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="festival_event[tracks_nominations]"
+                    value="true"
+                    checked={@festival_event.tracks_nominations}
+                    class="mr-2"
+                  />
+                  <span class="text-sm text-gray-700">Tracks Nominations</span>
+                </label>
+
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="festival_event[tracks_winners_only]"
+                    value="true"
+                    checked={@festival_event.tracks_winners_only}
+                    class="mr-2"
+                  />
+                  <span class="text-sm text-gray-700">Tracks Winners Only</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              phx-click="close_modal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% end %>
