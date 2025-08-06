@@ -12,8 +12,7 @@ defmodule Cinegraph.Cultural do
     CuratedList,
     MovieListItem,
     MovieDataChange,
-    CRIScore,
-    OscarCeremony
+    CRIScore
   }
   
   alias Cinegraph.Festivals
@@ -273,97 +272,61 @@ defmodule Cinegraph.Cultural do
   end
 
   @doc """
-  Gets Oscar nominations for a movie.
+  Gets Oscar nominations for a movie from the festival tables.
   """
   def get_movie_oscar_nominations(movie_id) do
-    from(nomination in Cinegraph.Cultural.OscarNomination,
-      join: ceremony in assoc(nomination, :ceremony),
-      join: category in assoc(nomination, :category),
-      left_join: person in assoc(nomination, :person),
-      where: nomination.movie_id == ^movie_id,
-      order_by: [desc: ceremony.year, asc: category.name],
-      preload: [ceremony: ceremony, category: category, person: person]
-    )
-    |> Repo.all()
+    # Get the Oscar organization
+    oscar_org = Festivals.get_or_create_oscar_organization()
+    
+    if oscar_org && oscar_org.id do
+      from(nomination in Cinegraph.Festivals.FestivalNomination,
+        join: ceremony in Cinegraph.Festivals.FestivalCeremony, on: nomination.ceremony_id == ceremony.id,
+        join: category in Cinegraph.Festivals.FestivalCategory, on: nomination.category_id == category.id,
+        left_join: person in Cinegraph.Movies.Person, on: nomination.person_id == person.id,
+        where: nomination.movie_id == ^movie_id and ceremony.organization_id == ^oscar_org.id,
+        order_by: [desc: ceremony.year, asc: category.name],
+        preload: [person: person],
+        select: %{
+          ceremony_year: ceremony.year,
+          ceremony_number: ceremony.ceremony_number,
+          category_name: category.name,
+          tracks_person: category.tracks_person,
+          won: nomination.won,
+          details: nomination.details,
+          person: person
+        }
+      )
+      |> Repo.all()
+    else
+      []
+    end
   end
 
   # ========================================
-  # OSCAR CEREMONIES
+  # OSCAR CEREMONIES (Now using Festival tables)
   # ========================================
   
   @doc """
-  Returns the list of Oscar ceremonies.
+  Returns the list of Oscar ceremonies from festival tables.
   """
   def list_oscar_ceremonies do
-    Repo.all(from c in OscarCeremony, order_by: [desc: c.year])
+    oscar_org = Festivals.get_or_create_oscar_organization()
+    if oscar_org && oscar_org.id do
+      Festivals.list_ceremonies(oscar_org.id)
+    else
+      []
+    end
   end
   
   @doc """
-  Gets a single Oscar ceremony by year.
+  Gets a single Oscar ceremony by year from festival tables.
   """
   def get_oscar_ceremony_by_year(year) do
-    Repo.get_by(OscarCeremony, year: year)
-  end
-  
-  @doc """
-  Gets a single Oscar ceremony by ceremony number.
-  """
-  def get_oscar_ceremony_by_number(ceremony_number) do
-    Repo.get_by(OscarCeremony, ceremony_number: ceremony_number)
-  end
-  
-  @doc """
-  Creates or updates an Oscar ceremony.
-  """
-  def upsert_oscar_ceremony(attrs) do
-    case get_oscar_ceremony_by_year(attrs[:year] || attrs["year"]) do
-      nil ->
-        %OscarCeremony{}
-        |> OscarCeremony.changeset(attrs)
-        |> Repo.insert()
-      
-      existing ->
-        existing
-        |> OscarCeremony.changeset(attrs)
-        |> Repo.update()
-    end
-  end
-  
-  @doc """
-  Imports Oscar ceremony data from scraped content.
-  """
-  def import_oscar_ceremony(year) do
-    case Cinegraph.Scrapers.OscarScraper.fetch_ceremony(year) do
-      {:ok, ceremony_data} ->
-        attrs = %{
-          year: year,
-          ceremony_number: ceremony_data.ceremony_number,
-          ceremony_date: ceremony_data[:ceremony_date],
-          data: ceremony_data
-        }
-        
-        upsert_oscar_ceremony(attrs)
-        
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-  
-  @doc """
-  Imports Oscar ceremony data from HTML file.
-  """
-  def import_oscar_ceremony_from_file(file_path, year) do
-    with {:ok, html_content} <- Cinegraph.Scrapers.OscarScraper.load_html_from_file(file_path),
-         {:ok, ceremony_data} <- Cinegraph.Scrapers.OscarScraper.parse_ceremony_html(html_content, year) do
-      
-      attrs = %{
-        year: year,
-        ceremony_number: ceremony_data.ceremony_number,
-        ceremony_date: ceremony_data[:ceremony_date],
-        data: ceremony_data
-      }
-      
-      upsert_oscar_ceremony(attrs)
+    oscar_org = Festivals.get_or_create_oscar_organization()
+    if oscar_org && oscar_org.id do
+      Festivals.get_ceremony_by_year(oscar_org.id, year)
+    else
+      nil
     end
   end
   
@@ -392,7 +355,7 @@ defmodule Cinegraph.Cultural do
         "options" => Enum.into(options, %{})
       }
       
-      # Use FestivalDiscoveryWorker which has the fuzzy matching system
+      # Use FestivalDiscoveryWorker (fuzzy matching to be ported from OscarDiscoveryWorker)
       case Cinegraph.Workers.FestivalDiscoveryWorker.new(job_args) |> Oban.insert() do
         {:ok, job} ->
           {:ok, %{
