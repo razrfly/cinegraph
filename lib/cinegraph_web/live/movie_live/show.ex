@@ -15,41 +15,44 @@ defmodule CinegraphWeb.MovieLive.Show do
   @impl true
   def handle_params(%{"id" => id}, _url, socket) do
     movie = load_movie_with_all_data(id)
-    
-    socket = 
+
+    socket =
       socket
       |> assign(:movie, movie)
       |> assign(:page_title, movie.title)
-      
+
     {:noreply, socket}
   end
 
   defp load_movie_with_all_data(id) do
     # Load movie with all related data
     movie = Movies.get_movie!(id)
-    
+
     # Load credits (cast and crew)
     credits = Movies.get_movie_credits(id)
-    cast = Enum.filter(credits, & &1.credit_type == "cast") |> Enum.sort_by(& &1.cast_order || 999)
-    crew = Enum.filter(credits, & &1.credit_type == "crew")
-    directors = Enum.filter(crew, & &1.job == "Director")
-    
+
+    cast =
+      Enum.filter(credits, &(&1.credit_type == "cast")) |> Enum.sort_by(&(&1.cast_order || 999))
+
+    crew = Enum.filter(credits, &(&1.credit_type == "crew"))
+    directors = Enum.filter(crew, &(&1.job == "Director"))
+
     # Load cultural data
     cultural_lists = Cultural.get_list_movies_for_movie(id)
     oscar_nominations = Cultural.get_movie_oscar_nominations(id)
-    
+
     # Load external sources data
     external_ratings = ExternalSources.get_movie_ratings(id)
-    
+
     # Load ALL other connected data
     keywords = Movies.get_movie_keywords(id)
     videos = Movies.get_movie_videos(id)
     release_dates = Movies.get_movie_release_dates(id)
     production_companies = Movies.get_movie_production_companies(id)
-    
+
     # Load all external sources
     all_external_sources = ExternalSources.list_sources()
-    
+
     # Check what data we're missing
     missing_data = %{
       has_keywords: length(keywords) > 0,
@@ -65,13 +68,13 @@ defmodule CinegraphWeb.MovieLive.Show do
       production_companies_count: length(production_companies),
       external_ratings_count: length(external_ratings)
     }
-    
+
     # Get key collaborations for this movie
     key_collaborations = get_key_collaborations(cast, crew)
-    
+
     movie
     |> Map.put(:cast, cast)
-    |> Map.put(:crew, crew) 
+    |> Map.put(:crew, crew)
     |> Map.put(:directors, directors)
     |> Map.put(:cultural_lists, cultural_lists)
     |> Map.put(:oscar_nominations, oscar_nominations)
@@ -84,16 +87,16 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:missing_data, missing_data)
     |> Map.put(:key_collaborations, key_collaborations)
   end
-  
+
   defp get_key_collaborations(cast, crew) do
     # Get directors
-    directors = Enum.filter(crew, & &1.job == "Director")
-    
+    directors = Enum.filter(crew, &(&1.job == "Director"))
+
     # Get top actors
     top_actors = Enum.take(cast, 10)
-    
+
     # Director-Actor reunions
-    director_actor_reunions = 
+    director_actor_reunions =
       for director <- directors,
           actor <- top_actors do
         case Collaborations.find_actor_director_movies(actor.person_id, director.person_id) do
@@ -105,14 +108,15 @@ defmodule CinegraphWeb.MovieLive.Show do
               collaboration_count: length(movies),
               is_reunion: true
             }
+
           _ ->
             nil
         end
       end
       |> Enum.reject(&is_nil/1)
-    
+
     # Actor-Actor partnerships
-    actor_partnerships = 
+    actor_partnerships =
       for {actor1, idx} <- Enum.with_index(top_actors),
           actor2 <- Enum.slice(top_actors, (idx + 1)..-1) do
         query = """
@@ -121,7 +125,7 @@ defmodule CinegraphWeb.MovieLive.Show do
         WHERE (c.person_a_id = $1 AND c.person_b_id = $2)
            OR (c.person_a_id = $2 AND c.person_b_id = $1)
         """
-        
+
         case Cinegraph.Repo.query(query, [actor1.person_id, actor2.person_id]) do
           {:ok, %{rows: [[count]]}} when count > 1 ->
             %{
@@ -131,22 +135,23 @@ defmodule CinegraphWeb.MovieLive.Show do
               collaboration_count: count,
               is_reunion: true
             }
+
           _ ->
             nil
         end
       end
       |> Enum.reject(&is_nil/1)
-    
+
     # Combine and sort by collaboration count
-    all_collaborations = director_actor_reunions ++ actor_partnerships
-    |> Enum.sort_by(& &1.collaboration_count, :desc)
-    |> Enum.take(6)
-    
+    all_collaborations =
+      (director_actor_reunions ++ actor_partnerships)
+      |> Enum.sort_by(& &1.collaboration_count, :desc)
+      |> Enum.take(6)
+
     %{
-      director_actor_reunions: Enum.filter(all_collaborations, & &1.type == :director_actor),
-      actor_partnerships: Enum.filter(all_collaborations, & &1.type == :actor_actor),
+      director_actor_reunions: Enum.filter(all_collaborations, &(&1.type == :director_actor)),
+      actor_partnerships: Enum.filter(all_collaborations, &(&1.type == :actor_actor)),
       total_reunions: length(all_collaborations)
     }
   end
-  
 end

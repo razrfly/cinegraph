@@ -15,14 +15,14 @@ defmodule Cinegraph.Movies.Person do
     field :known_for_department, :string
     field :adult, :boolean, default: false
     field :popularity, :float
-    
+
     # Images
     field :profile_path, :string
-    
+
     # Associations
     has_many :credits, Cinegraph.Movies.Credit, foreign_key: :person_id
     many_to_many :movies, Cinegraph.Movies.Movie, join_through: Cinegraph.Movies.Credit
-    
+
     timestamps()
   end
 
@@ -30,9 +30,18 @@ defmodule Cinegraph.Movies.Person do
   def changeset(person, attrs) do
     person
     |> cast(attrs, [
-      :tmdb_id, :imdb_id, :name, :gender,
-      :birthday, :deathday, :place_of_birth, :biography,
-      :known_for_department, :adult, :popularity, :profile_path
+      :tmdb_id,
+      :imdb_id,
+      :name,
+      :gender,
+      :birthday,
+      :deathday,
+      :place_of_birth,
+      :biography,
+      :known_for_department,
+      :adult,
+      :popularity,
+      :profile_path
     ])
     |> validate_required([:tmdb_id, :name])
     |> unique_constraint(:tmdb_id)
@@ -67,12 +76,13 @@ defmodule Cinegraph.Movies.Person do
       popularity: attrs["popularity"],
       profile_path: attrs["profile_path"]
     }
-    
+
     changeset(%__MODULE__{}, person_attrs)
   end
 
   defp parse_date(nil), do: nil
   defp parse_date(""), do: nil
+
   defp parse_date(date_string) do
     case Date.from_iso8601(date_string) do
       {:ok, date} -> date
@@ -96,6 +106,7 @@ defmodule Cinegraph.Movies.Person do
   Builds the full URL for a profile image
   """
   def profile_url(%__MODULE__{profile_path: nil}), do: nil
+
   def profile_url(%__MODULE__{profile_path: path}, size \\ "w185") do
     "https://image.tmdb.org/t/p/#{size}#{path}"
   end

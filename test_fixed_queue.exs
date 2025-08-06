@@ -10,24 +10,25 @@ Process.sleep(1000)
 import Ecto.Query
 alias Cinegraph.Repo
 
-page2_job = try do
-  Repo.one(
-    from j in Oban.Job,
-    where: j.queue == "tmdb_discovery" and j.args["page"] == 2,
-    order_by: [desc: j.id],
-    limit: 1
-  )
-rescue
-  e -> 
-    IO.puts("Database query failed: #{inspect(e)}")
-    nil
-end
+page2_job =
+  try do
+    Repo.one(
+      from j in Oban.Job,
+        where: j.queue == "tmdb_discovery" and j.args["page"] == 2,
+        order_by: [desc: j.id],
+        limit: 1
+    )
+  rescue
+    e ->
+      IO.puts("Database query failed: #{inspect(e)}")
+      nil
+  end
 
 if page2_job do
   IO.puts("\nPage 2 job created successfully\!")
   IO.puts("  State: #{page2_job.state}")
   IO.puts("  Scheduled at: #{page2_job.scheduled_at}")
-  
+
   if page2_job.scheduled_at do
     diff = DateTime.diff(page2_job.scheduled_at, DateTime.utc_now())
     IO.puts("  Will run in: #{diff} seconds")

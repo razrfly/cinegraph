@@ -14,19 +14,19 @@ defmodule CinegraphWeb.PersonLive.Show do
   def handle_params(%{"id" => id}, _url, socket) do
     case People.get_person_with_credits(id) do
       nil ->
-        socket = 
+        socket =
           socket
           |> put_flash(:error, "Person not found")
           |> push_navigate(to: ~p"/people")
-          
+
         {:noreply, socket}
-        
+
       person ->
         career_stats = People.get_career_stats(person.id)
         collaboration_stats = get_collaboration_stats(person.id)
         frequent_collaborators = get_frequent_collaborators(person)
-        
-        socket = 
+
+        socket =
           socket
           |> assign(:person, person)
           |> assign(:career_stats, career_stats)
@@ -37,48 +37,50 @@ defmodule CinegraphWeb.PersonLive.Show do
           |> assign(:six_degrees_target, nil)
           |> assign(:six_degrees_path, nil)
           |> assign(:six_degrees_loading, false)
-          
+
         {:noreply, socket}
     end
   end
-  
+
   @impl true
   def handle_event("change_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :active_tab, String.to_atom(tab))}
   end
-  
+
   @impl true
   def handle_event("toggle_six_degrees", _params, socket) do
     {:noreply, assign(socket, :show_six_degrees, !socket.assigns.show_six_degrees)}
   end
-  
+
   @impl true
-  def handle_event("search_six_degrees", %{"target_person_id" => target_id}, socket) when target_id != "" do
+  def handle_event("search_six_degrees", %{"target_person_id" => target_id}, socket)
+      when target_id != "" do
     case Integer.parse(target_id) do
-      {int_id, ""} -> 
+      {int_id, ""} ->
         socket = assign(socket, :six_degrees_loading, true)
         send(self(), {:find_path, int_id})
         {:noreply, socket}
-      _ -> 
+
+      _ ->
         {:noreply, put_flash(socket, :error, "Invalid target person ID")}
     end
   end
-  
+
   def handle_event("search_six_degrees", _params, socket) do
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_info({:find_path, target_id}, socket) do
     from_id = socket.assigns.person.id
-    
+
     case Collaborations.PathFinder.find_path_with_movies(from_id, target_id) do
       {:ok, path} ->
-        {:noreply, 
+        {:noreply,
          socket
          |> assign(:six_degrees_path, path)
          |> assign(:six_degrees_loading, false)}
-      
+
       {:error, :no_path_found} ->
         {:noreply,
          socket
@@ -86,12 +88,12 @@ defmodule CinegraphWeb.PersonLive.Show do
          |> assign(:six_degrees_loading, false)}
     end
   end
-  
+
   # Private functions
-  
+
   defp get_collaboration_stats(person_id) do
     person_id_int = if is_binary(person_id), do: String.to_integer(person_id), else: person_id
-    
+
     # Get unique collaborators count
     query = """
     SELECT COUNT(DISTINCT CASE 
@@ -110,23 +112,26 @@ defmodule CinegraphWeb.PersonLive.Show do
     LEFT JOIN collaboration_details cd ON cd.collaboration_id = c.id
     WHERE c.person_a_id = $1 OR c.person_b_id = $1
     """
-    
+
     case Cinegraph.Repo.query(query, [person_id_int]) do
       {:ok, %{rows: [[total, directors, recurring]]}} ->
         # Get peak collaboration year
         trends = Collaborations.get_person_collaboration_trends(person_id_int)
-        peak_year = if length(trends) > 0 do
-          Enum.max_by(trends, & &1.unique_collaborators)[:year]
-        else
-          nil
-        end
-        
+
+        peak_year =
+          if length(trends) > 0 do
+            Enum.max_by(trends, & &1.unique_collaborators)[:year]
+          else
+            nil
+          end
+
         %{
           total_collaborators: total || 0,
           unique_directors: directors || 0,
           recurring_partners: recurring || 0,
           peak_year: peak_year
         }
+
       _ ->
         %{
           total_collaborators: 0,
@@ -136,10 +141,10 @@ defmodule CinegraphWeb.PersonLive.Show do
         }
     end
   end
-  
+
   defp get_frequent_collaborators(person) do
     person_id = if is_binary(person.id), do: String.to_integer(person.id), else: person.id
-    
+
     # Get top collaborators with enhanced data
     query = """
     SELECT 
@@ -163,12 +168,12 @@ defmodule CinegraphWeb.PersonLive.Show do
     ORDER BY c.collaboration_count DESC, c.latest_collaboration_date DESC
     LIMIT 12
     """
-    
+
     case Cinegraph.Repo.query(query, [person_id]) do
       {:ok, %{rows: rows}} ->
         Enum.map(rows, fn [collab_id, count, first_date, last_date, avg_rating, revenue, types] ->
           collaborator = Cinegraph.People.get_person!(collab_id)
-          
+
           %{
             person: collaborator,
             collaboration_count: count,
@@ -177,13 +182,15 @@ defmodule CinegraphWeb.PersonLive.Show do
             avg_rating: avg_rating,
             total_revenue: revenue,
             collaboration_types: String.split(types, ", "),
-            strength: cond do
-              count >= 10 -> :very_strong
-              count >= 5 -> :strong
-              true -> :moderate
-            end
+            strength:
+              cond do
+                count >= 10 -> :very_strong
+                count >= 5 -> :strong
+                true -> :moderate
+              end
           }
         end)
+
       _ ->
         []
     end

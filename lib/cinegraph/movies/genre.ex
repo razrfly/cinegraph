@@ -5,9 +5,9 @@ defmodule Cinegraph.Movies.Genre do
   schema "genres" do
     field :tmdb_id, :integer
     field :name, :string
-    
+
     many_to_many :movies, Cinegraph.Movies.Movie, join_through: "movie_genres"
-    
+
     timestamps()
   end
 
@@ -18,7 +18,7 @@ defmodule Cinegraph.Movies.Genre do
     |> validate_required([:tmdb_id, :name])
     |> unique_constraint(:tmdb_id)
   end
-  
+
   @doc """
   Creates a changeset from TMDB data
   """
@@ -27,6 +27,7 @@ defmodule Cinegraph.Movies.Genre do
       tmdb_id: tmdb_data["id"],
       name: tmdb_data["name"]
     }
+
     changeset(%__MODULE__{}, attrs)
   end
 end

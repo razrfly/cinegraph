@@ -6,7 +6,7 @@ defmodule Cinegraph.Cultural.AwardFetcher do
   alias Cinegraph.{Repo, Cultural, Movies}
   alias Cinegraph.Cultural.CuratedList
   alias Cinegraph.Services.Wikidata
-  
+
   require Logger
 
   @doc """
@@ -15,11 +15,12 @@ defmodule Cinegraph.Cultural.AwardFetcher do
   def fetch_and_store_awards(movie) do
     if movie.imdb_id do
       Logger.info("Fetching awards for #{movie.title} (IMDb: #{movie.imdb_id})")
-      
+
       case Wikidata.fetch_movie_awards(movie.imdb_id) do
         {:ok, awards} ->
           store_awards(movie, awards)
           {:ok, length(awards)}
+
         {:error, reason} ->
           Logger.error("Failed to fetch awards for #{movie.title}: #{inspect(reason)}")
           {:error, reason}
@@ -35,24 +36,26 @@ defmodule Cinegraph.Cultural.AwardFetcher do
   """
   def fetch_all_movie_awards do
     movies = Movies.list_movies()
-    
-    results = Enum.map(movies, fn movie ->
-      # Add delay to avoid rate limiting
-      Process.sleep(1000)
-      
-      case fetch_and_store_awards(movie) do
-        {:ok, count} -> 
-          IO.puts("✅ #{movie.title}: #{count} awards")
-          {:ok, movie.id}
-        {:error, reason} -> 
-          IO.puts("❌ #{movie.title}: #{inspect(reason)}")
-          {:error, movie.id, reason}
-      end
-    end)
-    
+
+    results =
+      Enum.map(movies, fn movie ->
+        # Add delay to avoid rate limiting
+        Process.sleep(1000)
+
+        case fetch_and_store_awards(movie) do
+          {:ok, count} ->
+            IO.puts("✅ #{movie.title}: #{count} awards")
+            {:ok, movie.id}
+
+          {:error, reason} ->
+            IO.puts("❌ #{movie.title}: #{inspect(reason)}")
+            {:error, movie.id, reason}
+        end
+      end)
+
     successful = Enum.count(results, &match?({:ok, _}, &1))
     failed = Enum.count(results, &match?({:error, _, _}, &1))
-    
+
     IO.puts("\nSummary: #{successful} successful, #{failed} failed")
     results
   end
@@ -62,34 +65,38 @@ defmodule Cinegraph.Cultural.AwardFetcher do
   defp store_awards(movie, awards) do
     # Group awards by authority
     awards_by_authority = Enum.group_by(awards, &award_to_authority_name/1)
-    
+
     Enum.each(awards_by_authority, fn {authority_name, award_list} ->
       # Get or create the authority
-      authority = case Cultural.get_authority_by_name(authority_name) do
-        nil -> 
-          # Create if doesn't exist
-          {:ok, auth} = Cultural.create_authority(%{
-            name: authority_name,
-            authority_type: "award",
-            category: "film_award",
-            trust_score: default_trust_score(authority_name),
-            base_weight: 1.5,
-            data_source: "wikidata"
-          })
-          auth
-        existing -> 
-          existing
-      end
-      
+      authority =
+        case Cultural.get_authority_by_name(authority_name) do
+          nil ->
+            # Create if doesn't exist
+            {:ok, auth} =
+              Cultural.create_authority(%{
+                name: authority_name,
+                authority_type: "award",
+                category: "film_award",
+                trust_score: default_trust_score(authority_name),
+                base_weight: 1.5,
+                data_source: "wikidata"
+              })
+
+            auth
+
+          existing ->
+            existing
+        end
+
       # Group by year to create appropriate lists
       awards_by_year = Enum.group_by(award_list, & &1.year)
-      
+
       Enum.each(awards_by_year, fn {year, year_awards} ->
         list_name = if year, do: "#{authority_name} #{year}", else: authority_name
-        
+
         # Get or create the curated list for this authority/year
         list = get_or_create_award_list(authority, list_name, year)
-        
+
         # Add movie to the list with award details
         Enum.each(year_awards, fn award ->
           attrs = %{
@@ -99,14 +106,16 @@ defmodule Cinegraph.Cultural.AwardFetcher do
             award_result: award.result,
             notes: build_award_notes(award)
           }
-          
+
           # Remove from list first to avoid duplicates
           Cultural.remove_movie_from_list(movie.id, list.id, award.category)
-          
+
           # Add with award details
           case Cultural.add_movie_to_list(movie.id, list.id, attrs) do
-            {:ok, _} -> :ok
-            {:error, changeset} -> 
+            {:ok, _} ->
+              :ok
+
+            {:error, changeset} ->
               Logger.error("Failed to add movie to list: #{inspect(changeset.errors)}")
           end
         end)
@@ -143,15 +152,18 @@ defmodule Cinegraph.Cultural.AwardFetcher do
   defp get_or_create_award_list(authority, list_name, year) do
     case Repo.get_by(CuratedList, name: list_name, authority_id: authority.id) do
       nil ->
-        {:ok, list} = Cultural.create_curated_list(%{
-          name: list_name,
-          authority_id: authority.id,
-          list_type: "award",
-          year: year,
-          description: "Awards and nominations for #{year || "various years"}",
-          prestige_score: 0.9
-        })
+        {:ok, list} =
+          Cultural.create_curated_list(%{
+            name: list_name,
+            authority_id: authority.id,
+            list_type: "award",
+            year: year,
+            description: "Awards and nominations for #{year || "various years"}",
+            prestige_score: 0.9
+          })
+
         list
+
       existing ->
         existing
     end
@@ -162,7 +174,7 @@ defmodule Cinegraph.Cultural.AwardFetcher do
     parts = if award.category, do: ["Category: #{award.category}" | parts], else: parts
     parts = if award.year, do: ["Year: #{award.year}" | parts], else: parts
     parts = if award.award_id, do: ["Wikidata: #{award.award_id}" | parts], else: parts
-    
+
     Enum.join(parts, "; ")
   end
 end

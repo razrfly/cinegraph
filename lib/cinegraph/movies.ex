@@ -5,9 +5,21 @@ defmodule Cinegraph.Movies do
 
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{Movie, Person, Genre, Credit, Collection, Keyword, 
-                         ProductionCompany, ProductionCountry, SpokenLanguage,
-                         MovieVideo, MovieReleaseDate}
+
+  alias Cinegraph.Movies.{
+    Movie,
+    Person,
+    Genre,
+    Credit,
+    Collection,
+    Keyword,
+    ProductionCompany,
+    ProductionCountry,
+    SpokenLanguage,
+    MovieVideo,
+    MovieReleaseDate
+  }
+
   alias Cinegraph.Services.TMDb
   alias Cinegraph.ExternalSources
   require Logger
@@ -60,7 +72,8 @@ defmodule Cinegraph.Movies do
       "release_date_desc" -> order_by(query, [m], desc: m.release_date)
       "rating" -> order_by(query, [m], desc: m.vote_average)
       "popularity" -> order_by(query, [m], desc: m.popularity)
-      _ -> order_by(query, [m], desc: m.release_date) # default
+      # default
+      _ -> order_by(query, [m], desc: m.release_date)
     end
   end
 
@@ -68,9 +81,9 @@ defmodule Cinegraph.Movies do
   defp paginate(query, params) do
     page = parse_page(params["page"])
     per_page = parse_per_page(params["per_page"])
-    
+
     offset_val = (page - 1) * per_page
-    
+
     query
     |> limit(^per_page)
     |> offset(^offset_val)
@@ -173,7 +186,7 @@ defmodule Cinegraph.Movies do
   """
   def create_or_update_movie_from_tmdb(tmdb_data) do
     movie_attrs = Movie.from_tmdb(tmdb_data)
-    
+
     case get_movie_by_tmdb_id(tmdb_data["id"]) do
       nil ->
         # Try to insert, but handle race condition where another process inserted it
@@ -181,72 +194,84 @@ defmodule Cinegraph.Movies do
         |> Movie.changeset(movie_attrs)
         |> Repo.insert()
         |> case do
-          {:ok, movie} -> {:ok, movie}
+          {:ok, movie} ->
+            {:ok, movie}
+
           {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
             # Race condition - movie was inserted by another process, fetch it
             case get_movie_by_tmdb_id(tmdb_data["id"]) do
-              nil -> 
+              nil ->
                 # Still doesn't exist somehow, return the original error
                 %Movie{}
                 |> Movie.changeset(movie_attrs)
                 |> Repo.insert()
+
               existing_movie ->
                 # Found the movie inserted by another process, update it instead
                 existing_movie
                 |> Movie.changeset(movie_attrs)
                 |> Repo.update()
             end
-          error -> 
+
+          error ->
             error
         end
+
       existing_movie ->
         existing_movie
         |> Movie.changeset(movie_attrs)
         |> Repo.update()
     end
   end
-  
+
   @doc """
   Creates a soft import movie record with minimal data.
   This is used for movies that don't meet quality criteria.
   """
   def create_soft_import_movie(tmdb_data) do
     # Create movie with minimal data and soft import status
-    movie_attrs = 
+    movie_attrs =
       Movie.from_tmdb(tmdb_data)
       |> Map.put(:import_status, "soft")
-    
+
     changeset = Movie.changeset(%Movie{}, movie_attrs)
-    
+
     case get_movie_by_tmdb_id(tmdb_data["id"]) do
       nil ->
         # Try to insert, but handle race condition
         Repo.insert(changeset)
         |> case do
-          {:ok, movie} -> {:ok, movie}
+          {:ok, movie} ->
+            {:ok, movie}
+
           {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
             # Race condition - movie was inserted by another process, fetch it
             case get_movie_by_tmdb_id(tmdb_data["id"]) do
-              nil -> 
+              nil ->
                 # Still doesn't exist somehow, return the original error
                 Repo.insert(changeset)
+
               %Movie{import_status: "soft"} = existing_movie ->
                 # Re-soft-import if it was already soft
                 existing_movie
                 |> Movie.changeset(%{import_status: "soft"})
                 |> Repo.update()
+
               existing_movie ->
                 # Leave full imports untouched
                 {:ok, existing_movie}
             end
-          error -> 
+
+          error ->
             error
         end
+
       %Movie{import_status: "soft"} = existing_movie ->
         # Only re-soft-import if it was already soft
         existing_movie
         |> Movie.changeset(%{import_status: "soft"})
         |> Repo.update()
+
       existing_movie ->
         # Leave full imports untouched
         {:ok, existing_movie}
@@ -276,10 +301,11 @@ defmodule Cinegraph.Movies do
   """
   def create_or_update_person_from_tmdb(tmdb_data) do
     changeset = Person.from_tmdb(tmdb_data)
-    
+
     case get_person_by_tmdb_id(tmdb_data["id"]) do
       nil ->
         Repo.insert(changeset)
+
       existing_person ->
         existing_person
         |> Person.changeset(changeset.changes)
@@ -296,17 +322,18 @@ defmodule Cinegraph.Movies do
     with {:ok, %{"genres" => genres}} <- TMDb.Client.get("/genre/movie/list") do
       Enum.each(genres, fn genre_data ->
         changeset = Genre.from_tmdb(genre_data)
-        
+
         case Repo.get_by(Genre, tmdb_id: genre_data["id"]) do
           nil ->
             Repo.insert(changeset)
+
           existing_genre ->
             existing_genre
             |> Genre.changeset(changeset.changes)
             |> Repo.update()
         end
       end)
-      
+
       {:ok, :genres_synced}
     end
   end
@@ -357,6 +384,7 @@ defmodule Cinegraph.Movies do
   """
   def get_movie_keywords(movie_id) do
     movie = Repo.get(Movie, movie_id)
+
     if movie do
       movie
       |> Repo.preload(:keywords)
@@ -389,6 +417,7 @@ defmodule Cinegraph.Movies do
   """
   def get_movie_production_companies(movie_id) do
     movie = Repo.get(Movie, movie_id)
+
     if movie do
       movie
       |> Repo.preload(:production_companies)
@@ -436,11 +465,19 @@ defmodule Cinegraph.Movies do
   """
   def update_canonical_sources(%Movie{} = movie, source_key, metadata) do
     current_sources = movie.canonical_sources || %{}
-    
-    updated_sources = Map.put(current_sources, source_key, Map.merge(%{
-      "included" => true
-    }, metadata))
-    
+
+    updated_sources =
+      Map.put(
+        current_sources,
+        source_key,
+        Map.merge(
+          %{
+            "included" => true
+          },
+          metadata
+        )
+      )
+
     movie
     |> Movie.changeset(%{canonical_sources: updated_sources})
     |> Repo.update()
@@ -449,9 +486,10 @@ defmodule Cinegraph.Movies do
   # Processing functions for comprehensive movie data
 
   defp process_movie_credits(_movie, nil), do: :ok
+
   defp process_movie_credits(movie, %{"cast" => cast, "crew" => crew}) do
     alias Cinegraph.Imports.QualityFilter
-    
+
     # Process cast
     Enum.each(cast, fn cast_member ->
       # Check if person meets quality criteria
@@ -492,6 +530,7 @@ defmodule Cinegraph.Movies do
   end
 
   defp process_movie_keywords(_movie, nil), do: :ok
+
   defp process_movie_keywords(movie, %{"keywords" => keywords}) do
     Enum.each(keywords, fn keyword_data ->
       case create_or_update_keyword(keyword_data) do
@@ -502,39 +541,48 @@ defmodule Cinegraph.Movies do
             [[movie_id: movie.id, keyword_id: keyword.id]],
             on_conflict: :nothing
           )
+
         {:error, reason} ->
-          Logger.warning("Failed to create/update keyword #{keyword_data["name"]}: #{inspect(reason)}")
+          Logger.warning(
+            "Failed to create/update keyword #{keyword_data["name"]}: #{inspect(reason)}"
+          )
       end
     end)
-    
+
     :ok
   end
 
   defp process_movie_videos(_movie, nil), do: :ok
+
   defp process_movie_videos(movie, %{"results" => videos}) do
     Enum.each(videos, fn video_data ->
       video_data
       |> MovieVideo.from_tmdb(movie.id)
       |> Repo.insert(on_conflict: :nothing, conflict_target: :tmdb_id)
     end)
-    
+
     :ok
   end
 
   defp process_movie_release_dates(_movie, nil), do: :ok
+
   defp process_movie_release_dates(movie, %{"results" => countries}) do
     Enum.each(countries, fn country_data ->
       changesets = MovieReleaseDate.from_tmdb_country(country_data, movie.id)
-      
+
       Enum.each(changesets, fn changeset ->
-        Repo.insert(changeset, on_conflict: :nothing, conflict_target: [:movie_id, :country_code, :release_type])
+        Repo.insert(changeset,
+          on_conflict: :nothing,
+          conflict_target: [:movie_id, :country_code, :release_type]
+        )
       end)
     end)
-    
+
     :ok
   end
 
   defp process_movie_collection(_movie, nil), do: :ok
+
   defp process_movie_collection(_movie, collection_data) do
     with {:ok, collection_details} <- TMDb.get_collection(collection_data["id"]),
          {:ok, _collection} <- create_or_update_collection(collection_details) do
@@ -545,6 +593,7 @@ defmodule Cinegraph.Movies do
   end
 
   defp process_movie_companies(_movie, nil), do: :ok
+
   defp process_movie_companies(movie, companies) do
     Enum.each(companies, fn company_data ->
       # For now, just create basic company record
@@ -557,11 +606,14 @@ defmodule Cinegraph.Movies do
             [[movie_id: movie.id, production_company_id: company.id]],
             on_conflict: :nothing
           )
+
         {:error, reason} ->
-          Logger.warning("Failed to create/update company #{company_data["name"]}: #{inspect(reason)}")
+          Logger.warning(
+            "Failed to create/update company #{company_data["name"]}: #{inspect(reason)}"
+          )
       end
     end)
-    
+
     :ok
   end
 
@@ -575,21 +627,26 @@ defmodule Cinegraph.Movies do
         |> Keyword.from_tmdb()
         |> Repo.insert()
         |> case do
-          {:ok, keyword} -> {:ok, keyword}
+          {:ok, keyword} ->
+            {:ok, keyword}
+
           {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
             # Race condition - keyword was inserted by another process, fetch it
             case Repo.get_by(Keyword, tmdb_id: keyword_data["id"]) do
-              nil -> 
+              nil ->
                 # Still doesn't exist somehow, return the original error
                 keyword_data
                 |> Keyword.from_tmdb()
                 |> Repo.insert()
+
               existing_keyword ->
                 {:ok, existing_keyword}
             end
-          error -> 
+
+          error ->
             error
         end
+
       existing ->
         {:ok, existing}
     end
@@ -603,21 +660,26 @@ defmodule Cinegraph.Movies do
         |> Collection.from_tmdb()
         |> Repo.insert()
         |> case do
-          {:ok, collection} -> {:ok, collection}
+          {:ok, collection} ->
+            {:ok, collection}
+
           {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
             # Race condition - collection was inserted by another process, fetch it
             case Repo.get_by(Collection, tmdb_id: collection_data["id"]) do
-              nil -> 
+              nil ->
                 # Still doesn't exist somehow, return the original error
                 collection_data
                 |> Collection.from_tmdb()
                 |> Repo.insert()
+
               existing_collection ->
                 {:ok, existing_collection}
             end
-          error -> 
+
+          error ->
             error
         end
+
       existing ->
         {:ok, existing}
     end
@@ -636,11 +698,13 @@ defmodule Cinegraph.Movies do
         })
         |> Repo.insert()
         |> case do
-          {:ok, company} -> {:ok, company}
+          {:ok, company} ->
+            {:ok, company}
+
           {:error, %Ecto.Changeset{errors: [tmdb_id: {"has already been taken", _}]}} ->
             # Race condition - company was inserted by another process, fetch it
             case Repo.get_by(ProductionCompany, tmdb_id: company_data["id"]) do
-              nil -> 
+              nil ->
                 # Still doesn't exist somehow, return the original error
                 %ProductionCompany{}
                 |> ProductionCompany.changeset(%{
@@ -650,12 +714,15 @@ defmodule Cinegraph.Movies do
                   origin_country: company_data["origin_country"]
                 })
                 |> Repo.insert()
+
               existing_company ->
                 {:ok, existing_company}
             end
-          error -> 
+
+          error ->
             error
         end
+
       existing ->
         {:ok, existing}
     end
@@ -672,38 +739,42 @@ defmodule Cinegraph.Movies do
   end
 
   # Process recommendations and similar movies
-  
+
   defp process_movie_recommendations(_movie, nil), do: :ok
+
   defp process_movie_recommendations(movie, %{"results" => results}) do
     ExternalSources.store_tmdb_recommendations(movie, results, "recommended")
   end
 
   defp process_movie_similar(_movie, nil), do: :ok
+
   defp process_movie_similar(movie, %{"results" => results}) do
     ExternalSources.store_tmdb_recommendations(movie, results, "similar")
   end
 
-
   defp process_movie_reviews(_movie, nil), do: :ok
+
   defp process_movie_reviews(movie, %{"results" => reviews}) do
     # Store review count as engagement metric
     review_count = length(reviews)
-    
+
     # Calculate average rating if reviews have ratings
-    avg_rating = if review_count > 0 do
-      ratings = reviews 
-        |> Enum.filter(& &1["author_details"]["rating"])
-        |> Enum.map(& &1["author_details"]["rating"])
-      
-      if length(ratings) > 0 do
-        Enum.sum(ratings) / length(ratings)
+    avg_rating =
+      if review_count > 0 do
+        ratings =
+          reviews
+          |> Enum.filter(& &1["author_details"]["rating"])
+          |> Enum.map(& &1["author_details"]["rating"])
+
+        if length(ratings) > 0 do
+          Enum.sum(ratings) / length(ratings)
+        else
+          nil
+        end
       else
         nil
       end
-    else
-      nil
-    end
-    
+
     # Store as external rating
     with {:ok, source} <- ExternalSources.get_or_create_source("tmdb") do
       ExternalSources.upsert_rating(%{
@@ -712,7 +783,8 @@ defmodule Cinegraph.Movies do
         rating_type: "engagement",
         value: review_count,
         scale_min: 0.0,
-        scale_max: 1000.0,  # Arbitrary max for count
+        # Arbitrary max for count
+        scale_max: 1000.0,
         sample_size: review_count,
         metadata: %{
           "average_rating" => avg_rating,
@@ -721,22 +793,37 @@ defmodule Cinegraph.Movies do
         fetched_at: DateTime.utc_now()
       })
     end
-    
+
     :ok
   end
 
   defp process_movie_lists(_movie, nil), do: :ok
+
   defp process_movie_lists(movie, %{"results" => lists}) do
     # Store list appearances as popularity metric
     list_count = length(lists)
-    
+
     # Count lists that might be culturally relevant
-    cultural_lists = lists |> Enum.filter(fn list ->
-      name = String.downcase(list["name"] || "")
-      String.contains?(name, ["award", "oscar", "academy", "cannes", "criterion", 
-                             "afi", "best", "greatest", "top", "essential", "classic"])
-    end)
-    
+    cultural_lists =
+      lists
+      |> Enum.filter(fn list ->
+        name = String.downcase(list["name"] || "")
+
+        String.contains?(name, [
+          "award",
+          "oscar",
+          "academy",
+          "cannes",
+          "criterion",
+          "afi",
+          "best",
+          "greatest",
+          "top",
+          "essential",
+          "classic"
+        ])
+      end)
+
     with {:ok, source} <- ExternalSources.get_or_create_source("tmdb") do
       ExternalSources.upsert_rating(%{
         movie_id: movie.id,
@@ -744,7 +831,8 @@ defmodule Cinegraph.Movies do
         rating_type: "list_appearances",
         value: list_count,
         scale_min: 0.0,
-        scale_max: 10000.0,  # Arbitrary max for count
+        # Arbitrary max for count
+        scale_max: 10000.0,
         sample_size: list_count,
         metadata: %{
           "cultural_list_count" => length(cultural_lists),
@@ -753,116 +841,128 @@ defmodule Cinegraph.Movies do
         fetched_at: DateTime.utc_now()
       })
     end
-    
+
     :ok
   end
 
   # Process genres
   defp process_movie_genres(_movie, nil), do: :ok
+
   defp process_movie_genres(movie, genres) when is_list(genres) do
     # First ensure all genres exist
-    genre_records = Enum.map(genres, fn genre_data ->
-      attrs = %{
-        tmdb_id: genre_data["id"],
-        name: genre_data["name"]
-      }
-      
-      case Repo.get_by(Genre, tmdb_id: genre_data["id"]) do
-        nil ->
-          {:ok, genre} = Repo.insert(Genre.changeset(%Genre{}, attrs))
-          genre
-        existing_genre ->
-          existing_genre
-      end
-    end)
-    
+    genre_records =
+      Enum.map(genres, fn genre_data ->
+        attrs = %{
+          tmdb_id: genre_data["id"],
+          name: genre_data["name"]
+        }
+
+        case Repo.get_by(Genre, tmdb_id: genre_data["id"]) do
+          nil ->
+            {:ok, genre} = Repo.insert(Genre.changeset(%Genre{}, attrs))
+            genre
+
+          existing_genre ->
+            existing_genre
+        end
+      end)
+
     # Clear existing associations
     Repo.delete_all(from(mg in "movie_genres", where: mg.movie_id == ^movie.id))
-    
+
     # Create new associations
     Enum.each(genre_records, fn genre ->
-      Repo.insert_all("movie_genres", [[movie_id: movie.id, genre_id: genre.id]], 
+      Repo.insert_all("movie_genres", [[movie_id: movie.id, genre_id: genre.id]],
         on_conflict: :nothing,
         conflict_target: [:movie_id, :genre_id]
       )
     end)
-    
+
     :ok
   end
-  
+
   # Process production countries
   defp process_movie_production_countries(_movie, nil), do: :ok
+
   defp process_movie_production_countries(movie, countries) when is_list(countries) do
     # First ensure all countries exist
-    country_records = Enum.map(countries, fn country_data ->
-      attrs = %{
-        iso_3166_1: country_data["iso_3166_1"],
-        name: country_data["name"]
-      }
-      
-      case Repo.get_by(ProductionCountry, iso_3166_1: country_data["iso_3166_1"]) do
-        nil ->
-          {:ok, country} = Repo.insert(ProductionCountry.changeset(%ProductionCountry{}, attrs))
-          country
-        existing_country ->
-          existing_country
-      end
-    end)
-    
+    country_records =
+      Enum.map(countries, fn country_data ->
+        attrs = %{
+          iso_3166_1: country_data["iso_3166_1"],
+          name: country_data["name"]
+        }
+
+        case Repo.get_by(ProductionCountry, iso_3166_1: country_data["iso_3166_1"]) do
+          nil ->
+            {:ok, country} = Repo.insert(ProductionCountry.changeset(%ProductionCountry{}, attrs))
+            country
+
+          existing_country ->
+            existing_country
+        end
+      end)
+
     # Clear existing associations
     Repo.delete_all(from(mpc in "movie_production_countries", where: mpc.movie_id == ^movie.id))
-    
+
     # Create new associations
     Enum.each(country_records, fn country ->
-      Repo.insert_all("movie_production_countries", 
-        [[movie_id: movie.id, production_country_id: country.id]], 
+      Repo.insert_all(
+        "movie_production_countries",
+        [[movie_id: movie.id, production_country_id: country.id]],
         on_conflict: :nothing,
         conflict_target: [:movie_id, :production_country_id]
       )
     end)
-    
+
     :ok
   end
-  
+
   # Process spoken languages
   defp process_movie_spoken_languages(_movie, nil), do: :ok
+
   defp process_movie_spoken_languages(movie, languages) when is_list(languages) do
     # First ensure all languages exist
-    language_records = Enum.map(languages, fn lang_data ->
-      attrs = %{
-        iso_639_1: lang_data["iso_639_1"],
-        name: lang_data["name"] || lang_data["english_name"] || lang_data["iso_639_1"],
-        english_name: lang_data["english_name"]
-      }
-      
-      case Repo.get_by(SpokenLanguage, iso_639_1: lang_data["iso_639_1"]) do
-        nil ->
-          case Repo.insert(SpokenLanguage.changeset(%SpokenLanguage{}, attrs)) do
-            {:ok, language} -> language
-            {:error, _changeset} -> 
-              # If insert fails, skip this language
-              nil
-          end
-        existing_language ->
-          existing_language
-      end
-    end)
-    
+    language_records =
+      Enum.map(languages, fn lang_data ->
+        attrs = %{
+          iso_639_1: lang_data["iso_639_1"],
+          name: lang_data["name"] || lang_data["english_name"] || lang_data["iso_639_1"],
+          english_name: lang_data["english_name"]
+        }
+
+        case Repo.get_by(SpokenLanguage, iso_639_1: lang_data["iso_639_1"]) do
+          nil ->
+            case Repo.insert(SpokenLanguage.changeset(%SpokenLanguage{}, attrs)) do
+              {:ok, language} ->
+                language
+
+              {:error, _changeset} ->
+                # If insert fails, skip this language
+                nil
+            end
+
+          existing_language ->
+            existing_language
+        end
+      end)
+
     # Clear existing associations
     Repo.delete_all(from(msl in "movie_spoken_languages", where: msl.movie_id == ^movie.id))
-    
+
     # Create new associations (skip nil records)
     language_records
     |> Enum.reject(&is_nil/1)
     |> Enum.each(fn language ->
-      Repo.insert_all("movie_spoken_languages", 
-        [[movie_id: movie.id, spoken_language_id: language.id]], 
+      Repo.insert_all(
+        "movie_spoken_languages",
+        [[movie_id: movie.id, spoken_language_id: language.id]],
         on_conflict: :nothing,
         conflict_target: [:movie_id, :spoken_language_id]
       )
     end)
-    
+
     :ok
   end
-
 end

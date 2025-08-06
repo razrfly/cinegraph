@@ -11,7 +11,7 @@ defmodule Cinegraph.Festivals.FestivalNomination do
     belongs_to :category, Cinegraph.Festivals.FestivalCategory
     belongs_to :movie, Cinegraph.Movies.Movie
     belongs_to :person, Cinegraph.Movies.Person
-    
+
     field :won, :boolean, default: false
     field :details, :map
 

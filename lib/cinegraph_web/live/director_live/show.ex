@@ -18,14 +18,15 @@ defmodule CinegraphWeb.DirectorLive.Show do
           socket
           |> put_flash(:error, "Person not found")
           |> push_navigate(to: ~p"/people")
-        
+
         {:noreply, socket}
-      
+
       director ->
         # Verify this person is actually a director
-        is_director = director.known_for_department == "Directing" || 
-                      Enum.any?(director.crew_credits, & &1.job == "Director")
-        
+        is_director =
+          director.known_for_department == "Directing" ||
+            Enum.any?(director.crew_credits, &(&1.job == "Director"))
+
         if is_director do
           socket =
             socket
@@ -37,14 +38,14 @@ defmodule CinegraphWeb.DirectorLive.Show do
             |> assign(:rating_trends, get_rating_trends(director))
             |> assign(:box_office_trends, get_box_office_trends(director))
             |> assign(:collaboration_network, get_collaboration_network(id))
-          
+
           {:noreply, socket}
         else
           socket =
             socket
             |> put_flash(:error, "This person is not a director")
             |> push_navigate(to: ~p"/people/#{id}")
-          
+
           {:noreply, socket}
         end
     end
@@ -53,19 +54,19 @@ defmodule CinegraphWeb.DirectorLive.Show do
   # Private functions
 
   defp get_director_stats(director) do
-    directing_credits = Enum.filter(director.crew_credits, & &1.job == "Director")
+    directing_credits = Enum.filter(director.crew_credits, &(&1.job == "Director"))
     movies = Enum.map(directing_credits, & &1.movie) |> Enum.uniq_by(& &1.id)
-    
-    total_revenue = Enum.sum(Enum.map(movies, & (&1.revenue || 0)))
+
+    total_revenue = Enum.sum(Enum.map(movies, &(&1.revenue || 0)))
     avg_rating = calculate_average_rating(movies)
-    
+
     %{
       total_films: length(movies),
       total_revenue: total_revenue,
       avg_revenue: if(length(movies) > 0, do: div(total_revenue, length(movies)), else: 0),
       avg_rating: avg_rating,
-      highest_rated: Enum.max_by(movies, & (&1.vote_average || 0), fn -> nil end),
-      highest_grossing: Enum.max_by(movies, & (&1.revenue || 0), fn -> nil end),
+      highest_rated: Enum.max_by(movies, &(&1.vote_average || 0), fn -> nil end),
+      highest_grossing: Enum.max_by(movies, &(&1.revenue || 0), fn -> nil end),
       years_active: calculate_years_active(movies)
     }
   end
@@ -74,22 +75,23 @@ defmodule CinegraphWeb.DirectorLive.Show do
     Collaborations.find_director_frequent_actors(director_id, limit: 15)
     |> Enum.map(fn result ->
       # Add collaboration strength
-      strength = cond do
-        result.movie_count >= 5 -> :very_strong
-        result.movie_count >= 3 -> :strong
-        true -> :moderate
-      end
-      
+      strength =
+        cond do
+          result.movie_count >= 5 -> :very_strong
+          result.movie_count >= 3 -> :strong
+          true -> :moderate
+        end
+
       Map.put(result, :strength, strength)
     end)
   end
 
   defp analyze_genres(director) do
-    directing_credits = Enum.filter(director.crew_credits, & &1.job == "Director")
+    directing_credits = Enum.filter(director.crew_credits, &(&1.job == "Director"))
     movies = Enum.map(directing_credits, & &1.movie)
-    
+
     # Get genre distribution
-    genre_counts = 
+    genre_counts =
       movies
       |> Enum.flat_map(fn movie ->
         # In a real app, you'd fetch genres from movie_genres table
@@ -99,17 +101,18 @@ defmodule CinegraphWeb.DirectorLive.Show do
       |> Enum.frequencies()
       |> Enum.sort_by(fn {_genre, count} -> count end, :desc)
       |> Enum.take(5)
-    
+
     # Calculate genre performance
-    genre_performance = 
+    genre_performance =
       Enum.map(genre_counts, fn {genre, count} ->
-        genre_movies = Enum.filter(movies, fn movie ->
-          Enum.member?(categorize_movie_genres(movie), genre)
-        end)
-        
+        genre_movies =
+          Enum.filter(movies, fn movie ->
+            Enum.member?(categorize_movie_genres(movie), genre)
+          end)
+
         avg_rating = calculate_average_rating(genre_movies)
-        total_revenue = Enum.sum(Enum.map(genre_movies, & (&1.revenue || 0)))
-        
+        total_revenue = Enum.sum(Enum.map(genre_movies, &(&1.revenue || 0)))
+
         %{
           genre: genre,
           count: count,
@@ -117,7 +120,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
           total_revenue: total_revenue
         }
       end)
-    
+
     %{
       genre_counts: genre_counts,
       genre_performance: genre_performance,
@@ -129,28 +132,37 @@ defmodule CinegraphWeb.DirectorLive.Show do
     # Simple genre categorization based on movie attributes
     # In a real app, this would come from the movie_genres table
     cond do
-      String.contains?(String.downcase(movie.title || ""), ["war", "battle"]) -> ["War", "Drama"]
-      String.contains?(String.downcase(movie.title || ""), ["love", "romance"]) -> ["Romance", "Drama"]
-      String.contains?(String.downcase(movie.title || ""), ["space", "alien"]) -> ["Sci-Fi", "Adventure"]
-      movie.runtime && movie.runtime > 150 -> ["Drama", "Epic"]
-      true -> ["Drama"]
+      String.contains?(String.downcase(movie.title || ""), ["war", "battle"]) ->
+        ["War", "Drama"]
+
+      String.contains?(String.downcase(movie.title || ""), ["love", "romance"]) ->
+        ["Romance", "Drama"]
+
+      String.contains?(String.downcase(movie.title || ""), ["space", "alien"]) ->
+        ["Sci-Fi", "Adventure"]
+
+      movie.runtime && movie.runtime > 150 ->
+        ["Drama", "Epic"]
+
+      true ->
+        ["Drama"]
     end
   end
 
   defp get_rating_trends(director) do
-    directing_credits = 
+    directing_credits =
       director.crew_credits
-      |> Enum.filter(& &1.job == "Director")
+      |> Enum.filter(&(&1.job == "Director"))
       |> Enum.sort_by(& &1.movie.release_date)
-    
-    movies_with_ratings = 
+
+    movies_with_ratings =
       directing_credits
       |> Enum.map(& &1.movie)
-      |> Enum.filter(& &1.vote_average && &1.release_date)
-    
+      |> Enum.filter(&(&1.vote_average && &1.release_date))
+
     if length(movies_with_ratings) > 0 do
       # Group by decade
-      by_decade = 
+      by_decade =
         movies_with_ratings
         |> Enum.group_by(fn movie ->
           decade = div(movie.release_date.year, 10) * 10
@@ -164,7 +176,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
           }
         end)
         |> Enum.sort_by(& &1.decade)
-      
+
       %{
         by_decade: by_decade,
         trend: calculate_trend(movies_with_ratings),
@@ -176,19 +188,19 @@ defmodule CinegraphWeb.DirectorLive.Show do
   end
 
   defp get_box_office_trends(director) do
-    directing_credits = 
+    directing_credits =
       director.crew_credits
-      |> Enum.filter(& &1.job == "Director")
+      |> Enum.filter(&(&1.job == "Director"))
       |> Enum.sort_by(& &1.movie.release_date)
-    
-    movies_with_revenue = 
+
+    movies_with_revenue =
       directing_credits
       |> Enum.map(& &1.movie)
-      |> Enum.filter(& &1.revenue && &1.revenue > 0 && &1.release_date)
-    
+      |> Enum.filter(&(&1.revenue && &1.revenue > 0 && &1.release_date))
+
     if length(movies_with_revenue) > 0 do
       # Calculate cumulative box office
-      cumulative = 
+      cumulative =
         movies_with_revenue
         |> Enum.scan(%{year: nil, total: 0}, fn movie, acc ->
           %{
@@ -197,11 +209,12 @@ defmodule CinegraphWeb.DirectorLive.Show do
             movie: movie.title
           }
         end)
-      
+
       %{
         cumulative_revenue: cumulative,
         highest_year: find_highest_revenue_year(movies_with_revenue),
-        average_per_film: div(Enum.sum(Enum.map(movies_with_revenue, & &1.revenue)), length(movies_with_revenue))
+        average_per_film:
+          div(Enum.sum(Enum.map(movies_with_revenue, & &1.revenue)), length(movies_with_revenue))
       }
     else
       %{cumulative_revenue: [], highest_year: nil, average_per_film: 0}
@@ -230,9 +243,10 @@ defmodule CinegraphWeb.DirectorLive.Show do
     ORDER BY collaborations DESC
     LIMIT 20
     """
-    
-    director_id_int = if is_binary(director_id), do: String.to_integer(director_id), else: director_id
-    
+
+    director_id_int =
+      if is_binary(director_id), do: String.to_integer(director_id), else: director_id
+
     case Cinegraph.Repo.query(query, [director_id_int]) do
       {:ok, %{rows: rows}} ->
         Enum.map(rows, fn [id, name, job, department, collaborations, avg_rating] ->
@@ -244,6 +258,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
             avg_rating: avg_rating && Float.round(avg_rating, 1)
           }
         end)
+
       _ ->
         []
     end
@@ -252,11 +267,11 @@ defmodule CinegraphWeb.DirectorLive.Show do
   # Helper functions
 
   defp calculate_average_rating(movies) do
-    ratings = 
+    ratings =
       movies
       |> Enum.map(& &1.vote_average)
       |> Enum.reject(&is_nil/1)
-    
+
     if length(ratings) > 0 do
       Float.round(Enum.sum(ratings) / length(ratings), 1)
     else
@@ -265,15 +280,15 @@ defmodule CinegraphWeb.DirectorLive.Show do
   end
 
   defp calculate_years_active(movies) do
-    dates = 
+    dates =
       movies
       |> Enum.map(& &1.release_date)
       |> Enum.reject(&is_nil/1)
-    
+
     if length(dates) > 0 do
       min_date = Enum.min(dates, Date)
       max_date = Enum.max(dates, Date)
-      
+
       %{
         first_film: min_date,
         latest_film: max_date,
@@ -286,13 +301,13 @@ defmodule CinegraphWeb.DirectorLive.Show do
 
   defp calculate_trend(movies_with_ratings) do
     # Simple trend calculation based on recent vs older films
-    recent = Enum.filter(movies_with_ratings, & &1.release_date.year >= 2015)
-    older = Enum.filter(movies_with_ratings, & &1.release_date.year < 2015)
-    
+    recent = Enum.filter(movies_with_ratings, &(&1.release_date.year >= 2015))
+    older = Enum.filter(movies_with_ratings, &(&1.release_date.year < 2015))
+
     if length(recent) > 0 && length(older) > 0 do
       recent_avg = calculate_average_rating(recent)
       older_avg = calculate_average_rating(older)
-      
+
       cond do
         recent_avg > older_avg + 0.5 -> :improving
         recent_avg < older_avg - 0.5 -> :declining
@@ -304,11 +319,11 @@ defmodule CinegraphWeb.DirectorLive.Show do
   end
 
   defp calculate_recent_performance(movies) do
-    recent = 
+    recent =
       movies
-      |> Enum.filter(& &1.release_date.year >= Date.utc_today().year - 5)
+      |> Enum.filter(&(&1.release_date.year >= Date.utc_today().year - 5))
       |> Enum.take(-3)
-    
+
     if length(recent) > 0 do
       %{
         films: length(recent),

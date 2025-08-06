@@ -33,17 +33,19 @@ defmodule Cinegraph.Festivals do
           founded_year: 1927,
           website: "https://www.oscars.org"
         }
-        
+
         %FestivalOrganization{}
         |> FestivalOrganization.changeset(attrs)
         |> Repo.insert()
         |> case do
-          {:ok, org} -> org
-          {:error, _changeset} -> 
+          {:ok, org} ->
+            org
+
+          {:error, _changeset} ->
             # Race condition - try to get again
             Repo.get_by!(FestivalOrganization, abbreviation: "AMPAS")
         end
-        
+
       existing_org ->
         existing_org
     end
@@ -54,6 +56,22 @@ defmodule Cinegraph.Festivals do
   """
   def get_organization_by_abbreviation(abbrev) do
     Repo.get_by(FestivalOrganization, abbreviation: abbrev)
+  end
+
+  @doc """
+  Creates a festival organization.
+  """
+  def create_organization(attrs \\ %{}) do
+    %FestivalOrganization{}
+    |> FestivalOrganization.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Gets a category by name for a specific organization.
+  """
+  def get_category_by_name(organization_id, name) do
+    Repo.get_by(FestivalCategory, organization_id: organization_id, name: name)
   end
 
   # ========================================
@@ -147,7 +165,7 @@ defmodule Cinegraph.Festivals do
   Counts wins by ceremony.
   """
   def count_wins(ceremony_id) do
-    from(n in FestivalNomination, 
+    from(n in FestivalNomination,
       where: n.ceremony_id == ^ceremony_id and n.won == true
     )
     |> Repo.aggregate(:count, :id)

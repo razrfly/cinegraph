@@ -26,8 +26,14 @@ defmodule Cinegraph.Cultural.MovieDataChange do
   def changeset(change, attrs) do
     change
     |> cast(attrs, [
-      :movie_id, :source_platform, :change_type, :change_count,
-      :period_start, :period_end, :change_velocity, :unusual_activity
+      :movie_id,
+      :source_platform,
+      :change_type,
+      :change_count,
+      :period_start,
+      :period_end,
+      :change_velocity,
+      :unusual_activity
     ])
     |> validate_required([:movie_id, :source_platform, :change_type])
     |> validate_inclusion(:source_platform, @source_platforms)

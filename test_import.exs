@@ -3,9 +3,11 @@ IO.puts("=== Testing Import System ===\n")
 
 # 1. First check and set TMDB total
 IO.puts("1. Updating TMDB total count...")
+
 case Cinegraph.Imports.TMDbImporter.update_tmdb_total() do
   {:ok, total} ->
     IO.puts("   TMDB Total: #{total} movies")
+
   {:error, reason} ->
     IO.puts("   ❌ Failed to update TMDB total: #{inspect(reason)}")
     System.halt(1)
@@ -18,9 +20,11 @@ IO.inspect(progress, pretty: true)
 
 # 3. Start import
 IO.puts("\n3. Starting import...")
+
 case Cinegraph.Imports.TMDbImporter.start_full_import() do
   {:ok, info} ->
     IO.puts("   Started from page: #{info.starting_page}")
+
   {:error, reason} ->
     IO.puts("   ❌ Failed to start import: #{inspect(reason)}")
     System.halt(1)
@@ -34,13 +38,15 @@ Process.sleep(5000)
 import Ecto.Query
 alias Cinegraph.Repo
 
-job_counts = Repo.all(
-  from j in Oban.Job,
-  group_by: [j.queue, j.state],
-  select: {j.queue, j.state, count(j.id)}
-)
+job_counts =
+  Repo.all(
+    from j in Oban.Job,
+      group_by: [j.queue, j.state],
+      select: {j.queue, j.state, count(j.id)}
+  )
 
 IO.puts("\n5. Job status:")
+
 Enum.each(job_counts, fn {queue, state, count} ->
   IO.puts("   #{queue} - #{state}: #{count}")
 end)

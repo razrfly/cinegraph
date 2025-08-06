@@ -8,8 +8,8 @@
       Back to Home
     </.link>
   </div>
-
-  <!-- Header with Sort Options -->
+  
+<!-- Header with Sort Options -->
   <div class="mb-8">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
       <div>
@@ -17,19 +17,19 @@
           🎬 Movies Database
         </h1>
         <p class="text-gray-600 mt-2">
-          Showing <%= (@page - 1) * @per_page + 1 %> - <%= min(@page * @per_page, @total_movies) %> 
-          of <%= @total_movies %> movies
+          Showing {(@page - 1) * @per_page + 1} - {min(@page * @per_page, @total_movies)} of {@total_movies} movies
         </p>
       </div>
       
-      <!-- Sort Dropdown -->
+<!-- Sort Dropdown -->
       <div class="mt-4 sm:mt-0">
         <label for="sort" class="block text-sm font-medium text-gray-700 mb-1">Sort by</label>
-        <select 
-          id="sort" 
+        <select
+          id="sort"
           name="sort"
           phx-change="change_sort"
-          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+          class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+        >
           <option value="release_date_desc" selected={@sort == "release_date_desc"}>
             Release Date (Newest)
           </option>
@@ -52,8 +52,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Movies Grid -->
+  
+<!-- Movies Grid -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
     <%= for movie <- @movies do %>
       <.link navigate={~p"/movies/#{movie.id}"} class="group block">
@@ -61,8 +61,8 @@
           <!-- Movie Poster -->
           <div class="aspect-[2/3] bg-gray-200 relative">
             <%= if movie.poster_path do %>
-              <img 
-                src={Cinegraph.Movies.Movie.poster_url(movie, "w500")} 
+              <img
+                src={Cinegraph.Movies.Movie.poster_url(movie, "w500")}
                 alt={movie.title}
                 class="w-full h-full object-cover"
                 loading="lazy"
@@ -73,37 +73,37 @@
               </div>
             <% end %>
             
-            <!-- Rating Badge (if available) -->
+<!-- Rating Badge (if available) -->
             <%= if movie.vote_average && movie.vote_average > 0 do %>
               <div class="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-sm px-2 py-1 rounded">
-                ⭐ <%= Float.round(movie.vote_average, 1) %>
+                ⭐ {Float.round(movie.vote_average, 1)}
               </div>
             <% end %>
           </div>
           
-          <!-- Movie Info -->
+<!-- Movie Info -->
           <div class="p-4">
             <h3 class="font-semibold text-lg text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-              <%= movie.title %>
+              {movie.title}
             </h3>
-            
+
             <%= if movie.release_date do %>
               <p class="text-gray-500 text-sm mt-1">
-                <%= Calendar.strftime(movie.release_date, "%Y") %>
+                {Calendar.strftime(movie.release_date, "%Y")}
               </p>
             <% end %>
             
-            <!-- Quick Stats -->
+<!-- Quick Stats -->
             <div class="mt-3 flex flex-wrap gap-2">
               <%= if movie.runtime do %>
                 <span class="text-xs text-gray-500">
-                  <%= movie.runtime %> min
+                  {movie.runtime} min
                 </span>
               <% end %>
-              
+
               <%= if movie.original_language do %>
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  <%= String.upcase(movie.original_language) %>
+                  {String.upcase(movie.original_language)}
                 </span>
               <% end %>
             </div>
@@ -112,29 +112,35 @@
       </.link>
     <% end %>
   </div>
-
-  <!-- Empty State -->
+  
+<!-- Empty State -->
   <%= if Enum.empty?(@movies) do %>
     <div class="text-center py-12">
       <div class="mx-auto h-12 w-12 text-gray-400">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 011 1v1a1 1 0 01-1 1H3a1 1 0 01-1-1V5a1 1 0 011-1h4zm0 0v14a2 2 0 002 2h6a2 2 0 002-2V4H7z" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 011 1v1a1 1 0 01-1 1H3a1 1 0 01-1-1V5a1 1 0 011-1h4zm0 0v14a2 2 0 002 2h6a2 2 0 002-2V4H7z"
+          />
         </svg>
       </div>
       <h3 class="mt-2 text-sm font-medium text-gray-900">No movies found</h3>
       <p class="mt-1 text-sm text-gray-500">Try adjusting your filters or search criteria.</p>
     </div>
   <% end %>
-
-  <!-- Pagination -->
+  
+<!-- Pagination -->
   <%= if @total_pages > 1 do %>
     <div class="mt-8 flex items-center justify-between">
       <!-- Mobile pagination -->
       <div class="flex flex-1 justify-between sm:hidden">
         <%= if @page > 1 do %>
-          <.link 
+          <.link
             navigate={build_pagination_path(assigns, %{"page" => @page - 1})}
-            class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+          >
             Previous
           </.link>
         <% else %>
@@ -142,11 +148,12 @@
             Previous
           </span>
         <% end %>
-        
+
         <%= if @page < @total_pages do %>
-          <.link 
+          <.link
             navigate={build_pagination_path(assigns, %{"page" => @page + 1})}
-            class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+          >
             Next
           </.link>
         <% else %>
@@ -156,70 +163,94 @@
         <% end %>
       </div>
       
-      <!-- Desktop pagination -->
+<!-- Desktop pagination -->
       <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
         <div>
           <p class="text-sm text-gray-700">
-            Page <span class="font-medium"><%= @page %></span> of <span class="font-medium"><%= @total_pages %></span>
+            Page <span class="font-medium">{@page}</span>
+            of <span class="font-medium">{@total_pages}</span>
           </p>
         </div>
-        
+
         <div>
-          <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+          <nav
+            class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+            aria-label="Pagination"
+          >
             <!-- Previous button -->
             <%= if @page > 1 do %>
-              <.link 
+              <.link
                 navigate={build_pagination_path(assigns, %{"page" => @page - 1})}
-                class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+              >
                 <span class="sr-only">Previous</span>
                 <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  <path
+                    fill-rule="evenodd"
+                    d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
               </.link>
             <% else %>
               <span class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-gray-100 text-sm font-medium text-gray-400 cursor-not-allowed">
                 <span class="sr-only">Previous</span>
                 <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  <path
+                    fill-rule="evenodd"
+                    d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
               </span>
             <% end %>
             
-            <!-- Page numbers -->
+<!-- Page numbers -->
             <%= for page_num <- pagination_range(@page, @total_pages) do %>
               <%= if page_num == "..." do %>
                 <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
                   ...
                 </span>
               <% else %>
-                <.link 
+                <.link
                   navigate={build_pagination_path(assigns, %{"page" => page_num})}
                   class={[
                     "relative inline-flex items-center px-4 py-2 border text-sm font-medium",
-                    if(page_num == @page, 
-                       do: "z-10 bg-blue-50 border-blue-500 text-blue-600", 
-                       else: "bg-white border-gray-300 text-gray-500 hover:bg-gray-50")
-                  ]}>
-                  <%= page_num %>
+                    if(page_num == @page,
+                      do: "z-10 bg-blue-50 border-blue-500 text-blue-600",
+                      else: "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
+                    )
+                  ]}
+                >
+                  {page_num}
                 </.link>
               <% end %>
             <% end %>
             
-            <!-- Next button -->
+<!-- Next button -->
             <%= if @page < @total_pages do %>
-              <.link 
+              <.link
                 navigate={build_pagination_path(assigns, %{"page" => @page + 1})}
-                class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+              >
                 <span class="sr-only">Next</span>
                 <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                  <path
+                    fill-rule="evenodd"
+                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
               </.link>
             <% else %>
               <span class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-gray-100 text-sm font-medium text-gray-400 cursor-not-allowed">
                 <span class="sr-only">Next</span>
                 <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                  <path
+                    fill-rule="evenodd"
+                    d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                    clip-rule="evenodd"
+                  />
                 </svg>
               </span>
             <% end %>

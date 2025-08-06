@@ -1,43 +1,48 @@
 defmodule Cinegraph.Imports.QualityFilter do
   @moduledoc """
   Configurable quality filters for import decisions.
-  
+
   Provides modular criteria for determining whether movies and people
   should be fully imported, soft imported, or skipped entirely.
   """
-  
+
   require Logger
-  
+
   # Movie quality criteria configuration
   # Requires 2 out of 4 criteria for full import (lowered from 4 to increase data inclusion)
   # This balanced approach captures both mainstream and niche cinema while filtering out 
   # low-quality entries. Criteria: poster, votes, popularity, release_date
   @movie_min_required 2
-  
+
   # Configurable quality thresholds - relaxed to improve data coverage
   # These thresholds were lowered after analysis showed overly restrictive filtering
   # was excluding valuable content, particularly international and independent films
   @quality_thresholds %{
-    min_votes: 10,      # Lowered from 25 - captures indie films with engaged audiences
-    min_popularity: 0.5 # Lowered from 5.0 - includes art house and foreign cinema
+    # Lowered from 25 - captures indie films with engaged audiences
+    min_votes: 10,
+    # Lowered from 5.0 - includes art house and foreign cinema
+    min_popularity: 0.5
   }
-  
+
   # Person quality criteria configuration
   @key_departments ["Acting", "Directing", "Writing"]
-  
+
   # Movie criteria check functions
   defp check_has_poster(movie), do: !is_nil(movie["poster_path"])
   defp check_has_votes(movie), do: (movie["vote_count"] || 0) >= @quality_thresholds.min_votes
-  defp check_has_popularity(movie), do: (movie["popularity"] || 0) >= @quality_thresholds.min_popularity
+
+  defp check_has_popularity(movie),
+    do: (movie["popularity"] || 0) >= @quality_thresholds.min_popularity
+
   defp check_has_release_date(movie), do: !is_nil(movie["release_date"])
-  
+
   # Person criteria check functions
   defp check_person_has_profile(person), do: !is_nil(person["profile_path"])
   defp check_person_has_popularity(person), do: (person["popularity"] || 0) >= 0.5
-  
+
   @doc """
   Determines if a movie should be fully imported.
-  
+
   Returns {:full_import, met_criteria} or {:soft_import, failed_criteria}
   """
   def evaluate_movie(movie_data) do
@@ -48,31 +53,32 @@ defmodule Cinegraph.Imports.QualityFilter do
       {:has_popularity, &check_has_popularity/1},
       {:has_release_date, &check_has_release_date/1}
     ]
-    
+
     # Evaluate each criterion
-    results = Enum.map(criteria, fn {name, check_fn} ->
-      {name, check_fn.(movie_data)}
-    end)
-    
+    results =
+      Enum.map(criteria, fn {name, check_fn} ->
+        {name, check_fn.(movie_data)}
+      end)
+
     # Count how many criteria were met
     met_criteria = Enum.filter(results, fn {_name, passed} -> passed end)
     failed_criteria = Enum.filter(results, fn {_name, passed} -> !passed end)
-    
+
     if length(met_criteria) >= @movie_min_required do
       {:full_import, Enum.map(met_criteria, &elem(&1, 0))}
     else
       {:soft_import, Enum.map(failed_criteria, &elem(&1, 0))}
     end
   end
-  
+
   @doc """
   Determines if a person should be imported.
-  
+
   Returns true if the person meets quality criteria, false otherwise.
   """
   def should_import_person?(person_data) do
     dept = person_data["known_for_department"] || "Unknown"
-    
+
     if dept in @key_departments do
       # For key roles (Acting/Directing/Writing), require ANY criterion
       check_person_has_profile(person_data) || check_person_has_popularity(person_data)
@@ -81,7 +87,7 @@ defmodule Cinegraph.Imports.QualityFilter do
       check_person_has_profile(person_data) && check_person_has_popularity(person_data)
     end
   end
-  
+
   @doc """
   Logs quality decision for analytics.
   """
@@ -94,7 +100,7 @@ defmodule Cinegraph.Imports.QualityFilter do
       Criteria: #{inspect(criteria_results)}
     """)
   end
-  
+
   @doc """
   Gets current configuration for runtime adjustment.
   """
@@ -110,13 +116,13 @@ defmodule Cinegraph.Imports.QualityFilter do
       thresholds: @quality_thresholds
     }
   end
-  
+
   def get_person_config do
     %{
       key_departments: @key_departments
     }
   end
-  
+
   @doc """
   Analyzes why a movie failed quality checks.
   """
@@ -134,6 +140,7 @@ defmodule Cinegraph.Imports.QualityFilter do
             release_date: is_nil(movie_data["release_date"])
           }
         }
+
       _ ->
         nil
     end

@@ -16,100 +16,114 @@ defmodule CinegraphWeb.CollaborationLive.Index do
       |> assign(:selected_collaboration, nil)
       |> assign(:similar_collaborations, nil)
       |> assign(:loading, false)
-    
+
     {:ok, socket}
   end
 
   @impl true
   def handle_params(params, _url, socket) do
     # Handle person_id parameter if coming from person profile
-    socket = 
+    socket =
       case params["person_id"] do
-        nil -> socket
-        person_id -> 
+        nil ->
+          socket
+
+        person_id ->
           case People.get_person(person_id) do
             nil -> socket
             person -> assign(socket, :highlighted_person, person)
           end
       end
-    
+
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("search_collaborations", params, socket) do
     socket = assign(socket, :loading, true)
-    
-    actor_id = case params["actor_id"] do
-      "" -> nil
-      id -> case Integer.parse(id) do
-        {int_id, ""} -> int_id
-        _ -> nil
+
+    actor_id =
+      case params["actor_id"] do
+        "" ->
+          nil
+
+        id ->
+          case Integer.parse(id) do
+            {int_id, ""} -> int_id
+            _ -> nil
+          end
       end
-    end
-    
-    director_id = case params["director_id"] do
-      "" -> nil
-      id -> case Integer.parse(id) do
-        {int_id, ""} -> int_id
-        _ -> nil
+
+    director_id =
+      case params["director_id"] do
+        "" ->
+          nil
+
+        id ->
+          case Integer.parse(id) do
+            {int_id, ""} -> int_id
+            _ -> nil
+          end
       end
-    end
-    
-    socket = 
+
+    socket =
       socket
       |> assign(:search_actor_id, actor_id)
       |> assign(:search_director_id, director_id)
-    
+
     send(self(), {:search, actor_id, director_id})
-    
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("find_similar", %{"collaboration_id" => collab_id}, socket) do
     collaboration = get_collaboration_by_id(collab_id)
-    
+
     if collaboration do
-      similar = Collaborations.find_similar_collaborations(
-        collaboration.person_a_id, 
-        collaboration.person_b_id,
-        limit: 10
-      )
-      
+      similar =
+        Collaborations.find_similar_collaborations(
+          collaboration.person_a_id,
+          collaboration.person_b_id,
+          limit: 10
+        )
+
       socket
       |> assign(:selected_collaboration, collaboration)
       |> assign(:similar_collaborations, similar)
     else
       socket
     end
-    
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_info({:search, actor_id, director_id}, socket) do
-    results = 
+    results =
       cond do
         actor_id && director_id ->
           # Search for specific actor-director collaboration
           movies = Collaborations.find_actor_director_movies(actor_id, director_id)
+
           if length(movies) > 0 do
-            [%{
-              type: :actor_director,
-              person_a: safe_get_person(actor_id),
-              person_b: safe_get_person(director_id),
-              movies: movies,
-              collaboration_count: length(movies)
-            }]
+            [
+              %{
+                type: :actor_director,
+                person_a: safe_get_person(actor_id),
+                person_b: safe_get_person(director_id),
+                movies: movies,
+                collaboration_count: length(movies)
+              }
+            ]
           else
             []
           end
-          
+
         actor_id ->
           # Find all collaborations for an actor
           get_person_top_collaborations(actor_id)
-          
+
         director_id ->
           # Find frequent actors for a director
           Collaborations.find_director_frequent_actors(director_id, limit: 20)
@@ -123,33 +137,33 @@ defmodule CinegraphWeb.CollaborationLive.Index do
               total_revenue: result.total_revenue
             }
           end)
-          
+
         true ->
           []
       end
-    
-    socket = 
+
+    socket =
       socket
       |> assign(:search_results, results)
       |> assign(:loading, false)
-    
+
     {:noreply, socket}
   end
-  
+
   # Private functions
-  
+
   defp safe_get_person(id) do
     case People.get_person(id) do
       nil -> %{id: id, name: "Unknown Person"}
       person -> person
     end
   end
-  
+
   defp get_trending_collaborations do
     # Get collaborations from the last 2 years
     current_year = Date.utc_today().year
     start_year = current_year - 2
-    
+
     Collaborations.find_trending_collaborations(start_year, limit: 12)
     |> Enum.map(fn collab ->
       # Get additional details
@@ -157,7 +171,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
       Map.merge(collab, details)
     end)
   end
-  
+
   defp get_collaboration_details(collaboration) do
     query = """
     SELECT 
@@ -170,7 +184,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
     WHERE cd.collaboration_id = $1
     GROUP BY cd.collaboration_type
     """
-    
+
     case Cinegraph.Repo.query(query, [collaboration.id]) do
       {:ok, %{rows: [[type, avg_rating, revenue, count, year]]}} ->
         %{
@@ -180,6 +194,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
           movie_count: count,
           latest_year: year
         }
+
       _ ->
         %{
           collaboration_type: "unknown",
@@ -190,7 +205,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
         }
     end
   end
-  
+
   defp get_person_top_collaborations(person_id) do
     query = """
     SELECT 
@@ -211,14 +226,14 @@ defmodule CinegraphWeb.CollaborationLive.Index do
     ORDER BY c.collaboration_count DESC, c.latest_collaboration_date DESC
     LIMIT 20
     """
-    
+
     case Cinegraph.Repo.query(query, [person_id]) do
       {:ok, %{rows: rows}} ->
         person = safe_get_person(person_id)
-        
+
         Enum.map(rows, fn [collab_id, count, rating, revenue, latest_date, types] ->
           collaborator = safe_get_person(collab_id)
-          
+
           %{
             type: determine_primary_type(types),
             person_a: person,
@@ -230,11 +245,12 @@ defmodule CinegraphWeb.CollaborationLive.Index do
             collaboration_types: String.split(types, ", ")
           }
         end)
+
       _ ->
         []
     end
   end
-  
+
   defp determine_primary_type(types_string) do
     cond do
       String.contains?(types_string, "actor-director") -> :actor_director
@@ -243,7 +259,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
       true -> :other
     end
   end
-  
+
   defp get_collaboration_by_id(id) do
     Cinegraph.Repo.get(Collaborations.Collaboration, id)
     |> Cinegraph.Repo.preload([:person_a, :person_b])
