@@ -472,7 +472,14 @@ defmodule Cinegraph.Cultural do
               organization_id: oscar_org.id,
               year: year,
               ceremony_number: calculate_ceremony_number(year),
-              data: data
+              data: data,
+              data_source: "official_website",
+              source_url: "https://www.oscars.org/oscars/ceremonies/#{year}",
+              scraped_at: DateTime.utc_now(),
+              source_metadata: %{
+                "scraper" => "OscarScraper",
+                "version" => "1.0"
+              }
             }
             
             Festivals.upsert_ceremony(attrs)
