@@ -11,7 +11,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
   require Logger
   
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"year" => year, "options" => options}}) do
+  def perform(%Oban.Job{args: %{"year" => year, "options" => options}} = job) do
     year = ensure_integer(year)
     Logger.info("Starting Oscar import for year #{year} (from Cultural module)")
     
@@ -29,6 +29,22 @@ defmodule Cinegraph.Workers.OscarImportWorker do
       {:ok, result} ->
         case result do
           %{status: :queued} ->
+            # Check if ceremony already existed
+            existing_ceremonies = Cultural.list_oscar_ceremonies()
+            existing_years = Enum.map(existing_ceremonies, & &1.year)
+            ceremony_existed = year in existing_years
+            
+            job_meta = %{
+              years_processed: 1,
+              ceremonies_found: 1,
+              ceremonies_created: if(ceremony_existed, do: 0, else: 1),
+              ceremonies_updated: if(ceremony_existed, do: 1, else: 0),
+              discovery_jobs_queued: 1,
+              failed_years: []
+            }
+            
+            update_job_meta(job, job_meta)
+            
             # Job was queued, not processed directly
             broadcast_progress(:single, :queued, %{
               year: year,
@@ -71,7 +87,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
     end
   end
 
-  def perform(%Oban.Job{args: %{"action" => "import_single", "year" => year}}) do
+  def perform(%Oban.Job{args: %{"action" => "import_single", "year" => year}} = job) do
     Logger.info("Starting Oscar import for year #{year}")
     
     # Broadcast start
@@ -85,6 +101,22 @@ defmodule Cinegraph.Workers.OscarImportWorker do
       {:ok, result} ->
         case result do
           %{status: :queued} ->
+            # Check if ceremony already existed
+            existing_ceremonies = Cultural.list_oscar_ceremonies()
+            existing_years = Enum.map(existing_ceremonies, & &1.year)
+            ceremony_existed = year in existing_years
+            
+            job_meta = %{
+              years_processed: 1,
+              ceremonies_found: 1,
+              ceremonies_created: if(ceremony_existed, do: 0, else: 1),
+              ceremonies_updated: if(ceremony_existed, do: 1, else: 0),
+              discovery_jobs_queued: 1,
+              failed_years: []
+            }
+            
+            update_job_meta(job, job_meta)
+            
             # Job was queued, not processed directly
             broadcast_progress(:single, :queued, %{
               year: year,
