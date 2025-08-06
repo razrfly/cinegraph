@@ -16,6 +16,8 @@ defmodule Cinegraph.Cultural do
     OscarCeremony
   }
   
+  alias Cinegraph.Festivals
+  
   alias Cinegraph.Scrapers.OscarScraper
   require Logger
 
@@ -390,7 +392,8 @@ defmodule Cinegraph.Cultural do
         "options" => Enum.into(options, %{})
       }
       
-      case Cinegraph.Workers.OscarDiscoveryWorker.new(job_args) |> Oban.insert() do
+      # Use FestivalDiscoveryWorker which has the fuzzy matching system
+      case Cinegraph.Workers.FestivalDiscoveryWorker.new(job_args) |> Oban.insert() do
         {:ok, job} ->
           {:ok, %{
             ceremony_id: ceremony.id,
@@ -492,21 +495,24 @@ defmodule Cinegraph.Cultural do
   end
   
   defp fetch_or_create_ceremony(year) do
-    case Repo.get_by(OscarCeremony, year: year) do
+    # Get the Oscar organization first
+    oscar_org = Festivals.get_or_create_oscar_organization()
+    
+    # Use the new festival_ceremonies table with organization_id
+    case Festivals.get_ceremony_by_year(oscar_org.id, year) do
       nil -> 
         Logger.info("Fetching Oscar ceremony data for #{year}")
         
         case OscarScraper.fetch_ceremony(year) do
           {:ok, data} ->
             attrs = %{
+              organization_id: oscar_org.id,
               year: year,
               ceremony_number: calculate_ceremony_number(year),
               data: data
             }
             
-            %OscarCeremony{}
-            |> OscarCeremony.changeset(attrs)
-            |> Repo.insert()
+            Festivals.upsert_ceremony(attrs)
             
           {:error, reason} ->
             {:error, reason}
