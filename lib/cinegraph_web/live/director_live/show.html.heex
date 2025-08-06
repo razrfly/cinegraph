@@ -3,99 +3,113 @@
   <div class="mb-8">
     <div class="flex items-center justify-between mb-4">
       <h1 class="text-3xl font-bold text-gray-900">
-        🎬 Director Analysis: <%= @director.name %>
+        🎬 Director Analysis: {@director.name}
       </h1>
-      <.link navigate={~p"/people/#{@director.id}"} 
-             class="inline-flex items-center text-blue-600 hover:text-blue-800">
+      <.link
+        navigate={~p"/people/#{@director.id}"}
+        class="inline-flex items-center text-blue-600 hover:text-blue-800"
+      >
         View Full Profile →
       </.link>
     </div>
     
-    <!-- Director Overview Stats -->
+<!-- Director Overview Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div class="bg-white rounded-lg shadow p-4 text-center">
-        <div class="text-2xl font-bold text-blue-600"><%= @director_stats.total_films %></div>
+        <div class="text-2xl font-bold text-blue-600">{@director_stats.total_films}</div>
         <div class="text-sm text-gray-600">Films Directed</div>
       </div>
       <div class="bg-white rounded-lg shadow p-4 text-center">
         <div class="text-2xl font-bold text-yellow-600">
-          <%= if @director_stats.avg_rating, do: "★ #{@director_stats.avg_rating}", else: "-" %>
+          {if @director_stats.avg_rating, do: "★ #{@director_stats.avg_rating}", else: "-"}
         </div>
         <div class="text-sm text-gray-600">Average Rating</div>
       </div>
       <div class="bg-white rounded-lg shadow p-4 text-center">
         <div class="text-2xl font-bold text-green-600">
-          $<%= div(@director_stats.total_revenue || 0, 1_000_000) %>M
+          ${div(@director_stats.total_revenue || 0, 1_000_000)}M
         </div>
         <div class="text-sm text-gray-600">Total Box Office</div>
       </div>
       <div class="bg-white rounded-lg shadow p-4 text-center">
         <div class="text-2xl font-bold text-purple-600">
-          <%= @director_stats.years_active.years %> years
+          {@director_stats.years_active.years} years
         </div>
         <div class="text-sm text-gray-600">Career Span</div>
       </div>
     </div>
   </div>
-
-  <!-- Notable Films -->
+  
+<!-- Notable Films -->
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
     <%= if @director_stats.highest_rated do %>
       <div class="bg-white rounded-lg shadow p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-3">🏆 Highest Rated Film</h3>
-        <.link navigate={~p"/movies/#{@director_stats.highest_rated.id}"} 
-               class="flex items-center space-x-4 hover:bg-gray-50 p-3 rounded-lg transition-colors">
+        <.link
+          navigate={~p"/movies/#{@director_stats.highest_rated.id}"}
+          class="flex items-center space-x-4 hover:bg-gray-50 p-3 rounded-lg transition-colors"
+        >
           <%= if @director_stats.highest_rated.poster_path do %>
-            <img src={Cinegraph.Movies.Movie.poster_url(@director_stats.highest_rated, "w92")} 
-                 alt={@director_stats.highest_rated.title}
-                 class="w-16 h-24 object-cover rounded" />
+            <img
+              src={Cinegraph.Movies.Movie.poster_url(@director_stats.highest_rated, "w92")}
+              alt={@director_stats.highest_rated.title}
+              class="w-16 h-24 object-cover rounded"
+            />
           <% else %>
             <div class="w-16 h-24 bg-gray-200 rounded flex items-center justify-center">
               <span class="text-xs text-gray-400">No Poster</span>
             </div>
           <% end %>
           <div class="flex-1">
-            <h4 class="font-medium text-gray-900"><%= @director_stats.highest_rated.title %></h4>
+            <h4 class="font-medium text-gray-900">{@director_stats.highest_rated.title}</h4>
             <%= if @director_stats.highest_rated.release_date do %>
-              <p class="text-sm text-gray-600"><%= @director_stats.highest_rated.release_date.year %></p>
+              <p class="text-sm text-gray-600">
+                {@director_stats.highest_rated.release_date.year}
+              </p>
             <% end %>
             <p class="text-sm font-medium text-yellow-600">
-              ★ <%= Float.round(@director_stats.highest_rated.vote_average || 0, 1) %>
+              ★ {Float.round(@director_stats.highest_rated.vote_average || 0, 1)}
             </p>
           </div>
         </.link>
       </div>
     <% end %>
-    
+
     <%= if @director_stats.highest_grossing do %>
       <div class="bg-white rounded-lg shadow p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-3">💰 Highest Grossing Film</h3>
-        <.link navigate={~p"/movies/#{@director_stats.highest_grossing.id}"} 
-               class="flex items-center space-x-4 hover:bg-gray-50 p-3 rounded-lg transition-colors">
+        <.link
+          navigate={~p"/movies/#{@director_stats.highest_grossing.id}"}
+          class="flex items-center space-x-4 hover:bg-gray-50 p-3 rounded-lg transition-colors"
+        >
           <%= if @director_stats.highest_grossing.poster_path do %>
-            <img src={Cinegraph.Movies.Movie.poster_url(@director_stats.highest_grossing, "w92")} 
-                 alt={@director_stats.highest_grossing.title}
-                 class="w-16 h-24 object-cover rounded" />
+            <img
+              src={Cinegraph.Movies.Movie.poster_url(@director_stats.highest_grossing, "w92")}
+              alt={@director_stats.highest_grossing.title}
+              class="w-16 h-24 object-cover rounded"
+            />
           <% else %>
             <div class="w-16 h-24 bg-gray-200 rounded flex items-center justify-center">
               <span class="text-xs text-gray-400">No Poster</span>
             </div>
           <% end %>
           <div class="flex-1">
-            <h4 class="font-medium text-gray-900"><%= @director_stats.highest_grossing.title %></h4>
+            <h4 class="font-medium text-gray-900">{@director_stats.highest_grossing.title}</h4>
             <%= if @director_stats.highest_grossing.release_date do %>
-              <p class="text-sm text-gray-600"><%= @director_stats.highest_grossing.release_date.year %></p>
+              <p class="text-sm text-gray-600">
+                {@director_stats.highest_grossing.release_date.year}
+              </p>
             <% end %>
             <p class="text-sm font-medium text-green-600">
-              $<%= div(@director_stats.highest_grossing.revenue || 0, 1_000_000) %>M
+              ${div(@director_stats.highest_grossing.revenue || 0, 1_000_000)}M
             </p>
           </div>
         </.link>
       </div>
     <% end %>
   </div>
-
-  <!-- Genre Analysis -->
+  
+<!-- Genre Analysis -->
   <div class="bg-white rounded-lg shadow p-6 mb-8">
     <h2 class="text-xl font-bold text-gray-900 mb-4">🎭 Genre Specialization</h2>
     <%= if length(@genre_analysis.genre_performance) > 0 do %>
@@ -104,21 +118,23 @@
           <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
             <div class="flex-1">
               <h4 class="font-medium text-gray-900">
-                <%= genre_data.genre %>
+                {genre_data.genre}
                 <%= if genre_data.genre == @genre_analysis.primary_genre do %>
-                  <span class="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Primary</span>
+                  <span class="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                    Primary
+                  </span>
                 <% end %>
               </h4>
               <p class="text-sm text-gray-600">
-                <%= genre_data.count %> <%= if genre_data.count == 1, do: "film", else: "films" %>
+                {genre_data.count} {if genre_data.count == 1, do: "film", else: "films"}
               </p>
             </div>
             <div class="text-right text-sm">
               <%= if genre_data.avg_rating do %>
-                <p class="font-medium text-yellow-600">★ <%= genre_data.avg_rating %></p>
+                <p class="font-medium text-yellow-600">★ {genre_data.avg_rating}</p>
               <% end %>
               <%= if genre_data.total_revenue > 0 do %>
-                <p class="text-gray-600">$<%= div(genre_data.total_revenue, 1_000_000) %>M</p>
+                <p class="text-gray-600">${div(genre_data.total_revenue, 1_000_000)}M</p>
               <% end %>
             </div>
           </div>
@@ -128,36 +144,40 @@
       <p class="text-gray-500">No genre data available</p>
     <% end %>
   </div>
-
-  <!-- Frequent Actor Collaborators -->
+  
+<!-- Frequent Actor Collaborators -->
   <div class="bg-white rounded-lg shadow p-6 mb-8">
     <h2 class="text-xl font-bold text-gray-900 mb-4">🤝 Frequent Actor Collaborators</h2>
     <%= if length(@frequent_actors) > 0 do %>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <%= for actor <- Enum.take(@frequent_actors, 12) do %>
-          <.link navigate={~p"/people/#{actor.person.id}"} 
-                 class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200">
+          <.link
+            navigate={~p"/people/#{actor.person.id}"}
+            class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
+          >
             <%= if actor.person.profile_path do %>
-              <img src={Cinegraph.Movies.Person.profile_url(actor.person, "w185")} 
-                   alt={actor.person.name}
-                   class="w-12 h-12 rounded-full object-cover" />
+              <img
+                src={Cinegraph.Movies.Person.profile_url(actor.person, "w185")}
+                alt={actor.person.name}
+                class="w-12 h-12 rounded-full object-cover"
+              />
             <% else %>
               <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
                 <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                 </svg>
               </div>
             <% end %>
             <div class="flex-1 min-w-0">
-              <p class="font-medium text-gray-900 truncate"><%= actor.person.name %></p>
+              <p class="font-medium text-gray-900 truncate">{actor.person.name}</p>
               <p class="text-sm text-gray-600">
-                <%= actor.movie_count %> films • 
+                {actor.movie_count} films •
                 <span class={strength_color(actor.strength) <> " inline-flex px-2 py-0.5 text-xs font-medium rounded-full"}>
-                  <%= humanize_strength(actor.strength) %>
+                  {humanize_strength(actor.strength)}
                 </span>
               </p>
               <%= if actor.avg_rating do %>
-                <p class="text-xs text-gray-500">★ <%= Float.round(actor.avg_rating, 1) %> avg</p>
+                <p class="text-xs text-gray-500">★ {Float.round(actor.avg_rating, 1)} avg</p>
               <% end %>
             </div>
           </.link>
@@ -167,55 +187,63 @@
       <p class="text-gray-500">No frequent collaborators found</p>
     <% end %>
   </div>
-
-  <!-- Rating Trends -->
+  
+<!-- Rating Trends -->
   <%= if length(@rating_trends.by_decade) > 0 do %>
     <div class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 class="text-xl font-bold text-gray-900 mb-4">
         📈 Rating Trends
         <span class="ml-2 text-sm font-normal text-gray-600">
           <%= case @rating_trends.trend do %>
-            <% :improving -> %>📈 Improving
-            <% :declining -> %>📉 Declining
-            <% _ -> %>➡️ Stable
+            <% :improving -> %>
+              📈 Improving
+            <% :declining -> %>
+              📉 Declining
+            <% _ -> %>
+              ➡️ Stable
           <% end %>
         </span>
       </h2>
-      
+
       <div class="space-y-3">
         <%= for decade_data <- @rating_trends.by_decade do %>
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-              <span class="font-medium text-gray-900"><%= decade_data.decade %></span>
+              <span class="font-medium text-gray-900">{decade_data.decade}</span>
               <span class="text-sm text-gray-600">
-                (<%= decade_data.film_count %> <%= if decade_data.film_count == 1, do: "film", else: "films" %>)
+                ({decade_data.film_count} {if decade_data.film_count == 1,
+                  do: "film",
+                  else: "films"})
               </span>
             </div>
             <div class="flex items-center space-x-2">
               <div class="w-32 bg-gray-200 rounded-full h-4">
-                <div class="bg-yellow-500 h-4 rounded-full" 
-                     style={"width: #{((decade_data.avg_rating || 0) / 10) * 100}%"}></div>
+                <div
+                  class="bg-yellow-500 h-4 rounded-full"
+                  style={"width: #{((decade_data.avg_rating || 0) / 10) * 100}%"}
+                >
+                </div>
               </div>
               <span class="text-sm font-medium text-gray-900 w-8 text-right">
-                <%= decade_data.avg_rating %>
+                {decade_data.avg_rating}
               </span>
             </div>
           </div>
         <% end %>
       </div>
-      
+
       <%= if @rating_trends.recent_performance do %>
         <div class="mt-4 p-3 bg-blue-50 rounded-lg">
           <p class="text-sm text-blue-800">
-            Recent Performance: <%= @rating_trends.recent_performance.films %> films in last 5 years, 
-            ★ <%= @rating_trends.recent_performance.avg_rating %> average
+            Recent Performance: {@rating_trends.recent_performance.films} films in last 5 years,
+            ★ {@rating_trends.recent_performance.avg_rating} average
           </p>
         </div>
       <% end %>
     </div>
   <% end %>
-
-  <!-- Collaboration Network -->
+  
+<!-- Collaboration Network -->
   <%= if length(@collaboration_network) > 0 do %>
     <div class="bg-white rounded-lg shadow p-6">
       <h2 class="text-xl font-bold text-gray-900 mb-4">🎬 Key Crew Collaborators</h2>
@@ -244,23 +272,25 @@
             <%= for crew <- @collaboration_network do %>
               <tr class="hover:bg-gray-50">
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <.link navigate={~p"/people/#{crew.person.id}"} 
-                         class="text-sm font-medium text-gray-900 hover:text-blue-600">
-                    <%= crew.person.name %>
+                  <.link
+                    navigate={~p"/people/#{crew.person.id}"}
+                    class="text-sm font-medium text-gray-900 hover:text-blue-600"
+                  >
+                    {crew.person.name}
                   </.link>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <%= crew.job %>
+                  {crew.job}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <%= crew.department %>
+                  {crew.department}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <%= crew.collaborations %>
+                  {crew.collaborations}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <%= if crew.avg_rating do %>
-                    ★ <%= crew.avg_rating %>
+                    ★ {crew.avg_rating}
                   <% else %>
                     -
                   <% end %>

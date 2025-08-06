@@ -1,7 +1,6 @@
 defmodule CinegraphWeb.Router do
   use CinegraphWeb, :router
 
-
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -19,20 +18,20 @@ defmodule CinegraphWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
-    
+
     # Movie routes
     live "/movies", MovieLive.Index, :index
     live "/movies/:id", MovieLive.Show, :show
-    
+
     # People routes
     live "/people", PersonLive.Index, :index
     live "/people/:id", PersonLive.Show, :show
-    
+
     # Collaboration routes
     live "/collaborations", CollaborationLive.Index, :index
     live "/six-degrees", SixDegreesLive.Index, :index
     live "/directors/:id", DirectorLive.Show, :show
-    
+
     # Import dashboard
     live "/imports", ImportDashboardLive, :index
   end
@@ -57,10 +56,9 @@ defmodule CinegraphWeb.Router do
 
       live_dashboard "/dashboard", metrics: CinegraphWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
-      
+
       # Oban Web dashboard
-      oban_dashboard "/oban"
+      oban_dashboard("/oban")
     end
   end
-
 end

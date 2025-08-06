@@ -11,6 +11,7 @@ IO.puts(String.duplicate("=", 60) <> "\n")
 IO.puts("1. CURRENT MOVIE LISTS STATE")
 IO.puts(String.duplicate("-", 40))
 lists = Cinegraph.Movies.MovieLists.list_all_movie_lists()
+
 Enum.each(lists, fn list ->
   IO.puts("#{list.source_key}:")
   IO.puts("  Last Import: #{list.last_import_at || "Never"}")
@@ -37,7 +38,7 @@ case Cinegraph.Workers.CanonicalImportOrchestrator.new(job_args) |> Oban.insert(
     IO.puts("1. Visit http://localhost:4001/import to see progress")
     IO.puts("2. Wait a few minutes for the import to complete")
     IO.puts("3. Run this script again to see updated statistics")
-    
+
   {:error, reason} ->
     IO.puts("✗ Failed to queue import: #{inspect(reason)}")
 end
@@ -46,6 +47,7 @@ end
 IO.puts("\n3. CHECKING STATISTICS")
 IO.puts(String.duplicate("-", 40))
 IO.puts("To check if statistics are updating, run:")
+
 IO.puts(~s"""
 mix run -e '
   list = Cinegraph.Movies.MovieLists.get_by_source_key("1001_movies")

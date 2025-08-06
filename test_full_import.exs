@@ -31,7 +31,7 @@ duration = end_time - start_time
 IO.puts("\n✅ Import Complete!")
 IO.puts("📊 Results:")
 IO.puts("  • Total movies processed: #{result.total_movies}")
-IO.puts("  • Updated (already existed): #{result.movies_updated}") 
+IO.puts("  • Updated (already existed): #{result.movies_updated}")
 IO.puts("  • Queued for creation: #{result.movies_queued}")
 IO.puts("  • Skipped: #{result.movies_skipped}")
 IO.puts("  • Duration: #{duration} seconds")
@@ -45,9 +45,11 @@ IO.puts("  • Net change: +#{final_count - initial_count}")
 # Show sample movies from different parts of the list
 if result.results && length(result.results) > 0 do
   IO.puts("\n🎥 Sample Movies (every 200th):")
+
   [1, 200, 400, 600, 800, 1000, 1200]
   |> Enum.each(fn pos ->
     movie = Enum.at(result.results, pos - 1)
+
     if movie do
       title = movie[:title] || movie.title || "Unknown"
       IO.puts("  • ##{pos}: #{title}")
@@ -56,6 +58,7 @@ if result.results && length(result.results) > 0 do
 end
 
 IO.puts("\n🎯 Import Summary:")
+
 if result.total_movies >= 1200 do
   IO.puts("  ✅ Successfully imported full 1001 Movies list!")
 else

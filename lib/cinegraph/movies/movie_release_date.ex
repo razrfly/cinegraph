@@ -4,13 +4,13 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
 
   schema "movie_release_dates" do
     belongs_to :movie, Cinegraph.Movies.Movie
-    
+
     field :country_code, :string
     field :release_date, :naive_datetime
     field :certification, :string
     field :release_type, :integer
     field :note, :string
-    
+
     timestamps()
   end
 
@@ -29,7 +29,7 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
   """
   def from_tmdb_country(country_data, movie_id) do
     country_code = country_data["iso_3166_1"]
-    
+
     country_data["release_dates"]
     |> Enum.map(fn release ->
       release_attrs = %{
@@ -40,16 +40,19 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
         release_type: release["type"],
         note: release["note"]
       }
-      
+
       changeset(%__MODULE__{}, release_attrs)
     end)
   end
 
   defp parse_datetime(nil), do: nil
+
   defp parse_datetime(datetime_string) do
     case NaiveDateTime.from_iso8601(datetime_string) do
-      {:ok, datetime} -> datetime
-      {:error, _} -> 
+      {:ok, datetime} ->
+        datetime
+
+      {:error, _} ->
         # Try parsing as date only
         case Date.from_iso8601(datetime_string) do
           {:ok, date} -> NaiveDateTime.new!(date, ~T[00:00:00])

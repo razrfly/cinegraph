@@ -11,18 +11,22 @@ if list do
   IO.puts("  Movie Count: #{list.last_movie_count}")
   IO.puts("  Status: #{list.last_import_status || "None"}")
   IO.puts("  Total Imports: #{list.total_imports}")
-  
+
   # Count actual movies
   import Ecto.Query
-  count = Cinegraph.Repo.one(
-    from m in Cinegraph.Movies.Movie,
-    where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
-    select: count(m.id)
-  )
+
+  count =
+    Cinegraph.Repo.one(
+      from m in Cinegraph.Movies.Movie,
+        where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+        select: count(m.id)
+    )
+
   IO.puts("\nActual movies in database: #{count}")
-  
+
   # Update the stats directly
   IO.puts("\nUpdating stats...")
+
   case Cinegraph.Movies.MovieLists.update_import_stats(list, "success", count) do
     {:ok, updated_list} ->
       IO.puts("✓ Successfully updated!")
@@ -31,7 +35,7 @@ if list do
       IO.puts("  Movie Count: #{updated_list.last_movie_count}")
       IO.puts("  Status: #{updated_list.last_import_status}")
       IO.puts("  Total Imports: #{updated_list.total_imports}")
-      
+
     {:error, changeset} ->
       IO.puts("✗ Failed to update: #{inspect(changeset.errors)}")
   end

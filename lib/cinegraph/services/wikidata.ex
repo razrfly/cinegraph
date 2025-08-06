@@ -5,7 +5,7 @@ defmodule Cinegraph.Services.Wikidata do
   """
 
   @sparql_endpoint "https://query.wikidata.org/sparql"
-  
+
   @doc """
   Fetches award data for a movie using its IMDb ID.
   Returns a list of awards with categories and results (winner/nominee).
@@ -40,11 +40,12 @@ defmodule Cinegraph.Services.Wikidata do
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
     }
     """
-    
+
     case execute_sparql_query(query) do
       {:ok, results} ->
         awards = parse_award_results(results)
         {:ok, awards}
+
       error ->
         error
     end
@@ -69,11 +70,12 @@ defmodule Cinegraph.Services.Wikidata do
       SERVICE wikibase:label { bd:serviceParam wikibase:language "en" }
     }
     """
-    
+
     case execute_sparql_query(query) do
       {:ok, results} ->
         lists = parse_list_results(results)
         {:ok, lists}
+
       error ->
         error
     end
@@ -97,7 +99,7 @@ defmodule Cinegraph.Services.Wikidata do
     }
     GROUP BY ?movie ?movieLabel ?publicationDate
     """
-    
+
     execute_sparql_query(query)
   end
 
@@ -108,20 +110,23 @@ defmodule Cinegraph.Services.Wikidata do
       {"Accept", "application/sparql-results+json"},
       {"User-Agent", "Cinegraph/1.0 (https://github.com/razrfly/cinegraph)"}
     ]
-    
+
     params = URI.encode_query(%{query: query})
     url = "#{@sparql_endpoint}?#{params}"
-    
+
     case HTTPoison.get(url, headers, timeout: 30_000, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
         case Jason.decode(body) do
           {:ok, %{"results" => %{"bindings" => bindings}}} ->
             {:ok, bindings}
+
           {:error, _} ->
             {:error, :invalid_json}
         end
+
       {:ok, %HTTPoison.Response{status_code: status}} ->
         {:error, {:http_error, status}}
+
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, {:request_failed, reason}}
     end
@@ -156,6 +161,7 @@ defmodule Cinegraph.Services.Wikidata do
   end
 
   defp extract_wikidata_id(nil), do: nil
+
   defp extract_wikidata_id(url) when is_binary(url) do
     case Regex.run(~r/Q\d+$/, url) do
       [id] -> id
@@ -164,6 +170,7 @@ defmodule Cinegraph.Services.Wikidata do
   end
 
   defp parse_integer(nil), do: nil
+
   defp parse_integer(str) when is_binary(str) do
     case Integer.parse(str) do
       {num, _} -> num

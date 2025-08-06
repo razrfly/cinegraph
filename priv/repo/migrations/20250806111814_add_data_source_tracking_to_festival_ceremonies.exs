@@ -8,7 +8,7 @@ defmodule Cinegraph.Repo.Migrations.AddDataSourceTrackingToFestivalCeremonies do
       add :scraped_at, :utc_datetime
       add :source_metadata, :map, default: %{}
     end
-    
+
     # Add index for querying by data source
     create index(:festival_ceremonies, [:data_source])
   end

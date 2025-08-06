@@ -7,7 +7,7 @@ defmodule Cinegraph.CanonicalLists do
   @lists %{
     "1001_movies" => %{
       list_id: "ls024863935",
-      source_key: "1001_movies", 
+      source_key: "1001_movies",
       name: "1001 Movies You Must See Before You Die",
       metadata: %{"edition" => "2024"}
     },

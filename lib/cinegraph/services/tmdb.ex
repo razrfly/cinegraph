@@ -9,12 +9,12 @@ defmodule Cinegraph.Services.TMDb do
 
   @doc """
   Fetches detailed information about a specific movie by ID.
-  
+
   ## Options
     - `:append_to_response` - Additional data to fetch (credits, images, keywords, etc.)
-  
+
   ## Examples
-  
+
       iex> Cinegraph.Services.TMDb.get_movie(550)
       {:ok, %{"id" => 550, "title" => "Fight Club", ...}}
       
@@ -22,12 +22,12 @@ defmodule Cinegraph.Services.TMDb do
       {:ok, %{"id" => 550, "title" => "Fight Club", "credits" => %{...}, ...}}
   """
   def get_movie(movie_id, opts \\ []) when is_integer(movie_id) or is_binary(movie_id) do
-    params = 
+    params =
       case Keyword.get(opts, :append_to_response) do
         nil -> %{}
         append -> %{append_to_response: append}
       end
-      
+
     Client.get("/movie/#{movie_id}", params)
   end
 
@@ -36,7 +36,9 @@ defmodule Cinegraph.Services.TMDb do
   Uses append_to_response to minimize API calls.
   """
   def get_movie_comprehensive(movie_id) do
-    append = "credits,images,keywords,external_ids,release_dates,videos,recommendations,similar,alternative_titles,translations"
+    append =
+      "credits,images,keywords,external_ids,release_dates,videos,recommendations,similar,alternative_titles,translations"
+
     get_movie(movie_id, append_to_response: append)
   end
 
@@ -82,29 +84,29 @@ defmodule Cinegraph.Services.TMDb do
 
   @doc """
   Searches for movies by title.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
     - `:year` - Release year
     - `:region` - ISO 3166-1 code to filter release dates
     
   ## Examples
-  
+
       iex> Cinegraph.Services.TMDb.search_movies("Inception")
       {:ok, %{"results" => [%{"title" => "Inception", ...}], ...}}
   """
   def search_movies(query, opts \\ []) do
-    params = 
+    params =
       opts
       |> Keyword.take([:page, :year, :region])
       |> Enum.into(%{query: query})
-      
+
     Client.get("/search/movie", params)
   end
 
   @doc """
   Discovers movies based on various criteria.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
     - `:sort_by` - Sort results by (popularity.desc, vote_average.desc, etc.)
@@ -113,17 +115,17 @@ defmodule Cinegraph.Services.TMDb do
     - `:vote_average_gte` - Minimum vote average
     
   ## Examples
-  
+
       iex> Cinegraph.Services.TMDb.discover_movies(year: 2023, sort_by: "popularity.desc")
       {:ok, %{"results" => [...], ...}}
   """
   def discover_movies(opts \\ []) do
-    params = 
+    params =
       opts
       |> Keyword.take([:page, :sort_by, :year, :vote_count_gte, :vote_average_gte])
       |> Enum.into(%{})
       |> rename_keys()
-      
+
     Client.get("/discover/movie", params)
   end
 
@@ -151,18 +153,18 @@ defmodule Cinegraph.Services.TMDb do
     with {:ok, movie} <- get_movie(movie_id) do
       IO.puts("\n🎬 Movie Data Structure for ID: #{movie_id}")
       IO.puts("=" <> String.duplicate("=", 60))
-      
+
       pretty_print_data(movie)
-      
+
       {:ok, movie}
     end
   end
 
   @doc """
   Finds a movie by IMDb ID using TMDb's find endpoint.
-  
+
   ## Examples
-  
+
       iex> Cinegraph.Services.TMDb.find_by_imdb_id("tt0137523")
       {:ok, %{"movie_results" => [%{"id" => 550, "title" => "Fight Club", ...}], ...}}
   """
@@ -175,12 +177,12 @@ defmodule Cinegraph.Services.TMDb do
   Fetches detailed information about a person by ID.
   """
   def get_person(person_id, opts \\ []) when is_integer(person_id) or is_binary(person_id) do
-    params = 
+    params =
       case Keyword.get(opts, :append_to_response) do
         nil -> %{}
         append -> %{append_to_response: append}
       end
-      
+
     Client.get("/person/#{person_id}", params)
   end
 
@@ -211,17 +213,18 @@ defmodule Cinegraph.Services.TMDb do
   """
   def test_connection do
     IO.puts("\n🔍 Testing TMDb API Connection...")
-    
-    case get_movie(550) do  # Fight Club as test movie
+
+    # Fight Club as test movie
+    case get_movie(550) do
       {:ok, movie} ->
         IO.puts("✅ Connection successful!")
         IO.puts("   Test movie: #{movie["title"]} (#{movie["release_date"]})")
         {:ok, :connected}
-        
+
       {:error, :unauthorized} ->
         IO.puts("❌ Authentication failed. Check your API key.")
         {:error, :unauthorized}
-        
+
       {:error, reason} ->
         IO.puts("❌ Connection failed: #{inspect(reason)}")
         {:error, reason}
@@ -229,7 +232,7 @@ defmodule Cinegraph.Services.TMDb do
   end
 
   # Private functions
-  
+
   defp rename_keys(params) do
     params
     |> Enum.map(fn
@@ -242,31 +245,31 @@ defmodule Cinegraph.Services.TMDb do
 
   defp pretty_print_data(data, indent \\ 0) do
     padding = String.duplicate("  ", indent)
-    
+
     case data do
       map when is_map(map) ->
         Enum.each(map, fn {key, value} ->
           IO.write("#{padding}#{key}: ")
-          
+
           case value do
             v when is_map(v) or is_list(v) ->
               IO.puts("")
               pretty_print_data(v, indent + 1)
-              
+
             nil ->
               IO.puts("null")
-              
+
             v ->
               IO.puts(inspect(v))
           end
         end)
-        
+
       list when is_list(list) ->
         Enum.with_index(list, fn item, index ->
           IO.puts("#{padding}[#{index}]:")
           pretty_print_data(item, indent + 1)
         end)
-        
+
       value ->
         IO.puts("#{padding}#{inspect(value)}")
     end

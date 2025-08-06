@@ -4,7 +4,7 @@ defmodule Cinegraph.Movies.MovieVideo do
 
   schema "movie_videos" do
     belongs_to :movie, Cinegraph.Movies.Movie
-    
+
     field :tmdb_id, :string
     field :name, :string
     field :key, :string
@@ -13,7 +13,7 @@ defmodule Cinegraph.Movies.MovieVideo do
     field :size, :integer
     field :official, :boolean, default: false
     field :published_at, :naive_datetime
-    
+
     timestamps()
   end
 
@@ -21,8 +21,15 @@ defmodule Cinegraph.Movies.MovieVideo do
   def changeset(video, attrs) do
     video
     |> cast(attrs, [
-      :movie_id, :tmdb_id, :name, :key, :site, :type, 
-      :size, :official, :published_at
+      :movie_id,
+      :tmdb_id,
+      :name,
+      :key,
+      :site,
+      :type,
+      :size,
+      :official,
+      :published_at
     ])
     |> validate_required([:movie_id, :tmdb_id, :key, :site, :type])
     |> unique_constraint(:tmdb_id)
@@ -44,11 +51,12 @@ defmodule Cinegraph.Movies.MovieVideo do
       official: attrs["official"],
       published_at: parse_datetime(attrs["published_at"])
     }
-    
+
     changeset(%__MODULE__{}, video_attrs)
   end
 
   defp parse_datetime(nil), do: nil
+
   defp parse_datetime(datetime_string) do
     case DateTime.from_iso8601(datetime_string) do
       {:ok, datetime, _} -> datetime

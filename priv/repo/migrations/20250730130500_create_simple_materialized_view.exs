@@ -43,10 +43,12 @@ defmodule Cinegraph.Repo.Migrations.CreateSimpleMaterializedView do
     ) p
     GROUP BY p.person_id, p.year
     """
-    
+
     # Create indexes for better query performance
     execute "CREATE UNIQUE INDEX IF NOT EXISTS person_collaboration_trends_unique_idx ON person_collaboration_trends (person_id, year)"
+
     execute "CREATE INDEX IF NOT EXISTS person_collaboration_trends_person_idx ON person_collaboration_trends (person_id)"
+
     execute "CREATE INDEX IF NOT EXISTS person_collaboration_trends_year_idx ON person_collaboration_trends (year)"
   end
 

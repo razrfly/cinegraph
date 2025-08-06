@@ -12,16 +12,16 @@ lists_to_import = [
 # Queue each import
 Enum.each(lists_to_import, fn {list_key, display_name} ->
   IO.puts("Queueing import for: #{display_name}")
-  
+
   job_args = %{
     "action" => "orchestrate_import",
     "list_key" => list_key
   }
-  
+
   case CanonicalImportOrchestrator.new(job_args) |> Oban.insert() do
     {:ok, job} ->
       IO.puts("✅ Successfully queued #{display_name} (Job ID: #{job.id})")
-      
+
     {:error, reason} ->
       IO.puts("❌ Failed to queue #{display_name}: #{inspect(reason)}")
   end

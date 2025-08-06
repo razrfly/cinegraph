@@ -13,19 +13,20 @@ IO.puts("-" |> String.duplicate(30))
 case CanonicalImporter.import_1001_movies() do
   %{error: reason} ->
     IO.puts("❌ Failed: #{inspect(reason)}")
-    
+
   result ->
     IO.puts("✅ Import completed!")
     IO.puts("📊 Summary:")
     IO.puts("  • Total movies: #{result.total_movies}")
     IO.puts("  • Created: #{result.movies_created}")
-    IO.puts("  • Updated: #{result.movies_updated}") 
+    IO.puts("  • Updated: #{result.movies_updated}")
     IO.puts("  • Queued: #{result.movies_queued}")
     IO.puts("  • Skipped: #{result.movies_skipped}")
-    
+
     # Show first few results
     if result.results && length(result.results) > 0 do
       IO.puts("\n🎥 Sample Results:")
+
       result.results
       |> Enum.take(5)
       |> Enum.each(fn movie_result ->
@@ -77,8 +78,15 @@ IO.puts("   - Any other IMDb list")
 
 IO.puts("\n✅ Modular canonical import system ready!")
 IO.puts("📝 Usage:")
-IO.puts("  CanonicalImporter.import_canonical_list(\"ls024863935\", \"1001_movies\", \"1001 Movies\")")
-IO.puts("  CanonicalImporter.import_canonical_list(\"ls123456789\", \"sight_sound\", \"Sight & Sound\")")
+
+IO.puts(
+  "  CanonicalImporter.import_canonical_list(\"ls024863935\", \"1001_movies\", \"1001 Movies\")"
+)
+
+IO.puts(
+  "  CanonicalImporter.import_canonical_list(\"ls123456789\", \"sight_sound\", \"Sight & Sound\")"
+)
+
 IO.puts("  CanonicalImporter.import_1001_movies()")
 
 IO.puts("\n🎯 Next: Find IMDb list IDs for other canonical sources!")

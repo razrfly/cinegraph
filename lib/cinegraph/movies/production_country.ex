@@ -5,9 +5,9 @@ defmodule Cinegraph.Movies.ProductionCountry do
   schema "production_countries" do
     field :iso_3166_1, :string
     field :name, :string
-    
+
     many_to_many :movies, Cinegraph.Movies.Movie, join_through: "movie_production_countries"
-    
+
     timestamps()
   end
 

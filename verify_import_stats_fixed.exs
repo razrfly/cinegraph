@@ -9,22 +9,26 @@ IO.puts(String.duplicate("=", 60) <> "\n")
 IO.puts("1. CHECKING CURRENT STATE")
 IO.puts(String.duplicate("-", 40))
 list = Cinegraph.Movies.MovieLists.get_by_source_key("1001_movies")
+
 if list do
   IO.puts("List: #{list.name}")
   IO.puts("  Last Import: #{list.last_import_at || "Never"}")
   IO.puts("  Movie Count: #{list.last_movie_count}")
   IO.puts("  Status: #{list.last_import_status || "None"}")
   IO.puts("  Total Imports: #{list.total_imports}")
-  
+
   # Count actual movies
   import Ecto.Query
-  actual_count = Cinegraph.Repo.one(
-    from m in Cinegraph.Movies.Movie,
-    where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
-    select: count(m.id)
-  )
+
+  actual_count =
+    Cinegraph.Repo.one(
+      from m in Cinegraph.Movies.Movie,
+        where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+        select: count(m.id)
+    )
+
   IO.puts("  Actual Movies in DB: #{actual_count}")
-  
+
   if list.last_movie_count == actual_count && list.last_import_at != nil do
     IO.puts("\n✅ IMPORT STATISTICS ARE WORKING!")
     IO.puts("The fix has been successfully applied.")
@@ -39,9 +43,17 @@ end
 # 2. Test other lists
 IO.puts("\n2. CHECKING OTHER LISTS")
 IO.puts(String.duplicate("-", 40))
-other_lists = ["criterion", "sight_sound_critics_2022", "national_film_registry", "cannes_winners"]
+
+other_lists = [
+  "criterion",
+  "sight_sound_critics_2022",
+  "national_film_registry",
+  "cannes_winners"
+]
+
 Enum.each(other_lists, fn key ->
   list = Cinegraph.Movies.MovieLists.get_by_source_key(key)
+
   if list do
     status = if list.last_import_at, do: "✓ Imported", else: "○ Not imported"
     IO.puts("#{status} #{key}: #{list.last_movie_count} movies")

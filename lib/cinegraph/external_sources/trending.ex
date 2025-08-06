@@ -5,13 +5,13 @@ defmodule Cinegraph.ExternalSources.Trending do
   schema "external_trending" do
     belongs_to :movie, Cinegraph.Movies.Movie
     belongs_to :source, Cinegraph.ExternalSources.Source
-    
+
     field :time_window, :string
     field :rank, :integer
     field :score, :float
     field :region, :string
     field :fetched_at, :utc_datetime
-    
+
     timestamps()
   end
 
