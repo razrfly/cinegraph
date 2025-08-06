@@ -171,8 +171,8 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
   end
 
   defp schedule_next_check(args) do
-    # Schedule another check in 30 seconds
-    %{list_key: args["list_key"]}
+    # Re-enqueue with the full argument set so the next run has the data it expects
+    args
     |> __MODULE__.new(schedule_in: 30)
     |> Oban.insert()
 

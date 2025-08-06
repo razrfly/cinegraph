@@ -10,7 +10,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   alias Cinegraph.Movies.{Movie, MovieLists}
   alias Cinegraph.Events
   require Logger
-  alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker, VeniceFestivalWorker}
+  alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker}
   alias Cinegraph.Cultural
   import Ecto.Query
 
@@ -452,30 +452,6 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end
   end
 
-  defp get_festival_display_name(festival_key) do
-    case Events.get_active_by_source_key(festival_key) do
-      nil -> String.capitalize(festival_key)
-      event -> event.name
-    end
-  end
-
-  defp get_festival_year_range(festival_event) do
-    # Extract year range from festival dates, or use sensible defaults
-    current_year = Date.utc_today().year
-    
-    # Get available years from festival dates, or use default range
-    case festival_event.metadata do
-      %{"min_available_year" => min_year, "max_available_year" => max_year} 
-        when is_integer(min_year) and is_integer(max_year) ->
-        min_year..max_year
-      
-      _ ->
-        # Default range: 2020 to current year + 1
-        2020..current_year
-    end
-  end
-
-  @impl true
   def handle_event("show_add_modal", _params, socket) do
     socket =
       socket
@@ -485,7 +461,6 @@ defmodule CinegraphWeb.ImportDashboardLive do
     {:noreply, socket}
   end
 
-  @impl true
   def handle_event("show_edit_modal", %{"id" => id}, socket) do
     list = MovieLists.get_movie_list!(String.to_integer(id))
 
@@ -616,6 +591,29 @@ defmodule CinegraphWeb.ImportDashboardLive do
       {:error, _changeset} ->
         socket = put_flash(socket, :error, "Failed to update list")
         {:noreply, socket}
+    end
+  end
+
+  defp get_festival_display_name(festival_key) do
+    case Events.get_active_by_source_key(festival_key) do
+      nil -> String.capitalize(festival_key)
+      event -> event.name
+    end
+  end
+
+  defp get_festival_year_range(festival_event) do
+    # Extract year range from festival dates, or use sensible defaults
+    current_year = Date.utc_today().year
+    
+    # Get available years from festival dates, or use default range
+    case festival_event.metadata do
+      %{"min_available_year" => min_year, "max_available_year" => max_year} 
+        when is_integer(min_year) and is_integer(max_year) ->
+        min_year..max_year
+      
+      _ ->
+        # Default range: 2020 to current year + 1
+        2020..current_year
     end
   end
 

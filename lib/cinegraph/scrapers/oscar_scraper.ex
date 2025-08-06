@@ -162,9 +162,9 @@ defmodule Cinegraph.Scrapers.OscarScraper do
   end
 
   defp calculate_ceremony_number(year) do
-    # First ceremony was in 1929 for 1927-1928 films
-    # This is an approximation
-    year - 1927
+    # First numbered ceremony (1st) was held in 1929.
+    # Therefore ceremony_number = year - 1928
+    year - 1928
   end
 
   defp extract_categories(document) do
