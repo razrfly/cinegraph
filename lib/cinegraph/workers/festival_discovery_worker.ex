@@ -77,11 +77,35 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         summary = summarize_results(results)
         Logger.info("Festival discovery complete for #{ceremony.year}: #{inspect(summary)}")
         
-        # Save job metadata
+        # Calculate enhanced business metadata
+        movies_found = Enum.count(results, fn r -> r[:action] in [:queued_movie, :created_nomination, :existing, :updated] end)
+        tmdb_jobs_queued = Enum.count(results, & &1[:action] == :queued_movie)
+        imdb_ids_without_tmdb = Enum.count(results, fn r -> r[:action] == :skipped and r[:reason] == :fuzzy_search_failed end)
+        
+        # Count person vs film nominations by checking category types
+        person_nominations = Enum.count(categories, fn category_data ->
+          category_name = category_data["category"] || category_data[:category]
+          String.contains?(category_name, ["Actor", "Actress", "Directing", "Writing", "Cinematography"])
+        end)
+        film_nominations = length(categories) - person_nominations
+        
+        fuzzy_matches_attempted = Enum.count(results, & &1[:action] == :fuzzy_matched)
+        fuzzy_matches_successful = Enum.count(results, fn r -> 
+          r[:action] == :fuzzy_matched or (r[:action] == :updated and r[:fuzzy_matched_local])
+        end)
+        
+        # Save comprehensive job metadata
         job_meta = Map.merge(summary, %{
           ceremony_year: ceremony.year,
           categories_processed: length(categories),
-          total_nominees: length(results)
+          total_nominations: length(results),
+          movies_found: movies_found,
+          tmdb_jobs_queued: tmdb_jobs_queued,
+          imdb_ids_without_tmdb: imdb_ids_without_tmdb,
+          people_nominations: person_nominations,
+          film_nominations: film_nominations,
+          fuzzy_matches_attempted: fuzzy_matches_attempted,
+          fuzzy_matches_successful: fuzzy_matches_successful
         })
         
         update_job_meta(job, job_meta)
@@ -332,9 +356,19 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     }
   end
   
-  defp update_job_meta(_job, metadata) do
-    # Store metadata for tracking
+  defp update_job_meta(job, metadata) do
+    import Ecto.Query
+    
+    from(j in "oban_jobs",
+      where: j.id == ^job.id,
+      update: [set: [meta: ^metadata]]
+    )
+    |> Repo.update_all([])
+    
     Logger.info("Job completed with metadata: #{inspect(metadata)}")
+  rescue
+    error ->
+      Logger.warning("Failed to update job meta: #{inspect(error)}")
   end
   
   defp broadcast_discovery_complete(ceremony, summary) do
