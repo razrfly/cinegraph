@@ -490,7 +490,7 @@ defmodule Cinegraph.Collaborations do
           where: c.collaboration_count >= 2,
           group_by: c.id,
           order_by: [
-            desc: fragment("ABS(? - ?) < 0.5", c.avg_movie_rating, ^original.avg_movie_rating),
+            asc: fragment("ABS(? - ?)", c.avg_movie_rating, ^original.avg_movie_rating),
             desc: c.collaboration_count
           ],
           limit: ^limit,
