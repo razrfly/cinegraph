@@ -28,6 +28,7 @@ Movie Lists Seeding Results:
 
 if length(result.errors) > 0 do
   Logger.warning("Errors occurred during seeding:")
+
   Enum.each(result.errors, fn {:error, source_key, changeset} ->
     Logger.warning("  - #{source_key}: #{inspect(changeset.errors)}")
   end)

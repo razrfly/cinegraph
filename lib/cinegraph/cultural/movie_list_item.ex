@@ -24,8 +24,13 @@ defmodule Cinegraph.Cultural.MovieListItem do
   def changeset(movie_list_item, attrs) do
     movie_list_item
     |> cast(attrs, [
-      :movie_id, :list_id, :position, :award_category, :award_result,
-      :year_awarded, :notes
+      :movie_id,
+      :list_id,
+      :position,
+      :award_category,
+      :award_result,
+      :year_awarded,
+      :notes
     ])
     |> validate_required([:movie_id, :list_id])
     |> validate_inclusion(:award_result, @award_results)

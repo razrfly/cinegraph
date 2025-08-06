@@ -2,14 +2,16 @@ import Ecto.Query
 alias Cinegraph.Repo
 
 # Check discovery jobs
-discovery_jobs = Repo.all(
-  from j in Oban.Job,
-  where: j.queue == "tmdb_discovery",
-  order_by: [asc: j.args["page"]],
-  select: {j.args["page"], j.state, j.scheduled_at}
-)
+discovery_jobs =
+  Repo.all(
+    from j in Oban.Job,
+      where: j.queue == "tmdb_discovery",
+      order_by: [asc: j.args["page"]],
+      select: {j.args["page"], j.state, j.scheduled_at}
+  )
 
 IO.puts("Discovery jobs:")
+
 Enum.each(discovery_jobs, fn {page, state, scheduled} ->
   if scheduled && DateTime.compare(scheduled, DateTime.utc_now()) == :gt do
     diff = DateTime.diff(scheduled, DateTime.utc_now())

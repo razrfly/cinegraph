@@ -9,22 +9,25 @@ case Client.get("/discover/movie", %{"page" => 1}) do
     IO.puts("  Results on page 1: #{length(results)}")
     IO.puts("  Total pages: #{total_pages}")
     IO.puts("  Total results: #{response["total_results"]}")
-    
+
     # Check first movie
     if first = List.first(results) do
       IO.puts("\nFirst movie on page 1:")
       IO.puts("  ID: #{first["id"]}")
       IO.puts("  Title: #{first["title"]}")
-      exists = try do
-        Cinegraph.Movies.movie_exists?(first["id"])
-      rescue
-        e -> 
-          IO.puts("  Error checking existence: #{inspect(e)}")
-          "unknown"
-      end
+
+      exists =
+        try do
+          Cinegraph.Movies.movie_exists?(first["id"])
+        rescue
+          e ->
+            IO.puts("  Error checking existence: #{inspect(e)}")
+            "unknown"
+        end
+
       IO.puts("  Already exists: #{exists}")
     end
-    
+
   {:error, reason} ->
     IO.puts("Error: #{inspect(reason)}")
 end

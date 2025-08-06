@@ -6,9 +6,9 @@ defmodule Cinegraph.Movies.Keyword do
   schema "keywords" do
     field :tmdb_id, :integer
     field :name, :string
-    
+
     many_to_many :movies, Cinegraph.Movies.Movie, join_through: "movie_keywords"
-    
+
     timestamps()
   end
 
@@ -28,7 +28,7 @@ defmodule Cinegraph.Movies.Keyword do
       tmdb_id: attrs["id"],
       name: attrs["name"]
     }
-    
+
     changeset(%__MODULE__{}, keyword_attrs)
   end
 end

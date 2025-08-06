@@ -10,7 +10,10 @@ IO.puts("\n=== Testing Duplicate Job Fix (Clean) ===\n")
 # Clear ALL discovery and detail jobs
 deleted_discovery = Repo.delete_all(from j in Oban.Job, where: j.queue == "tmdb_discovery")
 deleted_details = Repo.delete_all(from j in Oban.Job, where: j.queue == "tmdb_details")
-IO.puts("Cleared #{elem(deleted_discovery, 0)} discovery jobs and #{elem(deleted_details, 0)} detail jobs")
+
+IO.puts(
+  "Cleared #{elem(deleted_discovery, 0)} discovery jobs and #{elem(deleted_details, 0)} detail jobs"
+)
 
 # Wait a moment to ensure clean state
 :timer.sleep(1000)
@@ -22,13 +25,16 @@ IO.puts("Successfully queued #{count} jobs")
 
 # Check initial state
 IO.puts("\n=== Initial Queue State ===")
-initial_jobs = Repo.all(
-  from j in Oban.Job,
-  where: j.queue == "tmdb_discovery" and j.state in ["available", "scheduled"],
-  select: {j.args["page"], j.state}
-)
+
+initial_jobs =
+  Repo.all(
+    from j in Oban.Job,
+      where: j.queue == "tmdb_discovery" and j.state in ["available", "scheduled"],
+      select: {j.args["page"], j.state}
+  )
 
 IO.puts("Jobs in queue: #{length(initial_jobs)}")
+
 Enum.each(initial_jobs, fn {page, state} ->
   IO.puts("  Page #{page}: #{state}")
 end)
@@ -39,11 +45,13 @@ IO.puts("\nWaiting 5 seconds for jobs to start processing...")
 
 # Check for duplicates after processing
 IO.puts("\n=== Checking for Duplicates After Processing ===")
-all_jobs = Repo.all(
-  from j in Oban.Job,
-  where: j.queue == "tmdb_discovery",
-  select: {j.args["page"], j.state, j.inserted_at}
-)
+
+all_jobs =
+  Repo.all(
+    from j in Oban.Job,
+      where: j.queue == "tmdb_discovery",
+      select: {j.args["page"], j.state, j.inserted_at}
+  )
 
 # Group by page to find duplicates
 pages_grouped = Enum.group_by(all_jobs, fn {page, _, _} -> page end)
@@ -55,8 +63,10 @@ if Enum.empty?(duplicate_pages) do
   IO.puts("✅ No duplicate pages found!")
 else
   IO.puts("❌ Found duplicate pages:")
+
   Enum.each(duplicate_pages, fn {page, jobs} ->
     IO.puts("\n  Page #{page}: #{length(jobs)} jobs")
+
     Enum.each(jobs, fn {_, state, inserted_at} ->
       IO.puts("    - State: #{state}, Inserted: #{inserted_at}")
     end)
@@ -71,7 +81,10 @@ IO.puts("\n=== Test Summary ===")
 IO.puts("Expected pages: 5")
 IO.puts("Unique pages found: #{unique_pages}")
 IO.puts("Total jobs found: #{total_jobs}")
-IO.puts("Test result: #{if unique_pages == 5 and total_jobs == 5, do: "✅ PASSED", else: "❌ FAILED"}")
+
+IO.puts(
+  "Test result: #{if unique_pages == 5 and total_jobs == 5, do: "✅ PASSED", else: "❌ FAILED"}"
+)
 
 if total_jobs > 5 do
   IO.puts("\n⚠️  More jobs than expected! This indicates duplicates are being created.")

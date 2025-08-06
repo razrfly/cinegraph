@@ -2,45 +2,47 @@
   <div class="mb-6 flex items-center justify-between">
     <div>
       <h1 class="text-3xl font-bold text-gray-900">People</h1>
-      <p class="text-gray-600 mt-2">Browse <%= @total_people %> actors, directors, and crew members</p>
+      <p class="text-gray-600 mt-2">Browse {@total_people} actors, directors, and crew members</p>
     </div>
     <div class="text-sm text-gray-600">
-      Page <%= @page %> of <%= @total_pages %>
+      Page {@page} of {@total_pages}
     </div>
   </div>
 
   <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
     <%= for person <- @people do %>
-      <.link navigate={~p"/people/#{person.id}"} 
-             class="group bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden">
+      <.link
+        navigate={~p"/people/#{person.id}"}
+        class="group bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
+      >
         <div class="aspect-[2/3] relative">
           <%= if person.profile_path do %>
-            <img 
-              src={Cinegraph.Movies.Person.profile_url(person, "w342")} 
+            <img
+              src={Cinegraph.Movies.Person.profile_url(person, "w342")}
               alt={person.name}
               class="w-full h-full object-cover"
             />
           <% else %>
             <div class="w-full h-full bg-gray-200 flex items-center justify-center">
               <svg class="w-20 h-20 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
               </svg>
             </div>
           <% end %>
         </div>
-        
+
         <div class="p-4">
           <h3 class="font-semibold text-gray-900 group-hover:text-blue-600 truncate">
-            <%= person.name %>
+            {person.name}
           </h3>
           <%= if person.known_for_department do %>
             <p class="text-sm text-gray-600 mt-1">
-              <%= person.known_for_department %>
+              {person.known_for_department}
             </p>
           <% end %>
           <%= if person.popularity do %>
             <p class="text-xs text-gray-500 mt-2">
-              Popularity: <%= Float.round(person.popularity, 1) %>
+              Popularity: {Float.round(person.popularity, 1)}
             </p>
           <% end %>
         </div>
@@ -48,13 +50,14 @@
     <% end %>
   </div>
   
-  <!-- Pagination Controls -->
+<!-- Pagination Controls -->
   <%= if @total_pages > 1 do %>
     <div class="mt-8 flex items-center justify-center space-x-2">
       <%= if @page > 1 do %>
-        <.link 
-          navigate={~p"/people?#{[page: @page - 1, per_page: @per_page]}"} 
-          class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+        <.link
+          navigate={~p"/people?#{[page: @page - 1, per_page: @per_page]}"}
+          class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+        >
           Previous
         </.link>
       <% else %>
@@ -63,23 +66,25 @@
         </span>
       <% end %>
       
-      <!-- Page Numbers -->
+<!-- Page Numbers -->
       <%= for page_num <- pagination_range(@page, @total_pages) do %>
         <%= if page_num == "..." do %>
           <span class="px-3 py-2 text-sm text-gray-700">...</span>
         <% else %>
-          <.link 
-            navigate={~p"/people?#{[page: page_num, per_page: @per_page]}"} 
-            class={"px-3 py-2 text-sm font-medium rounded-md #{if page_num == @page, do: "bg-blue-600 text-white", else: "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"}"}>
-            <%= page_num %>
+          <.link
+            navigate={~p"/people?#{[page: page_num, per_page: @per_page]}"}
+            class={"px-3 py-2 text-sm font-medium rounded-md #{if page_num == @page, do: "bg-blue-600 text-white", else: "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"}"}
+          >
+            {page_num}
           </.link>
         <% end %>
       <% end %>
-      
+
       <%= if @page < @total_pages do %>
-        <.link 
-          navigate={~p"/people?#{[page: @page + 1, per_page: @per_page]}"} 
-          class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+        <.link
+          navigate={~p"/people?#{[page: @page + 1, per_page: @per_page]}"}
+          class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+        >
           Next
         </.link>
       <% else %>

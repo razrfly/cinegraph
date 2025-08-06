@@ -22,6 +22,7 @@ Enum.each(test_keys, fn key ->
   case Cinegraph.Movies.MovieLists.get_config(key) do
     {:ok, config} ->
       Logger.info("  ✓ #{key}: Found config - #{config.name}")
+
     {:error, reason} ->
       Logger.info("  ✗ #{key}: Not found - #{reason}")
   end
@@ -34,6 +35,7 @@ Logger.info("Total available lists: #{map_size(available)}")
 
 # Test 4: Create a test list
 Logger.info("\n4. Testing list creation:")
+
 test_attrs = %{
   source_key: "test_list_#{:os.system_time(:second)}",
   name: "Test Movie List",
@@ -48,23 +50,25 @@ test_attrs = %{
 case Cinegraph.Movies.MovieLists.create_movie_list(test_attrs) do
   {:ok, list} ->
     Logger.info("  ✓ Created test list: #{list.name} (ID: #{list.id})")
-    
+
     # Test updating it
     case Cinegraph.Movies.MovieLists.update_movie_list(list, %{active: false}) do
       {:ok, updated} ->
         Logger.info("  ✓ Updated list active status to: #{updated.active}")
+
       {:error, _} ->
         Logger.info("  ✗ Failed to update list")
     end
-    
+
     # Clean up
     case Cinegraph.Movies.MovieLists.delete_movie_list(list) do
       {:ok, _} ->
         Logger.info("  ✓ Deleted test list")
+
       {:error, _} ->
         Logger.info("  ✗ Failed to delete test list")
     end
-    
+
   {:error, changeset} ->
     Logger.error("  ✗ Failed to create test list: #{inspect(changeset.errors)}")
 end

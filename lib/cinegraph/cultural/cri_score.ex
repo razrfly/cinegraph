@@ -24,16 +24,43 @@ defmodule Cinegraph.Cultural.CRIScore do
   @doc false
   def changeset(cri_score, attrs) do
     cri_score
-    |> cast(attrs, [:movie_id, :overall_score, :timelessness_score, :cultural_penetration_score, 
-                    :artistic_impact_score, :institutional_recognition_score, :public_reception_score,
-                    :calculation_version, :calculated_at, :metadata])
+    |> cast(attrs, [
+      :movie_id,
+      :overall_score,
+      :timelessness_score,
+      :cultural_penetration_score,
+      :artistic_impact_score,
+      :institutional_recognition_score,
+      :public_reception_score,
+      :calculation_version,
+      :calculated_at,
+      :metadata
+    ])
     |> validate_required([:movie_id, :overall_score, :calculation_version, :calculated_at])
-    |> validate_number(:overall_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 100.0)
-    |> validate_number(:timelessness_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 100.0)
-    |> validate_number(:cultural_penetration_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 100.0)
-    |> validate_number(:artistic_impact_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 100.0)
-    |> validate_number(:institutional_recognition_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 100.0)
-    |> validate_number(:public_reception_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 100.0)
+    |> validate_number(:overall_score,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 100.0
+    )
+    |> validate_number(:timelessness_score,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 100.0
+    )
+    |> validate_number(:cultural_penetration_score,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 100.0
+    )
+    |> validate_number(:artistic_impact_score,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 100.0
+    )
+    |> validate_number(:institutional_recognition_score,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 100.0
+    )
+    |> validate_number(:public_reception_score,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 100.0
+    )
     |> foreign_key_constraint(:movie_id)
   end
 end

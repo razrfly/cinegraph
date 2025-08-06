@@ -12,13 +12,15 @@ IO.puts("  Completion: #{progress.completion_percentage || 0}%")
 import Ecto.Query
 alias Cinegraph.Repo
 
-job_stats = Repo.all(
-  from j in Oban.Job,
-  group_by: [j.queue, j.state],
-  select: {j.queue, j.state, count(j.id)}
-)
+job_stats =
+  Repo.all(
+    from j in Oban.Job,
+      group_by: [j.queue, j.state],
+      select: {j.queue, j.state, count(j.id)}
+  )
 
 IO.puts("\nOban Queue Status:")
+
 Enum.each(job_stats, fn {queue, state, count} ->
   IO.puts("  #{queue} - #{state}: #{count}")
 end)
@@ -33,10 +35,11 @@ IO.puts("  Pages needed: ~#{target_pages}")
 IO.puts("  Estimated time: ~#{div(target_pages * 40, 3600)} hours")
 
 # Check if import is already running
-running_discovery = Repo.exists?(
-  from j in Oban.Job,
-  where: j.queue == "tmdb_discovery" and j.state in ["scheduled", "available", "executing"]
-)
+running_discovery =
+  Repo.exists?(
+    from j in Oban.Job,
+      where: j.queue == "tmdb_discovery" and j.state in ["scheduled", "available", "executing"]
+  )
 
 IO.puts("\nImport currently running: #{running_discovery}")
 

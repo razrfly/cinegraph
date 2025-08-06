@@ -65,18 +65,30 @@ config :phoenix, :json_library, Jason
 config :cinegraph, Oban,
   repo: Cinegraph.Repo,
   queues: [
-    tmdb_discovery: 10,     # Movie discovery from TMDb
-    tmdb_details: 20,       # Movie details fetching  
-    omdb_enrichment: 5,     # OMDb data enrichment
-    media_processing: 10,   # Keywords, videos, etc.
-    collaboration: 5,       # Collaboration processing
-    movie_enrichment: 10,   # Movie enrichment from Oscar imports
-    oscar_imports: 3,       # Oscar ceremony imports
-    imdb_scraping: 5,       # IMDb website scraping (canonical lists, user lists, etc.)
-    canonical_retry: 3      # Retry failed canonical source updates
+    # Movie discovery from TMDb
+    tmdb_discovery: 10,
+    # Movie details fetching  
+    tmdb_details: 20,
+    # OMDb data enrichment
+    omdb_enrichment: 5,
+    # Keywords, videos, etc.
+    media_processing: 10,
+    # Collaboration processing
+    collaboration: 5,
+    # Movie enrichment from Oscar imports
+    movie_enrichment: 10,
+    # Oscar ceremony imports
+    oscar_imports: 3,
+    # Festival imports (Venice, Cannes, Berlin, etc.)
+    festival_import: 5,
+    # IMDb website scraping (canonical lists, user lists, etc.)
+    imdb_scraping: 5,
+    # Retry failed canonical source updates
+    canonical_retry: 3
   ],
   plugins: [
-    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7}, # Keep jobs for 7 days
+    # Keep jobs for 7 days
+    {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Reindexer, schedule: "@daily"}
   ]
 

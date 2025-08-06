@@ -3,155 +3,196 @@
     <h1 class="text-3xl font-bold text-gray-900">TMDB Import Dashboard</h1>
     <p class="mt-2 text-gray-600">Simple progress tracking: TMDB Total - Our Total = Remaining</p>
   </div>
-
-  <!-- Progress Overview -->
+  
+<!-- Progress Overview -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">Import Progress</h2>
-    
+
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
       <div class="bg-blue-50 p-4 rounded">
         <div class="text-sm text-blue-600">TMDB Total Movies</div>
         <div class="text-2xl font-bold text-blue-900">
-          <%= format_number(@progress.tmdb_total_movies) %>
+          {format_number(@progress.tmdb_total_movies)}
         </div>
       </div>
-      
+
       <div class="bg-green-50 p-4 rounded">
         <div class="text-sm text-green-600">Our Movies</div>
         <div class="text-2xl font-bold text-green-900">
-          <%= format_number(@progress.our_total_movies) %>
+          {format_number(@progress.our_total_movies)}
         </div>
       </div>
-      
+
       <div class="bg-yellow-50 p-4 rounded">
         <div class="text-sm text-yellow-600">Movies Remaining</div>
         <div class="text-2xl font-bold text-yellow-900">
-          <%= format_number(@progress.movies_remaining) %>
+          {format_number(@progress.movies_remaining)}
         </div>
       </div>
-      
+
       <div class="bg-purple-50 p-4 rounded">
         <div class="text-sm text-purple-600">Completion</div>
         <div class="text-2xl font-bold text-purple-900">
-          <%= @progress.completion_percentage %>%
+          {@progress.completion_percentage}%
         </div>
       </div>
     </div>
     
-    <!-- Progress Bar -->
+<!-- Progress Bar -->
     <div class="w-full bg-gray-200 rounded-full h-4 mb-4">
-      <div class="bg-blue-600 h-4 rounded-full transition-all duration-500" 
-           style={"width: #{@progress.completion_percentage}%"}></div>
+      <div
+        class="bg-blue-600 h-4 rounded-full transition-all duration-500"
+        style={"width: #{@progress.completion_percentage}%"}
+      >
+      </div>
     </div>
     
-    <!-- Import Stats -->
+<!-- Import Stats -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
       <div>
         <span class="text-gray-500">Import Rate:</span>
-        <span class="font-medium"><%= @import_rate %> movies/min</span>
+        <span class="font-medium">{@import_rate} movies/min</span>
       </div>
       <div>
         <span class="text-gray-500">Last Page:</span>
-        <span class="font-medium"><%= @progress.last_page_processed %></span>
+        <span class="font-medium">{@progress.last_page_processed}</span>
       </div>
       <div>
         <span class="text-gray-500">Time to Complete:</span>
         <span class="font-medium">
-          <%= estimate_completion_time(@progress.movies_remaining, @import_rate) %>
+          {estimate_completion_time(@progress.movies_remaining, @import_rate)}
         </span>
       </div>
       <div>
         <span class="text-gray-500">Last Full Sync:</span>
         <span class="font-medium">
-          <%= if @progress.last_full_sync, do: @progress.last_full_sync, else: "Never" %>
+          {if @progress.last_full_sync, do: @progress.last_full_sync, else: "Never"}
         </span>
       </div>
     </div>
   </div>
-
-  <!-- Actions -->
+  
+<!-- Actions -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">TMDb Import Actions</h2>
-    
+
     <div class="flex flex-wrap gap-4 mb-4">
-      <button phx-click="start_full_import" 
-              class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+      <button
+        phx-click="start_full_import"
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
         Import 100 Pages
       </button>
-      
-      <button phx-click="start_daily_update" 
-              class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+
+      <button
+        phx-click="start_daily_update"
+        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+      >
         Start Daily Update
       </button>
-      
-      <button phx-click="update_tmdb_total" 
-              class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+
+      <button
+        phx-click="update_tmdb_total"
+        class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+      >
         Update TMDB Total
       </button>
     </div>
-    
+
     <form phx-submit="import_pages" class="flex gap-2 items-end">
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">
           Import Specific Pages
         </label>
-        <input type="number" name="pages" min="1" max="1000" placeholder="50"
-               class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <input
+          type="number"
+          name="pages"
+          min="1"
+          max="1000"
+          placeholder="50"
+          class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
       <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
         Queue Pages
       </button>
     </form>
   </div>
-
-  <!-- Canonical Lists Import -->
+  
+<!-- Canonical Lists Import -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">Canonical Movie Lists</h2>
-    
+
     <form phx-submit="import_canonical_list" class="flex gap-4 items-end mb-4">
       <div class="flex-1">
         <label class="block text-sm font-medium text-gray-700 mb-1">
           Select a list to import
         </label>
-        <select name="list_key" required
-                class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select
+          name="list_key"
+          required
+          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
           <option value="">Select a list...</option>
           <option value="all" class="font-semibold">Import All Lists</option>
           <option value="" disabled>──────────────</option>
           <%= for {key, config} <- @canonical_lists do %>
-            <option value={key}><%= config.name %></option>
+            <option value={key}>{config.name}</option>
           <% end %>
         </select>
       </div>
-      <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-              disabled={@canonical_import_running}>
-        <%= if @canonical_import_running, do: "Importing...", else: "Import/Update List" %>
+      <button
+        type="submit"
+        class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+        disabled={@canonical_import_running}
+      >
+        {if @canonical_import_running, do: "Importing...", else: "Import/Update List"}
       </button>
     </form>
-    
+
     <%= if @canonical_import_running do %>
       <div class="mt-4 p-4 bg-blue-50 rounded">
         <div class="flex items-center">
-          <svg class="animate-spin h-5 w-5 mr-3 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          <svg
+            class="animate-spin h-5 w-5 mr-3 text-blue-600"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            >
+            </circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            >
+            </path>
           </svg>
-          <span class="text-blue-800"><%= @canonical_import_progress || "Processing..." %></span>
+          <span class="text-blue-800">{@canonical_import_progress || "Processing..."}</span>
         </div>
       </div>
     <% end %>
     
-    <!-- Canonical List Stats -->
+<!-- Canonical List Stats -->
     <div class="mt-6 p-4 bg-gray-50 rounded">
       <h3 class="text-lg font-medium text-gray-900 mb-3">List Statistics</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <%= for list_stat <- @canonical_stats do %>
           <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-600"><%= list_stat.name %></span>
+            <span class="text-sm text-gray-600">{list_stat.name}</span>
             <span class="text-sm font-semibold text-gray-900">
-              <%= format_number(list_stat.count) %> movies
+              {format_number(list_stat.count)} movies
               <%= if list_stat[:expected_count] do %>
-                <span class="text-xs font-normal text-gray-500">(of <%= format_number(list_stat.expected_count) %>)</span>
+                <span class="text-xs font-normal text-gray-500">
+                  (of {format_number(list_stat.expected_count)})
+                </span>
               <% end %>
             </span>
           </div>
@@ -159,61 +200,83 @@
       </div>
     </div>
   </div>
-
-  <!-- Manage Movie Lists -->
+  
+<!-- Manage Movie Lists -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-xl font-semibold">Manage Movie Lists</h2>
-      <button phx-click="show_add_modal" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+      <button
+        phx-click="show_add_modal"
+        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      >
         + Add New List
       </button>
     </div>
     
-    <!-- Existing Lists Table -->
+<!-- Existing Lists Table -->
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Movies</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Import</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Name
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Source
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Category
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Movies
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Last Import
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Status
+            </th>
+            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           <%= for list <- @all_movie_lists do %>
             <tr class={if list.active, do: "", else: "opacity-50"}>
               <td class="px-4 py-4 whitespace-nowrap">
-                <div class="text-sm font-medium text-gray-900"><%= list.name %></div>
-                <div class="text-xs text-gray-500"><%= list.source_key %></div>
+                <div class="text-sm font-medium text-gray-900">{list.name}</div>
+                <div class="text-xs text-gray-500">{list.source_key}</div>
               </td>
               <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                <%= String.upcase(list.source_type) %>
+                {String.upcase(list.source_type)}
               </td>
               <td class="px-4 py-4 whitespace-nowrap">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                  <%= list.category %>
+                  {list.category}
                 </span>
               </td>
               <td class="px-4 py-4 whitespace-nowrap">
                 <div class="text-sm text-gray-900">
-                  <%= format_number(list.real_movie_count) %>
+                  {format_number(list.real_movie_count)}
                   <%= if list.metadata["expected_movie_count"] do %>
-                    <span class="text-xs text-gray-500">/ <%= format_number(list.metadata["expected_movie_count"]) %></span>
+                    <span class="text-xs text-gray-500">
+                      / {format_number(list.metadata["expected_movie_count"])}
+                    </span>
                   <% end %>
                 </div>
                 <%= if list.metadata["expected_movie_count"] && list.real_movie_count > 0 do %>
                   <div class="text-xs text-gray-500">
-                    <%= Float.round(list.real_movie_count / list.metadata["expected_movie_count"] * 100, 1) %>% complete
+                    {Float.round(
+                      list.real_movie_count / list.metadata["expected_movie_count"] * 100,
+                      1
+                    )}% complete
                   </div>
                 <% end %>
               </td>
               <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                 <%= if list.last_import_at do %>
-                  <%= Calendar.strftime(list.last_import_at, "%b %d, %Y") %>
+                  {Calendar.strftime(list.last_import_at, "%b %d, %Y")}
                 <% else %>
                   Never
                 <% end %>
@@ -230,20 +293,33 @@
                 <% end %>
               </td>
               <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
-                <button phx-click="toggle_list_active" phx-value-id={list.id} 
-                        class="text-indigo-600 hover:text-indigo-900 mr-2">
-                  <%= if list.active, do: "Disable", else: "Enable" %>
+                <button
+                  phx-click="toggle_list_active"
+                  phx-value-id={list.id}
+                  class="text-indigo-600 hover:text-indigo-900 mr-2"
+                >
+                  {if list.active, do: "Disable", else: "Enable"}
                 </button>
-                <button phx-click="show_edit_modal" phx-value-id={list.id}
-                        class="text-blue-600 hover:text-blue-900 mr-2">
+                <button
+                  phx-click="show_edit_modal"
+                  phx-value-id={list.id}
+                  class="text-blue-600 hover:text-blue-900 mr-2"
+                >
                   Edit
                 </button>
-                <button phx-click="delete_list" phx-value-id={list.id}
-                        data-confirm="Are you sure you want to delete this list?"
-                        class="text-red-600 hover:text-red-900 mr-2">
+                <button
+                  phx-click="delete_list"
+                  phx-value-id={list.id}
+                  data-confirm="Are you sure you want to delete this list?"
+                  class="text-red-600 hover:text-red-900 mr-2"
+                >
                   Delete
                 </button>
-                <a href={list.source_url} target="_blank" class="text-gray-600 hover:text-gray-900">
+                <a
+                  href={list.source_url}
+                  target="_blank"
+                  class="text-gray-600 hover:text-gray-900"
+                >
                   View →
                 </a>
               </td>
@@ -253,113 +329,229 @@
       </table>
     </div>
   </div>
-
-  <!-- Oscar Import -->
+  
+<!-- Oscar Import -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">Academy Awards Import</h2>
-    
+
     <form phx-submit="import_oscars" class="flex gap-4 items-end mb-4">
       <div class="flex-1">
         <label class="block text-sm font-medium text-gray-700 mb-1">
           Select decades to import
         </label>
-        <select name="year_range" required
-                class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select
+          name="year_range"
+          required
+          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
           <option value="">Select decades...</option>
           <%= for decade <- @oscar_decades do %>
-            <option value={decade.value}><%= decade.label %></option>
+            <option value={decade.value}>{decade.label}</option>
           <% end %>
           <option value="all">All Available Years</option>
         </select>
       </div>
-      <button type="submit" class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-              disabled={@oscar_import_running}>
-        <%= if @oscar_import_running, do: "Importing...", else: "Import Oscar Data" %>
+      <button
+        type="submit"
+        class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+        disabled={@oscar_import_running}
+      >
+        {if @oscar_import_running, do: "Importing...", else: "Import Oscar Data"}
       </button>
     </form>
-    
+
     <%= if @oscar_import_running do %>
       <div class="mt-4 p-4 bg-yellow-50 rounded">
         <div class="flex items-center">
-          <svg class="animate-spin h-5 w-5 mr-3 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          <svg
+            class="animate-spin h-5 w-5 mr-3 text-yellow-600"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            >
+            </circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            >
+            </path>
           </svg>
-          <span class="text-yellow-800"><%= @oscar_import_progress || "Processing..." %></span>
+          <span class="text-yellow-800">{@oscar_import_progress || "Processing..."}</span>
         </div>
       </div>
     <% end %>
     
-    <!-- Academy Awards Statistics -->
+<!-- Academy Awards Statistics -->
     <div class="mt-6 p-4 bg-gray-50 rounded">
       <h3 class="text-lg font-medium text-gray-900 mb-3">Academy Awards Statistics</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <%= for oscar_stat <- @oscar_stats do %>
           <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-600"><%= oscar_stat.label %></span>
-            <span class="text-sm font-semibold text-gray-900"><%= oscar_stat.value %></span>
+            <span class="text-sm text-gray-600">{oscar_stat.label}</span>
+            <span class="text-sm font-semibold text-gray-900">{oscar_stat.value}</span>
           </div>
         <% end %>
       </div>
     </div>
   </div>
-
-  <!-- Database Stats -->
+  
+<!-- Festival Awards Import -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <h2 class="text-xl font-semibold mb-4">Database Statistics</h2>
+    <h2 class="text-xl font-semibold mb-4">Festival Awards Import</h2>
+
+    <form phx-submit="import_festival" class="flex gap-4 items-end mb-4">
+      <div class="flex-1">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Select festival to import
+        </label>
+        <select
+          name="festival"
+          required
+          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Select festival...</option>
+          <%= for festival <- @festival_list do %>
+            <option value={festival.value}>{festival.label}</option>
+          <% end %>
+        </select>
+      </div>
+      <div class="flex-1">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Select year or range
+        </label>
+        <select
+          name="year_range"
+          required
+          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Select year...</option>
+          <%= for year_option <- @festival_years do %>
+            <option value={year_option.value}>{year_option.label}</option>
+          <% end %>
+        </select>
+      </div>
+      <button
+        type="submit"
+        class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+        disabled={@festival_import_running}
+      >
+        {if @festival_import_running, do: "Importing...", else: "Import Festival"}
+      </button>
+    </form>
+
+    <%= if @festival_import_running do %>
+      <div class="mt-4 p-4 bg-purple-50 rounded">
+        <div class="flex items-center">
+          <svg
+            class="animate-spin h-5 w-5 mr-3 text-purple-600"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            >
+            </circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            >
+            </path>
+          </svg>
+          <span class="text-purple-800">{@festival_import_progress || "Processing..."}</span>
+        </div>
+      </div>
+    <% end %>
     
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      <div>
-        <div class="text-sm text-gray-500">Total Movies</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.total_movies) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">With TMDB Data</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.movies_with_tmdb) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">With OMDb Data</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.movies_with_omdb) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">Canonical Movies</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.canonical_movies) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">Oscar Movies</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.oscar_movies) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">People</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.total_people) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">Credits</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.total_credits) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">Genres</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.total_genres) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">Keywords</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.total_keywords) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">Unique Collabs</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.unique_collaborations) %></div>
-      </div>
-      <div>
-        <div class="text-sm text-gray-500">Multi-Collabs</div>
-        <div class="text-lg font-semibold"><%= format_number(@stats.multi_collaborations) %></div>
+<!-- Festival Awards Statistics -->
+    <div class="mt-6 p-4 bg-gray-50 rounded">
+      <h3 class="text-lg font-medium text-gray-900 mb-3">Festival Awards Statistics</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <%= for festival_stat <- @festival_stats do %>
+          <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-600">{festival_stat.label}</span>
+            <span class="text-sm font-semibold text-gray-900">{festival_stat.value}</span>
+          </div>
+        <% end %>
       </div>
     </div>
   </div>
+  
+<!-- Database Stats -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">Database Statistics</h2>
 
-  <!-- Queue Status -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div>
+        <div class="text-sm text-gray-500">Total Movies</div>
+        <div class="text-lg font-semibold">{format_number(@stats.total_movies)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">With TMDB Data</div>
+        <div class="text-lg font-semibold">{format_number(@stats.movies_with_tmdb)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">With OMDb Data</div>
+        <div class="text-lg font-semibold">{format_number(@stats.movies_with_omdb)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Canonical Movies</div>
+        <div class="text-lg font-semibold">{format_number(@stats.canonical_movies)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Oscar Movies</div>
+        <div class="text-lg font-semibold">{format_number(@stats.oscar_movies)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Venice Movies</div>
+        <div class="text-lg font-semibold">{format_number(@stats.venice_movies)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">People</div>
+        <div class="text-lg font-semibold">{format_number(@stats.total_people)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Credits</div>
+        <div class="text-lg font-semibold">{format_number(@stats.total_credits)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Genres</div>
+        <div class="text-lg font-semibold">{format_number(@stats.total_genres)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Keywords</div>
+        <div class="text-lg font-semibold">{format_number(@stats.total_keywords)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Unique Collabs</div>
+        <div class="text-lg font-semibold">{format_number(@stats.unique_collaborations)}</div>
+      </div>
+      <div>
+        <div class="text-sm text-gray-500">Multi-Collabs</div>
+        <div class="text-lg font-semibold">{format_number(@stats.multi_collaborations)}</div>
+      </div>
+    </div>
+  </div>
+  
+<!-- Queue Status -->
   <div class="bg-white shadow rounded-lg p-6">
     <h2 class="text-xl font-semibold mb-4">Oban Queue Status</h2>
-    
+
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
@@ -382,16 +574,16 @@
           <%= for queue <- @queue_stats do %>
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                <%= format_queue_name(queue.name) %>
+                {format_queue_name(queue.name)}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <%= queue.available %>
+                {queue.available}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <%= queue.executing %>
+                {queue.executing}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <%= format_number(queue.completed) %>
+                {format_number(queue.completed)}
               </td>
             </tr>
           <% end %>
@@ -403,51 +595,75 @@
 
 <!-- Modal for Add/Edit Movie List -->
 <%= if @show_modal do %>
-  <div class="fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+  <div
+    class="fixed z-10 inset-0 overflow-y-auto"
+    aria-labelledby="modal-title"
+    role="dialog"
+    aria-modal="true"
+  >
     <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
       <!-- Background overlay -->
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
-           phx-click="hide_modal" aria-hidden="true"></div>
-
-      <!-- Modal panel -->
-      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+      <div
+        class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        phx-click="hide_modal"
+        aria-hidden="true"
+      >
+      </div>
       
+<!-- Modal panel -->
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
+        &#8203;
+      </span>
+
       <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
         <form phx-submit={if @editing_list, do: "update_movie_list", else: "add_movie_list"}>
           <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <h3 class="text-lg font-medium text-gray-900 mb-4">
-              <%= if @editing_list, do: "Edit Movie List", else: "Add New Movie List" %>
+              {if @editing_list, do: "Edit Movie List", else: "Add New Movie List"}
             </h3>
-            
+
             <%= if @editing_list do %>
-              <input type="hidden" name="list_id" value={@editing_list.id}>
+              <input type="hidden" name="list_id" value={@editing_list.id} />
             <% end %>
-            
+
             <div class="space-y-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">List URL</label>
-                <input type="url" name="source_url" required 
-                       value={if @editing_list, do: @editing_list.source_url, else: ""}
-                       placeholder="https://www.imdb.com/list/ls123456789/"
-                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input
+                  type="url"
+                  name="source_url"
+                  required
+                  value={if @editing_list, do: @editing_list.source_url, else: ""}
+                  placeholder="https://www.imdb.com/list/ls123456789/"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
                 <p class="text-xs text-gray-500 mt-1">IMDB, TMDb, or other movie list URL</p>
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">List Name</label>
-                <input type="text" name="name" required 
-                       value={if @editing_list, do: @editing_list.name, else: ""}
-                       placeholder="My Favorite Movies"
-                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  value={if @editing_list, do: @editing_list.name, else: ""}
+                  placeholder="My Favorite Movies"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Source Key</label>
-                <input type="text" name="source_key" required pattern="[a-z0-9_]+" 
-                       value={if @editing_list, do: @editing_list.source_key, else: ""}
-                       placeholder="my_favorites"
-                       readonly={@editing_list != nil}
-                       class={"w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 #{if @editing_list, do: "bg-gray-100", else: ""}"}>
+                <input
+                  type="text"
+                  name="source_key"
+                  required
+                  pattern="[a-z0-9_]+"
+                  value={if @editing_list, do: @editing_list.source_key, else: ""}
+                  placeholder="my_favorites"
+                  readonly={@editing_list != nil}
+                  class={"w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 #{if @editing_list, do: "bg-gray-100", else: ""}"}
+                />
                 <p class="text-xs text-gray-500 mt-1">
                   <%= if @editing_list do %>
                     Source key cannot be changed after creation
@@ -456,43 +672,93 @@
                   <% end %>
                 </p>
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select name="category" required
-                        class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select
+                  name="category"
+                  required
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
                   <option value="">Select category...</option>
-                  <option value="awards" selected={@editing_list && @editing_list.category == "awards"}>Awards</option>
-                  <option value="critics" selected={@editing_list && @editing_list.category == "critics"}>Critics</option>
-                  <option value="curated" selected={@editing_list && @editing_list.category == "curated"}>Curated</option>
-                  <option value="festivals" selected={@editing_list && @editing_list.category == "festivals"}>Festivals</option>
-                  <option value="personal" selected={@editing_list && @editing_list.category == "personal"}>Personal</option>
-                  <option value="registry" selected={@editing_list && @editing_list.category == "registry"}>Registry</option>
+                  <option
+                    value="awards"
+                    selected={@editing_list && @editing_list.category == "awards"}
+                  >
+                    Awards
+                  </option>
+                  <option
+                    value="critics"
+                    selected={@editing_list && @editing_list.category == "critics"}
+                  >
+                    Critics
+                  </option>
+                  <option
+                    value="curated"
+                    selected={@editing_list && @editing_list.category == "curated"}
+                  >
+                    Curated
+                  </option>
+                  <option
+                    value="festivals"
+                    selected={@editing_list && @editing_list.category == "festivals"}
+                  >
+                    Festivals
+                  </option>
+                  <option
+                    value="personal"
+                    selected={@editing_list && @editing_list.category == "personal"}
+                  >
+                    Personal
+                  </option>
+                  <option
+                    value="registry"
+                    selected={@editing_list && @editing_list.category == "registry"}
+                  >
+                    Registry
+                  </option>
                 </select>
               </div>
-              
+
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-                <textarea name="description" rows="2" 
-                          placeholder="Brief description of this list..."
-                          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"><%= if @editing_list, do: @editing_list.description, else: "" %></textarea>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Description (Optional)
+                </label>
+                <textarea
+                  name="description"
+                  rows="2"
+                  placeholder="Brief description of this list..."
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                ><%= if @editing_list, do: @editing_list.description, else: "" %></textarea>
               </div>
-              
+
               <div class="flex items-center">
-                <input type="checkbox" name="tracks_awards" id="modal_tracks_awards" class="mr-2"
-                       checked={@editing_list && @editing_list.tracks_awards}>
-                <label for="modal_tracks_awards" class="text-sm text-gray-700">This list tracks awards/winners</label>
+                <input
+                  type="checkbox"
+                  name="tracks_awards"
+                  id="modal_tracks_awards"
+                  class="mr-2"
+                  checked={@editing_list && @editing_list.tracks_awards}
+                />
+                <label for="modal_tracks_awards" class="text-sm text-gray-700">
+                  This list tracks awards/winners
+                </label>
               </div>
             </div>
           </div>
-          
+
           <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <button type="submit" 
-                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
-              <%= if @editing_list, do: "Update", else: "Add" %>
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              {if @editing_list, do: "Update", else: "Add"}
             </button>
-            <button type="button" phx-click="hide_modal"
-                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+            <button
+              type="button"
+              phx-click="hide_modal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
               Cancel
             </button>
           </div>

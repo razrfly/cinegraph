@@ -7,6 +7,7 @@ Logger.info("Testing Movie Lists UI Updates...")
 
 # Test 1: Create a test list to show in UI
 Logger.info("\n1. Creating test list for UI demo:")
+
 test_attrs = %{
   source_key: "test_ui_list",
   name: "Test UI List - Can Delete",
@@ -22,6 +23,7 @@ case Cinegraph.Movies.MovieLists.create_movie_list(test_attrs) do
   {:ok, list} ->
     Logger.info("  ✓ Created test list: #{list.name} (ID: #{list.id})")
     Logger.info("  ✓ This list will appear in the UI and can be edited/deleted")
+
   {:error, changeset} ->
     Logger.info("  ℹ Test list already exists or error: #{inspect(changeset.errors)}")
 end
@@ -29,6 +31,7 @@ end
 # Test 2: Show current lists
 Logger.info("\n2. Current movie lists in database:")
 lists = Cinegraph.Movies.MovieLists.list_all_movie_lists()
+
 Enum.each(lists, fn list ->
   status = if list.active, do: "Active", else: "Inactive"
   Logger.info("  - #{list.name} (#{status}) - #{list.category}")

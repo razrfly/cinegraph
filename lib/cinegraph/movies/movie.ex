@@ -21,53 +21,68 @@ defmodule Cinegraph.Movies.Movie do
     field :vote_average, :float
     field :vote_count, :integer
     field :popularity, :float
-    
+
     # Collection/Franchise
     field :collection_id, :integer
-    
+
     # Images
     field :poster_path, :string
     field :backdrop_path, :string
-    
+
     # TMDb raw data storage
     field :tmdb_data, :map
-    
+
     # OMDb raw data storage
     field :omdb_data, :map
-    
+
     # New high-priority fields
     field :awards_text, :string
     field :awards, :map
     field :box_office_domestic, :integer
     field :origin_country, {:array, :string}, default: []
-    
+
     # Import tracking
     field :import_status, :string, default: "full"
-    
+
     # Canonical sources for backtesting (1001 Movies, Sight & Sound, etc.)
     field :canonical_sources, :map, default: %{}
-    
+
     # Associations  
     has_many :movie_credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
     many_to_many :people, Cinegraph.Movies.Person, join_through: Cinegraph.Movies.Credit
-    
+
     # New associations for genres, countries, and languages
-    many_to_many :genres, Cinegraph.Movies.Genre, join_through: "movie_genres", join_keys: [movie_id: :id, genre_id: :id]
-    many_to_many :production_countries, Cinegraph.Movies.ProductionCountry, join_through: "movie_production_countries", join_keys: [movie_id: :id, production_country_id: :id]
-    many_to_many :spoken_languages, Cinegraph.Movies.SpokenLanguage, join_through: "movie_spoken_languages", join_keys: [movie_id: :id, spoken_language_id: :id]
-    
+    many_to_many :genres, Cinegraph.Movies.Genre,
+      join_through: "movie_genres",
+      join_keys: [movie_id: :id, genre_id: :id]
+
+    many_to_many :production_countries, Cinegraph.Movies.ProductionCountry,
+      join_through: "movie_production_countries",
+      join_keys: [movie_id: :id, production_country_id: :id]
+
+    many_to_many :spoken_languages, Cinegraph.Movies.SpokenLanguage,
+      join_through: "movie_spoken_languages",
+      join_keys: [movie_id: :id, spoken_language_id: :id]
+
     # Keywords and Production Companies (many-to-many through join tables)
-    many_to_many :keywords, Cinegraph.Movies.Keyword, join_through: "movie_keywords", join_keys: [movie_id: :id, keyword_id: :id]
-    many_to_many :production_companies, Cinegraph.Movies.ProductionCompany, join_through: "movie_production_companies", join_keys: [movie_id: :id, production_company_id: :id]
-    
+    many_to_many :keywords, Cinegraph.Movies.Keyword,
+      join_through: "movie_keywords",
+      join_keys: [movie_id: :id, keyword_id: :id]
+
+    many_to_many :production_companies, Cinegraph.Movies.ProductionCompany,
+      join_through: "movie_production_companies",
+      join_keys: [movie_id: :id, production_company_id: :id]
+
     # Videos and Release Dates
     has_many :movie_videos, Cinegraph.Movies.MovieVideo, foreign_key: :movie_id
     has_many :movie_release_dates, Cinegraph.Movies.MovieReleaseDate, foreign_key: :movie_id
-    
+
     # External data associations  
     has_many :external_ratings, Cinegraph.ExternalSources.Rating, foreign_key: :movie_id
-    has_many :external_recommendations, Cinegraph.ExternalSources.Recommendation, foreign_key: :source_movie_id
-    
+
+    has_many :external_recommendations, Cinegraph.ExternalSources.Recommendation,
+      foreign_key: :source_movie_id
+
     timestamps()
   end
 
@@ -75,11 +90,34 @@ defmodule Cinegraph.Movies.Movie do
   def changeset(movie, attrs) do
     movie
     |> cast(attrs, [
-      :tmdb_id, :imdb_id, :title, :original_title, :release_date,
-      :runtime, :overview, :tagline, :original_language, :budget, :revenue, :status,
-      :adult, :homepage, :collection_id, :poster_path, :backdrop_path, :vote_average,
-      :vote_count, :popularity, :tmdb_data, :omdb_data, :awards_text, :awards,
-      :box_office_domestic, :origin_country, :import_status, :canonical_sources
+      :tmdb_id,
+      :imdb_id,
+      :title,
+      :original_title,
+      :release_date,
+      :runtime,
+      :overview,
+      :tagline,
+      :original_language,
+      :budget,
+      :revenue,
+      :status,
+      :adult,
+      :homepage,
+      :collection_id,
+      :poster_path,
+      :backdrop_path,
+      :vote_average,
+      :vote_count,
+      :popularity,
+      :tmdb_data,
+      :omdb_data,
+      :awards_text,
+      :awards,
+      :box_office_domestic,
+      :origin_country,
+      :import_status,
+      :canonical_sources
     ])
     |> validate_required([:title])
     |> unique_constraint(:tmdb_id)
@@ -114,12 +152,13 @@ defmodule Cinegraph.Movies.Movie do
       origin_country: attrs["origin_country"] || [],
       tmdb_data: attrs
     }
-    
+
     movie_attrs
   end
 
   defp parse_date(nil), do: nil
   defp parse_date(""), do: nil
+
   defp parse_date(date_string) do
     case Date.from_iso8601(date_string) do
       {:ok, date} -> date
@@ -139,6 +178,7 @@ defmodule Cinegraph.Movies.Movie do
   """
   def image_url(path, size \\ "w500")
   def image_url(nil, _size), do: nil
+
   def image_url(path, size) do
     "https://image.tmdb.org/t/p/#{size}#{path}"
   end
