@@ -34,6 +34,9 @@ defmodule CinegraphWeb.Router do
 
     # Import dashboard
     live "/imports", ImportDashboardLive, :index
+    
+    # Festival Events management
+    live "/festival-events", FestivalEventLive.Index, :index
   end
 
   # Other scopes may use custom stacks.
