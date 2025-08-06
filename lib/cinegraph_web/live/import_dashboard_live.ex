@@ -620,10 +620,35 @@ defmodule CinegraphWeb.ImportDashboardLive do
     total_ceremonies = length(ceremony_stats)
     total_categories = Repo.aggregate(Cinegraph.Cultural.OscarCategory, :count)
     
+    # Calculate People Nominations (actors, directors, writers etc.)
+    people_nominations = Repo.one(
+      from on_table in Cinegraph.Cultural.OscarNomination,
+      join: cat in Cinegraph.Cultural.OscarCategory, on: on_table.category_id == cat.id,
+      where: cat.tracks_person == true,
+      select: count(on_table.id)
+    )
+    
+    # Count people nominations with correct names (not movie titles)
+    people_nominations_with_names = Repo.one(
+      from on_table in Cinegraph.Cultural.OscarNomination,
+      join: cat in Cinegraph.Cultural.OscarCategory, on: on_table.category_id == cat.id,
+      where: cat.tracks_person == true and 
+             fragment("? ->> 'nominee_names' IS NOT NULL", on_table.details) and
+             fragment("? ->> 'nominee_names' <> ''", on_table.details),
+      select: count(on_table.id)
+    )
+    
     # Build stats list
+    people_nom_display = if people_nominations == people_nominations_with_names do
+      "#{format_number(people_nominations)} ✅"
+    else
+      "#{format_number(people_nominations_with_names)}/#{format_number(people_nominations)} ⚠️"
+    end
+    
     base_stats = [
       %{label: "Ceremonies Imported", value: "#{total_ceremonies} (2016-2024)"},
       %{label: "Total Nominations", value: format_number(total_nominations)},
+      %{label: "People Nominations", value: people_nom_display},
       %{label: "Total Wins", value: format_number(total_wins)},
       %{label: "Categories", value: format_number(total_categories)}
     ]
