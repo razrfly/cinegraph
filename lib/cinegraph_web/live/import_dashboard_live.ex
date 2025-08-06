@@ -8,6 +8,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   alias Cinegraph.Imports.TMDbImporter
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, MovieLists}
+  alias Cinegraph.Events
   require Logger
   alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker, VeniceFestivalWorker}
   alias Cinegraph.Cultural
@@ -396,35 +397,35 @@ defmodule CinegraphWeb.ImportDashboardLive do
         %{"festival" => festival, "year_range" => year_range},
         socket
       ) do
+    # Validate festival exists in database before proceeding
+    festival_event = Events.get_active_by_source_key(festival)
+    
     result =
-      case {festival, year_range} do
-        # Handle "all years" for any festival
-        {fest, "all"} when fest in ["venice", "cannes", "bafta", "berlin"] ->
-          # Import years 2020-2024 for all festivals
-          Cultural.import_festival_years(fest, 2020..2024)
+      case festival_event do
+        nil ->
+          {:error, "Festival not found in database"}
+          
+        _event ->
+          case year_range do
+            "all" ->
+              # Get year range from database event configuration or use default
+              year_range = get_festival_year_range(festival_event)
+              Cultural.import_festival_years(festival, year_range)
 
-        # Handle Venice with legacy function (for backward compatibility)
-        {"venice", year_str} ->
-          case Integer.parse(year_str) do
-            {year, ""} when year > 1900 and year <= 2030 ->
-              Cultural.import_venice_year(year)
+            year_str ->
+              case Integer.parse(year_str) do
+                {year, ""} when year > 1900 and year <= 2030 ->
+                  # Use Venice-specific function for backward compatibility
+                  if festival == "venice" do
+                    Cultural.import_venice_year(year)
+                  else
+                    Cultural.import_festival(festival, year)
+                  end
 
-            _ ->
-              {:error, "Invalid year format"}
+                _ ->
+                  {:error, "Invalid year format"}
+              end
           end
-
-        # Handle other festivals with unified system
-        {fest, year_str} when fest in ["cannes", "bafta", "berlin"] ->
-          case Integer.parse(year_str) do
-            {year, ""} when year > 1900 and year <= 2030 ->
-              Cultural.import_festival(fest, year)
-
-            _ ->
-              {:error, "Invalid year format"}
-          end
-
-        {_, _} ->
-          {:error, "Unsupported festival"}
       end
 
     case result do
@@ -452,12 +453,25 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp get_festival_display_name(festival_key) do
-    case festival_key do
-      "venice" -> "Venice Film Festival"
-      "cannes" -> "Cannes Film Festival"
-      "bafta" -> "BAFTA Film Awards"
-      "berlin" -> "Berlin International Film Festival"
-      _ -> String.capitalize(festival_key)
+    case Events.get_active_by_source_key(festival_key) do
+      nil -> String.capitalize(festival_key)
+      event -> event.name
+    end
+  end
+
+  defp get_festival_year_range(festival_event) do
+    # Extract year range from festival dates, or use sensible defaults
+    current_year = Date.utc_today().year
+    
+    # Get available years from festival dates, or use default range
+    case festival_event.metadata do
+      %{"min_available_year" => min_year, "max_available_year" => max_year} 
+        when is_integer(min_year) and is_integer(max_year) ->
+        min_year..max_year
+      
+      _ ->
+        # Default range: 2020 to current year + 1
+        2020..current_year
     end
   end
 
@@ -1076,12 +1090,15 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp generate_festival_list do
-    [
-      %{value: "venice", label: "Venice International Film Festival"},
-      %{value: "cannes", label: "Cannes Film Festival"},
-      %{value: "bafta", label: "BAFTA Film Awards"},
-      %{value: "berlin", label: "Berlin International Film Festival"}
-    ]
+    # Get all active festival events from the database
+    Events.list_active_events()
+    |> Enum.map(fn event ->
+      %{
+        value: event.source_key,
+        label: event.name
+      }
+    end)
+    |> Enum.sort_by(& &1.label)
   end
 
   defp generate_oscar_decades do
@@ -1105,9 +1122,20 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp generate_festival_years do
-    # Generate years for all festivals (2020-2024 is a good range for IMDb data)
-    # Generate in reverse order (newest first)
-    festival_years = 2024..2020//-1
+    # Get the available year range from active events
+    active_events = Events.list_active_events()
+    
+    {min_year, max_year} = 
+      case active_events do
+        [] -> {2020, 2024}  # fallback
+        events ->
+          min_year = events |> Enum.map(& &1.min_available_year) |> Enum.min() |> max(2020)
+          max_year = events |> Enum.map(& &1.max_available_year) |> Enum.max() |> min(Date.utc_today().year)
+          {min_year, max_year}
+      end
+
+    # Generate years in reverse order (newest first)
+    festival_years = max_year..min_year//-1
 
     years_list =
       Enum.map(festival_years, fn year ->
@@ -1118,7 +1146,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       end)
 
     # Add "All Years" option at the top
-    [%{value: "all", label: "All Available Years (2020-2024)"} | years_list]
+    [%{value: "all", label: "All Available Years (#{min_year}-#{max_year})"} | years_list]
   end
 
   # Keep the old function for backward compatibility with the template
