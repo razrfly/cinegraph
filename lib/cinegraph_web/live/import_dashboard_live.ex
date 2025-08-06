@@ -605,65 +605,86 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp get_oscar_stats do
-    # Get ceremony years and their nomination/win counts
-    ceremony_stats = Repo.all(
-      from oc in Cinegraph.Cultural.OscarCeremony,
-      left_join: on_table in Cinegraph.Cultural.OscarNomination, on: on_table.ceremony_id == oc.id,
-      group_by: [oc.year, oc.id],
-      select: {oc.year, count(on_table.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", on_table.won))},
-      order_by: [desc: oc.year]
-    )
+    # Get AMPAS organization
+    oscar_org = Cinegraph.Festivals.get_organization_by_abbreviation("AMPAS")
     
-    # Calculate totals (ceremony_stats now returns tuples: {year, nominations, wins})
-    total_nominations = Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
-    total_wins = Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
-    total_ceremonies = length(ceremony_stats)
-    total_categories = Repo.aggregate(Cinegraph.Cultural.OscarCategory, :count)
-    
-    # Calculate People Nominations (actors, directors, writers etc.)
-    people_nominations = Repo.one(
-      from on_table in Cinegraph.Cultural.OscarNomination,
-      join: cat in Cinegraph.Cultural.OscarCategory, on: on_table.category_id == cat.id,
-      where: cat.tracks_person == true,
-      select: count(on_table.id)
-    )
-    
-    # Count people nominations with correct names (not movie titles)
-    people_nominations_with_names = Repo.one(
-      from on_table in Cinegraph.Cultural.OscarNomination,
-      join: cat in Cinegraph.Cultural.OscarCategory, on: on_table.category_id == cat.id,
-      where: cat.tracks_person == true and 
-             fragment("? ->> 'nominee_names' IS NOT NULL", on_table.details) and
-             fragment("? ->> 'nominee_names' <> ''", on_table.details),
-      select: count(on_table.id)
-    )
-    
-    # Build stats list
-    people_nom_display = if people_nominations == people_nominations_with_names do
-      "#{format_number(people_nominations)} ✅"
+    if oscar_org do
+      # Get ceremony years and their nomination/win counts from unified tables
+      ceremony_stats = Repo.all(
+        from fc in Cinegraph.Festivals.FestivalCeremony,
+        left_join: nom in Cinegraph.Festivals.FestivalNomination, on: nom.ceremony_id == fc.id,
+        where: fc.organization_id == ^oscar_org.id,
+        group_by: [fc.year, fc.id],
+        select: {fc.year, count(nom.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", nom.won))},
+        order_by: [desc: fc.year]
+      )
+      
+      # Calculate totals (ceremony_stats now returns tuples: {year, nominations, wins})
+      total_nominations = Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
+      total_wins = Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
+      total_ceremonies = length(ceremony_stats)
+      total_categories = Repo.aggregate(
+        from(c in Cinegraph.Festivals.FestivalCategory, where: c.organization_id == ^oscar_org.id),
+        :count
+      )
+      
+      # Calculate People Nominations (actors, directors, writers etc.)
+      people_nominations = Repo.one(
+        from nom in Cinegraph.Festivals.FestivalNomination,
+        join: fc in Cinegraph.Festivals.FestivalCeremony, on: nom.ceremony_id == fc.id,
+        join: cat in Cinegraph.Festivals.FestivalCategory, on: nom.category_id == cat.id,
+        where: fc.organization_id == ^oscar_org.id and cat.tracks_person == true,
+        select: count(nom.id)
+      )
+      
+      # Count people nominations with correct names (not movie titles)
+      people_nominations_with_names = Repo.one(
+        from nom in Cinegraph.Festivals.FestivalNomination,
+        join: fc in Cinegraph.Festivals.FestivalCeremony, on: nom.ceremony_id == fc.id,
+        join: cat in Cinegraph.Festivals.FestivalCategory, on: nom.category_id == cat.id,
+        where: fc.organization_id == ^oscar_org.id and 
+               cat.tracks_person == true and 
+               fragment("? ->> 'nominee_names' IS NOT NULL", nom.details) and
+               fragment("? ->> 'nominee_names' <> ''", nom.details),
+        select: count(nom.id)
+      )
+      
+      # Build stats list
+      people_nom_display = if people_nominations == people_nominations_with_names do
+        "#{format_number(people_nominations)} ✅"
+      else
+        "#{format_number(people_nominations_with_names)}/#{format_number(people_nominations)} ⚠️"
+      end
+      
+      base_stats = [
+        %{label: "Ceremonies Imported", value: "#{total_ceremonies}"},
+        %{label: "Total Nominations", value: format_number(total_nominations)},
+        %{label: "People Nominations", value: people_nom_display},
+        %{label: "Total Wins", value: format_number(total_wins)},
+        %{label: "Categories", value: format_number(total_categories)}
+      ]
+      
+      # Add year-by-year breakdown
+      year_stats = ceremony_stats
+      |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)  # Only show years with data
+      |> Enum.map(fn {year, nominations, wins} ->
+        %{
+          label: "#{year} Wins", 
+          value: "#{wins || 0}/#{nominations}"
+        }
+      end)
+      
+      base_stats ++ year_stats
     else
-      "#{format_number(people_nominations_with_names)}/#{format_number(people_nominations)} ⚠️"
+      # No AMPAS organization found, return empty stats
+      [
+        %{label: "Ceremonies Imported", value: "0"},
+        %{label: "Total Nominations", value: "0"},
+        %{label: "People Nominations", value: "0"},
+        %{label: "Total Wins", value: "0"},
+        %{label: "Categories", value: "0"}
+      ]
     end
-    
-    base_stats = [
-      %{label: "Ceremonies Imported", value: "#{total_ceremonies} (2016-2024)"},
-      %{label: "Total Nominations", value: format_number(total_nominations)},
-      %{label: "People Nominations", value: people_nom_display},
-      %{label: "Total Wins", value: format_number(total_wins)},
-      %{label: "Categories", value: format_number(total_categories)}
-    ]
-    
-    # Add year-by-year breakdown
-    year_stats = ceremony_stats
-    |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)  # Only show years with data
-    |> Enum.map(fn {year, nominations, wins} ->
-      %{
-        label: "#{year} Wins", 
-        value: "#{wins || 0}/#{nominations}"
-      }
-    end)
-    
-    base_stats ++ year_stats
   end
 
   defp get_oban_stats do

@@ -270,7 +270,9 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
     
     case fetch_ceremony_imdb_data(film_year) do
       {:ok, imdb_data} ->
-        enhanced_categories = enhance_categories(ceremony.data["categories"], imdb_data[:awards])
+        # Handle both atom and string keys for categories
+        original_categories = ceremony.data["categories"] || ceremony.data[:categories] || []
+        enhanced_categories = enhance_categories(original_categories, imdb_data[:awards])
         
         updated_data = 
           ceremony.data
@@ -289,14 +291,23 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
   defp enhance_categories(categories, imdb_awards) when is_list(categories) and is_map(imdb_awards) do
     categories
     |> Enum.map(fn category ->
+      # Handle both atom and string keys
+      category_name = category["category"] || category[:category]
+      nominees = category["nominees"] || category[:nominees] || []
+      
       # Try to match category name
-      imdb_category_data = find_matching_imdb_category(category["category"], imdb_awards)
+      imdb_category_data = find_matching_imdb_category(category_name, imdb_awards)
       
       if imdb_category_data do
-        enhanced_nominees = enhance_nominees(category["nominees"], imdb_category_data)
-        Map.put(category, "nominees", enhanced_nominees)
+        enhanced_nominees = enhance_nominees(nominees, imdb_category_data)
+        # Preserve the original key format
+        if Map.has_key?(category, :nominees) do
+          Map.put(category, :nominees, enhanced_nominees)
+        else
+          Map.put(category, "nominees", enhanced_nominees)
+        end
       else
-        Logger.warning("No IMDb match for category: #{category["category"]}")
+        Logger.warning("No IMDb match for category: #{category_name}")
         category
       end
     end)
@@ -354,11 +365,16 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
   defp enhance_nominees(nominees, _), do: nominees || []
   
   defp find_matching_imdb_nomination(nominee, imdb_nominations) do
+    # Handle both atom and string keys
+    is_winner = nominee["winner"] || nominee[:winner]
+    film_title = nominee["film"] || nominee[:film]
+    person_name = nominee["name"] || nominee[:name]
+    
     # Match by winner status and film/person names
     Enum.find(imdb_nominations, fn imdb_nom ->
-      imdb_nom[:winner] == nominee["winner"] &&
-      (film_matches?(nominee["film"], imdb_nom[:films]) ||
-       person_matches?(nominee["name"], imdb_nom[:people]))
+      imdb_nom[:winner] == is_winner &&
+      (film_matches?(film_title, imdb_nom[:films]) ||
+       person_matches?(person_name, imdb_nom[:people]))
     end)
   end
   
@@ -394,9 +410,16 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
     case List.first(imdb_films) do
       nil -> nominee
       film_data ->
-        nominee
-        |> Map.put("film_imdb_id", film_data[:imdb_id])
-        |> Map.put("film_year", film_data[:year])
+        # Preserve original key format
+        if Map.has_key?(nominee, :film) do
+          nominee
+          |> Map.put(:film_imdb_id, film_data[:imdb_id])
+          |> Map.put(:film_year, film_data[:year])
+        else
+          nominee
+          |> Map.put("film_imdb_id", film_data[:imdb_id])
+          |> Map.put("film_year", film_data[:year])
+        end
     end
   end
   defp add_imdb_film_data(nominee, _), do: nominee
@@ -404,7 +427,12 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
   defp add_imdb_person_data(nominee, imdb_people) when is_list(imdb_people) do
     if length(imdb_people) > 0 do
       person_ids = Enum.map(imdb_people, & &1[:imdb_id])
-      Map.put(nominee, "person_imdb_ids", person_ids)
+      # Preserve original key format
+      if Map.has_key?(nominee, :name) do
+        Map.put(nominee, :person_imdb_ids, person_ids)
+      else
+        Map.put(nominee, "person_imdb_ids", person_ids)
+      end
     else
       nominee
     end

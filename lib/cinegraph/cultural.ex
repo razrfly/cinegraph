@@ -381,33 +381,52 @@ defmodule Cinegraph.Cultural do
       
   """
   def import_oscar_year(year, options \\ []) do
-    Logger.info("Starting Oscar import for year #{year}")
+    Logger.info("Starting Oscar import for year #{year} - fetching directly from scraper")
     
-    with {:ok, ceremony} <- fetch_or_create_ceremony(year) do
-      # Queue the discovery worker to process the ceremony
-      job_args = %{
-        "ceremony_id" => ceremony.id,
-        "options" => Enum.into(options, %{})
-      }
+    # Get or create AMPAS organization
+    oscar_org = Cinegraph.Festivals.get_organization_by_abbreviation("AMPAS") ||
+      create_ampas_organization()
+    
+    # Fetch directly from scraper (skip old oscar_ceremonies table)
+    with {:ok, ceremony_data} <- OscarScraper.fetch_ceremony(year) do
+      Logger.info("Fetched ceremony data for #{year}, enhancing with IMDb...")
       
-      case Cinegraph.Workers.OscarDiscoveryWorker.new(job_args) |> Oban.insert() do
-        {:ok, job} ->
-          {:ok, %{
-            ceremony_id: ceremony.id,
-            year: year,
-            job_id: job.id,
-            status: :queued
-          }}
-          
-        {:error, reason} ->
-          Logger.error("Failed to queue Oscar discovery for year #{year}: #{inspect(reason)}")
-          {:error, reason}
+      # Create a temporary struct for IMDb enhancement (it expects .year and .data fields)
+      temp_ceremony = %{year: year, data: ceremony_data}
+      
+      # Enhance with IMDb data
+      enhanced_data = case Cinegraph.Scrapers.ImdbOscarScraper.enhance_ceremony_with_imdb(temp_ceremony) do
+        {:ok, data} -> data
+        {:error, _} -> 
+          Logger.warning("Could not enhance with IMDb data, using basic data")
+          ceremony_data
       end
+      
+      # Import directly into unified structure
+      result = Cinegraph.Festivals.UnifiedOscarImporter.import_from_scraped_data(
+        enhanced_data,
+        oscar_org,
+        year,
+        options
+      )
+      
+      {:ok, result}
     else
       {:error, reason} -> 
-        Logger.error("Failed to prepare Oscar year #{year}: #{inspect(reason)}")
+        Logger.error("Failed to fetch Oscar year #{year}: #{inspect(reason)}")
         {:error, reason}
     end
+  end
+  
+  defp create_ampas_organization do
+    {:ok, org} = Cinegraph.Festivals.create_organization(%{
+      name: "Academy of Motion Picture Arts and Sciences",
+      abbreviation: "AMPAS",
+      country: "United States",
+      founded_year: 1927,
+      website: "https://www.oscars.org"
+    })
+    org
   end
   
   @doc """

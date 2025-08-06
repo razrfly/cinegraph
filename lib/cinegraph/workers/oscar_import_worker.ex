@@ -13,7 +13,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"year" => year, "options" => options}}) do
     year = ensure_integer(year)
-    Logger.info("Starting Oscar import for year #{year} (from Cultural module)")
+    Logger.info("Starting Oscar import for year #{year} (unified festival structure)")
     
     # Convert options map back to keyword list
     import_options = Enum.map(options, fn {key, value} -> {String.to_atom(key), value} end)
@@ -24,46 +24,21 @@ defmodule Cinegraph.Workers.OscarImportWorker do
       status: "Importing Oscar data for #{year}..."
     })
     
-    # Perform import
+    # Perform import - now uses UnifiedOscarImporter through Cultural module
     case Cultural.import_oscar_year(year, import_options) do
       {:ok, result} ->
-        case result do
-          %{status: :queued} ->
-            # Job was queued, not processed directly
-            broadcast_progress(:single, :queued, %{
-              year: year,
-              job_id: result.job_id,
-              ceremony_id: result.ceremony_id,
-              jobs_queued: 1,
-              status: "Queued Oscar discovery job for #{year}"
-            })
-            
-            Logger.info("Queued Oscar discovery job for #{year}: job_id=#{result.job_id}")
-            :ok
-            
-          %{movies_created: _} ->
-            # Direct processing results (has statistics)
-            broadcast_progress(:single, :completed, %{
-              year: year,
-              movies_created: result.movies_created,
-              movies_updated: result.movies_updated,
-              movies_queued: result.movies_queued,
-              movies_skipped: result.movies_skipped,
-              total_nominees: result.total_nominees
-            })
-            
-            Logger.info("Completed Oscar import for #{year}: #{result.total_nominees} nominees processed")
-            :ok
-            
-          _ ->
-            # Unknown result format
-            Logger.warning("Unexpected result format from Cultural.import_oscar_year: #{inspect(result)}")
-            broadcast_progress(:single, :completed, %{
-              year: year,
-              status: "Oscar import completed with unknown result format"
-            })
-            :ok
-        end
+        # The new unified importer returns a different result structure
+        broadcast_progress(:single, :completed, %{
+          year: year,
+          movies_created: Map.get(result, :movies_created, 0),
+          movies_updated: Map.get(result, :movies_updated, 0),
+          movies_skipped: Map.get(result, :movies_skipped, 0),
+          total_nominees: Map.get(result, :total_nominees, 0),
+          ceremony_year: Map.get(result, :ceremony_year, year)
+        })
+        
+        Logger.info("Completed Oscar import for #{year}: #{Map.get(result, :total_nominees, 0)} nominees processed")
+        :ok
         
       {:error, reason} ->
         Logger.error("Failed to import Oscar year #{year}: #{inspect(reason)}")
@@ -72,6 +47,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
   end
 
   def perform(%Oban.Job{args: %{"action" => "import_single", "year" => year}}) do
+    year = ensure_integer(year)
     Logger.info("Starting Oscar import for year #{year}")
     
     # Broadcast start
@@ -80,46 +56,21 @@ defmodule Cinegraph.Workers.OscarImportWorker do
       status: "Importing Oscar data for #{year}..."
     })
     
-    # Perform import
+    # Perform import using unified structure
     case Cultural.import_oscar_year(year, [create_movies: true]) do
       {:ok, result} ->
-        case result do
-          %{status: :queued} ->
-            # Job was queued, not processed directly
-            broadcast_progress(:single, :queued, %{
-              year: year,
-              job_id: result.job_id,
-              ceremony_id: result.ceremony_id,
-              jobs_queued: 1,
-              status: "Queued Oscar discovery job for #{year}"
-            })
-            
-            Logger.info("Queued Oscar discovery job for #{year}: job_id=#{result.job_id}")
-            :ok
-            
-          %{movies_created: _} ->
-            # Direct processing results (has statistics)
-            broadcast_progress(:single, :completed, %{
-              year: year,
-              movies_created: result.movies_created,
-              movies_updated: result.movies_updated,
-              movies_queued: result.movies_queued,
-              movies_skipped: result.movies_skipped,
-              total_nominees: result.total_nominees
-            })
-            
-            Logger.info("Completed Oscar import for #{year}: #{result.total_nominees} nominees processed")
-            :ok
-            
-          _ ->
-            # Unknown result format
-            Logger.warning("Unexpected result format from Cultural.import_oscar_year: #{inspect(result)}")
-            broadcast_progress(:single, :completed, %{
-              year: year,
-              status: "Oscar import completed with unknown result format"
-            })
-            :ok
-        end
+        # The new unified importer returns a different result structure
+        broadcast_progress(:single, :completed, %{
+          year: year,
+          movies_created: Map.get(result, :movies_created, 0),
+          movies_updated: Map.get(result, :movies_updated, 0),
+          movies_skipped: Map.get(result, :movies_skipped, 0),
+          total_nominees: Map.get(result, :total_nominees, 0),
+          ceremony_year: Map.get(result, :ceremony_year, year)
+        })
+        
+        Logger.info("Completed Oscar import for #{year}: #{Map.get(result, :total_nominees, 0)} nominees processed")
+        :ok
         
       {:error, reason} ->
         Logger.error("Failed to import Oscar year #{year}: #{inspect(reason)}")
@@ -140,40 +91,33 @@ defmodule Cinegraph.Workers.OscarImportWorker do
       status: "Importing Oscar data for #{start_year}-#{end_year}..."
     })
     
-    # Queue individual year jobs
-    case Cultural.import_oscar_years(start_year..end_year, [create_movies: true]) do
-      {:ok, %{job_count: count, status: :queued}} ->
-        broadcast_progress(:range, :queued, %{
-          start_year: start_year,
-          end_year: end_year,
-          jobs_queued: count
-        })
-        
-        Logger.info("Queued #{count} Oscar import jobs for years #{start_year}-#{end_year}")
-        :ok
-        
-      results when is_map(results) ->
-        # Sequential processing results
-        total_created = Enum.reduce(results, 0, fn {_year, result}, acc ->
-          case result do
-            {:ok, data} -> acc + data.movies_created
-            _ -> acc
-          end
-        end)
-        
-        broadcast_progress(:range, :completed, %{
-          start_year: start_year,
-          end_year: end_year,
-          total_movies_created: total_created,
-          years_processed: map_size(results)
-        })
-        
-        :ok
-        
-      {:error, reason} ->
-        Logger.error("Failed to import Oscar years #{start_year}-#{end_year}: #{inspect(reason)}")
-        {:error, reason}
-    end
+    # Process synchronously with unified structure
+    # Cultural.import_oscar_years now returns a map of results per year
+    results = Cultural.import_oscar_years(start_year..end_year, [create_movies: true, async: false])
+    
+    # Calculate totals from the results map
+    {total_created, total_updated, years_processed} = 
+      Enum.reduce(results, {0, 0, 0}, fn {_year, year_result}, {created, updated, processed} ->
+        case year_result do
+          {:ok, data} -> 
+            {created + Map.get(data, :movies_created, 0), 
+             updated + Map.get(data, :movies_updated, 0),
+             processed + 1}
+          _ -> 
+            {created, updated, processed}
+        end
+      end)
+    
+    broadcast_progress(:range, :completed, %{
+      start_year: start_year,
+      end_year: end_year,
+      total_movies_created: total_created,
+      total_movies_updated: total_updated,
+      years_processed: years_processed
+    })
+    
+    Logger.info("Completed Oscar import for #{start_year}-#{end_year}: #{years_processed} years processed")
+    :ok
   end
   
   def perform(%Oban.Job{args: %{"action" => "import_all_years"}}) do
@@ -184,36 +128,30 @@ defmodule Cinegraph.Workers.OscarImportWorker do
       status: "Importing all Oscar ceremonies (2016-2024)..."
     })
     
-    # Import all years
-    case Cultural.import_all_oscar_years([create_movies: true]) do
-      {:ok, %{job_count: count, status: :queued}} ->
-        broadcast_progress(:all, :queued, %{
-          jobs_queued: count
-        })
-        
-        Logger.info("Queued #{count} Oscar import jobs for all years")
-        :ok
-        
-      results when is_map(results) ->
-        # Sequential processing results
-        total_created = Enum.reduce(results, 0, fn {_year, result}, acc ->
-          case result do
-            {:ok, data} -> acc + data.movies_created
-            _ -> acc
-          end
-        end)
-        
-        broadcast_progress(:all, :completed, %{
-          total_movies_created: total_created,
-          years_processed: map_size(results)
-        })
-        
-        :ok
-        
-      {:error, reason} ->
-        Logger.error("Failed to import all Oscar years: #{inspect(reason)}")
-        {:error, reason}
-    end
+    # Import all years synchronously with unified structure
+    results = Cultural.import_all_oscar_years([create_movies: true, async: false])
+    
+    # Calculate totals from the results map
+    {total_created, total_updated, years_processed} = 
+      Enum.reduce(results, {0, 0, 0}, fn {_year, year_result}, {created, updated, processed} ->
+        case year_result do
+          {:ok, data} -> 
+            {created + Map.get(data, :movies_created, 0), 
+             updated + Map.get(data, :movies_updated, 0),
+             processed + 1}
+          _ -> 
+            {created, updated, processed}
+        end
+      end)
+    
+    broadcast_progress(:all, :completed, %{
+      total_movies_created: total_created,
+      total_movies_updated: total_updated,
+      years_processed: years_processed
+    })
+    
+    Logger.info("Completed Oscar import for all years: #{years_processed} years processed")
+    :ok
   end
   
   defp ensure_integer(value) when is_integer(value), do: value
