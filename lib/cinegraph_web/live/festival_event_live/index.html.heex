@@ -183,7 +183,7 @@
                   name="festival_event[founded_year]"
                   value={@festival_event.founded_year}
                   min="1900"
-                  max="2025"
+                  max={@max_year}
                   class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -241,7 +241,7 @@
                   name="festival_event[min_available_year]"
                   value={@festival_event.min_available_year}
                   min="1900"
-                  max="2025"
+                  max={@max_year}
                   class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -255,7 +255,7 @@
                   name="festival_event[max_available_year]"
                   value={@festival_event.max_available_year}
                   min="1900"
-                  max="2025"
+                  max={@max_year}
                   class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -291,6 +291,7 @@
 
               <!-- Checkboxes -->
               <div class="col-span-2 space-y-2">
+                <input type="hidden" name="festival_event[active]" value="false" />
                 <label class="flex items-center">
                   <input
                     type="checkbox"
@@ -302,6 +303,7 @@
                   <span class="text-sm text-gray-700">Active</span>
                 </label>
 
+                <input type="hidden" name="festival_event[tracks_nominations]" value="false" />
                 <label class="flex items-center">
                   <input
                     type="checkbox"
@@ -313,6 +315,7 @@
                   <span class="text-sm text-gray-700">Tracks Nominations</span>
                 </label>
 
+                <input type="hidden" name="festival_event[tracks_winners_only]" value="false" />
                 <label class="flex items-center">
                   <input
                     type="checkbox"

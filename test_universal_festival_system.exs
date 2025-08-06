@@ -3,6 +3,9 @@
 # Test script for the universal festival import system
 # This verifies that issue #184 has been properly fixed
 
+# Start the application
+Application.ensure_all_started(:cinegraph)
+
 require Logger
 
 Logger.info("""
@@ -100,7 +103,7 @@ end)
 Logger.info("\n=== Test 4: Check for Hardcoded Workers ===")
 
 # Check that Venice-specific worker doesn't exist
-venice_worker_path = "/Users/holdenthomas/Code/paid-projects-2025/cinegraph/lib/cinegraph/workers/venice_festival_worker.ex"
+venice_worker_path = Path.join([File.cwd!(), "lib", "cinegraph", "workers", "venice_festival_worker.ex"])
 if File.exists?(venice_worker_path) do
   Logger.error("❌ Venice-specific worker still exists at: #{venice_worker_path}")
 else
@@ -108,7 +111,7 @@ else
 end
 
 # Check that Venice-specific scraper doesn't exist
-venice_scraper_path = "/Users/holdenthomas/Code/paid-projects-2025/cinegraph/lib/cinegraph/scrapers/venice_film_festival_scraper.ex"
+venice_scraper_path = Path.join([File.cwd!(), "lib", "cinegraph", "scrapers", "venice_film_festival_scraper.ex"])
 if File.exists?(venice_scraper_path) do
   Logger.error("❌ Venice-specific scraper still exists at: #{venice_scraper_path}")
 else
@@ -119,7 +122,7 @@ end
 Logger.info("\n=== Test 5: Check FestivalDiscoveryWorker ===")
 
 # Read the file and check for hardcoded categories
-discovery_worker_path = "/Users/holdenthomas/Code/paid-projects-2025/cinegraph/lib/cinegraph/workers/festival_discovery_worker.ex"
+discovery_worker_path = Path.join([File.cwd!(), "lib", "cinegraph", "workers", "festival_discovery_worker.ex"])
 content = File.read!(discovery_worker_path)
 
 if String.contains?(content, "@person_tracking_categories") do

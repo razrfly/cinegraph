@@ -12,7 +12,9 @@ defmodule CinegraphWeb.FestivalEventLive.Index do
      |> assign(:festival_events, list_festival_events())
      |> assign(:show_modal, false)
      |> assign(:modal_action, :new)
-     |> assign(:festival_event, %FestivalEvent{})}
+     |> assign(:festival_event, %FestivalEvent{})
+     |> assign(:changeset, FestivalEvent.changeset(%FestivalEvent{}, %{}))
+     |> assign(:max_year, Date.utc_today().year + 1)}
   end
 
   @impl true
