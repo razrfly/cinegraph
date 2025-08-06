@@ -127,7 +127,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
     end
   end
   
-  def perform(%Oban.Job{args: %{"action" => "import_range", "start_year" => start_year, "end_year" => end_year}}) do
+  def perform(%Oban.Job{args: %{"action" => "import_range", "start_year" => start_year, "end_year" => end_year}} = job) do
     start_year = ensure_integer(start_year)
     end_year = ensure_integer(end_year)
     
@@ -143,6 +143,29 @@ defmodule Cinegraph.Workers.OscarImportWorker do
     # Queue individual year jobs
     case Cultural.import_oscar_years(start_year..end_year, [create_movies: true]) do
       {:ok, %{job_count: count, status: :queued}} ->
+        # Calculate metadata for this range import
+        years_processed = end_year - start_year + 1
+        
+        # Check how many ceremonies already exist vs will be created
+        existing_ceremonies = Cultural.list_oscar_ceremonies()
+        existing_years = Enum.map(existing_ceremonies, & &1.year)
+        target_years = Enum.to_list(start_year..end_year)
+        
+        ceremonies_found = length(target_years)
+        ceremonies_existing = length(Enum.filter(target_years, & &1 in existing_years))
+        ceremonies_created = ceremonies_found - ceremonies_existing
+        
+        job_meta = %{
+          years_processed: years_processed,
+          ceremonies_found: ceremonies_found,
+          ceremonies_created: ceremonies_created,
+          ceremonies_updated: ceremonies_existing,
+          discovery_jobs_queued: count,
+          failed_years: []
+        }
+        
+        update_job_meta(job, job_meta)
+        
         broadcast_progress(:range, :queued, %{
           start_year: start_year,
           end_year: end_year,
@@ -229,5 +252,19 @@ defmodule Cinegraph.Workers.OscarImportWorker do
         timestamp: DateTime.utc_now()
       })}
     )
+  end
+  
+  defp update_job_meta(job, meta) do
+    import Ecto.Query
+    alias Cinegraph.Repo
+    
+    from(j in "oban_jobs",
+      where: j.id == ^job.id,
+      update: [set: [meta: ^meta]]
+    )
+    |> Repo.update_all([])
+  rescue
+    error ->
+      Logger.warning("Failed to update job meta: #{inspect(error)}")
   end
 end
