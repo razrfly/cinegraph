@@ -22,8 +22,10 @@ defmodule Cinegraph.Festivals do
   Gets or creates the Oscar organization.
   """
   def get_or_create_oscar_organization do
+    # Try to get existing first
     case Repo.get_by(FestivalOrganization, abbreviation: "AMPAS") do
       nil ->
+        # Create new
         attrs = %{
           name: "Academy of Motion Picture Arts and Sciences",
           abbreviation: "AMPAS",
@@ -34,9 +36,16 @@ defmodule Cinegraph.Festivals do
         
         %FestivalOrganization{}
         |> FestivalOrganization.changeset(attrs)
-        |> Repo.insert!()
-      
-      org -> org
+        |> Repo.insert()
+        |> case do
+          {:ok, org} -> org
+          {:error, _changeset} -> 
+            # Race condition - try to get again
+            Repo.get_by!(FestivalOrganization, abbreviation: "AMPAS")
+        end
+        
+      existing_org ->
+        existing_org
     end
   end
 
@@ -74,20 +83,12 @@ defmodule Cinegraph.Festivals do
   Creates or updates a festival ceremony.
   """
   def upsert_ceremony(attrs) do
-    organization_id = attrs[:organization_id] || attrs["organization_id"]
-    year = attrs[:year] || attrs["year"]
-    
-    case get_ceremony_by_year(organization_id, year) do
-      nil ->
-        %FestivalCeremony{}
-        |> FestivalCeremony.changeset(attrs)
-        |> Repo.insert()
-      
-      existing ->
-        existing
-        |> FestivalCeremony.changeset(attrs)
-        |> Repo.update()
-    end
+    %FestivalCeremony{}
+    |> FestivalCeremony.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace_all_except, [:id, :inserted_at]},
+      conflict_target: [:organization_id, :year]
+    )
   end
 
   # ========================================

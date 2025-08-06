@@ -2,7 +2,14 @@ import Ecto.Query
 alias Cinegraph.Repo
 
 # Check a specific category to see what nominees it has
-ceremony = Repo.get(Cinegraph.Festivals.FestivalCeremony, 50)
+ceremony_id = System.get_env("CEREMONY_ID", "50") |> String.to_integer()
+ceremony = Repo.get(Cinegraph.Festivals.FestivalCeremony, ceremony_id)
+
+if is_nil(ceremony) do
+  IO.puts("Ceremony with ID #{ceremony_id} not found")
+  System.halt(1)
+end
+
 categories = ceremony.data["categories"] || []
 
 # Find "Best Picture" category
