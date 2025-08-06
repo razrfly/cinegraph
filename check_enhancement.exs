@@ -35,9 +35,14 @@ try do
       
       IO.puts("Nominees with IMDb IDs after enhancement: #{with_imdb}/#{length(all_nominees)}")
       
-      # Update the ceremony with enhanced data
-      if with_imdb > 15 do
+      # Calculate coverage percentage
+      total_nominees = length(all_nominees)
+      coverage = if total_nominees > 0, do: with_imdb / total_nominees, else: 0
+      
+      # Only update if we have good coverage (>95%)
+      if coverage >= 0.95 do
         IO.puts("\n=== Updating Ceremony with Enhanced Data ===")
+        IO.puts("Coverage: #{Float.round(coverage * 100, 1)}% (#{with_imdb}/#{total_nominees})")
         changeset = Cinegraph.Festivals.FestivalCeremony.changeset(ceremony, %{data: enhanced_data})
         case Cinegraph.Repo.update(changeset) do
           {:ok, _updated} -> 
@@ -45,6 +50,9 @@ try do
           {:error, reason} ->
             IO.puts("❌ Failed to update: #{inspect(reason)}")
         end
+      else
+        IO.puts("\n⚠️ Insufficient IMDb coverage: #{Float.round(coverage * 100, 1)}% (#{with_imdb}/#{total_nominees})")
+        IO.puts("Skipping update - need at least 95% coverage")
       end
       
     {:error, reason} ->
