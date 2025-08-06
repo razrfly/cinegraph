@@ -16,19 +16,20 @@ case ImdbCanonicalScraper.scrape_1001_movies() do
     IO.puts("📊 Summary:")
     IO.puts("  • Total movies: #{result.summary.total}")
     IO.puts("  • Created: #{result.summary.created}")
-    IO.puts("  • Updated: #{result.summary.updated}") 
+    IO.puts("  • Updated: #{result.summary.updated}")
     IO.puts("  • Queued: #{result.summary.queued}")
     IO.puts("  • Skipped: #{result.summary.skipped}")
     IO.puts("  • Errors: #{result.summary.errors}")
-    
+
     # Show first few results
     IO.puts("\n🎥 Sample Results:")
+
     result.results
     |> Enum.take(5)
     |> Enum.each(fn movie_result ->
       IO.puts("  • #{movie_result.title} (#{movie_result.imdb_id}) - #{movie_result.action}")
     end)
-    
+
   {:error, reason} ->
     IO.puts("❌ Failed: #{inspect(reason)}")
 end
@@ -53,7 +54,7 @@ IO.puts("✨ The scraper now supports any IMDb list:")
 IO.puts("")
 IO.puts("# Single list scraping:")
 IO.puts("ImdbCanonicalScraper.scrape_imdb_list(")
-IO.puts("  \"ls024863935\",")  
+IO.puts("  \"ls024863935\",")
 IO.puts("  \"1001_movies\",")
 IO.puts("  \"1001 Movies You Must See Before You Die\",")
 IO.puts("  %{\"edition\" => \"2024\"}")
@@ -63,14 +64,18 @@ IO.puts("# Batch scraping multiple lists:")
 IO.puts("lists = [")
 IO.puts("  %{list_id: \"ls024863935\", source_key: \"1001_movies\", name: \"1001 Movies\"},")
 IO.puts("  %{list_id: \"ls123456789\", source_key: \"sight_sound\", name: \"Sight & Sound\"},")
-IO.puts("  %{list_id: \"ls987654321\", source_key: \"criterion\", name: \"Criterion Collection\"}")
+
+IO.puts(
+  "  %{list_id: \"ls987654321\", source_key: \"criterion\", name: \"Criterion Collection\"}"
+)
+
 IO.puts("]")
 IO.puts("ImdbCanonicalScraper.scrape_multiple_lists(lists)")
 
 IO.puts("\n🎯 Generic scraper ready! Just need to find the list IDs for:")
 IO.puts("  • Sight & Sound Greatest Films")
 IO.puts("  • Criterion Collection")
-IO.puts("  • AFI's Greatest Movies") 
+IO.puts("  • AFI's Greatest Movies")
 IO.puts("  • BFI's Greatest Films")
 IO.puts("  • Any other canonical movie list on IMDb")
 

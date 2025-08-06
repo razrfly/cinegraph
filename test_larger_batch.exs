@@ -16,11 +16,12 @@ IO.puts("Queueing pages 100-119...")
 IO.puts("Queued #{count} jobs")
 
 # Check immediate state
-jobs = Repo.all(
-  from j in Oban.Job,
-  where: j.queue == "tmdb_discovery",
-  select: j.args["page"]
-)
+jobs =
+  Repo.all(
+    from j in Oban.Job,
+      where: j.queue == "tmdb_discovery",
+      select: j.args["page"]
+  )
 
 pages = Enum.sort(jobs)
 unique_pages = Enum.uniq(jobs) |> length()
@@ -39,12 +40,14 @@ end
 
 # Show scheduling distribution
 IO.puts("\n=== Job Scheduling ===")
-job_details = Repo.all(
-  from j in Oban.Job,
-  where: j.queue == "tmdb_discovery",
-  select: {j.args["page"], j.scheduled_at},
-  order_by: j.scheduled_at
-)
+
+job_details =
+  Repo.all(
+    from j in Oban.Job,
+      where: j.queue == "tmdb_discovery",
+      select: {j.args["page"], j.scheduled_at},
+      order_by: j.scheduled_at
+  )
 
 Enum.each(job_details, fn {page, scheduled_at} ->
   IO.puts("Page #{page}: #{scheduled_at}")

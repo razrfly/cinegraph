@@ -6,9 +6,9 @@ defmodule Cinegraph.Movies.SpokenLanguage do
     field :iso_639_1, :string
     field :name, :string
     field :english_name, :string
-    
+
     many_to_many :movies, Cinegraph.Movies.Movie, join_through: "movie_spoken_languages"
-    
+
     timestamps()
   end
 

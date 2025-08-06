@@ -9,7 +9,7 @@ defmodule Cinegraph.Movies.Collection do
     field :overview, :string
     field :poster_path, :string
     field :backdrop_path, :string
-    
+
     timestamps()
   end
 
@@ -32,7 +32,7 @@ defmodule Cinegraph.Movies.Collection do
       poster_path: attrs["poster_path"],
       backdrop_path: attrs["backdrop_path"]
     }
-    
+
     changeset(%__MODULE__{}, collection_attrs)
   end
 end

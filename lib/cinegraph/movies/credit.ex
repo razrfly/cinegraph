@@ -9,11 +9,11 @@ defmodule Cinegraph.Movies.Credit do
     field :department, :string
     field :job, :string
     field :credit_id, :string
-    
+
     # Associations
     belongs_to :movie, Cinegraph.Movies.Movie
     belongs_to :person, Cinegraph.Movies.Person
-    
+
     timestamps()
   end
 
@@ -21,8 +21,14 @@ defmodule Cinegraph.Movies.Credit do
   def changeset(credit, attrs) do
     credit
     |> cast(attrs, [
-      :movie_id, :person_id, :credit_type, :character,
-      :cast_order, :department, :job, :credit_id
+      :movie_id,
+      :person_id,
+      :credit_type,
+      :character,
+      :cast_order,
+      :department,
+      :job,
+      :credit_id
     ])
     |> validate_required([:movie_id, :person_id, :credit_type])
     |> validate_inclusion(:credit_type, ["cast", "crew"])
@@ -42,7 +48,7 @@ defmodule Cinegraph.Movies.Credit do
       cast_order: attrs["order"],
       credit_id: attrs["credit_id"]
     }
-    
+
     changeset(%__MODULE__{}, credit_attrs)
   end
 
@@ -58,7 +64,7 @@ defmodule Cinegraph.Movies.Credit do
       job: attrs["job"],
       credit_id: attrs["credit_id"]
     }
-    
+
     changeset(%__MODULE__{}, credit_attrs)
   end
 end

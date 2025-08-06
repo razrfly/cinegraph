@@ -14,12 +14,26 @@ defmodule Cinegraph.Collaborations.CollaborationDetail do
   @doc false
   def changeset(detail, attrs) do
     detail
-    |> cast(attrs, [:collaboration_id, :movie_id, :collaboration_type, 
-                    :year, :movie_rating, :movie_revenue])
+    |> cast(attrs, [
+      :collaboration_id,
+      :movie_id,
+      :collaboration_type,
+      :year,
+      :movie_rating,
+      :movie_revenue
+    ])
     |> validate_required([:collaboration_id, :movie_id, :collaboration_type, :year])
-    |> validate_inclusion(:collaboration_type, 
-         ["actor-actor", "actor-director", "director-director", "actor-producer", 
-          "director-producer", "other"])
+    |> validate_inclusion(
+      :collaboration_type,
+      [
+        "actor-actor",
+        "actor-director",
+        "director-director",
+        "actor-producer",
+        "director-producer",
+        "other"
+      ]
+    )
     |> foreign_key_constraint(:collaboration_id)
     |> foreign_key_constraint(:movie_id)
     |> unique_constraint([:collaboration_id, :movie_id, :collaboration_type])

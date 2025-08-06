@@ -12,6 +12,7 @@ IO.puts("1. DATABASE MOVIE LISTS")
 IO.puts(String.duplicate("-", 40))
 db_lists = Cinegraph.Movies.MovieLists.list_all_movie_lists()
 IO.puts("Total lists in database: #{length(db_lists)}")
+
 Enum.each(db_lists, fn list ->
   status = if list.active, do: "✓", else: "✗"
   IO.puts("  #{status} #{list.source_key}: #{list.name}")
@@ -23,6 +24,7 @@ IO.puts("\n2. HARDCODED CANONICAL LISTS")
 IO.puts(String.duplicate("-", 40))
 hardcoded = Cinegraph.CanonicalLists.all()
 IO.puts("Total hardcoded lists: #{map_size(hardcoded)}")
+
 Enum.each(hardcoded, fn {key, config} ->
   IO.puts("  - #{key}: #{config.name}")
 end)
@@ -32,6 +34,7 @@ IO.puts("\n3. AVAILABLE LISTS (What Import System Sees)")
 IO.puts(String.duplicate("-", 40))
 available = Cinegraph.Workers.CanonicalImportOrchestrator.available_lists()
 IO.puts("Total available lists: #{map_size(available)}")
+
 Enum.each(available, fn {key, config} ->
   source = if Cinegraph.Movies.MovieLists.get_by_source_key(key), do: "DB", else: "Hardcoded"
   IO.puts("  - #{key}: #{config.name} [#{source}]")
@@ -41,10 +44,12 @@ end)
 IO.puts("\n4. TESTING get_config() FALLBACK")
 IO.puts(String.duplicate("-", 40))
 test_keys = ["1001_movies", "criterion", "fake_list"]
+
 Enum.each(test_keys, fn key ->
   case Cinegraph.Movies.MovieLists.get_config(key) do
     {:ok, config} ->
       IO.puts("  ✓ #{key}: Found - #{config.name}")
+
     {:error, _reason} ->
       IO.puts("  ✗ #{key}: Not found in DB or hardcoded")
   end
@@ -59,6 +64,7 @@ case Cinegraph.Movies.MovieLists.get_config("1001_movies") do
     IO.puts("  ✓ Can fetch '1001_movies' config")
     IO.puts("    List ID: #{config.list_id}")
     IO.puts("    Name: #{config.name}")
+
   {:error, reason} ->
     IO.puts("  ✗ Failed to fetch '1001_movies': #{inspect(reason)}")
 end
@@ -77,17 +83,19 @@ IO.puts(String.duplicate("=", 60))
 
 issues = []
 
-issues = if length(db_lists) == 0 do
-  ["No lists in database - run mix seed_movie_lists" | issues]
-else
-  issues
-end
+issues =
+  if length(db_lists) == 0 do
+    ["No lists in database - run mix seed_movie_lists" | issues]
+  else
+    issues
+  end
 
-issues = if map_size(available) < map_size(hardcoded) do
-  ["Available lists less than hardcoded - check merging logic" | issues]
-else
-  issues
-end
+issues =
+  if map_size(available) < map_size(hardcoded) do
+    ["Available lists less than hardcoded - check merging logic" | issues]
+  else
+    issues
+  end
 
 if length(issues) == 0 do
   IO.puts("\n✅ ALL CHECKS PASSED!")
@@ -98,6 +106,7 @@ if length(issues) == 0 do
   IO.puts("  - Seeding capability: Available")
 else
   IO.puts("\n⚠️  ISSUES FOUND:")
+
   Enum.each(issues, fn issue ->
     IO.puts("  - #{issue}")
   end)

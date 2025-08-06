@@ -19,22 +19,24 @@ IO.puts("-" |> String.duplicate(30))
 case CanonicalImporter.import_1001_movies() do
   %{error: reason} ->
     IO.puts("❌ Failed: #{inspect(reason)}")
-    
+
   result ->
     IO.puts("✅ Import completed!")
     IO.puts("📊 Summary:")
     IO.puts("  • Total movies processed: #{result.total_movies}")
     IO.puts("  • Created: #{result.movies_created}")
-    IO.puts("  • Updated: #{result.movies_updated}") 
+    IO.puts("  • Updated: #{result.movies_updated}")
     IO.puts("  • Queued: #{result.movies_queued}")
     IO.puts("  • Skipped: #{result.movies_skipped}")
-    
+
     # Show some results from different parts of the list
     if result.results && length(result.results) > 0 do
       IO.puts("\n🎥 Sample Results (every 250th movie):")
+
       [1, 250, 500, 750, 1000, 1250]
       |> Enum.each(fn pos ->
         movie = Enum.at(result.results, pos - 1)
+
         if movie do
           title = movie[:title] || movie.title || "Unknown"
           imdb_id = movie[:imdb_id] || movie.imdb_id || "No ID"

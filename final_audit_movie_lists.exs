@@ -26,12 +26,14 @@ IO.puts(String.duplicate("-", 60))
 
 # Get a sample list with data
 list = Cinegraph.Movies.MovieLists.get_by_source_key("1001_movies")
+
 if list do
   columns = [
     {:id, list.id, "✓ Used - Primary key"},
     {:source_key, list.source_key, "✓ Used - Unique identifier for imports"},
     {:name, list.name, "✓ Used - Display name in UI"},
-    {:description, list.description, "○ Optional - Currently NULL, could be used for UI tooltips"},
+    {:description, list.description,
+     "○ Optional - Currently NULL, could be used for UI tooltips"},
     {:source_type, list.source_type, "✓ Used - Determines scraper (imdb/tmdb/etc)"},
     {:source_url, list.source_url, "✓ Used - Full URL for reference"},
     {:source_id, list.source_id, "✓ Used - Extracted ID for API calls"},
@@ -47,17 +49,17 @@ if list do
     {:inserted_at, list.inserted_at, "✓ Used - Timestamps"},
     {:updated_at, list.updated_at, "✓ Used - Timestamps"}
   ]
-  
-  {unused_count, partially_used_count} = 
+
+  {unused_count, partially_used_count} =
     Enum.reduce(columns, {0, 0}, fn {field, value, usage}, {unused, partial} ->
       IO.puts("  #{field}: #{inspect(value, limit: 50)}")
       IO.puts("    → #{usage}")
-      
+
       unused = if String.starts_with?(usage, "✗"), do: unused + 1, else: unused
       partial = if String.starts_with?(usage, "△"), do: partial + 1, else: partial
       {unused, partial}
     end)
-  
+
   IO.puts("\nSummary:")
   IO.puts("  Fully used: #{length(columns) - unused_count - partially_used_count}")
   IO.puts("  Partially used: #{partially_used_count}")
@@ -68,11 +70,15 @@ end
 IO.puts("\n3. ALL MOVIE LISTS STATUS")
 IO.puts(String.duplicate("-", 60))
 lists = Cinegraph.Movies.MovieLists.list_all_movie_lists()
+
 Enum.each(lists, fn list ->
   status = if list.active, do: "Active", else: "Inactive"
   imported = if list.last_import_at, do: "✓", else: "✗"
   IO.puts("#{imported} #{list.source_key}: #{list.name} (#{status})")
-  IO.puts("    Category: #{list.category}, Movies: #{list.last_movie_count}, Imports: #{list.total_imports}")
+
+  IO.puts(
+    "    Category: #{list.category}, Movies: #{list.last_movie_count}, Imports: #{list.total_imports}"
+  )
 end)
 
 # 4. FEATURES IMPLEMENTED

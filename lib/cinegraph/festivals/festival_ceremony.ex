@@ -27,7 +27,19 @@ defmodule Cinegraph.Festivals.FestivalCeremony do
   @doc false
   def changeset(ceremony, attrs) do
     ceremony
-    |> cast(attrs, [:organization_id, :year, :ceremony_number, :name, :date, :location, :data, :data_source, :source_url, :scraped_at, :source_metadata])
+    |> cast(attrs, [
+      :organization_id,
+      :year,
+      :ceremony_number,
+      :name,
+      :date,
+      :location,
+      :data,
+      :data_source,
+      :source_url,
+      :scraped_at,
+      :source_metadata
+    ])
     |> validate_required([:organization_id, :year])
     |> foreign_key_constraint(:organization_id)
     |> unique_constraint([:organization_id, :year])

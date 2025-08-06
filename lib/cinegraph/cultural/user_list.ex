@@ -26,13 +26,23 @@ defmodule Cinegraph.Cultural.UserList do
   def changeset(user_list, attrs) do
     user_list
     |> cast(attrs, [
-      :source_platform, :external_list_id, :name, :creator_name,
-      :creator_reputation, :follower_count, :like_count, :item_count,
-      :quality_score, :spam_score
+      :source_platform,
+      :external_list_id,
+      :name,
+      :creator_name,
+      :creator_reputation,
+      :follower_count,
+      :like_count,
+      :item_count,
+      :quality_score,
+      :spam_score
     ])
     |> validate_required([:source_platform])
     |> validate_inclusion(:source_platform, @source_platforms)
-    |> validate_number(:creator_reputation, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
+    |> validate_number(:creator_reputation,
+      greater_than_or_equal_to: 0.0,
+      less_than_or_equal_to: 1.0
+    )
     |> validate_number(:quality_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
     |> validate_number(:spam_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
     |> validate_number(:follower_count, greater_than_or_equal_to: 0)

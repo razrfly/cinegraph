@@ -5,8 +5,10 @@ import Dotenvy
 if config_env() == :dev do
   source!([
     ".env",
-    ".env.dev",      # Optional: dev-specific overrides
-    System.get_env() # System env vars take precedence
+    # Optional: dev-specific overrides
+    ".env.dev",
+    # System env vars take precedence
+    System.get_env()
   ])
 end
 
@@ -16,16 +18,18 @@ config :supabase_potion,
   api_key: env!("SUPABASE_ANON_KEY", :string!)
 
 # Configure TMDb
-config :cinegraph, Cinegraph.Services.TMDb.Client,
-  api_key: env!("TMDB_API_KEY", :string!)
+config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: env!("TMDB_API_KEY", :string!)
 
 # Configure OMDb (if used)
 config :cinegraph, Cinegraph.Services.OMDb.Client,
-  api_key: env!("OMDB_API_KEY", :string, "")  # Optional with default
+  # Optional with default
+  api_key: env!("OMDB_API_KEY", :string, "")
 
 # Configure Zyte API (for Oscar scraping)
-config :cinegraph, :zyte_api_key,
-  env!("ZYTE_API_KEY", :string, "")  # Optional with default
+config :cinegraph,
+       :zyte_api_key,
+       # Optional with default
+       env!("ZYTE_API_KEY", :string, "")
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -50,18 +54,22 @@ end
 # Configure database URL for all environments that have it set
 if config_env() == :dev do
   config :cinegraph, Cinegraph.Repo,
-    url: env!("SUPABASE_DATABASE_URL", :string, "postgresql://postgres:postgres@127.0.0.1:54322/postgres")
+    url:
+      env!(
+        "SUPABASE_DATABASE_URL",
+        :string,
+        "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+      )
 else
   if database_url = System.get_env("SUPABASE_DATABASE_URL") || System.get_env("DATABASE_URL") do
-    config :cinegraph, Cinegraph.Repo,
-      url: database_url
+    config :cinegraph, Cinegraph.Repo, url: database_url
   end
 end
 
 if config_env() == :prod do
   database_url =
     System.get_env("SUPABASE_DATABASE_URL") ||
-    System.get_env("DATABASE_URL") ||
+      System.get_env("DATABASE_URL") ||
       raise """
       environment variable SUPABASE_DATABASE_URL or DATABASE_URL is missing.
       For example: postgresql://postgres:password@host:5432/database

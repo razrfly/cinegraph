@@ -8,9 +8,9 @@ defmodule Cinegraph.Movies.ProductionCompany do
     field :name, :string
     field :logo_path, :string
     field :origin_country, :string
-    
+
     many_to_many :movies, Cinegraph.Movies.Movie, join_through: "movie_production_companies"
-    
+
     timestamps()
   end
 
@@ -18,7 +18,10 @@ defmodule Cinegraph.Movies.ProductionCompany do
   def changeset(company, attrs) do
     company
     |> cast(attrs, [
-      :tmdb_id, :name, :logo_path, :origin_country
+      :tmdb_id,
+      :name,
+      :logo_path,
+      :origin_country
     ])
     |> validate_required([:tmdb_id, :name])
     |> unique_constraint(:tmdb_id)
@@ -34,7 +37,7 @@ defmodule Cinegraph.Movies.ProductionCompany do
       logo_path: attrs["logo_path"],
       origin_country: attrs["origin_country"]
     }
-    
+
     changeset(%__MODULE__{}, company_attrs)
   end
 end

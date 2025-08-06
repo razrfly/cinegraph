@@ -13,7 +13,7 @@ case CanonicalImportOrchestrator.new(job_args) |> Oban.insert() do
     IO.puts("Job ID: #{job.id}")
     IO.puts("\nMonitor logs with: mix phx.server")
     IO.puts("Or check debug HTML files with: ls criterion_worker_*.html")
-    
+
   {:error, reason} ->
     IO.puts("Failed to queue import: #{inspect(reason)}")
 end

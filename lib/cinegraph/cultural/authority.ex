@@ -25,8 +25,13 @@ defmodule Cinegraph.Cultural.Authority do
   def changeset(authority, attrs) do
     authority
     |> cast(attrs, [
-      :name, :authority_type, :description, :website, 
-      :trust_score, :active, :metadata
+      :name,
+      :authority_type,
+      :description,
+      :website,
+      :trust_score,
+      :active,
+      :metadata
     ])
     |> validate_required([:name, :authority_type])
     |> validate_inclusion(:authority_type, @authority_types)

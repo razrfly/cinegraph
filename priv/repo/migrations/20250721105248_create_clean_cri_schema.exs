@@ -31,7 +31,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :origin_country, {:array, :string}, default: []
       timestamps()
     end
-    
+
     create unique_index(:movies, [:tmdb_id])
     create index(:movies, [:imdb_id])
     create index(:movies, [:release_date])
@@ -54,7 +54,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :adult, :boolean, default: false
       timestamps()
     end
-    
+
     create unique_index(:people, [:tmdb_id])
     create index(:people, [:imdb_id])
     create index(:people, [:name])
@@ -67,7 +67,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :name, :string, null: false
       timestamps()
     end
-    
+
     create unique_index(:genres, [:tmdb_id])
     create index(:genres, [:name])
 
@@ -80,7 +80,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :backdrop_path, :string
       timestamps()
     end
-    
+
     create unique_index(:collections, [:tmdb_id])
     create index(:collections, [:name])
 
@@ -92,7 +92,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :origin_country, :string
       timestamps()
     end
-    
+
     create unique_index(:production_companies, [:tmdb_id])
     create index(:production_companies, [:name])
     create index(:production_companies, [:origin_country])
@@ -103,9 +103,9 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :name, :string, null: false
       timestamps()
     end
-    
+
     create unique_index(:production_countries, [:iso_3166_1])
-    
+
     # Spoken languages
     create table(:spoken_languages) do
       add :iso_639_1, :string, null: false
@@ -113,7 +113,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :english_name, :string
       timestamps()
     end
-    
+
     create unique_index(:spoken_languages, [:iso_639_1])
 
     # Keywords
@@ -122,7 +122,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :name, :string, null: false
       timestamps()
     end
-    
+
     create unique_index(:keywords, [:tmdb_id])
     create index(:keywords, [:name])
 
@@ -131,7 +131,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :movie_id, references(:movies, on_delete: :delete_all), null: false
       add :genre_id, references(:genres, on_delete: :delete_all), null: false
     end
-    
+
     create unique_index(:movie_genres, [:movie_id, :genre_id])
     create index(:movie_genres, [:movie_id])
     create index(:movie_genres, [:genre_id])
@@ -141,7 +141,8 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :movie_id, references(:movies, on_delete: :delete_all), null: false
       add :person_id, references(:people, on_delete: :delete_all), null: false
       add :credit_id, :string, null: false
-      add :credit_type, :string, null: false  # "cast" or "crew"
+      # "cast" or "crew"
+      add :credit_type, :string, null: false
       add :department, :string
       add :job, :string
       add :character, :string
@@ -149,7 +150,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :profile_path, :string
       timestamps()
     end
-    
+
     create index(:movie_credits, [:movie_id])
     create index(:movie_credits, [:person_id])
     create index(:movie_credits, [:credit_type])
@@ -161,33 +162,37 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :movie_id, references(:movies, on_delete: :delete_all), null: false
       add :keyword_id, references(:keywords, on_delete: :delete_all), null: false
     end
-    
+
     create unique_index(:movie_keywords, [:movie_id, :keyword_id])
 
     # Movie-Production Company junction table  
     create table(:movie_production_companies, primary_key: false) do
       add :movie_id, references(:movies, on_delete: :delete_all), null: false
-      add :production_company_id, references(:production_companies, on_delete: :delete_all), null: false
+
+      add :production_company_id, references(:production_companies, on_delete: :delete_all),
+        null: false
     end
-    
+
     create unique_index(:movie_production_companies, [:movie_id, :production_company_id])
 
     # Movie-Production Country junction table
     create table(:movie_production_countries, primary_key: false) do
       add :movie_id, references(:movies, on_delete: :delete_all), null: false
-      add :production_country_id, references(:production_countries, on_delete: :delete_all), null: false
+
+      add :production_country_id, references(:production_countries, on_delete: :delete_all),
+        null: false
     end
-    
+
     create unique_index(:movie_production_countries, [:movie_id, :production_country_id])
     create index(:movie_production_countries, [:movie_id])
     create index(:movie_production_countries, [:production_country_id])
-    
+
     # Movie-Spoken Language junction table
     create table(:movie_spoken_languages, primary_key: false) do
       add :movie_id, references(:movies, on_delete: :delete_all), null: false
       add :spoken_language_id, references(:spoken_languages, on_delete: :delete_all), null: false
     end
-    
+
     create unique_index(:movie_spoken_languages, [:movie_id, :spoken_language_id])
     create index(:movie_spoken_languages, [:movie_id])
     create index(:movie_spoken_languages, [:spoken_language_id])
@@ -205,7 +210,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :published_at, :naive_datetime
       timestamps()
     end
-    
+
     create index(:movie_videos, [:movie_id])
     create unique_index(:movie_videos, [:tmdb_id])
     create index(:movie_videos, [:type])
@@ -221,7 +226,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :note, :string
       timestamps()
     end
-    
+
     create index(:movie_release_dates, [:movie_id])
     create index(:movie_release_dates, [:country_code])
     create unique_index(:movie_release_dates, [:movie_id, :country_code, :release_type])
@@ -237,7 +242,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :config, :map
       timestamps()
     end
-    
+
     create unique_index(:external_sources, [:name])
 
     # External ratings from various sources
@@ -252,7 +257,7 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :fetched_at, :utc_datetime, null: false
       timestamps()
     end
-    
+
     create index(:external_ratings, [:movie_id])
     create index(:external_ratings, [:source_id])
     create unique_index(:external_ratings, [:movie_id, :source_id, :rating_type])
@@ -268,11 +273,16 @@ defmodule Cinegraph.Repo.Migrations.CreateCleanCriSchema do
       add :fetched_at, :utc_datetime, null: false
       timestamps()
     end
-    
+
     create index(:external_recommendations, [:source_movie_id])
     create index(:external_recommendations, [:recommended_movie_id])
     create index(:external_recommendations, [:source_id])
-    create unique_index(:external_recommendations, [:source_movie_id, :recommended_movie_id, :source_id, :recommendation_type], name: :external_recs_unique_idx)
+
+    create unique_index(
+             :external_recommendations,
+             [:source_movie_id, :recommended_movie_id, :source_id, :recommendation_type],
+             name: :external_recs_unique_idx
+           )
 
     # Note: Removed cultural_authorities, curated_lists, movie_list_items, and cri_scores tables
     # These will be added back when we implement the CRI scoring system

@@ -23,7 +23,7 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
       |> assign(:recent_games, get_recent_games())
       |> assign(:show_leaderboard, false)
       |> assign(:leaderboard, [])
-    
+
     {:ok, socket}
   end
 
@@ -50,26 +50,28 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
   @impl true
   def handle_event("select_player1", %{"person_id" => person_id}, socket) do
     person = People.get_person!(person_id)
+
     socket =
       socket
       |> assign(:player1_selected, person)
       |> assign(:player1_search, person.name)
       |> assign(:player1_results, [])
       |> assign(:path_result, nil)
-    
+
     {:noreply, socket}
   end
 
   @impl true
   def handle_event("select_player2", %{"person_id" => person_id}, socket) do
     person = People.get_person!(person_id)
+
     socket =
       socket
       |> assign(:player2_selected, person)
       |> assign(:player2_search, person.name)
       |> assign(:player2_results, [])
       |> assign(:path_result, nil)
-    
+
     {:noreply, socket}
   end
 
@@ -81,7 +83,7 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
       |> assign(:player1_search, "")
       |> assign(:player1_results, [])
       |> assign(:path_result, nil)
-    
+
     {:noreply, socket}
   end
 
@@ -93,7 +95,7 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
       |> assign(:player2_search, "")
       |> assign(:player2_results, [])
       |> assign(:path_result, nil)
-    
+
     {:noreply, socket}
   end
 
@@ -114,49 +116,50 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
         assign(socket, :show_leaderboard, false)
       else
         leaderboard = get_leaderboard()
+
         socket
         |> assign(:show_leaderboard, true)
         |> assign(:leaderboard, leaderboard)
       end
-    
+
     {:noreply, socket}
   end
 
   @impl true
   def handle_info({:search_people, player, query}, socket) do
     results = People.search_people(query, limit: 10)
-    
+
     socket =
       case player do
         :player1 ->
           socket
           |> assign(:player1_results, results)
           |> assign(:searching_player1, false)
-        
+
         :player2 ->
           socket
           |> assign(:player2_results, results)
           |> assign(:searching_player2, false)
       end
-    
+
     {:noreply, socket}
   end
 
   @impl true
   def handle_info(:find_path, socket) do
     start_time = System.monotonic_time(:millisecond)
-    
-    path_result = 
+
+    path_result =
       case PathFinder.find_path_with_movies(
-        socket.assigns.player1_selected.id,
-        socket.assigns.player2_selected.id
-      ) do
+             socket.assigns.player1_selected.id,
+             socket.assigns.player2_selected.id
+           ) do
         {:ok, path} ->
           elapsed_time = System.monotonic_time(:millisecond) - start_time
-          
+
           # Format path with movie details
           formatted_path = format_path(path)
-          
+
           # Save game result
           save_game_result(
             socket.assigns.player1_selected,
@@ -164,31 +167,31 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
             length(path),
             elapsed_time
           )
-          
+
           %{
             success: true,
             path: formatted_path,
             degrees: length(path),
             time_ms: elapsed_time
           }
-        
+
         {:error, :no_path_found} ->
           elapsed_time = System.monotonic_time(:millisecond) - start_time
-          
+
           %{
             success: false,
             message: "No connection found! These people are not connected within 6 degrees.",
             time_ms: elapsed_time
           }
       end
-    
+
     socket =
       socket
       |> assign(:path_result, path_result)
       |> assign(:finding_path, false)
       |> assign(:game_stats, get_game_stats())
       |> assign(:recent_games, get_recent_games())
-    
+
     {:noreply, socket}
   end
 
@@ -198,7 +201,7 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
     Enum.map(path, fn {person_a_id, movie, person_b_id} ->
       person_a = People.get_person!(person_a_id)
       person_b = People.get_person!(person_b_id)
-      
+
       %{
         person_a: person_a,
         person_b: person_b,
@@ -252,11 +255,46 @@ defmodule CinegraphWeb.SixDegreesLive.Index do
     # In a real app, this would come from the database
     # For now, return sample data
     [
-      %{rank: 1, player1: "Scarlett Johansson", player2: "Gary Oldman", degrees: 1, players: "User123", date: "Today"},
-      %{rank: 2, player1: "Tom Cruise", player2: "Helena Bonham Carter", degrees: 2, players: "MovieBuff", date: "Today"},
-      %{rank: 3, player1: "Will Smith", player2: "Tilda Swinton", degrees: 2, players: "CinemaFan", date: "Yesterday"},
-      %{rank: 4, player1: "Emma Stone", player2: "Ian McKellen", degrees: 3, players: "FilmGeek", date: "Yesterday"},
-      %{rank: 5, player1: "Ryan Gosling", player2: "Maggie Smith", degrees: 3, players: "MovieLover", date: "2 days ago"}
+      %{
+        rank: 1,
+        player1: "Scarlett Johansson",
+        player2: "Gary Oldman",
+        degrees: 1,
+        players: "User123",
+        date: "Today"
+      },
+      %{
+        rank: 2,
+        player1: "Tom Cruise",
+        player2: "Helena Bonham Carter",
+        degrees: 2,
+        players: "MovieBuff",
+        date: "Today"
+      },
+      %{
+        rank: 3,
+        player1: "Will Smith",
+        player2: "Tilda Swinton",
+        degrees: 2,
+        players: "CinemaFan",
+        date: "Yesterday"
+      },
+      %{
+        rank: 4,
+        player1: "Emma Stone",
+        player2: "Ian McKellen",
+        degrees: 3,
+        players: "FilmGeek",
+        date: "Yesterday"
+      },
+      %{
+        rank: 5,
+        player1: "Ryan Gosling",
+        player2: "Maggie Smith",
+        degrees: 3,
+        players: "MovieLover",
+        date: "2 days ago"
+      }
     ]
   end
 end

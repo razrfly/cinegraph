@@ -1,53 +1,77 @@
-# Test the unified festival import flow
-# This ensures data goes into festival_* tables instead of oscar_* tables
+# \!/usr/bin/env elixir
 
-IO.puts("Testing unified festival import...")
+# Test script for the new unified festival import system
 
-# Step 1: Check we have the festival_organizations table
-oscar_org = Cinegraph.Festivals.get_or_create_oscar_organization()
-IO.puts("✅ Oscar organization created/found: #{oscar_org.name} (ID: #{oscar_org.id})")
+IO.puts("\n" <> String.duplicate("=", 60))
+IO.puts("🎬 UNIFIED FESTIVAL IMPORT SYSTEM TEST")
+IO.puts(String.duplicate("=", 60))
 
-# Step 2: Import a test Oscar year (2024)
-IO.puts("\nImporting Oscar data for 2024...")
-case Cinegraph.Cultural.import_oscar_year(2024) do
-  {:ok, result} ->
-    IO.puts("✅ Oscar import queued:")
-    IO.inspect(result)
-    
-    # Wait for job to process
-    IO.puts("\nWaiting 5 seconds for job to process...")
+IO.puts("\n📋 Available festivals:")
+IO.puts("  - cannes   : Cannes Film Festival")
+IO.puts("  - bafta    : BAFTA Film Awards")
+IO.puts("  - berlin   : Berlin International Film Festival")
+IO.puts("  - venice   : Venice International Film Festival")
+
+IO.puts("\n📝 Example commands to test the system:")
+IO.puts("")
+
+# Single festival, single year
+IO.puts("1️⃣  Import Cannes 2024:")
+IO.puts("    Cinegraph.Cultural.import_festival(\"cannes\", 2024)")
+IO.puts("")
+
+IO.puts("2️⃣  Import BAFTA 2024:")
+IO.puts("    Cinegraph.Cultural.import_festival(\"bafta\", 2024)")
+IO.puts("")
+
+IO.puts("3️⃣  Import Berlin 2024:")
+IO.puts("    Cinegraph.Cultural.import_festival(\"berlin\", 2024)")
+IO.puts("")
+
+# Multiple years for a single festival
+IO.puts("4️⃣  Import Cannes 2020-2024:")
+IO.puts("    Cinegraph.Cultural.import_festival_years(\"cannes\", 2020..2024)")
+IO.puts("")
+
+# All festivals for a specific year
+IO.puts("5️⃣  Import ALL festivals for 2024:")
+IO.puts("    Cinegraph.Cultural.import_all_festivals_for_year(2024)")
+IO.puts("")
+
+# Check status
+IO.puts("6️⃣  Check import status:")
+IO.puts("    Cinegraph.Cultural.get_festival_import_status()")
+IO.puts("    Cinegraph.Cultural.get_festival_import_status(\"cannes\")")
+IO.puts("")
+
+IO.puts(String.duplicate("-", 60))
+IO.puts("\n🚀 Let's test importing ALL festivals for 2024...")
+IO.puts("")
+
+result = Cinegraph.Cultural.import_all_festivals_for_year(2024)
+
+case result do
+  {:ok, stats} ->
+    IO.puts("✅ SUCCESS\! Jobs queued for all festivals")
+    IO.puts("   Year: #{stats.year}")
+    IO.puts("   Festivals: #{Enum.join(stats.festivals, ", ")}")
+    IO.puts("   Jobs queued: #{stats.jobs}")
+    IO.puts("   Status: #{stats.status}")
+
+    IO.puts("\n⏳ Waiting 5 seconds to check job status...")
     Process.sleep(5000)
-    
-    # Step 3: Check that data is in festival tables
-    import Ecto.Query
-    
-    # Check festival_ceremonies
-    ceremony_count = Cinegraph.Repo.aggregate(
-      from(c in Cinegraph.Festivals.FestivalCeremony, 
-        where: c.organization_id == ^oscar_org.id),
-      :count
-    )
-    IO.puts("\n📊 Festival ceremonies for Oscars: #{ceremony_count}")
-    
-    # Check festival_categories
-    category_count = Cinegraph.Repo.aggregate(
-      from(c in Cinegraph.Festivals.FestivalCategory, 
-        where: c.organization_id == ^oscar_org.id),
-      :count
-    )
-    IO.puts("📊 Festival categories for Oscars: #{category_count}")
-    
-    # Check festival_nominations
-    nomination_count = Cinegraph.Repo.aggregate(
-      from(n in Cinegraph.Festivals.FestivalNomination,
-        join: cer in Cinegraph.Festivals.FestivalCeremony, on: n.ceremony_id == cer.id,
-        where: cer.organization_id == ^oscar_org.id),
-      :count
-    )
-    IO.puts("📊 Festival nominations for Oscars: #{nomination_count}")
-    
+
+    IO.puts("\n📊 Import Status:")
+    status = Cinegraph.Cultural.get_festival_import_status()
+    IO.puts("   Running: #{status.running_jobs}")
+    IO.puts("   Queued: #{status.queued_jobs}")
+    IO.puts("   Completed: #{status.completed_jobs}")
+    IO.puts("   Failed: #{status.failed_jobs}")
+
   {:error, reason} ->
-    IO.puts("❌ Failed to import Oscar data: #{inspect(reason)}")
+    IO.puts("❌ ERROR: #{inspect(reason)}")
 end
 
-IO.puts("\n✨ Test complete! Data should now be in festival_* tables instead of oscar_* tables.")
+IO.puts("\n" <> String.duplicate("=", 60))
+IO.puts("🎉 Test complete\! Check the database for imported festivals.")
+IO.puts(String.duplicate("=", 60))

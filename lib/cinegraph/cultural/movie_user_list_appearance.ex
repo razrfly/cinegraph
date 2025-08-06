@@ -24,8 +24,14 @@ defmodule Cinegraph.Cultural.MovieUserListAppearance do
   def changeset(appearance, attrs) do
     appearance
     |> cast(attrs, [
-      :movie_id, :platform, :total_list_appearances, :quality_weighted_appearances,
-      :genre_specific_lists, :award_related_lists, :cultural_lists, :last_calculated
+      :movie_id,
+      :platform,
+      :total_list_appearances,
+      :quality_weighted_appearances,
+      :genre_specific_lists,
+      :award_related_lists,
+      :cultural_lists,
+      :last_calculated
     ])
     |> validate_required([:movie_id, :platform])
     |> validate_inclusion(:platform, @platforms)

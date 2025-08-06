@@ -26,8 +26,14 @@ defmodule Cinegraph.Cultural.CuratedList do
   def changeset(curated_list, attrs) do
     curated_list
     |> cast(attrs, [
-      :authority_id, :name, :list_type, :year, :total_items,
-      :description, :source_url, :metadata
+      :authority_id,
+      :name,
+      :list_type,
+      :year,
+      :total_items,
+      :description,
+      :source_url,
+      :metadata
     ])
     |> validate_required([:authority_id, :name, :list_type])
     |> validate_inclusion(:list_type, @list_types)

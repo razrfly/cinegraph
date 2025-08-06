@@ -14,9 +14,9 @@ defmodule Cinegraph.Cultural do
     MovieDataChange,
     CRIScore
   }
-  
+
   alias Cinegraph.Festivals
-  
+
   alias Cinegraph.Scrapers.OscarScraper
   require Logger
 
@@ -77,14 +77,14 @@ defmodule Cinegraph.Cultural do
   """
   def list_curated_lists(authority_id \\ nil) do
     query = from l in CuratedList, preload: [:authority]
-    
-    query = 
+
+    query =
       if authority_id do
         from l in query, where: l.authority_id == ^authority_id
       else
         query
       end
-    
+
     Repo.all(query)
   end
 
@@ -129,7 +129,7 @@ defmodule Cinegraph.Cultural do
   """
   def get_list_movies(list_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 50)
-    
+
     from(item in MovieListItem,
       join: movie in assoc(item, :movie),
       where: item.list_id == ^list_id,
@@ -154,7 +154,7 @@ defmodule Cinegraph.Cultural do
   """
   def add_movie_to_list(movie_id, list_id, attrs \\ %{}) do
     attrs = Map.merge(attrs, %{movie_id: movie_id, list_id: list_id})
-    
+
     %MovieListItem{}
     |> MovieListItem.changeset(attrs)
     |> Repo.insert()
@@ -164,17 +164,17 @@ defmodule Cinegraph.Cultural do
   Removes a movie from a curated list.
   """
   def remove_movie_from_list(movie_id, list_id, award_category \\ nil) do
-    query = 
+    query =
       from item in MovieListItem,
         where: item.movie_id == ^movie_id and item.list_id == ^list_id
-    
-    query = 
+
+    query =
       if award_category do
         from item in query, where: item.award_category == ^award_category
       else
         query
       end
-    
+
     Repo.delete_all(query)
   end
 
@@ -205,7 +205,7 @@ defmodule Cinegraph.Cultural do
       version: version,
       calculated_at: DateTime.utc_now()
     }
-    
+
     %CRIScore{}
     |> CRIScore.changeset(attrs)
     |> Repo.insert()
@@ -218,24 +218,24 @@ defmodule Cinegraph.Cultural do
   def calculate_cri_score(movie_id) do
     # Get movie with all cultural data
     movie_cultural_data = get_movie_cultural_data(movie_id)
-    
+
     components = %{
       "authority_presence" => calculate_authority_presence(movie_cultural_data),
       "list_appearances" => calculate_list_appearances(movie_cultural_data),
       "award_recognition" => calculate_award_recognition(movie_cultural_data),
       "cultural_impact" => calculate_cultural_impact(movie_cultural_data)
     }
-    
+
     # Weighted average of components
-    score = 
-      (components["authority_presence"] * 0.3) +
-      (components["list_appearances"] * 0.25) +
-      (components["award_recognition"] * 0.35) +
-      (components["cultural_impact"] * 0.1)
-    
+    score =
+      components["authority_presence"] * 0.3 +
+        components["list_appearances"] * 0.25 +
+        components["award_recognition"] * 0.35 +
+        components["cultural_impact"] * 0.1
+
     # Scale to 0-100
     final_score = score * 100
-    
+
     upsert_cri_score(movie_id, final_score, components)
   end
 
@@ -247,12 +247,13 @@ defmodule Cinegraph.Cultural do
   Records a data change event for a movie.
   """
   def record_movie_change(movie_id, platform, change_type, attrs \\ %{}) do
-    attrs = Map.merge(attrs, %{
-      movie_id: movie_id,
-      source_platform: platform,
-      change_type: change_type
-    })
-    
+    attrs =
+      Map.merge(attrs, %{
+        movie_id: movie_id,
+        source_platform: platform,
+        change_type: change_type
+      })
+
     %MovieDataChange{}
     |> MovieDataChange.changeset(attrs)
     |> Repo.insert()
@@ -263,7 +264,7 @@ defmodule Cinegraph.Cultural do
   """
   def get_movie_change_activity(movie_id, days \\ 30) do
     since = DateTime.utc_now() |> DateTime.add(-days * 24 * 3600, :second)
-    
+
     from(change in MovieDataChange,
       where: change.movie_id == ^movie_id and change.period_end >= ^since,
       order_by: [desc: change.period_end]
@@ -277,12 +278,15 @@ defmodule Cinegraph.Cultural do
   def get_movie_oscar_nominations(movie_id) do
     # Get the Oscar organization
     oscar_org = Festivals.get_or_create_oscar_organization()
-    
+
     if oscar_org && oscar_org.id do
       from(nomination in Cinegraph.Festivals.FestivalNomination,
-        join: ceremony in Cinegraph.Festivals.FestivalCeremony, on: nomination.ceremony_id == ceremony.id,
-        join: category in Cinegraph.Festivals.FestivalCategory, on: nomination.category_id == category.id,
-        left_join: person in Cinegraph.Movies.Person, on: nomination.person_id == person.id,
+        join: ceremony in Cinegraph.Festivals.FestivalCeremony,
+        on: nomination.ceremony_id == ceremony.id,
+        join: category in Cinegraph.Festivals.FestivalCategory,
+        on: nomination.category_id == category.id,
+        left_join: person in Cinegraph.Movies.Person,
+        on: nomination.person_id == person.id,
         where: nomination.movie_id == ^movie_id and ceremony.organization_id == ^oscar_org.id,
         order_by: [desc: ceremony.year, asc: category.name],
         preload: [person: person],
@@ -305,88 +309,91 @@ defmodule Cinegraph.Cultural do
   # ========================================
   # OSCAR CEREMONIES (Now using Festival tables)
   # ========================================
-  
+
   @doc """
   Returns the list of Oscar ceremonies from festival tables.
   """
   def list_oscar_ceremonies do
     oscar_org = Festivals.get_or_create_oscar_organization()
+
     if oscar_org && oscar_org.id do
       Festivals.list_ceremonies(oscar_org.id)
     else
       []
     end
   end
-  
+
   @doc """
   Gets a single Oscar ceremony by year from festival tables.
   """
   def get_oscar_ceremony_by_year(year) do
     oscar_org = Festivals.get_or_create_oscar_organization()
+
     if oscar_org && oscar_org.id do
       Festivals.get_ceremony_by_year(oscar_org.id, year)
     else
       nil
     end
   end
-  
+
   @doc """
   Import Oscar data for a specific year.
   This fetches the ceremony, enhances with IMDb IDs, and imports all movies.
-  
+
   ## Options
     * `:create_movies` - whether to create new movie records (default: true)
     * `:create_partial` - whether to create partial records for movies not in TMDb (default: false)
     * `:queue_enrichment` - whether to queue OMDb enrichment jobs (default: true)
-  
+
   ## Examples
-  
+
       iex> Cinegraph.Cultural.import_oscar_year(2024)
       {:ok, %{movies_created: 45, movies_updated: 78, ...}}
       
   """
   def import_oscar_year(year, options \\ []) do
     Logger.info("Starting Oscar import for year #{year}")
-    
+
     with {:ok, ceremony} <- fetch_or_create_ceremony(year) do
       # Queue the discovery worker to process the ceremony
       job_args = %{
         "ceremony_id" => ceremony.id,
         "options" => Enum.into(options, %{})
       }
-      
+
       # Use FestivalDiscoveryWorker (fuzzy matching to be ported from OscarDiscoveryWorker)
       case Cinegraph.Workers.FestivalDiscoveryWorker.new(job_args) |> Oban.insert() do
         {:ok, job} ->
-          {:ok, %{
-            ceremony_id: ceremony.id,
-            year: year,
-            job_id: job.id,
-            status: :queued
-          }}
-          
+          {:ok,
+           %{
+             ceremony_id: ceremony.id,
+             year: year,
+             job_id: job.id,
+             status: :queued
+           }}
+
         {:error, reason} ->
           Logger.error("Failed to queue Oscar discovery for year #{year}: #{inspect(reason)}")
           {:error, reason}
       end
     else
-      {:error, reason} -> 
+      {:error, reason} ->
         Logger.error("Failed to prepare Oscar year #{year}: #{inspect(reason)}")
         {:error, reason}
     end
   end
-  
+
   @doc """
   Import Oscar data for a range of years.
-  
+
   By default, this queues jobs for parallel processing. Use `async: false` for sequential processing.
-  
+
   ## Options
     * `:async` - whether to use job queue (default: true)
     * All other options are passed to `import_oscar_year/2`
-  
+
   ## Examples
-  
+
       # Queue jobs for parallel processing (default)
       iex> Cinegraph.Cultural.import_oscar_years(2020..2024)
       {:ok, %{years: 2020..2024, job_count: 5, status: :queued}}
@@ -398,38 +405,45 @@ defmodule Cinegraph.Cultural do
   """
   def import_oscar_years(start_year..end_year//_, options \\ []) do
     {async, import_options} = Keyword.pop(options, :async, true)
-    
+
     if async do
       # Queue jobs for parallel processing
       years = start_year..end_year |> Enum.to_list()
-      
-      jobs = Enum.map(years, fn year ->
-        %{year: year, options: Enum.into(import_options, %{})}
-        |> Cinegraph.Workers.OscarImportWorker.new()
-      end)
-      
+
+      jobs =
+        Enum.map(years, fn year ->
+          %{year: year, options: Enum.into(import_options, %{})}
+          |> Cinegraph.Workers.OscarImportWorker.new()
+        end)
+
       # Insert jobs individually and collect results
       results = Enum.map(jobs, &Oban.insert/1)
-      
-      {successes, failures} = Enum.split_with(results, fn
-        {:ok, _} -> true
-        {:error, _} -> false
-      end)
-      
+
+      {successes, failures} =
+        Enum.split_with(results, fn
+          {:ok, _} -> true
+          {:error, _} -> false
+        end)
+
       successful_jobs = length(successes)
-      
+
       if successful_jobs == length(years) do
-        {:ok, %{
-          years: start_year..end_year,
-          job_count: successful_jobs,
-          status: :queued
-        }}
+        {:ok,
+         %{
+           years: start_year..end_year,
+           job_count: successful_jobs,
+           status: :queued
+         }}
       else
-        failed_years = failures 
+        failed_years =
+          failures
           |> Enum.zip(years)
-          |> Enum.filter(fn {{:error, _}, _} -> true; _ -> false end)
+          |> Enum.filter(fn
+            {{:error, _}, _} -> true
+            _ -> false
+          end)
           |> Enum.map(fn {_, year} -> year end)
-        
+
         {:error, "Failed to queue jobs for years: #{inspect(failed_years)}"}
       end
     else
@@ -441,13 +455,13 @@ defmodule Cinegraph.Cultural do
       |> Enum.into(%{})
     end
   end
-  
+
   @doc """
   Import all available Oscar years (2016-2024).
   Note: Oscars.org has data from 2016 onwards in the current format.
-  
+
   ## Examples
-  
+
       iex> Cinegraph.Cultural.import_all_oscar_years()
       %{2016 => {:ok, %{...}}, 2017 => {:ok, %{...}}, ...}
       
@@ -456,16 +470,16 @@ defmodule Cinegraph.Cultural do
     # Oscars.org has data from 2016 onwards in the current format
     import_oscar_years(2016..2024, options)
   end
-  
+
   defp fetch_or_create_ceremony(year) do
     # Get the Oscar organization first
     oscar_org = Festivals.get_or_create_oscar_organization()
-    
+
     # Use the new festival_ceremonies table with organization_id
     case Festivals.get_ceremony_by_year(oscar_org.id, year) do
-      nil -> 
+      nil ->
         Logger.info("Fetching Oscar ceremony data for #{year}")
-        
+
         case OscarScraper.fetch_ceremony(year) do
           {:ok, data} ->
             attrs = %{
@@ -481,28 +495,28 @@ defmodule Cinegraph.Cultural do
                 "version" => "1.0"
               }
             }
-            
+
             Festivals.upsert_ceremony(attrs)
-            
+
           {:error, reason} ->
             {:error, reason}
         end
-        
-      ceremony -> 
+
+      ceremony ->
         {:ok, ceremony}
     end
   end
-  
+
   defp calculate_ceremony_number(year) do
     # First ceremony was in 1929 for 1927-1928 films
     year - 1927
   end
-  
+
   @doc """
   Get the status of Oscar import jobs.
-  
+
   ## Examples
-  
+
       iex> Cinegraph.Cultural.get_oscar_import_status()
       %{
         running_jobs: 2,
@@ -514,15 +528,426 @@ defmodule Cinegraph.Cultural do
   """
   def get_oscar_import_status do
     import Ecto.Query
-    
+
     # Count jobs by state
-    job_counts = Oban.Job
+    job_counts =
+      Oban.Job
       |> where([j], j.worker == "Cinegraph.Workers.OscarImportWorker")
       |> group_by([j], j.state)
       |> select([j], {j.state, count(j.id)})
       |> Repo.all()
       |> Enum.into(%{})
+
+    %{
+      running_jobs: Map.get(job_counts, "executing", 0),
+      queued_jobs: Map.get(job_counts, "available", 0) + Map.get(job_counts, "scheduled", 0),
+      completed_jobs: Map.get(job_counts, "completed", 0),
+      failed_jobs: Map.get(job_counts, "retryable", 0) + Map.get(job_counts, "discarded", 0)
+    }
+  end
+
+  # ========================================
+  # VENICE FILM FESTIVAL CEREMONIES
+  # ========================================
+
+  @doc """
+  Returns the list of Venice Film Festival ceremonies from festival tables.
+  """
+  def list_venice_ceremonies do
+    venice_org = get_or_create_venice_organization()
+
+    if venice_org && venice_org.id do
+      Festivals.list_ceremonies(venice_org.id)
+    else
+      []
+    end
+  end
+
+  @doc """
+  Gets a single Venice ceremony by year from festival tables.
+  """
+  def get_venice_ceremony_by_year(year) do
+    venice_org = get_or_create_venice_organization()
+
+    if venice_org && venice_org.id do
+      Festivals.get_ceremony_by_year(venice_org.id, year)
+    else
+      nil
+    end
+  end
+
+  @doc """
+  Import Venice Film Festival data for a specific year.
+
+  ## Options
+    * `:create_movies` - whether to create new movie records (default: true)
+    * `:queue_enrichment` - whether to queue TMDb enrichment jobs (default: true)
+
+  ## Examples
+
+      iex> Cinegraph.Cultural.import_venice_year(2024)
+      {:ok, %{ceremony_id: 123, year: 2024, job_id: 456, status: :queued}}
+      
+  """
+  def import_venice_year(year, options \\ []) do
+    Logger.info("Starting Venice Film Festival import for year #{year}")
+
+    job_args = %{
+      "year" => year,
+      "options" => Enum.into(options, %{})
+    }
+
+    # Use unique args to prevent duplicate jobs for the same year
+    case Cinegraph.Workers.VeniceFestivalWorker.new(job_args,
+           unique: [period: 60, fields: [:args, :worker]]
+         )
+         |> Oban.insert() do
+      {:ok, job} ->
+        {:ok,
+         %{
+           year: year,
+           job_id: job.id,
+           status: :queued,
+           worker: "VeniceFestivalWorker"
+         }}
+
+      {:error, %Ecto.Changeset{errors: [unique: {"has already been taken", _}]}} ->
+        Logger.info("Venice import for year #{year} already queued or running")
+
+        {:ok,
+         %{
+           year: year,
+           status: :already_queued,
+           worker: "VeniceFestivalWorker"
+         }}
+
+      {:error, reason} ->
+        Logger.error("Failed to queue Venice import for year #{year}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Import Venice Film Festival data for a range of years.
+
+  ## Options
+    * `:max_concurrency` - number of concurrent requests (default: 3)
+    * All other options are passed to the worker
+
+  ## Examples
+
+      iex> Cinegraph.Cultural.import_venice_years(2020..2024)
+      {:ok, %{years: 2020..2024, job_id: 123, status: :queued}}
+      
+  """
+  def import_venice_years(start_year..end_year//_, options \\ []) do
+    years = start_year..end_year |> Enum.to_list()
+
+    job_args = %{
+      "years" => years,
+      "options" => Enum.into(options, %{})
+    }
+
+    Logger.info(
+      "Starting Venice Film Festival import for #{length(years)} years: #{inspect(years)}"
+    )
+
+    # Use unique args to prevent duplicate jobs for the same years
+    case Cinegraph.Workers.VeniceFestivalWorker.new(job_args,
+           unique: [period: 60, fields: [:args, :worker]]
+         )
+         |> Oban.insert() do
+      {:ok, job} ->
+        {:ok,
+         %{
+           years: start_year..end_year,
+           year_count: length(years),
+           job_id: job.id,
+           status: :queued,
+           worker: "VeniceFestivalWorker"
+         }}
+
+      {:error, %Ecto.Changeset{errors: [unique: {"has already been taken", _}]}} ->
+        Logger.info("Venice import for years #{inspect(years)} already queued or running")
+
+        {:ok,
+         %{
+           years: start_year..end_year,
+           year_count: length(years),
+           status: :already_queued,
+           worker: "VeniceFestivalWorker"
+         }}
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to queue Venice import for years #{inspect(years)}: #{inspect(reason)}"
+        )
+
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Gets Venice Film Festival nominations for a movie from the festival tables.
+  """
+  def get_movie_venice_nominations(movie_id) do
+    # Get the Venice organization
+    venice_org = get_or_create_venice_organization()
+
+    if venice_org && venice_org.id do
+      from(nomination in Cinegraph.Festivals.FestivalNomination,
+        join: ceremony in Cinegraph.Festivals.FestivalCeremony,
+        on: nomination.ceremony_id == ceremony.id,
+        join: category in Cinegraph.Festivals.FestivalCategory,
+        on: nomination.category_id == category.id,
+        left_join: person in Cinegraph.Movies.Person,
+        on: nomination.person_id == person.id,
+        where: nomination.movie_id == ^movie_id and ceremony.organization_id == ^venice_org.id,
+        order_by: [desc: ceremony.year, asc: category.name],
+        preload: [person: person],
+        select: %{
+          ceremony_year: ceremony.year,
+          category_name: category.name,
+          category_type: category.category_type,
+          tracks_person: category.tracks_person,
+          won: nomination.won,
+          details: nomination.details,
+          person: person
+        }
+      )
+      |> Repo.all()
+    else
+      []
+    end
+  end
+
+  @doc """
+  Get the status of Venice Film Festival import jobs.
+  """
+  def get_venice_import_status do
+    import Ecto.Query
+
+    # Count jobs by state
+    job_counts =
+      Oban.Job
+      |> where([j], j.worker == "Cinegraph.Workers.VeniceFestivalWorker")
+      |> group_by([j], j.state)
+      |> select([j], {j.state, count(j.id)})
+      |> Repo.all()
+      |> Enum.into(%{})
+
+    %{
+      running_jobs: Map.get(job_counts, "executing", 0),
+      queued_jobs: Map.get(job_counts, "available", 0) + Map.get(job_counts, "scheduled", 0),
+      completed_jobs: Map.get(job_counts, "completed", 0),
+      failed_jobs: Map.get(job_counts, "retryable", 0) + Map.get(job_counts, "discarded", 0)
+    }
+  end
+
+  defp get_or_create_venice_organization do
+    # Try to get existing Venice organization first
+    case Festivals.get_organization_by_abbreviation("VIFF") do
+      nil ->
+        # Create new using the same pattern as Oscar
+        attrs = %{
+          name: "Venice International Film Festival",
+          abbreviation: "VIFF",
+          country: "Italy",
+          founded_year: 1932,
+          website: "https://www.labiennale.org/en/cinema"
+        }
+
+        %Festivals.FestivalOrganization{}
+        |> Festivals.FestivalOrganization.changeset(attrs)
+        |> Repo.insert()
+        |> case do
+          {:ok, org} ->
+            org
+
+          {:error, _changeset} ->
+            # Race condition - try to get again
+            Repo.get_by!(Festivals.FestivalOrganization, abbreviation: "VIFF")
+        end
+
+      existing_org ->
+        existing_org
+    end
+  end
+
+  # ========================================
+  # UNIFIED FESTIVAL IMPORTS
+  # ========================================
+
+  @doc """
+  Import festival data for a specific festival and year.
+
+  ## Parameters
+    * festival - One of: "cannes", "bafta", "berlin", "venice"
+    * year - The festival year
+    * options - Import options
     
+  ## Examples
+
+      iex> Cinegraph.Cultural.import_festival("cannes", 2024)
+      {:ok, %{festival: "cannes", year: 2024, job_id: 123, status: :queued}}
+      
+  """
+  def import_festival(festival, year, options \\ []) when is_binary(festival) do
+    Logger.info("Starting #{festival} import for year #{year}")
+
+    job_args = %{
+      "festival" => festival,
+      "year" => year,
+      "options" => Enum.into(options, %{})
+    }
+
+    case Cinegraph.Workers.UnifiedFestivalWorker.new(job_args) |> Oban.insert() do
+      {:ok, job} ->
+        {:ok,
+         %{
+           festival: festival,
+           year: year,
+           job_id: job.id,
+           status: :queued,
+           worker: "UnifiedFestivalWorker"
+         }}
+
+      {:error, reason} ->
+        Logger.error("Failed to queue #{festival} import for year #{year}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Import festival data for multiple years.
+
+  ## Examples
+
+      iex> Cinegraph.Cultural.import_festival_years("cannes", 2020..2024)
+      {:ok, %{festival: "cannes", years: 2020..2024, job_id: 123, status: :queued}}
+      
+  """
+  def import_festival_years(festival, start_year..end_year//_, options \\ []) do
+    years = start_year..end_year |> Enum.to_list()
+
+    job_args = %{
+      "festival" => festival,
+      "years" => years,
+      "options" => Enum.into(options, %{})
+    }
+
+    case Cinegraph.Workers.UnifiedFestivalWorker.new(job_args) |> Oban.insert() do
+      {:ok, job} ->
+        {:ok,
+         %{
+           festival: festival,
+           years: start_year..end_year,
+           year_count: length(years),
+           job_id: job.id,
+           status: :queued,
+           worker: "UnifiedFestivalWorker"
+         }}
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to queue #{festival} import for years #{inspect(years)}: #{inspect(reason)}"
+        )
+
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Import all supported festivals for a specific year.
+
+  ## Examples
+
+      iex> Cinegraph.Cultural.import_all_festivals_for_year(2024)
+      {:ok, %{year: 2024, festivals: ["cannes", "bafta", "berlin", "venice"], jobs: 4}}
+      
+  """
+  def import_all_festivals_for_year(year, options \\ []) do
+    festivals = ["cannes", "bafta", "berlin", "venice"]
+
+    jobs =
+      Enum.map(festivals, fn festival ->
+        job_args = %{
+          "festival" => festival,
+          "year" => year,
+          "options" => Enum.into(options, %{})
+        }
+
+        Cinegraph.Workers.UnifiedFestivalWorker.new(job_args)
+      end)
+
+    results = Enum.map(jobs, &Oban.insert/1)
+
+    successful =
+      Enum.count(results, fn
+        {:ok, _} -> true
+        _ -> false
+      end)
+
+    if successful == length(festivals) do
+      {:ok,
+       %{
+         year: year,
+         festivals: festivals,
+         jobs: successful,
+         status: :queued
+       }}
+    else
+      failed =
+        festivals
+        |> Enum.zip(results)
+        |> Enum.filter(fn {_, result} ->
+          case result do
+            {:ok, _} -> false
+            _ -> true
+          end
+        end)
+        |> Enum.map(fn {festival, _} -> festival end)
+
+      {:error, "Failed to queue imports for: #{inspect(failed)}"}
+    end
+  end
+
+  @doc """
+  Get the status of festival import jobs.
+
+  ## Parameters
+    * festival - Optional festival filter (e.g., "cannes")
+    
+  ## Examples
+
+      iex> Cinegraph.Cultural.get_festival_import_status()
+      %{running_jobs: 2, queued_jobs: 3, completed_jobs: 5, failed_jobs: 0}
+      
+      iex> Cinegraph.Cultural.get_festival_import_status("cannes")
+      %{running_jobs: 1, queued_jobs: 0, completed_jobs: 2, failed_jobs: 0}
+      
+  """
+  def get_festival_import_status(festival \\ nil) do
+    import Ecto.Query
+
+    query =
+      Oban.Job
+      |> where([j], j.worker == "Cinegraph.Workers.UnifiedFestivalWorker")
+
+    query =
+      if festival do
+        where(query, [j], fragment("? ->> 'festival' = ?", j.args, ^festival))
+      else
+        query
+      end
+
+    job_counts =
+      query
+      |> group_by([j], j.state)
+      |> select([j], {j.state, count(j.id)})
+      |> Repo.all()
+      |> Enum.into(%{})
+
     %{
       running_jobs: Map.get(job_counts, "executing", 0),
       queued_jobs: Map.get(job_counts, "available", 0) + Map.get(job_counts, "scheduled", 0),
@@ -573,7 +998,7 @@ defmodule Cinegraph.Cultural do
         active: true
       }
     ]
-    
+
     Enum.each(authorities, fn attrs ->
       case get_authority_by_name(attrs.name) do
         nil -> create_authority(attrs)
@@ -599,17 +1024,17 @@ defmodule Cinegraph.Cultural do
 
   defp calculate_authority_presence(movie_data) do
     if movie_data && movie_data.movie_list_items do
-      authorities = 
+      authorities =
         movie_data.movie_list_items
         |> Enum.map(& &1.list.authority)
         |> Enum.uniq_by(& &1.id)
-      
+
       # Weight by authority trust scores
-      total_weight = 
+      total_weight =
         authorities
         |> Enum.map(& &1.trust_score)
         |> Enum.sum()
-      
+
       # Normalize to 0-1 scale (trust_score is 0-10)
       min(total_weight / 100.0, 1.0)
     else
@@ -621,7 +1046,8 @@ defmodule Cinegraph.Cultural do
     if movie_data && movie_data.movie_list_items do
       count = length(movie_data.movie_list_items)
       # Logarithmic scale - more lists = higher score but with diminishing returns
-      :math.log(count + 1) / :math.log(50)  # Max around 50 list appearances
+      # Max around 50 list appearances
+      :math.log(count + 1) / :math.log(50)
     else
       0.0
     end
@@ -629,16 +1055,16 @@ defmodule Cinegraph.Cultural do
 
   defp calculate_award_recognition(movie_data) do
     if movie_data && movie_data.movie_list_items do
-      award_items = 
+      award_items =
         movie_data.movie_list_items
-        |> Enum.filter(& &1.award_result in ["winner", "nominee"])
-      
-      winners = Enum.count(award_items, & &1.award_result == "winner")
-      nominees = Enum.count(award_items, & &1.award_result == "nominee")
-      
+        |> Enum.filter(&(&1.award_result in ["winner", "nominee"]))
+
+      winners = Enum.count(award_items, &(&1.award_result == "winner"))
+      nominees = Enum.count(award_items, &(&1.award_result == "nominee"))
+
       # Winners worth more than nominees
-      score = (winners * 1.0) + (nominees * 0.5)
-      
+      score = winners * 1.0 + nominees * 0.5
+
       # Normalize
       min(score / 10.0, 1.0)
     else

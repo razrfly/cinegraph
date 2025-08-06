@@ -13,7 +13,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets watch provider information for a movie by region.
   Critical for understanding global streaming reach.
-  
+
   ## Examples
       
       iex> Cinegraph.Services.TMDb.Extended.get_movie_watch_providers(550)
@@ -26,7 +26,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets user reviews for a movie.
   Critical for sentiment analysis and engagement metrics.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
     
@@ -43,7 +43,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets lists that contain a specific movie.
   Useful for understanding movie categorization and curation.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
   """
@@ -55,7 +55,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets trending movies for a specific time window.
   Critical for real-time popularity metrics.
-  
+
   ## Parameters
     - `time_window` - "day" or "week"
     
@@ -84,7 +84,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets movies currently playing in theaters.
   Critical for understanding current theatrical presence.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
     - `:region` - ISO 3166-1 code (e.g., "US")
@@ -97,7 +97,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets upcoming movie releases.
   Important for tracking future releases and anticipation.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
     - `:region` - ISO 3166-1 code (e.g., "US")
@@ -118,7 +118,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets a list of all available watch providers.
   Useful for understanding the streaming landscape.
-  
+
   ## Options
     - `:watch_region` - ISO 3166-1 code (required)
   """
@@ -170,61 +170,61 @@ defmodule Cinegraph.Services.TMDb.Extended do
 
   @doc """
   Searches for people by name.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
   """
   def search_people(query, opts \\ []) do
-    params = 
+    params =
       opts
       |> Keyword.take([:page])
       |> Enum.into(%{query: query})
-      
+
     Client.get("/search/person", params)
   end
 
   @doc """
   Searches for production companies.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
   """
   def search_companies(query, opts \\ []) do
-    params = 
+    params =
       opts
       |> Keyword.take([:page])
       |> Enum.into(%{query: query})
-      
+
     Client.get("/search/company", params)
   end
 
   @doc """
   Searches for keywords.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
   """
   def search_keywords(query, opts \\ []) do
-    params = 
+    params =
       opts
       |> Keyword.take([:page])
       |> Enum.into(%{query: query})
-      
+
     Client.get("/search/keyword", params)
   end
 
   @doc """
   Multi-search across movies, TV shows, and people.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
   """
   def search_multi(query, opts \\ []) do
-    params = 
+    params =
       opts
       |> Keyword.take([:page])
       |> Enum.into(%{query: query})
-      
+
     Client.get("/search/multi", params)
   end
 
@@ -235,7 +235,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Enhanced movie discovery with all available filters.
   Critical for cultural relevance queries.
-  
+
   ## Options
     - `:page` - Page number
     - `:sort_by` - Sort results by
@@ -291,11 +291,11 @@ defmodule Cinegraph.Services.TMDb.Extended do
       )
   """
   def discover_movies_enhanced(opts \\ []) do
-    params = 
+    params =
       opts
       |> Enum.map(&transform_discover_param/1)
       |> Enum.into(%{})
-      
+
     Client.get("/discover/movie", params)
   end
 
@@ -306,7 +306,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
   @doc """
   Gets popular people.
   Important for tracking influential figures.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
   """
@@ -324,7 +324,7 @@ defmodule Cinegraph.Services.TMDb.Extended do
 
   @doc """
   Gets tagged images for a person.
-  
+
   ## Options
     - `:page` - Page number (default: 1)
   """
@@ -343,25 +343,28 @@ defmodule Cinegraph.Services.TMDb.Extended do
   """
   def get_movie_ultra_comprehensive(movie_id) do
     # First get the standard comprehensive data
-    append = "credits,images,keywords,external_ids,release_dates,videos,recommendations,similar,alternative_titles,translations,watch/providers,reviews,lists"
-    
+    append =
+      "credits,images,keywords,external_ids,release_dates,videos,recommendations,similar,alternative_titles,translations,watch/providers,reviews,lists"
+
     case Client.get("/movie/#{movie_id}", %{append_to_response: append}) do
       {:ok, movie} ->
         # Watch providers might need separate call if not in append_to_response
-        movie_with_providers = 
+        movie_with_providers =
           case movie["watch/providers"] do
             nil ->
               case get_movie_watch_providers(movie_id) do
                 {:ok, providers} -> Map.put(movie, "watch_providers", providers)
                 _ -> movie
               end
+
             providers ->
               Map.put(movie, "watch_providers", providers)
           end
-          
+
         {:ok, movie_with_providers}
-        
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -377,21 +380,17 @@ defmodule Cinegraph.Services.TMDb.Extended do
       {:primary_release_date_lte, v} -> {"primary_release_date.lte", to_string(v)}
       {:release_date_gte, v} -> {"release_date.gte", to_string(v)}
       {:release_date_lte, v} -> {"release_date.lte", to_string(v)}
-      
       # Vote parameters
       {:vote_count_gte, v} -> {"vote_count.gte", to_string(v)}
       {:vote_count_lte, v} -> {"vote_count.lte", to_string(v)}
       {:vote_average_gte, v} -> {"vote_average.gte", to_string(v)}
       {:vote_average_lte, v} -> {"vote_average.lte", to_string(v)}
-      
       # Runtime parameters
       {:with_runtime_gte, v} -> {"with_runtime.gte", to_string(v)}
       {:with_runtime_lte, v} -> {"with_runtime.lte", to_string(v)}
-      
       # Certification parameters
       {:certification_gte, v} -> {"certification.gte", to_string(v)}
       {:certification_lte, v} -> {"certification.lte", to_string(v)}
-      
       # Array parameters - join if list
       {:with_genres, v} when is_list(v) -> {"with_genres", Enum.join(v, ",")}
       {:without_genres, v} when is_list(v) -> {"without_genres", Enum.join(v, ",")}
@@ -399,7 +398,6 @@ defmodule Cinegraph.Services.TMDb.Extended do
       {:without_keywords, v} when is_list(v) -> {"without_keywords", Enum.join(v, ",")}
       {:with_companies, v} when is_list(v) -> {"with_companies", Enum.join(v, ",")}
       {:with_watch_providers, v} when is_list(v) -> {"with_watch_providers", Enum.join(v, ",")}
-      
       # Default - convert atom to string
       {k, v} -> {to_string(k), to_string(v)}
     end
