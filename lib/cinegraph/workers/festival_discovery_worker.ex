@@ -98,9 +98,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         # Count person vs film nominations by checking category types
         person_nominations =
           Enum.count(categories, fn category_data ->
-            category_name = category_data["category"] || category_data[:category]
+            category_name = extract_category_name(category_data, category_format)
 
-            String.contains?(category_name, [
+            category_name && String.contains?(category_name, [
               "Actor",
               "Actress",
               "Directing",
@@ -180,30 +180,36 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   end
 
   defp ensure_imdb_enhancement(ceremony) do
-    if ceremony.data["imdb_matched"] do
-      ceremony
-    else
-      Logger.info("Enhancing ceremony #{ceremony.year} with IMDb data...")
+    # Only use IMDb enhancement for Oscars, not other festivals
+    if ceremony.organization.abbreviation == "AMPAS" do
+      if ceremony.data["imdb_matched"] do
+        ceremony
+      else
+        Logger.info("Enhancing Oscar ceremony #{ceremony.year} with IMDb data...")
 
-      case Cinegraph.Scrapers.ImdbOscarScraper.enhance_ceremony_with_imdb(ceremony) do
-        {:ok, enhanced_data} ->
-          # Update the ceremony with enhanced data
-          changeset = FestivalCeremony.changeset(ceremony, %{data: enhanced_data})
+        case Cinegraph.Scrapers.ImdbOscarScraper.enhance_ceremony_with_imdb(ceremony) do
+          {:ok, enhanced_data} ->
+            # Update the ceremony with enhanced data
+            changeset = FestivalCeremony.changeset(ceremony, %{data: enhanced_data})
 
-          case Repo.update(changeset) do
-            {:ok, updated} ->
-              Logger.info("Successfully enhanced ceremony #{ceremony.year} with IMDb data")
-              updated
+            case Repo.update(changeset) do
+              {:ok, updated} ->
+                Logger.info("Successfully enhanced Oscar ceremony #{ceremony.year} with IMDb data")
+                updated
 
-            {:error, reason} ->
-              Logger.error("Failed to update ceremony with enhanced data: #{inspect(reason)}")
-              ceremony
-          end
+              {:error, reason} ->
+                Logger.error("Failed to update ceremony with enhanced data: #{inspect(reason)}")
+                ceremony
+            end
 
-        {:error, reason} ->
-          Logger.error("Failed to enhance ceremony #{ceremony.year}: #{inspect(reason)}")
-          ceremony
+          {:error, reason} ->
+            Logger.error("Failed to enhance Oscar ceremony #{ceremony.year}: #{inspect(reason)}")
+            ceremony
+        end
       end
+    else
+      # Non-Oscar festivals don't use IMDb enhancement
+      ceremony
     end
   end
 
