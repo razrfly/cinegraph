@@ -302,7 +302,7 @@ defmodule Cinegraph.Movies do
   def create_or_update_person_from_tmdb(tmdb_data) do
     changeset = Person.from_tmdb(tmdb_data)
 
-    case get_person_by_tmdb_id(tmdb_data["id"]) do
+    result = case get_person_by_tmdb_id(tmdb_data["id"]) do
       nil ->
         Repo.insert(changeset)
 
@@ -310,6 +310,17 @@ defmodule Cinegraph.Movies do
         existing_person
         |> Person.changeset(changeset.changes)
         |> Repo.update()
+    end
+    
+    # Link any pending person nominations after person creation
+    case result do
+      {:ok, person} ->
+        # Call the TMDbDetailsWorker's linking function for person nominations
+        Cinegraph.Workers.TMDbDetailsWorker.link_pending_person_nominations(person)
+        {:ok, person}
+      
+      error ->
+        error
     end
   end
 

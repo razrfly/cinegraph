@@ -330,12 +330,13 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
 
           case movie_result do
             {:ok, movie} ->
-              # Create the nomination
+              # Create the nomination with existing movie
               create_nomination(movie, nominee, category, ceremony)
 
-            {:queued, job_id} ->
-              # Movie creation queued
-              %{action: :queued_movie, job_id: job_id, title: film_title}
+            {:queued, _job_id} ->
+              # Movie creation queued - still create nomination with pending movie
+              Logger.info("Movie queued for creation, creating pending nomination for #{film_title}")
+              create_pending_nomination(film_imdb_id, film_title, nominee, category, ceremony)
 
             {:error, reason} ->
               Logger.error("Failed to process movie #{film_title}: #{inspect(reason)}")
@@ -398,12 +399,15 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         nil
       end
 
-    # Build nomination attributes
+    # Build nomination attributes - now storing person data for pending linking
     attrs = %{
       ceremony_id: ceremony.id,
       category_id: category.id,
       movie_id: movie.id,
       person_id: person_id,
+      # Store person data for later linking if person doesn't exist yet
+      person_imdb_ids: if(is_nil(person_id) && person_imdb_ids != [], do: person_imdb_ids, else: []),
+      person_name: if(is_nil(person_id) && nominee_name, do: nominee_name, else: nil),
       won: is_winner,
       details: %{
         "nominee_names" => nominee_name,
@@ -442,6 +446,71 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           )
 
           %{action: :error, reason: changeset.errors, title: movie.title}
+      end
+    end
+  end
+
+  defp create_pending_nomination(film_imdb_id, film_title, nominee, category, ceremony) do
+    # Handle both atom and string keys
+    is_winner = nominee["winner"] || nominee[:winner] || false
+    nominee_name = nominee["name"] || nominee[:name]
+    person_imdb_ids = nominee["person_imdb_ids"] || nominee[:person_imdb_ids] || []
+
+    # Try to find the person if this is a person category
+    person_id =
+      if category && category.tracks_person && person_imdb_ids != [] do
+        find_or_create_person(person_imdb_ids, nominee_name)
+      else
+        nil
+      end
+
+    # Build nomination attributes - with movie_imdb_id instead of movie_id
+    attrs = %{
+      ceremony_id: ceremony.id,
+      category_id: category.id,
+      movie_id: nil,  # No movie yet
+      movie_imdb_id: film_imdb_id,  # Store IMDb ID for later linking
+      movie_title: film_title,  # Store title for reference
+      person_id: person_id,
+      # Store person data for later linking if person doesn't exist yet
+      person_imdb_ids: if(is_nil(person_id) && person_imdb_ids != [], do: person_imdb_ids, else: []),
+      person_name: if(is_nil(person_id) && nominee_name, do: nominee_name, else: nil),
+      won: is_winner,
+      details: %{
+        "nominee_names" => nominee_name,
+        "person_imdb_ids" => person_imdb_ids
+      }
+    }
+
+    # Check if nomination already exists for this IMDb ID
+    existing_count =
+      from(n in FestivalNomination,
+        where:
+          n.ceremony_id == ^ceremony.id and
+            n.category_id == ^category.id and
+            n.movie_imdb_id == ^film_imdb_id,
+        select: count(n.id)
+      )
+      |> Repo.one()
+
+    if existing_count > 0 do
+      Logger.debug(
+        "Pending nomination already exists for #{film_title} (#{film_imdb_id}) in #{category.name}"
+      )
+      %{action: :existing, movie_imdb_id: film_imdb_id, title: film_title}
+    else
+      case %FestivalNomination{}
+           |> FestivalNomination.changeset(attrs)
+           |> Repo.insert() do
+        {:ok, nomination} ->
+          Logger.info("Created pending nomination for #{film_title} (#{film_imdb_id}) in #{category.name}")
+          %{action: :created_nomination, nomination_id: nomination.id, movie_imdb_id: film_imdb_id, title: film_title}
+
+        {:error, changeset} ->
+          Logger.error(
+            "Failed to create pending nomination for #{film_title}: #{inspect(changeset.errors)}"
+          )
+          %{action: :error, reason: changeset.errors, title: film_title}
       end
     end
   end

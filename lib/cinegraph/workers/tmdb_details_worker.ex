@@ -12,6 +12,8 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   alias Cinegraph.Workers.{OMDbEnrichmentWorker, CollaborationWorker}
   alias Cinegraph.Imports.QualityFilter
   alias Cinegraph.Services.TMDb
+  alias Cinegraph.Festivals.FestivalNomination
+  import Ecto.Query
   require Logger
 
   @impl Oban.Worker
@@ -134,8 +136,9 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       {:ok, {:ok, movie}} ->
         Logger.info("Successfully fully imported movie: #{movie.title} (#{movie.tmdb_id})")
 
-        # Queue OMDb enrichment if we have an IMDb ID
+        # Link any pending festival nominations for this movie
         if movie.imdb_id do
+          link_pending_nominations(movie)
           queue_omdb_enrichment(movie)
         else
           Logger.info("No IMDb ID for movie #{movie.title}, skipping OMDb enrichment")
@@ -173,6 +176,11 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     case Movies.create_soft_import_movie(movie_data) do
       {:ok, movie} ->
         Logger.info("Successfully soft imported movie: #{movie.title} (#{movie.tmdb_id})")
+
+        # Link any pending festival nominations for this movie
+        if movie.imdb_id do
+          link_pending_nominations(movie)
+        end
 
         # Update job metadata with soft import details
         update_job_meta(job, %{
@@ -395,6 +403,72 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
 
     Logger.warning("Movie '#{title}' (#{imdb_id}) not found in TMDb")
     {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb"}
+  end
+
+  defp link_pending_nominations(movie) do
+    # Find all pending nominations for this movie's IMDb ID
+    pending_nominations = 
+      from(n in FestivalNomination,
+        where: n.movie_imdb_id == ^movie.imdb_id and is_nil(n.movie_id)
+      )
+      |> Repo.all()
+    
+    if length(pending_nominations) > 0 do
+      Logger.info("Found #{length(pending_nominations)} pending nominations for #{movie.title} (#{movie.imdb_id})")
+      
+      # Update each nomination to link to the movie
+      Enum.each(pending_nominations, fn nomination ->
+        nomination
+        |> Ecto.Changeset.change(%{movie_id: movie.id})
+        |> Repo.update()
+        |> case do
+          {:ok, _updated} ->
+            Logger.info("Linked nomination #{nomination.id} to movie #{movie.id}")
+          {:error, changeset} ->
+            Logger.error("Failed to link nomination #{nomination.id}: #{inspect(changeset.errors)}")
+        end
+      end)
+      
+      Logger.info("Successfully linked #{length(pending_nominations)} nominations to movie #{movie.title}")
+    else
+      Logger.debug("No pending nominations found for #{movie.title} (#{movie.imdb_id})")
+    end
+  end
+
+  @doc """
+  Links pending festival nominations to a person after the person is created.
+  Called when a person is created and has IMDb IDs.
+  """
+  def link_pending_person_nominations(person) do
+    if person.imdb_id do
+      # Find all pending nominations that have this person's IMDb ID
+      pending_nominations = 
+        from(n in FestivalNomination,
+          where: ^person.imdb_id in n.person_imdb_ids and is_nil(n.person_id)
+        )
+        |> Repo.all()
+      
+      if length(pending_nominations) > 0 do
+        Logger.info("Found #{length(pending_nominations)} pending person nominations for #{person.name} (#{person.imdb_id})")
+        
+        # Update each nomination to link to the person
+        Enum.each(pending_nominations, fn nomination ->
+          nomination
+          |> Ecto.Changeset.change(%{person_id: person.id})
+          |> Repo.update()
+          |> case do
+            {:ok, _updated} ->
+              Logger.info("Linked nomination #{nomination.id} to person #{person.id}")
+            {:error, changeset} ->
+              Logger.error("Failed to link nomination #{nomination.id} to person: #{inspect(changeset.errors)}")
+          end
+        end)
+        
+        Logger.info("Successfully linked #{length(pending_nominations)} nominations to person #{person.name}")
+      else
+        Logger.debug("No pending nominations found for person #{person.name} (#{person.imdb_id})")
+      end
+    end
   end
 
   defp update_job_meta(job, meta) do
