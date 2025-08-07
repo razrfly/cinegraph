@@ -399,8 +399,15 @@ defmodule CinegraphWeb.ImportDashboardLive do
       ) do
     # Special handling for Academy Awards/Oscars - use the Oscar-specific scraper
     if festival == "oscars" do
-      # Route to Oscar import handler
-      handle_event("import_oscars", %{"year_range" => year_range}, socket)
+      # Validate Oscar configuration exists for consistency
+      case Events.get_active_by_source_key("oscars") do
+        nil ->
+          socket = put_flash(socket, :error, "Oscar configuration not found in database")
+          {:noreply, socket}
+        _event ->
+          # Route to Oscar import handler
+          handle_event("import_oscars", %{"year_range" => year_range}, socket)
+      end
     else
       # Validate festival exists in database before proceeding
       festival_event = Events.get_active_by_source_key(festival)
