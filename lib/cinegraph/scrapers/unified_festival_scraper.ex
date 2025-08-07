@@ -7,7 +7,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   require Logger
   
   alias Cinegraph.Events
-  alias Cinegraph.Events.FestivalEvent
+  alias Cinegraph.Events.{FestivalEvent, FestivalEventCache}
 
   @timeout 30_000
 
@@ -47,7 +47,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   Get all supported festival keys.
   """
   def supported_festivals do
-    Events.list_active_events()
+    FestivalEventCache.get_active_events()
     |> Enum.map(& &1.source_key)
   end
 
@@ -309,8 +309,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   end
   
   defp get_festival_event_by_config(festival_config) do
-    Events.list_active_events()
-    |> Enum.find(fn event -> event.abbreviation == festival_config.abbreviation end)
+    FestivalEventCache.find_by_abbreviation(festival_config.abbreviation)
   end
 
   defp extract_imdb_id(nil), do: nil

@@ -7,7 +7,7 @@ defmodule Cinegraph.Events do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
 
-  alias Cinegraph.Events.{FestivalEvent, FestivalDate}
+  alias Cinegraph.Events.{FestivalEvent, FestivalDate, FestivalEventCache}
 
   # ========================================
   # FESTIVAL EVENTS
@@ -55,18 +55,51 @@ defmodule Cinegraph.Events do
   Creates a festival event.
   """
   def create_festival_event(attrs \\ %{}) do
-    %FestivalEvent{}
-    |> FestivalEvent.changeset(attrs)
-    |> Repo.insert()
+    result = 
+      %FestivalEvent{}
+      |> FestivalEvent.changeset(attrs)
+      |> Repo.insert()
+    
+    case result do
+      {:ok, _} = success ->
+        FestivalEventCache.invalidate()
+        success
+      error ->
+        error
+    end
   end
 
   @doc """
   Updates a festival event.
   """
   def update_festival_event(%FestivalEvent{} = event, attrs) do
-    event
-    |> FestivalEvent.changeset(attrs)
-    |> Repo.update()
+    result = 
+      event
+      |> FestivalEvent.changeset(attrs)
+      |> Repo.update()
+    
+    case result do
+      {:ok, _} = success ->
+        FestivalEventCache.invalidate()
+        success
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Deletes a festival event.
+  """
+  def delete_festival_event(%FestivalEvent{} = event) do
+    result = Repo.delete(event)
+    
+    case result do
+      {:ok, _} = success ->
+        FestivalEventCache.invalidate()
+        success
+      error ->
+        error
+    end
   end
 
   @doc """
