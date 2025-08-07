@@ -180,37 +180,10 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   end
 
   defp ensure_imdb_enhancement(ceremony) do
-    # Only use IMDb enhancement for Oscars, not other festivals
-    if ceremony.organization.abbreviation == "AMPAS" do
-      if ceremony.data["imdb_matched"] do
-        ceremony
-      else
-        Logger.info("Enhancing Oscar ceremony #{ceremony.year} with IMDb data...")
-
-        case Cinegraph.Scrapers.ImdbOscarScraper.enhance_ceremony_with_imdb(ceremony) do
-          {:ok, enhanced_data} ->
-            # Update the ceremony with enhanced data
-            changeset = FestivalCeremony.changeset(ceremony, %{data: enhanced_data})
-
-            case Repo.update(changeset) do
-              {:ok, updated} ->
-                Logger.info("Successfully enhanced Oscar ceremony #{ceremony.year} with IMDb data")
-                updated
-
-              {:error, reason} ->
-                Logger.error("Failed to update ceremony with enhanced data: #{inspect(reason)}")
-                ceremony
-            end
-
-          {:error, reason} ->
-            Logger.error("Failed to enhance Oscar ceremony #{ceremony.year}: #{inspect(reason)}")
-            ceremony
-        end
-      end
-    else
-      # Non-Oscar festivals don't use IMDb enhancement
-      ceremony
-    end
+    # No longer using IMDb enhancement for any festivals
+    # Oscar data comes directly from oscars.org
+    # Other festivals already have their data from UnifiedFestivalScraper
+    ceremony
   end
 
   defp ensure_category_exists(category_name, organization_id) do
