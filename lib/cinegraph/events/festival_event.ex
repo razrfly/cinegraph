@@ -75,7 +75,7 @@ defmodule Cinegraph.Events.FestivalEvent do
     |> validate_inclusion(:primary_source, ["imdb", "official", "api", "custom"])
     |> validate_inclusion(:ceremony_vs_festival, ["ceremony", "festival"], allow_nil: true)
     |> validate_inclusion(:current_year_status, ["upcoming", "in_progress", "completed", "cancelled"], allow_nil: true)
-    |> validate_inclusion(:categories_structure, ["hierarchical", "flat", "custom"])
+    |> validate_inclusion(:categories_structure, ["hierarchical", "flat", "custom"], allow_nil: true)
     |> validate_number(:reliability_score, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
     |> validate_month_if_present()
     |> validate_day_if_present()

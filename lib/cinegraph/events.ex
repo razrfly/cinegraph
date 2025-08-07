@@ -75,7 +75,7 @@ defmodule Cinegraph.Events do
   def update_import_stats(%FestivalEvent{} = event, success \\ true, error \\ nil) do
     attrs = %{
       last_successful_import: if(success, do: DateTime.utc_now(), else: event.last_successful_import),
-      total_successful_imports: if(success, do: event.total_successful_imports + 1, else: event.total_successful_imports),
+      total_successful_imports: if(success, do: (event.total_successful_imports || 0) + 1, else: event.total_successful_imports),
       last_error: error
     }
     

@@ -543,7 +543,7 @@ create_festival_dates = fn ->
       year: 2025,
       start_date: ~D[2025-03-07],
       end_date: ~D[2025-03-15],
-      status: "completed",
+      status: "upcoming",
       source: "official"
     })
   end
