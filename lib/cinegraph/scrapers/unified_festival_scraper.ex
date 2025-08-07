@@ -29,16 +29,23 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
 
       festival_event ->
         festival_config = FestivalEvent.to_scraper_config(festival_event)
-        url = build_imdb_url(festival_config.event_id, year)
-        Logger.info("Fetching #{festival_config.name} data for #{year} from: #{url}")
+        
+        # Build URL using template from database or fall back to default IMDb format
+        url = build_festival_url(festival_config, year)
+        
+        if url do
+          Logger.info("Fetching #{festival_config.name} data for #{year} from: #{url}")
 
-        case fetch_html_direct(url) do
-          {:ok, html} ->
-            parse_festival_html(html, year, festival_config)
+          case fetch_html_direct(url) do
+            {:ok, html} ->
+              parse_festival_html(html, year, festival_config)
 
-          {:error, reason} ->
-            Logger.error("Failed to fetch #{festival_config.name} #{year}: #{inspect(reason)}")
-            {:error, reason}
+            {:error, reason} ->
+              Logger.error("Failed to fetch #{festival_config.name} #{year}: #{inspect(reason)}")
+              {:error, reason}
+          end
+        else
+          {:error, "No URL template or event ID configured for #{festival_key}"}
         end
     end
   end
@@ -61,8 +68,22 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     end
   end
 
-  defp build_imdb_url(event_id, year) do
-    "https://www.imdb.com/event/#{event_id}/#{year}/1/"
+  defp build_festival_url(festival_config, year) do
+    cond do
+      # First check for url_template in config
+      festival_config[:url_template] ->
+        festival_config[:url_template]
+        |> String.replace("{event_id}", festival_config[:event_id] || "")
+        |> String.replace("{year}", to_string(year))
+      
+      # Fall back to IMDb URL if event_id is present
+      festival_config[:event_id] ->
+        "https://www.imdb.com/event/#{festival_config[:event_id]}/#{year}/1/"
+      
+      # No URL can be built
+      true ->
+        nil
+    end
   end
 
   defp fetch_html_direct(url) do
