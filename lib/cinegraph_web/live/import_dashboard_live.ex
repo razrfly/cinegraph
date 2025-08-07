@@ -397,58 +397,64 @@ defmodule CinegraphWeb.ImportDashboardLive do
         %{"festival" => festival, "year_range" => year_range},
         socket
       ) do
-    # Validate festival exists in database before proceeding
-    festival_event = Events.get_active_by_source_key(festival)
-    
-    result =
-      case festival_event do
-        nil ->
-          {:error, "Festival not found in database"}
-          
-        _event ->
-          case year_range do
-            "all" ->
-              # Get year range from database event configuration or use default
-              year_range = get_festival_year_range(festival_event)
-              Cultural.import_festival_years(festival, year_range)
+    # Special handling for Academy Awards/Oscars - use the Oscar-specific scraper
+    if festival == "oscars" do
+      # Route to Oscar import handler
+      handle_event("import_oscars", %{"year_range" => year_range}, socket)
+    else
+      # Validate festival exists in database before proceeding
+      festival_event = Events.get_active_by_source_key(festival)
+      
+      result =
+        case festival_event do
+          nil ->
+            {:error, "Festival not found in database"}
+            
+          _event ->
+            case year_range do
+              "all" ->
+                # Get year range from database event configuration or use default
+                year_range = get_festival_year_range(festival_event)
+                Cultural.import_festival_years(festival, year_range)
 
-            year_str ->
-              case Integer.parse(year_str) do
-                {year, ""} when year > 1900 and year <= 2030 ->
-                  # Use Venice-specific function for backward compatibility
-                  if festival == "venice" do
-                    Cultural.import_venice_year(year)
-                  else
-                    Cultural.import_festival(festival, year)
-                  end
+              year_str ->
+                case Integer.parse(year_str) do
+                  {year, ""} when year > 1900 and year <= 2030 ->
+                    # Use Venice-specific function for backward compatibility
+                    if festival == "venice" do
+                      Cultural.import_venice_year(year)
+                    else
+                      Cultural.import_festival(festival, year)
+                    end
 
-                _ ->
-                  {:error, "Invalid year format"}
-              end
-          end
+                  _ ->
+                    {:error, "Invalid year format"}
+                end
+            end
+        end
+
+      case result do
+        {:ok, _import_result} ->
+          festival_name = get_festival_display_name(festival)
+
+          message =
+            case year_range do
+              "all" -> "Queued #{festival_name} import for all years (2020-2024)"
+              _ -> "Queued #{festival_name} import for #{year_range}"
+            end
+
+          socket =
+            socket
+            |> put_flash(:info, message)
+            |> assign(:festival_import_running, true)
+            |> assign(:festival_import_progress, "Starting import...")
+
+          {:noreply, socket}
+
+        {:error, reason} ->
+          socket = put_flash(socket, :error, "Failed to queue festival import: #{inspect(reason)}")
+          {:noreply, socket}
       end
-
-    case result do
-      {:ok, _import_result} ->
-        festival_name = get_festival_display_name(festival)
-
-        message =
-          case year_range do
-            "all" -> "Queued #{festival_name} import for all years (2020-2024)"
-            _ -> "Queued #{festival_name} import for #{year_range}"
-          end
-
-        socket =
-          socket
-          |> put_flash(:info, message)
-          |> assign(:festival_import_running, true)
-          |> assign(:festival_import_progress, "Starting import...")
-
-        {:noreply, socket}
-
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to queue festival import: #{inspect(reason)}")
-        {:noreply, socket}
     end
   end
 
@@ -1025,63 +1031,88 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp get_festival_stats do
-    # Get Venice Film Festival statistics
-    venice_org = Cinegraph.Festivals.get_organization_by_abbreviation("VIFF")
+    # Get all festival organizations except AMPAS (shown in Academy Awards section)
+    festival_orgs = 
+      Repo.all(
+        from fo in Cinegraph.Festivals.FestivalOrganization,
+          where: fo.abbreviation != "AMPAS",
+          select: fo
+      )
 
-    if venice_org && venice_org.id do
-      # Get ceremony years and their nomination/win counts from festival tables
-      ceremony_stats =
-        Repo.all(
-          from fc in Cinegraph.Festivals.FestivalCeremony,
-            left_join: nom in Cinegraph.Festivals.FestivalNomination,
-            on: nom.ceremony_id == fc.id,
-            where: fc.organization_id == ^venice_org.id,
-            group_by: [fc.year, fc.id],
-            select:
-              {fc.year, count(nom.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", nom.won))},
-            order_by: [desc: fc.year]
-        )
+    # Collect stats for all festivals
+    all_stats = 
+      festival_orgs
+      |> Enum.flat_map(fn org ->
+        # Get ceremony years and their nomination/win counts from festival tables
+        ceremony_stats =
+          Repo.all(
+            from fc in Cinegraph.Festivals.FestivalCeremony,
+              left_join: nom in Cinegraph.Festivals.FestivalNomination,
+              on: nom.ceremony_id == fc.id,
+              where: fc.organization_id == ^org.id,
+              group_by: [fc.year, fc.id],
+              select:
+                {fc.year, count(nom.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", nom.won))},
+              order_by: [desc: fc.year]
+          )
 
-      # Calculate totals
-      total_nominations =
-        Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
+        if length(ceremony_stats) > 0 do
+          # Calculate totals
+          total_nominations =
+            Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
 
-      total_wins =
-        Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
+          total_wins =
+            Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
 
-      total_ceremonies = length(ceremony_stats)
+          total_ceremonies = length(ceremony_stats)
 
-      # Count categories
-      total_categories =
-        Repo.aggregate(
-          from(c in Cinegraph.Festivals.FestivalCategory,
-            where: c.organization_id == ^venice_org.id
-          ),
-          :count
-        )
+          # Count categories
+          total_categories =
+            Repo.aggregate(
+              from(c in Cinegraph.Festivals.FestivalCategory,
+                where: c.organization_id == ^org.id
+              ),
+              :count
+            )
 
-      # Build stats list
-      base_stats = [
-        %{label: "Venice Ceremonies", value: "#{total_ceremonies}"},
-        %{label: "Total Nominations", value: format_number(total_nominations)},
-        %{label: "Total Wins", value: format_number(total_wins)},
-        %{label: "Categories", value: format_number(total_categories)}
-      ]
+          # Get festival display name
+          festival_name = 
+            case org.abbreviation do
+              "VIFF" -> "Venice"
+              "CFF" -> "Cannes"
+              "BIFF" -> "Berlin"
+              _ -> org.name
+            end
 
-      # Add year-by-year breakdown if we have data
-      year_stats =
-        ceremony_stats
-        |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)
-        # Show last 5 years only
-        |> Enum.take(5)
-        |> Enum.map(fn {year, nominations, wins} ->
-          %{
-            label: "Venice #{year}",
-            value: "#{wins || 0}/#{nominations}"
-          }
-        end)
+          # Build stats list for this festival
+          base_stats = [
+            %{label: "#{festival_name} Ceremonies", value: "#{total_ceremonies}"},
+            %{label: "#{festival_name} Nominations", value: format_number(total_nominations)},
+            %{label: "#{festival_name} Wins", value: format_number(total_wins)},
+            %{label: "#{festival_name} Categories", value: format_number(total_categories)}
+          ]
 
-      base_stats ++ year_stats
+          # Add year-by-year breakdown if we have data
+          year_stats =
+            ceremony_stats
+            |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)
+            # Show last 3 years only per festival
+            |> Enum.take(3)
+            |> Enum.map(fn {year, nominations, wins} ->
+              %{
+                label: "#{festival_name} #{year}",
+                value: "#{wins || 0}/#{nominations}"
+              }
+            end)
+
+          base_stats ++ year_stats
+        else
+          []
+        end
+      end)
+
+    if length(all_stats) > 0 do
+      all_stats
     else
       []
     end
