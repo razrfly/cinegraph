@@ -409,46 +409,127 @@ defmodule CinegraphWeb.ImportDashboardLive do
           handle_event("import_oscars", %{"year_range" => year_range}, socket)
       end
     else
-      # Validate festival exists in database before proceeding
-      festival_event = Events.get_active_by_source_key(festival)
-      
-      result =
-        case festival_event do
-          nil ->
-            {:error, "Festival not found in database"}
+      # Handle importing all festivals
+      if festival == "all" do
+        # Import all active festivals
+        active_events = Events.list_active_events()
+        
+        results = 
+          Enum.map(active_events, fn event ->
+            Logger.info("Processing import for festival: #{event.source_key} (#{event.name})")
             
-          _event ->
-            case year_range do
-              "all" ->
-                # Get year range from database event configuration or use default
-                year_range = get_festival_year_range(festival_event)
-                Cultural.import_festival_years(festival, year_range)
-
-              year_str ->
-                case Integer.parse(year_str) do
-                  {year, ""} when year > 1900 and year <= 2030 ->
-                    # Use Venice-specific function for backward compatibility
-                    if festival == "venice" do
-                      Cultural.import_venice_year(year)
-                    else
-                      Cultural.import_festival(festival, year)
-                    end
-
-                  _ ->
-                    {:error, "Invalid year format"}
-                end
+            year_range_to_use = 
+              case year_range do
+                "all" -> get_festival_year_range(event)
+                year_str -> 
+                  case Integer.parse(year_str) do
+                    {year, ""} -> year
+                    _ -> nil
+                  end
+              end
+            
+            Logger.info("Year range for #{event.source_key}: #{inspect(year_range_to_use)}")
+            
+            if year_range_to_use do
+              # Special handling for Oscar imports - MUST be first to prevent falling through
+              result = cond do
+                event.source_key == "oscars" and is_integer(year_range_to_use) ->
+                  Logger.info("OSCAR PATH: Calling import_oscar_year(#{year_range_to_use})")
+                  Cultural.import_oscar_year(year_range_to_use)
+                  
+                event.source_key == "oscars" and is_struct(year_range_to_use, Range) ->
+                  Logger.info("OSCAR PATH: Calling import_oscar_years(#{inspect(year_range_to_use)})")
+                  Cultural.import_oscar_years(year_range_to_use)
+                  
+                event.source_key == "oscars" ->
+                  Logger.error("OSCAR PATH ERROR: Unexpected year_range type: #{inspect(year_range_to_use)}")
+                  {:error, "Invalid year range for Oscars"}
+                  
+                event.source_key == "venice" and is_integer(year_range_to_use) ->
+                  Logger.info("Calling import_venice_year(#{year_range_to_use})")
+                  Cultural.import_venice_year(year_range_to_use)
+                  
+                event.source_key == "venice" ->
+                  Logger.info("Calling import_venice_years(#{inspect(year_range_to_use)})")
+                  Cultural.import_venice_years(year_range_to_use)
+                  
+                is_integer(year_range_to_use) and event.source_key != "oscars" ->
+                  Logger.info("Calling import_festival(#{event.source_key}, #{year_range_to_use})")
+                  Cultural.import_festival(event.source_key, year_range_to_use)
+                  
+                event.source_key != "oscars" ->
+                  Logger.info("Calling import_festival_years(#{event.source_key}, #{inspect(year_range_to_use)})")
+                  Cultural.import_festival_years(event.source_key, year_range_to_use)
+                  
+                true ->
+                  Logger.error("UNHANDLED CASE: festival=#{event.source_key}, year_range=#{inspect(year_range_to_use)}")
+                  {:error, "Unhandled import case"}
+              end
+              
+              Logger.info("Import result for #{event.source_key}: #{inspect(result)}")
+              result
+            else
+              {:error, "Invalid year"}
             end
-        end
+          end)
+        
+        successful_imports = Enum.count(results, fn {status, _} -> status == :ok end)
+        
+        message = 
+          if year_range == "all" do
+            "Queued #{successful_imports} festival imports for all available years"
+          else
+            "Queued #{successful_imports} festival imports for year #{year_range}"
+          end
+        
+        socket =
+          socket
+          |> put_flash(:info, message)
+          |> assign(:festival_import_running, true)
+          |> assign(:festival_import_progress, "Starting imports...")
+        
+        {:noreply, socket}
+      else
+        # Validate festival exists in database before proceeding
+        festival_event = Events.get_active_by_source_key(festival)
+        
+        result =
+          case festival_event do
+            nil ->
+              {:error, "Festival not found in database"}
+              
+            _event ->
+              case year_range do
+                "all" ->
+                  # Get year range from database event configuration or use default
+                  year_range = get_festival_year_range(festival_event)
+                  Cultural.import_festival_years(festival, year_range)
 
-      case result do
-        {:ok, _import_result} ->
-          festival_name = get_festival_display_name(festival)
+                year_str ->
+                  case Integer.parse(year_str) do
+                    {year, ""} when year > 1900 and year <= 2030 ->
+                      # Use Venice-specific function for backward compatibility
+                      if festival == "venice" do
+                        Cultural.import_venice_year(year)
+                      else
+                        Cultural.import_festival(festival, year)
+                      end
 
-          message =
-            case year_range do
-              "all" -> "Queued #{festival_name} import for all years (2020-2024)"
-              _ -> "Queued #{festival_name} import for #{year_range}"
-            end
+                    _ ->
+                      {:error, "Invalid year format"}
+                  end
+              end
+          end
+
+        case result do
+          {:ok, _import_result} ->
+            festival_name = get_festival_display_name(festival)
+
+            message =
+              case year_range do
+                "all" -> "Queued #{festival_name} import for all years (2020-2024)"
+                _ -> "Queued #{festival_name} import for #{year_range}"
+              end
 
           socket =
             socket
@@ -461,6 +542,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
         {:error, reason} ->
           socket = put_flash(socket, :error, "Failed to queue festival import: #{inspect(reason)}")
           {:noreply, socket}
+        end
       end
     end
   end
@@ -1127,14 +1209,24 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
   defp generate_festival_list do
     # Get all active festival events from the database
-    Events.list_active_events()
-    |> Enum.map(fn event ->
-      %{
-        value: event.source_key,
-        label: event.name
-      }
-    end)
-    |> Enum.sort_by(& &1.label)
+    active_events = Events.list_active_events()
+    
+    festival_options = 
+      active_events
+      |> Enum.map(fn event ->
+        %{
+          value: event.source_key,
+          label: event.name
+        }
+      end)
+      |> Enum.sort_by(& &1.label)
+    
+    # Add "All Festivals" option at the beginning if there are multiple festivals
+    if length(festival_options) > 1 do
+      [%{value: "all", label: "All Festivals"} | festival_options]
+    else
+      festival_options
+    end
   end
 
   defp generate_oscar_decades do
