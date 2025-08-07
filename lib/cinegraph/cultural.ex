@@ -423,7 +423,6 @@ defmodule Cinegraph.Cultural do
         on: nomination.person_id == person.id,
         where: nomination.movie_id == ^movie_id and ceremony.organization_id == ^oscar_org.id,
         order_by: [desc: ceremony.year, asc: category.name],
-        preload: [person: person],
         select: %{
           ceremony_year: ceremony.year,
           ceremony_number: ceremony.ceremony_number,
@@ -840,7 +839,6 @@ defmodule Cinegraph.Cultural do
         on: nomination.person_id == person.id,
         where: nomination.movie_id == ^movie_id and ceremony.organization_id == ^venice_org.id,
         order_by: [desc: ceremony.year, asc: category.name],
-        preload: [person: person],
         select: %{
           ceremony_year: ceremony.year,
           category_name: category.name,
