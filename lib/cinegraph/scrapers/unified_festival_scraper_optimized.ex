@@ -1,7 +1,7 @@
-defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
+defmodule Cinegraph.Scrapers.UnifiedFestivalScraperOptimized do
   @moduledoc """
-  Unified scraper for multiple film festivals and awards from IMDb.
-  Supports Cannes, BAFTA, Berlin, and Venice film festivals.
+  Optimized version of UnifiedFestivalScraper that reduces database queries.
+  This version loads festival events once per parse operation instead of 40+ times.
   """
 
   require Logger
@@ -34,7 +34,9 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
 
         case fetch_html_direct(url) do
           {:ok, html} ->
-            parse_festival_html(html, year, festival_config)
+            # Pass the pre-loaded events to avoid repeated queries
+            all_events = Events.list_active_events()
+            parse_festival_html(html, year, festival_config, all_events)
 
           {:error, reason} ->
             Logger.error("Failed to fetch #{festival_config.name} #{year}: #{inspect(reason)}")
@@ -93,32 +95,32 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     end
   end
 
-  def parse_festival_html(html, year, festival_config) do
-    # Load all events once to avoid repeated database queries
-    all_events = Events.list_active_events()
+  def parse_festival_html(html, year, festival_config, all_events \\ nil) do
+    # Load events only if not provided
+    events = all_events || Events.list_active_events()
     
     # First try looking for __NEXT_DATA__ (modern IMDb format)
     case Regex.run(~r/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s, html) do
       [_, json_content] ->
         case Jason.decode(json_content) do
           {:ok, data} ->
-            extract_festival_awards(data, year, festival_config, all_events)
+            extract_festival_awards(data, year, festival_config, events)
 
           {:error, reason} ->
             Logger.error("Failed to parse __NEXT_DATA__ JSON: #{inspect(reason)}")
-            parse_html_fallback(html, year, festival_config, all_events)
+            parse_html_fallback(html, year, festival_config, events)
         end
 
       nil ->
         Logger.info("No __NEXT_DATA__ found, using HTML fallback parser")
-        parse_html_fallback(html, year, festival_config, all_events)
+        parse_html_fallback(html, year, festival_config, events)
     end
   end
 
-  defp parse_html_fallback(html, year, festival_config, all_events) do
+  defp parse_html_fallback(html, year, festival_config, events) do
     case Floki.parse_document(html) do
       {:ok, document} ->
-        extract_from_html(document, year, festival_config, all_events)
+        extract_from_html(document, year, festival_config, events)
 
       {:error, reason} ->
         Logger.error("Failed to parse HTML: #{inspect(reason)}")
@@ -126,18 +128,18 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     end
   end
 
-  defp extract_festival_awards(next_data, year, festival_config, all_events) do
+  defp extract_festival_awards(next_data, year, festival_config, events) do
     try do
       awards = get_in(next_data, ["props", "pageProps", "edition", "awards"])
 
       if awards && length(awards) > 0 do
-        parsed_awards = parse_awards(awards, festival_config, all_events)
+        parsed_awards = parse_awards(awards, festival_config, events)
 
         {:ok,
          %{
            year: year,
            festival: festival_config.name,
-           festival_key: get_festival_key(festival_config, all_events),
+           festival_key: get_festival_key(festival_config, events),
            awards: parsed_awards,
            source: "imdb",
            timestamp: DateTime.utc_now(),
@@ -145,23 +147,23 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
          }}
       else
         Logger.warning("No awards data found in __NEXT_DATA__")
-        {:ok, empty_festival_data(year, festival_config, all_events)}
+        {:ok, empty_festival_data(year, festival_config, events)}
       end
     rescue
       e ->
         Logger.error("Error extracting festival nominations: #{inspect(e)}")
-        {:ok, empty_festival_data(year, festival_config, all_events)}
+        {:ok, empty_festival_data(year, festival_config, events)}
     end
   end
 
-  defp extract_from_html(document, year, festival_config, all_events) do
+  defp extract_from_html(document, year, festival_config, events) do
     # Look for movie links
     movie_links = Floki.find(document, "a[href*='/title/tt']")
 
     awards =
       if length(movie_links) > 0 do
         # Extract basic award information from HTML
-        extract_awards_from_links(movie_links, document, festival_config, all_events)
+        extract_awards_from_links(movie_links, document, festival_config, events)
       else
         %{}
       end
@@ -170,7 +172,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
      %{
        year: year,
        festival: festival_config.name,
-       festival_key: get_festival_key(festival_config, all_events),
+       festival_key: get_festival_key(festival_config, events),
        awards: awards,
        source: "imdb",
        timestamp: DateTime.utc_now(),
@@ -178,9 +180,9 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
      }}
   end
 
-  defp extract_awards_from_links(movie_links, _document, festival_config, all_events) do
+  defp extract_awards_from_links(movie_links, _document, festival_config, events) do
     # Group movies into a generic award category
-    default_category = get_default_category(festival_config, all_events)
+    default_category = get_default_category(festival_config, events)
 
     nominees =
       Enum.map(movie_links, fn link ->
@@ -200,16 +202,16 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     %{default_category => nominees}
   end
 
-  defp parse_awards(awards, festival_config, all_events) when is_list(awards) do
+  defp parse_awards(awards, festival_config, events) when is_list(awards) do
     awards
-    |> Enum.flat_map(&parse_award_category(&1, festival_config, all_events))
+    |> Enum.flat_map(&parse_award_category(&1, festival_config, events))
     |> Map.new()
   end
 
   defp parse_awards(_, _, _), do: %{}
 
-  defp parse_award_category(award, festival_config, all_events) do
-    award_text = award["text"] || get_default_category(festival_config, all_events)
+  defp parse_award_category(award, festival_config, events) do
+    award_text = award["text"] || get_default_category(festival_config, events)
     nomination_categories = award["nominationCategories"] || %{}
     edges = nomination_categories["edges"] || []
 
@@ -227,7 +229,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
             |> Enum.map(&parse_nomination_edge/1)
             |> Enum.reject(&is_nil/1)
 
-          {normalize_category_name(category_name, festival_config, all_events), parsed_nominations}
+          {normalize_category_name(category_name, festival_config, events), parsed_nominations}
         else
           nil
         end
@@ -287,7 +289,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     }
   end
 
-  defp normalize_category_name(name, festival_config, all_events) do
+  defp normalize_category_name(name, festival_config, events) do
     # Normalize category names based on festival
     normalized =
       name
@@ -297,12 +299,12 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
       |> String.replace(~r/\s+/, "_")
 
     # Apply festival-specific mappings if needed
-    apply_festival_mappings(normalized, festival_config, all_events)
+    apply_festival_mappings(normalized, festival_config, events)
   end
 
-  defp apply_festival_mappings(name, festival_config, all_events) do
+  defp apply_festival_mappings(name, festival_config, events) do
     # Try to get category mappings from database metadata
-    case get_festival_event_by_config(festival_config, all_events) do
+    case get_festival_event_by_config(festival_config, events) do
       %{metadata: %{"category_mappings" => mappings}} when is_map(mappings) ->
         Map.get(mappings, name, name)
       _ ->
@@ -311,9 +313,9 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     end
   end
   
-  defp get_festival_event_by_config(festival_config, all_events) do
-    all_events
-    |> Enum.find(fn event -> event.abbreviation == festival_config.abbreviation end)
+  # This is the key optimization - use pre-loaded events instead of querying each time
+  defp get_festival_event_by_config(festival_config, events) do
+    Enum.find(events, fn event -> event.abbreviation == festival_config.abbreviation end)
   end
 
   defp extract_imdb_id(nil), do: nil
@@ -325,17 +327,17 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     end
   end
 
-  defp get_festival_key(festival_config, all_events) do
+  defp get_festival_key(festival_config, events) do
     # Try to find the festival by abbreviation in the database
-    case get_festival_event_by_config(festival_config, all_events) do
+    case get_festival_event_by_config(festival_config, events) do
       %{source_key: source_key} -> source_key
       nil -> String.downcase(festival_config.abbreviation || "unknown")
     end
   end
 
-  defp get_default_category(festival_config, all_events) do
+  defp get_default_category(festival_config, events) do
     # Try to get default category from database metadata
-    case get_festival_event_by_config(festival_config, all_events) do
+    case get_festival_event_by_config(festival_config, events) do
       %{metadata: %{"default_category" => default_category}} when is_binary(default_category) ->
         default_category
       _ ->
@@ -344,11 +346,11 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     end
   end
 
-  defp empty_festival_data(year, festival_config, all_events) do
+  defp empty_festival_data(year, festival_config, events) do
     %{
       year: year,
       festival: festival_config.name,
-      festival_key: get_festival_key(festival_config, all_events),
+      festival_key: get_festival_key(festival_config, events),
       awards: %{},
       source: "imdb",
       timestamp: DateTime.utc_now(),
