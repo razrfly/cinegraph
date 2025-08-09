@@ -418,8 +418,15 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       
       # Update each nomination to link to the movie
       Enum.each(pending_nominations, fn nomination ->
+        # When linking, clear person_name if we have a person_id to avoid duplicate constraint issues
+        update_attrs = if nomination.person_id do
+          %{movie_id: movie.id, person_name: nil}
+        else
+          %{movie_id: movie.id}
+        end
+        
         nomination
-        |> Ecto.Changeset.change(%{movie_id: movie.id})
+        |> Ecto.Changeset.change(update_attrs)
         |> Repo.update()
         |> case do
           {:ok, _updated} ->

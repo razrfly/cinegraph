@@ -38,6 +38,19 @@ defmodule Cinegraph.Festivals.FestivalNomination do
     |> foreign_key_constraint(:category_id)
     |> foreign_key_constraint(:movie_id)
     |> foreign_key_constraint(:person_id)
+    # Add unique constraint checks to prevent duplicates
+    |> unique_constraint([:ceremony_id, :category_id, :movie_id, :person_name], 
+                         name: :festival_nominations_unique_person_idx,
+                         message: "nomination already exists for this person")
+    |> unique_constraint([:ceremony_id, :category_id, :movie_id], 
+                         name: :festival_nominations_unique_film_idx,
+                         message: "nomination already exists for this film")
+    |> unique_constraint([:ceremony_id, :category_id, :movie_imdb_id, :person_name],
+                         name: :festival_nominations_unique_pending_person_idx,
+                         message: "pending nomination already exists for this person")
+    |> unique_constraint([:ceremony_id, :category_id, :movie_imdb_id],
+                         name: :festival_nominations_unique_pending_film_idx,
+                         message: "pending nomination already exists for this film")
   end
   
   # Custom validation to ensure we have either a movie_id or movie_imdb_id

@@ -416,19 +416,67 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     }
 
     # Check if nomination already exists using a query to avoid multiple results
+    # For person-based categories, we need to check person identity too
     existing_count =
-      from(n in FestivalNomination,
-        where:
-          n.ceremony_id == ^ceremony.id and
-            n.category_id == ^category.id and
-            n.movie_id == ^movie.id,
-        select: count(n.id)
-      )
-      |> Repo.one()
+      if category.tracks_person do
+        # For person categories, check if this specific person's nomination exists
+        # We check ALL possible ways the nomination could exist to prevent duplicates
+        cond do
+          # If we have a person_id, check by person_id
+          person_id != nil ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony.id and
+                  n.category_id == ^category.id and
+                  n.movie_id == ^movie.id and
+                  n.person_id == ^person_id,
+              select: count(n.id)
+            )
+            |> Repo.one()
+          
+          # If we have a nominee_name but no person_id, check all possible matches
+          nominee_name != nil ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony.id and
+                  n.category_id == ^category.id and
+                  n.movie_id == ^movie.id and
+                  # Check if this nomination already exists for this person
+                  # Could be stored as person_name OR in details
+                  (n.person_name == ^nominee_name or 
+                   fragment("? ->> 'nominee_names' = ?", n.details, ^nominee_name)),
+              select: count(n.id)
+            )
+            |> Repo.one()
+          
+          # No person info, just check movie (shouldn't happen for person categories)
+          true ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony.id and
+                  n.category_id == ^category.id and
+                  n.movie_id == ^movie.id,
+              select: count(n.id)
+            )
+            |> Repo.one()
+        end
+      else
+        # For non-person categories (film awards), just check movie
+        from(n in FestivalNomination,
+          where:
+            n.ceremony_id == ^ceremony.id and
+              n.category_id == ^category.id and
+              n.movie_id == ^movie.id,
+          select: count(n.id)
+        )
+        |> Repo.one()
+      end
 
     if existing_count > 0 do
       Logger.debug(
-        "Nomination already exists for #{movie.title} in #{category.name} (found #{existing_count})"
+        "Nomination already exists for #{movie.title} in #{category.name}" <>
+        if(category.tracks_person && nominee_name, do: " for #{nominee_name}", else: "") <>
+        " (found #{existing_count})"
       )
 
       %{action: :existing, movie_id: movie.id, title: movie.title}
@@ -451,6 +499,20 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   end
 
   defp create_pending_nomination(film_imdb_id, film_title, nominee, category, ceremony) do
+    # First check if the movie already exists (it might have been created since last run)
+    existing_movie = Repo.get_by(Movie, imdb_id: film_imdb_id)
+    
+    if existing_movie do
+      # Movie exists now, create regular nomination instead of pending
+      Logger.info("Movie now exists for #{film_imdb_id}, creating regular nomination")
+      create_nomination(existing_movie, nominee, category, ceremony)
+    else
+      # Movie doesn't exist yet, create pending nomination
+      create_pending_nomination_internal(film_imdb_id, film_title, nominee, category, ceremony)
+    end
+  end
+
+  defp create_pending_nomination_internal(film_imdb_id, film_title, nominee, category, ceremony) do
     # Handle both atom and string keys
     is_winner = nominee["winner"] || nominee[:winner] || false
     nominee_name = nominee["name"] || nominee[:name]
@@ -482,20 +544,67 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       }
     }
 
-    # Check if nomination already exists for this IMDb ID
+    # Check if nomination already exists for this IMDb ID (either as pending OR already linked)
+    # For person-based categories, we need to check person identity too
     existing_count =
-      from(n in FestivalNomination,
-        where:
-          n.ceremony_id == ^ceremony.id and
-            n.category_id == ^category.id and
-            n.movie_imdb_id == ^film_imdb_id,
-        select: count(n.id)
-      )
-      |> Repo.one()
+      if category.tracks_person do
+        # For person categories, check if this specific person's nomination exists
+        # We check ALL possible ways the nomination could exist to prevent duplicates
+        cond do
+          # If we have a person_id, check by person_id
+          person_id != nil ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony.id and
+                  n.category_id == ^category.id and
+                  n.movie_imdb_id == ^film_imdb_id and
+                  n.person_id == ^person_id,
+              select: count(n.id)
+            )
+            |> Repo.one()
+          
+          # If we have a nominee_name but no person_id, check all possible matches
+          nominee_name != nil ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony.id and
+                  n.category_id == ^category.id and
+                  n.movie_imdb_id == ^film_imdb_id and
+                  # Check if this nomination already exists for this person
+                  # Could be stored as person_name OR in details
+                  (n.person_name == ^nominee_name or 
+                   fragment("? ->> 'nominee_names' = ?", n.details, ^nominee_name)),
+              select: count(n.id)
+            )
+            |> Repo.one()
+          
+          # No person info, just check movie (shouldn't happen for person categories)
+          true ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony.id and
+                  n.category_id == ^category.id and
+                  n.movie_imdb_id == ^film_imdb_id,
+              select: count(n.id)
+            )
+            |> Repo.one()
+        end
+      else
+        # For non-person categories (film awards), just check movie
+        from(n in FestivalNomination,
+          where:
+            n.ceremony_id == ^ceremony.id and
+              n.category_id == ^category.id and
+              n.movie_imdb_id == ^film_imdb_id,
+          select: count(n.id)
+        )
+        |> Repo.one()
+      end
 
     if existing_count > 0 do
       Logger.debug(
-        "Pending nomination already exists for #{film_title} (#{film_imdb_id}) in #{category.name}"
+        "Pending nomination already exists for #{film_title} (#{film_imdb_id}) in #{category.name}" <>
+        if(category.tracks_person && nominee_name, do: " for #{nominee_name}", else: "")
       )
       %{action: :existing, movie_imdb_id: film_imdb_id, title: film_title}
     else

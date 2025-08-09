@@ -1120,91 +1120,137 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp get_festival_stats do
-    # Get all festival organizations except AMPAS (shown in Academy Awards section)
+    # Get ALL festival organizations including AMPAS (Academy Awards)
     festival_orgs = 
       Repo.all(
         from fo in Cinegraph.Festivals.FestivalOrganization,
-          where: fo.abbreviation != "AMPAS",
+          order_by: [asc: fo.name],
           select: fo
       )
 
-    # Collect stats for all festivals
-    all_stats = 
-      festival_orgs
-      |> Enum.flat_map(fn org ->
-        # Get ceremony years and their nomination/win counts from festival tables
-        ceremony_stats =
-          Repo.all(
-            from fc in Cinegraph.Festivals.FestivalCeremony,
-              left_join: nom in Cinegraph.Festivals.FestivalNomination,
-              on: nom.ceremony_id == fc.id,
-              where: fc.organization_id == ^org.id,
-              group_by: [fc.year, fc.id],
-              select:
-                {fc.year, count(nom.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", nom.won))},
-              order_by: [desc: fc.year]
+    # Group stats by festival for modular display
+    festival_orgs
+    |> Enum.map(fn org ->
+      # Get ceremony years and their nomination/win counts from festival tables
+      ceremony_stats =
+        Repo.all(
+          from fc in Cinegraph.Festivals.FestivalCeremony,
+            left_join: nom in Cinegraph.Festivals.FestivalNomination,
+            on: nom.ceremony_id == fc.id,
+            where: fc.organization_id == ^org.id,
+            group_by: [fc.year, fc.id],
+            select:
+              {fc.year, count(nom.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", nom.won))},
+            order_by: [desc: fc.year]
+        )
+
+      if length(ceremony_stats) > 0 do
+        # Calculate totals
+        total_nominations =
+          Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
+
+        total_wins =
+          Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
+
+        total_ceremonies = length(ceremony_stats)
+
+        # Count categories
+        total_categories =
+          Repo.aggregate(
+            from(c in Cinegraph.Festivals.FestivalCategory,
+              where: c.organization_id == ^org.id
+            ),
+            :count
           )
 
-        if length(ceremony_stats) > 0 do
-          # Calculate totals
-          total_nominations =
-            Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
+        # Get festival display name with special handling for Academy Awards
+        festival_name = 
+          case org.abbreviation do
+            "AMPAS" -> "Academy Awards"
+            "VIFF" -> "Venice International Film Festival"
+            "CFF" -> "Cannes Film Festival"
+            "BIFF" -> "Berlin International Film Festival"
+            "SFF" -> "Sundance Film Festival"
+            "SXSW" -> "SXSW Film Festival"
+            "NHIFF" -> "New Horizons International Film Festival"
+            _ -> org.name
+          end
 
-          total_wins =
-            Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
+        # Add special handling for People Nominations for Academy Awards
+        additional_stats = 
+          if org.abbreviation == "AMPAS" do
+            # Calculate People Nominations (nominations in categories that track people)
+            people_nominations =
+              Repo.one(
+                from nom in Cinegraph.Festivals.FestivalNomination,
+                  join: fc in Cinegraph.Festivals.FestivalCategory,
+                  on: nom.category_id == fc.id,
+                  join: cer in Cinegraph.Festivals.FestivalCeremony,
+                  on: nom.ceremony_id == cer.id,
+                  where: fc.tracks_person == true and cer.organization_id == ^org.id,
+                  select: count(nom.id)
+              ) || 0
 
-          total_ceremonies = length(ceremony_stats)
+            # Calculate People Nominations with names in details
+            people_nominations_with_names =
+              Repo.one(
+                from nom in Cinegraph.Festivals.FestivalNomination,
+                  join: fc in Cinegraph.Festivals.FestivalCategory,
+                  on: nom.category_id == fc.id,
+                  join: cer in Cinegraph.Festivals.FestivalCeremony,
+                  on: nom.ceremony_id == cer.id,
+                  where:
+                    fc.tracks_person == true and
+                      cer.organization_id == ^org.id and
+                      not is_nil(fragment("? ->> 'nominee_names'", nom.details)) and
+                      fragment("? ->> 'nominee_names'", nom.details) != "",
+                  select: count(nom.id)
+              ) || 0
 
-          # Count categories
-          total_categories =
-            Repo.aggregate(
-              from(c in Cinegraph.Festivals.FestivalCategory,
-                where: c.organization_id == ^org.id
-              ),
-              :count
-            )
+            # Format People Nominations display
+            people_nominations_display =
+              if people_nominations == people_nominations_with_names do
+                "#{format_number(people_nominations)} ✅"
+              else
+                "#{format_number(people_nominations_with_names)}/#{format_number(people_nominations)} ⚠️"
+              end
 
-          # Get festival display name
-          festival_name = 
-            case org.abbreviation do
-              "VIFF" -> "Venice"
-              "CFF" -> "Cannes"
-              "BIFF" -> "Berlin"
-              _ -> org.name
-            end
+            [%{label: "People Nominations", value: people_nominations_display}]
+          else
+            []
+          end
 
-          # Build stats list for this festival
-          base_stats = [
-            %{label: "#{festival_name} Ceremonies", value: "#{total_ceremonies}"},
-            %{label: "#{festival_name} Nominations", value: format_number(total_nominations)},
-            %{label: "#{festival_name} Wins", value: format_number(total_wins)},
-            %{label: "#{festival_name} Categories", value: format_number(total_categories)}
-          ]
+        # Build base stats list for this festival
+        base_stats = [
+          %{label: "Ceremonies", value: format_number(total_ceremonies)},
+          %{label: "Nominations", value: format_number(total_nominations)},
+          %{label: "Wins", value: format_number(total_wins)},
+          %{label: "Categories", value: format_number(total_categories)}
+        ] ++ additional_stats
 
-          # Add year-by-year breakdown if we have data
-          year_stats =
-            ceremony_stats
-            |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)
-            # Show last 3 years only per festival
-            |> Enum.take(3)
-            |> Enum.map(fn {year, nominations, wins} ->
-              %{
-                label: "#{festival_name} #{year}",
-                value: "#{wins || 0}/#{nominations}"
-              }
-            end)
+        # Add year-by-year breakdown if we have data
+        year_stats =
+          ceremony_stats
+          |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)
+          # Show last 3 years only per festival
+          |> Enum.take(3)
+          |> Enum.map(fn {year, nominations, wins} ->
+            %{
+              label: "#{year}",
+              value: "#{wins || 0}/#{nominations}"
+            }
+          end)
 
-          base_stats ++ year_stats
-        else
-          []
-        end
-      end)
-
-    if length(all_stats) > 0 do
-      all_stats
-    else
-      []
-    end
+        %{
+          name: festival_name,
+          abbreviation: org.abbreviation,
+          stats: base_stats ++ year_stats
+        }
+      else
+        nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
   end
 
   defp generate_festival_list do
