@@ -264,6 +264,20 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
 
         :ok
 
+      # Festival fuzzy-matched import: create the nomination after movie import
+      args["source"] == "festival_import" and is_map(args["metadata"]) ->
+        meta = args["metadata"]
+
+        with %{"ceremony_id" => ceremony_id, "category_id" => category_id} <- meta,
+             %Movies.Movie{} = movie <- Movies.get_movie_by_tmdb_id(tmdb_id) do
+          Logger.info("Creating festival nomination from metadata for movie #{movie.id}")
+          create_festival_nomination_from_metadata(movie, ceremony_id, category_id, meta)
+        else
+          _ -> :ok
+        end
+
+        :ok
+
       true ->
         # No special post-processing needed
         Logger.debug(
@@ -271,6 +285,135 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         )
 
         :ok
+    end
+  end
+
+  defp create_festival_nomination_from_metadata(movie, ceremony_id, category_id, meta) do
+    alias Cinegraph.Festivals.FestivalNomination
+    alias Cinegraph.Festivals.FestivalCategory
+
+    nominee = meta["nominee"] || %{}
+    is_winner = (nominee["winner"] || meta["winner"]) || false
+    nominee_name = nominee["name"]
+    person_imdb_ids = nominee["person_imdb_ids"] || []
+
+    category = Repo.get(FestivalCategory, category_id)
+    tracks_person = category && category.tracks_person
+
+    person_id =
+      if tracks_person && person_imdb_ids != [] do
+        Enum.find_value(person_imdb_ids, fn imdb ->
+          case Repo.get_by(Movies.Person, imdb_id: imdb) do
+            nil -> nil
+            p -> p.id
+          end
+        end)
+      else
+        nil
+      end
+
+    attrs = %{
+      ceremony_id: ceremony_id,
+      category_id: category_id,
+      movie_id: movie.id,
+      person_id: person_id,
+      person_imdb_ids: if(is_nil(person_id), do: person_imdb_ids, else: []),
+      person_name: if(is_nil(person_id), do: nominee_name, else: nil),
+      won: is_winner,
+      details: %{
+        "nominee_names" => nominee_name,
+        "source" => "tmdb_fuzzy"
+      }
+    }
+
+    # Dedup similar to FestivalDiscoveryWorker
+    existing_count =
+      if tracks_person do
+        cond do
+          person_id != nil ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony_id and
+                  n.category_id == ^category_id and
+                  n.movie_id == ^movie.id and
+                  n.person_id == ^person_id,
+              select: count(n.id)
+            )
+            |> Repo.one()
+
+          person_imdb_ids != [] ->
+            linked_count =
+              from(n in FestivalNomination,
+                join: p in Movies.Person, on: p.id == n.person_id,
+                where:
+                  n.ceremony_id == ^ceremony_id and
+                    n.category_id == ^category_id and
+                    n.movie_id == ^movie.id and
+                    p.imdb_id in ^person_imdb_ids,
+                select: count(n.id)
+              )
+              |> Repo.one()
+
+            pending_count =
+              from(n in FestivalNomination,
+                where:
+                  n.ceremony_id == ^ceremony_id and
+                    n.category_id == ^category_id and
+                    n.movie_id == ^movie.id and
+                    fragment("? && ?", n.person_imdb_ids, ^person_imdb_ids),
+                select: count(n.id)
+              )
+              |> Repo.one()
+
+            linked_count + pending_count
+
+          nominee_name != nil ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony_id and
+                  n.category_id == ^category_id and
+                  n.movie_id == ^movie.id and
+                  n.person_name == ^nominee_name,
+              select: count(n.id)
+            )
+            |> Repo.one()
+
+          true ->
+            from(n in FestivalNomination,
+              where:
+                n.ceremony_id == ^ceremony_id and
+                  n.category_id == ^category_id and
+                  n.movie_id == ^movie.id,
+              select: count(n.id)
+            )
+            |> Repo.one()
+        end
+      else
+        from(n in FestivalNomination,
+          where:
+            n.ceremony_id == ^ceremony_id and
+              n.category_id == ^category_id and
+              n.movie_id == ^movie.id,
+          select: count(n.id)
+        )
+        |> Repo.one()
+      end
+
+    if existing_count > 0 do
+      Logger.debug("Nomination already exists for movie #{movie.id} in category #{category_id}")
+      :ok
+    else
+      case %FestivalNomination{}
+           |> FestivalNomination.changeset(attrs)
+           |> Repo.insert() do
+        {:ok, _} ->
+          Logger.info("Created nomination via TMDbDetailsWorker for movie #{movie.id}")
+          :ok
+
+        {:error, changeset} ->
+          Logger.error("Failed to create nomination via TMDbDetailsWorker: #{inspect(changeset.errors)}")
+          :ok
+      end
     end
   end
 

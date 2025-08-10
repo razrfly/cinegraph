@@ -22,6 +22,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   alias Cinegraph.Festivals
   alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
   alias Cinegraph.Workers.TMDbDetailsWorker
+  alias Cinegraph.Movies
   alias Cinegraph.Movies.{Movie, Person}
   alias Cinegraph.Services.TMDb
   import Ecto.Query
@@ -220,8 +221,23 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         end
 
       category ->
-        # Category already exists
-        category
+        # Category already exists; ensure its type/tracking are correct
+        {expected_type, expected_tracks_person} = determine_category_type(category_name)
+
+        if category.category_type != expected_type or category.tracks_person != expected_tracks_person do
+          Logger.info(
+            "Updating category '#{category_name}' type/tracking (#{category.category_type}/#{category.tracks_person} -> #{expected_type}/#{expected_tracks_person})"
+          )
+
+          case Festivals.update_category(category, %{category_type: expected_type, tracks_person: expected_tracks_person}) do
+            {:ok, updated} -> updated
+            {:error, changeset} ->
+              Logger.warning("Failed updating category '#{category_name}': #{inspect(changeset.errors)}")
+              category
+          end
+        else
+          category
+        end
     end
   end
 
@@ -415,12 +431,10 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       }
     }
 
-    # Check if nomination already exists using a query to avoid multiple results
-    # For person-based categories, we need to check person identity too
+    # Check if nomination already exists using robust person identity rules
+    # Prefer `person_id` and IMDb IDs; avoid name-only JSON checks to prevent false duplicates
     existing_count =
       if category.tracks_person do
-        # For person categories, check if this specific person's nomination exists
-        # We check ALL possible ways the nomination could exist to prevent duplicates
         cond do
           # If we have a person_id, check by person_id
           person_id != nil ->
@@ -433,23 +447,49 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
               select: count(n.id)
             )
             |> Repo.one()
-          
-          # If we have a nominee_name but no person_id, check all possible matches
+
+          # If we have IMDb IDs for the person but no person_id yet, check by overlap
+          person_imdb_ids != [] ->
+            # Match either already-linked nominations via Person.imdb_id
+            # OR pending nominations that store overlapping person_imdb_ids
+            linked_count =
+              from(n in FestivalNomination,
+                join: p in Person, on: p.id == n.person_id,
+                where:
+                  n.ceremony_id == ^ceremony.id and
+                    n.category_id == ^category.id and
+                    n.movie_id == ^movie.id and
+                    p.imdb_id in ^person_imdb_ids,
+                select: count(n.id)
+              )
+              |> Repo.one()
+
+            pending_count =
+              from(n in FestivalNomination,
+                where:
+                  n.ceremony_id == ^ceremony.id and
+                    n.category_id == ^category.id and
+                    n.movie_id == ^movie.id and
+                    fragment("? && ?", n.person_imdb_ids, ^person_imdb_ids),
+                select: count(n.id)
+              )
+              |> Repo.one()
+
+            linked_count + pending_count
+
+          # Fall back to exact person_name match only when nothing else is available
           nominee_name != nil ->
             from(n in FestivalNomination,
               where:
                 n.ceremony_id == ^ceremony.id and
                   n.category_id == ^category.id and
                   n.movie_id == ^movie.id and
-                  # Check if this nomination already exists for this person
-                  # Could be stored as person_name OR in details
-                  (n.person_name == ^nominee_name or 
-                   fragment("? ->> 'nominee_names' = ?", n.details, ^nominee_name)),
+                  n.person_name == ^nominee_name,
               select: count(n.id)
             )
             |> Repo.one()
-          
-          # No person info, just check movie (shouldn't happen for person categories)
+
+          # Last resort: check by movie only (shouldn't happen for person categories)
           true ->
             from(n in FestivalNomination,
               where:
@@ -545,11 +585,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     }
 
     # Check if nomination already exists for this IMDb ID (either as pending OR already linked)
-    # For person-based categories, we need to check person identity too
+    # For person-based categories, use person_id or IMDb IDs to avoid name-collision false positives
     existing_count =
       if category.tracks_person do
-        # For person categories, check if this specific person's nomination exists
-        # We check ALL possible ways the nomination could exist to prevent duplicates
         cond do
           # If we have a person_id, check by person_id
           person_id != nil ->
@@ -562,23 +600,47 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
               select: count(n.id)
             )
             |> Repo.one()
-          
-          # If we have a nominee_name but no person_id, check all possible matches
+
+          # If we have IMDb IDs but no person_id yet, check by overlap (pending or linked via Person)
+          person_imdb_ids != [] ->
+            linked_count =
+              from(n in FestivalNomination,
+                join: p in Person, on: p.id == n.person_id,
+                where:
+                  n.ceremony_id == ^ceremony.id and
+                    n.category_id == ^category.id and
+                    n.movie_imdb_id == ^film_imdb_id and
+                    p.imdb_id in ^person_imdb_ids,
+                select: count(n.id)
+              )
+              |> Repo.one()
+
+            pending_count =
+              from(n in FestivalNomination,
+                where:
+                  n.ceremony_id == ^ceremony.id and
+                    n.category_id == ^category.id and
+                    n.movie_imdb_id == ^film_imdb_id and
+                    fragment("? && ?", n.person_imdb_ids, ^person_imdb_ids),
+                select: count(n.id)
+              )
+              |> Repo.one()
+
+            linked_count + pending_count
+
+          # Fall back to exact person_name match only when nothing else is available
           nominee_name != nil ->
             from(n in FestivalNomination,
               where:
                 n.ceremony_id == ^ceremony.id and
                   n.category_id == ^category.id and
                   n.movie_imdb_id == ^film_imdb_id and
-                  # Check if this nomination already exists for this person
-                  # Could be stored as person_name OR in details
-                  (n.person_name == ^nominee_name or 
-                   fragment("? ->> 'nominee_names' = ?", n.details, ^nominee_name)),
+                  n.person_name == ^nominee_name,
               select: count(n.id)
             )
             |> Repo.one()
-          
-          # No person info, just check movie (shouldn't happen for person categories)
+
+          # Last resort: check by movie only (shouldn't happen for person categories)
           true ->
             from(n in FestivalNomination,
               where:
@@ -624,7 +686,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     end
   end
 
-  defp find_or_create_person(person_imdb_ids, _nominee_name) do
+  defp find_or_create_person(person_imdb_ids, nominee_name) do
     # Try to find person by IMDb ID
     person =
       Enum.find_value(person_imdb_ids, fn imdb_id ->
@@ -632,11 +694,98 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       end)
 
     if person do
+      Logger.info("Found existing person #{person.name} (IMDb: #{person.imdb_id})")
+      # Proactively link any pending nominations for this person within the same run
+      TMDbDetailsWorker.link_pending_person_nominations(person)
       person.id
     else
-      # For now, we'll leave person_id nil and let it be linked later
-      # when the person data is imported from TMDb
-      nil
+      # OPTION 1 FIX: Create person synchronously if they don't exist
+      # This ensures person_id is available for duplicate detection
+      Logger.info("Person not found for IMDb IDs #{inspect(person_imdb_ids)}, creating synchronously")
+      
+      # Try to fetch person data from TMDb and create the person
+      person_id = create_person_from_tmdb(person_imdb_ids, nominee_name)
+      
+      if person_id do
+        Logger.info("Successfully created person #{nominee_name} with ID #{person_id}")
+        # Link any pending nominations that referenced this person's IMDb ID
+        case Repo.get(Person, person_id) do
+          nil -> :ok
+          created_person -> TMDbDetailsWorker.link_pending_person_nominations(created_person)
+        end
+      else
+        Logger.warning("Failed to create person #{nominee_name} - will be linked later")
+      end
+      
+      person_id
+    end
+  end
+  
+  defp create_person_from_tmdb(person_imdb_ids, nominee_name) do
+    # Try each IMDb ID until we find one that works
+    Enum.find_value(person_imdb_ids, fn imdb_id ->
+      Logger.info("Attempting to fetch person data from TMDb for IMDb ID: #{imdb_id}")
+      
+      case TMDb.find_by_imdb_id(imdb_id) do
+        {:ok, %{"person_results" => [person_data | _]}} ->
+          # Found person data, create the person
+          tmdb_person_id = person_data["id"]
+          Logger.info("Found TMDb person ID #{tmdb_person_id} for IMDb ID #{imdb_id}")
+          
+          # Fetch full person details
+          case TMDb.get_person(tmdb_person_id) do
+            {:ok, full_person_data} ->
+              # Add the IMDb ID to the data since it might not be included
+              person_attrs = Map.put(full_person_data, "imdb_id", imdb_id)
+              
+              # Create the person using the Movies context function
+              case Movies.create_or_update_person_from_tmdb(person_attrs) do
+                {:ok, person} ->
+                  Logger.info("Created person: #{person.name} (ID: #{person.id}, IMDb: #{person.imdb_id})")
+                  person.id
+                  
+                {:error, reason} ->
+                  Logger.error("Failed to create person from TMDb data: #{inspect(reason)}")
+                  nil
+              end
+              
+            {:error, reason} ->
+              Logger.error("Failed to fetch full person details from TMDb: #{inspect(reason)}")
+              nil
+          end
+          
+        {:ok, %{"person_results" => []}} ->
+          Logger.warning("No TMDb person found for IMDb ID #{imdb_id}")
+          nil
+          
+        {:error, reason} ->
+          Logger.error("TMDb API error for person IMDb ID #{imdb_id}: #{inspect(reason)}")
+          nil
+      end
+    end) || create_person_with_minimal_data(person_imdb_ids, nominee_name)
+  end
+  
+  defp create_person_with_minimal_data(person_imdb_ids, nominee_name) do
+    # If we can't get data from TMDb, create a minimal person record
+    # This ensures we have a person_id for duplicate detection
+    Logger.info("Creating minimal person record for #{nominee_name}")
+    
+    # Use the first IMDb ID
+    imdb_id = List.first(person_imdb_ids)
+    
+    attrs = %{
+      name: nominee_name,
+      imdb_id: imdb_id
+    }
+
+    case Movies.create_person_from_imdb(attrs) do
+      {:ok, person} ->
+        Logger.info("Created minimal person record: #{person.name} (ID: #{person.id})")
+        person.id
+        
+      {:error, changeset} ->
+        Logger.error("Failed to create minimal person record: #{inspect(changeset.errors)}")
+        nil
     end
   end
 
@@ -1070,11 +1219,17 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       "source" => "festival_import",
       "fuzzy_matched" => true,
       "metadata" => %{
+        "ceremony_id" => ceremony.id,
+        "category_id" => category.id,
         "ceremony_year" => ceremony.year,
         "category" => category.name,
         "film_title" => film_title,
         "winner" => nominee["winner"] || nominee[:winner] || false,
-        "original_search_title" => film_title
+        "original_search_title" => film_title,
+        "nominee" => %{
+          "name" => nominee["name"] || nominee[:name],
+          "person_imdb_ids" => nominee["person_imdb_ids"] || nominee[:person_imdb_ids] || []
+        }
       }
     }
 

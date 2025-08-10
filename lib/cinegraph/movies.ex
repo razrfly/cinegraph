@@ -297,6 +297,16 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Creates a person using only IMDb data (no TMDb ID required).
+  Safely inserts with a minimal changeset and unique constraint on `imdb_id`.
+  """
+  def create_person_from_imdb(attrs \\ %{}) do
+    %Person{}
+    |> Person.imdb_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
   Creates or updates a person from TMDB data.
   """
   def create_or_update_person_from_tmdb(tmdb_data) do

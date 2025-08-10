@@ -129,6 +129,15 @@ defmodule Cinegraph.Festivals do
     |> Repo.insert()
   end
 
+  @doc """
+  Updates a festival category.
+  """
+  def update_category(%FestivalCategory{} = category, attrs) do
+    category
+    |> FestivalCategory.changeset(attrs)
+    |> Repo.update()
+  end
+
   # ========================================
   # FESTIVAL NOMINATIONS
   # ========================================
