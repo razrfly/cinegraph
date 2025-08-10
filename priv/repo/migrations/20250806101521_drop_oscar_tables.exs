@@ -9,10 +9,10 @@ defmodule Cinegraph.Repo.Migrations.DropOscarTables do
     execute "DROP VIEW IF EXISTS movie_oscar_stats"
     execute "DROP VIEW IF EXISTS person_oscar_stats"
 
-    # Drop tables in dependency order
-    drop table(:oscar_nominations)
-    drop table(:oscar_categories)
-    drop table(:oscar_ceremonies)
+    # Drop tables in dependency order (if they exist)
+    execute "DROP TABLE IF EXISTS oscar_nominations"
+    execute "DROP TABLE IF EXISTS oscar_categories"
+    execute "DROP TABLE IF EXISTS oscar_ceremonies"
   end
 
   def down do
