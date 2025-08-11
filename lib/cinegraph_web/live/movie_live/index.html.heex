@@ -23,6 +23,14 @@
             No movies found
           <% end %>
         </p>
+        <div class="mt-2">
+          <.link navigate={~p"/movies/discover"} class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            Discover Movies with Tunable Scoring
+          </.link>
+        </div>
       </div>
       
       <!-- Search Bar -->
@@ -122,19 +130,15 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Genres
               </label>
-              <select
+              <.multi_select_dropdown
+                id="genres-select"
                 name="filters[genres][]"
-                multiple
-                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                size="3"
-              >
-                <%= for genre <- @available_genres do %>
-                  <option value={genre.id} selected={to_string(genre.id) in (@filters.genres || [])}>
-                    <%= genre.name %>
-                  </option>
-                <% end %>
-              </select>
-              <p class="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple</p>
+                options={@available_genres}
+                selected={@filters.genres || []}
+                placeholder="Select genres..."
+                label_field={:name}
+                value_field={:id}
+              />
             </div>
             
             <!-- Country Filter -->
@@ -142,19 +146,15 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Production Countries
               </label>
-              <select
+              <.multi_select_dropdown
+                id="countries-select"
                 name="filters[countries][]"
-                multiple
-                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                size="3"
-              >
-                <%= for country <- @available_countries do %>
-                  <option value={country.id} selected={to_string(country.id) in (@filters.countries || [])}>
-                    <%= country.name %>
-                  </option>
-                <% end %>
-              </select>
-              <p class="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple</p>
+                options={@available_countries}
+                selected={@filters.countries || []}
+                placeholder="Select countries..."
+                label_field={:name}
+                value_field={:id}
+              />
             </div>
             
             <!-- Language Filter -->
@@ -162,19 +162,15 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Languages
               </label>
-              <select
+              <.multi_select_dropdown
+                id="languages-select"
                 name="filters[languages][]"
-                multiple
-                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                size="3"
-              >
-                <%= for language <- @available_languages do %>
-                  <option value={language.iso_639_1} selected={language.iso_639_1 in (@filters.languages || [])}>
-                    <%= language.english_name %>
-                  </option>
-                <% end %>
-              </select>
-              <p class="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple</p>
+                options={@available_languages}
+                selected={@filters.languages || []}
+                placeholder="Select languages..."
+                label_field={:english_name}
+                value_field={:iso_639_1}
+              />
             </div>
             
             <!-- Canonical Lists Filter -->
@@ -182,19 +178,15 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Lists
               </label>
-              <select
+              <.multi_select_dropdown
+                id="lists-select"
                 name="filters[lists][]"
-                multiple
-                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                size="3"
-              >
-                <%= for list <- @available_lists do %>
-                  <option value={list.key} selected={list.key in (@filters.lists || [])}>
-                    <%= list.name %>
-                  </option>
-                <% end %>
-              </select>
-              <p class="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple</p>
+                options={@available_lists}
+                selected={@filters.lists || []}
+                placeholder="Select lists..."
+                label_field={:name}
+                value_field={:key}
+              />
             </div>
             
             <!-- Year Range -->
