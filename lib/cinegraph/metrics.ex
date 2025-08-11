@@ -15,11 +15,15 @@ defmodule Cinegraph.Metrics do
   def store_tmdb_metrics(movie, tmdb_data) do
     metrics = ExternalMetric.from_tmdb(movie.id, tmdb_data)
     
-    Enum.each(metrics, fn metric_attrs ->
-      upsert_metric(metric_attrs)
+    results = Enum.map(metrics, fn metric_attrs ->
+      case upsert_metric(metric_attrs) do
+        {:ok, _} -> :ok
+        error -> error
+      end
     end)
     
-    :ok
+    errors = Enum.filter(results, &(&1 != :ok))
+    if Enum.empty?(errors), do: :ok, else: {:error, errors}
   end
 
   @doc """
@@ -28,11 +32,15 @@ defmodule Cinegraph.Metrics do
   def store_omdb_metrics(movie, omdb_data) do
     metrics = ExternalMetric.from_omdb(movie.id, omdb_data)
     
-    Enum.each(metrics, fn metric_attrs ->
-      upsert_metric(metric_attrs)
+    results = Enum.map(metrics, fn metric_attrs ->
+      case upsert_metric(metric_attrs) do
+        {:ok, _} -> :ok
+        error -> error
+      end
     end)
     
-    :ok
+    errors = Enum.filter(results, &(&1 != :ok))
+    if Enum.empty?(errors), do: :ok, else: {:error, errors}
   end
 
   @doc """
@@ -42,7 +50,7 @@ defmodule Cinegraph.Metrics do
     %ExternalMetric{}
     |> ExternalMetric.changeset(attrs)
     |> Repo.insert(
-      on_conflict: :replace_all,
+      on_conflict: {:replace, [:value, :text_value, :metadata, :valid_until, :updated_at]},
       conflict_target: [:movie_id, :source, :metric_type, :fetched_at]
     )
   end
