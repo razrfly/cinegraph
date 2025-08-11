@@ -60,8 +60,8 @@ defmodule Cinegraph.ExternalSources do
     %ExternalMetric{}
     |> ExternalMetric.changeset(metric_attrs)
     |> Repo.insert(
-      on_conflict: :replace_all,
-      conflict_target: [:movie_id, :source, :metric_type, :fetched_at]
+      on_conflict: :replace_all_except_primary_key,
+      conflict_target: [:movie_id, :source, :metric_type]
     )
   end
 
@@ -190,8 +190,8 @@ defmodule Cinegraph.ExternalSources do
       %ExternalMetric{}
       |> ExternalMetric.changeset(metric_attrs)
       |> Repo.insert(
-        on_conflict: :replace_all,
-        conflict_target: [:movie_id, :source, :metric_type, :fetched_at]
+        on_conflict: :replace_all_except_primary_key,
+        conflict_target: [:movie_id, :source, :metric_type]
       )
     end)
     

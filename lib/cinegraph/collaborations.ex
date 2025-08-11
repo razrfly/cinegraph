@@ -311,7 +311,7 @@ defmodule Cinegraph.Collaborations do
             END as collaboration_type
           FROM movie_credits mc1
           JOIN movie_credits mc2 ON mc1.movie_id = mc2.movie_id
-          JOIN movies_with_metrics m ON mc1.movie_id = m.id
+          JOIN movies m ON mc1.movie_id = m.id
           WHERE mc1.person_id != mc2.person_id
             AND m.release_date IS NOT NULL
             AND m.id = ANY($1)
