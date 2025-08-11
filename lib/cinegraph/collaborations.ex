@@ -4,6 +4,7 @@ defmodule Cinegraph.Collaborations do
   """
 
   import Ecto.Query, warn: false
+  require Logger
   alias Cinegraph.Repo
   alias Cinegraph.Collaborations.{Collaboration, CollaborationDetail, PersonRelationship}
   alias Cinegraph.Movies.{Movie, Person}
@@ -66,7 +67,7 @@ defmodule Cinegraph.Collaborations do
           END as collaboration_type
         FROM movie_credits mc1
         JOIN movie_credits mc2 ON mc1.movie_id = mc2.movie_id
-        JOIN movies m ON mc1.movie_id = m.id
+        JOIN movies_with_metrics m ON mc1.movie_id = m.id
         WHERE mc1.person_id != mc2.person_id
           AND m.release_date IS NOT NULL
           AND m.id = $1
@@ -110,29 +111,31 @@ defmodule Cinegraph.Collaborations do
         {:ok, %{rows: rows}} ->
           count =
             Enum.reduce(rows, 0, fn row, acc ->
-              [
-                person_a_id,
-                person_b_id,
-                movie_id,
-                collaboration_type,
-                year,
-                vote_average,
-                revenue,
-                release_date
-              ] = row
+              try do
+                [
+                  person_a_id,
+                  person_b_id,
+                  movie_id,
+                  collaboration_type,
+                  year,
+                  vote_average,
+                  revenue,
+                  release_date
+                ] = row
 
-              # Update or create collaboration
-              existing_collab =
-                Repo.get_by(Collaboration,
-                  person_a_id: person_a_id,
-                  person_b_id: person_b_id
-                )
+                # Update or create collaboration
+                existing_collab =
+                  Repo.get_by(Collaboration,
+                    person_a_id: person_a_id,
+                    person_b_id: person_b_id
+                  )
 
               collaboration =
                 if existing_collab do
                   # Update existing collaboration
                   years = Enum.uniq([year | existing_collab.years_active || []])
-                  total_revenue = (existing_collab.total_revenue || 0) + (revenue || 0)
+                  revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
+                  total_revenue = (existing_collab.total_revenue || 0) + revenue_value
 
                   updated_attrs = %{
                     collaboration_count: existing_collab.collaboration_count + 1,
@@ -156,6 +159,7 @@ defmodule Cinegraph.Collaborations do
                   updated
                 else
                   # Create new collaboration
+                  revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
                   attrs = %{
                     person_a_id: person_a_id,
                     person_b_id: person_b_id,
@@ -163,33 +167,65 @@ defmodule Cinegraph.Collaborations do
                     first_collaboration_date: release_date,
                     latest_collaboration_date: release_date,
                     avg_movie_rating: vote_average,
-                    total_revenue: revenue || 0,
+                    total_revenue: revenue_value,
                     years_active: [year]
                   }
 
-                  {:ok, new_collab} =
-                    %Collaboration{}
-                    |> Collaboration.changeset(attrs)
-                    |> Repo.insert()
+                  case %Collaboration{}
+                       |> Collaboration.changeset(attrs)
+                       |> Repo.insert() do
+                    {:ok, new_collab} ->
+                      new_collab
 
-                  new_collab
+                    {:error, %Ecto.Changeset{errors: [person_a_id: {"has already been taken", _}]}} ->
+                      # Race condition: collaboration was created by another process
+                      # Retry by fetching the existing collaboration
+                      case Repo.get_by(Collaboration,
+                        person_a_id: person_a_id,
+                        person_b_id: person_b_id
+                      ) do
+                        nil ->
+                          # Very rare case: the collaboration was deleted between the error and retry
+                          Logger.warning("Collaboration not found after race condition for persons #{person_a_id} and #{person_b_id}")
+                          nil
+                        existing ->
+                          existing
+                      end
+
+                    {:error, changeset} ->
+                      # Re-raise other types of errors
+                      raise "Failed to insert collaboration: #{inspect(changeset.errors)}"
+                  end
                 end
 
-              # Create collaboration detail
-              detail_attrs = %{
-                collaboration_id: collaboration.id,
-                movie_id: movie_id,
-                year: year,
-                collaboration_type: collaboration_type,
-                movie_rating: vote_average,
-                movie_revenue: revenue
-              }
+              # Create collaboration detail only if we have a valid collaboration
+              if collaboration do
+                revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
+                detail_attrs = %{
+                  collaboration_id: collaboration.id,
+                  movie_id: movie_id,
+                  year: year,
+                  collaboration_type: collaboration_type,
+                  movie_rating: vote_average,
+                  movie_revenue: revenue_value
+                }
 
-              %CollaborationDetail{}
-              |> CollaborationDetail.changeset(detail_attrs)
-              |> Repo.insert(on_conflict: :nothing)
+                %CollaborationDetail{}
+                |> CollaborationDetail.changeset(detail_attrs)
+                |> Repo.insert(on_conflict: :nothing)
 
-              acc + 1
+                acc + 1
+              else
+                # Skip this collaboration if we couldn't create/find it
+                Logger.warning("Skipping collaboration detail for movie #{movie_id} - collaboration not found")
+                acc
+              end
+              rescue
+                error ->
+                  Logger.error("Error processing collaboration for movie #{movie_id}: #{inspect(error)}")
+                  # Continue processing other collaborations
+                  acc
+              end
             end)
 
           count
@@ -275,7 +311,7 @@ defmodule Cinegraph.Collaborations do
             END as collaboration_type
           FROM movie_credits mc1
           JOIN movie_credits mc2 ON mc1.movie_id = mc2.movie_id
-          JOIN movies m ON mc1.movie_id = m.id
+          JOIN movies_with_metrics m ON mc1.movie_id = m.id
           WHERE mc1.person_id != mc2.person_id
             AND m.release_date IS NOT NULL
             AND m.id = ANY($1)
@@ -351,7 +387,7 @@ defmodule Cinegraph.Collaborations do
                           collaboration_type: collab_type,
                           year: year,
                           movie_rating: rating,
-                          movie_revenue: revenue
+                          movie_revenue: if(is_nil(revenue), do: 0, else: trunc(revenue))
                         }
                         | acc.details
                       ]

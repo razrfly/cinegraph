@@ -1,0 +1,28 @@
+# Temporary files and debugging artifacts
+temp_files/
+test_*.exs
+check_*.exs
+debug_*.exs
+verify_*.exs
+audit_*.exs
+*.html
+*.dump
+server.log
+*.json
+
+# Build and dependency directories
+deps/
+_build/
+node_modules/
+assets/vendor/
+
+# Database and environment files
+erl_crash.dump
+
+# Documentation archives
+docs/archive/
+
+# Large generated files
+criterion_worker_*.html
+oscar_*.html
+pagination_*.html

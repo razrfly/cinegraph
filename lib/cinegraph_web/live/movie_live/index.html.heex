@@ -74,9 +74,10 @@
             <% end %>
             
 <!-- Rating Badge (if available) -->
-            <%= if movie.vote_average && movie.vote_average > 0 do %>
+            <% vote_avg = Cinegraph.Movies.Movie.vote_average(movie) %>
+            <%= if vote_avg && vote_avg > 0 do %>
               <div class="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-sm px-2 py-1 rounded">
-                ⭐ {Float.round(movie.vote_average, 1)}
+                ⭐ {Float.round(vote_avg, 1)}
               </div>
             <% end %>
           </div>
