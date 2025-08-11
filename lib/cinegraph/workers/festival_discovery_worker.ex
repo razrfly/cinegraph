@@ -326,20 +326,40 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         # Has IMDb ID - process normally
         !is_nil(film_imdb_id) ->
           Logger.info("Processing movie nominee: #{film_title} (#{film_imdb_id})")
-          movie_result = ensure_movie_exists(film_imdb_id, film_title, film_year)
-
-          case movie_result do
-            {:ok, movie} ->
-              # Create the nomination
-              create_nomination(movie, nominee, category, ceremony)
-
-            {:queued, job_id} ->
-              # Movie creation queued
-              %{action: :queued_movie, job_id: job_id, title: film_title}
-
-            {:error, reason} ->
-              Logger.error("Failed to process movie #{film_title}: #{inspect(reason)}")
-              %{action: :error, reason: reason, title: film_title}
+          
+          # Check if movie exists
+          movie = Repo.get_by(Movie, imdb_id: film_imdb_id)
+          
+          if movie do
+            # Movie exists, create nomination with movie_id
+            create_nomination(movie, nominee, category, ceremony)
+          else
+            # Movie doesn't exist yet - create nomination with movie_imdb_id
+            # and queue movie creation
+            Logger.info("Movie not found for #{film_imdb_id}, creating pending nomination")
+            
+            # Create the nomination with movie_imdb_id instead of movie_id
+            create_pending_nomination(film_imdb_id, nominee, category, ceremony)
+            
+            # Queue TMDbDetailsWorker to create the movie
+            job_args = %{
+              "imdb_id" => film_imdb_id,
+              "source" => "festival_import",
+              "metadata" => %{
+                "film_title" => film_title,
+                "film_year" => film_year
+              }
+            }
+            
+            case TMDbDetailsWorker.new(job_args) |> Oban.insert() do
+              {:ok, job} ->
+                Logger.info("Queued TMDbDetailsWorker job #{job.id} for #{film_title}")
+                %{action: :queued_movie, job_id: job.id, title: film_title}
+                
+              {:error, reason} ->
+                Logger.error("Failed to queue TMDbDetailsWorker: #{inspect(reason)}")
+                %{action: :error, reason: reason, title: film_title}
+            end
           end
 
         # No IMDb ID - try fuzzy search fallback
@@ -398,21 +418,35 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         nil
       end
 
-    # Build nomination attributes
+    # Build nomination attributes with new fields
     attrs = %{
       ceremony_id: ceremony.id,
       category_id: category.id,
       movie_id: movie.id,
       person_id: person_id,
       won: is_winner,
+      # Store IMDb IDs and names for later linking
+      movie_imdb_id: movie.imdb_id,
+      person_imdb_ids: person_imdb_ids,
+      person_name: if(category.tracks_person, do: nominee_name, else: nil),
       details: %{
         "nominee_names" => nominee_name,
         "person_imdb_ids" => person_imdb_ids
       }
     }
 
-    # Check if nomination already exists using a query to avoid multiple results
-    existing_count =
+    # Check if nomination already exists
+    # For person categories, check person_name to avoid duplicates
+    existing_query = if category.tracks_person && nominee_name do
+      from(n in FestivalNomination,
+        where:
+          n.ceremony_id == ^ceremony.id and
+            n.category_id == ^category.id and
+            n.movie_id == ^movie.id and
+            n.person_name == ^nominee_name,
+        select: count(n.id)
+      )
+    else
       from(n in FestivalNomination,
         where:
           n.ceremony_id == ^ceremony.id and
@@ -420,7 +454,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
             n.movie_id == ^movie.id,
         select: count(n.id)
       )
-      |> Repo.one()
+    end
+
+    existing_count = Repo.one(existing_query)
 
     if existing_count > 0 do
       Logger.debug(
@@ -442,6 +478,75 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           )
 
           %{action: :error, reason: changeset.errors, title: movie.title}
+      end
+    end
+  end
+
+  defp create_pending_nomination(film_imdb_id, nominee, category, ceremony) do
+    # Handle both atom and string keys
+    is_winner = nominee["winner"] || nominee[:winner] || false
+    nominee_name = nominee["name"] || nominee[:name]
+    person_imdb_ids = nominee["person_imdb_ids"] || nominee[:person_imdb_ids] || []
+
+    # Build nomination attributes without movie_id
+    attrs = %{
+      ceremony_id: ceremony.id,
+      category_id: category.id,
+      movie_id: nil,  # Will be filled in later by TMDbDetailsWorker
+      person_id: nil,  # Will be filled in later if needed
+      won: is_winner,
+      # Store IMDb IDs for later linking
+      movie_imdb_id: film_imdb_id,
+      person_imdb_ids: person_imdb_ids,
+      person_name: if(category.tracks_person, do: nominee_name, else: nil),
+      details: %{
+        "nominee_names" => nominee_name,
+        "person_imdb_ids" => person_imdb_ids
+      }
+    }
+
+    # Check if nomination already exists by IMDb ID
+    existing_query = if category.tracks_person && nominee_name do
+      from(n in FestivalNomination,
+        where:
+          n.ceremony_id == ^ceremony.id and
+            n.category_id == ^category.id and
+            n.movie_imdb_id == ^film_imdb_id and
+            n.person_name == ^nominee_name,
+        select: count(n.id)
+      )
+    else
+      from(n in FestivalNomination,
+        where:
+          n.ceremony_id == ^ceremony.id and
+            n.category_id == ^category.id and
+            n.movie_imdb_id == ^film_imdb_id,
+        select: count(n.id)
+      )
+    end
+
+    existing_count = Repo.one(existing_query)
+
+    if existing_count > 0 do
+      Logger.debug(
+        "Pending nomination already exists for IMDb ID #{film_imdb_id} in #{category.name}"
+      )
+
+      %{action: :existing, movie_imdb_id: film_imdb_id}
+    else
+      case %FestivalNomination{}
+           |> FestivalNomination.changeset(attrs)
+           |> Repo.insert() do
+        {:ok, _nomination} ->
+          Logger.info("Created pending nomination for IMDb ID #{film_imdb_id} in #{category.name}")
+          %{action: :created_nomination, movie_imdb_id: film_imdb_id}
+
+        {:error, changeset} ->
+          Logger.error(
+            "Failed to create pending nomination for #{film_imdb_id}: #{inspect(changeset.errors)}"
+          )
+
+          %{action: :error, reason: changeset.errors, movie_imdb_id: film_imdb_id}
       end
     end
   end
