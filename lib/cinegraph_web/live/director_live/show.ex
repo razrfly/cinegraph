@@ -65,7 +65,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
       total_revenue: total_revenue,
       avg_revenue: if(length(movies) > 0, do: div(total_revenue, length(movies)), else: 0),
       avg_rating: avg_rating,
-      highest_rated: Enum.max_by(movies, &(&1.vote_average || 0), fn -> nil end),
+      highest_rated: Enum.max_by(movies, &(Cinegraph.Movies.Movie.vote_average(&1) || 0), fn -> nil end),
       highest_grossing: Enum.max_by(movies, &(&1.revenue || 0), fn -> nil end),
       years_active: calculate_years_active(movies)
     }
@@ -158,7 +158,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
     movies_with_ratings =
       directing_credits
       |> Enum.map(& &1.movie)
-      |> Enum.filter(&(&1.vote_average && &1.release_date))
+      |> Enum.filter(&(Cinegraph.Movies.Movie.vote_average(&1) && &1.release_date))
 
     if length(movies_with_ratings) > 0 do
       # Group by decade
@@ -269,7 +269,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
   defp calculate_average_rating(movies) do
     ratings =
       movies
-      |> Enum.map(& &1.vote_average)
+      |> Enum.map(&Cinegraph.Movies.Movie.vote_average/1)
       |> Enum.reject(&is_nil/1)
 
     if length(ratings) > 0 do

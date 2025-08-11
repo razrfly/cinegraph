@@ -103,17 +103,17 @@
             </div>
           <% end %>
 
-          <%= if @movie.budget && @movie.budget > 0 do %>
+          <%= if (budget = Map.get(@movie, :budget)) && budget > 0 do %>
             <div class="bg-gray-50 rounded p-2">
               <span class="text-gray-500">Budget</span>
-              <p class="font-medium">${div(@movie.budget, 1_000_000)}M</p>
+              <p class="font-medium">${trunc(budget / 1_000_000)}M</p>
             </div>
           <% end %>
 
-          <%= if @movie.revenue && @movie.revenue > 0 do %>
+          <%= if (revenue = Map.get(@movie, :revenue)) && revenue > 0 do %>
             <div class="bg-gray-50 rounded p-2">
               <span class="text-gray-500">Revenue</span>
-              <p class="font-medium">${div(@movie.revenue, 1_000_000)}M</p>
+              <p class="font-medium">${trunc(revenue / 1_000_000)}M</p>
             </div>
           <% end %>
         </div>
@@ -502,10 +502,17 @@
                         ${Float.round(rating.value / 1_000_000, 1)}M
                       <% rating.rating_type == "popularity" -> %>
                         {Float.round(rating.value / 1000, 0)}K votes
-                      <% rating.scale_max == 100.0 -> %>
+                      <% rating.metadata["scale"] == "0-100" -> %>
                         {round(rating.value)}%
+                      <% rating.metadata["scale"] -> %>
+                        <%= case String.split(rating.metadata["scale"], "-") do %>
+                          <% [_min, max] -> %>
+                            {rating.value}/{max}
+                          <% _ -> %>
+                            {rating.value}
+                        <% end %>
                       <% true -> %>
-                        {rating.value}/{round(rating.scale_max)}
+                        {rating.value}
                     <% end %>
                   </td>
                   <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 text-right">

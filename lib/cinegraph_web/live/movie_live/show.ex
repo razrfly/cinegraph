@@ -6,6 +6,7 @@ defmodule CinegraphWeb.MovieLive.Show do
   alias Cinegraph.Cultural
   alias Cinegraph.ExternalSources
   alias Cinegraph.Collaborations
+  alias Cinegraph.Metrics
 
   @impl true
   def mount(_params, _session, socket) do
@@ -27,6 +28,9 @@ defmodule CinegraphWeb.MovieLive.Show do
   defp load_movie_with_all_data(id) do
     # Load movie with all related data
     movie = Movies.get_movie!(id)
+    
+    # Load aggregated metrics for backward compatibility
+    metrics = Metrics.get_movie_aggregates(id)
 
     # Load credits (cast and crew)
     credits = Movies.get_movie_credits(id)
@@ -73,6 +77,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     key_collaborations = get_key_collaborations(cast, crew)
 
     movie
+    |> Map.merge(metrics)  # Add metrics data (budget, revenue, etc.)
     |> Map.put(:cast, cast)
     |> Map.put(:crew, crew)
     |> Map.put(:directors, directors)
@@ -118,7 +123,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     # Actor-Actor partnerships
     actor_partnerships =
       for {actor1, idx} <- Enum.with_index(top_actors),
-          actor2 <- Enum.slice(top_actors, (idx + 1)..-1) do
+          actor2 <- Enum.slice(top_actors, (idx + 1)..-1//1) do
         query = """
         SELECT c.collaboration_count
         FROM collaborations c
