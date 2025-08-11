@@ -15,13 +15,9 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.DiscoveryCommon
 
-  @default_weights %{
-    popular_opinion: 0.25,
-    critical_acclaim: 0.25,
-    industry_recognition: 0.25,
-    cultural_impact: 0.25
-  }
+  @default_weights DiscoveryCommon.default_weights()
 
   @doc """
   Applies discovery scoring to a movie query with user-defined weights.
@@ -50,8 +46,6 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
   Useful for displaying score breakdown in UI.
   """
   def calculate_movie_scores(movie_id) do
-    movie = Repo.get!(Movie, movie_id)
-    
     %{
       popular_opinion: calculate_popular_opinion(movie_id),
       critical_acclaim: calculate_critical_acclaim(movie_id),
@@ -64,46 +58,13 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
   Returns scoring presets for common use cases.
   """
   def get_presets do
-    %{
-      balanced: @default_weights,
-      crowd_pleaser: %{
-        popular_opinion: 0.5,
-        critical_acclaim: 0.15,
-        industry_recognition: 0.15,
-        cultural_impact: 0.2
-      },
-      critics_choice: %{
-        popular_opinion: 0.15,
-        critical_acclaim: 0.5,
-        industry_recognition: 0.25,
-        cultural_impact: 0.1
-      },
-      award_winner: %{
-        popular_opinion: 0.1,
-        critical_acclaim: 0.2,
-        industry_recognition: 0.6,
-        cultural_impact: 0.1
-      },
-      cult_classic: %{
-        popular_opinion: 0.2,
-        critical_acclaim: 0.1,
-        industry_recognition: 0.1,
-        cultural_impact: 0.6
-      }
-    }
+    DiscoveryCommon.get_presets()
   end
 
   # Private functions
 
   defp normalize_weights(weights) do
-    weights = Map.merge(@default_weights, weights)
-    total = Enum.sum(Map.values(weights))
-    
-    if total == 0 do
-      @default_weights
-    else
-      Map.new(weights, fn {k, v} -> {k, v / total} end)
-    end
+    DiscoveryCommon.normalize_weights(weights)
   end
 
   defp add_scoring_subqueries(query, weights) do
@@ -173,7 +134,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                   -- Canonical lists presence
                   (CASE 
                     WHEN m2.canonical_sources IS NOT NULL AND m2.canonical_sources != '{}' 
-                    THEN jsonb_array_length(jsonb_object_keys(m2.canonical_sources)::jsonb) * 0.1
+                    THEN (SELECT count(*) FROM jsonb_object_keys(m2.canonical_sources)) * 0.1
                     ELSE 0
                   END) +
                   -- Popularity score normalized
@@ -252,7 +213,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                   LEAST(1.0,
                     (CASE 
                       WHEN m2.canonical_sources IS NOT NULL AND m2.canonical_sources != '{}' 
-                      THEN jsonb_array_length(jsonb_object_keys(m2.canonical_sources)::jsonb) * 0.1
+                      THEN (SELECT count(*) FROM jsonb_object_keys(m2.canonical_sources)) * 0.1
                       ELSE 0
                     END) +
                     (COALESCE(pop.value, 0) / 1000.0)
@@ -374,7 +335,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
       LEAST(1.0,
         (CASE 
           WHEN m.canonical_sources IS NOT NULL AND m.canonical_sources != '{}' 
-          THEN jsonb_array_length(jsonb_object_keys(m.canonical_sources)::jsonb) * 0.1
+          THEN (SELECT count(*) FROM jsonb_object_keys(m.canonical_sources)) * 0.1
           ELSE 0
         END) +
         (COALESCE(pop.value, 0) / 1000.0)
