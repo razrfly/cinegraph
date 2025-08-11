@@ -43,7 +43,22 @@ defmodule Cinegraph.ExternalSources do
   end
 
   @doc """
-  Centralized function for upserting external metrics with consistent conflict resolution.
+  Upserts an external metric, replacing any existing metric with the same 
+  movie_id, source, and metric_type combination.
+  
+  This function overwrites the entire record (latest-value-only strategy).
+  Use `Metrics.upsert_metric/1` if you need to preserve historical values 
+  with different fetched_at timestamps.
+  
+  ## Examples
+  
+      iex> upsert_external_metric(%{
+      ...>   movie_id: 1,
+      ...>   source: "tmdb",
+      ...>   metric_type: "popularity",
+      ...>   value: 8.5
+      ...> })
+      {:ok, %ExternalMetric{}}
   """
   def upsert_external_metric(attrs) do
     %ExternalMetric{}

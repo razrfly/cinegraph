@@ -44,7 +44,25 @@ defmodule Cinegraph.Metrics do
   end
 
   @doc """
-  Creates or updates a metric.
+  Creates or updates a metric, preserving historical values.
+  
+  This function uses a 4-column conflict resolution (movie_id, source, metric_type, fetched_at)
+  to maintain a history of metric values over time. Only the value fields are updated
+  on conflict, preserving the original fetched_at timestamp.
+  
+  Use `ExternalSources.upsert_external_metric/1` if you only need to keep
+  the latest value for each metric type.
+  
+  ## Examples
+  
+      iex> upsert_metric(%{
+      ...>   movie_id: 1,
+      ...>   source: "tmdb",
+      ...>   metric_type: "popularity",
+      ...>   value: 8.5,
+      ...>   fetched_at: ~U[2024-01-01 12:00:00Z]
+      ...> })
+      {:ok, %ExternalMetric{}}
   """
   def upsert_metric(attrs) do
     %ExternalMetric{}
