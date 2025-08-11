@@ -11,8 +11,7 @@ defmodule Cinegraph.ApiProcessors.OMDb do
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Services.OMDb
-  alias Cinegraph.ExternalSources
-  alias Cinegraph.ExternalSources.Rating
+  alias Cinegraph.Metrics
   import Ecto.Query
   require Logger
 
@@ -65,20 +64,19 @@ defmodule Cinegraph.ApiProcessors.OMDb do
 
   defp fetch_and_update_movie(movie, opts) do
     force_refresh = Keyword.get(opts, :force_refresh, false)
-    omdb_source = OMDb.Transformer.get_or_create_source!()
 
     # Validate IMDb ID format
     if not valid_imdb_id?(movie.imdb_id) do
       Logger.warning("Invalid IMDb ID format for #{movie.title}: #{movie.imdb_id}")
       {:error, :invalid_imdb_id}
     else
-      if should_skip_processing?(movie, omdb_source, force_refresh) do
+      if should_skip_processing?(movie, force_refresh) do
         Logger.info("OMDb data already exists for #{movie.title} (ID: #{movie.id})")
         {:ok, movie}
       else
         Logger.info("Fetching OMDb data for #{movie.title} (IMDb ID: #{movie.imdb_id})")
 
-        case fetch_and_store_omdb_data(movie, omdb_source) do
+        case fetch_and_store_omdb_data(movie) do
           {:ok, updated_movie} ->
             Logger.info("Successfully processed OMDb data for #{movie.title}")
             {:ok, updated_movie}
@@ -91,28 +89,28 @@ defmodule Cinegraph.ApiProcessors.OMDb do
     end
   end
 
-  defp should_skip_processing?(movie, omdb_source, force_refresh) do
+  defp should_skip_processing?(movie, force_refresh) do
     if force_refresh do
       false
     else
-      # Check if we have the JSON data
+      # Check if we have the JSON data and metrics
       has_json = has_data?(movie)
 
-      # Check if we have ratings (for backward compatibility)
-      has_ratings =
+      # Check if we have metrics in the new external_metrics table
+      has_metrics =
         Repo.exists?(
-          from r in Rating,
-            where: r.movie_id == ^movie.id and r.source_id == ^omdb_source.id
+          from m in Cinegraph.Movies.ExternalMetric,
+            where: m.movie_id == ^movie.id and m.source == "omdb"
         )
 
-      has_json and has_ratings
+      has_json and has_metrics
     end
   end
 
-  defp fetch_and_store_omdb_data(movie, omdb_source) do
+  defp fetch_and_store_omdb_data(movie) do
     case OMDb.Client.get_movie_by_imdb_id(movie.imdb_id, tomatoes: true) do
       {:ok, omdb_data} ->
-        store_omdb_data(omdb_data, movie, omdb_source)
+        store_omdb_data(omdb_data, movie)
 
       {:error, "Movie not found!"} ->
         Logger.warning("Movie not found in OMDb: #{movie.title} (#{movie.imdb_id})")
@@ -124,17 +122,16 @@ defmodule Cinegraph.ApiProcessors.OMDb do
     end
   end
 
-  defp store_omdb_data(omdb_data, movie, omdb_source) do
-    # Extract additional fields from OMDb
+  defp store_omdb_data(omdb_data, movie) do
+    # Store the complete OMDb response in the movie record
     movie_updates = %{
-      omdb_data: omdb_data,
-      awards_text: omdb_data["Awards"],
-      box_office_domestic: parse_box_office(omdb_data["BoxOffice"])
+      omdb_data: omdb_data
     }
 
-    # First, store the complete OMDb response and extracted fields in the movie record
+    # First, update the movie with the raw OMDb data
     with {:ok, updated_movie} <- update_movie(movie, movie_updates),
-         :ok <- store_ratings(omdb_data, updated_movie, omdb_source) do
+         # Then store all metrics using the new Metrics module
+         :ok <- Metrics.store_omdb_metrics(updated_movie, omdb_data) do
       {:ok, updated_movie}
     end
   end
@@ -145,35 +142,7 @@ defmodule Cinegraph.ApiProcessors.OMDb do
     |> Repo.update()
   end
 
-  defp store_ratings(omdb_data, movie, omdb_source) do
-    # Transform and store ratings
-    ratings = OMDb.Transformer.transform_to_ratings(omdb_data, movie.id, omdb_source.id)
-
-    Enum.each(ratings, fn rating_attrs ->
-      case ExternalSources.upsert_rating(rating_attrs) do
-        {:ok, rating} ->
-          Logger.debug("Stored #{rating.rating_type} rating for #{movie.title}: #{rating.value}")
-
-        {:error, changeset} ->
-          Logger.error("Failed to store rating: #{inspect(changeset.errors)}")
-      end
-    end)
-
-    :ok
-  end
-
-  defp parse_box_office(nil), do: nil
-  defp parse_box_office("N/A"), do: nil
-
-  defp parse_box_office(box_office) when is_binary(box_office) do
-    box_office
-    |> String.replace("$", "")
-    |> String.replace(",", "")
-    |> String.trim()
-    |> String.to_integer()
-  rescue
-    _ -> nil
-  end
+  # Box office parsing is now handled by Metrics.store_omdb_metrics
 
   # Validate IMDb ID format (tt followed by 7+ digits)
   defp valid_imdb_id?(nil), do: false

@@ -19,7 +19,7 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
   def import_popular_movies(pages \\ 5) do
     Logger.info("Starting comprehensive movie import...")
 
-    # Ensure OMDb source exists
+    # Get OMDb source
     omdb_source = OMDb.Transformer.get_or_create_source!()
 
     # Import from TMDb

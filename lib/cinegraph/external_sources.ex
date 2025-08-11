@@ -6,40 +6,62 @@ defmodule Cinegraph.ExternalSources do
 
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
-  alias Cinegraph.ExternalSources.{Source, Rating, Recommendation}
-  alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.{Movie, ExternalMetric, MovieRecommendation}
 
   @doc """
-  Lists all external sources.
+  Lists all external sources from external_metrics table.
   """
   def list_sources do
-    Repo.all(Source)
+    import Ecto.Query
+    alias Cinegraph.Movies.ExternalMetric
+    
+    # Get unique sources from external_metrics
+    query = from em in ExternalMetric,
+      distinct: em.source,
+      select: %{
+        id: nil,
+        name: em.source,
+        source_type: "metric",
+        active: true
+      }
+    
+    Repo.all(query)
   end
 
   @doc """
-  Gets or creates an external source by name.
+  Gets or creates an external source by name (legacy function for compatibility).
+  Since sources are now implicit in external_metrics, this returns a mock source.
   """
   def get_or_create_source(name, attrs \\ %{}) do
-    case Repo.get_by(Source, name: name) do
-      nil ->
-        %Source{}
-        |> Source.changeset(Map.put(attrs, :name, name))
-        |> Repo.insert()
-
-      source ->
-        {:ok, source}
-    end
+    # Return a mock source for compatibility
+    {:ok, %{
+      id: nil,
+      name: name,
+      source_type: Map.get(attrs, :source_type, "metric"),
+      active: true
+    }}
   end
 
   @doc """
-  Creates or updates a rating for a movie from an external source.
+  Creates or updates a rating for a movie from an external source (legacy function).
+  This now creates external metrics instead of ratings.
   """
   def upsert_rating(attrs) do
-    %Rating{}
-    |> Rating.changeset(attrs)
+    # Convert old rating attrs to external metric format
+    metric_attrs = %{
+      movie_id: attrs[:movie_id],
+      source: attrs[:source_name] || "unknown",
+      metric_type: attrs[:rating_type] || "rating_average",
+      value: attrs[:value],
+      metadata: Map.take(attrs, [:scale_min, :scale_max, :sample_size]),
+      fetched_at: attrs[:fetched_at] || DateTime.utc_now()
+    }
+
+    %ExternalMetric{}
+    |> ExternalMetric.changeset(metric_attrs)
     |> Repo.insert(
       on_conflict: :replace_all,
-      conflict_target: [:movie_id, :source_id, :rating_type]
+      conflict_target: [:movie_id, :source, :metric_type, :fetched_at]
     )
   end
 
@@ -47,48 +69,67 @@ defmodule Cinegraph.ExternalSources do
   Creates or updates a recommendation.
   """
   def upsert_recommendation(attrs) do
-    %Recommendation{}
-    |> Recommendation.changeset(attrs)
+    %MovieRecommendation{}
+    |> MovieRecommendation.changeset(attrs)
     |> Repo.insert(
       on_conflict: :replace_all,
-      conflict_target: [:source_movie_id, :recommended_movie_id, :source_id, :recommendation_type]
+      conflict_target: [:source_movie_id, :recommended_movie_id, :source, :type]
     )
   end
 
   @doc """
-  Gets all ratings for a movie, optionally filtered by source.
+  Gets all ratings for a movie from external_metrics table.
   """
   def get_movie_ratings(movie_id, source_names \\ nil) do
+    import Ecto.Query
+    alias Cinegraph.Movies.ExternalMetric
+    
+    # Get rating-related metrics for this movie
     query =
-      from r in Rating,
-        join: s in assoc(r, :source),
-        where: r.movie_id == ^movie_id,
-        preload: [source: s]
+      from em in ExternalMetric,
+        where: em.movie_id == ^movie_id,
+        where: em.metric_type in ["rating_average", "tomatometer", "metascore", "audience_score"],
+        order_by: [desc: em.fetched_at]
 
     query =
       if source_names do
-        from [r, s] in query, where: s.name in ^source_names
+        from em in query, where: em.source in ^source_names
       else
         query
       end
 
-    Repo.all(query)
+    metrics = Repo.all(query)
+    
+    # Convert metrics to a format compatible with the old ratings structure
+    Enum.map(metrics, fn metric ->
+      %{
+        id: metric.id,
+        movie_id: metric.movie_id,
+        rating_type: metric.metric_type,
+        value: metric.value,
+        metadata: metric.metadata,
+        fetched_at: metric.fetched_at,
+        source: %{
+          name: metric.source,
+          id: nil # No longer have separate source table
+        }
+      }
+    end)
   end
 
   @doc """
-  Gets normalized scores across all sources for a movie.
+  Gets normalized scores across all sources for a movie from external_metrics.
   """
-  def get_normalized_scores(movie_id, rating_type \\ "user") do
-    from(r in Rating,
-      join: s in assoc(r, :source),
-      where: r.movie_id == ^movie_id and r.rating_type == ^rating_type,
+  def get_normalized_scores(movie_id, rating_type \\ "rating_average") do
+    from(em in ExternalMetric,
+      where: em.movie_id == ^movie_id and em.metric_type == ^rating_type,
       select: %{
-        source: s.name,
-        normalized_score: fragment("? / ? * 10.0", r.value, r.scale_max),
-        weight: s.weight_factor,
-        sample_size: r.sample_size,
-        raw_value: r.value,
-        scale_max: r.scale_max
+        source: em.source,
+        normalized_score: em.value,  # Assume already normalized or handle in app layer
+        weight: 1.0,  # Default weight since no source table
+        sample_size: fragment("?->>'sample_size'", em.metadata),
+        raw_value: em.value,
+        scale_max: fragment("?->>'scale_max'", em.metadata)
       }
     )
     |> Repo.all()
@@ -103,18 +144,17 @@ defmodule Cinegraph.ExternalSources do
     source_name = Keyword.get(opts, :source)
 
     query =
-      from(r in Recommendation,
+      from(r in MovieRecommendation,
         join: m in assoc(r, :recommended_movie),
-        join: s in assoc(r, :source),
         where: r.source_movie_id == ^movie_id and r.score >= ^min_score,
         order_by: [desc: r.score],
         limit: ^limit,
-        preload: [recommended_movie: m, source: s]
+        preload: [recommended_movie: m]
       )
 
     query =
       if source_name do
-        from [r, m, s] in query, where: s.name == ^source_name
+        from [r, m] in query, where: r.source == ^source_name
       else
         query
       end
@@ -139,44 +179,26 @@ defmodule Cinegraph.ExternalSources do
   end
 
   @doc """
-  Stores TMDB subjective data (ratings, popularity) as external ratings.
+  Stores TMDB subjective data (ratings, popularity) as external metrics.
   """
   def store_tmdb_ratings(movie, tmdb_data) do
-    with {:ok, source} <-
-           get_or_create_source("tmdb", %{
-             source_type: "api",
-             base_url: "https://api.themoviedb.org/3",
-             api_version: "3"
-           }) do
-      # Store user rating
-      if tmdb_data["vote_average"] && tmdb_data["vote_count"] && tmdb_data["vote_count"] > 0 do
-        upsert_rating(%{
-          movie_id: movie.id,
-          source_id: source.id,
-          rating_type: "user",
-          value: tmdb_data["vote_average"],
-          scale_min: 0.0,
-          scale_max: 10.0,
-          sample_size: tmdb_data["vote_count"],
-          fetched_at: DateTime.utc_now()
-        })
-      end
-
-      # Store popularity score
-      if tmdb_data["popularity"] do
-        upsert_rating(%{
-          movie_id: movie.id,
-          source_id: source.id,
-          rating_type: "popularity",
-          value: tmdb_data["popularity"],
-          scale_min: 0.0,
-          # TMDB popularity can go very high
-          scale_max: 1000.0,
-          fetched_at: DateTime.utc_now()
-        })
-      end
-
-      :ok
+    # Use the ExternalMetric.from_tmdb function to create metrics
+    metrics = ExternalMetric.from_tmdb(movie.id, tmdb_data)
+    
+    # Insert each metric
+    results = Enum.map(metrics, fn metric_attrs ->
+      %ExternalMetric{}
+      |> ExternalMetric.changeset(metric_attrs)
+      |> Repo.insert(
+        on_conflict: :replace_all,
+        conflict_target: [:movie_id, :source, :metric_type, :fetched_at]
+      )
+    end)
+    
+    # Check if all succeeded
+    case Enum.all?(results, fn {status, _} -> status == :ok end) do
+      true -> :ok
+      false -> {:error, "Failed to store some metrics"}
     end
   end
 
@@ -184,31 +206,32 @@ defmodule Cinegraph.ExternalSources do
   Stores TMDB recommendations.
   """
   def store_tmdb_recommendations(source_movie, recommendations_data, recommendation_type) do
-    with {:ok, source} <- get_or_create_source("tmdb") do
-      recommendations_data
-      |> Enum.with_index(1)
-      |> Enum.each(fn {rec_data, _rank} ->
-        # First ensure the recommended movie exists
-        case Repo.get_by(Movie, tmdb_id: rec_data["id"]) do
-          nil ->
-            # Skip if movie doesn't exist yet
-            :ok
+    recommendations_data
+    |> Enum.with_index(1)
+    |> Enum.each(fn {rec_data, rank} ->
+      # First ensure the recommended movie exists
+      case Repo.get_by(Movie, tmdb_id: rec_data["id"]) do
+        nil ->
+          # Skip if movie doesn't exist yet
+          :ok
 
-          recommended_movie ->
-            upsert_recommendation(%{
-              source_movie_id: source_movie.id,
-              recommended_movie_id: recommended_movie.id,
-              source_id: source.id,
-              recommendation_type: recommendation_type,
-              score: rec_data["vote_average"] || 0.0,
-              metadata: %{
-                "popularity" => rec_data["popularity"],
-                "vote_count" => rec_data["vote_count"]
-              },
-              fetched_at: DateTime.utc_now()
-            })
-        end
-      end)
-    end
+        recommended_movie ->
+          upsert_recommendation(%{
+            source_movie_id: source_movie.id,
+            recommended_movie_id: recommended_movie.id,
+            source: "tmdb",
+            type: recommendation_type,
+            rank: rank,
+            score: rec_data["vote_average"] || 0.0,
+            metadata: %{
+              "popularity" => rec_data["popularity"],
+              "vote_count" => rec_data["vote_count"]
+            },
+            fetched_at: DateTime.utc_now()
+          })
+      end
+    end)
+    
+    :ok
   end
 end

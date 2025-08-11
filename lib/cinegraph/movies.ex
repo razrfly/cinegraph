@@ -21,7 +21,7 @@ defmodule Cinegraph.Movies do
   }
 
   alias Cinegraph.Services.TMDb
-  alias Cinegraph.ExternalSources
+  alias Cinegraph.Metrics
   require Logger
 
   @doc """
@@ -70,8 +70,22 @@ defmodule Cinegraph.Movies do
       "title_desc" -> order_by(query, [m], desc: m.title)
       "release_date" -> order_by(query, [m], asc: m.release_date)
       "release_date_desc" -> order_by(query, [m], desc: m.release_date)
-      "rating" -> order_by(query, [m], desc: m.vote_average)
-      "popularity" -> order_by(query, [m], desc: m.popularity)
+      "rating" -> 
+        query
+        |> order_by([m], desc: 
+          fragment("""
+          (SELECT value FROM external_metrics 
+           WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+           ORDER BY fetched_at DESC LIMIT 1)
+          """, m.id))
+      "popularity" -> 
+        query
+        |> order_by([m], desc: 
+          fragment("""
+          (SELECT value FROM external_metrics 
+           WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score'
+           ORDER BY fetched_at DESC LIMIT 1)
+          """, m.id))
       # default
       _ -> order_by(query, [m], desc: m.release_date)
     end
@@ -163,7 +177,7 @@ defmodule Cinegraph.Movies do
   def fetch_and_store_movie_comprehensive(tmdb_id) do
     with {:ok, tmdb_data} <- TMDb.get_movie_ultra_comprehensive(tmdb_id),
          {:ok, movie} <- create_or_update_movie_from_tmdb(tmdb_data),
-         :ok <- ExternalSources.store_tmdb_ratings(movie, tmdb_data),
+         :ok <- Metrics.store_tmdb_metrics(movie, tmdb_data),
          :ok <- process_movie_credits(movie, tmdb_data["credits"]),
          :ok <- process_movie_genres(movie, tmdb_data["genres"]),
          :ok <- process_movie_production_countries(movie, tmdb_data["production_countries"]),
@@ -558,7 +572,10 @@ defmodule Cinegraph.Movies do
     Enum.each(videos, fn video_data ->
       video_data
       |> MovieVideo.from_tmdb(movie.id)
-      |> Repo.insert(on_conflict: :nothing, conflict_target: :tmdb_id)
+      |> Repo.insert(
+        on_conflict: :nothing,
+        conflict_target: :tmdb_id
+      )
     end)
 
     :ok
@@ -743,105 +760,30 @@ defmodule Cinegraph.Movies do
   defp process_movie_recommendations(_movie, nil), do: :ok
 
   defp process_movie_recommendations(movie, %{"results" => results}) do
-    ExternalSources.store_tmdb_recommendations(movie, results, "recommended")
+    Metrics.store_tmdb_recommendations(movie, results, "recommended")
+    :ok
   end
 
   defp process_movie_similar(_movie, nil), do: :ok
 
   defp process_movie_similar(movie, %{"results" => results}) do
-    ExternalSources.store_tmdb_recommendations(movie, results, "similar")
+    Metrics.store_tmdb_recommendations(movie, results, "similar")
+    :ok
   end
 
   defp process_movie_reviews(_movie, nil), do: :ok
 
   defp process_movie_reviews(movie, %{"results" => reviews}) do
-    # Store review count as engagement metric
-    review_count = length(reviews)
-
-    # Calculate average rating if reviews have ratings
-    avg_rating =
-      if review_count > 0 do
-        ratings =
-          reviews
-          |> Enum.filter(& &1["author_details"]["rating"])
-          |> Enum.map(& &1["author_details"]["rating"])
-
-        if length(ratings) > 0 do
-          Enum.sum(ratings) / length(ratings)
-        else
-          nil
-        end
-      else
-        nil
-      end
-
-    # Store as external rating
-    with {:ok, source} <- ExternalSources.get_or_create_source("tmdb") do
-      ExternalSources.upsert_rating(%{
-        movie_id: movie.id,
-        source_id: source.id,
-        rating_type: "engagement",
-        value: review_count,
-        scale_min: 0.0,
-        # Arbitrary max for count
-        scale_max: 1000.0,
-        sample_size: review_count,
-        metadata: %{
-          "average_rating" => avg_rating,
-          "rated_reviews" => length(Enum.filter(reviews, & &1["author_details"]["rating"]))
-        },
-        fetched_at: DateTime.utc_now()
-      })
-    end
-
+    # Use the new Metrics module to store engagement metrics
+    Metrics.store_tmdb_engagement_metrics(movie, %{"results" => reviews}, nil)
     :ok
   end
 
   defp process_movie_lists(_movie, nil), do: :ok
 
   defp process_movie_lists(movie, %{"results" => lists}) do
-    # Store list appearances as popularity metric
-    list_count = length(lists)
-
-    # Count lists that might be culturally relevant
-    cultural_lists =
-      lists
-      |> Enum.filter(fn list ->
-        name = String.downcase(list["name"] || "")
-
-        String.contains?(name, [
-          "award",
-          "oscar",
-          "academy",
-          "cannes",
-          "criterion",
-          "afi",
-          "best",
-          "greatest",
-          "top",
-          "essential",
-          "classic"
-        ])
-      end)
-
-    with {:ok, source} <- ExternalSources.get_or_create_source("tmdb") do
-      ExternalSources.upsert_rating(%{
-        movie_id: movie.id,
-        source_id: source.id,
-        rating_type: "list_appearances",
-        value: list_count,
-        scale_min: 0.0,
-        # Arbitrary max for count
-        scale_max: 10000.0,
-        sample_size: list_count,
-        metadata: %{
-          "cultural_list_count" => length(cultural_lists),
-          "cultural_list_names" => Enum.take(Enum.map(cultural_lists, & &1["name"]), 10)
-        },
-        fetched_at: DateTime.utc_now()
-      })
-    end
-
+    # Use the new Metrics module to store engagement metrics
+    Metrics.store_tmdb_engagement_metrics(movie, nil, %{"results" => lists})
     :ok
   end
 
