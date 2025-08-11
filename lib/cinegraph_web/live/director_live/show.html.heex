@@ -68,7 +68,7 @@
               </p>
             <% end %>
             <p class="text-sm font-medium text-yellow-600">
-              ★ {Float.round(@director_stats.highest_rated.vote_average || 0, 1)}
+              ★ {Float.round(Cinegraph.Movies.Movie.vote_average(@director_stats.highest_rated) || 0, 1)}
             </p>
           </div>
         </.link>

@@ -1,11 +1,15 @@
 defmodule Cinegraph.Movies.Movie do
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
 
   @primary_key {:id, :id, autogenerate: true}
   schema "movies" do
+    # Core Identity (Never Changes)
     field :tmdb_id, :integer
     field :imdb_id, :string
+
+    # Core Facts (Rarely Change)
     field :title, :string
     field :original_title, :string
     field :release_date, :date
@@ -13,38 +17,20 @@ defmodule Cinegraph.Movies.Movie do
     field :overview, :string
     field :tagline, :string
     field :original_language, :string
-    field :budget, :integer
-    field :revenue, :integer
     field :status, :string
     field :adult, :boolean, default: false
     field :homepage, :string
-    field :vote_average, :float
-    field :vote_count, :integer
-    field :popularity, :float
-
-    # Collection/Franchise
-    field :collection_id, :integer
-
-    # Images
-    field :poster_path, :string
-    field :backdrop_path, :string
-
-    # TMDb raw data storage
-    field :tmdb_data, :map
-
-    # OMDb raw data storage
-    field :omdb_data, :map
-
-    # New high-priority fields
-    field :awards_text, :string
-    field :awards, :map
-    field :box_office_domestic, :integer
     field :origin_country, {:array, :string}, default: []
 
-    # Import tracking
-    field :import_status, :string, default: "full"
+    # Media & Collections
+    field :poster_path, :string
+    field :backdrop_path, :string
+    field :collection_id, :integer
 
-    # Canonical sources for backtesting (1001 Movies, Sight & Sound, etc.)
+    # System Fields
+    field :tmdb_data, :map
+    field :omdb_data, :map
+    field :import_status, :string, default: "full"
     field :canonical_sources, :map, default: %{}
 
     # Associations  
@@ -78,9 +64,9 @@ defmodule Cinegraph.Movies.Movie do
     has_many :movie_release_dates, Cinegraph.Movies.MovieReleaseDate, foreign_key: :movie_id
 
     # External data associations  
-    has_many :external_ratings, Cinegraph.ExternalSources.Rating, foreign_key: :movie_id
+    has_many :external_metrics, Cinegraph.Movies.ExternalMetric, foreign_key: :movie_id
 
-    has_many :external_recommendations, Cinegraph.ExternalSources.Recommendation,
+    has_many :external_recommendations, Cinegraph.Movies.MovieRecommendation,
       foreign_key: :source_movie_id
 
     timestamps()
@@ -99,22 +85,14 @@ defmodule Cinegraph.Movies.Movie do
       :overview,
       :tagline,
       :original_language,
-      :budget,
-      :revenue,
       :status,
       :adult,
       :homepage,
       :collection_id,
       :poster_path,
       :backdrop_path,
-      :vote_average,
-      :vote_count,
-      :popularity,
       :tmdb_data,
       :omdb_data,
-      :awards_text,
-      :awards,
-      :box_office_domestic,
       :origin_country,
       :import_status,
       :canonical_sources
@@ -126,6 +104,7 @@ defmodule Cinegraph.Movies.Movie do
 
   @doc """
   Creates a changeset from TMDB API response data
+  Note: Volatile metrics (vote_average, popularity, budget, etc.) are now stored in external_metrics table
   """
   def from_tmdb(attrs) do
     movie_attrs = %{
@@ -138,14 +117,9 @@ defmodule Cinegraph.Movies.Movie do
       overview: attrs["overview"],
       tagline: attrs["tagline"],
       original_language: attrs["original_language"],
-      budget: normalize_money_value(attrs["budget"]),
-      revenue: normalize_money_value(attrs["revenue"]),
       status: attrs["status"],
       adult: attrs["adult"],
       homepage: attrs["homepage"],
-      vote_average: attrs["vote_average"],
-      vote_count: attrs["vote_count"],
-      popularity: attrs["popularity"],
       collection_id: extract_collection_id(attrs["belongs_to_collection"]),
       poster_path: attrs["poster_path"],
       backdrop_path: attrs["backdrop_path"],
@@ -165,10 +139,6 @@ defmodule Cinegraph.Movies.Movie do
       {:error, _} -> nil
     end
   end
-
-  defp normalize_money_value(nil), do: nil
-  defp normalize_money_value(0), do: nil
-  defp normalize_money_value(value) when is_integer(value), do: value
 
   defp extract_collection_id(nil), do: nil
   defp extract_collection_id(%{"id" => id}), do: id
@@ -220,5 +190,39 @@ defmodule Cinegraph.Movies.Movie do
   """
   def canonical_source_keys(%__MODULE__{canonical_sources: sources}) do
     Map.keys(sources || %{})
+  end
+
+  @doc """
+  Gets the current vote average from external metrics.
+  Returns nil if no rating is available.
+  """
+  def vote_average(%__MODULE__{id: id}) do
+    case Cinegraph.Repo.one(
+      from em in Cinegraph.Movies.ExternalMetric,
+      where: em.movie_id == ^id and em.source == "tmdb" and em.metric_type == "rating_average",
+      order_by: [desc: em.fetched_at],
+      limit: 1,
+      select: em.value
+    ) do
+      nil -> nil
+      value -> value
+    end
+  end
+
+  @doc """
+  Gets the current popularity score from external metrics.
+  Returns nil if no popularity score is available.
+  """
+  def popularity(%__MODULE__{id: id}) do
+    case Cinegraph.Repo.one(
+      from em in Cinegraph.Movies.ExternalMetric,
+      where: em.movie_id == ^id and em.source == "tmdb" and em.metric_type == "popularity_score",
+      order_by: [desc: em.fetched_at],
+      limit: 1,
+      select: em.value
+    ) do
+      nil -> nil
+      value -> value
+    end
   end
 end
