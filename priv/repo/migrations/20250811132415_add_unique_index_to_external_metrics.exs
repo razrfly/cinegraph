@@ -2,17 +2,19 @@ defmodule Cinegraph.Repo.Migrations.AddUniqueIndexToExternalMetrics do
   use Ecto.Migration
 
   def up do
-    # First, remove duplicates by keeping only the most recent entry for each combination
+    # First, remove duplicates by keeping only the most recent entry per (movie_id, source, metric_type)
+    # Uses a window function for better performance on larger tables.
     execute """
-    DELETE FROM external_metrics em1
-    WHERE EXISTS (
-      SELECT 1 FROM external_metrics em2
-      WHERE em2.movie_id = em1.movie_id
-        AND em2.source = em1.source
-        AND em2.metric_type = em1.metric_type
-        AND (em2.fetched_at > em1.fetched_at 
-             OR (em2.fetched_at = em1.fetched_at AND em2.id > em1.id))
-    )
+    DELETE FROM external_metrics em
+    USING (
+      SELECT id,
+             ROW_NUMBER() OVER (
+               PARTITION BY movie_id, source, metric_type
+               ORDER BY fetched_at DESC, id DESC
+             ) AS rn
+      FROM external_metrics
+    ) dups
+    WHERE em.id = dups.id AND dups.rn > 1;
     """
     
     # Now add the unique index on (movie_id, source, metric_type) for upsert operations
