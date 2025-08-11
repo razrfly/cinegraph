@@ -7,6 +7,7 @@ Mix.shell(Mix.Shell.Process)
 # Start the application
 {:ok, _} = Application.ensure_all_started(:cinegraph)
 
+import Ecto.Query
 alias Cinegraph.{Repo, Movies, Metrics}
 alias Cinegraph.Movies.{Movie, ExternalMetric, MovieRecommendation}
 alias Cinegraph.Services.TMDb

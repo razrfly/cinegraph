@@ -578,10 +578,11 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     clean_title = clean_title_for_search(title)
 
     # Query for movies with similar titles
+    # Order by release_date descending to prefer newer movies when multiple matches
     query =
       from m in Movie,
         where: fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{clean_title}%"),
-        order_by: [desc: m.vote_count]
+        order_by: [desc: m.release_date]
 
     movies = Repo.all(query)
 
