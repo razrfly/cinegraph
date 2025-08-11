@@ -28,11 +28,22 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   end
   
   @impl true
-  def handle_event("update_weight", %{"dimension" => dimension, "value" => value}, socket) do
-    dimension = String.to_atom(dimension)
-    value = String.to_float(value) / 100
+  def handle_event("update_weight", params, socket) do
+    # Handle all weight updates from the form
+    weights = 
+      Enum.reduce(params, %{}, fn
+        {key, value}, acc when key in ["popular_opinion", "critical_acclaim", "industry_recognition", "cultural_impact"] ->
+          dimension = String.to_atom(key)
+          parsed_value = case Float.parse(value) do
+            {val, _} -> min(1.0, max(0.0, val / 100))
+            :error -> 0.0
+          end
+          Map.put(acc, dimension, parsed_value)
+        _, acc -> acc
+      end)
     
-    weights = Map.put(socket.assigns.weights, dimension, value)
+    # Merge with existing weights to handle any missing ones
+    weights = Map.merge(socket.assigns.weights, weights)
     
     socket =
       socket
@@ -63,8 +74,11 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   end
   
   @impl true
-  def handle_event("update_min_score", %{"value" => value}, socket) do
-    min_score = String.to_float(value) / 100
+  def handle_event("update_min_score", %{"min_score" => value}, socket) do
+    min_score = case Float.parse(value) do
+      {val, _} -> min(1.0, max(0.0, val / 100))
+      :error -> 0.0
+    end
     
     socket =
       socket
@@ -159,7 +173,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
         </div>
         
         <!-- Weight Sliders -->
-        <div class="space-y-4">
+        <form phx-change="update_weight" class="space-y-4">
           <h3 class="text-lg font-semibold text-gray-900">Scoring Weights</h3>
           
           <div :for={{dimension, weight} <- @weights} class="space-y-1">
@@ -173,21 +187,20 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
             </div>
             <input
               type="range"
+              name={dimension}
               min="0"
               max="100"
               value={round(weight * 100)}
-              phx-change="update_weight"
-              phx-value-dimension={dimension}
               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
             />
             <p class="text-xs text-gray-500">
               <%= dimension_description(dimension) %>
             </p>
           </div>
-        </div>
+        </form>
         
         <!-- Minimum Score Filter -->
-        <div class="space-y-1">
+        <form phx-change="update_min_score" class="space-y-1">
           <div class="flex justify-between items-center">
             <label class="text-sm font-medium text-gray-700">
               Minimum Score Threshold
@@ -198,13 +211,13 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           </div>
           <input
             type="range"
+            name="min_score"
             min="0"
             max="100"
             value={round(@min_score * 100)}
-            phx-change="update_min_score"
             class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
           />
-        </div>
+        </form>
         
         <!-- Toggle Score Display -->
         <div>
@@ -292,7 +305,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
       </div>
       
       <!-- Load More Button -->
-      <%= if length(@movies) >= @page * @per_page do %>
+      <%= if rem(length(@movies), @per_page) == 0 and length(@movies) > 0 do %>
         <div class="mt-8 text-center">
           <button
             phx-click="load_more"
