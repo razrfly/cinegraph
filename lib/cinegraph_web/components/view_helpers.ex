@@ -25,9 +25,7 @@ defmodule CinegraphWeb.ViewHelpers do
   """
   def safe_divide(nil, _), do: nil
   def safe_divide(_, nil), do: nil
-  def safe_divide(_, 0), do: nil
-  def safe_divide(_, +0.0), do: nil
-  def safe_divide(_, -0.0), do: nil
+  def safe_divide(_, denom) when is_number(denom) and denom == 0, do: nil
   
   def safe_divide(%Decimal{} = numerator, %Decimal{} = denominator) do
     if Decimal.equal?(denominator, Decimal.new(0)) do
@@ -35,6 +33,14 @@ defmodule CinegraphWeb.ViewHelpers do
     else
       Decimal.div(numerator, denominator)
     end
+  end
+  
+  def safe_divide(%Decimal{} = numerator, denom) when is_number(denom) do
+    safe_divide(numerator, to_decimal(denom))
+  end
+  
+  def safe_divide(numerator, %Decimal{} = denom) when is_number(numerator) do
+    safe_divide(to_decimal(numerator), denom)
   end
   
   def safe_divide(numerator, denominator) when is_number(numerator) and is_number(denominator) do
@@ -60,6 +66,14 @@ defmodule CinegraphWeb.ViewHelpers do
   
   def safe_multiply(%Decimal{} = a, %Decimal{} = b) do
     Decimal.mult(a, b)
+  end
+  
+  def safe_multiply(%Decimal{} = a, b) when is_number(b) do
+    Decimal.mult(a, to_decimal(b))
+  end
+  
+  def safe_multiply(a, %Decimal{} = b) when is_number(a) do
+    Decimal.mult(to_decimal(a), b)
   end
   
   def safe_multiply(a, b) when is_number(a) and is_number(b) do
@@ -90,6 +104,14 @@ defmodule CinegraphWeb.ViewHelpers do
     Decimal.add(a, b)
   end
   
+  def safe_add(%Decimal{} = a, b) when is_number(b) do
+    Decimal.add(a, to_decimal(b))
+  end
+  
+  def safe_add(a, %Decimal{} = b) when is_number(a) do
+    Decimal.add(to_decimal(a), b)
+  end
+  
   def safe_add(a, b) when is_number(a) and is_number(b) do
     a + b
   end
@@ -118,6 +140,14 @@ defmodule CinegraphWeb.ViewHelpers do
     Decimal.sub(a, b)
   end
   
+  def safe_subtract(%Decimal{} = a, b) when is_number(b) do
+    Decimal.sub(a, to_decimal(b))
+  end
+  
+  def safe_subtract(a, %Decimal{} = b) when is_number(a) do
+    Decimal.sub(to_decimal(a), b)
+  end
+  
   def safe_subtract(a, b) when is_number(a) and is_number(b) do
     a - b
   end
@@ -139,13 +169,15 @@ defmodule CinegraphWeb.ViewHelpers do
   def format_currency(nil), do: "N/A"
   
   def format_currency(%Decimal{} = amount) do
-    amount
-    |> Decimal.to_float()
-    |> format_currency()
+    "$" <> Number.Delimit.number_to_delimited(Decimal.to_float(amount), precision: 2)
   end
   
-  def format_currency(amount) when is_number(amount) do
+  def format_currency(amount) when is_integer(amount) do
     "$" <> Number.Delimit.number_to_delimited(amount, precision: 0)
+  end
+  
+  def format_currency(amount) when is_float(amount) do
+    "$" <> Number.Delimit.number_to_delimited(amount, precision: 2)
   end
 
   @doc """
@@ -207,8 +239,23 @@ defmodule CinegraphWeb.ViewHelpers do
     valid_values = Enum.reject(values, &is_nil/1)
     
     case valid_values do
-      [] -> nil
-      _ -> Enum.sum(valid_values) / length(valid_values)
+      [] ->
+        nil
+      
+      _ when Enum.any?(valid_values, &match?(%Decimal{}, &1)) ->
+        sum =
+          Enum.reduce(valid_values, Decimal.new(0), fn v, acc ->
+            case v do
+              %Decimal{} -> Decimal.add(acc, v)
+              v when is_integer(v) -> Decimal.add(acc, Decimal.new(v))
+              v when is_float(v) -> Decimal.add(acc, Decimal.from_float(v))
+            end
+          end)
+        
+        Decimal.div(sum, Decimal.new(length(valid_values)))
+      
+      _ ->
+        Enum.sum(valid_values) / length(valid_values)
     end
   end
 
@@ -232,7 +279,11 @@ defmodule CinegraphWeb.ViewHelpers do
     Decimal.round(number, precision)
   end
   
-  def safe_round(number, precision) when is_number(number) do
+  def safe_round(number, precision) when is_integer(number) and is_integer(precision) do
+    Float.round(number * 1.0, precision)
+  end
+  
+  def safe_round(number, precision) when is_float(number) and is_integer(precision) do
     Float.round(number, precision)
   end
 
@@ -257,4 +308,9 @@ defmodule CinegraphWeb.ViewHelpers do
   end
   
   def safe_to_string(value), do: to_string(value)
+
+  # Private helper to convert numeric values to Decimal
+  defp to_decimal(v) when is_integer(v), do: Decimal.new(v)
+  defp to_decimal(v) when is_float(v), do: Decimal.from_float(v)
+  defp to_decimal(%Decimal{} = v), do: v
 end
