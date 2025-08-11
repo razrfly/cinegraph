@@ -69,6 +69,10 @@ defmodule Cinegraph.Movies.Movie do
     has_many :external_recommendations, Cinegraph.Movies.MovieRecommendation,
       foreign_key: :source_movie_id
 
+    # Virtual fields for discovery scoring
+    field :discovery_score, :float, virtual: true
+    field :score_components, :map, virtual: true
+
     timestamps()
   end
 

@@ -647,6 +647,215 @@ defmodule CinegraphWeb.CoreComponents do
   end
 
   @doc """
+  Renders a multi-select autocomplete dropdown component.
+  
+  ## Examples
+  
+      <.multi_select_dropdown
+        id="genres-select"
+        name="filters[genres][]"
+        options={@available_genres}
+        selected={@filters.genres || []}
+        placeholder="Select genres..."
+        label_field={:name}
+        value_field={:id}
+      />
+  """
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :options, :list, required: true
+  attr :selected, :list, default: []
+  attr :placeholder, :string, default: "Select options..."
+  attr :label_field, :atom, default: :name
+  attr :value_field, :atom, default: :id
+  attr :class, :string, default: ""
+  attr :max_height, :string, default: "max-h-60"
+
+  def multi_select_dropdown(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      data-selected={Jason.encode!(Enum.map(@selected, &to_string/1))}
+      data-options={Jason.encode!(format_options(@options, @label_field, @value_field))}
+      x-data={"
+        {
+          open: false,
+          search: '',
+          selected: #{Jason.encode!(Enum.map(@selected, &to_string/1))},
+          options: #{Jason.encode!(format_options(@options, @label_field, @value_field))},
+          name: #{Jason.encode!(@name)},
+          syncFromServer() {
+            try {
+              const root = this.$root;
+              if (!root) return;
+              const selectedData = root.getAttribute('data-selected') || '[]';
+              const optionsData = root.getAttribute('data-options') || '[]';
+              const nextSelected = JSON.parse(selectedData).map(String);
+              const nextOptions = JSON.parse(optionsData);
+              this.selected = nextSelected;
+              this.options = nextOptions;
+              // Mirror to hidden select as well
+              const sel = this.$refs.backing;
+              if (sel) {
+                const set = new Set(this.selected);
+                Array.from(sel.options).forEach(opt => opt.selected = set.has(opt.value));
+              }
+            } catch (_) {}
+          },
+          initObserver() {
+            try {
+              const observer = new MutationObserver(() => this.syncFromServer());
+              observer.observe(this.$root, { attributes: true, attributeFilter: ['data-selected', 'data-options'] });
+              this.syncFromServer();
+            } catch (_) {}
+          },
+          // Deprecated; we now mirror to a native select and dispatch change on it
+          triggerChange() {},
+          get filteredOptions() {
+            if (this.search === '') return this.options;
+            return this.options.filter(option => 
+              option.label.toLowerCase().includes(this.search.toLowerCase())
+            );
+          },
+          toggle(value) {
+            const index = this.selected.indexOf(value);
+            if (index === -1) {
+              this.selected.push(value);
+            } else {
+              this.selected.splice(index, 1);
+            }
+            // Mirror selection to hidden native <select>
+            const sel = this.$refs.backing;
+            if (sel) {
+              Array.from(sel.options).forEach(opt => {
+                if (opt.value === value) opt.selected = this.selected.includes(value);
+              });
+              const evtInit = { bubbles: true, cancelable: true };
+              sel.dispatchEvent(new Event('change', evtInit));
+            }
+          },
+          isSelected(value) {
+            return this.selected.includes(value);
+          },
+          removeItem(value) {
+            const index = this.selected.indexOf(value);
+            if (index !== -1) {
+              this.selected.splice(index, 1);
+            }
+            const sel = this.$refs.backing;
+            if (sel) {
+              Array.from(sel.options).forEach(opt => {
+                if (opt.value === value) opt.selected = false;
+              });
+              const evtInit = { bubbles: true, cancelable: true };
+              sel.dispatchEvent(new Event('change', evtInit));
+            }
+          },
+          getLabel(value) {
+            const option = this.options.find(o => o.value === value);
+            return option ? option.label : value;
+          }
+        }
+      "}
+      x-init="initObserver()"
+      class={"relative #{@class}"}
+      @click.away="open = false"
+    >
+      <!-- Alpine-managed UI is ignored by LiveView to prevent patch conflicts -->
+      <div id={"#{@id}-ui"} phx-update="ignore">
+        <!-- Selected items display -->
+        <div class="min-h-[38px] p-1 border border-gray-300 rounded-md bg-white">
+          <div class="flex flex-wrap gap-1">
+            <template x-for="value in selected">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded">
+                <span x-text="getLabel(value)"></span>
+                <button
+                  type="button"
+                  @click.stop="removeItem(value)"
+                  class="text-blue-600 hover:text-blue-800"
+                >
+                  <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </span>
+            </template>
+            <input
+              type="text"
+              x-model="search"
+              @focus="open = true"
+              @click="open = true"
+              @input.stop
+              @keydown.stop
+              class="flex-1 min-w-[120px] border-0 p-1 text-sm focus:outline-none focus:ring-0"
+              placeholder={@placeholder}
+            />
+          </div>
+        </div>
+
+        <!-- Dropdown -->
+        <div
+          x-show="open"
+          x-transition:enter="transition ease-out duration-100"
+          x-transition:enter-start="transform opacity-0 scale-95"
+          x-transition:enter-end="transform opacity-100 scale-100"
+          x-transition:leave="transition ease-in duration-75"
+          x-transition:leave-start="transform opacity-100 scale-100"
+          x-transition:leave-end="transform opacity-0 scale-95"
+          class={"absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg #{@max_height} overflow-auto"}
+        >
+          <ul class="py-1">
+            <template x-for="option in filteredOptions">
+              <li>
+                <button
+                  type="button"
+                  @click="toggle(option.value)"
+                  class="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center justify-between"
+                  x-bind:class="isSelected(option.value) ? 'bg-blue-50' : ''"
+                >
+                  <span x-text="option.label"></span>
+                  <svg
+                    x-show="isSelected(option.value)"
+                    class="h-4 w-4 text-blue-600"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                </button>
+              </li>
+            </template>
+            <li x-show="filteredOptions.length === 0" class="px-3 py-2 text-sm text-gray-500">
+              No options found
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Hidden native select to mirror state for LiveView -->
+      <select x-ref="backing" name={@name} multiple class="hidden">
+        <%= for option <- @options do %>
+          <% val = Map.get(option, @value_field) %>
+          <% lab = Map.get(option, @label_field) %>
+          <option value={val} selected={to_string(val) in (@selected || [])}>
+            <%= lab %>
+          </option>
+        <% end %>
+      </select>
+    </div>
+    """
+  end
+
+  defp format_options(options, label_field, value_field) do
+    Enum.map(options, fn option ->
+      %{
+        "label" => to_string(Map.get(option, label_field)),
+        "value" => to_string(Map.get(option, value_field))
+      }
+    end)
+  end
+
+  @doc """
   Translates an error message using gettext.
   """
   def translate_error({msg, opts}) do
