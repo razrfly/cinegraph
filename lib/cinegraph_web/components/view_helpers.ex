@@ -169,7 +169,10 @@ defmodule CinegraphWeb.ViewHelpers do
   def format_currency(nil), do: "N/A"
   
   def format_currency(%Decimal{} = amount) do
-    "$" <> Number.Delimit.number_to_delimited(Decimal.to_float(amount), precision: 2)
+    amount
+    |> Decimal.round(2)
+    |> Decimal.to_float()
+    |> then(&("$" <> Number.Delimit.number_to_delimited(&1, precision: 2)))
   end
   
   def format_currency(amount) when is_integer(amount) do
@@ -242,20 +245,22 @@ defmodule CinegraphWeb.ViewHelpers do
       [] ->
         nil
       
-      _ when Enum.any?(valid_values, &match?(%Decimal{}, &1)) ->
-        sum =
-          Enum.reduce(valid_values, Decimal.new(0), fn v, acc ->
-            case v do
-              %Decimal{} -> Decimal.add(acc, v)
-              v when is_integer(v) -> Decimal.add(acc, Decimal.new(v))
-              v when is_float(v) -> Decimal.add(acc, Decimal.from_float(v))
-            end
-          end)
-        
-        Decimal.div(sum, Decimal.new(length(valid_values)))
-      
       _ ->
-        Enum.sum(valid_values) / length(valid_values)
+        # Check if any values are Decimals
+        if Enum.any?(valid_values, &match?(%Decimal{}, &1)) do
+          sum =
+            Enum.reduce(valid_values, Decimal.new(0), fn v, acc ->
+              case v do
+                %Decimal{} -> Decimal.add(acc, v)
+                v when is_integer(v) -> Decimal.add(acc, Decimal.new(v))
+                v when is_float(v) -> Decimal.add(acc, Decimal.from_float(v))
+              end
+            end)
+          
+          Decimal.div(sum, Decimal.new(length(valid_values)))
+        else
+          Enum.sum(valid_values) / length(valid_values)
+        end
     end
   end
 
