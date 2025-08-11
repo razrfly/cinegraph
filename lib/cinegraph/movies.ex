@@ -17,7 +17,8 @@ defmodule Cinegraph.Movies do
     ProductionCountry,
     SpokenLanguage,
     MovieVideo,
-    MovieReleaseDate
+    MovieReleaseDate,
+    Filters
   }
 
   alias Cinegraph.Services.TMDb
@@ -25,23 +26,37 @@ defmodule Cinegraph.Movies do
   require Logger
 
   @doc """
-  Returns the list of movies with pagination.
+  Returns the list of movies with pagination, filtering, and sorting.
   Only returns fully imported movies by default.
   """
   def list_movies(params \\ %{}) do
     Movie
     |> where([m], m.import_status == "full")
-    |> apply_sorting(params)
+    |> Filters.apply_filters(params)
+    |> Filters.apply_sorting(params)
     |> paginate(params)
   end
 
   @doc """
   Counts total movies for pagination.
+  Takes filters into account when counting.
   Only counts fully imported movies by default.
   """
-  def count_movies(_params \\ %{}) do
-    from(m in Movie, where: m.import_status == "full")
-    |> Repo.aggregate(:count, :id)
+  def count_movies(params \\ %{}) do
+    query = 
+      Movie
+      |> where([m], m.import_status == "full")
+      |> Filters.apply_filters(params)
+    
+    # If we have genre filters, we need to count differently due to GROUP BY
+    if params["genres"] && params["genres"] != [] do
+      # Wrap the grouped query in a subquery and count the results
+      from(m in subquery(query), select: count())
+      |> Repo.one()
+    else
+      # For all other filters, use normal aggregate
+      Repo.aggregate(query, :count, :id)
+    end
   end
 
   @doc """
