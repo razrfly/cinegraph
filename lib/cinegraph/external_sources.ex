@@ -43,6 +43,18 @@ defmodule Cinegraph.ExternalSources do
   end
 
   @doc """
+  Centralized function for upserting external metrics with consistent conflict resolution.
+  """
+  def upsert_external_metric(attrs) do
+    %ExternalMetric{}
+    |> ExternalMetric.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: :replace_all_except_primary_key,
+      conflict_target: [:movie_id, :source, :metric_type]
+    )
+  end
+
+  @doc """
   Creates or updates a rating for a movie from an external source (legacy function).
   This now creates external metrics instead of ratings.
   """
@@ -57,12 +69,7 @@ defmodule Cinegraph.ExternalSources do
       fetched_at: attrs[:fetched_at] || DateTime.utc_now()
     }
 
-    %ExternalMetric{}
-    |> ExternalMetric.changeset(metric_attrs)
-    |> Repo.insert(
-      on_conflict: :replace_all_except_primary_key,
-      conflict_target: [:movie_id, :source, :metric_type]
-    )
+    upsert_external_metric(metric_attrs)
   end
 
   @doc """
@@ -185,14 +192,9 @@ defmodule Cinegraph.ExternalSources do
     # Use the ExternalMetric.from_tmdb function to create metrics
     metrics = ExternalMetric.from_tmdb(movie.id, tmdb_data)
     
-    # Insert each metric
+    # Insert each metric using the centralized function
     results = Enum.map(metrics, fn metric_attrs ->
-      %ExternalMetric{}
-      |> ExternalMetric.changeset(metric_attrs)
-      |> Repo.insert(
-        on_conflict: :replace_all_except_primary_key,
-        conflict_target: [:movie_id, :source, :metric_type]
-      )
+      upsert_external_metric(metric_attrs)
     end)
     
     # Check if all succeeded
