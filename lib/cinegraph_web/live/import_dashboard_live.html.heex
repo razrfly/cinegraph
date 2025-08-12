@@ -895,6 +895,76 @@
   </div>
 </div>
 
+<!-- Import State Tracking Section -->
+<%= if length(@import_metrics) > 0 do %>
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">Import State Activity (Last 24 Hours)</h2>
+    <p class="text-sm text-gray-600 mb-4">Recent import state updates tracked through the new unified metrics system</p>
+    
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              Source
+            </th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              State Key
+            </th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              Value
+            </th>
+            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+              Updated At
+            </th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <%= for metric <- @import_metrics do %>
+            <tr>
+              <td class="px-4 py-2 text-sm">
+                <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 uppercase">
+                  <%= metric.source %>
+                </span>
+              </td>
+              <td class="px-4 py-2 text-sm font-medium">
+                <%= String.replace(metric.key, "_", " ") |> String.capitalize() %>
+              </td>
+              <td class="px-4 py-2 text-sm">
+                <%= case metric.metadata do %>
+                  <% %{"value" => value} -> %>
+                    <span class="font-mono"><%= value %></span>
+                  <% _ -> %>
+                    <span class="text-gray-400">—</span>
+                <% end %>
+              </td>
+              <td class="px-4 py-2 text-sm text-gray-500">
+                <%= Calendar.strftime(metric.inserted_at, "%m/%d %H:%M") %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    
+    <div class="mt-4 text-sm text-gray-600">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="font-medium">Migration Status:</span> 
+          <span class="text-green-600 font-medium">✅ Using new unified metrics system</span>
+        </div>
+        <div>
+          <span class="font-medium">Entries shown:</span> <%= length(@import_metrics) %> of last 10
+        </div>
+      </div>
+      <p class="mt-2 text-xs">
+        <strong>Note:</strong> Import state is now tracked through the api_lookup_metrics table, 
+        providing enhanced observability and performance tracking compared to the old import_state table.
+      </p>
+    </div>
+  </div>
+<% end %>
+
 <!-- Modal for Add/Edit Movie List -->
 <%= if @show_modal do %>
   <div
