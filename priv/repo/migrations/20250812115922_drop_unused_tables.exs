@@ -4,7 +4,7 @@ defmodule Cinegraph.Repo.Migrations.DropUnusedTables do
   def up do
     # Drop the unused person_relationships table (broken caching that was never working)
     drop table(:person_relationships)
-    
+
     # Drop the unused skipped_imports table (never implemented, using import_status field instead)
     drop table(:skipped_imports)
   end
@@ -25,9 +25,9 @@ defmodule Cinegraph.Repo.Migrations.DropUnusedTables do
     create unique_index(:person_relationships, [:from_person_id, :to_person_id])
     create index(:person_relationships, [:degree, :from_person_id])
     create index(:person_relationships, :expires_at)
-    
+
     create constraint(:person_relationships, :valid_degree, check: "degree BETWEEN 1 AND 6")
-    
+
     # Recreate skipped_imports table if rolling back
     create table(:skipped_imports) do
       add :tmdb_id, :integer, null: false
@@ -35,10 +35,10 @@ defmodule Cinegraph.Repo.Migrations.DropUnusedTables do
       add :reason, :string
       add :criteria_failed, :map
       add :checked_at, :utc_datetime_usec, default: fragment("NOW()")
-      
+
       timestamps(type: :utc_datetime_usec, updated_at: false)
     end
-    
+
     create index(:skipped_imports, [:tmdb_id])
     create index(:skipped_imports, [:checked_at])
   end

@@ -603,12 +603,13 @@ defmodule Cinegraph.Collaborations do
     case Repo.query(query, [from_id, to_id, max_depth]) do
       {:ok, %{rows: [[path, depth]]}} ->
         # Return a simple map with the path information
-        {:ok, %{
-          from_person_id: from_id,
-          to_person_id: to_id,
-          degree: depth,
-          shortest_path: path
-        }}
+        {:ok,
+         %{
+           from_person_id: from_id,
+           to_person_id: to_id,
+           degree: depth,
+           shortest_path: path
+         }}
 
       {:ok, %{rows: []}} ->
         {:error, :no_path_found}

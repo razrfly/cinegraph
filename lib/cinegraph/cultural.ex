@@ -111,6 +111,7 @@ defmodule Cinegraph.Cultural do
         {:error, "Unknown festival: #{festival_key}"}
 
       festival_event ->
+        # Note: Converting range to list as the worker expects a list for multi-year processing
         job_args = %{
           "festival" => festival_key,
           "years" => years,
