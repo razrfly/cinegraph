@@ -15,6 +15,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   require Logger
   alias Cinegraph.{Repo, Movies}
   alias Cinegraph.Workers.TMDbDetailsWorker
+  alias Cinegraph.Metrics.ApiTracker
 
   @timeout 60_000
 
@@ -548,15 +549,25 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
   defp fetch_html(url) do
     Logger.info("Fetching HTML from: #{url}")
+    
+    # Extract list ID from URL for tracking
+    list_id = case Regex.run(~r/list\/(ls\d+)/, url) do
+      [_, id] -> id
+      _ -> "unknown"
+    end
 
     # Use Zyte API like the Oscar scraper
     api_key = Application.get_env(:cinegraph, :zyte_api_key) || System.get_env("ZYTE_API_KEY")
 
     if is_nil(api_key) || api_key == "" do
       Logger.error("No ZYTE_API_KEY configured, falling back to direct HTTP")
-      fetch_html_direct(url)
+      ApiTracker.track_lookup("imdb_scraper", "fetch_list_direct", list_id, fn ->
+        fetch_html_direct(url)
+      end)
     else
-      fetch_html_with_zyte(url, api_key)
+      ApiTracker.track_lookup("imdb_scraper", "fetch_list_zyte", list_id, fn ->
+        fetch_html_with_zyte(url, api_key)
+      end)
     end
   end
 
