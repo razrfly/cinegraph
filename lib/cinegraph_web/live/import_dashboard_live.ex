@@ -48,7 +48,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:api_metrics, %{})
       |> assign(:fallback_stats, %{})
       |> assign(:strategy_breakdown, [])
-      |> assign(:import_metrics, %{})
+      |> assign(:import_metrics, [])
       |> load_data()
       |> schedule_refresh()
 
