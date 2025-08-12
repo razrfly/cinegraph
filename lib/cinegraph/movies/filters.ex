@@ -21,6 +21,7 @@ defmodule Cinegraph.Movies.Filters do
     |> filter_by_lists(params["lists"])
     |> filter_by_runtime(params["runtime_min"], params["runtime_max"])
     |> filter_by_rating(params["rating_min"])
+    |> filter_unreleased(params["show_unreleased"])
   end
 
   @doc """
@@ -241,6 +242,12 @@ defmodule Cinegraph.Movies.Filters do
         |> where([m, ..., em], em.value >= ^rating)
         |> distinct([m], m.id)
     end
+  end
+
+  defp filter_unreleased(query, "true"), do: query
+  defp filter_unreleased(query, _) do
+    today = Date.utc_today()
+    where(query, [m], m.release_date <= ^today or is_nil(m.release_date))
   end
 
   # Helper functions

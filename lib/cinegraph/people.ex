@@ -170,7 +170,7 @@ defmodule Cinegraph.People do
         |> Enum.uniq()
         |> Enum.reject(&is_nil/1),
       years_active: calculate_years_active(movies),
-      total_revenue: Enum.sum(Enum.map(movies, &(&1.revenue || 0))),
+      total_revenue: calculate_total_revenue(movies),
       average_rating: calculate_average_rating(movies)
     }
   end
@@ -195,10 +195,21 @@ defmodule Cinegraph.People do
     end
   end
 
+  defp calculate_total_revenue(movies) do
+    movies
+    |> Enum.map(fn movie ->
+      case movie.tmdb_data do
+        %{"revenue" => revenue} when is_number(revenue) -> revenue
+        _ -> 0
+      end
+    end)
+    |> Enum.sum()
+  end
+
   defp calculate_average_rating(movies) do
     ratings =
       movies
-      |> Enum.map(& &1.vote_average)
+      |> Enum.map(&Movie.vote_average/1)
       |> Enum.reject(&is_nil/1)
 
     if length(ratings) > 0 do

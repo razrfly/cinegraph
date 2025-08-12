@@ -1,28 +1,90 @@
-# Temporary files and debugging artifacts
+# Build and dependencies
+_build/
+deps/
+.elixir_ls/
+node_modules/
+.mix/
+.hex/
+.fetch/
+
+# Version control
+.git/
+
+# Test coverage
+cover/
+
+# Documentation builds
+doc/
+docs/archive/
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+logs/
+tmp/
 temp_files/
+server.log
+
+# Database dumps
+*.dump
+*.sql
+erl_crash.dump
+
+# Environment files with secrets
+.env.local
+.env.production
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Large assets
+priv/static/uploads/
+priv/static/images/
+assets/vendor/
+
+# Test fixtures and debugging files
+test/fixtures/large_*
+test/support/fixtures/large_*
 test_*.exs
 check_*.exs
 debug_*.exs
 verify_*.exs
 audit_*.exs
-*.html
-*.dump
-server.log
-*.json
 
-# Build and dependency directories
-deps/
-_build/
-node_modules/
-assets/vendor/
+# Phoenix specific
+priv/cert/
+priv/static/cache_manifest.json
 
-# Database and environment files
-erl_crash.dump
+# NPM debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Documentation archives
-docs/archive/
+# Operating System Files
+Thumbs.db
+ehthumbs.db
 
-# Large generated files
+# Backup files
+*.backup
+*.bak
+.claude/settings.local.json.backup
+
+# Large generated HTML files
 criterion_worker_*.html
 oscar_*.html
 pagination_*.html
+venice_*.html
+cannes_*.html
+*.html
+
+# JSON files (except package.json and mix-related)
+*.json
+!package.json
+!package-lock.json
+!mix.json
