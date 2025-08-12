@@ -27,6 +27,10 @@ defmodule Cinegraph.Movies.ExternalMetric do
     |> validate_inclusion(:source, ["tmdb", "omdb", "imdb", "rotten_tomatoes", "metacritic", "the_numbers"])
     |> validate_metric_type()
     |> foreign_key_constraint(:movie_id)
+    |> unique_constraint([:movie_id, :source, :metric_type],
+      name: :external_metrics_movie_source_type_index,
+      message: "metric already exists for this movie, source, and type"
+    )
   end
 
   defp validate_metric_type(changeset) do
