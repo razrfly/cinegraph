@@ -11,37 +11,49 @@ defmodule Cinegraph.Services.OMDb.Client do
   @timeout 30_000
 
   def get_movie_by_imdb_id(imdb_id, opts \\ []) do
-    ApiTracker.track_lookup("omdb", "get_by_imdb", imdb_id, fn ->
-      params = build_params(imdb_id: imdb_id, opts: opts)
+    ApiTracker.track_lookup(
+      "omdb",
+      "get_by_imdb",
+      imdb_id,
+      fn ->
+        params = build_params(imdb_id: imdb_id, opts: opts)
 
-      case make_request(params) do
-        {:ok, %{"Response" => "True"} = data} ->
-          {:ok, data}
+        case make_request(params) do
+          {:ok, %{"Response" => "True"} = data} ->
+            {:ok, data}
 
-        {:ok, %{"Response" => "False", "Error" => error}} ->
-          {:error, error}
+          {:ok, %{"Response" => "False", "Error" => error}} ->
+            {:error, error}
 
-        {:error, reason} ->
-          {:error, reason}
-      end
-    end)
+          {:error, reason} ->
+            {:error, reason}
+        end
+      end,
+      opts
+    )
   end
 
   def get_movie_by_title(title, opts \\ []) do
-    ApiTracker.track_lookup("omdb", "get_by_title", title, fn ->
-      params = build_params(title: title, opts: opts)
+    ApiTracker.track_lookup(
+      "omdb",
+      "get_by_title",
+      title,
+      fn ->
+        params = build_params(title: title, opts: opts)
 
-      case make_request(params) do
-        {:ok, %{"Response" => "True"} = data} ->
-          {:ok, data}
+        case make_request(params) do
+          {:ok, %{"Response" => "True"} = data} ->
+            {:ok, data}
 
-        {:ok, %{"Response" => "False", "Error" => error}} ->
-          {:error, error}
+          {:ok, %{"Response" => "False", "Error" => error}} ->
+            {:error, error}
 
-        {:error, reason} ->
-          {:error, reason}
-      end
-    end, opts)
+          {:error, reason} ->
+            {:error, reason}
+        end
+      end,
+      opts
+    )
   end
 
   defp build_params(imdb_id: imdb_id, opts: opts) do

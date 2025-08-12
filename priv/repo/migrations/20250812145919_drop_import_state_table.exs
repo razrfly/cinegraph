@@ -37,7 +37,7 @@ defmodule Cinegraph.Repo.Migrations.DropImportStateTable do
         AND target_identifier = import_state.key
       )
     """)
-    
+
     # Drop the import_state table (will fail silently if it doesn't exist)
     execute("DROP TABLE IF EXISTS import_state")
   end
@@ -49,7 +49,7 @@ defmodule Cinegraph.Repo.Migrations.DropImportStateTable do
       add :value, :text
       add :updated_at, :utc_datetime_usec, null: false
     end
-    
+
     # Migrate data back from api_lookup_metrics
     execute("""
       INSERT INTO import_state (key, value, updated_at)
@@ -62,7 +62,7 @@ defmodule Cinegraph.Repo.Migrations.DropImportStateTable do
       AND source = 'tmdb'
       AND metadata->>'operation_type' = 'migrated_from_import_state'
     """)
-    
+
     IO.puts("Recreated import_state table and restored data")
   end
 end
