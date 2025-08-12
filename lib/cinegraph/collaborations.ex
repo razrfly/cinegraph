@@ -130,99 +130,112 @@ defmodule Cinegraph.Collaborations do
                     person_b_id: person_b_id
                   )
 
-              collaboration =
-                if existing_collab do
-                  # Update existing collaboration
-                  years = Enum.uniq([year | existing_collab.years_active || []])
-                  revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
-                  total_revenue = (existing_collab.total_revenue || 0) + revenue_value
+                collaboration =
+                  if existing_collab do
+                    # Update existing collaboration
+                    years = Enum.uniq([year | existing_collab.years_active || []])
+                    revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
+                    total_revenue = (existing_collab.total_revenue || 0) + revenue_value
 
-                  updated_attrs = %{
-                    collaboration_count: existing_collab.collaboration_count + 1,
-                    latest_collaboration_date:
-                      max_date(existing_collab.latest_collaboration_date, release_date),
-                    avg_movie_rating:
-                      update_average(
-                        existing_collab.avg_movie_rating,
-                        existing_collab.collaboration_count,
-                        vote_average
-                      ),
-                    total_revenue: total_revenue,
-                    years_active: years
-                  }
+                    updated_attrs = %{
+                      collaboration_count: existing_collab.collaboration_count + 1,
+                      latest_collaboration_date:
+                        max_date(existing_collab.latest_collaboration_date, release_date),
+                      avg_movie_rating:
+                        update_average(
+                          existing_collab.avg_movie_rating,
+                          existing_collab.collaboration_count,
+                          vote_average
+                        ),
+                      total_revenue: total_revenue,
+                      years_active: years
+                    }
 
-                  {:ok, updated} =
-                    existing_collab
-                    |> Collaboration.changeset(updated_attrs)
-                    |> Repo.update()
+                    {:ok, updated} =
+                      existing_collab
+                      |> Collaboration.changeset(updated_attrs)
+                      |> Repo.update()
 
-                  updated
-                else
-                  # Create new collaboration
-                  revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
-                  attrs = %{
-                    person_a_id: person_a_id,
-                    person_b_id: person_b_id,
-                    collaboration_count: 1,
-                    first_collaboration_date: release_date,
-                    latest_collaboration_date: release_date,
-                    avg_movie_rating: vote_average,
-                    total_revenue: revenue_value,
-                    years_active: [year]
-                  }
+                    updated
+                  else
+                    # Create new collaboration
+                    revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
 
-                  case %Collaboration{}
-                       |> Collaboration.changeset(attrs)
-                       |> Repo.insert() do
-                    {:ok, new_collab} ->
-                      new_collab
+                    attrs = %{
+                      person_a_id: person_a_id,
+                      person_b_id: person_b_id,
+                      collaboration_count: 1,
+                      first_collaboration_date: release_date,
+                      latest_collaboration_date: release_date,
+                      avg_movie_rating: vote_average,
+                      total_revenue: revenue_value,
+                      years_active: [year]
+                    }
 
-                    {:error, %Ecto.Changeset{errors: [person_a_id: {"has already been taken", _}]}} ->
-                      # Race condition: collaboration was created by another process
-                      # Retry by fetching the existing collaboration
-                      case Repo.get_by(Collaboration,
-                        person_a_id: person_a_id,
-                        person_b_id: person_b_id
-                      ) do
-                        nil ->
-                          # Very rare case: the collaboration was deleted between the error and retry
-                          Logger.warning("Collaboration not found after race condition for persons #{person_a_id} and #{person_b_id}")
-                          nil
-                        existing ->
-                          existing
-                      end
+                    case %Collaboration{}
+                         |> Collaboration.changeset(attrs)
+                         |> Repo.insert() do
+                      {:ok, new_collab} ->
+                        new_collab
 
-                    {:error, changeset} ->
-                      # Re-raise other types of errors
-                      raise "Failed to insert collaboration: #{inspect(changeset.errors)}"
+                      {:error,
+                       %Ecto.Changeset{errors: [person_a_id: {"has already been taken", _}]}} ->
+                        # Race condition: collaboration was created by another process
+                        # Retry by fetching the existing collaboration
+                        case Repo.get_by(Collaboration,
+                               person_a_id: person_a_id,
+                               person_b_id: person_b_id
+                             ) do
+                          nil ->
+                            # Very rare case: the collaboration was deleted between the error and retry
+                            Logger.warning(
+                              "Collaboration not found after race condition for persons #{person_a_id} and #{person_b_id}"
+                            )
+
+                            nil
+
+                          existing ->
+                            existing
+                        end
+
+                      {:error, changeset} ->
+                        # Re-raise other types of errors
+                        raise "Failed to insert collaboration: #{inspect(changeset.errors)}"
+                    end
                   end
+
+                # Create collaboration detail only if we have a valid collaboration
+                if collaboration do
+                  revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
+
+                  detail_attrs = %{
+                    collaboration_id: collaboration.id,
+                    movie_id: movie_id,
+                    year: year,
+                    collaboration_type: collaboration_type,
+                    movie_rating: vote_average,
+                    movie_revenue: revenue_value
+                  }
+
+                  %CollaborationDetail{}
+                  |> CollaborationDetail.changeset(detail_attrs)
+                  |> Repo.insert(on_conflict: :nothing)
+
+                  acc + 1
+                else
+                  # Skip this collaboration if we couldn't create/find it
+                  Logger.warning(
+                    "Skipping collaboration detail for movie #{movie_id} - collaboration not found"
+                  )
+
+                  acc
                 end
-
-              # Create collaboration detail only if we have a valid collaboration
-              if collaboration do
-                revenue_value = if is_nil(revenue), do: 0, else: trunc(revenue)
-                detail_attrs = %{
-                  collaboration_id: collaboration.id,
-                  movie_id: movie_id,
-                  year: year,
-                  collaboration_type: collaboration_type,
-                  movie_rating: vote_average,
-                  movie_revenue: revenue_value
-                }
-
-                %CollaborationDetail{}
-                |> CollaborationDetail.changeset(detail_attrs)
-                |> Repo.insert(on_conflict: :nothing)
-
-                acc + 1
-              else
-                # Skip this collaboration if we couldn't create/find it
-                Logger.warning("Skipping collaboration detail for movie #{movie_id} - collaboration not found")
-                acc
-              end
               rescue
                 error ->
-                  Logger.error("Error processing collaboration for movie #{movie_id}: #{inspect(error)}")
+                  Logger.error(
+                    "Error processing collaboration for movie #{movie_id}: #{inspect(error)}"
+                  )
+
                   # Continue processing other collaborations
                   acc
               end

@@ -10,19 +10,34 @@ defmodule Cinegraph.People do
   alias Cinegraph.Movies.Movie
 
   @doc """
-  Returns the list of people with optional pagination.
+  Returns the list of people with optional pagination, filtering, and sorting.
   """
   def list_people(params \\ %{}) do
     Person
-    |> order_by(desc: :popularity)
+    |> filter_by_search(params["search"])
+    |> filter_by_department(params["departments"])
+    |> filter_by_gender(params["genders"])
+    |> filter_by_age_range(params["age_min"], params["age_max"])
+    |> filter_by_decade(params["birth_decade"])
+    |> filter_by_status(params["status"])
+    |> filter_by_nationality(params["nationality"])
+    |> sort_people(params["sort_by"], params["sort_order"])
     |> paginate(params)
   end
 
   @doc """
-  Returns the count of all people.
+  Returns the count of all people with optional filtering.
   """
-  def count_people do
-    Repo.aggregate(Person, :count, :id)
+  def count_people(params \\ %{}) do
+    Person
+    |> filter_by_search(params["search"])
+    |> filter_by_department(params["departments"])
+    |> filter_by_gender(params["genders"])
+    |> filter_by_age_range(params["age_min"], params["age_max"])
+    |> filter_by_decade(params["birth_decade"])
+    |> filter_by_status(params["status"])
+    |> filter_by_nationality(params["nationality"])
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
@@ -152,6 +167,46 @@ defmodule Cinegraph.People do
   end
 
   @doc """
+  Gets all available departments for filtering.
+  """
+  def get_departments do
+    Person
+    |> where([p], not is_nil(p.known_for_department))
+    |> select([p], p.known_for_department)
+    |> distinct(true)
+    |> order_by([p], p.known_for_department)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets available birth decades for filtering.
+  """
+  def get_birth_decades do
+    Person
+    |> where([p], not is_nil(p.birthday))
+    |> select([p], fragment("EXTRACT(decade FROM ?) * 10", p.birthday))
+    |> distinct(true)
+    |> order_by([p], fragment("EXTRACT(decade FROM ?) * 10", p.birthday))
+    |> Repo.all()
+    |> Enum.map(&trunc/1)
+  end
+
+  @doc """
+  Gets available nationalities/places of birth for filtering.
+  """
+  def get_nationalities do
+    Person
+    |> where([p], not is_nil(p.place_of_birth) and p.place_of_birth != "")
+    |> select([p], p.place_of_birth)
+    |> distinct(true)
+    |> order_by([p], p.place_of_birth)
+    |> limit(100)
+    |> Repo.all()
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  @doc """
   Gets career statistics for a person.
   """
   def get_career_stats(person_id) do
@@ -198,13 +253,23 @@ defmodule Cinegraph.People do
   defp calculate_total_revenue(movies) do
     movies
     |> Enum.map(fn movie ->
-      case movie.tmdb_data do
-        %{"revenue" => revenue} when is_number(revenue) -> revenue
-        _ -> 0
-      end
+      normalize_revenue(movie.tmdb_data["revenue"])
     end)
     |> Enum.sum()
   end
+
+  defp normalize_revenue(nil), do: 0
+  defp normalize_revenue(revenue) when is_integer(revenue), do: revenue
+  defp normalize_revenue(revenue) when is_float(revenue), do: trunc(revenue)
+  defp normalize_revenue(revenue) when is_binary(revenue) do
+    # Handle string revenue values (may contain commas, spaces, etc.)
+    cleaned = String.replace(revenue, ~r/[^\d.]/, "")
+    case Float.parse(cleaned) do
+      {value, _} -> trunc(value)
+      :error -> 0
+    end
+  end
+  defp normalize_revenue(_), do: 0
 
   defp calculate_average_rating(movies) do
     ratings =
@@ -216,6 +281,171 @@ defmodule Cinegraph.People do
       Float.round(Enum.sum(ratings) / length(ratings), 1)
     else
       nil
+    end
+  end
+
+  # Filter helper functions
+  defp filter_by_search(query, nil), do: query
+  defp filter_by_search(query, ""), do: query
+
+  defp filter_by_search(query, search_term) do
+    search_pattern = "%#{search_term}%"
+    where(query, [p], ilike(p.name, ^search_pattern))
+  end
+
+  defp filter_by_department(query, nil), do: query
+  defp filter_by_department(query, []), do: query
+
+  defp filter_by_department(query, departments) when is_list(departments) do
+    where(query, [p], p.known_for_department in ^departments)
+  end
+
+  defp filter_by_department(query, department) when is_binary(department) do
+    where(query, [p], p.known_for_department == ^department)
+  end
+
+  defp filter_by_gender(query, nil), do: query
+  defp filter_by_gender(query, []), do: query
+
+  defp filter_by_gender(query, genders) when is_list(genders) do
+    gender_ints = Enum.map(genders, &parse_gender/1)
+    where(query, [p], p.gender in ^gender_ints)
+  end
+
+  defp filter_by_gender(query, gender) when is_binary(gender) do
+    gender_int = parse_gender(gender)
+    where(query, [p], p.gender == ^gender_int)
+  end
+
+  # Female
+  defp parse_gender("1"), do: 1
+  # Male
+  defp parse_gender("2"), do: 2
+  # Non-binary
+  defp parse_gender("3"), do: 3
+  defp parse_gender("female"), do: 1
+  defp parse_gender("male"), do: 2
+  defp parse_gender("non-binary"), do: 3
+  defp parse_gender(_), do: nil
+
+  defp filter_by_age_range(query, nil, nil), do: query
+
+  defp filter_by_age_range(query, age_min, age_max) do
+    current_date = Date.utc_today()
+
+    query =
+      if age_min do
+        with {min_age, _} <- Integer.parse(age_min) do
+          max_birth_date = Date.add(current_date, -min_age * 365)
+          where(query, [p], is_nil(p.birthday) or p.birthday <= ^max_birth_date)
+        else
+          _ -> query
+        end
+      else
+        query
+      end
+
+    if age_max do
+      with {max_age, _} <- Integer.parse(age_max) do
+        min_birth_date = Date.add(current_date, -(max_age + 1) * 365)
+        where(query, [p], not is_nil(p.birthday) and p.birthday >= ^min_birth_date)
+      else
+        _ -> query
+      end
+    else
+      query
+    end
+  end
+
+  defp filter_by_decade(query, nil), do: query
+
+  defp filter_by_decade(query, decade) do
+    with {decade_year, _} <- Integer.parse(decade) do
+      start_year = decade_year
+      end_year = decade_year + 9
+      start_date = Date.new!(start_year, 1, 1)
+      end_date = Date.new!(end_year, 12, 31)
+
+      where(
+        query,
+        [p],
+        not is_nil(p.birthday) and
+          p.birthday >= ^start_date and
+          p.birthday <= ^end_date
+      )
+    else
+      _ -> query
+    end
+  end
+
+  defp filter_by_status(query, nil), do: query
+  defp filter_by_status(query, []), do: query
+
+  defp filter_by_status(query, status_filters) when is_list(status_filters) do
+    Enum.reduce(status_filters, query, &apply_status_filter/2)
+  end
+
+  defp filter_by_status(query, status) when is_binary(status) do
+    apply_status_filter(status, query)
+  end
+
+  defp apply_status_filter("living", query) do
+    where(query, [p], is_nil(p.deathday))
+  end
+
+  defp apply_status_filter("deceased", query) do
+    where(query, [p], not is_nil(p.deathday))
+  end
+
+  defp apply_status_filter("has_biography", query) do
+    where(query, [p], not is_nil(p.biography) and p.biography != "")
+  end
+
+  defp apply_status_filter("has_image", query) do
+    where(query, [p], not is_nil(p.profile_path))
+  end
+
+  defp apply_status_filter(_, query), do: query
+
+  defp filter_by_nationality(query, nil), do: query
+  defp filter_by_nationality(query, ""), do: query
+
+  defp filter_by_nationality(query, nationality) do
+    search_pattern = "%#{nationality}%"
+    where(query, [p], ilike(p.place_of_birth, ^search_pattern))
+  end
+
+  defp sort_people(query, nil, _), do: order_by(query, desc: :popularity)
+  defp sort_people(query, "", _), do: order_by(query, desc: :popularity)
+
+  defp sort_people(query, sort_by, sort_order) do
+    direction = if sort_order == "desc", do: :desc, else: :asc
+
+    case sort_by do
+      "name" ->
+        order_by(query, [{^direction, :name}])
+
+      "popularity" ->
+        order_by(query, [{^direction, :popularity}])
+
+      "birthday" ->
+        if direction == :asc do
+          # For ascending birthday, we want oldest first (earliest dates)
+          order_by(query, [p], [{^direction, fragment("COALESCE(?, '1900-01-01')", p.birthday)}])
+        else
+          # For descending birthday, we want youngest first (latest dates)
+          order_by(query, [p], [{^direction, fragment("COALESCE(?, '2100-01-01')", p.birthday)}])
+        end
+
+      "recently_added" ->
+        order_by(query, [{^direction, :inserted_at}])
+
+      "credits" ->
+        # This will require a join and count - for now, fallback to popularity
+        order_by(query, desc: :popularity)
+
+      _ ->
+        order_by(query, desc: :popularity)
     end
   end
 
