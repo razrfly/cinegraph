@@ -121,7 +121,7 @@ defmodule CinegraphWeb.PersonLive.Index do
 
   @impl true
   def handle_event("filter", params, socket) do
-    current_params = build_current_params(socket)
+    current_params = build_current_params(socket.assigns)
     new_params = Map.merge(current_params, params) |> Map.put("page", "1")
 
     {:noreply, push_patch(socket, to: ~p"/people?#{new_params}")}
@@ -129,7 +129,7 @@ defmodule CinegraphWeb.PersonLive.Index do
 
   @impl true
   def handle_event("change_sort", %{"sort" => sort}, socket) do
-    current_params = build_current_params(socket)
+    current_params = build_current_params(socket.assigns)
     new_params = Map.merge(current_params, %{"sort" => sort, "page" => "1"})
 
     {:noreply, push_patch(socket, to: ~p"/people?#{new_params}")}
@@ -147,7 +147,7 @@ defmodule CinegraphWeb.PersonLive.Index do
 
   @impl true
   def handle_info({:perform_search, search}, socket) do
-    current_params = build_current_params(socket)
+    current_params = build_current_params(socket.assigns)
     new_params = Map.merge(current_params, %{"search" => search, "page" => "1"})
 
     {:noreply, push_patch(socket, to: ~p"/people?#{new_params}")}
@@ -235,44 +235,18 @@ defmodule CinegraphWeb.PersonLive.Index do
   end
 
   # Helper function to build current params for pagination (used in templates)
-  def build_current_params(
-        search,
-        sort,
-        selected_departments,
-        selected_genders,
-        age_min,
-        age_max,
-        birth_decade,
-        selected_status,
-        nationality
-      ) do
+  # Public function that accepts a map of parameters (assigns)
+  def build_current_params(params) when is_map(params) do
     %{
-      "search" => search,
-      "sort" => sort,
-      "departments" => Enum.join(selected_departments, ","),
-      "genders" => Enum.join(selected_genders, ","),
-      "age_min" => age_min,
-      "age_max" => age_max,
-      "birth_decade" => birth_decade,
-      "status" => Enum.join(selected_status, ","),
-      "nationality" => nationality
-    }
-    |> Enum.reject(fn {_k, v} -> v == "" end)
-    |> Map.new()
-  end
-
-  # Private helper function for internal use with socket
-  defp build_current_params(socket) do
-    %{
-      "search" => socket.assigns.search,
-      "sort" => socket.assigns.sort,
-      "departments" => Enum.join(socket.assigns.selected_departments, ","),
-      "genders" => Enum.join(socket.assigns.selected_genders, ","),
-      "age_min" => socket.assigns.age_min,
-      "age_max" => socket.assigns.age_max,
-      "birth_decade" => socket.assigns.birth_decade,
-      "status" => Enum.join(socket.assigns.selected_status, ","),
-      "nationality" => socket.assigns.nationality
+      "search" => Map.get(params, :search, ""),
+      "sort" => Map.get(params, :sort, "movie_count_desc"),
+      "departments" => params |> Map.get(:selected_departments, []) |> Enum.join(","),
+      "genders" => params |> Map.get(:selected_genders, []) |> Enum.join(","),
+      "age_min" => Map.get(params, :age_min, ""),
+      "age_max" => Map.get(params, :age_max, ""),
+      "birth_decade" => Map.get(params, :birth_decade, ""),
+      "status" => params |> Map.get(:selected_status, []) |> Enum.join(","),
+      "nationality" => Map.get(params, :nationality, "")
     }
     |> Enum.reject(fn {_k, v} -> v == "" end)
     |> Map.new()

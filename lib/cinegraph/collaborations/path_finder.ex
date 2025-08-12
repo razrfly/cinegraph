@@ -84,7 +84,6 @@ defmodule Cinegraph.Collaborations.PathFinder do
     Repo.all(query)
   end
 
-
   @doc """
   Finds a path with movie connections for display.
   Returns a list of {person, movie, person} tuples showing the connection path.
@@ -129,5 +128,4 @@ defmodule Cinegraph.Collaborations.PathFinder do
         limit: 1
     )
   end
-
 end

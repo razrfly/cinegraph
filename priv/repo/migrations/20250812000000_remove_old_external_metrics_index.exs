@@ -13,6 +13,11 @@ defmodule Cinegraph.Repo.Migrations.RemoveOldExternalMetricsIndex do
   def down do
     # Recreate the old index in case of rollback
     # Note: this may fail if there are duplicate rows, which is expected
-    create_if_not_exists unique_index(:external_metrics, [:movie_id, :source, :metric_type, :fetched_at])
+    create_if_not_exists unique_index(:external_metrics, [
+                           :movie_id,
+                           :source,
+                           :metric_type,
+                           :fetched_at
+                         ])
   end
 end
