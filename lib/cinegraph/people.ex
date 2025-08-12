@@ -369,7 +369,7 @@ defmodule Cinegraph.People do
     case Date.new(year, month, day) do
       {:ok, date} -> date
       {:error, _} ->
-        last_day = Date.days_in_month(year, month)
+        last_day = Date.days_in_month(Date.new!(year, month, 1))
         Date.new!(year, month, min(day, last_day))
     end
   end
