@@ -1164,12 +1164,19 @@ defmodule CinegraphWeb.ImportDashboardLive do
   defp get_fallback_stats do
     ApiTracker.get_tmdb_fallback_stats(24)
     |> Enum.map(fn stat ->
+      avg_conf =
+        case stat.avg_confidence do
+          %Decimal{} = d -> Decimal.to_float(d)
+          nil -> 0.0
+          v when is_number(v) -> v
+        end
+
       {stat.level,
        %{
          total: stat.total,
          successful: stat.successful || 0,
          success_rate: stat.success_rate || 0.0,
-         avg_confidence: Float.round(stat.avg_confidence || 0, 2)
+         avg_confidence: Float.round(avg_conf, 2)
        }}
     end)
     |> Enum.into(%{})

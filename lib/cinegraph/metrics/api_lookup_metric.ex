@@ -7,6 +7,9 @@ defmodule Cinegraph.Metrics.ApiLookupMetric do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @min_fallback_level 1
+  @max_fallback_level 6
+
   schema "api_lookup_metrics" do
     # "tmdb", "omdb", "imdb_scraper", "venice_scraper", etc.
     field :source, :string
@@ -17,7 +20,7 @@ defmodule Cinegraph.Metrics.ApiLookupMetric do
     field :success, :boolean
     # For fuzzy matches (0.0 to 1.0 scale, higher is better)
     field :confidence_score, :float
-    # Which strategy succeeded (1-6)
+    # Which strategy succeeded (@min_fallback_level..@max_fallback_level)
     field :fallback_level, :integer
     field :response_time_ms, :integer
     # "not_found", "rate_limit", "timeout", "parse_error"
@@ -50,7 +53,13 @@ defmodule Cinegraph.Metrics.ApiLookupMetric do
       greater_than_or_equal_to: 0.0,
       less_than_or_equal_to: 1.0
     )
-    |> validate_number(:fallback_level, greater_than_or_equal_to: 1, less_than_or_equal_to: 6)
+    |> validate_change(:error_type, fn :error_type, value ->
+      if value == nil or value in error_types(), do: [], else: [error_type: "is not a valid error type"]
+    end)
+    |> validate_number(:fallback_level,
+      greater_than_or_equal_to: @min_fallback_level,
+      less_than_or_equal_to: @max_fallback_level
+    )
     |> validate_number(:response_time_ms, greater_than_or_equal_to: 0)
   end
 

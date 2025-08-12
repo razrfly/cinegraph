@@ -29,11 +29,15 @@ defmodule Cinegraph.Metrics.ApiTracker do
         fun.()
       rescue
         error ->
-          Logger.error("API operation failed: #{inspect(error)}")
+          Logger.error(Exception.format(:error, error, __STACKTRACE__))
           {:error, error}
       catch
-        :exit, reason -> {:error, {:exit, reason}}
-        kind, reason -> {:error, {kind, reason}}
+        :exit, reason ->
+          Logger.error("Caught exit: #{inspect(reason)}")
+          {:error, {:exit, reason}}
+        kind, reason ->
+          Logger.error("Caught #{inspect(kind)}: #{inspect(reason)}")
+          {:error, {kind, reason}}
       end
 
     end_time = System.monotonic_time(:millisecond)

@@ -12,21 +12,21 @@
       <div class="bg-blue-50 p-4 rounded">
         <div class="text-sm text-blue-600">TMDB Total Movies</div>
         <div class="text-2xl font-bold text-blue-900">
-          {format_number(@progress.tmdb_total_movies)}
+          <%= format_number(@progress.tmdb_total_movies) %>
         </div>
       </div>
 
       <div class="bg-green-50 p-4 rounded">
         <div class="text-sm text-green-600">Our Movies</div>
         <div class="text-2xl font-bold text-green-900">
-          {format_number(@progress.our_total_movies)}
+          <%= format_number(@progress.our_total_movies) %>
         </div>
       </div>
 
       <div class="bg-yellow-50 p-4 rounded">
         <div class="text-sm text-yellow-600">Movies Remaining</div>
         <div class="text-2xl font-bold text-yellow-900">
-          {format_number(@progress.movies_remaining)}
+          <%= format_number(@progress.movies_remaining) %>
         </div>
       </div>
 
@@ -60,13 +60,13 @@
       <div>
         <span class="text-gray-500">Time to Complete:</span>
         <span class="font-medium">
-          {estimate_completion_time(@progress.movies_remaining, @import_rate)}
+          <%= estimate_completion_time(@progress.movies_remaining, @import_rate) %>
         </span>
       </div>
       <div>
         <span class="text-gray-500">Last Full Sync:</span>
         <span class="font-medium">
-          {if @progress.last_full_sync, do: @progress.last_full_sync, else: "Never"}
+          <%= if @progress.last_full_sync, do: @progress.last_full_sync, else: "Never" %>
         </span>
       </div>
     </div>
@@ -137,7 +137,7 @@
           <option value="all" class="font-semibold">Import All Lists</option>
           <option value="" disabled>──────────────</option>
           <%= for {key, config} <- @canonical_lists do %>
-            <option value={key}>{config.name}</option>
+            <option value={key}><%= config.name %></option>
           <% end %>
         </select>
       </div>
@@ -146,7 +146,7 @@
         class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
         disabled={@canonical_import_running}
       >
-        {if @canonical_import_running, do: "Importing...", else: "Import/Update List"}
+        <%= if @canonical_import_running, do: "Importing...", else: "Import/Update List" %>
       </button>
     </form>
 
@@ -186,7 +186,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <%= for list_stat <- @canonical_stats do %>
           <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-600">{list_stat.name}</span>
+            <span class="text-sm text-gray-600"><%= list_stat.name %></span>
             <span class="text-sm font-semibold text-gray-900">
               {format_number(list_stat.count)} movies
               <%= if list_stat[:expected_count] do %>
@@ -267,16 +267,16 @@
                 </div>
                 <%= if list.metadata["expected_movie_count"] && list.real_movie_count > 0 do %>
                   <div class="text-xs text-gray-500">
-                    {Float.round(
+                    <%= Float.round(
                       list.real_movie_count / list.metadata["expected_movie_count"] * 100,
                       1
-                    )}% complete
+                    ) %>% complete
                   </div>
                 <% end %>
               </td>
               <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                 <%= if list.last_import_at do %>
-                  {Calendar.strftime(list.last_import_at, "%b %d, %Y")}
+                  <%= Calendar.strftime(list.last_import_at, "%b %d, %Y") %>
                 <% else %>
                   Never
                 <% end %>
@@ -298,7 +298,7 @@
                   phx-value-id={list.id}
                   class="text-indigo-600 hover:text-indigo-900 mr-2"
                 >
-                  {if list.active, do: "Disable", else: "Enable"}
+                  <%= if list.active, do: "Disable", else: "Enable" %>
                 </button>
                 <button
                   phx-click="show_edit_modal"
@@ -346,7 +346,7 @@
         >
           <option value="">Select decades...</option>
           <%= for decade <- @oscar_decades do %>
-            <option value={decade.value}>{decade.label}</option>
+            <option value={decade.value}><%= decade.label %></option>
           <% end %>
           <option value="all">All Available Years</option>
         </select>
@@ -356,7 +356,7 @@
         class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
         disabled={@oscar_import_running}
       >
-        {if @oscar_import_running, do: "Importing...", else: "Import Oscar Data"}
+        <%= if @oscar_import_running, do: "Importing...", else: "Import Oscar Data" %>
       </button>
     </form>
 
@@ -396,8 +396,8 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <%= for oscar_stat <- @oscar_stats do %>
           <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-600">{oscar_stat.label}</span>
-            <span class="text-sm font-semibold text-gray-900">{oscar_stat.value}</span>
+            <span class="text-sm text-gray-600"><%= oscar_stat.label %></span>
+            <span class="text-sm font-semibold text-gray-900"><%= oscar_stat.value %></span>
           </div>
         <% end %>
       </div>
@@ -432,7 +432,7 @@
         >
           <option value="">Select festival...</option>
           <%= for festival <- @festival_list do %>
-            <option value={festival.value}>{festival.label}</option>
+            <option value={festival.value}><%= festival.label %></option>
           <% end %>
         </select>
       </div>
@@ -448,7 +448,7 @@
         >
           <option value="">Select year...</option>
           <%= for year_option <- @festival_years do %>
-            <option value={year_option.value}>{year_option.label}</option>
+            <option value={year_option.value}><%= year_option.label %></option>
           <% end %>
         </select>
       </div>
@@ -457,7 +457,7 @@
         class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
         disabled={@festival_import_running}
       >
-        {if @festival_import_running, do: "Importing...", else: "Import Festival"}
+        <%= if @festival_import_running, do: "Importing...", else: "Import Festival" %>
       </button>
     </form>
 
@@ -497,8 +497,8 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <%= for festival_stat <- @festival_stats do %>
           <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-600">{festival_stat.label}</span>
-            <span class="text-sm font-semibold text-gray-900">{festival_stat.value}</span>
+            <span class="text-sm text-gray-600"><%= festival_stat.label %></span>
+            <span class="text-sm font-semibold text-gray-900"><%= festival_stat.value %></span>
           </div>
         <% end %>
       </div>
@@ -512,51 +512,51 @@
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       <div>
         <div class="text-sm text-gray-500">Total Movies</div>
-        <div class="text-lg font-semibold">{format_number(@stats.total_movies)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.total_movies) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">With TMDB Data</div>
-        <div class="text-lg font-semibold">{format_number(@stats.movies_with_tmdb)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.movies_with_tmdb) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">With OMDb Data</div>
-        <div class="text-lg font-semibold">{format_number(@stats.movies_with_omdb)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.movies_with_omdb) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Canonical Movies</div>
-        <div class="text-lg font-semibold">{format_number(@stats.canonical_movies)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.canonical_movies) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Oscar Movies</div>
-        <div class="text-lg font-semibold">{format_number(@stats.oscar_movies)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.oscar_movies) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Venice Movies</div>
-        <div class="text-lg font-semibold">{format_number(@stats.venice_movies)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.venice_movies) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">People</div>
-        <div class="text-lg font-semibold">{format_number(@stats.total_people)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.total_people) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Credits</div>
-        <div class="text-lg font-semibold">{format_number(@stats.total_credits)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.total_credits) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Genres</div>
-        <div class="text-lg font-semibold">{format_number(@stats.total_genres)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.total_genres) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Keywords</div>
-        <div class="text-lg font-semibold">{format_number(@stats.total_keywords)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.total_keywords) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Unique Collabs</div>
-        <div class="text-lg font-semibold">{format_number(@stats.unique_collaborations)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.unique_collaborations) %></div>
       </div>
       <div>
         <div class="text-sm text-gray-500">Multi-Collabs</div>
-        <div class="text-lg font-semibold">{format_number(@stats.multi_collaborations)}</div>
+        <div class="text-lg font-semibold"><%= format_number(@stats.multi_collaborations) %></div>
       </div>
     </div>
   </div>
@@ -587,16 +587,16 @@
           <%= for queue <- @queue_stats do %>
             <tr>
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {format_queue_name(queue.name)}
+                <%= format_queue_name(queue.name) %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {queue.available}
+                <%= queue.available %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {queue.executing}
+                <%= queue.executing %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {format_number(queue.completed)}
+                <%= format_number(queue.completed) %>
               </td>
             </tr>
           <% end %>
@@ -615,7 +615,7 @@
         <%= for {source, metrics} <- @api_metrics do %>
           <div class="border rounded-lg p-4">
             <div class="flex justify-between items-start mb-2">
-              <h4 class="font-medium text-gray-900 uppercase">{source}</h4>
+              <h4 class="font-medium text-gray-900 uppercase"><%= source %></h4>
               <%= if metrics.success_rate >= 90 do %>
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                   Healthy
@@ -644,16 +644,16 @@
                     true -> "text-red-600"
                   end
                 ]}>
-                  {metrics.success_rate}%
+                  <%= metrics.success_rate %>%
                 </span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Total Calls:</span>
-                <span class="font-medium">{format_number(metrics.total_calls)}</span>
+                <span class="font-medium"><%= format_number(metrics.total_calls) %></span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-600">Avg Response:</span>
-                <span class="font-medium">{metrics.avg_response_time}ms</span>
+                <span class="font-medium"><%= metrics.avg_response_time %>ms</span>
               </div>
             </div>
             
@@ -707,7 +707,7 @@
               <%= for {level, stats} <- Enum.sort(@fallback_stats) do %>
                 <tr>
                   <td class="px-4 py-2 text-sm">
-                    Level {level}
+                    Level <%= level %>
                     <%= case level do %>
                       <% 1 -> %>
                         (Direct IMDb)
@@ -724,14 +724,14 @@
                       <% _ -> %>
                     <% end %>
                   </td>
-                  <td class="px-4 py-2 text-sm">{stats.total}</td>
-                  <td class="px-4 py-2 text-sm">{stats.successful}</td>
+                  <td class="px-4 py-2 text-sm"><%= stats.total %></td>
+                  <td class="px-4 py-2 text-sm"><%= stats.successful %></td>
                   <td class="px-4 py-2 text-sm">
                     <span class={"font-medium #{if stats.success_rate >= 80, do: "text-green-600", else: if(stats.success_rate >= 60, do: "text-yellow-600", else: "text-red-600")}"}>
-                      {stats.success_rate}%
+                      <%= stats.success_rate %>%
                     </span>
                   </td>
-                  <td class="px-4 py-2 text-sm">{stats.avg_confidence}</td>
+                  <td class="px-4 py-2 text-sm"><%= stats.avg_confidence %></td>
                 </tr>
               <% end %>
             </tbody>
@@ -784,12 +784,12 @@
                           _ -> "bg-gray-100 text-gray-800"
                         end
                       ]}>
-                        {String.replace(strategy.strategy_name, "_", " ") |> String.capitalize()}
+                        <%= String.replace(strategy.strategy_name, "_", " ") |> String.capitalize() %>
                       </span>
                     </div>
                   </td>
                   <td class="px-4 py-2 text-sm font-medium">
-                    {strategy.total}
+                    <%= strategy.total %>
                     <%= if strategy.strategy_name == "direct_imdb" do %>
                       <span class="text-xs text-gray-500 ml-1">(Primary)</span>
                     <% end %>
@@ -803,7 +803,7 @@
                         true -> "text-red-600"
                       end
                     ]}>
-                      {strategy.success_rate}%
+                      <%= strategy.success_rate %>%
                     </span>
                   </td>
                   <td class="px-4 py-2 text-sm">
@@ -816,7 +816,7 @@
                           true -> "text-red-600"
                         end
                       ]}>
-                        {Float.round(strategy.avg_confidence, 2)}
+                        <%= Float.round(strategy.avg_confidence, 2) %>
                       </span>
                     <% else %>
                       <span class="text-gray-400">—</span>
@@ -832,7 +832,7 @@
                           true -> "text-red-600"
                         end
                       ]}>
-                        {round(strategy.avg_response_time)}ms
+                        <%= round(strategy.avg_response_time) %>ms
                       </span>
                     <% else %>
                       <span class="text-gray-400">—</span>
@@ -874,21 +874,21 @@
                 <% fuzzy_searches =
                   Enum.find(@strategy_breakdown, fn s -> s.strategy_name == "fuzzy_title" end) %>
                 <ul class="space-y-1 text-xs">
-                  <li><strong>Total searches:</strong> {total_searches}</li>
+                  <li><strong>Total searches:</strong> <%= total_searches %></li>
                   <%= if direct_searches do %>
                     <li>
-                      <strong>Direct IMDb usage:</strong> {Float.round(
+                      <strong>Direct IMDb usage:</strong> <%= Float.round(
                         direct_searches.total / total_searches * 100,
                         1
-                      )}%
+                      ) %>%
                     </li>
                   <% end %>
                   <%= if fuzzy_searches do %>
                     <li>
-                      <strong>Fuzzy search usage:</strong> {Float.round(
+                      <strong>Fuzzy search usage:</strong> <%= Float.round(
                         fuzzy_searches.total / total_searches * 100,
                         1
-                      )}%
+                      ) %>%
                     </li>
                   <% end %>
                 </ul>
@@ -906,12 +906,12 @@
           <% error_dist = ApiTracker.get_error_distribution(source, 24) %>
           <%= if length(error_dist) > 0 do %>
             <div class="border rounded p-3">
-              <h4 class="font-medium text-sm text-gray-700 mb-2 uppercase">{source} Errors</h4>
+              <h4 class="font-medium text-sm text-gray-700 mb-2 uppercase"><%= source %> Errors</h4>
               <div class="space-y-1">
                 <%= for %{error_type: type, count: count} <- Enum.take(error_dist, 3) do %>
                   <div class="flex justify-between text-xs">
-                    <span class="text-gray-600">{type}:</span>
-                    <span class="font-medium">{count}</span>
+                    <span class="text-gray-600"><%= type %>:</span>
+                    <span class="font-medium"><%= count %></span>
                   </div>
                 <% end %>
               </div>
@@ -954,22 +954,22 @@
             <tr>
               <td class="px-4 py-2 text-sm">
                 <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 uppercase">
-                  {metric.source}
+                  <%= metric.source %>
                 </span>
               </td>
               <td class="px-4 py-2 text-sm font-medium">
-                {String.replace(metric.key, "_", " ") |> String.capitalize()}
+                <%= String.replace(metric.key, "_", " ") |> String.capitalize() %>
               </td>
               <td class="px-4 py-2 text-sm">
                 <%= case metric.metadata do %>
                   <% %{"value" => value} -> %>
-                    <span class="font-mono">{value}</span>
+                    <span class="font-mono"><%= value %></span>
                   <% _ -> %>
                     <span class="text-gray-400">—</span>
                 <% end %>
               </td>
               <td class="px-4 py-2 text-sm text-gray-500">
-                {Calendar.strftime(metric.inserted_at, "%m/%d %H:%M")}
+                <%= Calendar.strftime(metric.inserted_at, "%m/%d %H:%M") %>
               </td>
             </tr>
           <% end %>
@@ -984,7 +984,7 @@
           <span class="text-green-600 font-medium">✅ Using new unified metrics system</span>
         </div>
         <div>
-          <span class="font-medium">Entries shown:</span> {length(@import_metrics)} of last 10
+          <span class="font-medium">Entries shown:</span> <%= length(@import_metrics) %> of last 10
         </div>
       </div>
       <p class="mt-2 text-xs">
@@ -1022,7 +1022,7 @@
         <form phx-submit={if @editing_list, do: "update_movie_list", else: "add_movie_list"}>
           <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <h3 class="text-lg font-medium text-gray-900 mb-4">
-              {if @editing_list, do: "Edit Movie List", else: "Add New Movie List"}
+              <%= if @editing_list, do: "Edit Movie List", else: "Add New Movie List" %>
             </h3>
 
             <%= if @editing_list do %>
@@ -1155,7 +1155,7 @@
               type="submit"
               class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
             >
-              {if @editing_list, do: "Update", else: "Add"}
+              <%= if @editing_list, do: "Update", else: "Add" %>
             </button>
             <button
               type="button"

@@ -36,9 +36,14 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   Sets a value for a key.
   """
   def set(key, value) when is_binary(key) do
-    ApiTracker.set_import_state(@default_source, key, value)
-    # Return format compatible with old system
-    {:ok, %{key: key, value: value}}
+    case ApiTracker.set_import_state(@default_source, key, value) do
+      {:ok, _} ->
+        # Return format compatible with old system
+        {:ok, %{key: key, value: value}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
