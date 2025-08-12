@@ -47,7 +47,10 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
 
         # Process each category - handle both Oscar format (categories) and Venice format (awards)
         {categories, category_format} = extract_categories(ceremony.data)
-        Logger.info("Processing #{length(categories)} categories for ceremony #{ceremony.year} (format: #{category_format})")
+
+        Logger.info(
+          "Processing #{length(categories)} categories for ceremony #{ceremony.year} (format: #{category_format})"
+        )
 
         results =
           categories
@@ -100,13 +103,14 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           Enum.count(categories, fn category_data ->
             category_name = extract_category_name(category_data, category_format)
 
-            category_name && String.contains?(category_name, [
-              "Actor",
-              "Actress",
-              "Directing",
-              "Writing",
-              "Cinematography"
-            ])
+            category_name &&
+              String.contains?(category_name, [
+                "Actor",
+                "Actress",
+                "Directing",
+                "Writing",
+                "Cinematography"
+              ])
           end)
 
         film_nominations = length(categories) - person_nominations
@@ -145,35 +149,39 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   defp extract_categories(data) do
     # Check for Oscar format categories first - but only if non-empty
     oscar_categories = data["categories"] || data[:categories] || []
-    
+
     # Check for Venice/Festival format awards
     awards = data["awards"] || data[:awards] || %{}
-    
+
     cond do
       # Oscar format: data["categories"] with nominees inside (and not empty)
       length(oscar_categories) > 0 ->
         {oscar_categories, :oscar_format}
-      
+
       # Venice/Festival format: data["awards"] with categories as keys (and not empty)
       map_size(awards) > 0 ->
         # Convert to list of {category_name, nominees} tuples  
-        categories = Enum.map(awards, fn {category_name, nominees} ->
-          {category_name, nominees}
-        end)
+        categories =
+          Enum.map(awards, fn {category_name, nominees} ->
+            {category_name, nominees}
+          end)
+
         {categories, :awards_format}
-      
+
       true ->
         {[], :unknown_format}
     end
   end
-  
+
   defp extract_category_name(category_data, format) do
     case format do
       :oscar_format ->
         category_data["category"] || category_data[:category]
+
       :awards_format ->
         {category_name, _nominees} = category_data
         category_name
+
       _ ->
         nil
     end
@@ -229,9 +237,15 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     # Determine if category is major based on common patterns
     # This can be overridden in database metadata for each festival
     String.contains?(category_name, [
-      "Best Picture", "Palme d'Or", "Golden Lion", "Golden Bear",
-      "Actor in a Leading Role", "Actress in a Leading Role",
-      "Directing", "Director", "Grand Prix"
+      "Best Picture",
+      "Palme d'Or",
+      "Golden Lion",
+      "Golden Bear",
+      "Actor in a Leading Role",
+      "Actress in a Leading Role",
+      "Directing",
+      "Director",
+      "Grand Prix"
     ])
   end
 
@@ -239,14 +253,20 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     # Universal category determination based on common patterns
     # Each festival can override this in their metadata configuration
     normalized = String.downcase(category_name)
-    
+
     cond do
       # Person awards - actors, directors, writers, etc.
-      Regex.match?(~r/(actor|actress|director|directing|writer|writing|cinematograph|editor|editing|composer)/i, normalized) ->
+      Regex.match?(
+        ~r/(actor|actress|director|directing|writer|writing|cinematograph|editor|editing|composer)/i,
+        normalized
+      ) ->
         {"person", true}
 
       # Main film awards
-      Regex.match?(~r/(best picture|best film|palme|golden lion|golden bear|grand prix)/i, normalized) ->
+      Regex.match?(
+        ~r/(best picture|best film|palme|golden lion|golden bear|grand prix)/i,
+        normalized
+      ) ->
         {"film", false}
 
       # Technical awards
@@ -256,7 +276,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       # Genre-specific film awards
       Regex.match?(~r/(documentary|animated|animation|international|foreign)/i, normalized) ->
         {"film", false}
-        
+
       # Special jury or other awards
       Regex.match?(~r/(jury|special|honorary)/i, normalized) ->
         {"special", false}
@@ -272,6 +292,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       # Venice/Awards format: films array with movie data
       nominee["films"] || nominee[:films] ->
         films = nominee["films"] || nominee[:films] || []
+
         if length(films) > 0 do
           film = List.first(films)
           imdb_id = film["imdb_id"] || film[:imdb_id]
@@ -281,26 +302,29 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         else
           {nil, nil, nil}
         end
-      
+
       # Oscar format: film data directly in nominee
       true ->
         film_imdb_id = nominee["film_imdb_id"] || nominee[:film_imdb_id]
-        film_title = nominee["film"] || nominee[:film] 
+        film_title = nominee["film"] || nominee[:film]
         film_year = nominee["film_year"] || nominee[:film_year]
         {film_imdb_id, film_title, film_year}
     end
   end
 
   defp process_category(category_data, fest_category, ceremony, format) do
-    nominees = case format do
-      :oscar_format ->
-        category_data["nominees"] || category_data[:nominees] || []
-      :awards_format ->
-        {_category_name, nominees} = category_data
-        nominees || []
-      _ ->
-        []
-    end
+    nominees =
+      case format do
+        :oscar_format ->
+          category_data["nominees"] || category_data[:nominees] || []
+
+        :awards_format ->
+          {_category_name, nominees} = category_data
+          nominees || []
+
+        _ ->
+          []
+      end
 
     nominees
     |> Enum.map(fn nominee ->

@@ -34,7 +34,7 @@ defmodule CinegraphWeb.FestivalEventLive.Index do
   @impl true
   def handle_event("edit", %{"id" => id}, socket) do
     festival_event = Events.get_by_source_key(id)
-    
+
     {:noreply,
      socket
      |> assign(:show_modal, true)
@@ -45,7 +45,7 @@ defmodule CinegraphWeb.FestivalEventLive.Index do
   @impl true
   def handle_event("toggle_active", %{"source-key" => source_key}, socket) do
     festival_event = Events.get_by_source_key(source_key)
-    
+
     case Events.update_festival_event(festival_event, %{active: !festival_event.active}) do
       {:ok, _} ->
         {:noreply,

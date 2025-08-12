@@ -2,7 +2,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   use CinegraphWeb, :live_view
 
   import Ecto.Query, only: [from: 2]
-  
+
   alias Cinegraph.Movies
   alias Cinegraph.Movies.{Genre, ProductionCountry, SpokenLanguage, MovieLists}
   alias Cinegraph.Repo
@@ -36,9 +36,10 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("change_sort", %{"sort" => sort}, socket) do
-    params = build_filter_params(socket)
-    |> Map.put("sort", sort)
-    |> Map.put("page", "1")
+    params =
+      build_filter_params(socket)
+      |> Map.put("sort", sort)
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -51,9 +52,10 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("search", %{"search" => search_term}, socket) do
-    params = build_filter_params(socket)
-    |> Map.put("search", search_term)
-    |> Map.put("page", "1")
+    params =
+      build_filter_params(socket)
+      |> Map.put("search", search_term)
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -61,11 +63,12 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    params = build_filter_params(socket)
-    |> Map.merge(filters)
-    |> Map.put("page", "1")
-    |> Enum.reject(fn {_k, v} -> v == "" or v == [] end)
-    |> Map.new()
+    params =
+      build_filter_params(socket)
+      |> Map.merge(filters)
+      |> Map.put("page", "1")
+      |> Enum.reject(fn {_k, v} -> v == "" or v == [] end)
+      |> Map.new()
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -110,7 +113,7 @@ defmodule CinegraphWeb.MovieLive.Index do
       runtime_min: params["runtime_min"],
       runtime_max: params["runtime_max"],
       rating_min: params["rating_min"],
-      show_unreleased: params["show_unreleased"] || "false"
+      show_unreleased: params["show_unreleased"] in ["true", "on", true]
     })
   end
 
@@ -124,9 +127,10 @@ defmodule CinegraphWeb.MovieLive.Index do
   end
 
   defp load_paginated_movies(socket) do
-    %{page: page, per_page: per_page, sort: sort, filters: filters, search_term: search_term} = socket.assigns
+    %{page: page, per_page: per_page, sort: sort, filters: filters, search_term: search_term} =
+      socket.assigns
 
-    params = 
+    params =
       %{
         "page" => to_string(page),
         "per_page" => to_string(per_page),
@@ -168,13 +172,17 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   defp stringify_value(nil), do: nil
   defp stringify_value(v) when is_list(v), do: Enum.join(v, ",")
+  defp stringify_value(true), do: "true"
+  defp stringify_value(false), do: "false"
   defp stringify_value(v), do: to_string(v)
 
   defp parse_list_param(nil), do: []
   defp parse_list_param(""), do: []
+
   defp parse_list_param(param) when is_binary(param) do
     String.split(param, ",", trim: true)
   end
+
   defp parse_list_param(param) when is_list(param), do: param
 
   defp parse_int_param(param, default, opts) do
@@ -219,7 +227,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp generate_decades do
     current_year = Date.utc_today().year
     start_decade = 1900
-    
+
     for decade <- start_decade..current_year//10 do
       %{value: decade, label: "#{decade}s"}
     end
@@ -228,13 +236,14 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   # Pagination path builder
   def build_pagination_path(assigns, new_params \\ %{}) do
-    current_params = %{
-      "page" => to_string(assigns.page),
-      "per_page" => to_string(assigns.per_page),
-      "sort" => assigns.sort,
-      "search" => assigns.search_term
-    }
-    |> Map.merge(stringify_filters(assigns.filters))
+    current_params =
+      %{
+        "page" => to_string(assigns.page),
+        "per_page" => to_string(assigns.per_page),
+        "sort" => assigns.sort,
+        "search" => assigns.search_term
+      }
+      |> Map.merge(stringify_filters(assigns.filters))
 
     params =
       current_params

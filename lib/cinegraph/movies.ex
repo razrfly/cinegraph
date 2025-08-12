@@ -43,11 +43,11 @@ defmodule Cinegraph.Movies do
   Only counts fully imported movies by default.
   """
   def count_movies(params \\ %{}) do
-    query = 
+    query =
       Movie
       |> where([m], m.import_status == "full")
       |> Filters.apply_filters(params)
-    
+
     # If we have genre filters, we need to count differently due to GROUP BY
     if params["genres"] && params["genres"] != [] do
       # Wrap the grouped query in a subquery and count the results
@@ -81,28 +81,49 @@ defmodule Cinegraph.Movies do
   # Sorting helper
   defp apply_sorting(query, params) do
     case params["sort"] do
-      "title" -> order_by(query, [m], asc: m.title)
-      "title_desc" -> order_by(query, [m], desc: m.title)
-      "release_date" -> order_by(query, [m], asc: m.release_date)
-      "release_date_desc" -> order_by(query, [m], desc: m.release_date)
-      "rating" -> 
+      "title" ->
+        order_by(query, [m], asc: m.title)
+
+      "title_desc" ->
+        order_by(query, [m], desc: m.title)
+
+      "release_date" ->
+        order_by(query, [m], asc: m.release_date)
+
+      "release_date_desc" ->
+        order_by(query, [m], desc: m.release_date)
+
+      "rating" ->
         query
-        |> order_by([m], desc: 
-          fragment("""
-          (SELECT value FROM external_metrics 
-           WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
-           ORDER BY fetched_at DESC LIMIT 1)
-          """, m.id))
-      "popularity" -> 
+        |> order_by([m],
+          desc:
+            fragment(
+              """
+              (SELECT value FROM external_metrics 
+               WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+               ORDER BY fetched_at DESC LIMIT 1)
+              """,
+              m.id
+            )
+        )
+
+      "popularity" ->
         query
-        |> order_by([m], desc: 
-          fragment("""
-          (SELECT value FROM external_metrics 
-           WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score'
-           ORDER BY fetched_at DESC LIMIT 1)
-          """, m.id))
+        |> order_by([m],
+          desc:
+            fragment(
+              """
+              (SELECT value FROM external_metrics 
+               WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score'
+               ORDER BY fetched_at DESC LIMIT 1)
+              """,
+              m.id
+            )
+        )
+
       # default
-      _ -> order_by(query, [m], desc: m.release_date)
+      _ ->
+        order_by(query, [m], desc: m.release_date)
     end
   end
 

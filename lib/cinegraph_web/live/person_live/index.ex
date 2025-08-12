@@ -5,32 +5,82 @@ defmodule CinegraphWeb.PersonLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    # Get filter options
+    departments = People.get_departments()
+    birth_decades = People.get_birth_decades()
+    nationalities = People.get_nationalities()
+
     {:ok,
      socket
      |> assign(:page, 1)
      |> assign(:per_page, 20)
      |> assign(:people, [])
-     |> assign(:total_people, 0)}
+     |> assign(:total_people, 0)
+     |> assign(:search, "")
+     |> assign(:search_timer, nil)
+     |> assign(:sort_by, "popularity")
+     |> assign(:sort_order, "desc")
+     |> assign(:departments, departments)
+     |> assign(:selected_departments, [])
+     |> assign(:genders, [
+       %{value: "1", label: "Female"},
+       %{value: "2", label: "Male"},
+       %{value: "3", label: "Non-binary"}
+     ])
+     |> assign(:selected_genders, [])
+     |> assign(:age_min, "")
+     |> assign(:age_max, "")
+     |> assign(:birth_decade, "")
+     |> assign(:birth_decades, birth_decades)
+     |> assign(:status_filters, [
+       %{value: "living", label: "Living"},
+       %{value: "deceased", label: "Deceased"},
+       %{value: "has_biography", label: "Has Biography"},
+       %{value: "has_image", label: "Has Image"}
+     ])
+     |> assign(:selected_status, [])
+     |> assign(:nationality, "")
+     |> assign(:nationalities, nationalities)
+     |> assign(:show_filters, false)}
   end
 
   @impl true
   def handle_params(params, _url, socket) do
-    page =
-      case Integer.parse(params["page"] || "1") do
-        {page_num, _} when page_num > 0 -> page_num
-        _ -> 1
-      end
+    # Parse all parameters
+    page = parse_integer(params["page"], 1, 1, nil)
+    per_page = parse_integer(params["per_page"], 20, 1, 100)
 
-    per_page =
-      case Integer.parse(params["per_page"] || "20") do
-        {per_page_num, _} when per_page_num > 0 and per_page_num <= 100 -> per_page_num
-        _ -> 20
-      end
+    search = params["search"] || ""
+    sort_by = params["sort_by"] || "popularity"
+    sort_order = params["sort_order"] || "desc"
 
-    people = People.list_people(%{"page" => to_string(page), "per_page" => to_string(per_page)})
+    departments = parse_list(params["departments"])
+    genders = parse_list(params["genders"])
+    age_min = params["age_min"] || ""
+    age_max = params["age_max"] || ""
+    birth_decade = params["birth_decade"] || ""
+    status_filters = parse_list(params["status"])
+    nationality = params["nationality"] || ""
 
-    # Get total count for pagination
-    total_people = People.count_people()
+    # Build filter params
+    filter_params = %{
+      "page" => to_string(page),
+      "per_page" => to_string(per_page),
+      "search" => search,
+      "sort_by" => sort_by,
+      "sort_order" => sort_order,
+      "departments" => departments,
+      "genders" => genders,
+      "age_min" => age_min,
+      "age_max" => age_max,
+      "birth_decade" => birth_decade,
+      "status" => status_filters,
+      "nationality" => nationality
+    }
+
+    # Get filtered results
+    people = People.list_people(filter_params)
+    total_people = People.count_people(filter_params)
     total_pages = ceil(total_people / per_page)
 
     socket =
@@ -40,10 +90,132 @@ defmodule CinegraphWeb.PersonLive.Index do
       |> assign(:people, people)
       |> assign(:total_people, total_people)
       |> assign(:total_pages, total_pages)
-      |> assign(:page_title, "People")
+      |> assign(:search, search)
+      |> assign(:sort_by, sort_by)
+      |> assign(:sort_order, sort_order)
+      |> assign(:selected_departments, departments)
+      |> assign(:selected_genders, genders)
+      |> assign(:age_min, age_min)
+      |> assign(:age_max, age_max)
+      |> assign(:birth_decade, birth_decade)
+      |> assign(:selected_status, status_filters)
+      |> assign(:nationality, nationality)
+      |> assign(:page_title, page_title(filter_params))
       |> assign(:person, nil)
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("search", %{"search" => search}, socket) do
+    # Cancel any existing timer
+    if socket.assigns.search_timer do
+      Process.cancel_timer(socket.assigns.search_timer)
+    end
+
+    # Set a new debounced timer
+    timer = Process.send_after(self(), {:perform_search, search}, 300)
+
+    {:noreply, assign(socket, search: search, search_timer: timer)}
+  end
+
+  @impl true
+  def handle_event("filter", params, socket) do
+    current_params = build_current_params(socket)
+    new_params = Map.merge(current_params, params) |> Map.put("page", "1")
+
+    {:noreply, push_patch(socket, to: ~p"/people?#{new_params}")}
+  end
+
+  @impl true
+  def handle_event("sort", %{"sort_by" => sort_by}, socket) do
+    current_sort = socket.assigns.sort_by
+
+    sort_order =
+      if current_sort == sort_by do
+        if socket.assigns.sort_order == "desc", do: "asc", else: "desc"
+      else
+        # Default sort orders for different fields
+        case sort_by do
+          "name" -> "asc"
+          # Youngest first by default
+          "birthday" -> "desc"
+          _ -> "desc"
+        end
+      end
+
+    current_params = build_current_params(socket)
+
+    new_params =
+      Map.merge(current_params, %{"sort_by" => sort_by, "sort_order" => sort_order, "page" => "1"})
+
+    {:noreply, push_patch(socket, to: ~p"/people?#{new_params}")}
+  end
+
+  @impl true
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply, push_patch(socket, to: ~p"/people")}
+  end
+
+  @impl true
+  def handle_event("toggle_filters", _params, socket) do
+    {:noreply, assign(socket, :show_filters, !socket.assigns.show_filters)}
+  end
+
+  @impl true
+  def handle_info({:perform_search, search}, socket) do
+    current_params = build_current_params(socket)
+    new_params = Map.merge(current_params, %{"search" => search, "page" => "1"})
+
+    {:noreply, push_patch(socket, to: ~p"/people?#{new_params}")}
+  end
+
+  # Helper functions
+  defp parse_integer(value, default, min \\ nil, max \\ nil) do
+    case Integer.parse(value || to_string(default)) do
+      {num, _} ->
+        num = if min, do: max(num, min), else: num
+        num = if max, do: min(num, max), else: num
+        num
+
+      _ ->
+        default
+    end
+  end
+
+  defp parse_list(nil), do: []
+  defp parse_list(""), do: []
+
+  defp parse_list(value) when is_binary(value) do
+    String.split(value, ",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  defp parse_list(value) when is_list(value), do: value
+
+  defp page_title(params) do
+    filters = []
+
+    filters =
+      if params["search"] && params["search"] != "",
+        do: ["Search: \"#{params["search"]}\"" | filters],
+        else: filters
+
+    filters =
+      if params["departments"] && params["departments"] != [],
+        do: ["Departments" | filters],
+        else: filters
+
+    filters =
+      if params["genders"] && params["genders"] != [], do: ["Gender" | filters], else: filters
+
+    filters =
+      if params["status"] && params["status"] != [], do: ["Status" | filters], else: filters
+
+    if filters != [] do
+      "People - " <> Enum.join(filters, ", ")
+    else
+      "People"
+    end
   end
 
   # Helper function for pagination range
@@ -62,5 +234,41 @@ defmodule CinegraphWeb.PersonLive.Index do
       true ->
         [1, "...", current_page - 1, current_page, current_page + 1, "...", total_pages]
     end
+  end
+
+  # Helper function to build current params for pagination (used in templates)
+  def build_current_params(search, sort_by, sort_order, selected_departments, selected_genders, age_min, age_max, birth_decade, selected_status, nationality) do
+    %{
+      "search" => search,
+      "sort_by" => sort_by,
+      "sort_order" => sort_order,
+      "departments" => Enum.join(selected_departments, ","),
+      "genders" => Enum.join(selected_genders, ","),
+      "age_min" => age_min,
+      "age_max" => age_max,
+      "birth_decade" => birth_decade,
+      "status" => Enum.join(selected_status, ","),
+      "nationality" => nationality
+    }
+    |> Enum.reject(fn {_k, v} -> v == "" end)
+    |> Map.new()
+  end
+
+  # Private helper function for internal use with socket
+  defp build_current_params(socket) do
+    %{
+      "search" => socket.assigns.search,
+      "sort_by" => socket.assigns.sort_by,
+      "sort_order" => socket.assigns.sort_order,
+      "departments" => Enum.join(socket.assigns.selected_departments, ","),
+      "genders" => Enum.join(socket.assigns.selected_genders, ","),
+      "age_min" => socket.assigns.age_min,
+      "age_max" => socket.assigns.age_max,
+      "birth_decade" => socket.assigns.birth_decade,
+      "status" => Enum.join(socket.assigns.selected_status, ","),
+      "nationality" => socket.assigns.nationality
+    }
+    |> Enum.reject(fn {_k, v} -> v == "" end)
+    |> Map.new()
   end
 end

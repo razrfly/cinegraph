@@ -2,10 +2,10 @@ defmodule Cinegraph.Scrapers.ImdbOscarScraper do
   @moduledoc """
   DEPRECATED: This scraper should no longer be used.
   Oscar data should come exclusively from oscars.org via Cinegraph.Scrapers.OscarScraper.
-  
+
   Previously used to fetch IMDb IDs for Oscar nominees, but this functionality
   has been removed to avoid hardcoded festival logic.
-  
+
   Kept for reference only - DO NOT USE.
   """
 

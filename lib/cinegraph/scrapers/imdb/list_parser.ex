@@ -37,7 +37,8 @@ defmodule Cinegraph.Scrapers.Imdb.ListParser do
           end
         end)
 
-      {:error, _} -> nil
+      {:error, _} ->
+        nil
     end
   end
 

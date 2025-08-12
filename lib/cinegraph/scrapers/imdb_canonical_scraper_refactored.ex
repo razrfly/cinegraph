@@ -22,13 +22,13 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraperRefactored do
 
     with {:ok, expected_count} <- get_expected_count(list_id),
          {:ok, all_movies} <- scrape_all_pages(list_id, list_config),
-         {:ok, processed_results} <- MovieProcessor.process_canonical_movies(all_movies, list_config) do
-      
+         {:ok, processed_results} <-
+           MovieProcessor.process_canonical_movies(all_movies, list_config) do
       results = Map.put(processed_results, :expected_count, expected_count)
       Logger.info("Successfully scraped #{list_name}: #{length(all_movies)} movies total")
       {:ok, results}
     else
-      {:error, reason} -> 
+      {:error, reason} ->
         Logger.error("Failed to scrape #{list_name}: #{inspect(reason)}")
         {:error, reason}
     end
@@ -39,18 +39,21 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraperRefactored do
   """
   def scrape_multiple_lists(list_configs) when is_list(list_configs) do
     results = Enum.map(list_configs, &scrape_single_config/1)
-    
-    successful = Enum.count(results, &(&1.status == :success))
-    total_movies = results |> Enum.map(&(&1.movies)) |> Enum.sum()
 
-    Logger.info("Batch scraping complete: #{successful}/#{length(results)} lists, #{total_movies} total movies")
-    
-    {:ok, %{
-      results: results,
-      total_lists: length(results),
-      successful_lists: successful,
-      total_movies: total_movies
-    }}
+    successful = Enum.count(results, &(&1.status == :success))
+    total_movies = results |> Enum.map(& &1.movies) |> Enum.sum()
+
+    Logger.info(
+      "Batch scraping complete: #{successful}/#{length(results)} lists, #{total_movies} total movies"
+    )
+
+    {:ok,
+     %{
+       results: results,
+       total_lists: length(results),
+       successful_lists: successful,
+       total_movies: total_movies
+     }}
   end
 
   @doc """
@@ -60,7 +63,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraperRefactored do
     case Cinegraph.Movies.MovieLists.get_config(list_key) do
       {:ok, config} ->
         scrape_imdb_list(config.list_id, config.source_key, config.name, config.metadata || %{})
-      
+
       {:error, reason} ->
         Logger.error("Failed to scrape list #{list_key}: #{reason}")
         {:error, reason}
@@ -93,7 +96,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraperRefactored do
 
   defp scrape_single_config(config) do
     list_id = config[:list_id] || config["list_id"]
-    source_key = config[:source_key] || config["source_key"] 
+    source_key = config[:source_key] || config["source_key"]
     name = config[:name] || config["name"]
     metadata = config[:metadata] || config["metadata"] || %{}
 
