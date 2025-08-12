@@ -18,8 +18,7 @@ defmodule CinegraphWeb.PersonLive.Index do
      |> assign(:total_people, 0)
      |> assign(:search, "")
      |> assign(:search_timer, nil)
-     |> assign(:sort_by, "popularity")
-     |> assign(:sort_order, "desc")
+     |> assign(:sort, "movie_count_desc")
      |> assign(:departments, departments)
      |> assign(:selected_departments, [])
      |> assign(:genders, [
@@ -51,8 +50,10 @@ defmodule CinegraphWeb.PersonLive.Index do
     per_page = parse_integer(params["per_page"], 20, 1, 100)
 
     search = params["search"] || ""
-    sort_by = params["sort_by"] || "popularity"
-    sort_order = params["sort_order"] || "desc"
+    sort = params["sort"] || "movie_count_desc"
+
+    # Parse sort into sort_by and sort_order for backward compatibility
+    {sort_by, sort_order} = parse_sort(sort)
 
     departments = parse_list(params["departments"])
     genders = parse_list(params["genders"])
@@ -91,8 +92,7 @@ defmodule CinegraphWeb.PersonLive.Index do
       |> assign(:total_people, total_people)
       |> assign(:total_pages, total_pages)
       |> assign(:search, search)
-      |> assign(:sort_by, sort_by)
-      |> assign(:sort_order, sort_order)
+      |> assign(:sort, sort)
       |> assign(:selected_departments, departments)
       |> assign(:selected_genders, genders)
       |> assign(:age_min, age_min)
@@ -128,26 +128,9 @@ defmodule CinegraphWeb.PersonLive.Index do
   end
 
   @impl true
-  def handle_event("sort", %{"sort_by" => sort_by}, socket) do
-    current_sort = socket.assigns.sort_by
-
-    sort_order =
-      if current_sort == sort_by do
-        if socket.assigns.sort_order == "desc", do: "asc", else: "desc"
-      else
-        # Default sort orders for different fields
-        case sort_by do
-          "name" -> "asc"
-          # Youngest first by default
-          "birthday" -> "desc"
-          _ -> "desc"
-        end
-      end
-
+  def handle_event("change_sort", %{"sort" => sort}, socket) do
     current_params = build_current_params(socket)
-
-    new_params =
-      Map.merge(current_params, %{"sort_by" => sort_by, "sort_order" => sort_order, "page" => "1"})
+    new_params = Map.merge(current_params, %{"sort" => sort, "page" => "1"})
 
     {:noreply, push_patch(socket, to: ~p"/people?#{new_params}")}
   end
@@ -171,7 +154,22 @@ defmodule CinegraphWeb.PersonLive.Index do
   end
 
   # Helper functions
-  defp parse_integer(value, default, min \\ nil, max \\ nil) do
+  defp parse_sort(sort_string) do
+    case sort_string do
+      "name" -> {"name", "asc"}
+      "name_desc" -> {"name", "desc"}
+      "popularity" -> {"popularity", "desc"}
+      "popularity_desc" -> {"popularity", "desc"}
+      "birthday" -> {"birthday", "asc"}
+      "birthday_desc" -> {"birthday", "desc"}
+      "recently_added" -> {"recently_added", "desc"}
+      "movie_count" -> {"movie_count", "desc"}
+      "movie_count_desc" -> {"movie_count", "desc"}
+      _ -> {"movie_count", "desc"}
+    end
+  end
+
+  defp parse_integer(value, default, min, max) do
     case Integer.parse(value || to_string(default)) do
       {num, _} ->
         num = if min, do: max(num, min), else: num
@@ -237,11 +235,20 @@ defmodule CinegraphWeb.PersonLive.Index do
   end
 
   # Helper function to build current params for pagination (used in templates)
-  def build_current_params(search, sort_by, sort_order, selected_departments, selected_genders, age_min, age_max, birth_decade, selected_status, nationality) do
+  def build_current_params(
+        search,
+        sort,
+        selected_departments,
+        selected_genders,
+        age_min,
+        age_max,
+        birth_decade,
+        selected_status,
+        nationality
+      ) do
     %{
       "search" => search,
-      "sort_by" => sort_by,
-      "sort_order" => sort_order,
+      "sort" => sort,
       "departments" => Enum.join(selected_departments, ","),
       "genders" => Enum.join(selected_genders, ","),
       "age_min" => age_min,
@@ -258,8 +265,7 @@ defmodule CinegraphWeb.PersonLive.Index do
   defp build_current_params(socket) do
     %{
       "search" => socket.assigns.search,
-      "sort_by" => socket.assigns.sort_by,
-      "sort_order" => socket.assigns.sort_order,
+      "sort" => socket.assigns.sort,
       "departments" => Enum.join(socket.assigns.selected_departments, ","),
       "genders" => Enum.join(socket.assigns.selected_genders, ","),
       "age_min" => socket.assigns.age_min,
