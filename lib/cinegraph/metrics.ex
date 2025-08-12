@@ -44,14 +44,11 @@ defmodule Cinegraph.Metrics do
   end
 
   @doc """
-  Creates or updates a metric, preserving historical values.
+  Creates or updates a metric, replacing the existing value.
   
-  This function uses a 4-column conflict resolution (movie_id, source, metric_type, fetched_at)
-  to maintain a history of metric values over time. Only the value fields are updated
-  on conflict, preserving the original fetched_at timestamp.
-  
-  Use `ExternalSources.upsert_external_metric/1` if you only need to keep
-  the latest value for each metric type.
+  This function uses a 3-column conflict resolution (movie_id, source, metric_type)
+  to maintain only the latest value for each metric type. All fields except the
+  primary key are replaced on conflict.
   
   ## Examples
   
@@ -68,8 +65,8 @@ defmodule Cinegraph.Metrics do
     %ExternalMetric{}
     |> ExternalMetric.changeset(attrs)
     |> Repo.insert(
-      on_conflict: {:replace, [:value, :text_value, :metadata, :valid_until, :updated_at]},
-      conflict_target: [:movie_id, :source, :metric_type, :fetched_at]
+      on_conflict: {:replace, [:value, :text_value, :metadata, :fetched_at, :valid_until, :updated_at]},
+      conflict_target: [:movie_id, :source, :metric_type]
     )
   end
 
