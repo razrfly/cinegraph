@@ -14,14 +14,15 @@ defmodule Cinegraph.Metrics do
   """
   def store_tmdb_metrics(movie, tmdb_data) do
     metrics = ExternalMetric.from_tmdb(movie.id, tmdb_data)
-    
-    results = Enum.map(metrics, fn metric_attrs ->
-      case upsert_metric(metric_attrs) do
-        {:ok, _} -> :ok
-        error -> error
-      end
-    end)
-    
+
+    results =
+      Enum.map(metrics, fn metric_attrs ->
+        case upsert_metric(metric_attrs) do
+          {:ok, _} -> :ok
+          error -> error
+        end
+      end)
+
     errors = Enum.filter(results, &(&1 != :ok))
     if Enum.empty?(errors), do: :ok, else: {:error, errors}
   end
@@ -31,27 +32,28 @@ defmodule Cinegraph.Metrics do
   """
   def store_omdb_metrics(movie, omdb_data) do
     metrics = ExternalMetric.from_omdb(movie.id, omdb_data)
-    
-    results = Enum.map(metrics, fn metric_attrs ->
-      case upsert_metric(metric_attrs) do
-        {:ok, _} -> :ok
-        error -> error
-      end
-    end)
-    
+
+    results =
+      Enum.map(metrics, fn metric_attrs ->
+        case upsert_metric(metric_attrs) do
+          {:ok, _} -> :ok
+          error -> error
+        end
+      end)
+
     errors = Enum.filter(results, &(&1 != :ok))
     if Enum.empty?(errors), do: :ok, else: {:error, errors}
   end
 
   @doc """
   Creates or updates a metric, replacing the existing value.
-  
+
   This function uses a 3-column conflict resolution (movie_id, source, metric_type)
   to maintain only the latest value for each metric type. All fields except the
   primary key are replaced on conflict.
-  
+
   ## Examples
-  
+
       iex> upsert_metric(%{
       ...>   movie_id: 1,
       ...>   source: "tmdb",
@@ -65,7 +67,8 @@ defmodule Cinegraph.Metrics do
     %ExternalMetric{}
     |> ExternalMetric.changeset(attrs)
     |> Repo.insert(
-      on_conflict: {:replace, [:value, :text_value, :metadata, :fetched_at, :valid_until, :updated_at]},
+      on_conflict:
+        {:replace, [:value, :text_value, :metadata, :fetched_at, :valid_until, :updated_at]},
       conflict_target: [:movie_id, :source, :metric_type]
     )
   end
@@ -75,7 +78,7 @@ defmodule Cinegraph.Metrics do
   """
   def store_tmdb_recommendations(source_movie, recommendations_data, type) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    
+
     recommendations_data
     |> Enum.with_index(1)
     |> Enum.each(fn {rec_data, rank} ->
@@ -100,7 +103,7 @@ defmodule Cinegraph.Metrics do
             },
             fetched_at: now
           }
-          
+
           %MovieRecommendation{}
           |> MovieRecommendation.changeset(attrs)
           |> Repo.insert(
@@ -109,7 +112,7 @@ defmodule Cinegraph.Metrics do
           )
       end
     end)
-    
+
     :ok
   end
 
@@ -118,17 +121,19 @@ defmodule Cinegraph.Metrics do
   """
   def get_movie_metrics(movie_id, opts \\ []) do
     query = from m in ExternalMetric, where: m.movie_id == ^movie_id
-    
-    query = case Keyword.get(opts, :source) do
-      nil -> query
-      source -> from m in query, where: m.source == ^source
-    end
-    
-    query = case Keyword.get(opts, :metric_type) do
-      nil -> query
-      type -> from m in query, where: m.metric_type == ^type
-    end
-    
+
+    query =
+      case Keyword.get(opts, :source) do
+        nil -> query
+        source -> from m in query, where: m.source == ^source
+      end
+
+    query =
+      case Keyword.get(opts, :metric_type) do
+        nil -> query
+        type -> from m in query, where: m.metric_type == ^type
+      end
+
     Repo.all(query)
   end
 
@@ -137,9 +142,10 @@ defmodule Cinegraph.Metrics do
   """
   def get_metric_value(movie_id, source, metric_type) do
     from(m in ExternalMetric,
-      where: m.movie_id == ^movie_id and 
-             m.source == ^source and 
-             m.metric_type == ^metric_type,
+      where:
+        m.movie_id == ^movie_id and
+          m.source == ^source and
+          m.metric_type == ^metric_type,
       order_by: [desc: m.fetched_at],
       limit: 1,
       select: m.value
@@ -152,22 +158,24 @@ defmodule Cinegraph.Metrics do
   """
   def store_tmdb_engagement_metrics(movie, reviews_data, lists_data) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    
+
     # Store review count as engagement metric
     if reviews_data && reviews_data["results"] do
       review_count = length(reviews_data["results"])
-      
+
       # Calculate average rating if reviews have ratings
-      avg_rating = if review_count > 0 do
-        ratings = reviews_data["results"]
-          |> Enum.filter(& &1["author_details"]["rating"])
-          |> Enum.map(& &1["author_details"]["rating"])
-        
-        if length(ratings) > 0 do
-          Enum.sum(ratings) / length(ratings)
+      avg_rating =
+        if review_count > 0 do
+          ratings =
+            reviews_data["results"]
+            |> Enum.filter(& &1["author_details"]["rating"])
+            |> Enum.map(& &1["author_details"]["rating"])
+
+          if length(ratings) > 0 do
+            Enum.sum(ratings) / length(ratings)
+          end
         end
-      end
-      
+
       upsert_metric(%{
         movie_id: movie.id,
         source: "tmdb",
@@ -180,21 +188,32 @@ defmodule Cinegraph.Metrics do
         fetched_at: now
       })
     end
-    
+
     # Store list appearances as popularity metric
     if lists_data && lists_data["results"] do
       list_count = length(lists_data["results"])
-      
+
       # Count lists that might be culturally relevant
-      cultural_lists = lists_data["results"]
+      cultural_lists =
+        lists_data["results"]
         |> Enum.filter(fn list ->
           name = String.downcase(list["name"] || "")
+
           String.contains?(name, [
-            "award", "oscar", "academy", "cannes", "criterion",
-            "afi", "best", "greatest", "top", "essential", "classic"
+            "award",
+            "oscar",
+            "academy",
+            "cannes",
+            "criterion",
+            "afi",
+            "best",
+            "greatest",
+            "top",
+            "essential",
+            "classic"
           ])
         end)
-      
+
       upsert_metric(%{
         movie_id: movie.id,
         source: "tmdb",
@@ -208,7 +227,7 @@ defmodule Cinegraph.Metrics do
         fetched_at: now
       })
     end
-    
+
     :ok
   end
 
@@ -218,26 +237,33 @@ defmodule Cinegraph.Metrics do
   """
   def get_movie_aggregates(movie_id) do
     metrics = get_movie_metrics(movie_id)
-    
+
     Enum.reduce(metrics, %{}, fn metric, acc ->
       case metric.metric_type do
         "rating_average" when metric.source == "tmdb" ->
           Map.put(acc, :vote_average, metric.value)
+
         "rating_votes" when metric.source == "tmdb" ->
           Map.put(acc, :vote_count, metric.value)
+
         "popularity_score" when metric.source == "tmdb" ->
           Map.put(acc, :popularity, metric.value)
+
         "budget" ->
           Map.put(acc, :budget, metric.value)
+
         "revenue_worldwide" ->
           Map.put(acc, :revenue, metric.value)
+
         "revenue_domestic" ->
           Map.put(acc, :box_office_domestic, metric.value)
+
         "awards_summary" ->
           Map.merge(acc, %{
             awards_text: metric.text_value,
             awards: metric.metadata
           })
+
         _ ->
           acc
       end

@@ -403,11 +403,14 @@
                 <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
                   <% vote_avg = Cinegraph.Movies.Movie.vote_average(credit.movie) %>
                   <%= if vote_avg do %>
-                    <span>★ <%= Float.round(vote_avg, 1) %></span>
+                    <span>★ {Float.round(vote_avg, 1)}</span>
                   <% end %>
-                  <% revenue = if Map.has_key?(credit.movie.tmdb_data || %{}, "revenue"), do: credit.movie.tmdb_data["revenue"], else: nil %>
+                  <% revenue =
+                    if Map.has_key?(credit.movie.tmdb_data || %{}, "revenue"),
+                      do: credit.movie.tmdb_data["revenue"],
+                      else: nil %>
                   <%= if revenue && revenue > 0 do %>
-                    <span>$<%= div(revenue, 1_000_000) %>M</span>
+                    <span>${div(revenue, 1_000_000)}M</span>
                   <% end %>
                 </div>
               </div>

@@ -1,11 +1,306 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="mb-6 flex items-center justify-between">
-    <div>
-      <h1 class="text-3xl font-bold text-gray-900">People</h1>
-      <p class="text-gray-600 mt-2">Browse {@total_people} actors, directors, and crew members</p>
+  <div class="mb-6">
+    <h1 class="text-3xl font-bold text-gray-900">People</h1>
+    <p class="text-gray-600 mt-2">Browse {@total_people} actors, directors, and crew members</p>
+  </div>
+  
+<!-- Search and Filter Controls -->
+  <div class="mb-8 space-y-4">
+    <!-- Search Bar -->
+    <div class="flex gap-4 items-center">
+      <div class="flex-1 max-w-md">
+        <form phx-change="search" phx-submit="search">
+          <div class="relative">
+            <input
+              type="text"
+              name="search"
+              placeholder="Search people by name..."
+              value={@search}
+              phx-debounce="300"
+              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+            />
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg
+                class="h-5 w-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                >
+                </path>
+              </svg>
+            </div>
+            <%= if @search != "" do %>
+              <button
+                type="button"
+                phx-click="filter"
+                phx-value-search=""
+                class="absolute inset-y-0 right-0 pr-3 flex items-center"
+              >
+                <svg
+                  class="h-4 w-4 text-gray-400 hover:text-gray-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  >
+                  </path>
+                </svg>
+              </button>
+            <% end %>
+          </div>
+        </form>
+      </div>
+
+      <button
+        phx-click="toggle_filters"
+        class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center gap-2 transition-colors"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+          >
+          </path>
+        </svg>
+        Filters
+        <%= if Enum.any?([@selected_departments, @selected_genders, @selected_status]) || @age_min != "" || @age_max != "" || @birth_decade != "" || @nationality != "" do %>
+          <span class="bg-blue-500 text-white text-xs rounded-full px-2 py-1">Active</span>
+        <% end %>
+      </button>
+
+      <%= if @total_people > 0 do %>
+        <button
+          phx-click="clear_filters"
+          class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+        >
+          Clear All
+        </button>
+      <% end %>
     </div>
-    <div class="text-sm text-gray-600">
-      Page {@page} of {@total_pages}
+    
+<!-- Expandable Filters -->
+    <%= if @show_filters do %>
+      <div class="bg-gray-50 rounded-lg p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <!-- Department Filter -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Department</label>
+            <form phx-change="filter">
+              <select
+                multiple
+                name="departments"
+                class="w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                size="5"
+              >
+                <%= for dept <- @departments do %>
+                  <option value={dept} selected={dept in @selected_departments}>
+                    {dept}
+                  </option>
+                <% end %>
+              </select>
+            </form>
+          </div>
+          
+<!-- Gender Filter -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+            <div class="space-y-2">
+              <%= for gender <- @genders do %>
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    value={gender.value}
+                    checked={gender.value in @selected_genders}
+                    phx-click="filter"
+                    phx-value-genders={
+                      if gender.value in @selected_genders,
+                        do: Enum.join(List.delete(@selected_genders, gender.value), ","),
+                        else:
+                          Enum.join(
+                            [@selected_genders, gender.value]
+                            |> List.flatten()
+                            |> Enum.reject(&(&1 == "")),
+                            ","
+                          )
+                    }
+                    class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                  />
+                  <span class="ml-2 text-sm text-gray-700">{gender.label}</span>
+                </label>
+              <% end %>
+            </div>
+          </div>
+          
+<!-- Age Range -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Age Range</label>
+            <form phx-change="filter">
+              <div class="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={@age_min}
+                  name="age_min"
+                  min="0"
+                  max="120"
+                  class="w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={@age_max}
+                  name="age_max"
+                  min="0"
+                  max="120"
+                  class="w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </form>
+          </div>
+          
+<!-- Birth Decade -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Birth Decade</label>
+            <form phx-change="filter">
+              <select
+                name="birth_decade"
+                value={@birth_decade}
+                class="w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All decades</option>
+                <%= for decade <- Enum.sort(@birth_decades, :desc) do %>
+                  <option value={decade} selected={to_string(decade) == @birth_decade}>
+                    {decade}s
+                  </option>
+                <% end %>
+              </select>
+            </form>
+          </div>
+          
+<!-- Status Filters -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+            <div class="space-y-2">
+              <%= for status <- @status_filters do %>
+                <label class="flex items-center">
+                  <input
+                    type="checkbox"
+                    value={status.value}
+                    checked={status.value in @selected_status}
+                    phx-click="filter"
+                    phx-value-status={
+                      if status.value in @selected_status,
+                        do: Enum.join(List.delete(@selected_status, status.value), ","),
+                        else:
+                          Enum.join(
+                            [@selected_status, status.value]
+                            |> List.flatten()
+                            |> Enum.reject(&(&1 == "")),
+                            ","
+                          )
+                    }
+                    class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                  />
+                  <span class="ml-2 text-sm text-gray-700">{status.label}</span>
+                </label>
+              <% end %>
+            </div>
+          </div>
+          
+<!-- Nationality -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Place of Birth</label>
+            <form phx-change="filter">
+              <input
+                type="text"
+                placeholder="e.g. New York, London"
+                value={@nationality}
+                name="nationality"
+                list="nationalities"
+                class="w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+              />
+              <datalist id="nationalities">
+                <%= for nation <- Enum.take(@nationalities, 20) do %>
+                  <option value={nation}>{nation}</option>
+                <% end %>
+              </datalist>
+            </form>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Sort Controls -->
+    <div class="flex justify-between items-center">
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-gray-600">Sort by:</span>
+        <div class="flex gap-2">
+          <%= for {sort_key, label} <- [{"popularity", "Popularity"}, {"name", "Name"}, {"birthday", "Age"}, {"recently_added", "Recently Added"}] do %>
+            <button
+              phx-click="sort"
+              phx-value-sort_by={sort_key}
+              class={"px-3 py-1 rounded text-sm transition-colors " <> 
+                if @sort_by == sort_key do
+                  "bg-blue-500 text-white"
+                else
+                  "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                end}
+            >
+              {label}
+              <%= if @sort_by == sort_key do %>
+                <%= if @sort_order == "desc" do %>
+                  <svg
+                    class="inline h-4 w-4 ml-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 9l-7 7-7-7"
+                    >
+                    </path>
+                  </svg>
+                <% else %>
+                  <svg
+                    class="inline h-4 w-4 ml-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 15l7-7 7 7"
+                    >
+                    </path>
+                  </svg>
+                <% end %>
+              <% end %>
+            </button>
+          <% end %>
+        </div>
+      </div>
+
+      <div class="text-sm text-gray-600">
+        Page {@page} of {@total_pages}
+      </div>
     </div>
   </div>
 
@@ -55,7 +350,9 @@
     <div class="mt-8 flex items-center justify-center space-x-2">
       <%= if @page > 1 do %>
         <.link
-          navigate={~p"/people?#{[page: @page - 1, per_page: @per_page]}"}
+          navigate={
+            ~p"/people?#{Map.merge(build_current_params(@search, @sort_by, @sort_order, @selected_departments, @selected_genders, @age_min, @age_max, @birth_decade, @selected_status, @nationality), %{"page" => @page - 1, "per_page" => @per_page})}"
+          }
           class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
         >
           Previous
@@ -72,7 +369,9 @@
           <span class="px-3 py-2 text-sm text-gray-700">...</span>
         <% else %>
           <.link
-            navigate={~p"/people?#{[page: page_num, per_page: @per_page]}"}
+            navigate={
+              ~p"/people?#{Map.merge(build_current_params(@search, @sort_by, @sort_order, @selected_departments, @selected_genders, @age_min, @age_max, @birth_decade, @selected_status, @nationality), %{"page" => page_num, "per_page" => @per_page})}"
+            }
             class={"px-3 py-2 text-sm font-medium rounded-md #{if page_num == @page, do: "bg-blue-600 text-white", else: "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"}"}
           >
             {page_num}
@@ -82,7 +381,9 @@
 
       <%= if @page < @total_pages do %>
         <.link
-          navigate={~p"/people?#{[page: @page + 1, per_page: @per_page]}"}
+          navigate={
+            ~p"/people?#{Map.merge(build_current_params(@search, @sort_by, @sort_order, @selected_departments, @selected_genders, @age_min, @age_max, @birth_decade, @selected_status, @nationality), %{"page" => @page + 1, "per_page" => @per_page})}"
+          }
           class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
         >
           Next

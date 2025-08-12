@@ -5,7 +5,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   """
 
   require Logger
-  
+
   alias Cinegraph.Events
   alias Cinegraph.Events.FestivalEvent
 
@@ -29,10 +29,10 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
 
       festival_event ->
         festival_config = FestivalEvent.to_scraper_config(festival_event)
-        
+
         # Build URL using template from database or fall back to default IMDb format
         url = build_festival_url(festival_config, year)
-        
+
         if url do
           Logger.info("Fetching #{festival_config.name} data for #{year} from: #{url}")
 
@@ -75,11 +75,11 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
         festival_config[:url_template]
         |> String.replace("{event_id}", festival_config[:event_id] || "")
         |> String.replace("{year}", to_string(year))
-      
+
       # Fall back to IMDb URL if event_id is present
       festival_config[:event_id] ->
         "https://www.imdb.com/event/#{festival_config[:event_id]}/#{year}/1/"
-      
+
       # No URL can be built
       true ->
         nil
@@ -323,12 +323,13 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     case get_festival_event_by_config(festival_config) do
       %{metadata: %{"category_mappings" => mappings}} when is_map(mappings) ->
         Map.get(mappings, name, name)
+
       _ ->
         # No mapping found, return name as-is
         name
     end
   end
-  
+
   defp get_festival_event_by_config(festival_config) do
     Events.list_active_events()
     |> Enum.find(fn event -> event.abbreviation == festival_config.abbreviation end)
@@ -356,6 +357,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     case get_festival_event_by_config(festival_config) do
       %{metadata: %{"default_category" => default_category}} when is_binary(default_category) ->
         default_category
+
       _ ->
         # Fallback to a generic category
         "festival_award"

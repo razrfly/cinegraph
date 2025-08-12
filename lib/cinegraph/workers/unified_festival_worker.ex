@@ -116,15 +116,21 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
   defp create_or_update_ceremony(organization, year, festival_data) do
     # Get the event configuration from database to build proper source URL
     event_id = get_event_id_from_database(organization)
-    
+
     # Build source URL or use a fallback for missing event IDs
-    source_url = case build_source_url(event_id, year) do
-      {:ok, url} -> url
-      {:error, :missing_event_id} -> 
-        Logger.warning("Missing IMDb event ID for #{organization.abbreviation}, using fallback URL")
-        nil
-    end
-    
+    source_url =
+      case build_source_url(event_id, year) do
+        {:ok, url} ->
+          url
+
+        {:error, :missing_event_id} ->
+          Logger.warning(
+            "Missing IMDb event ID for #{organization.abbreviation}, using fallback URL"
+          )
+
+          nil
+      end
+
     attrs = %{
       organization_id: organization.id,
       year: year,
@@ -147,24 +153,31 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
     # Look up the festival event in the database by organization abbreviation
     case Events.list_active_events() do
       events when is_list(events) ->
-        event = Enum.find(events, fn e -> 
-          e.abbreviation == organization.abbreviation
-        end)
-        
+        event =
+          Enum.find(events, fn e ->
+            e.abbreviation == organization.abbreviation
+          end)
+
         if event && event.source_config do
           # Get the IMDb event ID from the database configuration
           event.source_config["event_id"] || event.source_config["imdb_event_id"]
         else
-          Logger.warning("No event configuration found for organization: #{organization.abbreviation}")
+          Logger.warning(
+            "No event configuration found for organization: #{organization.abbreviation}"
+          )
+
           nil
         end
+
       _ ->
         nil
     end
   end
-  
+
   defp build_source_url(nil, _year), do: {:error, :missing_event_id}
-  defp build_source_url(event_id, year), do: {:ok, "https://www.imdb.com/event/#{event_id}/#{year}/1/"}
+
+  defp build_source_url(event_id, year),
+    do: {:ok, "https://www.imdb.com/event/#{event_id}/#{year}/1/"}
 
   defp queue_festival_discovery_job(ceremony) do
     job_args = %{

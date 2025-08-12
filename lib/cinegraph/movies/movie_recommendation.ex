@@ -5,7 +5,7 @@ defmodule Cinegraph.Movies.MovieRecommendation do
   schema "movie_recommendations" do
     belongs_to :source_movie, Cinegraph.Movies.Movie
     belongs_to :recommended_movie, Cinegraph.Movies.Movie
-    
+
     field :source, :string
     field :type, :string
     field :rank, :integer
@@ -25,7 +25,14 @@ defmodule Cinegraph.Movies.MovieRecommendation do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> validate_inclusion(:source, ["tmdb", "omdb", "imdb", "letterboxd", "mubi"])
-    |> validate_inclusion(:type, ["similar", "recommended", "related", "sequel", "prequel", "collection"])
+    |> validate_inclusion(:type, [
+      "similar",
+      "recommended",
+      "related",
+      "sequel",
+      "prequel",
+      "collection"
+    ])
     |> foreign_key_constraint(:source_movie_id)
     |> foreign_key_constraint(:recommended_movie_id)
     |> unique_constraint([:source_movie_id, :recommended_movie_id, :source, :type])
@@ -36,13 +43,14 @@ defmodule Cinegraph.Movies.MovieRecommendation do
   """
   def from_tmdb_similar(source_movie_id, similar_movies) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    
+
     similar_movies
     |> Enum.with_index(1)
     |> Enum.map(fn {movie_data, rank} ->
       %{
         source_movie_id: source_movie_id,
-        recommended_movie_id: nil, # Will be resolved later
+        # Will be resolved later
+        recommended_movie_id: nil,
         source: "tmdb",
         type: "similar",
         rank: rank,
@@ -62,13 +70,14 @@ defmodule Cinegraph.Movies.MovieRecommendation do
   """
   def from_tmdb_recommended(source_movie_id, recommended_movies) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    
+
     recommended_movies
     |> Enum.with_index(1)
     |> Enum.map(fn {movie_data, rank} ->
       %{
         source_movie_id: source_movie_id,
-        recommended_movie_id: nil, # Will be resolved later
+        # Will be resolved later
+        recommended_movie_id: nil,
         source: "tmdb",
         type: "recommended",
         rank: rank,

@@ -28,7 +28,7 @@ defmodule CinegraphWeb.MovieLive.Show do
   defp load_movie_with_all_data(id) do
     # Load movie with all related data
     movie = Movies.get_movie!(id)
-    
+
     # Load aggregated metrics for backward compatibility
     metrics = Metrics.get_movie_aggregates(id)
 
@@ -77,7 +77,8 @@ defmodule CinegraphWeb.MovieLive.Show do
     key_collaborations = get_key_collaborations(cast, crew)
 
     movie
-    |> Map.merge(metrics)  # Add metrics data (budget, revenue, etc.)
+    # Add metrics data (budget, revenue, etc.)
+    |> Map.merge(metrics)
     |> Map.put(:cast, cast)
     |> Map.put(:crew, crew)
     |> Map.put(:directors, directors)

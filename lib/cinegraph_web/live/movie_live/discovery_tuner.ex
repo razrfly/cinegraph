@@ -5,15 +5,15 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   """
   use CinegraphWeb, :live_view
   import Ecto.Query
-  
+
   alias Cinegraph.Movies
   alias Cinegraph.Movies.DiscoveryScoringSimple, as: DiscoveryScoring
-  
+
   @impl true
   def mount(_params, _session, socket) do
     weights = DiscoveryScoring.get_presets().balanced
-    
-    socket = 
+
+    socket =
       socket
       |> assign(:weights, weights)
       |> assign(:preset, "balanced")
@@ -23,92 +23,106 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
       |> assign(:min_score, 0.0)
       |> assign(:show_scores, false)
       |> load_movies()
-    
+
     {:ok, socket}
   end
-  
+
   @impl true
   def handle_event("update_weight", params, socket) do
     # Handle all weight updates from the form
-    weights = 
+    weights =
       Enum.reduce(params, %{}, fn
-        {key, value}, acc when key in ["popular_opinion", "critical_acclaim", "industry_recognition", "cultural_impact"] ->
+        {key, value}, acc
+        when key in [
+               "popular_opinion",
+               "critical_acclaim",
+               "industry_recognition",
+               "cultural_impact"
+             ] ->
           dimension = String.to_atom(key)
-          parsed_value = case Float.parse(value) do
-            {val, _} -> min(1.0, max(0.0, val / 100))
-            :error -> 0.0
-          end
+
+          parsed_value =
+            case Float.parse(value) do
+              {val, _} -> min(1.0, max(0.0, val / 100))
+              :error -> 0.0
+            end
+
           Map.put(acc, dimension, parsed_value)
-        _, acc -> acc
+
+        _, acc ->
+          acc
       end)
-    
+
     # Merge with existing weights to handle any missing ones
     weights = Map.merge(socket.assigns.weights, weights)
-    
+
     socket =
       socket
       |> assign(:weights, weights)
       |> assign(:preset, "custom")
       |> load_movies()
-    
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("select_preset", %{"preset" => preset}, socket) do
-    weights = 
+    weights =
       case preset do
-        "custom" -> socket.assigns.weights
-        preset_name -> 
+        "custom" ->
+          socket.assigns.weights
+
+        preset_name ->
           DiscoveryScoring.get_presets()
           |> Map.get(String.to_atom(preset_name))
       end
-    
+
     socket =
       socket
       |> assign(:weights, weights)
       |> assign(:preset, preset)
       |> load_movies()
-    
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("update_min_score", %{"min_score" => value}, socket) do
-    min_score = case Float.parse(value) do
-      {val, _} -> min(1.0, max(0.0, val / 100))
-      :error -> 0.0
-    end
-    
+    min_score =
+      case Float.parse(value) do
+        {val, _} -> min(1.0, max(0.0, val / 100))
+        :error -> 0.0
+      end
+
     socket =
       socket
       |> assign(:min_score, min_score)
       |> load_movies()
-    
+
     {:noreply, socket}
   end
-  
+
   @impl true
   def handle_event("toggle_scores", _params, socket) do
     {:noreply, assign(socket, :show_scores, !socket.assigns.show_scores)}
   end
-  
+
   @impl true
   def handle_event("load_more", _params, socket) do
     socket =
       socket
       |> assign(:page, socket.assigns.page + 1)
       |> load_movies(append: true)
-    
+
     {:noreply, socket}
   end
-  
+
   defp load_movies(socket, opts \\ []) do
     query = Movies.Movie
-    
-    movies = 
+
+    movies =
       DiscoveryScoring.apply_scoring(
-        query, 
+        query,
         socket.assigns.weights,
         %{min_score: socket.assigns.min_score}
       )
@@ -116,14 +130,14 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
       |> offset(^((socket.assigns.page - 1) * socket.assigns.per_page))
       |> Cinegraph.Repo.all()
       |> Cinegraph.Repo.preload([:genres])
-    
+
     if opts[:append] do
       assign(socket, :movies, socket.assigns.movies ++ movies)
     else
       assign(socket, :movies, movies)
     end
   end
-  
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -134,7 +148,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           Adjust the importance of different scoring factors to discover movies that match your preferences
         </:subtitle>
       </.header>
-      
+
       <div class="tuner-controls space-y-6 bg-white p-6 rounded-lg shadow mb-8">
         <!-- Preset Selector -->
         <div>
@@ -154,7 +168,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                 )
               ]}
             >
-              <%= humanize_preset(key) %>
+              {humanize_preset(key)}
             </button>
             <button
               phx-click="select_preset"
@@ -172,17 +186,17 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           </div>
         </div>
         
-        <!-- Weight Sliders -->
+    <!-- Weight Sliders -->
         <form phx-change="update_weight" class="space-y-4">
           <h3 class="text-lg font-semibold text-gray-900">Scoring Weights</h3>
-          
+
           <div :for={{dimension, weight} <- @weights} class="space-y-1">
             <div class="flex justify-between items-center">
               <label class="text-sm font-medium text-gray-700">
-                <%= humanize_dimension(dimension) %>
+                {humanize_dimension(dimension)}
               </label>
               <span class="text-sm text-gray-600">
-                <%= round(weight * 100) %>%
+                {round(weight * 100)}%
               </span>
             </div>
             <input
@@ -194,19 +208,19 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
             />
             <p class="text-xs text-gray-500">
-              <%= dimension_description(dimension) %>
+              {dimension_description(dimension)}
             </p>
           </div>
         </form>
         
-        <!-- Minimum Score Filter -->
+    <!-- Minimum Score Filter -->
         <form phx-change="update_min_score" class="space-y-1">
           <div class="flex justify-between items-center">
             <label class="text-sm font-medium text-gray-700">
               Minimum Score Threshold
             </label>
             <span class="text-sm text-gray-600">
-              <%= round(@min_score * 100) %>%
+              {round(@min_score * 100)}%
             </span>
           </div>
           <input
@@ -219,18 +233,18 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           />
         </form>
         
-        <!-- Toggle Score Display -->
+    <!-- Toggle Score Display -->
         <div>
           <button
             phx-click="toggle_scores"
             class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
           >
-            <%= if @show_scores, do: "Hide", else: "Show" %> Score Breakdown
+            {if @show_scores, do: "Hide", else: "Show"} Score Breakdown
           </button>
         </div>
       </div>
       
-      <!-- Results Grid -->
+    <!-- Results Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         <%= for movie <- @movies do %>
           <.link navigate={~p"/movies/#{movie.id}"} class="group block">
@@ -249,52 +263,55 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                     <span class="text-gray-400 text-lg">No Image</span>
                   </div>
                 <% end %>
-
-                <!-- Rating Badge (if available) -->
+                
+    <!-- Rating Badge (if available) -->
                 <% vote_avg = Cinegraph.Movies.Movie.vote_average(movie) %>
                 <%= if vote_avg && vote_avg > 0 do %>
                   <div class="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-sm px-2 py-1 rounded">
-                    ⭐ <%= Float.round(vote_avg, 1) %>
+                    ⭐ {Float.round(vote_avg, 1)}
                   </div>
                 <% end %>
               </div>
-
-              <!-- Movie Info -->
+              
+    <!-- Movie Info -->
               <div class="p-4">
                 <h3 class="font-semibold text-lg text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                  <%= movie.title %>
+                  {movie.title}
                 </h3>
 
                 <%= if movie.release_date do %>
                   <p class="text-gray-500 text-sm mt-1">
-                    <%= Calendar.strftime(movie.release_date, "%Y") %>
+                    {Calendar.strftime(movie.release_date, "%Y")}
                   </p>
                 <% end %>
-
-                <!-- Quick Stats -->
+                
+    <!-- Quick Stats -->
                 <div class="mt-3 flex flex-wrap gap-2">
                   <%= if movie.runtime do %>
                     <span class="text-xs text-gray-500">
-                      <%= movie.runtime %> min
+                      {movie.runtime} min
                     </span>
                   <% end %>
 
                   <%= if movie.original_language do %>
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      <%= String.upcase(movie.original_language) %>
+                      {String.upcase(movie.original_language)}
                     </span>
                   <% end %>
                 </div>
-
-                <!-- Score Breakdown -->
+                
+    <!-- Score Breakdown -->
                 <%= if @show_scores and movie.score_components do %>
                   <div class="mt-4 space-y-1 text-xs text-gray-600">
                     <div class="font-semibold text-gray-700">
-                      Total Score: <%= format_score(movie.discovery_score) %>
+                      Total Score: {format_score(movie.discovery_score)}
                     </div>
-                    <div :for={{dimension, score} <- movie.score_components} class="flex justify-between">
-                      <span><%= humanize_dimension(dimension) %>:</span>
-                      <span><%= format_score(score) %></span>
+                    <div
+                      :for={{dimension, score} <- movie.score_components}
+                      class="flex justify-between"
+                    >
+                      <span>{humanize_dimension(dimension)}:</span>
+                      <span>{format_score(score)}</span>
                     </div>
                   </div>
                 <% end %>
@@ -304,7 +321,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
         <% end %>
       </div>
       
-      <!-- Load More Button -->
+    <!-- Load More Button -->
       <%= if rem(length(@movies), @per_page) == 0 and length(@movies) > 0 do %>
         <div class="mt-8 text-center">
           <button
@@ -318,26 +335,26 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     </div>
     """
   end
-  
+
   defp humanize_preset(:balanced), do: "Balanced"
   defp humanize_preset(:crowd_pleaser), do: "Crowd Pleaser"
   defp humanize_preset(:critics_choice), do: "Critics' Choice"
   defp humanize_preset(:award_winner), do: "Award Winner"
   defp humanize_preset(:cult_classic), do: "Cult Classic"
   defp humanize_preset(preset), do: Phoenix.Naming.humanize(preset)
-  
+
   defp humanize_dimension(:popular_opinion), do: "Popular Opinion"
   defp humanize_dimension(:critical_acclaim), do: "Critical Acclaim"
   defp humanize_dimension(:industry_recognition), do: "Industry Recognition"
   defp humanize_dimension(:cultural_impact), do: "Cultural Impact"
   defp humanize_dimension(dimension), do: Phoenix.Naming.humanize(dimension)
-  
+
   defp dimension_description(:popular_opinion), do: "TMDb and IMDb user ratings"
   defp dimension_description(:critical_acclaim), do: "Metacritic and Rotten Tomatoes scores"
   defp dimension_description(:industry_recognition), do: "Festival awards and nominations"
   defp dimension_description(:cultural_impact), do: "Canonical lists and popularity metrics"
   defp dimension_description(_), do: ""
-  
+
   defp format_score(nil), do: "N/A"
   defp format_score(score) when is_float(score), do: "#{round(score * 100)}%"
   defp format_score(score), do: to_string(score)
