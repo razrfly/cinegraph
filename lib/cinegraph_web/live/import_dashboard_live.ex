@@ -48,6 +48,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:api_metrics, %{})
       |> assign(:fallback_stats, %{})
       |> assign(:strategy_breakdown, [])
+      |> assign(:import_metrics, %{})
       |> load_data()
       |> schedule_refresh()
 
@@ -819,6 +820,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
     api_metrics = get_api_metrics()
     fallback_stats = get_fallback_stats()
     strategy_breakdown = get_strategy_breakdown()
+    import_metrics = get_import_metrics()
 
     socket
     |> assign(:progress, progress)
@@ -833,6 +835,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:api_metrics, api_metrics)
     |> assign(:fallback_stats, fallback_stats)
     |> assign(:strategy_breakdown, strategy_breakdown)
+    |> assign(:import_metrics, import_metrics)
   end
 
   defp get_canonical_movies_count do
@@ -1163,6 +1166,24 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
   defp get_strategy_breakdown do
     ApiTracker.get_tmdb_strategy_breakdown(24)
+  end
+
+  defp get_import_metrics do
+    # Get recent import state operations to show activity
+    since = DateTime.utc_now() |> DateTime.add(-24 * 3600, :second)
+    
+    Repo.all(
+      from m in Cinegraph.Metrics.ApiLookupMetric,
+        where: m.operation == "import_state" and m.inserted_at >= ^since,
+        order_by: [desc: m.inserted_at],
+        limit: 10,
+        select: %{
+          source: m.source,
+          key: m.target_identifier,
+          metadata: m.metadata,
+          inserted_at: m.inserted_at
+        }
+    )
   end
 
   @doc """

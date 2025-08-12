@@ -279,6 +279,133 @@ defmodule Cinegraph.Metrics.ApiTracker do
     deleted
   end
 
+  # Import State Tracking Functions
+  # Replaces the old import_state table with unified metrics tracking
+
+  @doc """
+  Sets an import state value. Replaces ImportState.set/2 functionality.
+  
+  ## Examples
+  
+      ApiTracker.set_import_state("tmdb", "last_page_processed", 1500)
+      ApiTracker.set_import_state("tmdb", "total_movies", 50000)
+  """
+  def set_import_state(source, key, value) when is_binary(source) and is_binary(key) do
+    track_lookup(source, "import_state", key, fn ->
+      {:ok, %{value: value}}
+    end, [
+      metadata: %{
+        operation_type: "state_update",
+        key: key,
+        value: to_string(value),
+        timestamp: DateTime.utc_now()
+      }
+    ])
+  end
+
+  @doc """
+  Gets an import state value. Replaces ImportState.get/1 functionality.
+  Returns the most recent value for the given key.
+  """
+  def get_import_state(source, key) do
+    query = 
+      from m in ApiLookupMetric,
+        where: m.source == ^source and 
+               m.operation == "import_state" and
+               m.target_identifier == ^key and
+               m.success == true,
+        order_by: [desc: m.inserted_at],
+        limit: 1,
+        select: m.metadata
+    
+    case Repo.one(query) do
+      nil -> nil
+      %{"value" => value} -> value
+      metadata -> Map.get(metadata, "value")
+    end
+  end
+
+  @doc """
+  Gets an import state value with a default. Replaces ImportState.get/2.
+  """
+  def get_import_state(source, key, default) do
+    get_import_state(source, key) || default
+  end
+
+  @doc """
+  Gets an import state value as an integer. Replaces ImportState.get_integer/2.
+  """
+  def get_import_state_integer(source, key, default \\ 0) do
+    case get_import_state(source, key) do
+      nil -> default
+      value when is_binary(value) ->
+        case Integer.parse(value) do
+          {int, _} -> int
+          :error -> default
+        end
+      value when is_integer(value) -> value
+      _ -> default
+    end
+  end
+
+  @doc """
+  Gets an import state value as a date. Replaces ImportState.get_date/1.
+  """
+  def get_import_state_date(source, key) do
+    case get_import_state(source, key) do
+      nil -> nil
+      value when is_binary(value) ->
+        case Date.from_iso8601(value) do
+          {:ok, date} -> date
+          {:error, _} -> nil
+        end
+      %Date{} = date -> date
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Gets all import state for a source as a map.
+  """
+  def get_all_import_state(source) do
+    # Get the most recent value for each key
+    query = 
+      from m in ApiLookupMetric,
+        where: m.source == ^source and 
+               m.operation == "import_state" and
+               m.success == true,
+        order_by: [desc: m.inserted_at],
+        select: {m.target_identifier, m.metadata}
+    
+    Repo.all(query)
+    |> Enum.reduce(%{}, fn {key, metadata}, acc ->
+      if Map.has_key?(acc, key) do
+        acc  # Keep the first (most recent) entry
+      else
+        value = case metadata do
+          %{"value" => value} -> value
+          _ -> nil
+        end
+        Map.put(acc, key, value)
+      end
+    end)
+  end
+
+  @doc """
+  Gets import progress statistics for dashboard display.
+  """
+  def get_import_progress(source \\ "tmdb") do
+    all_state = get_all_import_state(source)
+    
+    %{
+      total_movies: get_import_state_integer(source, "total_movies", 0),
+      last_page_processed: get_import_state_integer(source, "last_page_processed", 0),
+      last_full_sync: get_import_state_date(source, "last_full_sync"),
+      last_update_check: get_import_state_date(source, "last_update_check"),
+      state_entries: map_size(all_state)
+    }
+  end
+
   # Helper functions
   
   defp calculate_success_rate([]), do: 0.0

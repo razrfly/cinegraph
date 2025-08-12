@@ -353,7 +353,7 @@ defmodule Cinegraph.People do
     if age_max do
       with {max_age, _} <- Integer.parse(age_max) do
         min_birth_date =
-          safe_date_new(current_date.year - max_age - 1, current_date.month, current_date.day)
+          safe_date_new(current_date.year - max_age, current_date.month, current_date.day)
 
         where(query, [p], not is_nil(p.birthday) and p.birthday >= ^min_birth_date)
       else
@@ -364,12 +364,13 @@ defmodule Cinegraph.People do
     end
   end
 
-  # Helper function to safely create dates, handling Feb 29 edge cases
+  # Helper function to safely create dates, clamping invalid days to the month's last day
   defp safe_date_new(year, month, day) do
     case Date.new(year, month, day) do
       {:ok, date} -> date
-      # Handle Feb 29 -> Feb 28
-      {:error, _} -> Date.new!(year, month, day - 1)
+      {:error, _} ->
+        last_day = Date.days_in_month(year, month)
+        Date.new!(year, month, min(day, last_day))
     end
   end
 
