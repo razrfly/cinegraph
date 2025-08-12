@@ -6,33 +6,14 @@ defmodule Cinegraph.Collaborations.PathFinder do
 
   import Ecto.Query
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{Person, Credit}
-  alias Cinegraph.Collaborations.PersonRelationship
+  alias Cinegraph.Movies.Credit
 
   @doc """
   Finds the shortest path between two people using BFS.
   Returns {:ok, path} or {:error, :no_path_found}
   """
   def find_shortest_path(from_person_id, to_person_id, max_depth \\ 6) do
-    # First check cache
-    case get_cached_path(from_person_id, to_person_id) do
-      {:ok, path} -> {:ok, path}
-      :not_found -> calculate_path_bfs(from_person_id, to_person_id, max_depth)
-    end
-  end
-
-  defp get_cached_path(from_id, to_id) do
-    now = DateTime.utc_now()
-
-    case Repo.one(
-           from pr in PersonRelationship,
-             where: pr.from_person_id == ^from_id and pr.to_person_id == ^to_id,
-             where: pr.expires_at > ^now,
-             select: pr.shortest_path
-         ) do
-      nil -> :not_found
-      path -> {:ok, path}
-    end
+    calculate_path_bfs(from_person_id, to_person_id, max_depth)
   end
 
   defp calculate_path_bfs(from_id, to_id, max_depth) do
@@ -45,8 +26,6 @@ defmodule Cinegraph.Collaborations.PathFinder do
 
     case result do
       {:ok, path} ->
-        # Cache the result
-        cache_path(from_id, to_id, path)
         {:ok, path}
 
       :not_found ->
@@ -105,20 +84,6 @@ defmodule Cinegraph.Collaborations.PathFinder do
     Repo.all(query)
   end
 
-  defp cache_path(from_id, to_id, path) do
-    attrs = %{
-      from_person_id: from_id,
-      to_person_id: to_id,
-      degree: length(path) - 1,
-      shortest_path: path,
-      calculated_at: DateTime.utc_now(),
-      expires_at: DateTime.add(DateTime.utc_now(), 7, :day)
-    }
-
-    %PersonRelationship{}
-    |> PersonRelationship.changeset(attrs)
-    |> Repo.insert(on_conflict: :replace_all, conflict_target: [:from_person_id, :to_person_id])
-  end
 
   @doc """
   Finds a path with movie connections for display.
@@ -165,36 +130,4 @@ defmodule Cinegraph.Collaborations.PathFinder do
     )
   end
 
-  @doc """
-  Pre-calculates paths for popular people to improve performance.
-  """
-  def precalculate_popular_paths(limit \\ 100) do
-    # Get most popular/credited people
-    popular_people =
-      Repo.all(
-        from p in Person,
-          join: mc in Credit,
-          on: mc.person_id == p.id,
-          group_by: p.id,
-          order_by: [desc: count(mc.id)],
-          limit: ^limit,
-          select: p.id
-      )
-
-    total = length(popular_people) * (length(popular_people) - 1)
-
-    # Calculate paths between all pairs
-    popular_people
-    |> Enum.flat_map(fn from_id ->
-      Enum.map(popular_people, &{from_id, &1})
-    end)
-    |> Enum.reject(fn {a, b} -> a == b end)
-    |> Enum.with_index(1)
-    |> Enum.each(fn {{from_id, to_id}, idx} ->
-      find_shortest_path(from_id, to_id)
-      if rem(idx, 100) == 0, do: IO.puts("Calculated #{idx}/#{total} paths...")
-    end)
-
-    IO.puts("✓ Pre-calculated #{total} paths")
-  end
 end

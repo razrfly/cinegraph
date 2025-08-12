@@ -6,7 +6,7 @@ defmodule Cinegraph.Collaborations do
   import Ecto.Query, warn: false
   require Logger
   alias Cinegraph.Repo
-  alias Cinegraph.Collaborations.{Collaboration, CollaborationDetail, PersonRelationship}
+  alias Cinegraph.Collaborations.{Collaboration, CollaborationDetail}
   alias Cinegraph.Movies.{Movie, Person}
 
   @doc """
@@ -555,24 +555,10 @@ defmodule Cinegraph.Collaborations do
   Finds the shortest path between two people using PostgreSQL recursive CTE.
   """
   def find_shortest_path(from_person_id, to_person_id, max_depth \\ 6) do
-    # First check cache
-    case get_cached_relationship(from_person_id, to_person_id) do
-      %PersonRelationship{} = rel -> {:ok, rel}
-      nil -> calculate_and_cache_path(from_person_id, to_person_id, max_depth)
-    end
+    calculate_path(from_person_id, to_person_id, max_depth)
   end
 
-  defp get_cached_relationship(from_id, to_id) do
-    now = DateTime.utc_now()
-
-    Repo.one(
-      from pr in PersonRelationship,
-        where: pr.from_person_id == ^from_id and pr.to_person_id == ^to_id,
-        where: pr.expires_at > ^now
-    )
-  end
-
-  defp calculate_and_cache_path(from_id, to_id, max_depth) do
+  defp calculate_path(from_id, to_id, max_depth) do
     query = """
     WITH RECURSIVE path_search AS (
       -- Base case: direct connections through movies
@@ -616,25 +602,13 @@ defmodule Cinegraph.Collaborations do
 
     case Repo.query(query, [from_id, to_id, max_depth]) do
       {:ok, %{rows: [[path, depth]]}} ->
-        # Cache the result
-        attrs = %{
+        # Return a simple map with the path information
+        {:ok, %{
           from_person_id: from_id,
           to_person_id: to_id,
           degree: depth,
-          shortest_path: path,
-          calculated_at: DateTime.utc_now(),
-          expires_at: DateTime.add(DateTime.utc_now(), 7, :day)
-        }
-
-        {:ok, rel} =
-          %PersonRelationship{}
-          |> PersonRelationship.changeset(attrs)
-          |> Repo.insert(
-            on_conflict: :replace_all,
-            conflict_target: [:from_person_id, :to_person_id]
-          )
-
-        {:ok, rel}
+          shortest_path: path
+        }}
 
       {:ok, %{rows: []}} ->
         {:error, :no_path_found}

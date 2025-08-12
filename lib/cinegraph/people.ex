@@ -261,14 +261,17 @@ defmodule Cinegraph.People do
   defp normalize_revenue(nil), do: 0
   defp normalize_revenue(revenue) when is_integer(revenue), do: revenue
   defp normalize_revenue(revenue) when is_float(revenue), do: trunc(revenue)
+
   defp normalize_revenue(revenue) when is_binary(revenue) do
     # Handle string revenue values (may contain commas, spaces, etc.)
     cleaned = String.replace(revenue, ~r/[^\d.]/, "")
+
     case Float.parse(cleaned) do
       {value, _} -> trunc(value)
       :error -> 0
     end
   end
+
   defp normalize_revenue(_), do: 0
 
   defp calculate_average_rating(movies) do
@@ -440,9 +443,13 @@ defmodule Cinegraph.People do
       "recently_added" ->
         order_by(query, [{^direction, :inserted_at}])
 
-      "credits" ->
-        # This will require a join and count - for now, fallback to popularity
-        order_by(query, desc: :popularity)
+      "movie_count" ->
+        # Join with credits and count distinct movies
+        query
+        |> join(:left, [p], c in Credit, on: c.person_id == p.id)
+        |> group_by([p], p.id)
+        |> order_by([p, c], [{^direction, count(fragment("DISTINCT ?", c.movie_id))}])
+        |> select([p, c], p)
 
       _ ->
         order_by(query, desc: :popularity)

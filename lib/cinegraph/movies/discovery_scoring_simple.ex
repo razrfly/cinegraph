@@ -6,8 +6,6 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
   """
 
   import Ecto.Query, warn: false
-  alias Cinegraph.Repo
-  alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.DiscoveryCommon
 
   @default_weights DiscoveryCommon.default_weights()
