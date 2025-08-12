@@ -3,17 +3,24 @@ defmodule Cinegraph.Repo.Migrations.CreateApiLookupMetrics do
 
   def change do
     create table(:api_lookup_metrics) do
-      add :source, :string, null: false         # "tmdb", "omdb", "imdb_scraper", "venice_scraper", etc.
-      add :operation, :string, null: false      # "find_by_imdb", "search_movie", "fetch_ceremony", etc.
-      add :target_identifier, :string           # IMDb ID, movie title, festival year, etc.
+      # "tmdb", "omdb", "imdb_scraper", "venice_scraper", etc.
+      add :source, :string, null: false
+      # "find_by_imdb", "search_movie", "fetch_ceremony", etc.
+      add :operation, :string, null: false
+      # IMDb ID, movie title, festival year, etc.
+      add :target_identifier, :string
       add :success, :boolean, null: false
-      add :confidence_score, :float             # For fuzzy matches
-      add :fallback_level, :integer             # Which strategy succeeded (1-5)
+      # For fuzzy matches
+      add :confidence_score, :float
+      # Which strategy succeeded (1-5)
+      add :fallback_level, :integer
       add :response_time_ms, :integer
-      add :error_type, :string                  # "not_found", "rate_limit", "timeout", "parse_error"
+      # "not_found", "rate_limit", "timeout", "parse_error"
+      add :error_type, :string
       add :error_message, :text
-      add :metadata, :map                       # Additional context (import source, job_id, etc.)
-      
+      # Additional context (import source, job_id, etc.)
+      add :metadata, :map
+
       timestamps()
     end
 

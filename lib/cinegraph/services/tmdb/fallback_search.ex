@@ -8,12 +8,19 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   alias Cinegraph.Metrics.ApiTracker
   require Logger
 
-  @max_fallback_level Application.compile_env(:cinegraph, [:tmdb_search, :max_fallback_level], 3)
-  @min_confidence Application.compile_env(:cinegraph, [:tmdb_search, :min_confidence], 0.7)
+  defp max_fallback_level do
+    Application.get_env(:cinegraph, :tmdb_search, [])
+    |> Keyword.get(:max_fallback_level, 3)
+  end
+
+  defp min_confidence do
+    Application.get_env(:cinegraph, :tmdb_search, [])
+    |> Keyword.get(:min_confidence, 0.7)
+  end
 
   @doc """
   Attempts to find a movie using progressive fallback strategies.
-  
+
   ## Parameters
     - `imdb_id` - The IMDb ID to search for (optional)
     - `title` - The movie title
@@ -26,15 +33,19 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   """
   def find_movie(imdb_id, title, year \\ nil, opts \\ []) do
     strategies = build_strategies(imdb_id, title, year, opts)
-    
+    min_conf = min_confidence()
+
     strategies
-    |> Enum.take(@max_fallback_level)
+    |> Enum.take(max_fallback_level())
     |> Enum.reduce_while({:error, :not_found}, fn strategy, _acc ->
       case execute_strategy(strategy) do
-        {:ok, result} when result.confidence >= @min_confidence ->
-          {:halt, {:ok, result}}
-        {:ok, _low_confidence} ->
-          {:cont, {:error, :not_found}}
+        {:ok, result} ->
+          if result.confidence >= min_conf do
+            {:halt, {:ok, result}}
+          else
+            {:cont, {:error, :not_found}}
+          end
+
         {:error, _} ->
           {:cont, {:error, :not_found}}
       end
@@ -42,119 +53,58 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   end
 
   defp build_strategies(imdb_id, title, year, _opts) do
-    strategies = []
-    
-    # Strategy 1: Direct IMDb lookup (confidence: 1.0)
-    strategies = 
-      if imdb_id && imdb_id != "" do
-        [%{
-          level: 1,
-          name: "direct_imdb",
-          confidence: 1.0,
-          fn: fn -> find_by_imdb(imdb_id) end
-        } | strategies]
-      else
-        strategies
-      end
-    
-    # Strategy 2: Exact title + year match (confidence: 0.9)
-    strategies = 
-      if title && year do
-        strategies ++ [%{
-          level: 2,
-          name: "exact_title_year",
-          confidence: 0.9,
-          fn: fn -> search_exact_title_year(title, year) end
-        }]
-      else
-        strategies
-      end
-    
-    # Strategy 3: Normalized title match (confidence: 0.8)
-    strategies = 
-      if title do
-        strategies ++ [%{
-          level: 3,
-          name: "normalized_title",
-          confidence: 0.8,
-          fn: fn -> search_normalized_title(title, year) end
-        }]
-      else
-        strategies
-      end
-    
-    # Strategy 4: Year-tolerant match (confidence: 0.7)
-    strategies = 
-      if title && year do
-        strategies ++ [%{
-          level: 4,
-          name: "year_tolerant",
-          confidence: 0.7,
-          fn: fn -> search_year_tolerant(title, year) end
-        }]
-      else
-        strategies
-      end
-    
-    # Strategy 5: Fuzzy title match (confidence: 0.6)
-    strategies = 
-      if title do
-        strategies ++ [%{
-          level: 5,
-          name: "fuzzy_title",
-          confidence: 0.6,
-          fn: fn -> search_fuzzy_title(title) end
-        }]
-      else
-        strategies
-      end
-    
-    # Strategy 6: Broad search (confidence: 0.5)
-    strategies = 
-      if title do
-        strategies ++ [%{
-          level: 6,
-          name: "broad_search",
-          confidence: 0.5,
-          fn: fn -> search_broad(title) end
-        }]
-      else
-        strategies
-      end
-    
-    strategies
+    [
+      {imdb_id && imdb_id != "", 1, "direct_imdb", 1.0, fn -> find_by_imdb(imdb_id) end},
+      {title && year, 2, "exact_title_year", 0.9, fn -> search_exact_title_year(title, year) end},
+      {title, 3, "normalized_title", 0.8, fn -> search_normalized_title(title, year) end},
+      {title && year, 4, "year_tolerant", 0.7, fn -> search_year_tolerant(title, year) end},
+      {title, 5, "fuzzy_title", 0.6, fn -> search_fuzzy_title(title) end},
+      {title, 6, "broad_search", 0.5, fn -> search_broad(title) end}
+    ]
+    |> Enum.filter(fn {condition, _, _, _, _} -> condition end)
+    |> Enum.map(fn {_, level, name, confidence, fun} ->
+      %{level: level, name: name, confidence: confidence, fn: fun}
+    end)
   end
 
   defp execute_strategy(strategy) do
     Logger.debug("Executing TMDb search strategy: #{strategy.name} (level: #{strategy.level})")
-    
-    ApiTracker.track_lookup("tmdb", "fallback_#{strategy.name}", "", fn ->
-      case strategy.fn.() do
-        {:ok, movie} ->
-          {:ok, %{
-            movie: movie,
-            confidence: strategy.confidence,
-            fallback_level: strategy.level,
-            strategy: strategy.name
-          }}
-        error ->
-          error
-      end
-    end, [
+
+    ApiTracker.track_lookup(
+      "tmdb",
+      "fallback_#{strategy.name}",
+      "",
+      fn ->
+        case strategy.fn.() do
+          {:ok, movie} ->
+            {:ok,
+             %{
+               movie: movie,
+               confidence: strategy.confidence,
+               fallback_level: strategy.level,
+               strategy: strategy.name
+             }}
+
+          error ->
+            error
+        end
+      end,
       fallback_level: strategy.level,
       confidence: strategy.confidence,
       metadata: %{strategy: strategy.name}
-    ])
+    )
   end
 
   # Strategy implementations
-  
+
   defp find_by_imdb(imdb_id) do
     case TMDb.find_by_imdb_id(imdb_id) do
       {:ok, %{"movie_results" => [movie | _]}} ->
         {:ok, movie}
+
       {:ok, %{"movie_results" => []}} ->
         {:error, :not_found}
+
       error ->
         error
     end
@@ -164,6 +114,7 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
     case TMDb.search_movies(title, year: year) do
       {:ok, %{"results" => results}} ->
         find_exact_match(results, title, year)
+
       error ->
         error
     end
@@ -171,28 +122,29 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
 
   defp search_normalized_title(title, year) do
     normalized = normalize_title(title)
-    
+
     opts = if year, do: [year: year], else: []
-    
+
     case TMDb.search_movies(normalized, opts) do
       {:ok, %{"results" => results}} ->
         find_normalized_match(results, normalized, year)
+
       error ->
         error
     end
   end
 
   defp search_year_tolerant(title, year) do
-    years = [(year - 1), year, (year + 1)]
-    
-    results = 
+    years = [year - 1, year, year + 1]
+
+    results =
       Enum.flat_map(years, fn y ->
         case TMDb.search_movies(title, year: y) do
           {:ok, %{"results" => res}} -> res
           _ -> []
         end
       end)
-    
+
     find_year_tolerant_match(results, title, year)
   end
 
@@ -200,6 +152,7 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
     case TMDb.search_movies(title) do
       {:ok, %{"results" => results}} ->
         find_fuzzy_match(results, title)
+
       error ->
         error
     end
@@ -208,10 +161,11 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   defp search_broad(title) do
     # Extract main keywords from title
     keywords = extract_keywords(title)
-    
+
     case TMDb.search_movies(keywords) do
       {:ok, %{"results" => results}} ->
         find_broad_match(results, title)
+
       error ->
         error
     end
@@ -220,11 +174,12 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   # Matching helpers
 
   defp find_exact_match([], _title, _year), do: {:error, :not_found}
+
   defp find_exact_match([movie | rest], title, year) do
     movie_year = extract_year(movie)
-    
+
     if String.downcase(movie["title"] || "") == String.downcase(title) &&
-       movie_year == year do
+         movie_year == year do
       {:ok, movie}
     else
       find_exact_match(rest, title, year)
@@ -232,21 +187,24 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   end
 
   defp find_normalized_match([], _title, _year), do: {:error, :not_found}
+
   defp find_normalized_match([movie | _rest], _title, _year) do
     # Take the first result after normalization
     {:ok, movie}
   end
 
   defp find_year_tolerant_match([], _title, _year), do: {:error, :not_found}
+
   defp find_year_tolerant_match([movie | _rest], _title, _year) do
     # Take the first result within year tolerance
     {:ok, movie}
   end
 
   defp find_fuzzy_match([], _title), do: {:error, :not_found}
+
   defp find_fuzzy_match([movie | rest], title) do
     similarity = calculate_similarity(movie["title"] || "", title)
-    
+
     if similarity > 0.7 do
       {:ok, movie}
     else
@@ -255,6 +213,7 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   end
 
   defp find_broad_match([], _title), do: {:error, :not_found}
+
   defp find_broad_match([movie | _rest], _title) do
     # Take the first result from broad search
     {:ok, movie}
@@ -277,6 +236,7 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   rescue
     _ -> nil
   end
+
   defp extract_year(_), do: nil
 
   defp extract_keywords(title) do
@@ -289,22 +249,73 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
   end
 
   defp calculate_similarity(str1, str2) do
-    # Simple Jaro-Winkler similarity
-    # For production, consider using a proper string similarity library
-    s1 = String.downcase(str1)
-    s2 = String.downcase(str2)
-    
-    if s1 == s2 do
-      1.0
-    else
-      # Simplified similarity based on common characters
-      chars1 = String.graphemes(s1) |> MapSet.new()
-      chars2 = String.graphemes(s2) |> MapSet.new()
-      
-      common = MapSet.intersection(chars1, chars2) |> MapSet.size()
-      total = max(MapSet.size(chars1), MapSet.size(chars2))
-      
-      if total == 0, do: 0.0, else: common / total
+    # Levenshtein distance based similarity
+    # More accurate than simple character set overlap
+    s1 = String.downcase(String.trim(str1 || ""))
+    s2 = String.downcase(String.trim(str2 || ""))
+
+    cond do
+      s1 == s2 ->
+        1.0
+
+      s1 == "" or s2 == "" ->
+        0.0
+
+      true ->
+        # Calculate Levenshtein distance
+        distance = levenshtein_distance(s1, s2)
+        max_len = max(String.length(s1), String.length(s2))
+
+        if max_len == 0 do
+          0.0
+        else
+          # Convert distance to similarity score (0.0 to 1.0)
+          1.0 - distance / max_len
+        end
     end
+  end
+
+  defp levenshtein_distance(s1, s2) do
+    # Dynamic programming implementation of Levenshtein distance
+    len1 = String.length(s1)
+    len2 = String.length(s2)
+
+    # Create a 2D array for dynamic programming
+    # Use a map for simplicity
+    initial_matrix =
+      for i <- 0..len1, j <- 0..len2, into: %{} do
+        cond do
+          i == 0 -> {{i, j}, j}
+          j == 0 -> {{i, j}, i}
+          true -> {{i, j}, 0}
+        end
+      end
+
+    # Fill in the matrix
+    chars1 = String.graphemes(s1)
+    chars2 = String.graphemes(s2)
+
+    Enum.reduce(1..len1, initial_matrix, fn i, matrix ->
+      Enum.reduce(1..len2, matrix, fn j, matrix2 ->
+        char1 = Enum.at(chars1, i - 1)
+        char2 = Enum.at(chars2, j - 1)
+
+        cost = if char1 == char2, do: 0, else: 1
+
+        val =
+          min(
+            # Deletion
+            matrix2[{i - 1, j}] + 1,
+            min(
+              # Insertion
+              matrix2[{i, j - 1}] + 1,
+              # Substitution
+              matrix2[{i - 1, j - 1}] + cost
+            )
+          )
+
+        Map.put(matrix2, {i, j}, val)
+      end)
+    end)[{len1, len2}]
   end
 end

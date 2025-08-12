@@ -13,9 +13,9 @@ defmodule Cinegraph.Metrics.ApiTracker do
 
   @doc """
   Tracks an external API or scraping operation.
-  
+
   ## Examples
-  
+
       ApiTracker.track_lookup("tmdb", "find_by_imdb", "tt0111161", fn ->
         # Your API call here
         {:ok, movie_data}
@@ -23,27 +23,27 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def track_lookup(source, operation, target, fun, opts \\ []) do
     start_time = System.monotonic_time(:millisecond)
-    
-    result = 
+
+    result =
       try do
         fun.()
       rescue
-        error -> 
+        error ->
           Logger.error("API operation failed: #{inspect(error)}")
           {:error, error}
       catch
         :exit, reason -> {:error, {:exit, reason}}
         kind, reason -> {:error, {kind, reason}}
       end
-    
+
     end_time = System.monotonic_time(:millisecond)
     response_time = end_time - start_time
-    
+
     attrs = build_metric_attrs(source, operation, target, result, response_time, opts)
-    
+
     # Fire and forget - don't let tracking failures affect the operation
     Task.start(fn -> create_metric(attrs) end)
-    
+
     result
   end
 
@@ -52,17 +52,17 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def track_async_lookup(source, operation, target, task, opts \\ []) do
     start_time = System.monotonic_time(:millisecond)
-    
+
     result = Task.await(task, Keyword.get(opts, :timeout, 30_000))
-    
+
     end_time = System.monotonic_time(:millisecond)
     response_time = end_time - start_time
-    
+
     attrs = build_metric_attrs(source, operation, target, result, response_time, opts)
-    
+
     # Fire and forget
     Task.start(fn -> create_metric(attrs) end)
-    
+
     result
   end
 
@@ -75,7 +75,7 @@ defmodule Cinegraph.Metrics.ApiTracker do
       response_time_ms: response_time,
       metadata: Keyword.get(opts, :metadata, %{})
     }
-    
+
     base_attrs
     |> add_error_info(result)
     |> add_confidence_score(result, opts)
@@ -88,11 +88,12 @@ defmodule Cinegraph.Metrics.ApiTracker do
 
   defp add_error_info(attrs, {:error, error}) do
     {error_type, error_message} = extract_error_details(error)
-    
+
     attrs
     |> Map.put(:error_type, error_type)
     |> Map.put(:error_message, error_message)
   end
+
   defp add_error_info(attrs, _), do: attrs
 
   defp extract_error_details(%{message: msg}), do: {"api_error", msg}
@@ -105,6 +106,7 @@ defmodule Cinegraph.Metrics.ApiTracker do
   defp add_confidence_score(attrs, {:ok, %{confidence: confidence}}, _opts) do
     Map.put(attrs, :confidence_score, confidence)
   end
+
   defp add_confidence_score(attrs, _result, opts) do
     case Keyword.get(opts, :confidence) do
       nil -> attrs
@@ -124,10 +126,11 @@ defmodule Cinegraph.Metrics.ApiTracker do
     |> ApiLookupMetric.changeset(attrs)
     |> Repo.insert()
     |> case do
-      {:ok, metric} -> 
+      {:ok, metric} ->
         Logger.debug("Tracked API operation: #{metric.source}/#{metric.operation}")
         {:ok, metric}
-      {:error, changeset} -> 
+
+      {:error, changeset} ->
         Logger.warning("Failed to track API operation: #{inspect(changeset.errors)}")
         {:error, changeset}
     end
@@ -138,18 +141,18 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_success_rate(source, operation \\ nil, hours \\ 24) do
     since = DateTime.utc_now() |> DateTime.add(-hours * 3600, :second)
-    
-    query = 
+
+    query =
       from m in ApiLookupMetric,
         where: m.source == ^source and m.inserted_at >= ^since
-    
-    query = 
+
+    query =
       if operation do
         where(query, [m], m.operation == ^operation)
       else
         query
       end
-    
+
     metrics = Repo.all(query)
     calculate_success_rate(metrics)
   end
@@ -159,7 +162,7 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_all_stats(hours \\ 24) do
     since = DateTime.utc_now() |> DateTime.add(-hours * 3600, :second)
-    
+
     Repo.all(
       from m in ApiLookupMetric,
         where: m.inserted_at >= ^since,
@@ -184,12 +187,13 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_error_distribution(source, hours \\ 24) do
     since = DateTime.utc_now() |> DateTime.add(-hours * 3600, :second)
-    
+
     Repo.all(
       from m in ApiLookupMetric,
-        where: m.source == ^source and 
-               m.success == false and 
-               m.inserted_at >= ^since,
+        where:
+          m.source == ^source and
+            m.success == false and
+            m.inserted_at >= ^since,
         group_by: m.error_type,
         select: %{
           error_type: m.error_type,
@@ -203,12 +207,13 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_tmdb_fallback_stats(hours \\ 24) do
     since = DateTime.utc_now() |> DateTime.add(-hours * 3600, :second)
-    
+
     Repo.all(
       from m in ApiLookupMetric,
-        where: m.source == "tmdb" and 
-               not is_nil(m.fallback_level) and
-               m.inserted_at >= ^since,
+        where:
+          m.source == "tmdb" and
+            not is_nil(m.fallback_level) and
+            m.inserted_at >= ^since,
         group_by: m.fallback_level,
         select: %{
           level: m.fallback_level,
@@ -228,13 +233,14 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_tmdb_strategy_breakdown(hours \\ 24) do
     since = DateTime.utc_now() |> DateTime.add(-hours * 3600, :second)
-    
+
     # Get operations that contain fallback strategy info
     Repo.all(
       from m in ApiLookupMetric,
-        where: m.source == "tmdb" and 
-               like(m.operation, "fallback_%") and
-               m.inserted_at >= ^since,
+        where:
+          m.source == "tmdb" and
+            like(m.operation, "fallback_%") and
+            m.inserted_at >= ^since,
         group_by: m.operation,
         select: %{
           strategy: m.operation,
@@ -246,7 +252,7 @@ defmodule Cinegraph.Metrics.ApiTracker do
     )
     |> Enum.map(fn stat ->
       strategy_name = String.replace(stat.strategy, "fallback_", "")
-      
+
       stat
       |> Map.put(:strategy_name, strategy_name)
       |> Map.put(:success_rate, calculate_rate(stat.successful, stat.total))
@@ -270,11 +276,11 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def cleanup_old_metrics(days \\ 90) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 86400, :second)
-    
-    {deleted, _} = 
+
+    {deleted, _} =
       from(m in ApiLookupMetric, where: m.inserted_at < ^cutoff)
       |> Repo.delete_all()
-    
+
     Logger.info("Cleaned up #{deleted} old API metrics")
     deleted
   end
@@ -284,23 +290,27 @@ defmodule Cinegraph.Metrics.ApiTracker do
 
   @doc """
   Sets an import state value. Replaces ImportState.set/2 functionality.
-  
+
   ## Examples
-  
+
       ApiTracker.set_import_state("tmdb", "last_page_processed", 1500)
       ApiTracker.set_import_state("tmdb", "total_movies", 50000)
   """
   def set_import_state(source, key, value) when is_binary(source) and is_binary(key) do
-    track_lookup(source, "import_state", key, fn ->
-      {:ok, %{value: value}}
-    end, [
+    track_lookup(
+      source,
+      "import_state",
+      key,
+      fn ->
+        {:ok, %{value: value}}
+      end,
       metadata: %{
         operation_type: "state_update",
         key: key,
         value: to_string(value),
         timestamp: DateTime.utc_now()
       }
-    ])
+    )
   end
 
   @doc """
@@ -308,16 +318,17 @@ defmodule Cinegraph.Metrics.ApiTracker do
   Returns the most recent value for the given key.
   """
   def get_import_state(source, key) do
-    query = 
+    query =
       from m in ApiLookupMetric,
-        where: m.source == ^source and 
-               m.operation == "import_state" and
-               m.target_identifier == ^key and
-               m.success == true,
+        where:
+          m.source == ^source and
+            m.operation == "import_state" and
+            m.target_identifier == ^key and
+            m.success == true,
         order_by: [desc: m.inserted_at],
         limit: 1,
         select: m.metadata
-    
+
     case Repo.one(query) do
       nil -> nil
       %{"value" => value} -> value
@@ -337,14 +348,20 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_import_state_integer(source, key, default \\ 0) do
     case get_import_state(source, key) do
-      nil -> default
+      nil ->
+        default
+
       value when is_binary(value) ->
         case Integer.parse(value) do
           {int, _} -> int
           :error -> default
         end
-      value when is_integer(value) -> value
-      _ -> default
+
+      value when is_integer(value) ->
+        value
+
+      _ ->
+        default
     end
   end
 
@@ -353,14 +370,20 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_import_state_date(source, key) do
     case get_import_state(source, key) do
-      nil -> nil
+      nil ->
+        nil
+
       value when is_binary(value) ->
         case Date.from_iso8601(value) do
           {:ok, date} -> date
           {:error, _} -> nil
         end
-      %Date{} = date -> date
-      _ -> nil
+
+      %Date{} = date ->
+        date
+
+      _ ->
+        nil
     end
   end
 
@@ -369,23 +392,27 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_all_import_state(source) do
     # Get the most recent value for each key
-    query = 
+    query =
       from m in ApiLookupMetric,
-        where: m.source == ^source and 
-               m.operation == "import_state" and
-               m.success == true,
+        where:
+          m.source == ^source and
+            m.operation == "import_state" and
+            m.success == true,
         order_by: [desc: m.inserted_at],
         select: {m.target_identifier, m.metadata}
-    
+
     Repo.all(query)
     |> Enum.reduce(%{}, fn {key, metadata}, acc ->
       if Map.has_key?(acc, key) do
-        acc  # Keep the first (most recent) entry
+        # Keep the first (most recent) entry
+        acc
       else
-        value = case metadata do
-          %{"value" => value} -> value
-          _ -> nil
-        end
+        value =
+          case metadata do
+            %{"value" => value} -> value
+            _ -> nil
+          end
+
         Map.put(acc, key, value)
       end
     end)
@@ -396,7 +423,7 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def get_import_progress(source \\ "tmdb") do
     all_state = get_all_import_state(source)
-    
+
     %{
       total_movies: get_import_state_integer(source, "total_movies", 0),
       last_page_processed: get_import_state_integer(source, "last_page_processed", 0),
@@ -407,8 +434,9 @@ defmodule Cinegraph.Metrics.ApiTracker do
   end
 
   # Helper functions
-  
+
   defp calculate_success_rate([]), do: 0.0
+
   defp calculate_success_rate(metrics) do
     total = length(metrics)
     successful = Enum.count(metrics, & &1.success)
@@ -416,6 +444,7 @@ defmodule Cinegraph.Metrics.ApiTracker do
   end
 
   defp calculate_rate(_, 0), do: 0.0
+
   defp calculate_rate(successful, total) do
     Float.round(successful / total * 100, 1)
   end

@@ -30,20 +30,27 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     case Repo.get_by(Movies.Movie, imdb_id: imdb_id) do
       nil ->
         # Use fallback search to find movie by IMDb ID with progressive strategies
-        title = Map.get(args, "title")
-        year = Map.get(args, "year")
-        
+        # For festival imports, title and year are in metadata
+        title = get_in(args, ["metadata", "film_title"]) || Map.get(args, "title", "")
+        year = get_in(args, ["metadata", "film_year"]) || Map.get(args, "year")
+
         case FallbackSearch.find_movie(imdb_id, title, year) do
           {:ok, result} ->
             # Found a match using fallback search
             tmdb_id = result.movie["id"]
-            Logger.info("Found TMDb ID #{tmdb_id} for IMDb ID #{imdb_id} using #{result.strategy} (confidence: #{result.confidence})")
+
+            Logger.info(
+              "Found TMDb ID #{tmdb_id} for IMDb ID #{imdb_id} using #{result.strategy} (confidence: #{result.confidence})"
+            )
 
             # Process the movie creation directly
             process_tmdb_movie(tmdb_id, args, job)
 
           {:error, :not_found} ->
-            Logger.warning("No TMDb match for IMDb ID #{imdb_id} after exhausting all fallback strategies")
+            Logger.warning(
+              "No TMDb match for IMDb ID #{imdb_id} after exhausting all fallback strategies"
+            )
+
             handle_no_tmdb_match(imdb_id, args, job)
 
           {:error, reason} ->
@@ -367,11 +374,11 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
           end
 
         "festival_import" ->
-          # Handle festival import source - extract title and year from args
-          title = args["title"] || "Unknown"
-          year = args["year"]
+          # Handle festival import source - extract title and year from metadata first, then args
+          title = get_in(args, ["metadata", "film_title"]) || args["title"] || "Unknown"
+          year = get_in(args, ["metadata", "film_year"]) || args["year"]
           source_key = args["source_key"] || "festival_import"
-          metadata = Map.take(args, ["title", "year", "source_key"])
+          metadata = args["metadata"] || Map.take(args, ["title", "year", "source_key"])
           {title, year, source_key, metadata}
 
         source_type ->

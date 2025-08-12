@@ -44,7 +44,10 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
                 parse_festival_html(html, year, festival_config)
 
               {:error, reason} ->
-                Logger.error("Failed to fetch #{festival_config.name} #{year}: #{inspect(reason)}")
+                Logger.error(
+                  "Failed to fetch #{festival_config.name} #{year}: #{inspect(reason)}"
+                )
+
                 {:error, reason}
             end
           end)
