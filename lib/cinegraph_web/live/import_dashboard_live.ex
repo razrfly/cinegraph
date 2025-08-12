@@ -38,6 +38,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:oscar_decades, generate_oscar_decades())
       |> assign(:festival_list, generate_festival_list())
       |> assign(:festival_years, generate_festival_years())
+      |> assign(:selected_year_range, nil)
       # Keep for backward compatibility
       |> assign(:venice_years, generate_venice_years())
       |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
@@ -579,7 +580,11 @@ defmodule CinegraphWeb.ImportDashboardLive do
         generate_festival_years_for(festival)
       end
 
-    socket = assign(socket, :festival_years, festival_years)
+    socket =
+      socket
+      |> assign(:festival_years, festival_years)
+      |> assign(:selected_year_range, nil)
+
     {:noreply, socket}
   end
 
@@ -1312,7 +1317,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Special case for "All festivals" option
     if festival_key == "all" do
       current_year = Date.utc_today().year
-      
+
       # Return practical test options for "All festivals"
       [
         %{value: to_string(current_year), label: "#{current_year} (Current Year)"},
@@ -1326,31 +1331,31 @@ defmodule CinegraphWeb.ImportDashboardLive do
       festival_event = Events.get_active_by_source_key(festival_key)
 
       if festival_event do
-      current_year = Date.utc_today().year
+        current_year = Date.utc_today().year
 
-      # Use festival-specific min/max years
-      min_year = festival_event.min_available_year || festival_event.founded_year || 2020
-      max_year = min(festival_event.max_available_year || current_year, current_year)
+        # Use festival-specific min/max years
+        min_year = festival_event.min_available_year || festival_event.founded_year || 2020
+        max_year = min(festival_event.max_available_year || current_year, current_year)
 
-      # For future festivals that haven't occurred yet
-      if min_year > current_year do
-        [%{value: "", label: "Festival not yet available"}]
+        # For future festivals that haven't occurred yet
+        if min_year > current_year do
+          [%{value: "", label: "Festival not yet available"}]
+        else
+          # Generate years in reverse order (newest first)
+          festival_years = max_year..min_year//-1
+
+          years_list =
+            Enum.map(festival_years, fn year ->
+              %{
+                value: to_string(year),
+                label: to_string(year)
+              }
+            end)
+
+          # Add "All Years" option at the top with the actual range
+          [%{value: "all", label: "All Available Years (#{min_year}-#{max_year})"} | years_list]
+        end
       else
-        # Generate years in reverse order (newest first)
-        festival_years = max_year..min_year//-1
-
-        years_list =
-          Enum.map(festival_years, fn year ->
-            %{
-              value: to_string(year),
-              label: to_string(year)
-            }
-          end)
-
-        # Add "All Years" option at the top with the actual range
-        [%{value: "all", label: "All Available Years (#{min_year}-#{max_year})"} | years_list]
-      end
-    else
         # Fallback if festival not found
         [%{value: "", label: "Festival configuration not found"}]
       end

@@ -154,9 +154,9 @@ defmodule Cinegraph.ExternalSources do
         normalized_score: em.value,
         # Default weight since no source table
         weight: 1.0,
-        sample_size: fragment("?->>'sample_size'", em.metadata),
+        sample_size: fragment("(?->>'sample_size')::integer", em.metadata),
         raw_value: em.value,
-        scale_max: fragment("?->>'scale_max'", em.metadata)
+        scale_max: fragment("(?->>'scale_max')::numeric", em.metadata)
       }
     )
     |> Repo.all()

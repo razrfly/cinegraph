@@ -339,7 +339,9 @@ defmodule Cinegraph.People do
     query =
       if age_min do
         with {min_age, _} <- Integer.parse(age_min) do
-          max_birth_date = Date.add(current_date, -min_age * 365)
+          max_birth_date =
+            safe_date_new(current_date.year - min_age, current_date.month, current_date.day)
+
           where(query, [p], is_nil(p.birthday) or p.birthday <= ^max_birth_date)
         else
           _ -> query
@@ -350,13 +352,24 @@ defmodule Cinegraph.People do
 
     if age_max do
       with {max_age, _} <- Integer.parse(age_max) do
-        min_birth_date = Date.add(current_date, -(max_age + 1) * 365)
+        min_birth_date =
+          safe_date_new(current_date.year - max_age - 1, current_date.month, current_date.day)
+
         where(query, [p], not is_nil(p.birthday) and p.birthday >= ^min_birth_date)
       else
         _ -> query
       end
     else
       query
+    end
+  end
+
+  # Helper function to safely create dates, handling Feb 29 edge cases
+  defp safe_date_new(year, month, day) do
+    case Date.new(year, month, day) do
+      {:ok, date} -> date
+      # Handle Feb 29 -> Feb 28
+      {:error, _} -> Date.new!(year, month, day - 1)
     end
   end
 
