@@ -5,7 +5,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
   Progress is tracked by: TMDB Total Movies - Our Total Movies
   """
 
-  alias Cinegraph.Imports.ImportState
+  alias Cinegraph.Imports.ImportStateV2, as: ImportState
   alias Cinegraph.Workers.{TMDbDiscoveryWorker, TMDbDetailsWorker}
   alias Cinegraph.Services.TMDb
   alias Cinegraph.Movies
@@ -150,23 +150,11 @@ defmodule Cinegraph.Imports.TMDbImporter do
   end
 
   @doc """
-  Gets current import progress.
+  Gets current import progress with enhanced metrics tracking.
   """
   def get_progress do
-    tmdb_total = ImportState.tmdb_total_movies()
-    our_total = count_our_movies()
-    last_page = ImportState.last_page_processed()
-
-    %{
-      tmdb_total_movies: tmdb_total,
-      our_total_movies: our_total,
-      movies_remaining: max(0, tmdb_total - our_total),
-      completion_percentage:
-        if(tmdb_total > 0, do: Float.round(our_total / tmdb_total * 100, 2), else: 0.0),
-      last_page_processed: last_page,
-      last_full_sync: ImportState.last_full_sync(),
-      last_update_check: ImportState.last_update_check()
-    }
+    # Use the enhanced progress method that includes metrics
+    ImportState.get_progress_with_metrics()
   end
 
   @doc """
