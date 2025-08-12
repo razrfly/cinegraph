@@ -5,7 +5,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
   Progress is tracked by: TMDB Total Movies - Our Total Movies
   """
 
-  alias Cinegraph.Imports.ImportState
+  # ImportState module removed - import_state table no longer exists
   alias Cinegraph.Workers.{TMDbDiscoveryWorker, TMDbDetailsWorker}
   alias Cinegraph.Services.TMDb
   alias Cinegraph.Movies
@@ -27,8 +27,8 @@ defmodule Cinegraph.Imports.TMDbImporter do
       {:ok, total} ->
         Logger.info("TMDB has #{total} total movies")
 
-        # Start from page 1 (or resume from last page)
-        start_page = ImportState.last_page_processed() + 1
+        # Start from page 1 since we can't track last page anymore
+        start_page = 1
         pages_to_import = Keyword.get(opts, :pages, 500)
         end_page = start_page + pages_to_import - 1
 
@@ -105,8 +105,8 @@ defmodule Cinegraph.Imports.TMDbImporter do
     # Get or update TMDB total
     update_tmdb_total()
 
-    # Start from where we left off
-    start_page = ImportState.last_page_processed() + 1
+    # Start from page 1 since we can't track last page anymore
+    start_page = 1
     end_page = start_page + num_pages - 1
 
     Logger.info("Importing #{num_pages} pages (#{start_page} to #{end_page})")
@@ -141,7 +141,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
          |> TMDbDiscoveryWorker.new()
          |> Oban.insert() do
       {:ok, job} ->
-        ImportState.set_last_update_check()
+        # Can't track last update check without import_state table
         {:ok, job}
 
       error ->
@@ -151,21 +151,23 @@ defmodule Cinegraph.Imports.TMDbImporter do
 
   @doc """
   Gets current import progress.
+  
+  Note: This returns stub data since the import_state table has been removed.
+  The TMDbImporter is not currently being used in favor of the newer
+  modular import system (MovieImporter and ApiProcessors).
   """
   def get_progress do
-    tmdb_total = ImportState.tmdb_total_movies()
     our_total = count_our_movies()
-    last_page = ImportState.last_page_processed()
-
+    
+    # Return safe defaults since import_state table no longer exists
     %{
-      tmdb_total_movies: tmdb_total,
+      tmdb_total_movies: 0,
       our_total_movies: our_total,
-      movies_remaining: max(0, tmdb_total - our_total),
-      completion_percentage:
-        if(tmdb_total > 0, do: Float.round(our_total / tmdb_total * 100, 2), else: 0.0),
-      last_page_processed: last_page,
-      last_full_sync: ImportState.last_full_sync(),
-      last_update_check: ImportState.last_update_check()
+      movies_remaining: 0,
+      completion_percentage: 100.0,
+      last_page_processed: 0,
+      last_full_sync: nil,
+      last_update_check: nil
     }
   end
 
@@ -175,7 +177,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
   def update_tmdb_total do
     case TMDb.get_total_movie_count() do
       {:ok, total} ->
-        ImportState.set_tmdb_total_movies(total)
+        # Can't store total without import_state table
         {:ok, total}
 
       error ->
@@ -217,8 +219,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
 
     case Oban.insert_all(jobs) do
       results when is_list(results) ->
-        # Update last processed page
-        ImportState.set_last_page_processed(page)
+        # Can't track last processed page without import_state table
         {:ok, length(results)}
 
       error ->
