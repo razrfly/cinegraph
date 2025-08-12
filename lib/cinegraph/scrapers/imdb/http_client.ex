@@ -15,10 +15,12 @@ defmodule Cinegraph.Scrapers.Imdb.HttpClient do
   """
   def fetch_list_page(list_id, page \\ 1) do
     url = build_list_url(list_id, page)
-    
+
     case fetch_with_retries(url, @max_retries) do
-      {:ok, html} -> {:ok, html}
-      {:error, reason} -> 
+      {:ok, html} ->
+        {:ok, html}
+
+      {:error, reason} ->
         Logger.error("Failed to fetch #{url}: #{inspect(reason)}")
         {:error, reason}
     end
@@ -35,18 +37,18 @@ defmodule Cinegraph.Scrapers.Imdb.HttpClient do
   # Private functions
   defp fetch_with_retries(url, retries_left) when retries_left > 0 do
     case HTTPoison.get(url, headers(), timeout: @timeout, recv_timeout: @timeout) do
-      {:ok, %{status_code: 200, body: body}} -> 
+      {:ok, %{status_code: 200, body: body}} ->
         {:ok, body}
-      
+
       {:ok, %{status_code: status}} when status in [429, 503] ->
         # Rate limited or server error, wait and retry
         delay = @base_delay * (4 - retries_left)
         :timer.sleep(delay)
         fetch_with_retries(url, retries_left - 1)
-      
+
       {:ok, %{status_code: status}} ->
         {:error, "HTTP #{status}"}
-      
+
       {:error, reason} ->
         if retries_left > 1 do
           :timer.sleep(@base_delay)

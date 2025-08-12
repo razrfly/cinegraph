@@ -47,10 +47,10 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
 
   @doc """
   Normalizes weights to sum to 1.0.
-  
+
   ## Parameters
   - weights: Map of weights to normalize
-  
+
   ## Returns
   Normalized weights map where all values sum to 1.0
   """

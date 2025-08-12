@@ -14,17 +14,18 @@ defmodule Cinegraph.ExternalSources do
   def list_sources do
     import Ecto.Query
     alias Cinegraph.Movies.ExternalMetric
-    
+
     # Get unique sources from external_metrics
-    query = from em in ExternalMetric,
-      distinct: em.source,
-      select: %{
-        id: nil,
-        name: em.source,
-        source_type: "metric",
-        active: true
-      }
-    
+    query =
+      from em in ExternalMetric,
+        distinct: em.source,
+        select: %{
+          id: nil,
+          name: em.source,
+          source_type: "metric",
+          active: true
+        }
+
     Repo.all(query)
   end
 
@@ -34,24 +35,25 @@ defmodule Cinegraph.ExternalSources do
   """
   def get_or_create_source(name, attrs \\ %{}) do
     # Return a mock source for compatibility
-    {:ok, %{
-      id: nil,
-      name: name,
-      source_type: Map.get(attrs, :source_type, "metric"),
-      active: true
-    }}
+    {:ok,
+     %{
+       id: nil,
+       name: name,
+       source_type: Map.get(attrs, :source_type, "metric"),
+       active: true
+     }}
   end
 
   @doc """
   Upserts an external metric, replacing any existing metric with the same 
   movie_id, source, and metric_type combination.
-  
+
   This function overwrites the entire record (latest-value-only strategy).
   Use `Metrics.upsert_metric/1` if you need to preserve historical values 
   with different fetched_at timestamps.
-  
+
   ## Examples
-  
+
       iex> upsert_external_metric(%{
       ...>   movie_id: 1,
       ...>   source: "tmdb",
@@ -105,7 +107,7 @@ defmodule Cinegraph.ExternalSources do
   def get_movie_ratings(movie_id, source_names \\ nil) do
     import Ecto.Query
     alias Cinegraph.Movies.ExternalMetric
-    
+
     # Get rating-related metrics for this movie
     query =
       from em in ExternalMetric,
@@ -121,7 +123,7 @@ defmodule Cinegraph.ExternalSources do
       end
 
     metrics = Repo.all(query)
-    
+
     # Convert metrics to a format compatible with the old ratings structure
     Enum.map(metrics, fn metric ->
       %{
@@ -133,7 +135,8 @@ defmodule Cinegraph.ExternalSources do
         fetched_at: metric.fetched_at,
         source: %{
           name: metric.source,
-          id: nil # No longer have separate source table
+          # No longer have separate source table
+          id: nil
         }
       }
     end)
@@ -147,8 +150,10 @@ defmodule Cinegraph.ExternalSources do
       where: em.movie_id == ^movie_id and em.metric_type == ^rating_type,
       select: %{
         source: em.source,
-        normalized_score: em.value,  # Assume already normalized or handle in app layer
-        weight: 1.0,  # Default weight since no source table
+        # Assume already normalized or handle in app layer
+        normalized_score: em.value,
+        # Default weight since no source table
+        weight: 1.0,
         sample_size: fragment("?->>'sample_size'", em.metadata),
         raw_value: em.value,
         scale_max: fragment("?->>'scale_max'", em.metadata)
@@ -206,12 +211,13 @@ defmodule Cinegraph.ExternalSources do
   def store_tmdb_ratings(movie, tmdb_data) do
     # Use the ExternalMetric.from_tmdb function to create metrics
     metrics = ExternalMetric.from_tmdb(movie.id, tmdb_data)
-    
+
     # Insert each metric using the centralized function
-    results = Enum.map(metrics, fn metric_attrs ->
-      upsert_external_metric(metric_attrs)
-    end)
-    
+    results =
+      Enum.map(metrics, fn metric_attrs ->
+        upsert_external_metric(metric_attrs)
+      end)
+
     # Check if all succeeded
     case Enum.all?(results, fn {status, _} -> status == :ok end) do
       true -> :ok
@@ -248,7 +254,7 @@ defmodule Cinegraph.ExternalSources do
           })
       end
     end)
-    
+
     :ok
   end
 end

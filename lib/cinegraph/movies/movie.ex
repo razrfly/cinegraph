@@ -202,12 +202,13 @@ defmodule Cinegraph.Movies.Movie do
   """
   def vote_average(%__MODULE__{id: id}) do
     case Cinegraph.Repo.one(
-      from em in Cinegraph.Movies.ExternalMetric,
-      where: em.movie_id == ^id and em.source == "tmdb" and em.metric_type == "rating_average",
-      order_by: [desc: em.fetched_at],
-      limit: 1,
-      select: em.value
-    ) do
+           from em in Cinegraph.Movies.ExternalMetric,
+             where:
+               em.movie_id == ^id and em.source == "tmdb" and em.metric_type == "rating_average",
+             order_by: [desc: em.fetched_at],
+             limit: 1,
+             select: em.value
+         ) do
       nil -> nil
       value -> value
     end
@@ -219,12 +220,13 @@ defmodule Cinegraph.Movies.Movie do
   """
   def popularity(%__MODULE__{id: id}) do
     case Cinegraph.Repo.one(
-      from em in Cinegraph.Movies.ExternalMetric,
-      where: em.movie_id == ^id and em.source == "tmdb" and em.metric_type == "popularity_score",
-      order_by: [desc: em.fetched_at],
-      limit: 1,
-      select: em.value
-    ) do
+           from em in Cinegraph.Movies.ExternalMetric,
+             where:
+               em.movie_id == ^id and em.source == "tmdb" and em.metric_type == "popularity_score",
+             order_by: [desc: em.fetched_at],
+             limit: 1,
+             select: em.value
+         ) do
       nil -> nil
       value -> value
     end
