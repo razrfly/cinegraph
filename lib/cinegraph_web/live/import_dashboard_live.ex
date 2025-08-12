@@ -527,7 +527,12 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
             message =
               case year_range do
-                "all" -> "Queued #{festival_name} import for all years (2020-2024)"
+                "all" -> 
+                  {min_year, max_year} = case festival_event.metadata do
+                    %{"min_available_year" => min, "max_available_year" => max} -> {min, max}
+                    _ -> {2020, Date.utc_today().year}
+                  end
+                  "Queued #{festival_name} import for all years (#{min_year}-#{max_year})"
                 _ -> "Queued #{festival_name} import for #{year_range}"
               end
 
@@ -1252,13 +1257,14 @@ defmodule CinegraphWeb.ImportDashboardLive do
   defp generate_festival_years do
     # Get the available year range from active events
     active_events = Events.list_active_events()
+    current_year = Date.utc_today().year
     
     {min_year, max_year} = 
       case active_events do
-        [] -> {2020, 2024}  # fallback
+        [] -> {2020, current_year}  # dynamic fallback using current year
         events ->
           min_year = events |> Enum.map(& &1.min_available_year) |> Enum.min() |> max(2020)
-          max_year = events |> Enum.map(& &1.max_available_year) |> Enum.max() |> min(Date.utc_today().year)
+          max_year = events |> Enum.map(& &1.max_available_year) |> Enum.max() |> min(current_year)
           {min_year, max_year}
       end
 
