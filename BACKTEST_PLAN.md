@@ -4,14 +4,17 @@
 
 The goal is to use the "1001 Movies You Must See Before You Die" list as a target variable to backtest and develop a predictive model that can identify movies likely to appear in future editions of the book (published every 5 years).
 
+**Key Advantage**: We already have ALL 1,256 movies that have appeared across ALL editions of the book. This gives us the complete universe of movies the editors have considered worthy, which is invaluable for pattern recognition.
+
 ## Current Data Status
 
 ### ✅ What We Have
 
 #### 1. Core Movie Data
 - **Total Movies**: 5,521 in database
-- **1001 Movies Imported**: 1,256 movies (complete coverage of the list)
-- **Data Quality**: 100% of 1001 movies have basic TMDb data
+- **1001 Movies Collection**: 1,256 movies (ALL editions combined - every movie that has EVER appeared in any edition)
+- **Data Quality**: 100% of these movies have basic TMDb data
+- **Important**: This is the complete historical collection, not just one edition
 
 #### 2. External Metrics Coverage (for 1001 Movies)
 | Metric | Coverage | Avg Value | Source |
@@ -40,11 +43,12 @@ The goal is to use the "1001 Movies You Must See Before You Die" list as a targe
 
 ### ❌ Missing/Incomplete Data
 
-#### 1. Historical Editions of 1001 Movies
-- **Critical Gap**: Need previous editions (2003, 2008, 2013, 2018, 2023) to track:
-  - Movies added/removed between editions
-  - Temporal patterns in selection
-  - Edition-specific trends
+#### 1. Edition-Specific Tracking
+- **Critical Gap**: While we have ALL movies across all editions, we need to track WHICH movies appeared in WHICH editions:
+  - Need edition metadata (which movies were in 2003, 2008, 2013, 2018, 2023 editions)
+  - Track additions/removals between editions
+  - Identify temporal patterns in selection criteria
+  - This metadata is essential for training our prediction model
 
 #### 2. Box Office Data
 - Only 33% domestic revenue coverage
@@ -160,7 +164,8 @@ end
 ## Implementation Roadmap
 
 ### Phase 1: Data Completion (Week 1-2)
-- [ ] Import historical 1001 editions via IMDb lists
+- [ ] Create edition tracking system (tag which movies belong to which editions)
+- [ ] Research and map edition-specific membership for all 1,256 movies
 - [ ] Import other canonical lists (Criterion, BFI, NFR)
 - [ ] Fetch missing box office data from The Numbers API
 - [ ] Expand festival data to 10-year history
@@ -278,14 +283,17 @@ end
 ## Conclusion
 
 We have a solid foundation with:
-- Complete 1001 movies list imported
-- Good coverage of ratings and basic metrics
+- Complete collection of ALL 1,256 movies that have EVER appeared in any edition
+- Good coverage of ratings and basic metrics for these movies
 - Infrastructure for importing additional data
 
-**We are approximately 40% ready** for backtesting. The critical missing pieces are:
-1. Historical editions for temporal analysis
-2. Expanded festival and awards data
-3. Complete box office information
+**We are approximately 50% ready** for backtesting. The critical missing pieces are:
+1. Edition-specific metadata (which movies were in which editions) - this is ESSENTIAL for training
+2. Expanded festival and awards data coverage
+3. Complete box office information (only 33% coverage)
 4. Other canonical lists for cross-validation
 
-With 4-6 weeks of focused development, we can build a robust prediction system with 70-75% accuracy for identifying future 1001 Movies additions.
+The good news is we already have the hardest part - all the movies and their basic metrics. With 3-4 weeks of focused development (less than originally estimated), we can:
+- Map edition membership
+- Expand data coverage to 80%+
+- Build a robust prediction system with 70-75% accuracy for identifying future 1001 Movies additions
