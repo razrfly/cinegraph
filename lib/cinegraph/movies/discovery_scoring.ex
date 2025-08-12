@@ -14,7 +14,6 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
 
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.DiscoveryCommon
 
   @default_weights DiscoveryCommon.default_weights()
@@ -261,7 +260,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
     )
   end
 
-  defp filter_by_min_score(query, 0.0), do: query
+  defp filter_by_min_score(query, +0.0), do: query
 
   defp filter_by_min_score(query, min_score) do
     from([m, scores] in query,
