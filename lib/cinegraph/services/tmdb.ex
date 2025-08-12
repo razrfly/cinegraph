@@ -6,6 +6,7 @@ defmodule Cinegraph.Services.TMDb do
 
   alias Cinegraph.Services.TMDb.Client
   alias Cinegraph.Services.TMDb.Extended
+  alias Cinegraph.Metrics.ApiTracker
 
   @doc """
   Fetches detailed information about a specific movie by ID.
@@ -96,12 +97,14 @@ defmodule Cinegraph.Services.TMDb do
       {:ok, %{"results" => [%{"title" => "Inception", ...}], ...}}
   """
   def search_movies(query, opts \\ []) do
-    params =
-      opts
-      |> Keyword.take([:page, :year, :region])
-      |> Enum.into(%{query: query})
+    ApiTracker.track_lookup("tmdb", "search_movie", query, fn ->
+      params =
+        opts
+        |> Keyword.take([:page, :year, :region])
+        |> Enum.into(%{query: query})
 
-    Client.get("/search/movie", params)
+      Client.get("/search/movie", params)
+    end, opts)
   end
 
   @doc """
@@ -169,8 +172,10 @@ defmodule Cinegraph.Services.TMDb do
       {:ok, %{"movie_results" => [%{"id" => 550, "title" => "Fight Club", ...}], ...}}
   """
   def find_by_imdb_id(imdb_id) when is_binary(imdb_id) do
-    params = %{external_source: "imdb_id"}
-    Client.get("/find/#{imdb_id}", params)
+    ApiTracker.track_lookup("tmdb", "find_by_imdb", imdb_id, fn ->
+      params = %{external_source: "imdb_id"}
+      Client.get("/find/#{imdb_id}", params)
+    end)
   end
 
   @doc """

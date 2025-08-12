@@ -10,7 +10,7 @@ defmodule Cinegraph.Scrapers.OscarMovieMatcher do
 
   require Logger
   alias Cinegraph.{Repo, Movies}
-  alias Cinegraph.Services.TMDb
+  alias Cinegraph.Services.TMDb.FallbackSearch
   import Ecto.Query
 
   @doc """
@@ -122,112 +122,23 @@ defmodule Cinegraph.Scrapers.OscarMovieMatcher do
     |> Repo.one()
   end
 
-  # Search TMDb and create movie if found
+  # Search TMDb and create movie if found using fallback strategies
   defp search_and_create_from_tmdb(title, year) do
-    case TMDb.search_movies(title) do
-      {:ok, %{"results" => results}} when results != [] ->
-        # Find best match by year
-        best_match = find_best_tmdb_match(results, title, year)
+    case FallbackSearch.find_movie(nil, title, year) do
+      {:ok, result} ->
+        Logger.info("Found TMDb match for '#{title}' (#{year}) using #{result.strategy} (confidence: #{result.confidence})")
+        create_movie_from_tmdb(result.movie)
 
-        if best_match do
-          create_movie_from_tmdb(best_match)
-        else
-          nil
-        end
+      {:error, :not_found} ->
+        Logger.warning("No TMDb match found for '#{title}' (#{year}) after exhausting fallback strategies")
+        nil
 
-      _ ->
+      {:error, reason} ->
+        Logger.error("TMDb search error for '#{title}' (#{year}): #{inspect(reason)}")
         nil
     end
   end
 
-  # Find the best TMDb match based on title and year
-  defp find_best_tmdb_match(results, title, year) do
-    normalized_search_title = normalize_title(title)
-
-    # Score each result
-    scored_results =
-      results
-      |> Enum.map(fn result ->
-        score = calculate_match_score(result, normalized_search_title, year)
-        {score, result}
-      end)
-      |> Enum.sort_by(fn {score, _} -> score end, :desc)
-
-    # Take the best match if score is high enough
-    case scored_results do
-      [{score, result} | _] when score >= 0.7 ->
-        result
-
-      _ ->
-        nil
-    end
-  end
-
-  # Calculate how well a TMDb result matches our search
-  defp calculate_match_score(tmdb_result, normalized_search_title, year) do
-    title_score = calculate_title_similarity(tmdb_result["title"], normalized_search_title)
-
-    # Extract year from release date
-    year_score =
-      case tmdb_result["release_date"] do
-        nil ->
-          0
-
-        "" ->
-          0
-
-        date_string ->
-          case String.split(date_string, "-") do
-            [release_year | _] ->
-              year_diff = abs(String.to_integer(release_year) - year)
-
-              case year_diff do
-                # Exact year match
-                0 -> 1.0
-                # One year off
-                1 -> 0.8
-                # Two years off
-                2 -> 0.5
-                # More than 2 years off
-                _ -> 0.1
-              end
-
-            _ ->
-              0
-          end
-      end
-
-    # Weighted average (title similarity is more important)
-    title_score * 0.7 + year_score * 0.3
-  end
-
-  # Calculate title similarity (simple version)
-  defp calculate_title_similarity(tmdb_title, search_title) do
-    normalized_tmdb = normalize_title(tmdb_title)
-
-    cond do
-      normalized_tmdb == search_title -> 1.0
-      String.contains?(normalized_tmdb, search_title) -> 0.8
-      String.contains?(search_title, normalized_tmdb) -> 0.8
-      true -> calculate_fuzzy_similarity(normalized_tmdb, search_title)
-    end
-  end
-
-  # Simple fuzzy string similarity
-  defp calculate_fuzzy_similarity(str1, str2) do
-    # This is a simplified version - could use Jaro-Winkler or Levenshtein
-    words1 = String.split(str1)
-    words2 = String.split(str2)
-
-    common_words = MapSet.intersection(MapSet.new(words1), MapSet.new(words2))
-    total_words = MapSet.union(MapSet.new(words1), MapSet.new(words2))
-
-    if MapSet.size(total_words) > 0 do
-      MapSet.size(common_words) / MapSet.size(total_words)
-    else
-      0.0
-    end
-  end
 
   # Create a movie from TMDb data
   defp create_movie_from_tmdb(tmdb_data) do

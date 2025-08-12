@@ -12,6 +12,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   alias Cinegraph.Workers.{OMDbEnrichmentWorker, CollaborationWorker}
   alias Cinegraph.Imports.QualityFilter
   alias Cinegraph.Services.TMDb
+  alias Cinegraph.Services.TMDb.FallbackSearch
   require Logger
 
   @impl Oban.Worker
@@ -28,18 +29,21 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     # Check if movie already exists by IMDb ID
     case Repo.get_by(Movies.Movie, imdb_id: imdb_id) do
       nil ->
-        # Look up TMDb ID from IMDb ID
-        case TMDb.find_by_imdb_id(imdb_id) do
-          {:ok, %{"movie_results" => [movie_data | _]}} ->
-            # Found a match, process with TMDb ID but keep original args
-            tmdb_id = movie_data["id"]
-            Logger.info("Found TMDb ID #{tmdb_id} for IMDb ID #{imdb_id}")
+        # Use fallback search to find movie by IMDb ID with progressive strategies
+        title = Map.get(args, "title")
+        year = Map.get(args, "year")
+        
+        case FallbackSearch.find_movie(imdb_id, title, year) do
+          {:ok, result} ->
+            # Found a match using fallback search
+            tmdb_id = result.movie["id"]
+            Logger.info("Found TMDb ID #{tmdb_id} for IMDb ID #{imdb_id} using #{result.strategy} (confidence: #{result.confidence})")
 
-            # Process the movie creation directly instead of recursive call
+            # Process the movie creation directly
             process_tmdb_movie(tmdb_id, args, job)
 
-          {:ok, %{"movie_results" => []}} ->
-            Logger.warning("No TMDb match for IMDb ID #{imdb_id}")
+          {:error, :not_found} ->
+            Logger.warning("No TMDb match for IMDb ID #{imdb_id} after exhausting all fallback strategies")
             handle_no_tmdb_match(imdb_id, args, job)
 
           {:error, reason} ->
