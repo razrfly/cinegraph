@@ -113,7 +113,7 @@ defmodule CinegraphWeb.MovieLive.Index do
       runtime_min: params["runtime_min"],
       runtime_max: params["runtime_max"],
       rating_min: params["rating_min"],
-      show_unreleased: params["show_unreleased"] in ["true", "on", true]
+      show_unreleased: params["show_unreleased"] == "true"
     })
   end
 

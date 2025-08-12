@@ -416,7 +416,11 @@
       </a>
     </div>
 
-    <form phx-submit="import_festival" class="flex gap-4 items-end mb-4">
+    <form
+      phx-submit="import_festival"
+      phx-change="festival_selected"
+      class="flex gap-4 items-end mb-4"
+    >
       <div class="flex-1">
         <label class="block text-sm font-medium text-gray-700 mb-1">
           Select festival to import
@@ -424,7 +428,6 @@
         <select
           name="festival"
           required
-          phx-change="festival_selected"
           class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">Select festival...</option>
@@ -440,6 +443,7 @@
         <select
           name="year_range"
           required
+          value={@selected_year_range || ""}
           class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">Select year...</option>
