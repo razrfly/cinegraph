@@ -9,6 +9,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, MovieLists}
   alias Cinegraph.Events
+  alias Cinegraph.Metrics.ApiTracker
   require Logger
   alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker}
   alias Cinegraph.Cultural
@@ -44,6 +45,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:all_movie_lists, MovieLists.list_all_movie_lists())
       |> assign(:show_modal, false)
       |> assign(:editing_list, nil)
+      |> assign(:api_metrics, %{})
+      |> assign(:fallback_stats, %{})
+      |> assign(:strategy_breakdown, [])
       |> load_data()
       |> schedule_refresh()
 
@@ -811,6 +815,11 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Get runtime stats from ImportStats
     runtime_stats = Cinegraph.Imports.ImportStats.get_stats()
 
+    # Get API metrics
+    api_metrics = get_api_metrics()
+    fallback_stats = get_fallback_stats()
+    strategy_breakdown = get_strategy_breakdown()
+
     socket
     |> assign(:progress, progress)
     |> assign(:stats, stats)
@@ -821,6 +830,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:import_rate, runtime_stats.movies_per_minute)
     |> assign(:all_movie_lists, get_movie_list_with_real_counts())
     |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+    |> assign(:api_metrics, api_metrics)
+    |> assign(:fallback_stats, fallback_stats)
+    |> assign(:strategy_breakdown, strategy_breakdown)
   end
 
   defp get_canonical_movies_count do
@@ -1101,6 +1113,57 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   def estimate_completion_time(_, _), do: "Unknown"
+
+  defp get_api_metrics do
+    # Get metrics for last 24 hours
+    ApiTracker.get_all_stats(24)
+    |> Enum.group_by(& &1.source)
+    |> Enum.map(fn {source, operations} ->
+      total_calls = Enum.sum(Enum.map(operations, & &1.total))
+      total_successful = Enum.sum(Enum.map(operations, & (&1.successful || 0)))
+      avg_response_time = 
+        if total_calls > 0 do
+          total_response_time = Enum.sum(Enum.map(operations, fn op -> 
+            avg_time = case op.avg_response_time do
+              %Decimal{} = decimal -> Decimal.to_float(decimal)
+              nil -> 0
+              value -> value
+            end
+            avg_time * op.total 
+          end))
+          Float.round(total_response_time / total_calls, 0)
+        else
+          0
+        end
+      
+      success_rate = if total_calls > 0, do: Float.round(total_successful / total_calls * 100, 1), else: 0.0
+      
+      {source, %{
+        total_calls: total_calls,
+        success_rate: success_rate,
+        avg_response_time: avg_response_time,
+        operations: operations
+      }}
+    end)
+    |> Enum.into(%{})
+  end
+
+  defp get_fallback_stats do
+    ApiTracker.get_tmdb_fallback_stats(24)
+    |> Enum.map(fn stat ->
+      {stat.level, %{
+        total: stat.total,
+        successful: stat.successful || 0,
+        success_rate: stat.success_rate || 0.0,
+        avg_confidence: Float.round(stat.avg_confidence || 0, 2)
+      }}
+    end)
+    |> Enum.into(%{})
+  end
+
+  defp get_strategy_breakdown do
+    ApiTracker.get_tmdb_strategy_breakdown(24)
+  end
 
   @doc """
   Formats queue names for display.

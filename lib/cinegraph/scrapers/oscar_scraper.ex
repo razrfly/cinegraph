@@ -9,6 +9,7 @@ defmodule Cinegraph.Scrapers.OscarScraper do
   """
 
   require Logger
+  alias Cinegraph.Metrics.ApiTracker
 
   @zyte_api_url "https://api.zyte.com/v1/extract"
   @timeout 60_000
@@ -50,7 +51,9 @@ defmodule Cinegraph.Scrapers.OscarScraper do
   """
   def fetch_ceremony(year) do
     url = "https://www.oscars.org/oscars/ceremonies/#{year}"
-    fetch_with_zyte(url, year)
+    ApiTracker.track_lookup("oscar_scraper", "fetch_ceremony", "#{year}", fn ->
+      fetch_with_zyte(url, year)
+    end)
   end
 
   @doc """

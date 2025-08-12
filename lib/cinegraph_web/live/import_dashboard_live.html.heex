@@ -604,6 +604,295 @@
       </table>
     </div>
   </div>
+
+<!-- API Health Section -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">API Health & Performance</h2>
+    
+    <div class="mb-6">
+      <h3 class="text-lg font-medium mb-3">Service Status (Last 24 Hours)</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <%= for {source, metrics} <- @api_metrics do %>
+          <div class="border rounded-lg p-4">
+            <div class="flex justify-between items-start mb-2">
+              <h4 class="font-medium text-gray-900 uppercase"><%= source %></h4>
+              <%= if metrics.success_rate >= 90 do %>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Healthy
+                </span>
+              <% else %>
+                <%= if metrics.success_rate >= 70 do %>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    Warning
+                  </span>
+                <% else %>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                    Critical
+                  </span>
+                <% end %>
+              <% end %>
+            </div>
+            
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-600">Success Rate:</span>
+                <span class={[
+                  "font-medium",
+                  cond do
+                    metrics.success_rate >= 90 -> "text-green-600"
+                    metrics.success_rate >= 70 -> "text-yellow-600"
+                    true -> "text-red-600"
+                  end
+                ]}>
+                  <%= metrics.success_rate %>%
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">Total Calls:</span>
+                <span class="font-medium"><%= format_number(metrics.total_calls) %></span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-600">Avg Response:</span>
+                <span class="font-medium"><%= metrics.avg_response_time %>ms</span>
+              </div>
+            </div>
+            
+            <!-- Success rate bar -->
+            <div class="mt-3">
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  class={[
+                    "h-2 rounded-full",
+                    cond do
+                      metrics.success_rate >= 90 -> "bg-green-500"
+                      metrics.success_rate >= 70 -> "bg-yellow-500"
+                      true -> "bg-red-500"
+                    end
+                  ]}
+                  style={"width: #{metrics.success_rate}%"}
+                >
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    
+    <%= if map_size(@fallback_stats) > 0 do %>
+      <div class="mt-6 pt-6 border-t">
+        <h3 class="text-lg font-medium mb-3">TMDb Fallback Strategy Performance</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Strategy Level
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Total Attempts
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Successful
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Success Rate
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Avg Confidence
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for {level, stats} <- Enum.sort(@fallback_stats) do %>
+                <tr>
+                  <td class="px-4 py-2 text-sm">
+                    Level <%= level %>
+                    <%= case level do %>
+                      <% 1 -> %> (Direct IMDb)
+                      <% 2 -> %> (Exact Title+Year)
+                      <% 3 -> %> (Normalized Title)
+                      <% 4 -> %> (Year Tolerant)
+                      <% 5 -> %> (Fuzzy Match)
+                      <% 6 -> %> (Broad Search)
+                      <% _ -> %>
+                    <% end %>
+                  </td>
+                  <td class="px-4 py-2 text-sm"><%= stats.total %></td>
+                  <td class="px-4 py-2 text-sm"><%= stats.successful %></td>
+                  <td class="px-4 py-2 text-sm">
+                    <span class={"font-medium #{if stats.success_rate >= 80, do: "text-green-600", else: if(stats.success_rate >= 60, do: "text-yellow-600", else: "text-red-600")}"}>
+                      <%= stats.success_rate %>%
+                    </span>
+                  </td>
+                  <td class="px-4 py-2 text-sm"><%= stats.avg_confidence %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% end %>
+
+    <%= if length(@strategy_breakdown) > 0 do %>
+      <div class="mt-6 pt-6 border-t">
+        <h3 class="text-lg font-medium mb-3">TMDb Search Strategy Breakdown (Last 24 Hours)</h3>
+        <p class="text-sm text-gray-600 mb-4">Shows how often each fallback search strategy is used and their effectiveness</p>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Search Strategy
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Usage Count
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Success Rate
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Avg Confidence
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Avg Response Time
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <%= for strategy <- @strategy_breakdown do %>
+                <tr class={if strategy.strategy_name == "direct_imdb", do: "bg-blue-50", else: ""}>
+                  <td class="px-4 py-2 text-sm">
+                    <div class="flex items-center space-x-2">
+                      <span class={[
+                        "px-2 py-1 rounded-full text-xs font-medium",
+                        case strategy.strategy_name do
+                          "direct_imdb" -> "bg-blue-100 text-blue-800"
+                          "exact_title_year" -> "bg-green-100 text-green-800"
+                          "normalized_title" -> "bg-yellow-100 text-yellow-800"
+                          "year_tolerant" -> "bg-orange-100 text-orange-800"
+                          "fuzzy_title" -> "bg-red-100 text-red-800"
+                          "broad_search" -> "bg-gray-100 text-gray-800"
+                          _ -> "bg-gray-100 text-gray-800"
+                        end
+                      ]}>
+                        <%= String.replace(strategy.strategy_name, "_", " ") |> String.capitalize() %>
+                      </span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-2 text-sm font-medium">
+                    <%= strategy.total %>
+                    <%= if strategy.strategy_name == "direct_imdb" do %>
+                      <span class="text-xs text-gray-500 ml-1">(Primary)</span>
+                    <% end %>
+                  </td>
+                  <td class="px-4 py-2 text-sm">
+                    <span class={[
+                      "font-medium",
+                      cond do
+                        strategy.success_rate >= 90 -> "text-green-600"
+                        strategy.success_rate >= 70 -> "text-yellow-600"
+                        true -> "text-red-600"
+                      end
+                    ]}>
+                      <%= strategy.success_rate %>%
+                    </span>
+                  </td>
+                  <td class="px-4 py-2 text-sm">
+                    <%= if strategy.avg_confidence do %>
+                      <span class={[
+                        "font-medium",
+                        cond do
+                          strategy.avg_confidence >= 0.9 -> "text-green-600"
+                          strategy.avg_confidence >= 0.7 -> "text-yellow-600"
+                          true -> "text-red-600"
+                        end
+                      ]}>
+                        <%= Float.round(strategy.avg_confidence, 2) %>
+                      </span>
+                    <% else %>
+                      <span class="text-gray-400">—</span>
+                    <% end %>
+                  </td>
+                  <td class="px-4 py-2 text-sm">
+                    <%= if strategy.avg_response_time do %>
+                      <span class={[
+                        "font-medium",
+                        cond do
+                          strategy.avg_response_time <= 200 -> "text-green-600"
+                          strategy.avg_response_time <= 500 -> "text-yellow-600"
+                          true -> "text-red-600"
+                        end
+                      ]}>
+                        <%= round(strategy.avg_response_time) %>ms
+                      </span>
+                    <% else %>
+                      <span class="text-gray-400">—</span>
+                    <% end %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="mt-4 text-sm text-gray-600">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 class="font-medium text-gray-700 mb-2">Strategy Explanation</h4>
+              <ul class="space-y-1 text-xs">
+                <li><span class="font-medium">Direct IMDb:</span> Exact IMDb ID lookup (highest confidence)</li>
+                <li><span class="font-medium">Exact Title+Year:</span> Precise title and year match</li>
+                <li><span class="font-medium">Normalized Title:</span> Title cleanup and normalization</li>
+                <li><span class="font-medium">Year Tolerant:</span> Allow ±1 year difference</li>
+                <li><span class="font-medium">Fuzzy Title:</span> String similarity matching</li>
+                <li><span class="font-medium">Broad Search:</span> Keyword-based fallback</li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="font-medium text-gray-700 mb-2">Key Insights</h4>
+              <%= if length(@strategy_breakdown) > 0 do %>
+                <% total_searches = Enum.sum(Enum.map(@strategy_breakdown, & &1.total)) %>
+                <% direct_searches = Enum.find(@strategy_breakdown, fn s -> s.strategy_name == "direct_imdb" end) %>
+                <% fuzzy_searches = Enum.find(@strategy_breakdown, fn s -> s.strategy_name == "fuzzy_title" end) %>
+                <ul class="space-y-1 text-xs">
+                  <li><strong>Total searches:</strong> <%= total_searches %></li>
+                  <%= if direct_searches do %>
+                    <li><strong>Direct IMDb usage:</strong> <%= Float.round(direct_searches.total / total_searches * 100, 1) %>%</li>
+                  <% end %>
+                  <%= if fuzzy_searches do %>
+                    <li><strong>Fuzzy search usage:</strong> <%= Float.round(fuzzy_searches.total / total_searches * 100, 1) %>%</li>
+                  <% end %>
+                </ul>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    
+    <div class="mt-6 pt-6 border-t">
+      <h3 class="text-lg font-medium mb-3">Error Distribution</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <%= for {source, _metrics} <- @api_metrics do %>
+          <% error_dist = ApiTracker.get_error_distribution(source, 24) %>
+          <%= if length(error_dist) > 0 do %>
+            <div class="border rounded p-3">
+              <h4 class="font-medium text-sm text-gray-700 mb-2 uppercase"><%= source %> Errors</h4>
+              <div class="space-y-1">
+                <%= for %{error_type: type, count: count} <- Enum.take(error_dist, 3) do %>
+                  <div class="flex justify-between text-xs">
+                    <span class="text-gray-600"><%= type %>:</span>
+                    <span class="font-medium"><%= count %></span>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal for Add/Edit Movie List -->

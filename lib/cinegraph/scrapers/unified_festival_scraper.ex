@@ -8,6 +8,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
 
   alias Cinegraph.Events
   alias Cinegraph.Events.FestivalEvent
+  alias Cinegraph.Metrics.ApiTracker
 
   @timeout 30_000
 
@@ -36,14 +37,17 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
         if url do
           Logger.info("Fetching #{festival_config.name} data for #{year} from: #{url}")
 
-          case fetch_html_direct(url) do
-            {:ok, html} ->
-              parse_festival_html(html, year, festival_config)
+          # Track the festival scraping operation
+          ApiTracker.track_lookup("festival_scraper", "fetch_#{festival_key}", "#{year}", fn ->
+            case fetch_html_direct(url) do
+              {:ok, html} ->
+                parse_festival_html(html, year, festival_config)
 
-            {:error, reason} ->
-              Logger.error("Failed to fetch #{festival_config.name} #{year}: #{inspect(reason)}")
-              {:error, reason}
-          end
+              {:error, reason} ->
+                Logger.error("Failed to fetch #{festival_config.name} #{year}: #{inspect(reason)}")
+                {:error, reason}
+            end
+          end)
         else
           {:error, "No URL template or event ID configured for #{festival_key}"}
         end
