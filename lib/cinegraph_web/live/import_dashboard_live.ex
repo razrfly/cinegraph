@@ -822,6 +822,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
     strategy_breakdown = get_strategy_breakdown()
     import_metrics = get_import_metrics()
 
+
     socket
     |> assign(:progress, progress)
     |> assign(:stats, stats)
@@ -1123,30 +1124,39 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> Enum.group_by(& &1.source)
     |> Enum.map(fn {source, operations} ->
       total_calls = Enum.sum(Enum.map(operations, & &1.total))
-      total_successful = Enum.sum(Enum.map(operations, & (&1.successful || 0)))
-      avg_response_time = 
+      total_successful = Enum.sum(Enum.map(operations, &(&1.successful || 0)))
+
+      avg_response_time =
         if total_calls > 0 do
-          total_response_time = Enum.sum(Enum.map(operations, fn op -> 
-            avg_time = case op.avg_response_time do
-              %Decimal{} = decimal -> Decimal.to_float(decimal)
-              nil -> 0
-              value -> value
-            end
-            avg_time * op.total 
-          end))
+          total_response_time =
+            Enum.sum(
+              Enum.map(operations, fn op ->
+                avg_time =
+                  case op.avg_response_time do
+                    %Decimal{} = decimal -> Decimal.to_float(decimal)
+                    nil -> 0
+                    value -> value
+                  end
+
+                avg_time * op.total
+              end)
+            )
+
           Float.round(total_response_time / total_calls, 0)
         else
           0
         end
-      
-      success_rate = if total_calls > 0, do: Float.round(total_successful / total_calls * 100, 1), else: 0.0
-      
-      {source, %{
-        total_calls: total_calls,
-        success_rate: success_rate,
-        avg_response_time: avg_response_time,
-        operations: operations
-      }}
+
+      success_rate =
+        if total_calls > 0, do: Float.round(total_successful / total_calls * 100, 1), else: 0.0
+
+      {source,
+       %{
+         total_calls: total_calls,
+         success_rate: success_rate,
+         avg_response_time: avg_response_time,
+         operations: operations
+       }}
     end)
     |> Enum.into(%{})
   end
@@ -1154,12 +1164,13 @@ defmodule CinegraphWeb.ImportDashboardLive do
   defp get_fallback_stats do
     ApiTracker.get_tmdb_fallback_stats(24)
     |> Enum.map(fn stat ->
-      {stat.level, %{
-        total: stat.total,
-        successful: stat.successful || 0,
-        success_rate: stat.success_rate || 0.0,
-        avg_confidence: Float.round(stat.avg_confidence || 0, 2)
-      }}
+      {stat.level,
+       %{
+         total: stat.total,
+         successful: stat.successful || 0,
+         success_rate: stat.success_rate || 0.0,
+         avg_confidence: Float.round(stat.avg_confidence || 0, 2)
+       }}
     end)
     |> Enum.into(%{})
   end
@@ -1171,7 +1182,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   defp get_import_metrics do
     # Get recent import state operations to show activity
     since = DateTime.utc_now() |> DateTime.add(-24 * 3600, :second)
-    
+
     Repo.all(
       from m in Cinegraph.Metrics.ApiLookupMetric,
         where: m.operation == "import_state" and m.inserted_at >= ^since,
@@ -1185,6 +1196,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
         }
     )
   end
+
 
   @doc """
   Formats queue names for display.
@@ -1289,6 +1301,49 @@ defmodule CinegraphWeb.ImportDashboardLive do
               :count
             )
 
+          # Calculate People Nominations (nominations in categories that track people)
+          people_nominations =
+            Repo.one(
+              from nom in Cinegraph.Festivals.FestivalNomination,
+                join: fc in Cinegraph.Festivals.FestivalCategory,
+                on: nom.category_id == fc.id,
+                join: cer in Cinegraph.Festivals.FestivalCeremony,
+                on: nom.ceremony_id == cer.id,
+                where: fc.tracks_person == true and cer.organization_id == ^org.id,
+                select: count(nom.id)
+            ) || 0
+
+          # People Nominations with person_id linked
+          people_nominations_linked =
+            Repo.one(
+              from nom in Cinegraph.Festivals.FestivalNomination,
+                join: fc in Cinegraph.Festivals.FestivalCategory,
+                on: nom.category_id == fc.id,
+                join: cer in Cinegraph.Festivals.FestivalCeremony,
+                on: nom.ceremony_id == cer.id,
+                where:
+                  fc.tracks_person == true and cer.organization_id == ^org.id and
+                    not is_nil(nom.person_id),
+                select: count(nom.id)
+            ) || 0
+
+          # Format People Nominations display
+          people_nominations_display =
+            if people_nominations == 0 do
+              "0"
+            else
+              if people_nominations_linked == people_nominations do
+                "#{format_number(people_nominations)} ✅"
+              else
+                linking_rate =
+                  if people_nominations > 0,
+                    do: Float.round(people_nominations_linked / people_nominations * 100, 1),
+                    else: 0.0
+
+                "#{format_number(people_nominations_linked)}/#{format_number(people_nominations)} (#{linking_rate}%)"
+              end
+            end
+
           # Get festival display name
           festival_name =
             case org.abbreviation do
@@ -1303,7 +1358,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
             %{label: "#{festival_name} Ceremonies", value: "#{total_ceremonies}"},
             %{label: "#{festival_name} Nominations", value: format_number(total_nominations)},
             %{label: "#{festival_name} Wins", value: format_number(total_wins)},
-            %{label: "#{festival_name} Categories", value: format_number(total_categories)}
+            %{label: "#{festival_name} Categories", value: format_number(total_categories)},
+            %{label: "#{festival_name} People Nominations", value: people_nominations_display}
           ]
 
           # Add year-by-year breakdown if we have data

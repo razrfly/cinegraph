@@ -97,14 +97,20 @@ defmodule Cinegraph.Services.TMDb do
       {:ok, %{"results" => [%{"title" => "Inception", ...}], ...}}
   """
   def search_movies(query, opts \\ []) do
-    ApiTracker.track_lookup("tmdb", "search_movie", query, fn ->
-      params =
-        opts
-        |> Keyword.take([:page, :year, :region])
-        |> Enum.into(%{query: query})
+    ApiTracker.track_lookup(
+      "tmdb",
+      "search_movie",
+      query,
+      fn ->
+        params =
+          opts
+          |> Keyword.take([:page, :year, :region])
+          |> Enum.into(%{query: query})
 
-      Client.get("/search/movie", params)
-    end, opts)
+        Client.get("/search/movie", params)
+      end,
+      opts
+    )
   end
 
   @doc """

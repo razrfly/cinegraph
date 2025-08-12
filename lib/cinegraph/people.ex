@@ -287,6 +287,7 @@ defmodule Cinegraph.People do
     end
   end
 
+
   # Filter helper functions
   defp filter_by_search(query, nil), do: query
   defp filter_by_search(query, ""), do: query
@@ -367,7 +368,9 @@ defmodule Cinegraph.People do
   # Helper function to safely create dates, clamping invalid days to the month's last day
   defp safe_date_new(year, month, day) do
     case Date.new(year, month, day) do
-      {:ok, date} -> date
+      {:ok, date} ->
+        date
+
       {:error, _} ->
         last_day = Date.days_in_month(Date.new!(year, month, 1))
         Date.new!(year, month, min(day, last_day))
@@ -464,6 +467,7 @@ defmodule Cinegraph.People do
         |> group_by([p], p.id)
         |> order_by([p, c], [{^direction, count(fragment("DISTINCT ?", c.movie_id))}])
         |> select([p, c], p)
+
 
       _ ->
         order_by(query, desc: :popularity)

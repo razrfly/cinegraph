@@ -3,7 +3,7 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   New import state tracking using the unified api_lookup_metrics system.
   Provides the same API as ImportState but with better observability and performance tracking.
   """
-  
+
   alias Cinegraph.Metrics.ApiTracker
 
   @default_source "tmdb"
@@ -37,7 +37,8 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   """
   def set(key, value) when is_binary(key) do
     ApiTracker.set_import_state(@default_source, key, value)
-    {:ok, %{key: key, value: value}}  # Return format compatible with old system
+    # Return format compatible with old system
+    {:ok, %{key: key, value: value}}
   end
 
   @doc """
@@ -65,7 +66,7 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   @doc """
   Get/set the last page processed during import.
   """
-  def last_page_processed, do: get_integer("last_page_processed", 0) 
+  def last_page_processed, do: get_integer("last_page_processed", 0)
   def set_last_page_processed(page), do: set("last_page_processed", page)
 
   @doc """
@@ -95,12 +96,12 @@ defmodule Cinegraph.Imports.ImportStateV2 do
     last_page = get_integer("last_page_processed", 0)
     last_sync = get_date("last_full_sync")
     last_check = get_date("last_update_check")
-    
+
     %{
       tmdb_total_movies: tmdb_total,
       our_total_movies: our_total,
       movies_remaining: max(0, tmdb_total - our_total),
-      completion_percentage: 
+      completion_percentage:
         if(tmdb_total > 0, do: Float.round(our_total / tmdb_total * 100, 2), else: 0.0),
       last_page_processed: last_page,
       last_full_sync: last_sync,
@@ -112,7 +113,7 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   defp count_our_movies do
     import Ecto.Query
     alias Cinegraph.{Repo, Movies.Movie}
-    
+
     Repo.one(from m in Movie, select: count(m.id))
   end
 end
