@@ -95,6 +95,7 @@
         <select
           id="sort"
           name="sort"
+          value={@sort}
           phx-change="change_sort"
           class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
         >
@@ -276,6 +277,25 @@
                 step="0.1"
                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
               />
+            </div>
+            
+            <!-- Show Unreleased Films -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Include Unreleased
+              </label>
+              <div class="mt-2">
+                <label class="inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    name="filters[show_unreleased]"
+                    value="true"
+                    checked={@filters.show_unreleased == "true"}
+                    class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  />
+                  <span class="ml-2 text-sm text-gray-600">Show unreleased films</span>
+                </label>
+              </div>
             </div>
           </div>
           
