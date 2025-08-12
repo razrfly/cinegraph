@@ -126,11 +126,17 @@ defmodule Cinegraph.Scrapers.OscarMovieMatcher do
   defp search_and_create_from_tmdb(title, year) do
     case FallbackSearch.find_movie(nil, title, year) do
       {:ok, result} ->
-        Logger.info("Found TMDb match for '#{title}' (#{year}) using #{result.strategy} (confidence: #{result.confidence})")
+        Logger.info(
+          "Found TMDb match for '#{title}' (#{year}) using #{result.strategy} (confidence: #{result.confidence})"
+        )
+
         create_movie_from_tmdb(result.movie)
 
       {:error, :not_found} ->
-        Logger.warning("No TMDb match found for '#{title}' (#{year}) after exhausting fallback strategies")
+        Logger.warning(
+          "No TMDb match found for '#{title}' (#{year}) after exhausting fallback strategies"
+        )
+
         nil
 
       {:error, reason} ->
@@ -138,7 +144,6 @@ defmodule Cinegraph.Scrapers.OscarMovieMatcher do
         nil
     end
   end
-
 
   # Create a movie from TMDb data
   defp create_movie_from_tmdb(tmdb_data) do

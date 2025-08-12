@@ -51,6 +51,7 @@ defmodule Cinegraph.Scrapers.OscarScraper do
   """
   def fetch_ceremony(year) do
     url = "https://www.oscars.org/oscars/ceremonies/#{year}"
+
     ApiTracker.track_lookup("oscar_scraper", "fetch_ceremony", "#{year}", fn ->
       fetch_with_zyte(url, year)
     end)

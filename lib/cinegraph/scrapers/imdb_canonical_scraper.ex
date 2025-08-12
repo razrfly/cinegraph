@@ -549,18 +549,37 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
   defp fetch_html(url) do
     Logger.info("Fetching HTML from: #{url}")
-    
+
     # Extract list ID from URL for tracking
-    list_id = case Regex.run(~r/list\/(ls\d+)/, url) do
-      [_, id] -> id
-      _ -> "unknown"
-    end
+    list_id =
+      case URI.parse(url) do
+        %URI{path: path} when is_binary(path) ->
+          case Regex.run(~r/list\/(ls\d+)/, path) do
+            [_, id] when is_binary(id) ->
+              if Regex.match?(~r/^ls\d+$/, id) do
+                id
+              else
+                Logger.warning("Invalid list ID format: #{id}")
+                :crypto.hash(:md5, url) |> Base.encode16(case: :lower) |> String.slice(0..7)
+              end
+
+            _ ->
+              Logger.warning("Could not extract list ID from URL: #{url}")
+              # Use URL hash as fallback identifier
+              :crypto.hash(:md5, url) |> Base.encode16(case: :lower) |> String.slice(0..7)
+          end
+
+        _ ->
+          Logger.warning("Invalid URL format: #{url}")
+          "unknown"
+      end
 
     # Use Zyte API like the Oscar scraper
     api_key = Application.get_env(:cinegraph, :zyte_api_key) || System.get_env("ZYTE_API_KEY")
 
     if is_nil(api_key) || api_key == "" do
       Logger.error("No ZYTE_API_KEY configured, falling back to direct HTTP")
+
       ApiTracker.track_lookup("imdb_scraper", "fetch_list_direct", list_id, fn ->
         fetch_html_direct(url)
       end)
