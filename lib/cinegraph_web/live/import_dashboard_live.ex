@@ -822,7 +822,6 @@ defmodule CinegraphWeb.ImportDashboardLive do
     strategy_breakdown = get_strategy_breakdown()
     import_metrics = get_import_metrics()
 
-
     socket
     |> assign(:progress, progress)
     |> assign(:stats, stats)
@@ -1203,7 +1202,6 @@ defmodule CinegraphWeb.ImportDashboardLive do
         }
     )
   end
-
 
   @doc """
   Formats queue names for display.

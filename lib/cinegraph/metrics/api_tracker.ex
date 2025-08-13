@@ -35,6 +35,7 @@ defmodule Cinegraph.Metrics.ApiTracker do
         :exit, reason ->
           Logger.error("Caught exit: #{inspect(reason)}")
           {:error, {:exit, reason}}
+
         kind, reason ->
           Logger.error("Caught #{inspect(kind)}: #{inspect(reason)}")
           {:error, {kind, reason}}
@@ -280,25 +281,27 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def cleanup_old_metrics(days \\ 90) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 86400, :second)
-    
-    # First, get the IDs of the latest import_state record per key
-    # These should be preserved regardless of age
-    latest_import_state_ids =
-      from(m in ApiLookupMetric,
-        where: m.operation == "import_state",
-        group_by: [m.source, m.target_identifier],
-        select: max(m.id)
+
+    # Build a subquery for the latest import_state record per key
+    latest_subq =
+      from(mi in ApiLookupMetric,
+        where: mi.operation == "import_state" and mi.success == true,
+        group_by: [mi.source, mi.target_identifier],
+        select: %{max_id: max(mi.id)}
       )
-      |> Repo.all()
-    
+
     # Delete old metrics but preserve the latest import_state per key
-    query = if Enum.empty?(latest_import_state_ids) do
-      from(m in ApiLookupMetric, where: m.inserted_at < ^cutoff)
-    else
-      from(m in ApiLookupMetric, 
-        where: m.inserted_at < ^cutoff and m.id not in ^latest_import_state_ids
+    query =
+      from(m in ApiLookupMetric,
+        as: :metric,
+        where: m.inserted_at < ^cutoff,
+        where:
+          not exists(
+            from(ls in subquery(latest_subq),
+              where: ls.max_id == parent_as(:metric).id
+            )
+          )
       )
-    end
 
     {deleted, _} = Repo.delete_all(query)
 
@@ -320,24 +323,27 @@ defmodule Cinegraph.Metrics.ApiTracker do
   def set_import_state(source, key, value) when is_binary(source) and is_binary(key) do
     # Use synchronous write for import state to ensure read-after-write consistency
     result = {:ok, %{value: value}}
-    
-    attrs = build_metric_attrs(
-      source,
-      "import_state",
-      key,
-      result,
-      0,
-      metadata: %{
-        operation_type: "state_update",
-        key: key,
-        value: to_string(value),
-        timestamp: DateTime.utc_now()
-      }
-    )
-    
+
+    attrs =
+      build_metric_attrs(
+        source,
+        "import_state",
+        key,
+        result,
+        0,
+        metadata: %{
+          operation_type: "state_update",
+          key: key,
+          value: to_string(value),
+          timestamp: DateTime.utc_now()
+        }
+      )
+
     case create_metric(attrs) do
-      {:ok, _metric} -> result
-      {:error, changeset} -> 
+      {:ok, _metric} ->
+        result
+
+      {:error, changeset} ->
         Logger.error("Failed to save import state: #{inspect(changeset.errors)}")
         {:error, changeset}
     end

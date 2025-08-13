@@ -29,11 +29,11 @@ defmodule Cinegraph.Repo.Migrations.DropImportStateTable do
             json_build_object(
               ''value'', value,
               ''operation_type'', ''migrated_from_import_state'',
-              ''migrated_at'', NOW()
+              ''migrated_at'', (CURRENT_TIMESTAMP AT TIME ZONE ''UTC'')
             ) as metadata,
             0 as response_time_ms,
             updated_at as inserted_at,
-            NOW() as updated_at
+            (CURRENT_TIMESTAMP AT TIME ZONE ''UTC'') as updated_at
           FROM import_state
           WHERE NOT EXISTS (
             SELECT 1 FROM api_lookup_metrics
