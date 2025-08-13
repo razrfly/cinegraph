@@ -39,11 +39,18 @@ defmodule Cinegraph.Metrics.ScoringService do
   @doc """
   Converts a database weight profile to the format expected by the discovery UI.
   Maps category_weights to the four main dimensions.
+  
+  Note: "ratings" category is split into popular_opinion and critical_acclaim
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
+    ratings_weight = get_category_weight(profile, "ratings", 0.5)
+    
+    # Split ratings into popular and critical based on the profile
+    # For now, we'll split it 50/50 for popular vs critical within ratings
+    # This could be refined based on individual metric weights
     %{
-      popular_opinion: get_category_weight(profile, "ratings", 0.25),
-      critical_acclaim: get_critical_weight(profile, 0.25),
+      popular_opinion: ratings_weight * 0.5,      # Half of ratings weight
+      critical_acclaim: ratings_weight * 0.5,     # Half of ratings weight  
       industry_recognition: get_category_weight(profile, "awards", 0.25),
       cultural_impact: get_category_weight(profile, "cultural", 0.25)
     }
@@ -101,24 +108,6 @@ defmodule Cinegraph.Metrics.ScoringService do
     Map.get(weights || %{}, category, default)
   end
   
-  defp get_critical_weight(%MetricWeightProfile{} = profile, default) do
-    # Critical acclaim is a special case - it's ratings but only for critic scores
-    # We need to look at individual metric weights to determine this
-    ratings_weight = get_category_weight(profile, "ratings", default)
-    
-    # Check if profile emphasizes critic scores specifically
-    weights = profile.weights || %{}
-    critic_weight = (Map.get(weights, "metacritic_metascore", 1.0) + 
-                    Map.get(weights, "rotten_tomatoes_tomatometer", 1.0)) / 2
-    audience_weight = (Map.get(weights, "imdb_rating", 1.0) + 
-                      Map.get(weights, "tmdb_rating", 1.0)) / 2
-    
-    if critic_weight > audience_weight do
-      ratings_weight * (critic_weight / (critic_weight + audience_weight))
-    else
-      ratings_weight * 0.5  # Default to half of ratings weight for critics
-    end
-  end
   
   defp build_metric_weights_from_discovery(weights) do
     pop_weight = Map.get(weights, :popular_opinion, 0.25)
