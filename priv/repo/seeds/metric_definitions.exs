@@ -4,8 +4,7 @@
 alias Cinegraph.Repo
 import Ecto.Query
 
-# Clear existing definitions
-Repo.delete_all(from md in "metric_definitions")
+# Definitions are system-owned; no need to hard-delete. We'll upsert below.
 
 metric_definitions = [
   # ========== RATINGS (Public Opinion) ==========
@@ -373,16 +372,34 @@ metric_definitions = [
   }
 ]
 
-# Insert all metric definitions
+# Insert or update all metric definitions idempotently
 now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+entries =
+  Enum.map(metric_definitions, fn definition ->
+    Map.merge(definition, %{inserted_at: now, updated_at: now})
+  end)
 
-Enum.each(metric_definitions, fn definition ->
-  Repo.insert_all("metric_definitions", [
-    Map.merge(definition, %{
-      inserted_at: now,
-      updated_at: now
-    })
-  ])
-end)
+# Requires a unique index on metric_definitions(code)
+Repo.insert_all(
+  "metric_definitions",
+  entries,
+  conflict_target: [:code],
+  on_conflict: {:replace, [
+    :name,
+    :description,
+    :source_table,
+    :source_type,
+    :source_field,
+    :category,
+    :subcategory,
+    :normalization_type,
+    :normalization_params,
+    :raw_scale_min,
+    :raw_scale_max,
+    :source_reliability,
+    :active,
+    :updated_at
+  ]}
+)
 
-IO.puts "Inserted #{length(metric_definitions)} metric definitions"
+IO.puts "Upserted #{length(metric_definitions)} metric definitions"
