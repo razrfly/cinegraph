@@ -23,6 +23,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
   alias Cinegraph.Workers.TMDbDetailsWorker
   alias Cinegraph.Movies.{Movie, Person}
+  alias Cinegraph.People.FestivalPersonInferrer
   alias Cinegraph.Services.TMDb
   alias Cinegraph.Services.TMDb.Extended, as: TMDbExtended
   alias Cinegraph.Metrics.ApiTracker
@@ -173,6 +174,14 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
 
         # Broadcast completion
         broadcast_discovery_complete(ceremony, summary)
+
+        # Run person inference for non-Oscar festivals (Issue #250)
+        if ceremony.organization.abbreviation != "AMPAS" do
+          Task.start(fn ->
+            Logger.info("Running person inference for #{ceremony.organization.abbreviation} #{ceremony.year}")
+            FestivalPersonInferrer.infer_all_director_nominations()
+          end)
+        end
 
         :ok
     end
