@@ -202,7 +202,6 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
           key = profile.name 
                 |> String.downcase() 
                 |> String.replace(" ", "_")
-                |> String.to_atom()
           
           weights = ScoringService.profile_to_discovery_weights(profile)
           {key, weights}

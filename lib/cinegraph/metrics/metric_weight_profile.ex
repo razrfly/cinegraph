@@ -54,10 +54,15 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
       weights ->
         valid_categories = ["ratings", "awards", "financial", "cultural"]
         
-        if Enum.all?(Map.keys(weights), &(&1 in valid_categories)) do
-          changeset
-        else
-          add_error(changeset, :category_weights, "contains invalid categories")
+        cond do
+          not Enum.all?(Map.keys(weights), &(&1 in valid_categories)) ->
+            add_error(changeset, :category_weights, "contains invalid categories")
+          
+          not Enum.all?(Map.values(weights), &(is_number(&1) and &1 >= 0)) ->
+            add_error(changeset, :category_weights, "weights must be non-negative numbers")
+          
+          true ->
+            changeset
         end
     end
   end
@@ -68,7 +73,12 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
       import Ecto.Query
       current_id = changeset.data.id
       
-      case Cinegraph.Repo.one(from p in __MODULE__, where: p.is_default == true and p.id != ^current_id) do
+      query = case current_id do
+        nil -> from p in __MODULE__, where: p.is_default == true
+        id -> from p in __MODULE__, where: p.is_default == true and p.id != ^id
+      end
+      
+      case Cinegraph.Repo.one(query) do
         nil -> changeset
         _ -> add_error(changeset, :is_default, "only one profile can be default")
       end
