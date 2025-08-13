@@ -171,11 +171,10 @@ weight_profiles = [
       # Festival presence (10%)
       "cannes_palme_dor" => 1.5,
       "venice_golden_lion" => 1.5,
-      "berlin_golden_bear" => 1.5,
+      "berlin_golden_bear" => 1.5
       
-      # Low financial success (affects cultural)
-      "tmdb_revenue_worldwide" => 0.2,
-      "tmdb_budget" => 0.1
+      # Financial metrics excluded - cult classics often have low budgets/revenue
+      # but current normalization rewards higher values, so we exclude them
     },
     category_weights: %{
       "ratings" => 0.50,     # 50%
@@ -193,14 +192,28 @@ weight_profiles = [
 now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
 # Validate profiles before inserting
+IO.puts("\n=== Validating Weight Profiles ===")
 Enum.each(weight_profiles, fn profile ->
+  # Validate category weights sum to approximately 1.0
   weights = profile.category_weights || %{}
   sum = Map.values(weights) |> Enum.sum()
   
-  if abs(sum - 1.0) > 0.01 do
-    IO.puts "WARNING: #{profile.name} weights sum to #{Float.round(sum * 100, 1)}%"
+  cond do
+    sum > 1.01 ->
+      IO.puts("⚠️  WARNING: #{profile.name} category_weights sum to #{Float.round(sum * 100, 1)}% (> 101%)")
+      IO.puts("    Breakdown: #{inspect(weights)}")
+    sum < 0.99 ->
+      IO.puts("⚠️  WARNING: #{profile.name} category_weights sum to #{Float.round(sum * 100, 1)}% (< 99%)")
+      IO.puts("    Breakdown: #{inspect(weights)}")
+    true ->
+      IO.puts("✅ #{profile.name}: #{Float.round(sum * 100, 1)}%")
   end
+  
+  # Also validate individual metric weights sum per category
+  # Note: We can't easily validate individual metric weights without the MetricDefinition data
+  # which uses 'code' field not 'source_key'. Skip this detailed validation for now.
 end)
+IO.puts("")
 
 entries =
   Enum.map(weight_profiles, fn profile ->

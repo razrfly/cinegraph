@@ -41,9 +41,13 @@ defmodule Cinegraph.Metrics.ScoringService do
   Maps category_weights to the four main dimensions.
   
   Note: "ratings" category is split into popular_opinion and critical_acclaim
+  Financial weights are folded into cultural_impact since financial success
+  often indicates cultural relevance and impact.
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
     ratings_weight = get_category_weight(profile, "ratings", 0.5)
+    cultural_weight = get_category_weight(profile, "cultural", 0.25)
+    financial_weight = get_category_weight(profile, "financial", 0.0)
     
     # Split ratings into popular and critical based on the profile
     # For now, we'll split it 50/50 for popular vs critical within ratings
@@ -52,7 +56,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       popular_opinion: ratings_weight * 0.5,      # Half of ratings weight
       critical_acclaim: ratings_weight * 0.5,     # Half of ratings weight  
       industry_recognition: get_category_weight(profile, "awards", 0.25),
-      cultural_impact: get_category_weight(profile, "cultural", 0.25)
+      # Financial success contributes to cultural impact
+      cultural_impact: cultural_weight + financial_weight
     }
   end
   
