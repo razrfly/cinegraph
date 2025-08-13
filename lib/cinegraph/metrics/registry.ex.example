@@ -1,0 +1,197 @@
+defmodule Cinegraph.Metrics.Registry do
+  @moduledoc """
+  Centralized registry for all movie metrics, normalization rules, and weighting profiles.
+  
+  This module provides:
+  - Metric definitions and normalization
+  - Weight profile management
+  - Coverage statistics
+  - Dynamic metric scoring
+  """
+  
+  use GenServer
+  import Ecto.Query
+  alias Cinegraph.Repo
+  
+  # Client API
+  
+  @doc """
+  Normalizes a raw metric value according to its definition.
+  
+  ## Examples
+  
+      iex> Registry.normalize_value("tmdb_rating", 7.5)
+      0.75
+      
+      iex> Registry.normalize_value("metacritic_score", 85)
+      0.85
+      
+      iex> Registry.normalize_value("oscar_wins", 3)
+      1.0  # Capped at 1.0 for > 2 wins
+  """
+  def normalize_value(metric_code, raw_value) do
+    metric = get_metric_definition(metric_code)
+    
+    case metric.normalization_type do
+      "linear" -> 
+        linear_normalize(raw_value, metric.raw_scale_min, metric.raw_scale_max)
+      
+      "logarithmic" ->
+        log_normalize(raw_value, metric.normalization_params["threshold"])
+      
+      "sigmoid" ->
+        sigmoid_normalize(raw_value, metric.normalization_params)
+      
+      "boolean" ->
+        if raw_value, do: 1.0, else: 0.0
+      
+      "custom" ->
+        apply_custom_normalization(metric_code, raw_value)
+    end
+  end
+  
+  @doc """
+  Calculates a weighted score for a movie using a specific profile.
+  
+  ## Examples
+  
+      iex> Registry.calculate_movie_score(movie_id, "critics_choice")
+      %{
+        total_score: 0.82,
+        category_scores: %{
+          rating: 0.85,
+          award: 0.90,
+          financial: 0.65,
+          cultural: 0.88
+        },
+        metric_scores: %{
+          "tmdb_rating" => 0.75,
+          "metacritic_score" => 0.92,
+          ...
+        }
+      }
+  """
+  def calculate_movie_score(movie_id, profile_name \\ "balanced") do
+    profile = get_weight_profile(profile_name)
+    metrics = get_movie_metrics(movie_id)
+    
+    # Group metrics by category
+    category_scores = 
+      metrics
+      |> Enum.group_by(& &1.category)
+      |> Enum.map(fn {category, category_metrics} ->
+        # Calculate weighted average within category
+        category_score = 
+          category_metrics
+          |> Enum.map(fn m -> 
+            normalized = normalize_value(m.code, m.value)
+            weight = get_metric_weight(profile.id, m.code)
+            normalized * weight * m.source_reliability
+          end)
+          |> Enum.sum()
+        
+        {category, category_score}
+      end)
+      |> Map.new()
+    
+    # Apply category weights
+    total_score = 
+      category_scores
+      |> Enum.map(fn {category, score} ->
+        category_weight = Map.get(profile, :"#{category}_weight", 0.0)
+        score * category_weight
+      end)
+      |> Enum.sum()
+    
+    %{
+      total_score: total_score,
+      category_scores: category_scores,
+      profile_used: profile_name
+    }
+  end
+  
+  @doc """
+  Gets data coverage statistics for all metrics or a specific category.
+  
+  ## Examples
+  
+      iex> Registry.get_coverage_stats()
+      %{
+        overall: %{coverage: 72.3, total_movies: 5521},
+        by_category: %{
+          "rating" => %{coverage: 95.2, sources: 4},
+          "award" => %{coverage: 45.6, sources: 6},
+          "financial" => %{coverage: 35.8, sources: 3},
+          "cultural" => %{coverage: 28.9, sources: 5}
+        },
+        by_source: %{
+          "tmdb" => %{coverage: 99.7, metrics: 5},
+          "imdb" => %{coverage: 89.3, metrics: 3},
+          "metacritic" => %{coverage: 42.1, metrics: 1},
+          ...
+        }
+      }
+  """
+  def get_coverage_stats(category \\ nil) do
+    # Implementation would query metric_coverage_stats table
+  end
+  
+  @doc """
+  Searches movies using normalized metric filters.
+  
+  ## Examples
+  
+      # Find highly rated movies across all sources
+      iex> Registry.search_movies(%{
+        category: "rating",
+        min_normalized: 0.8
+      })
+      
+      # Find award-winning hidden gems
+      iex> Registry.search_movies(%{
+        filters: [
+          %{category: "award", min_normalized: 0.5},
+          %{metric_code: "tmdb_popularity", max_normalized: 0.3}
+        ]
+      })
+  """
+  def search_movies(params) do
+    # Build dynamic query based on normalized metrics
+  end
+  
+  # Private normalization functions
+  
+  defp linear_normalize(value, min, max) do
+    normalized = (value - min) / (max - min)
+    max(0.0, min(1.0, normalized)) # Clamp to 0-1
+  end
+  
+  defp log_normalize(value, threshold) do
+    :math.log(value + 1) / :math.log(threshold + 1)
+    |> max(0.0)
+    |> min(1.0)
+  end
+  
+  defp sigmoid_normalize(value, %{"k" => k, "midpoint" => mid}) do
+    1 / (1 + :math.exp(-k * (mid - value)))
+  end
+  
+  # Example custom normalizations
+  defp apply_custom_normalization("oscar_wins", count) do
+    cond do
+      count == 0 -> 0.0
+      count == 1 -> 0.6
+      count == 2 -> 0.8
+      count >= 3 -> 1.0
+    end
+  end
+  
+  defp apply_custom_normalization("festival_selections", data) do
+    # Complex logic for festival prestige weighting
+    # Cannes Palme d'Or = 1.0
+    # Venice Golden Lion = 0.95
+    # Berlin Golden Bear = 0.90
+    # Other major awards = 0.7-0.85
+    # Nominations = 0.3-0.5
+  end
+end

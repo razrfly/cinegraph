@@ -23,7 +23,12 @@ defmodule Cinegraph.Workers.FestivalPersonInferenceWorker do
     Logger.metadata(ceremony_id: ceremony_id, organization: abbr, year: year)
     Logger.info("Running person inference for #{abbr} #{year} (ceremony ##{ceremony_id})")
     
-    try do
+    # Skip AMPAS/Oscar ceremonies as they already have person names in data
+    if abbr == "AMPAS" do
+      Logger.info("Skipping person inference for Oscars (AMPAS) ceremony ##{ceremony_id}")
+      :ok
+    else
+      try do
       {microseconds, result} = :timer.tc(fn ->
         FestivalPersonInferrer.infer_all_director_nominations()
       end)
@@ -51,6 +56,7 @@ defmodule Cinegraph.Workers.FestivalPersonInferenceWorker do
           Exception.format(:error, error, __STACKTRACE__)
         )
         {:error, :person_inference_failed}
+      end
     end
   end
 end
