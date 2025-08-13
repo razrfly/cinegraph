@@ -23,7 +23,6 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
   alias Cinegraph.Workers.TMDbDetailsWorker
   alias Cinegraph.Movies.{Movie, Person}
-  alias Cinegraph.People.FestivalPersonInferrer
   alias Cinegraph.Services.TMDb
   alias Cinegraph.Services.TMDb.Extended, as: TMDbExtended
   alias Cinegraph.Metrics.ApiTracker
@@ -175,12 +174,26 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         # Broadcast completion
         broadcast_discovery_complete(ceremony, summary)
 
-        # Run person inference for non-Oscar festivals (Issue #250)
-        if ceremony.organization.abbreviation != "AMPAS" do
-          Task.start(fn ->
-            Logger.info("Running person inference for #{ceremony.organization.abbreviation} #{ceremony.year}")
-            FestivalPersonInferrer.infer_all_director_nominations()
-          end)
+        # Queue person inference for non-Oscar festivals (Issue #250)
+        abbr = ceremony.organization && ceremony.organization.abbreviation
+        
+        if is_binary(abbr) and abbr != "AMPAS" do
+          %{
+            "ceremony_id" => ceremony.id,
+            "abbr" => abbr,
+            "year" => ceremony.year
+          }
+          |> Cinegraph.Workers.FestivalPersonInferenceWorker.new()
+          |> Oban.insert()
+          |> case do
+            {:ok, job} ->
+              Logger.info("Queued person inference job ##{job.id} for #{abbr} #{ceremony.year}")
+              
+            {:error, reason} ->
+              Logger.warning(
+                "Failed to queue person inference for #{abbr} #{ceremony.year}: #{inspect(reason)}"
+              )
+          end
         end
 
         :ok
