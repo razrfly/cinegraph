@@ -23,8 +23,8 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
   alias Cinegraph.Workers.TMDbDetailsWorker
   alias Cinegraph.Movies.{Movie, Person}
-  alias Cinegraph.Services.TMDb
   alias Cinegraph.Services.TMDb.Extended, as: TMDbExtended
+  alias Cinegraph.Services.TMDb.FallbackSearch
   alias Cinegraph.Metrics.ApiTracker
   import Ecto.Query
   require Logger
@@ -686,15 +686,30 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           end
 
         {:error, :not_found} ->
-          # Not in database, try TMDb fuzzy search
-          case fuzzy_search_movie(actual_title, ceremony.year, category_name) do
-            {:ok, tmdb_id} ->
-              Logger.info(
-                "Fuzzy search successful for '#{actual_title}' - found TMDb ID: #{tmdb_id}"
-              )
+          # Not in database, try TMDb search using FallbackSearch
+          case FallbackSearch.find_movie(nil, actual_title, ceremony.year) do
+            {:ok, result} ->
+              tmdb_id = result.movie["id"]
+              min_confidence = Application.get_env(:cinegraph, :fuzzy_match_min_confidence, 0.7)
+              
+              if result.confidence < min_confidence do
+                Logger.warning(
+                  "Fuzzy search confidence too low for '#{actual_title}': #{result.confidence} < #{min_confidence}"
+                )
+                %{
+                  action: :skipped,
+                  reason: :low_confidence,
+                  title: actual_title,
+                  confidence: result.confidence
+                }
+              else
+                Logger.info(
+                  "Fuzzy search successful for '#{actual_title}' - found TMDb ID: #{tmdb_id} using strategy: #{result.strategy} (confidence: #{result.confidence})"
+                )
 
-              # Queue the movie creation with TMDb ID (not IMDb ID)
-              queue_movie_creation_by_tmdb(tmdb_id, nominee, category, ceremony)
+                # Queue the movie creation with TMDb ID (not IMDb ID)
+                queue_movie_creation_by_tmdb(tmdb_id, nominee, category, ceremony)
+              end
 
             {:error, reason} ->
               Logger.warning("Fuzzy search failed for '#{actual_title}': #{reason}")
@@ -790,108 +805,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     end
   end
 
-  defp fuzzy_search_movie(title, year, category_name) do
-    Logger.info(
-      "Performing fuzzy search for '#{title}' (year: #{year}, category: #{category_name})"
-    )
-
-    # Clean the title for better search results
-    clean_title = clean_title_for_search(title)
-
-    # Search with year constraint
-    case TMDb.search_movies(clean_title, year: year) do
-      {:ok, %{"results" => results}} when results != [] ->
-        # Filter and validate results
-        case find_best_match(results, title, year, category_name) do
-          {:ok, movie} ->
-            {:ok, movie["id"]}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-
-      {:ok, %{"results" => []}} ->
-        # Try without year constraint as fallback
-        case TMDb.search_movies(clean_title) do
-          {:ok, %{"results" => results}} when results != [] ->
-            case find_best_match(results, title, year, category_name) do
-              {:ok, movie} ->
-                {:ok, movie["id"]}
-
-              {:error, reason} ->
-                {:error, reason}
-            end
-
-          _ ->
-            {:error, :no_results}
-        end
-
-      {:error, reason} ->
-        {:error, {:api_error, reason}}
-    end
-  end
-
-  defp find_best_match(results, original_title, target_year, category_name) do
-    # Score and filter results
-    scored_results =
-      results
-      |> Enum.map(fn movie ->
-        {movie, calculate_match_score(movie, original_title, target_year, category_name)}
-      end)
-      # 85% minimum threshold
-      |> Enum.filter(fn {_movie, score} -> score > 0.85 end)
-      |> Enum.sort_by(fn {_movie, score} -> score end, :desc)
-
-    case scored_results do
-      [{movie, score} | _] when score > 0.9 ->
-        Logger.info(
-          "Found high-confidence match: '#{movie["title"]}' (#{movie["release_date"]}) with score #{Float.round(score, 3)}"
-        )
-
-        {:ok, movie}
-
-      [{movie, score} | rest] when score > 0.85 ->
-        # If multiple results above threshold, only accept if clear winner
-        case rest do
-          [] ->
-            Logger.info(
-              "Found good match: '#{movie["title"]}' (#{movie["release_date"]}) with score #{Float.round(score, 3)}"
-            )
-
-            {:ok, movie}
-
-          [{_, second_score} | _] when score - second_score > 0.1 ->
-            Logger.info(
-              "Found clear best match: '#{movie["title"]}' (#{movie["release_date"]}) with score #{Float.round(score, 3)}"
-            )
-
-            {:ok, movie}
-
-          _ ->
-            {:error, :multiple_matches}
-        end
-
-      [] ->
-        {:error, :no_good_matches}
-    end
-  end
-
-  defp calculate_match_score(movie, original_title, target_year, category_name) do
-    # Start with title similarity (60% weight)
-    title_score = calculate_title_similarity(movie["title"], original_title) * 0.6
-
-    # Year matching (30% weight)
-    year_score = calculate_year_score(movie["release_date"], target_year) * 0.3
-
-    # Category validation (10% weight)
-    category_score = validate_category_match(movie, category_name) * 0.1
-
-    # Bonus for high vote count (indicates real/notable film)
-    vote_bonus = if movie["vote_count"] > 50, do: 0.05, else: 0
-
-    min(title_score + year_score + category_score + vote_bonus, 1.0)
-  end
-
+  # Removed fuzzy_search_movie and related functions - now using FallbackSearch module
+  # Keep helper functions that are still used elsewhere
+  
   defp calculate_title_similarity(movie_title, original_title) do
     # Normalize titles for comparison
     normalized_movie = normalize_title(movie_title)
@@ -900,38 +816,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     # Use Jaro distance for fuzzy matching
     String.jaro_distance(normalized_movie, normalized_original)
   end
-
-  defp calculate_year_score(release_date, target_year) when is_binary(release_date) do
-    case extract_year(release_date) do
-      {:ok, year} ->
-        # Exact match = 1.0, ±1 year = 0.8, ±2 years = 0.5, beyond = 0
-        case abs(year - target_year) do
-          0 -> 1.0
-          1 -> 0.8
-          2 -> 0.5
-          _ -> 0.0
-        end
-
-      _ ->
-        0.0
-    end
-  end
-
-  defp calculate_year_score(_, _), do: 0.0
-
-  defp validate_category_match(movie, category_name) do
-    genres = movie["genre_ids"] || []
-
-    cond do
-      String.contains?(category_name, "Animated") and 16 in genres -> 1.0
-      String.contains?(category_name, "Documentary") and 99 in genres -> 1.0
-      # Can't validate well
-      String.contains?(category_name, "International") -> 0.9
-      # Default score for other categories
-      true -> 0.8
-    end
-  end
-
+  
   defp normalize_title(title) do
     title
     |> String.downcase()
