@@ -126,24 +126,56 @@
           value={@sort}
           class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
         >
-          <option value="release_date_desc" selected={@sort == "release_date_desc"}>
-            Release Date (Newest)
-          </option>
-          <option value="release_date" selected={@sort == "release_date"}>
-            Release Date (Oldest)
-          </option>
-          <option value="title" selected={@sort == "title"}>
-            Title (A-Z)
-          </option>
-          <option value="title_desc" selected={@sort == "title_desc"}>
-            Title (Z-A)
-          </option>
-          <option value="rating" selected={@sort == "rating"}>
-            Rating (Highest)
-          </option>
-          <option value="popularity" selected={@sort == "popularity"}>
-            Popularity
-          </option>
+          <optgroup label="Basic">
+            <option value="release_date_desc" selected={@sort == "release_date_desc"}>
+              Release Date (Newest)
+            </option>
+            <option value="release_date" selected={@sort == "release_date"}>
+              Release Date (Oldest)
+            </option>
+            <option value="title" selected={@sort == "title"}>
+              Title (A-Z)
+            </option>
+            <option value="title_desc" selected={@sort == "title_desc"}>
+              Title (Z-A)
+            </option>
+          </optgroup>
+          
+          <optgroup label="Ratings & Popularity">
+            <option value="rating" selected={@sort == "rating"}>
+              Rating (Highest)
+            </option>
+            <option value="popularity" selected={@sort == "popularity"}>
+              Popularity
+            </option>
+          </optgroup>
+          
+          <optgroup label="Discovery Metrics">
+            <option value="popular_opinion" selected={@sort == "popular_opinion"}>
+              🎬 Popular Opinion (Highest)
+            </option>
+            <option value="popular_opinion_asc" selected={@sort == "popular_opinion_asc"}>
+              🎬 Popular Opinion (Lowest)
+            </option>
+            <option value="critical_acclaim" selected={@sort == "critical_acclaim"}>
+              🏆 Critical Acclaim (Highest)
+            </option>
+            <option value="critical_acclaim_asc" selected={@sort == "critical_acclaim_asc"}>
+              🏆 Critical Acclaim (Lowest)
+            </option>
+            <option value="industry_recognition" selected={@sort == "industry_recognition"}>
+              🌟 Industry Recognition (Highest)
+            </option>
+            <option value="industry_recognition_asc" selected={@sort == "industry_recognition_asc"}>
+              🌟 Industry Recognition (Lowest)
+            </option>
+            <option value="cultural_impact" selected={@sort == "cultural_impact"}>
+              📚 Cultural Impact (Highest)
+            </option>
+            <option value="cultural_impact_asc" selected={@sort == "cultural_impact_asc"}>
+              📚 Cultural Impact (Lowest)
+            </option>
+          </optgroup>
         </select>
       </form>
     </div>
