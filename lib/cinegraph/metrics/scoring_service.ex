@@ -17,7 +17,7 @@ defmodule Cinegraph.Metrics.ScoringService do
   end
   
   def get_profile(name) when is_atom(name) do
-    get_profile(Atom.to_string(name) |> String.replace("_", " ") |> String.split() |> Enum.map(&String.capitalize/1) |> Enum.join(" "))
+    get_profile(normalize_profile_name(name))
   end
   
   @doc """
@@ -66,7 +66,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       category_weights: %{
         "ratings" => Map.get(weights, :popular_opinion, 0.25),
         "awards" => Map.get(weights, :industry_recognition, 0.25),
-        "financial" => Map.get(weights, :popular_opinion, 0.25) * 0.3, # Financial correlates with popular
+        # Financial impact is not directly represented in discovery weights
+        "financial" => Map.get(weights, :financial_impact, 0.1),
         "cultural" => Map.get(weights, :cultural_impact, 0.25)
       },
       weights: build_metric_weights_from_discovery(weights),
@@ -102,11 +103,29 @@ defmodule Cinegraph.Metrics.ScoringService do
     end
   end
   
+  @doc """
+  Normalizes a profile name from atom or string format to title case.
+  """
+  def normalize_profile_name(name) when is_atom(name) do
+    name |> Atom.to_string() |> normalize_profile_name()
+  end
+  
+  def normalize_profile_name(name) when is_binary(name) do
+    name
+    |> String.replace("_", " ")
+    |> String.split()
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(" ")
+  end
+  
   # Private functions
   
   defp get_category_weight(%MetricWeightProfile{category_weights: weights}, category, default) do
     Map.get(weights || %{}, category, default)
   end
+  
+  # Note: SQL fragment extraction isn't feasible with Ecto's query compilation
+  # The discovery score calculation is kept inline in each context for now
   
   
   defp build_metric_weights_from_discovery(weights) do
@@ -209,7 +228,12 @@ defmodule Cinegraph.Metrics.ScoringService do
        rotten_tomatoes: rt, popularity: pop, festivals: f],
       %{
         discovery_score: fragment(
-          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
+          """
+          ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + 
+          ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + 
+          ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
+          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)
+          """,
           ^weights.popular_opinion, tr.value, ir.value,
           ^weights.critical_acclaim, mc.value, rt.value,
           ^weights.industry_recognition, f.wins, f.nominations,
@@ -241,7 +265,7 @@ defmodule Cinegraph.Metrics.ScoringService do
     where(query,
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
        rotten_tomatoes: rt, popularity: pop, festivals: f],
-      fragment(
+fragment(
         "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0) >= ?",
         ^weights.popular_opinion, tr.value, ir.value,
         ^weights.critical_acclaim, mc.value, rt.value,
@@ -256,7 +280,7 @@ defmodule Cinegraph.Metrics.ScoringService do
     order_by(query,
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
        rotten_tomatoes: rt, popularity: pop, festivals: f],
-      desc: fragment(
+desc: fragment(
         "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
         ^weights.popular_opinion, tr.value, ir.value,
         ^weights.critical_acclaim, mc.value, rt.value,
