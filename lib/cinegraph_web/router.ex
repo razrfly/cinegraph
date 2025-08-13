@@ -23,6 +23,7 @@ defmodule CinegraphWeb.Router do
     live "/movies", MovieLive.Index, :index
     live "/movies/discover", MovieLive.DiscoveryTuner, :index
     live "/movies/:id", MovieLive.Show, :show
+    live "/movies/:id/metrics", MovieMetricsLive.Show, :show
 
     # People routes
     live "/people", PersonLive.Index, :index
@@ -35,6 +36,7 @@ defmodule CinegraphWeb.Router do
 
     # Import dashboard
     live "/imports", ImportDashboardLive, :index
+
 
     # Festival Events management
     live "/festival-events", FestivalEventLive.Index, :index
