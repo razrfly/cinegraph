@@ -576,4 +576,11 @@ end
 create_festival_dates.()
 Logger.info("  ✅ Created festival dates for 2024/2025")
 
+# Seed metric definitions and weight profiles for discovery system
+Logger.info("Seeding metric definitions...")
+Code.eval_file("priv/repo/seeds/metric_definitions.exs")
+
+Logger.info("Seeding discovery weight profiles...")
+Code.eval_file("priv/repo/seeds/metric_weight_profiles.exs")
+
 Logger.info("Seeds completed!")

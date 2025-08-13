@@ -87,7 +87,9 @@ config :cinegraph, Oban,
     # IMDb website scraping (canonical lists, user lists, etc.)
     imdb_scraping: 5,
     # Retry failed canonical source updates
-    canonical_retry: 3
+    canonical_retry: 3,
+    # CRI calculation jobs
+    cri_calculation: 5
   ],
   plugins: [
     # Keep jobs for 7 days

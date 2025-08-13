@@ -14,9 +14,6 @@ NC='\033[0m' # No Color
 # Load environment variables
 source .env
 
-echo -e "${YELLOW}🗑️  Clearing all data from Cinegraph database...${NC}"
-echo ""
-
 # Extract connection details from DATABASE_URL
 if [[ -z "$SUPABASE_DATABASE_URL" ]]; then
     echo -e "${RED}Error: SUPABASE_DATABASE_URL not found in .env${NC}"
@@ -43,7 +40,20 @@ if [[ -z "$DB_HOST" || -z "$DB_PORT" || -z "$DB_NAME" || -z "$DB_USER" ]]; then
     exit 1
 fi
 
+echo -e "${RED}⚠️  WARNING: This will permanently delete ALL data from the Cinegraph database!${NC}"
+echo -e "${YELLOW}This includes movies, people, collaborations, festivals, and all other data.${NC}"
+echo ""
 echo "Database: $DB_NAME on $DB_HOST:$DB_PORT"
+echo ""
+echo "Are you sure you want to continue? This action cannot be undone."
+echo "Type 'yes' to proceed or anything else to cancel:"
+read -r confirmation
+
+if [[ "$confirmation" != "yes" ]]; then
+    echo -e "${GREEN}Cancelled. Database was not modified.${NC}"
+    exit 0
+fi
+
 echo ""
 
 # First, try to terminate any active connections (this might fail but that's OK)

@@ -166,6 +166,12 @@ defmodule Cinegraph.Movies.Movie do
   end
 
   @doc """
+  Gets the release year from release_date
+  """
+  def release_year(%__MODULE__{release_date: nil}), do: nil
+  def release_year(%__MODULE__{release_date: date}), do: date.year
+
+  @doc """
   Checks if a movie is in a canonical source. source_key is required.
   """
   def is_canonical?(%__MODULE__{canonical_sources: sources}, source_key) do

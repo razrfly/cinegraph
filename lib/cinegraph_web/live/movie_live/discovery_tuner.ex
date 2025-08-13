@@ -1,27 +1,44 @@
 defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   @moduledoc """
   LiveView component for the Tunable Movie Discovery System.
-  Allows users to adjust scoring weights and see results in real-time.
+  Now uses database-driven weight profiles instead of hard-coded values.
   """
   use CinegraphWeb, :live_view
   import Ecto.Query
 
   alias Cinegraph.Movies
   alias Cinegraph.Movies.DiscoveryScoringSimple, as: DiscoveryScoring
+  alias Cinegraph.Metrics.ScoringService
 
   @impl true
   def mount(_params, _session, socket) do
-    weights = DiscoveryScoring.get_presets().balanced
+    # Load presets from database
+    presets = DiscoveryScoring.get_presets()
+    
+    # Get the default/balanced weights
+    weights = Map.get(presets, :balanced, %{
+      popular_opinion: 0.25,
+      critical_acclaim: 0.25,
+      industry_recognition: 0.25,
+      cultural_impact: 0.25
+    })
+    
+    # Store the current profile for database lookups
+    current_profile = ScoringService.get_profile("Balanced") || 
+                     ScoringService.get_default_profile()
 
     socket =
       socket
       |> assign(:weights, weights)
       |> assign(:preset, "balanced")
+      |> assign(:current_profile, current_profile)
+      |> assign(:presets, presets)
       |> assign(:movies, [])
       |> assign(:page, 1)
       |> assign(:per_page, 20)
       |> assign(:min_score, 0.0)
       |> assign(:show_scores, false)
+      |> assign(:show_explanation, false)
       |> load_movies()
 
     {:ok, socket}
@@ -67,20 +84,37 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
 
   @impl true
   def handle_event("select_preset", %{"preset" => preset}, socket) do
-    weights =
+    {weights, profile} =
       case preset do
         "custom" ->
-          socket.assigns.weights
+          {socket.assigns.weights, nil}
 
         preset_name ->
-          DiscoveryScoring.get_presets()
-          |> Map.get(String.to_atom(preset_name))
+          # Try to get from database first
+          profile_name = preset_name 
+                        |> String.replace("_", " ")
+                        |> String.split()
+                        |> Enum.map(&String.capitalize/1)
+                        |> Enum.join(" ")
+          
+          case ScoringService.get_profile(profile_name) do
+            nil ->
+              # Fallback to presets if not in database
+              weights = socket.assigns.presets
+                       |> Map.get(String.to_atom(preset_name))
+              {weights, nil}
+            
+            profile ->
+              weights = ScoringService.profile_to_discovery_weights(profile)
+              {weights, profile}
+          end
       end
 
     socket =
       socket
       |> assign(:weights, weights)
       |> assign(:preset, preset)
+      |> assign(:current_profile, profile)
       |> load_movies()
 
     {:noreply, socket}
@@ -106,6 +140,11 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   def handle_event("toggle_scores", _params, socket) do
     {:noreply, assign(socket, :show_scores, !socket.assigns.show_scores)}
   end
+  
+  @impl true
+  def handle_event("toggle_explanation", _params, socket) do
+    {:noreply, assign(socket, :show_explanation, !socket.assigns.show_explanation)}
+  end
 
   @impl true
   def handle_event("load_more", _params, socket) do
@@ -120,10 +159,18 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   defp load_movies(socket, opts \\ []) do
     query = Movies.Movie
 
+    # Use database profile if available, otherwise use weights
+    scoring_input = 
+      if socket.assigns[:current_profile] do
+        socket.assigns.current_profile
+      else
+        socket.assigns.weights
+      end
+
     movies =
       DiscoveryScoring.apply_scoring(
         query,
-        socket.assigns.weights,
+        scoring_input,
         %{min_score: socket.assigns.min_score}
       )
       |> limit(^socket.assigns.per_page)
@@ -146,6 +193,11 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
         Tunable Movie Discovery
         <:subtitle>
           Adjust the importance of different scoring factors to discover movies that match your preferences
+          <%= if @current_profile do %>
+            <span class="ml-2 text-sm text-green-600">
+              (Using database profile: {@current_profile.name})
+            </span>
+          <% end %>
         </:subtitle>
       </.header>
 
@@ -218,6 +270,13 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           <div class="flex justify-between items-center">
             <label class="text-sm font-medium text-gray-700">
               Minimum Score Threshold
+              <button
+                type="button"
+                phx-click="toggle_explanation"
+                class="ml-2 text-blue-600 hover:text-blue-800"
+              >
+                ℹ️
+              </button>
             </label>
             <span class="text-sm text-gray-600">
               {round(@min_score * 100)}%
@@ -231,6 +290,19 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
             value={round(@min_score * 100)}
             class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
           />
+          <%= if @show_explanation do %>
+            <div class="mt-2 p-3 bg-blue-50 rounded-lg text-sm text-gray-700">
+              <p class="font-semibold mb-1">What is Minimum Score Threshold?</p>
+              <p>This filter excludes movies with a total discovery score below the specified percentage. The discovery score is calculated by combining:</p>
+              <ul class="list-disc list-inside mt-2 space-y-1">
+                <li><strong>Popular Opinion:</strong> IMDb and TMDb user ratings</li>
+                <li><strong>Critical Acclaim:</strong> Metacritic and Rotten Tomatoes critic scores</li>
+                <li><strong>Industry Recognition:</strong> Festival awards and Oscar nominations/wins</li>
+                <li><strong>Cultural Impact:</strong> Presence in canonical film lists and popularity metrics</li>
+              </ul>
+              <p class="mt-2">Setting this to 50% will only show movies that score at least 0.5 out of 1.0 based on your selected weights.</p>
+            </div>
+          <% end %>
         </form>
         
     <!-- Toggle Score Display -->
