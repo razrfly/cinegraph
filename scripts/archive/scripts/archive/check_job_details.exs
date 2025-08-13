@@ -38,7 +38,7 @@ end
 # Let's manually simulate what should happen after page 1
 IO.puts("\nManually queueing page 2...")
 # Get the actual total pages from TMDb or ImportState
-tmdb_total = Cinegraph.Imports.ImportState.get("tmdb_total_movies")
+tmdb_total = Cinegraph.Imports.ImportState.tmdb_total_movies()
 # Assuming 20 movies per page
 total_pages = div(String.to_integer(tmdb_total || "0"), 20)
 Cinegraph.Imports.TMDbImporter.queue_next_discovery(1, total_pages, "full")

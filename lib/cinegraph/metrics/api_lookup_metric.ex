@@ -53,9 +53,7 @@ defmodule Cinegraph.Metrics.ApiLookupMetric do
       greater_than_or_equal_to: 0.0,
       less_than_or_equal_to: 1.0
     )
-    |> validate_change(:error_type, fn :error_type, value ->
-      if value == nil or value in error_types(), do: [], else: [error_type: "is not a valid error type"]
-    end)
+    |> validate_inclusion(:error_type, error_types(), allow_nil: true)
     |> validate_number(:fallback_level,
       greater_than_or_equal_to: @min_fallback_level,
       less_than_or_equal_to: @max_fallback_level
@@ -75,6 +73,17 @@ defmodule Cinegraph.Metrics.ApiLookupMetric do
   Returns list of common error types.
   """
   def error_types do
-    ~w(not_found rate_limit timeout parse_error auth_error network_error invalid_response)
+    ~w(
+      not_found
+      rate_limit
+      timeout
+      parse_error
+      auth_error
+      network_error
+      invalid_response
+      api_error
+      error
+      unknown
+    )
   end
 end
