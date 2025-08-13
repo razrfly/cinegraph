@@ -3,39 +3,53 @@ defmodule Cinegraph.Repo.Migrations.DropImportStateTable do
 
   def up do
     # Migrate any existing data from import_state to api_lookup_metrics
-    # This SQL will only run if the import_state table exists
+    # Use PL/pgSQL to safely check for table existence before attempting the migration
     execute("""
-      INSERT INTO api_lookup_metrics (
-        source, 
-        operation, 
-        target_identifier, 
-        success, 
-        metadata, 
-        response_time_ms,
-        inserted_at, 
-        updated_at
-      )
-      SELECT 
-        'tmdb' as source,
-        'import_state' as operation,
-        key as target_identifier,
-        true as success,
-        json_build_object(
-          'value', value,
-          'operation_type', 'migrated_from_import_state',
-          'migrated_at', NOW()
-        ) as metadata,
-        0 as response_time_ms,
-        updated_at as inserted_at,
-        NOW() as updated_at
-      FROM import_state
-      WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'import_state')
-      AND NOT EXISTS (
-        SELECT 1 FROM api_lookup_metrics 
-        WHERE source = 'tmdb' 
-        AND operation = 'import_state' 
-        AND target_identifier = import_state.key
-      )
+    DO $$
+    BEGIN
+      -- Check if import_state table exists
+      IF to_regclass('public.import_state') IS NOT NULL THEN
+        -- Perform the migration
+        EXECUTE '
+          INSERT INTO api_lookup_metrics (
+            source,
+            operation,
+            target_identifier,
+            success,
+            metadata,
+            response_time_ms,
+            inserted_at,
+            updated_at
+          )
+          SELECT
+            ''tmdb'' as source,
+            ''import_state'' as operation,
+            key as target_identifier,
+            true as success,
+            json_build_object(
+              ''value'', value,
+              ''operation_type'', ''migrated_from_import_state'',
+              ''migrated_at'', NOW()
+            ) as metadata,
+            0 as response_time_ms,
+            updated_at as inserted_at,
+            NOW() as updated_at
+          FROM import_state
+          WHERE NOT EXISTS (
+            SELECT 1 FROM api_lookup_metrics
+            WHERE source = ''tmdb''
+              AND operation = ''import_state''
+              AND target_identifier = import_state.key
+          )
+        ';
+        
+        -- Log the migration
+        RAISE NOTICE ''Migrated data from import_state table to api_lookup_metrics'';
+      ELSE
+        RAISE NOTICE ''import_state table does not exist, skipping migration'';
+      END IF;
+    END
+    $$;
     """)
 
     # Drop the import_state table (will fail silently if it doesn't exist)

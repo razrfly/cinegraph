@@ -36,9 +36,14 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   Sets a value for a key.
   """
   def set(key, value) when is_binary(key) do
-    ApiTracker.set_import_state(@default_source, key, value)
-    # Return format compatible with old system
-    {:ok, %{key: key, value: value}}
+    case ApiTracker.set_import_state(@default_source, key, value) do
+      {:ok, _} ->
+        # Return format compatible with old system
+        {:ok, %{key: key, value: value}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
@@ -60,8 +65,8 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   @doc """
   Get/set the total number of movies in TMDB.
   """
-  def tmdb_total_movies, do: get_integer("tmdb_total_movies", 0)
-  def set_tmdb_total_movies(count), do: set("tmdb_total_movies", count)
+  def tmdb_total_movies, do: get_integer("total_movies", 0)
+  def set_tmdb_total_movies(count), do: set("total_movies", count)
 
   @doc """
   Get/set the last page processed during import.
@@ -92,7 +97,7 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   def get_progress_with_metrics do
     # Get individual values using the correct key names
     our_total = count_our_movies()
-    tmdb_total = get_integer("tmdb_total_movies", 0)
+    tmdb_total = get_integer("total_movies", 0)
     last_page = get_integer("last_page_processed", 0)
     last_sync = get_date("last_full_sync")
     last_check = get_date("last_update_check")

@@ -88,7 +88,7 @@ defmodule Cinegraph.Services.OMDb.Client do
   defp make_request(params) do
     url = build_url(params)
 
-    Logger.debug("OMDb API request: #{url}")
+    Logger.debug("OMDb API request: #{sanitize_url(url)}")
 
     case HTTPoison.get(url, [], timeout: @timeout, recv_timeout: @timeout) do
       {:ok, %{status_code: 200, body: body}} ->
@@ -100,6 +100,19 @@ defmodule Cinegraph.Services.OMDb.Client do
       {:error, %HTTPoison.Error{reason: reason}} ->
         {:error, reason}
     end
+  end
+
+  defp sanitize_url(url) do
+    uri = URI.parse(url)
+    params = URI.decode_query(uri.query || "")
+    
+    redacted =
+      params
+      |> Map.update("apikey", "[REDACTED]", fn _ -> "[REDACTED]" end)
+      |> URI.encode_query()
+
+    %{uri | query: redacted}
+    |> URI.to_string()
   end
 
   defp build_url(params) do
