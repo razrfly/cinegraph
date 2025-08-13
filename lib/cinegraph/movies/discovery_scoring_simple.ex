@@ -2,19 +2,34 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
   @moduledoc """
   Simplified Tunable Movie Discovery System using materialized scores.
 
-  This version pre-calculates component scores for better performance.
+  This version pre-calculates component scores for better performance and
+  can use either database-driven weight profiles or legacy hard-coded weights.
   """
 
   import Ecto.Query, warn: false
   alias Cinegraph.Movies.DiscoveryCommon
+  alias Cinegraph.Metrics.ScoringService
 
   @default_weights DiscoveryCommon.default_weights()
 
   @doc """
   Applies discovery scoring to a movie query with user-defined weights.
-  This simplified version uses pre-calculated scores for better performance.
+  Can accept either a weight map (legacy) or a profile name (database-driven).
   """
-  def apply_scoring(query, weights \\ @default_weights, options \\ %{}) do
+  def apply_scoring(query, weights \\ @default_weights, options \\ %{})
+  
+  # Handle database profile by name
+  def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
+    ScoringService.apply_scoring(query, profile_name, options)
+  end
+  
+  # Handle database profile struct
+  def apply_scoring(query, %Cinegraph.Metrics.MetricWeightProfile{} = profile, options) do
+    ScoringService.apply_scoring(query, profile, options)
+  end
+  
+  # Legacy hard-coded weights (for backwards compatibility)
+  def apply_scoring(query, weights, options) when is_map(weights) do
     normalized_weights = normalize_weights(weights)
     min_score = Map.get(options, :min_score, 0.0)
 
@@ -171,9 +186,29 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
 
   @doc """
   Returns scoring presets for common use cases.
+  Now fetches from database instead of hard-coded values.
   """
   def get_presets do
-    DiscoveryCommon.get_presets()
+    # Try to get from database first
+    case ScoringService.get_all_profiles() do
+      [] ->
+        # Fallback to hard-coded if database is empty
+        DiscoveryCommon.get_presets()
+      
+      profiles ->
+        # Convert database profiles to discovery format
+        profiles
+        |> Enum.map(fn profile ->
+          key = profile.name 
+                |> String.downcase() 
+                |> String.replace(" ", "_")
+                |> String.to_atom()
+          
+          weights = ScoringService.profile_to_discovery_weights(profile)
+          {key, weights}
+        end)
+        |> Enum.into(%{})
+    end
   end
 
   # Private functions
