@@ -9,7 +9,10 @@ import Config
 
 config :cinegraph,
   ecto_repos: [Cinegraph.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  # Minimum confidence threshold for fuzzy matching movies (0.0 - 1.0)
+  # Movies found with confidence below this threshold will be skipped
+  fuzzy_match_min_confidence: 0.7
 
 # Configures the endpoint
 config :cinegraph, CinegraphWeb.Endpoint,
