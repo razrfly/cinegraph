@@ -7,7 +7,8 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   import Ecto.Query
 
   alias Cinegraph.Movies
-  alias Cinegraph.Movies.DiscoveryScoringSimple, as: DiscoveryScoring
+  # Use CRI-based scoring instead of hardcoded logic
+  alias Cinegraph.Movies.DiscoveryScoringCRI, as: DiscoveryScoring
 
   @impl true
   def mount(_params, _session, socket) do

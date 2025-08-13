@@ -35,6 +35,9 @@ defmodule CinegraphWeb.Router do
 
     # Import dashboard
     live "/imports", ImportDashboardLive, :index
+    
+    # CRI Dashboard
+    live "/cri", CRIDashboardLive, :index
 
     # Festival Events management
     live "/festival-events", FestivalEventLive.Index, :index
