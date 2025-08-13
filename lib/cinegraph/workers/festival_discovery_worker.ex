@@ -207,15 +207,18 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
 
   defp extract_category_name(category_data, format) do
     # Debug logging to understand the issue
-    data_type = cond do
-      is_map(category_data) -> "map"
-      is_tuple(category_data) -> "tuple(size: #{tuple_size(category_data)})"
-      is_list(category_data) -> "list"
-      true -> "other"
-    end
-    
-    Logger.debug("extract_category_name called with format: #{inspect(format)}, data type: #{data_type}")
-    
+    data_type =
+      cond do
+        is_map(category_data) -> "map"
+        is_tuple(category_data) -> "tuple(size: #{tuple_size(category_data)})"
+        is_list(category_data) -> "list"
+        true -> "other"
+      end
+
+    Logger.debug(
+      "extract_category_name called with format: #{inspect(format)}, data type: #{data_type}"
+    )
+
     case format do
       :oscar_format ->
         # Oscar format has a map with "category" key

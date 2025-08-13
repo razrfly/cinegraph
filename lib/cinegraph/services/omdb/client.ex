@@ -7,7 +7,7 @@ defmodule Cinegraph.Services.OMDb.Client do
   require Logger
   alias Cinegraph.Metrics.ApiTracker
 
-  @base_url "http://www.omdbapi.com/"
+  @base_url "https://www.omdbapi.com/"
   @timeout 30_000
 
   def get_movie_by_imdb_id(imdb_id, opts \\ []) do
@@ -105,7 +105,7 @@ defmodule Cinegraph.Services.OMDb.Client do
   defp sanitize_url(url) do
     uri = URI.parse(url)
     params = URI.decode_query(uri.query || "")
-    
+
     redacted =
       params
       |> Map.update("apikey", "[REDACTED]", fn _ -> "[REDACTED]" end)

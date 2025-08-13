@@ -287,7 +287,6 @@ defmodule Cinegraph.People do
     end
   end
 
-
   # Filter helper functions
   defp filter_by_search(query, nil), do: query
   defp filter_by_search(query, ""), do: query
@@ -467,7 +466,6 @@ defmodule Cinegraph.People do
         |> group_by([p], p.id)
         |> order_by([p, c], [{^direction, count(fragment("DISTINCT ?", c.movie_id))}])
         |> select([p, c], p)
-
 
       _ ->
         order_by(query, desc: :popularity)
