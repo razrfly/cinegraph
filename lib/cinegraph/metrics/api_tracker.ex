@@ -29,11 +29,15 @@ defmodule Cinegraph.Metrics.ApiTracker do
         fun.()
       rescue
         error ->
-          Logger.error("API operation failed: #{inspect(error)}")
+          Logger.error(Exception.format(:error, error, __STACKTRACE__))
           {:error, error}
       catch
-        :exit, reason -> {:error, {:exit, reason}}
-        kind, reason -> {:error, {kind, reason}}
+        :exit, reason ->
+          Logger.error("Caught exit: #{inspect(reason)}")
+          {:error, {:exit, reason}}
+        kind, reason ->
+          Logger.error("Caught #{inspect(kind)}: #{inspect(reason)}")
+          {:error, {kind, reason}}
       end
 
     end_time = System.monotonic_time(:millisecond)
@@ -276,12 +280,29 @@ defmodule Cinegraph.Metrics.ApiTracker do
   """
   def cleanup_old_metrics(days \\ 90) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 86400, :second)
-
-    {deleted, _} =
+    
+    # First, get the IDs of the latest import_state record per key
+    # These should be preserved regardless of age
+    latest_import_state_ids =
+      from(m in ApiLookupMetric,
+        where: m.operation == "import_state",
+        group_by: [m.source, m.target_identifier],
+        select: max(m.id)
+      )
+      |> Repo.all()
+    
+    # Delete old metrics but preserve the latest import_state per key
+    query = if Enum.empty?(latest_import_state_ids) do
       from(m in ApiLookupMetric, where: m.inserted_at < ^cutoff)
-      |> Repo.delete_all()
+    else
+      from(m in ApiLookupMetric, 
+        where: m.inserted_at < ^cutoff and m.id not in ^latest_import_state_ids
+      )
+    end
 
-    Logger.info("Cleaned up #{deleted} old API metrics")
+    {deleted, _} = Repo.delete_all(query)
+
+    Logger.info("Cleaned up #{deleted} old API metrics (preserved latest import_state records)")
     deleted
   end
 
@@ -297,13 +318,15 @@ defmodule Cinegraph.Metrics.ApiTracker do
       ApiTracker.set_import_state("tmdb", "total_movies", 50000)
   """
   def set_import_state(source, key, value) when is_binary(source) and is_binary(key) do
-    track_lookup(
+    # Use synchronous write for import state to ensure read-after-write consistency
+    result = {:ok, %{value: value}}
+    
+    attrs = build_metric_attrs(
       source,
       "import_state",
       key,
-      fn ->
-        {:ok, %{value: value}}
-      end,
+      result,
+      0,
       metadata: %{
         operation_type: "state_update",
         key: key,
@@ -311,6 +334,13 @@ defmodule Cinegraph.Metrics.ApiTracker do
         timestamp: DateTime.utc_now()
       }
     )
+    
+    case create_metric(attrs) do
+      {:ok, _metric} -> result
+      {:error, changeset} -> 
+        Logger.error("Failed to save import state: #{inspect(changeset.errors)}")
+        {:error, changeset}
+    end
   end
 
   @doc """
