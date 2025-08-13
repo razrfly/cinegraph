@@ -4,8 +4,8 @@
 alias Cinegraph.Repo
 import Ecto.Query
 
-# Clear existing profiles
-Repo.delete_all(from mwp in "metric_weight_profiles")
+# Only clear system profiles to preserve user-created ones
+Repo.delete_all(from mwp in "metric_weight_profiles", where: field(mwp, :is_system) == true)
 
 weight_profiles = [
   %{
@@ -189,27 +189,35 @@ weight_profiles = [
   }
 ]
 
-# Insert all weight profiles
+# Insert or update all system profiles idempotently
 now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
+# Validate profiles before inserting
 Enum.each(weight_profiles, fn profile ->
-  # Validate that category_weights sum to less than or equal to 1.0
-  # (Note: financial is 0 so totals won't always be exactly 1.0)
-  relevant_weights = Map.take(profile.category_weights, ["ratings", "awards", "cultural"])
-  sum = Map.values(relevant_weights) |> Enum.sum()
+  weights = profile.category_weights || %{}
+  sum = Map.values(weights) |> Enum.sum()
   
-  if sum > 1.01 do
-    IO.puts "WARNING: #{profile.name} weights sum to #{sum}"
+  if abs(sum - 1.0) > 0.01 do
+    IO.puts "WARNING: #{profile.name} weights sum to #{Float.round(sum * 100, 1)}%"
   end
-  
-  Repo.insert_all("metric_weight_profiles", [
+end)
+
+entries =
+  Enum.map(weight_profiles, fn profile ->
     Map.merge(profile, %{
       usage_count: 0,
       last_used_at: nil,
       inserted_at: now,
       updated_at: now
     })
-  ])
-end)
+  end)
 
-IO.puts "Inserted #{length(weight_profiles)} metric weight profiles"
+# Requires a unique index on metric_weight_profiles.name
+Repo.insert_all(
+  "metric_weight_profiles",
+  entries,
+  conflict_target: [:name],
+  on_conflict: {:replace, [:description, :weights, :category_weights, :active, :is_default, :is_system, :updated_at]}
+)
+
+IO.puts "Upserted #{length(weight_profiles)} metric weight profiles"

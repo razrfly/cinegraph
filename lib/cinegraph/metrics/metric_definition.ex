@@ -56,6 +56,34 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     |> unique_constraint(:code)
     |> validate_inclusion(:category, ["ratings", "awards", "financial", "cultural"])
     |> validate_inclusion(:normalization_type, ["linear", "logarithmic", "sigmoid", "boolean", "custom"])
-    |> validate_inclusion(:display_format, ["percentage", "score", "money", "count", "boolean"], allow_nil: true)
+    |> validate_display_format()
+    |> validate_number(:source_reliability, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
+    |> validate_raw_scale()
+    |> validate_format(:code, ~r/^[a-z0-9_\.]+$/i)
+  end
+
+  # Only validate display_format when present
+  defp validate_display_format(changeset) do
+    case get_field(changeset, :display_format) do
+      nil -> changeset
+      _ ->
+        validate_inclusion(
+          changeset,
+          :display_format,
+          ["percentage", "score", "money", "count", "boolean"]
+        )
+    end
+  end
+
+  # Ensure raw_scale_min <= raw_scale_max when both are provided
+  defp validate_raw_scale(changeset) do
+    min = get_field(changeset, :raw_scale_min)
+    max = get_field(changeset, :raw_scale_max)
+
+    if is_number(min) and is_number(max) and min > max do
+      add_error(changeset, :raw_scale_max, "must be greater than or equal to raw_scale_min")
+    else
+      changeset
+    end
   end
 end

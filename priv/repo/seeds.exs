@@ -578,9 +578,21 @@ Logger.info("  ✅ Created festival dates for 2024/2025")
 
 # Seed metric definitions and weight profiles for discovery system
 Logger.info("Seeding metric definitions...")
-Code.eval_file("priv/repo/seeds/metric_definitions.exs")
+try do
+  Code.eval_file(Application.app_dir(:cinegraph, "priv/repo/seeds/metric_definitions.exs"))
+rescue
+  e ->
+    Logger.error("Failed seeding metric definitions: #{Exception.message(e)}")
+    reraise e, __STACKTRACE__
+end
 
 Logger.info("Seeding discovery weight profiles...")
-Code.eval_file("priv/repo/seeds/metric_weight_profiles.exs")
+try do
+  Code.eval_file(Application.app_dir(:cinegraph, "priv/repo/seeds/metric_weight_profiles.exs"))
+rescue
+  e ->
+    Logger.error("Failed seeding metric weight profiles: #{Exception.message(e)}")
+    reraise e, __STACKTRACE__
+end
 
 Logger.info("Seeds completed!")
