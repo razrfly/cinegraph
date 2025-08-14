@@ -23,18 +23,44 @@ defmodule Cinegraph.Movies do
 
   alias Cinegraph.Services.TMDb
   alias Cinegraph.Metrics
+  alias Cinegraph.Metrics.ScoringService
   require Logger
 
   @doc """
   Returns the list of movies with pagination, filtering, and sorting.
   Only returns fully imported movies by default.
+  Includes discovery scores for movie cards when not using discovery metric sorting.
   """
   def list_movies(params \\ %{}) do
-    Movie
+    sort = params["sort"] || "release_date_desc"
+    
+    query = Movie
     |> where([m], m.import_status == "full")
     |> Filters.apply_filters(params)
+    
+    # Only add discovery scores for display if we're NOT using discovery metric sorting
+    # (discovery metric sorting in Filters handles its own scoring)
+    query = if uses_discovery_sorting?(sort) do
+      # Let Filters.apply_sorting handle the discovery scoring for these sorts
+      query
+    else
+      # Add discovery scores for movie cards display, but don't affect sorting
+      ScoringService.add_scores_for_display(query, "Balanced")
+    end
+    
+    query
     |> Filters.apply_sorting(params)
     |> paginate(params)
+  end
+  
+  defp uses_discovery_sorting?(sort) do
+    sort in [
+      "popular_opinion", "popular_opinion_asc",
+      "critical_acclaim", "critical_acclaim_asc", 
+      "industry_recognition", "industry_recognition_asc",
+      "cultural_impact", "cultural_impact_asc",
+      "people_quality", "people_quality_asc"
+    ]
   end
 
   @doc """

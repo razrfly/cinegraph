@@ -155,7 +155,7 @@ defmodule CinegraphWeb.MetricsLive.Index do
       COUNT(DISTINCT mc.movie_id) as movies_with_people_scores
     FROM movie_credits mc
     JOIN person_metrics pm ON mc.person_id = pm.person_id
-    WHERE pm.metric_type IN ('director_quality', 'actor_quality', 'writer_quality', 'producer_quality')
+    WHERE pm.metric_type IN ('quality_score', 'director_quality', 'actor_quality', 'writer_quality', 'producer_quality')
     """
     
     %{
