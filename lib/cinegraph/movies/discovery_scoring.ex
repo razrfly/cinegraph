@@ -127,7 +127,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                 ), 0
               ) * ? AS industry_recognition,
               
-              -- Cultural Impact Score (Canonical lists + popularity)
+              -- Cultural Impact Score (Canonical lists + popularity with log normalization)
               COALESCE(
                 (
                   SELECT 
@@ -138,8 +138,11 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                         THEN (SELECT count(*) FROM jsonb_object_keys(m2.canonical_sources)) * 0.1
                         ELSE 0
                       END) +
-                      -- Popularity score normalized
-                      (COALESCE(pop.value, 0) / 1000.0)
+                      -- Popularity score with logarithmic normalization
+                      (CASE 
+                        WHEN COALESCE(pop.value, 0) = 0 THEN 0
+                        ELSE LN(COALESCE(pop.value, 0) + 1) / LN(1001)
+                      END)
                     )
                   FROM movies m2
                   LEFT JOIN LATERAL (
