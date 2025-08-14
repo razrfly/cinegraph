@@ -204,24 +204,60 @@ defmodule Cinegraph.Movies.Filters do
       {:cultural_impact, :desc} ->
         order_by(query, [m], desc: fragment(
           """
-          COALESCE(LEAST(1.0, 
-            COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?.canonical_sources, '{}'::jsonb))), 0) * 0.1 + 
-            COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) / 1000.0
-          ), 0)
+          COALESCE(
+            LEAST(1.0, 
+              COALESCE(
+                (SELECT COUNT(*) * 0.1
+                 FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
+                0
+              ) + 
+              COALESCE(
+                (SELECT CASE 
+                  WHEN value IS NULL OR value = 0 THEN 0
+                  ELSE LN(value + 1) / LN(1001)
+                END
+                FROM external_metrics 
+                WHERE movie_id = ? 
+                  AND source = 'tmdb' 
+                  AND metric_type = 'popularity_score' 
+                LIMIT 1), 
+                0
+              )
+            ), 
+            0
+          )
           """,
-          m,
+          m.canonical_sources,
           m.id
         ))
       
       {:cultural_impact, :asc} ->
         order_by(query, [m], asc: fragment(
           """
-          COALESCE(LEAST(1.0, 
-            COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?.canonical_sources, '{}'::jsonb))), 0) * 0.1 + 
-            COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) / 1000.0
-          ), 0)
+          COALESCE(
+            LEAST(1.0, 
+              COALESCE(
+                (SELECT COUNT(*) * 0.1
+                 FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
+                0
+              ) + 
+              COALESCE(
+                (SELECT CASE 
+                  WHEN value IS NULL OR value = 0 THEN 0
+                  ELSE LN(value + 1) / LN(1001)
+                END
+                FROM external_metrics 
+                WHERE movie_id = ? 
+                  AND source = 'tmdb' 
+                  AND metric_type = 'popularity_score' 
+                LIMIT 1), 
+                0
+              )
+            ), 
+            0
+          )
           """,
-          m,
+          m.canonical_sources,
           m.id
         ))
     end
