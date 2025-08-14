@@ -39,13 +39,17 @@ weight_profiles = [
       
       # Financial (included but lower weight in balanced)
       "tmdb_revenue_worldwide" => 0.5,
-      "tmdb_budget" => 0.3
+      "tmdb_budget" => 0.3,
+      
+      # People Quality
+      "person_quality_score" => 1.5
     },
     category_weights: %{
-      "ratings" => 0.50,     # 50% (Popular + Critical combined, will be split 25%/25%)
-      "awards" => 0.25,      # 25%
+      "ratings" => 0.40,     # 40% (Popular + Critical combined, reduced from 50%)
+      "awards" => 0.20,      # 20% (reduced from 25%)
       "financial" => 0.00,   # 0% (not used in current scoring)
-      "cultural" => 0.25     # 25%
+      "cultural" => 0.20,    # 20% (reduced from 25%)
+      "people" => 0.20       # 20% (new - person quality scores)
     },
     active: true,
     is_default: true,
@@ -74,13 +78,17 @@ weight_profiles = [
       
       # Popular Opinion (10%)
       "imdb_rating" => 0.5,
-      "tmdb_rating" => 0.5
+      "tmdb_rating" => 0.5,
+      
+      # People Quality (10%)
+      "person_quality_score" => 1.0
     },
     category_weights: %{
-      "ratings" => 0.30,     # 30% (mostly audience ratings, will be split)
-      "awards" => 0.50,      # 50%
+      "ratings" => 0.25,     # 25% (reduced from 30%)
+      "awards" => 0.45,      # 45% (reduced from 50%)
       "financial" => 0.00,   # 0%
-      "cultural" => 0.20     # 20%
+      "cultural" => 0.20,    # 20% (unchanged)
+      "people" => 0.10       # 10% (new - person quality scores)
     },
     active: true,
     is_default: false,
@@ -108,13 +116,17 @@ weight_profiles = [
       
       # Popular Opinion (10%)
       "imdb_rating" => 0.3,
-      "tmdb_rating" => 0.3
+      "tmdb_rating" => 0.3,
+      
+      # People Quality (5%)
+      "person_quality_score" => 0.5
     },
     category_weights: %{
-      "ratings" => 0.55,     # 55% (but internal weights favor critics over audience)
-      "awards" => 0.15,      # 15%
+      "ratings" => 0.50,     # 50% (reduced from 55%, critics still favored)
+      "awards" => 0.15,      # 15% (unchanged)
       "financial" => 0.00,   # 0%
-      "cultural" => 0.30     # 30%
+      "cultural" => 0.30,    # 30% (unchanged)
+      "people" => 0.05       # 5% (new - minimal for critics choice)
     },
     active: true,
     is_default: false,
@@ -141,13 +153,17 @@ weight_profiles = [
       
       # Critical Acclaim (10%)
       "metacritic_metascore" => 0.3,
-      "rotten_tomatoes_tomatometer" => 0.3
+      "rotten_tomatoes_tomatometer" => 0.3,
+      
+      # People Quality (5%)
+      "person_quality_score" => 0.5
     },
     category_weights: %{
-      "ratings" => 0.45,     # 45% (audience ratings weighted high)
-      "awards" => 0.10,      # 10%
+      "ratings" => 0.40,     # 40% (reduced from 45%)
+      "awards" => 0.10,      # 10% (unchanged)
       "financial" => 0.10,   # 10% (box office success matters for crowd pleasers)
-      "cultural" => 0.35     # 35% (includes popularity metrics)
+      "cultural" => 0.35,    # 35% (includes popularity metrics)
+      "people" => 0.05       # 5% (new - minimal for crowd pleasers)
     },
     active: true,
     is_default: false,
@@ -171,17 +187,21 @@ weight_profiles = [
       # Festival presence (10%)
       "cannes_palme_dor" => 1.5,
       "venice_golden_lion" => 1.5,
-      "berlin_golden_bear" => 1.5
+      "berlin_golden_bear" => 1.5,
+      
+      # People Quality (15% - important for cult films)
+      "person_quality_score" => 2.0
       
       # Note: Financial metrics intentionally excluded
       # Cult classics often have low box office but high cultural impact
       # Setting these to 0 or excluding them entirely
     },
     category_weights: %{
-      "ratings" => 0.50,     # 50%
-      "awards" => 0.10,      # 10%
+      "ratings" => 0.40,     # 40% (reduced from 50%)
+      "awards" => 0.10,      # 10% (unchanged)
       "financial" => 0.00,   # 0%
-      "cultural" => 0.40     # 40%
+      "cultural" => 0.35,    # 35% (reduced from 40%)
+      "people" => 0.15       # 15% (new - important for cult classics)
     },
     active: true,
     is_default: false,
@@ -197,17 +217,17 @@ Enum.each(weight_profiles, fn profile ->
   weights = profile.category_weights || %{}
   
   # Check relevant weights (excluding financial which is typically 0)
-  relevant_weights = Map.take(weights, ["ratings", "awards", "cultural"])
+  relevant_weights = Map.take(weights, ["ratings", "awards", "cultural", "people"])
   sum = Map.values(relevant_weights) |> Enum.sum()
   
   # Provide detailed validation feedback
   cond do
     sum > 1.01 ->
       IO.puts "WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (> 1.01)"
-      IO.puts "  Breakdown: ratings=#{weights["ratings"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}"
+      IO.puts "  Breakdown: ratings=#{weights["ratings"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}"
     sum < 0.99 ->
       IO.puts "WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (< 0.99)"
-      IO.puts "  Breakdown: ratings=#{weights["ratings"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}"
+      IO.puts "  Breakdown: ratings=#{weights["ratings"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}"
     true ->
       :ok
   end

@@ -26,10 +26,11 @@ defmodule Cinegraph.Metrics.PersonMetric do
     |> validate_required(@required_fields)
     |> validate_number(:score, greater_than_or_equal_to: 0, less_than_or_equal_to: 100)
     |> validate_inclusion(:metric_type, [
-      "director_quality",
-      "actor_quality",
-      "writer_quality",
-      "producer_quality",
+      "quality_score",          # Universal person quality score
+      "director_quality",       # Legacy - for backward compatibility
+      "actor_quality",          # Legacy - for backward compatibility
+      "writer_quality",         # Legacy - for backward compatibility
+      "producer_quality",       # Legacy - for backward compatibility
       "awards_score",
       "career_longevity",
       "peer_recognition",

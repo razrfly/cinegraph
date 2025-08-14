@@ -326,7 +326,7 @@
     <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
       <h2 class="text-xl font-bold text-gray-900 mb-4">🧮 Category Composition Breakdown</h2>
       
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div class="border border-blue-200 rounded-lg p-4">
           <h3 class="font-semibold text-blue-900 mb-2">📊 Popular Opinion</h3>
           <p class="text-sm text-gray-600 mb-2">Average of audience ratings:</p>
@@ -400,6 +400,28 @@
           </ul>
           <div class="mt-2 p-2 bg-purple-50 rounded text-xs">
             Formula: <code>MIN(1.0, lists*0.1 + popularity/1000)</code>
+          </div>
+        </div>
+        
+        <div class="border border-orange-200 rounded-lg p-4">
+          <h3 class="font-semibold text-orange-900 mb-2">👥 People Quality</h3>
+          <p class="text-sm text-gray-600 mb-2">Average quality of talent:</p>
+          <ul class="space-y-1 text-sm">
+            <li class="flex justify-between">
+              <span>• Director Quality Score</span>
+              <span class="font-mono">weighted avg</span>
+            </li>
+            <li class="flex justify-between">
+              <span>• Actor Quality Score</span>
+              <span class="font-mono">weighted avg</span>
+            </li>
+            <li class="flex justify-between">
+              <span>• Writer Quality Score</span>
+              <span class="font-mono">weighted avg</span>
+            </li>
+          </ul>
+          <div class="mt-2 p-2 bg-orange-50 rounded text-xs">
+            Formula: <code>avg_person_quality / 100</code>
           </div>
         </div>
       </div>
