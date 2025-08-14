@@ -138,8 +138,8 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                         THEN (SELECT count(*) FROM jsonb_object_keys(m2.canonical_sources)) * 0.1
                         ELSE 0
                       END) +
-                      -- Popularity score normalized
-                      (COALESCE(pop.value, 0) / 1000.0)
+                      -- Popularity score normalized using log scale
+                      LN(COALESCE(pop.value, 0) + 1) / LN(1000.0 + 1)
                     )
                   FROM movies m2
                   LEFT JOIN LATERAL (
@@ -217,7 +217,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                           THEN (SELECT count(*) FROM jsonb_object_keys(m2.canonical_sources)) * 0.1
                           ELSE 0
                         END) +
-                        (COALESCE(pop.value, 0) / 1000.0)
+                        LN(COALESCE(pop.value, 0) + 1) / LN(1000.0 + 1)
                       )
                     FROM movies m2
                     LEFT JOIN LATERAL (
@@ -350,7 +350,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
           THEN (SELECT count(*) FROM jsonb_object_keys(m.canonical_sources)) * 0.1
           ELSE 0
         END) +
-        (COALESCE(pop.value, 0) / 1000.0)
+        LN(COALESCE(pop.value, 0) + 1) / LN(1000.0 + 1)
       ) as score
     FROM movies m
     LEFT JOIN LATERAL (

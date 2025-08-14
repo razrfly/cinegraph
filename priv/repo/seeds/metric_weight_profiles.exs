@@ -202,13 +202,30 @@ Enum.each(weight_profiles, fn profile ->
   end
 end)
 
+# Check if a default profile already exists (could be user-created)
+default_exists = 
+  Repo.aggregate(
+    from(p in "metric_weight_profiles", where: field(p, :is_default) == true),
+    :count,
+    :id
+  ) > 0
+
 entries =
   Enum.map(weight_profiles, fn profile ->
+    # Only allow one default - if one exists, set others to false
+    is_default = 
+      if profile.is_default and default_exists do
+        false
+      else
+        profile.is_default
+      end
+    
     Map.merge(profile, %{
       usage_count: 0,
       last_used_at: nil,
       inserted_at: now,
-      updated_at: now
+      updated_at: now,
+      is_default: is_default
     })
   end)
 
@@ -219,5 +236,41 @@ Repo.insert_all(
   conflict_target: [:name],
   on_conflict: {:replace, [:description, :weights, :category_weights, :active, :is_default, :is_system, :updated_at]}
 )
+
+# Ensure exactly one default exists after upsert
+# If no default was set, make "Balanced" the default
+default_count = Repo.aggregate(
+  from(p in "metric_weight_profiles", where: field(p, :is_default) == true),
+  :count,
+  :id
+)
+
+cond do
+  default_count == 0 ->
+    # No default exists, set Balanced as default
+    from(p in "metric_weight_profiles", where: p.name == "Balanced")
+    |> Repo.update_all(set: [is_default: true])
+    IO.puts "Set 'Balanced' as the default profile"
+  
+  default_count > 1 ->
+    # Multiple defaults exist, keep only the first one
+    first_default = 
+      from(p in "metric_weight_profiles", 
+        where: field(p, :is_default) == true,
+        order_by: [asc: p.id],
+        limit: 1
+      )
+      |> Repo.one()
+    
+    from(p in "metric_weight_profiles", 
+      where: field(p, :is_default) == true and p.id != ^first_default.id
+    )
+    |> Repo.update_all(set: [is_default: false])
+    IO.puts "Fixed multiple defaults - kept '#{first_default.name}' as default"
+  
+  true ->
+    # Exactly one default exists, all good
+    :ok
+end
 
 IO.puts "Upserted #{length(weight_profiles)} metric weight profiles"

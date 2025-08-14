@@ -6,14 +6,16 @@ defmodule Cinegraph.Metrics.ScoringService do
   
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
-  alias Cinegraph.Metrics.MetricWeightProfile
+  alias Cinegraph.Metrics.{MetricWeightProfile, Normalization}
   
   @doc """
   Gets a weight profile by name from the database.
   Returns the profile or nil if not found.
   """
   def get_profile(name) when is_binary(name) do
-    Repo.get_by(MetricWeightProfile, name: name, active: true)
+    # Normalize binary names for consistent lookups
+    normalized_name = normalize_profile_name(name)
+    Repo.get_by(MetricWeightProfile, name: normalized_name, active: true)
   end
   
   def get_profile(name) when is_atom(name) do
@@ -44,6 +46,8 @@ defmodule Cinegraph.Metrics.ScoringService do
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
     ratings_weight = get_category_weight(profile, "ratings", 0.5)
+    cultural_weight = get_category_weight(profile, "cultural", 0.25)
+    financial_weight = get_category_weight(profile, "financial", 0.0)
     
     # Split ratings into popular and critical based on the profile
     # For now, we'll split it 50/50 for popular vs critical within ratings
@@ -52,7 +56,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       popular_opinion: ratings_weight * 0.5,      # Half of ratings weight
       critical_acclaim: ratings_weight * 0.5,     # Half of ratings weight  
       industry_recognition: get_category_weight(profile, "awards", 0.25),
-      cultural_impact: get_category_weight(profile, "cultural", 0.25)
+      # Financial metrics contribute to cultural impact
+      cultural_impact: cultural_weight + financial_weight
     }
   end
   
@@ -64,10 +69,13 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: name,
       description: "Custom weight profile created from discovery UI",
       category_weights: %{
-        "ratings" => Map.get(weights, :popular_opinion, 0.25),
+        # Ratings combines both popular_opinion and critical_acclaim
+        "ratings" => 
+          Map.get(weights, :popular_opinion, 0.25) +
+          Map.get(weights, :critical_acclaim, 0.25),
         "awards" => Map.get(weights, :industry_recognition, 0.25),
         # Financial impact is not directly represented in discovery weights
-        "financial" => Map.get(weights, :financial_impact, 0.1),
+        "financial" => Map.get(weights, :financial_impact, 0.0),
         "cultural" => Map.get(weights, :cultural_impact, 0.25)
       },
       weights: build_metric_weights_from_discovery(weights),
@@ -94,6 +102,11 @@ defmodule Cinegraph.Metrics.ScoringService do
     |> select_with_scores(normalized_weights)
     |> filter_by_min_score(normalized_weights, min_score)
     |> order_by_score(normalized_weights)
+  end
+  
+  def apply_scoring(query, profile_name, options) when is_atom(profile_name) do
+    # Normalize atom to string and delegate
+    apply_scoring(query, normalize_profile_name(profile_name), options)
   end
   
   def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
@@ -232,12 +245,12 @@ defmodule Cinegraph.Metrics.ScoringService do
           ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + 
           ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + 
           ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
-          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)
+          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0)
           """,
           ^weights.popular_opinion, tr.value, ir.value,
           ^weights.critical_acclaim, mc.value, rt.value,
           ^weights.industry_recognition, f.wins, f.nominations,
-          ^weights.cultural_impact, m.canonical_sources, pop.value
+          ^weights.cultural_impact, m.canonical_sources, ^Normalization.canonical_sources_weight(), pop.value, ^Normalization.popularity_max_value()
         ),
         score_components: %{
           popular_opinion: fragment(
@@ -253,8 +266,8 @@ defmodule Cinegraph.Metrics.ScoringService do
             f.wins, f.nominations
           ),
           cultural_impact: fragment(
-            "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
-            m.canonical_sources, pop.value
+            "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0)",
+            m.canonical_sources, ^Normalization.canonical_sources_weight(), pop.value, ^Normalization.popularity_max_value()
           )
         }
       }
@@ -266,11 +279,11 @@ defmodule Cinegraph.Metrics.ScoringService do
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
        rotten_tomatoes: rt, popularity: pop, festivals: f],
 fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0) >= ?",
+        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0) >= ?",
         ^weights.popular_opinion, tr.value, ir.value,
         ^weights.critical_acclaim, mc.value, rt.value,
         ^weights.industry_recognition, f.wins, f.nominations,
-        ^weights.cultural_impact, m.canonical_sources, pop.value,
+        ^weights.cultural_impact, m.canonical_sources, ^Normalization.canonical_sources_weight(), pop.value, ^Normalization.popularity_max_value(),
         ^min_score
       )
     )
@@ -281,11 +294,11 @@ fragment(
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
        rotten_tomatoes: rt, popularity: pop, festivals: f],
 desc: fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
+        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0)",
         ^weights.popular_opinion, tr.value, ir.value,
         ^weights.critical_acclaim, mc.value, rt.value,
         ^weights.industry_recognition, f.wins, f.nominations,
-        ^weights.cultural_impact, m.canonical_sources, pop.value
+        ^weights.cultural_impact, m.canonical_sources, ^Normalization.canonical_sources_weight(), pop.value, ^Normalization.popularity_max_value()
       )
     )
   end

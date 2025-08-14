@@ -78,7 +78,7 @@
         <div class="bg-white rounded-lg shadow">
           <div class="px-6 py-4 border-b border-gray-200">
             <h2 class="text-xl font-semibold text-gray-900 capitalize flex items-center">
-              <div class={"w-3 h-3 rounded-full mr-2 bg-#{category_color(category)}-500"}></div>
+              <div class={"w-3 h-3 rounded-full mr-2 #{category_color_class(category)}"}></div>
               <%= String.replace(category, "_", " ") %>
             </h2>
           </div>

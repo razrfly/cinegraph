@@ -37,12 +37,16 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
 
   @impl true
   def handle_event("select_profile", %{"profile" => profile_name}, socket) do
-    profile = Enum.find(socket.assigns.weight_profiles, & &1.name == profile_name)
-    
-    {:noreply,
-     socket
-     |> assign(:selected_profile, profile)
-     |> calculate_movie_score(socket.assigns.movie, profile)}
+    case Enum.find(socket.assigns.weight_profiles, & &1.name == profile_name) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Invalid profile selected: #{profile_name}")}
+      
+      profile ->
+        {:noreply,
+         socket
+         |> assign(:selected_profile, profile)
+         |> calculate_movie_score(socket.assigns.movie, profile)}
+    end
   end
 
   # Private functions
@@ -147,12 +151,10 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
     end)
   end
 
-  defp calculate_movie_score(socket, movie, profile) do
-    # Recalculate score for the selected profile
-    scores = calculate_all_profile_scores(movie, [profile])
-    selected_score = List.first(scores)
-    
-    assign(socket, :selected_score, selected_score)
+  defp calculate_movie_score(socket, _movie, _profile) do
+    # Profile scores are already calculated in load_movie_metrics
+    # The template uses @profile_scores for display
+    socket
   end
 
   # Helper functions for the template
@@ -172,11 +174,18 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
   def format_raw_value(%{raw_value_text: text}) when is_binary(text), do: text
   def format_raw_value(_), do: "N/A"
 
-  def category_color("ratings"), do: "blue"
-  def category_color("awards"), do: "yellow"
-  def category_color("cultural"), do: "purple"
-  def category_color("financial"), do: "green"
-  def category_color(_), do: "gray"
+  def category_color_class("ratings"), do: "bg-blue-500"
+  def category_color_class("awards"), do: "bg-yellow-500"
+  def category_color_class("cultural"), do: "bg-purple-500"
+  def category_color_class("financial"), do: "bg-green-500"
+  def category_color_class(_), do: "bg-gray-500"
+  
+  # Also provide text color classes for consistency
+  def category_text_class("ratings"), do: "text-blue-600"
+  def category_text_class("awards"), do: "text-yellow-600"
+  def category_text_class("cultural"), do: "text-purple-600"
+  def category_text_class("financial"), do: "text-green-600"
+  def category_text_class(_), do: "text-gray-600"
 
   def get_metric_by_code(metric_values, code) do
     Enum.find(metric_values, &(&1.metric_code == code))

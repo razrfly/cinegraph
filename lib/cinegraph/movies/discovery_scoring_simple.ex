@@ -8,7 +8,7 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
 
   import Ecto.Query, warn: false
   alias Cinegraph.Movies.DiscoveryCommon
-  alias Cinegraph.Metrics.ScoringService
+  alias Cinegraph.Metrics.{ScoringService, Normalization}
 
   @default_weights DiscoveryCommon.default_weights()
 
@@ -86,7 +86,7 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       %{
         discovery_score:
           fragment(
-            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
+            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0)",
             ^normalized_weights.popular_opinion,
             tr.value,
             ir.value,
@@ -98,7 +98,9 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
             f.nominations,
             ^normalized_weights.cultural_impact,
             m.canonical_sources,
-            pop.value
+            ^Normalization.canonical_sources_weight(),
+            pop.value,
+            ^Normalization.popularity_max_value()
           ),
         score_components: %{
           popular_opinion:
@@ -121,9 +123,11 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
             ),
           cultural_impact:
             fragment(
-              "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
+              "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0)",
               m.canonical_sources,
-              pop.value
+              ^Normalization.canonical_sources_weight(),
+              pop.value,
+              ^Normalization.popularity_max_value()
             )
         }
       }
@@ -139,7 +143,7 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         festivals: f
       ],
       fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0) >= ?",
+        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0) >= ?",
         ^normalized_weights.popular_opinion,
         tr.value,
         ir.value,
@@ -151,7 +155,9 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         f.nominations,
         ^normalized_weights.cultural_impact,
         m.canonical_sources,
+        ^Normalization.canonical_sources_weight(),
         pop.value,
+        ^Normalization.popularity_max_value(),
         ^min_score
       )
     )
@@ -167,7 +173,7 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       ],
       desc:
         fragment(
-          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
+          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * ? + LN(COALESCE(?, 0) + 1) / LN(? + 1)), 0)",
           ^normalized_weights.popular_opinion,
           tr.value,
           ir.value,
@@ -179,7 +185,9 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
           f.nominations,
           ^normalized_weights.cultural_impact,
           m.canonical_sources,
-          pop.value
+          ^Normalization.canonical_sources_weight(),
+          pop.value,
+          ^Normalization.popularity_max_value()
         )
     )
   end

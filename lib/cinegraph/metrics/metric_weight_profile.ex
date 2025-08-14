@@ -78,8 +78,8 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
         id -> from p in __MODULE__, where: p.is_default == true and p.id != ^id
       end
       
-      case Cinegraph.Repo.one(query) do
-        nil -> changeset
+      case Cinegraph.Repo.aggregate(query, :count, :id) do
+        0 -> changeset
         _ -> add_error(changeset, :is_default, "only one profile can be default")
       end
     else
