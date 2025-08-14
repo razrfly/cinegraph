@@ -40,10 +40,14 @@ defmodule Cinegraph.Metrics.ScoringService do
   Converts a database weight profile to the format expected by the discovery UI.
   Maps category_weights to the four main dimensions.
   
-  Note: "ratings" category is split into popular_opinion and critical_acclaim
+  Note: 
+  - "ratings" category is split into popular_opinion and critical_acclaim
+  - "financial" category is folded into cultural_impact (box office success affects cultural penetration)
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
     ratings_weight = get_category_weight(profile, "ratings", 0.5)
+    financial_weight = get_category_weight(profile, "financial", 0.0)
+    cultural_weight = get_category_weight(profile, "cultural", 0.25)
     
     # Split ratings into popular and critical based on the profile
     # For now, we'll split it 50/50 for popular vs critical within ratings
@@ -52,7 +56,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       popular_opinion: ratings_weight * 0.5,      # Half of ratings weight
       critical_acclaim: ratings_weight * 0.5,     # Half of ratings weight  
       industry_recognition: get_category_weight(profile, "awards", 0.25),
-      cultural_impact: get_category_weight(profile, "cultural", 0.25)
+      # Financial success contributes to cultural impact (box office affects cultural penetration)
+      cultural_impact: cultural_weight + financial_weight * 0.5
     }
   end
   
@@ -232,12 +237,12 @@ defmodule Cinegraph.Metrics.ScoringService do
           ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + 
           ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + 
           ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
-          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)
+          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)
           """,
           ^weights.popular_opinion, tr.value, ir.value,
           ^weights.critical_acclaim, mc.value, rt.value,
           ^weights.industry_recognition, f.wins, f.nominations,
-          ^weights.cultural_impact, m.canonical_sources, pop.value
+          ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value
         ),
         score_components: %{
           popular_opinion: fragment(
@@ -253,8 +258,8 @@ defmodule Cinegraph.Metrics.ScoringService do
             f.wins, f.nominations
           ),
           cultural_impact: fragment(
-            "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
-            m.canonical_sources, pop.value
+            "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
+            m.canonical_sources, pop.value, pop.value
           )
         }
       }
@@ -266,11 +271,11 @@ defmodule Cinegraph.Metrics.ScoringService do
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
        rotten_tomatoes: rt, popularity: pop, festivals: f],
 fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0) >= ?",
+        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) >= ?",
         ^weights.popular_opinion, tr.value, ir.value,
         ^weights.critical_acclaim, mc.value, rt.value,
         ^weights.industry_recognition, f.wins, f.nominations,
-        ^weights.cultural_impact, m.canonical_sources, pop.value,
+        ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
         ^min_score
       )
     )
@@ -281,11 +286,11 @@ fragment(
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
        rotten_tomatoes: rt, popularity: pop, festivals: f],
 desc: fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + COALESCE(?, 0) / 1000.0), 0)",
+        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
         ^weights.popular_opinion, tr.value, ir.value,
         ^weights.critical_acclaim, mc.value, rt.value,
         ^weights.industry_recognition, f.wins, f.nominations,
-        ^weights.cultural_impact, m.canonical_sources, pop.value
+        ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value
       )
     )
   end
