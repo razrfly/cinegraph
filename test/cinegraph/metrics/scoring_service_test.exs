@@ -79,6 +79,44 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.industry_recognition == 0.25
       assert result.cultural_impact == 0.25
     end
+    
+    test "handles zero ratings weight" do
+      profile = %MetricWeightProfile{
+        name: "No Ratings Profile",
+        category_weights: %{
+          "ratings" => 0.00,
+          "awards" => 0.50,
+          "cultural" => 0.50,
+          "financial" => 0.00
+        }
+      }
+      
+      result = ScoringService.profile_to_discovery_weights(profile)
+      
+      assert result.popular_opinion == 0.00
+      assert result.critical_acclaim == 0.00
+      assert result.industry_recognition == 0.50
+      assert result.cultural_impact == 0.50
+    end
+    
+    test "handles full ratings weight" do
+      profile = %MetricWeightProfile{
+        name: "All Ratings Profile",
+        category_weights: %{
+          "ratings" => 1.00,
+          "awards" => 0.00,
+          "cultural" => 0.00,
+          "financial" => 0.00
+        }
+      }
+      
+      result = ScoringService.profile_to_discovery_weights(profile)
+      
+      assert result.popular_opinion == 0.50  # 1.00 * 0.5
+      assert result.critical_acclaim == 0.50  # 1.00 * 0.5
+      assert result.industry_recognition == 0.00
+      assert result.cultural_impact == 0.00
+    end
   end
   
   describe "discovery_weights_to_profile/2" do
@@ -97,6 +135,36 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.category_weights["ratings"] == 0.30
       assert result.category_weights["awards"] == 0.25
       assert result.category_weights["cultural"] == 0.25
+    end
+  end
+  
+  describe "get_category_weight/3" do
+    setup do
+      profile = %MetricWeightProfile{
+        name: "Test Profile",
+        category_weights: %{
+          "ratings" => 0.50,
+          "awards" => 0.25,
+          "cultural" => 0.25
+        }
+      }
+      {:ok, profile: profile}
+    end
+    
+    test "returns weight for existing category", %{profile: profile} do
+      assert ScoringService.get_category_weight(profile, "ratings", 0.0) == 0.50
+      assert ScoringService.get_category_weight(profile, "awards", 0.0) == 0.25
+      assert ScoringService.get_category_weight(profile, "cultural", 0.0) == 0.25
+    end
+    
+    test "returns default for missing category", %{profile: profile} do
+      assert ScoringService.get_category_weight(profile, "financial", 0.0) == 0.0
+      assert ScoringService.get_category_weight(profile, "nonexistent", 0.5) == 0.5
+    end
+    
+    test "handles nil category_weights gracefully", %{profile: profile} do
+      profile_with_nil = %{profile | category_weights: nil}
+      assert ScoringService.get_category_weight(profile_with_nil, "ratings", 0.5) == 0.5
     end
   end
 end
