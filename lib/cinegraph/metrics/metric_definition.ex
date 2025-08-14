@@ -54,7 +54,7 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> unique_constraint(:code)
-    |> validate_inclusion(:category, ["ratings", "awards", "financial", "cultural"])
+    |> validate_inclusion(:category, ["ratings", "awards", "financial", "cultural", "people"])
     |> validate_inclusion(:normalization_type, ["linear", "logarithmic", "sigmoid", "boolean", "custom"])
     |> validate_display_format()
     |> validate_number(:source_reliability, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 1.0)
