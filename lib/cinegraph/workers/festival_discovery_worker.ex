@@ -23,6 +23,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
   alias Cinegraph.Workers.TMDbDetailsWorker
   alias Cinegraph.Movies.{Movie, Person}
+  alias Cinegraph.People.FestivalPersonInferrer
   alias Cinegraph.Services.TMDb.Extended, as: TMDbExtended
   alias Cinegraph.Services.TMDb.FallbackSearch
   alias Cinegraph.Metrics.ApiTracker
@@ -65,8 +66,12 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         {:error, :ceremony_not_found}
 
       ceremony ->
+        # Store organization info before any modifications
+        organization_abbr = ceremony.organization && ceremony.organization.abbreviation
+        organization_id = ceremony.organization && ceremony.organization.id
+        
         Logger.info(
-          "Processing #{ceremony.organization.abbreviation} ceremony #{ceremony.year} (ID: #{ceremony.id})"
+          "Processing #{organization_abbr} ceremony #{ceremony.year} (ID: #{ceremony.id})"
         )
 
         # First ensure ceremony is enhanced with IMDb data
@@ -89,8 +94,8 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
               "Processing category #{index + 1}/#{length(categories)}: #{category_name || "Unknown"}"
             )
 
-            # Get or create the festival category
-            festival_category = ensure_category_exists(category_name, ceremony.organization_id)
+            # Get or create the festival category (use stored organization_id)
+            festival_category = ensure_category_exists(category_name, organization_id)
 
             # Process nominees if category was created successfully
             category_results =
@@ -174,26 +179,18 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         # Broadcast completion
         broadcast_discovery_complete(ceremony, summary)
 
-        # Queue person inference for non-Oscar festivals (Issue #250)
-        abbr = ceremony.organization && ceremony.organization.abbreviation
-        
-        if is_binary(abbr) and abbr != "AMPAS" do
-          %{
-            "ceremony_id" => ceremony.id,
-            "abbr" => abbr,
-            "year" => ceremony.year
-          }
-          |> Cinegraph.Workers.FestivalPersonInferenceWorker.new()
-          |> Oban.insert()
-          |> case do
-            {:ok, job} ->
-              Logger.info("Queued person inference job ##{job.id} for #{abbr} #{ceremony.year}")
-              
-            {:error, reason} ->
-              Logger.warning(
-                "Failed to queue person inference for #{abbr} #{ceremony.year}: #{inspect(reason)}"
-              )
-          end
+        # Run person inference DIRECTLY for non-Oscar festivals (Issue #250 & #286)
+        # Simple solution: just run it here instead of queuing another job
+        if is_binary(organization_abbr) and organization_abbr != "AMPAS" do
+          Logger.info("Running person inference for #{organization_abbr} #{ceremony.year}")
+          
+          # Run the inference directly - this is the simple, elegant solution
+          result = FestivalPersonInferrer.infer_all_director_nominations()
+          
+          Logger.info(
+            "Person inference completed for #{organization_abbr} #{ceremony.year}: " <>
+            "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed"
+          )
         end
 
         :ok

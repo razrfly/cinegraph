@@ -15,12 +15,13 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     # Load presets from database
     presets = DiscoveryScoring.get_presets()
     
-    # Get the default/balanced weights
+    # Get the default/balanced weights - now including people_quality
     weights = Map.get(presets, :balanced, %{
-      popular_opinion: 0.25,
-      critical_acclaim: 0.25,
-      industry_recognition: 0.25,
-      cultural_impact: 0.25
+      popular_opinion: 0.2,
+      critical_acclaim: 0.2,
+      industry_recognition: 0.2,
+      cultural_impact: 0.2,
+      people_quality: 0.2
     })
     
     # Store the current profile for database lookups
@@ -54,7 +55,8 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                "popular_opinion",
                "critical_acclaim",
                "industry_recognition",
-               "cultural_impact"
+               "cultural_impact",
+               "people_quality"
              ] ->
           dimension = String.to_atom(key)
 
@@ -299,6 +301,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                 <li><strong>Critical Acclaim:</strong> Metacritic and Rotten Tomatoes critic scores</li>
                 <li><strong>Industry Recognition:</strong> Festival awards and Oscar nominations/wins</li>
                 <li><strong>Cultural Impact:</strong> Presence in canonical film lists and popularity metrics</li>
+                <li><strong>People Quality:</strong> Quality scores of directors, actors, and crew members</li>
               </ul>
               <p class="mt-2">Setting this to 50% will only show movies that score at least 0.5 out of 1.0 based on your selected weights.</p>
             </div>
@@ -419,12 +422,14 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   defp humanize_dimension(:critical_acclaim), do: "Critical Acclaim"
   defp humanize_dimension(:industry_recognition), do: "Industry Recognition"
   defp humanize_dimension(:cultural_impact), do: "Cultural Impact"
+  defp humanize_dimension(:people_quality), do: "People Quality"
   defp humanize_dimension(dimension), do: Phoenix.Naming.humanize(dimension)
 
   defp dimension_description(:popular_opinion), do: "TMDb and IMDb user ratings"
   defp dimension_description(:critical_acclaim), do: "Metacritic and Rotten Tomatoes scores"
   defp dimension_description(:industry_recognition), do: "Festival awards and nominations"
   defp dimension_description(:cultural_impact), do: "Canonical lists and popularity metrics"
+  defp dimension_description(:people_quality), do: "Quality of directors, actors, and crew"
   defp dimension_description(_), do: ""
 
   defp format_score(nil), do: "N/A"
