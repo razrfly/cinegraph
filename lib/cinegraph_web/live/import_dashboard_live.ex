@@ -787,9 +787,11 @@ defmodule CinegraphWeb.ImportDashboardLive do
       movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count),
       movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count),
       canonical_movies: get_canonical_movies_count(),
-      oscar_movies: get_oscar_movies_count(),
-      venice_movies: get_venice_movies_count(),
+      festival_nominations: get_festival_nominations_count(),
+      festival_wins: get_festival_wins_count(),
       total_people: Repo.aggregate(Cinegraph.Movies.Person, :count),
+      directors_with_pqs: get_directors_with_pqs_count(),
+      actors_with_pqs: get_actors_with_pqs_count(),
       total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count),
       total_genres: Repo.aggregate(Cinegraph.Movies.Genre, :count),
       total_keywords: Repo.aggregate(Cinegraph.Movies.Keyword, :count),
@@ -852,41 +854,44 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end
   end
 
-  defp get_oscar_movies_count do
-    # Count movies that have Oscar nominations in the festival_nominations table
-    oscar_org = Cinegraph.Festivals.get_or_create_oscar_organization()
-
-    if oscar_org && oscar_org.id do
-      # Count distinct movies with Oscar nominations
-      Repo.one(
-        from n in Cinegraph.Festivals.FestivalNomination,
-          join: c in Cinegraph.Festivals.FestivalCeremony,
-          on: n.ceremony_id == c.id,
-          where: c.organization_id == ^oscar_org.id,
-          select: count(n.movie_id, :distinct)
-      ) || 0
-    else
-      Logger.error("Failed to get or create Oscar organization for dashboard stats")
-      0
-    end
+  defp get_festival_nominations_count do
+    # Count total distinct movies with any festival nominations
+    Repo.one(
+      from n in Cinegraph.Festivals.FestivalNomination,
+        where: not is_nil(n.movie_id),
+        select: count(n.movie_id, :distinct)
+    ) || 0
   end
 
-  defp get_venice_movies_count do
-    # Count movies that have Venice nominations in the festival_nominations table
-    venice_org = Cinegraph.Festivals.get_organization_by_abbreviation("VIFF")
+  defp get_festival_wins_count do
+    # Count total distinct movies with any festival wins
+    Repo.one(
+      from n in Cinegraph.Festivals.FestivalNomination,
+        where: not is_nil(n.movie_id) and n.won == true,
+        select: count(n.movie_id, :distinct)
+    ) || 0
+  end
 
-    if venice_org && venice_org.id do
-      # Count distinct movies with Venice nominations
-      Repo.one(
-        from n in Cinegraph.Festivals.FestivalNomination,
-          join: c in Cinegraph.Festivals.FestivalCeremony,
-          on: n.ceremony_id == c.id,
-          where: c.organization_id == ^venice_org.id,
-          select: count(n.movie_id, :distinct)
-      ) || 0
-    else
-      0
-    end
+  defp get_directors_with_pqs_count do
+    # Count directors with PQS scores
+    Repo.one(
+      from pm in Cinegraph.Metrics.PersonMetric,
+        join: p in Cinegraph.Movies.Person, on: pm.person_id == p.id,
+        join: c in Cinegraph.Movies.Credit, on: c.person_id == p.id,
+        where: pm.metric_type == "quality_score" and c.credit_type == "crew" and c.job == "Director",
+        select: count(pm.person_id, :distinct)
+    ) || 0
+  end
+
+  defp get_actors_with_pqs_count do
+    # Count actors with PQS scores
+    Repo.one(
+      from pm in Cinegraph.Metrics.PersonMetric,
+        join: p in Cinegraph.Movies.Person, on: pm.person_id == p.id,
+        join: c in Cinegraph.Movies.Credit, on: c.person_id == p.id,
+        where: pm.metric_type == "quality_score" and c.credit_type == "cast",
+        select: count(pm.person_id, :distinct)
+    ) || 0
   end
 
   defp get_canonical_list_stats do

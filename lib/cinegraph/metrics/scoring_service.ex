@@ -282,6 +282,21 @@ defmodule Cinegraph.Metrics.ScoringService do
   end
   
   defp select_with_scores(query, weights) do
+    # Check if the query already has a GROUP BY clause (e.g., from genre filtering)
+    # If it does, we need to handle the selection differently
+    if has_group_by?(query) do
+      select_with_scores_grouped(query, weights)
+    else
+      select_with_scores_ungrouped(query, weights)
+    end
+  end
+  
+  defp has_group_by?(query) do
+    # Check if the query has a group_by clause
+    query.group_bys != []
+  end
+  
+  defp select_with_scores_ungrouped(query, weights) do
     select_merge(query,
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc, 
        rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
@@ -326,34 +341,113 @@ defmodule Cinegraph.Metrics.ScoringService do
     )
   end
   
-  defp filter_by_min_score(query, weights, min_score) do
-    where(query,
-      [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
+  defp select_with_scores_grouped(query, weights) do
+    # When using GROUP BY, we need to use aggregate functions or include columns in GROUP BY
+    # Using MAX() here since we're grouping by movie ID, so there's only one value per group
+    select_merge(query,
+      [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc, 
        rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
-fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0) >= ?",
-        ^weights.popular_opinion, tr.value, ir.value,
-        ^weights.critical_acclaim, mc.value, rt.value,
-        ^weights.industry_recognition, f.wins, f.nominations,
-        ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
-        ^weights.people_quality, pq.avg_person_quality,
-        ^min_score
-      )
+      %{
+        discovery_score: fragment(
+          """
+          ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + 
+          ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + 
+          ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
+          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
+          ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)
+          """,
+          ^weights.popular_opinion, tr.value, ir.value,
+          ^weights.critical_acclaim, mc.value, rt.value,
+          ^weights.industry_recognition, f.wins, f.nominations,
+          ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
+          ^weights.people_quality, pq.avg_person_quality
+        ),
+        score_components: %{
+          popular_opinion: fragment(
+            "COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0)",
+            tr.value, ir.value
+          ),
+          critical_acclaim: fragment(
+            "COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0)",
+            mc.value, rt.value
+          ),
+          industry_recognition: fragment(
+            "COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0)",
+            f.wins, f.nominations
+          ),
+          cultural_impact: fragment(
+            "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0)",
+            m.canonical_sources, pop.value, pop.value
+          ),
+          people_quality: fragment(
+            "COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
+            pq.avg_person_quality
+          )
+        }
+      }
     )
   end
   
-  defp order_by_score(query, weights) do
-    order_by(query,
-      [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
-       rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
-desc: fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
-        ^weights.popular_opinion, tr.value, ir.value,
-        ^weights.critical_acclaim, mc.value, rt.value,
-        ^weights.industry_recognition, f.wins, f.nominations,
-        ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
-        ^weights.people_quality, pq.avg_person_quality
+  defp filter_by_min_score(query, weights, min_score) do
+    if has_group_by?(query) do
+      # When grouped, use HAVING instead of WHERE and aggregate functions
+      having(query,
+        [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
+         rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
+        fragment(
+          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) >= ?",
+          ^weights.popular_opinion, tr.value, ir.value,
+          ^weights.critical_acclaim, mc.value, rt.value,
+          ^weights.industry_recognition, f.wins, f.nominations,
+          ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
+          ^weights.people_quality, pq.avg_person_quality,
+          ^min_score
+        )
       )
-    )
+    else
+      where(query,
+        [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
+         rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
+        fragment(
+          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0) >= ?",
+          ^weights.popular_opinion, tr.value, ir.value,
+          ^weights.critical_acclaim, mc.value, rt.value,
+          ^weights.industry_recognition, f.wins, f.nominations,
+          ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
+          ^weights.people_quality, pq.avg_person_quality,
+          ^min_score
+        )
+      )
+    end
+  end
+  
+  defp order_by_score(query, weights) do
+    if has_group_by?(query) do
+      order_by(query,
+        [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
+         rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
+        desc: fragment(
+          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
+          ^weights.popular_opinion, tr.value, ir.value,
+          ^weights.critical_acclaim, mc.value, rt.value,
+          ^weights.industry_recognition, f.wins, f.nominations,
+          ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
+          ^weights.people_quality, pq.avg_person_quality
+        )
+      )
+    else
+      order_by(query,
+        [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
+         rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
+        desc: fragment(
+          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
+          ^weights.popular_opinion, tr.value, ir.value,
+          ^weights.critical_acclaim, mc.value, rt.value,
+          ^weights.industry_recognition, f.wins, f.nominations,
+          ^weights.cultural_impact, m.canonical_sources, pop.value, pop.value,
+          ^weights.people_quality, pq.avg_person_quality
+        )
+      )
+    end
   end
 end
