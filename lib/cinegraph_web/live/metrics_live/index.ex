@@ -150,11 +150,20 @@ defmodule CinegraphWeb.MetricsLive.Index do
        OR (m.tmdb_data->>'revenue' IS NOT NULL AND (m.tmdb_data->>'revenue')::bigint > 0)
     """
     
+    people_query = """
+    SELECT 
+      COUNT(DISTINCT mc.movie_id) as movies_with_people_scores
+    FROM movie_credits mc
+    JOIN person_metrics pm ON mc.person_id = pm.person_id
+    WHERE pm.metric_type IN ('quality_score', 'director_quality', 'actor_quality', 'writer_quality', 'producer_quality')
+    """
+    
     %{
       ratings: get_single_count(ratings_query),
       awards: get_single_count(awards_query),
       cultural: get_single_count(cultural_query),
-      financial: get_single_count(financial_query)
+      financial: get_single_count(financial_query),
+      people: get_single_count(people_query)
     }
   end
   
@@ -328,6 +337,7 @@ defmodule CinegraphWeb.MetricsLive.Index do
   def category_color("awards"), do: "yellow"
   def category_color("cultural"), do: "purple"
   def category_color("financial"), do: "green"
+  def category_color("people"), do: "orange"
   def category_color(_), do: "gray"
   
   def get_metric_coverage(metric_code, coverage_stats, total_movies) do
@@ -340,14 +350,16 @@ defmodule CinegraphWeb.MetricsLive.Index do
   
   def get_profile_weight(profile, category) do
     weights = profile.category_weights || %{}
-    weight = Map.get(weights, category, 0.25)
+    # Default to 20% for 5 categories instead of 25% for 4
+    weight = Map.get(weights, category, 0.20)
     round(weight * 100)
   end
   
   def get_profile_weight_actual(profile, category) do
     # Get the actual weight for displaying what's really in the database
     weights = profile.category_weights || %{}
-    weight = Map.get(weights, category, 0.25)
+    # Default to 20% for 5 categories instead of 25% for 4
+    weight = Map.get(weights, category, 0.20)
     Float.round(weight * 100, 1)
   end
   

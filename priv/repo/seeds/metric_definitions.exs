@@ -2,7 +2,6 @@
 # Run with: mix run priv/repo/seeds/metric_definitions.exs
 
 alias Cinegraph.Repo
-import Ecto.Query
 
 # Definitions are system-owned; no need to hard-delete. We'll upsert below.
 
@@ -366,6 +365,24 @@ metric_definitions = [
     normalization_type: "sigmoid",
     normalization_params: %{"k" => 0.05, "midpoint" => 50},
     raw_scale_min: 1.0,
+    raw_scale_max: 100.0,
+    source_reliability: 0.9,
+    active: true
+  },
+  
+  # ========== PEOPLE QUALITY (Talent Recognition) ==========
+  %{
+    code: "person_quality_score",
+    name: "Person Quality Score",
+    description: "Universal quality score based on objective achievements (canonical films, ratings, festival recognition)",
+    source_table: "person_metrics",
+    source_type: "quality_score",
+    source_field: "score",
+    category: "people",
+    subcategory: "talent_quality",
+    normalization_type: "linear",
+    normalization_params: %{},
+    raw_scale_min: 0.0,
     raw_scale_max: 100.0,
     source_reliability: 0.9,
     active: true
