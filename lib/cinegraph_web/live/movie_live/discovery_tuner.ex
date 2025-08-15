@@ -81,6 +81,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
       socket
       |> assign(:weights, weights)
       |> assign(:preset, "custom")
+      |> assign(:current_profile, nil)  # Clear database profile to use custom weights
       |> load_movies()
 
     {:noreply, socket}
