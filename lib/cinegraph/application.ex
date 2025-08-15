@@ -20,6 +20,8 @@ defmodule Cinegraph.Application do
       Cinegraph.RateLimiter,
       # Start Import Stats
       Cinegraph.Imports.ImportStats,
+      # Start Festival Inference Monitor (Issue #286)
+      Cinegraph.ObanPlugins.FestivalInferenceMonitor,
       # Start a worker by calling: Cinegraph.Worker.start_link(arg)
       # {Cinegraph.Worker, arg},
       # Start to serve requests, typically the last entry

@@ -528,12 +528,14 @@ defmodule Cinegraph.Movies.Filters do
     end
   end
 
+  # When show_unreleased is true, show all movies
   defp filter_unreleased(query, "true"), do: query
   defp filter_unreleased(query, true), do: query
 
+  # By default, hide movies without release dates or with future release dates
   defp filter_unreleased(query, _) do
     today = Date.utc_today()
-    where(query, [m], m.release_date <= ^today or is_nil(m.release_date))
+    where(query, [m], not is_nil(m.release_date) and m.release_date <= ^today)
   end
 
   # Award-based filtering functions

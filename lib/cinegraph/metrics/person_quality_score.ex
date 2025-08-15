@@ -42,6 +42,8 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
           "total_count" => 0,
           "festival_wins" => 0,
           "festival_nominations" => 0,
+          "direct_festival_wins" => 0,
+          "direct_festival_nominations" => 0,
           "raw_score" => 0
         }
         {:ok, 0.0, components}
@@ -49,16 +51,18 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
         # Count objective achievements
         canonical_count = count_canonical_appearances(person_movies)
         high_rated_count = count_high_rated_movies(person_movies)
-        festival_nominations = count_festival_nominations(person_id)
-        festival_wins = count_festival_wins(person_id)
+        {festival_nominations, direct_nominations} = count_festival_nominations_with_breakdown(person_id)
+        {festival_wins, direct_wins} = count_festival_wins_with_breakdown(person_id)
         total_count = length(person_movies)
         
-        # Calculate weighted score
+        # Calculate weighted score - direct person awards get double weight
         raw_score = (canonical_count * @canonical_weight) +
                     (high_rated_count * @high_rated_weight) +
                     (total_count * @volume_weight) +
                     (festival_wins * @festival_win_weight) +
-                    (festival_nominations * @festival_nom_weight)
+                    (direct_wins * @festival_win_weight) + # Bonus for direct wins
+                    (festival_nominations * @festival_nom_weight) +
+                    (direct_nominations * @festival_nom_weight) # Bonus for direct nominations
         
         # Normalize to 0-100 range using adaptive scaling
         normalized_score = normalize_score(raw_score, total_count)
@@ -69,6 +73,8 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
           "total_count" => total_count,
           "festival_wins" => festival_wins,
           "festival_nominations" => festival_nominations,
+          "direct_festival_wins" => direct_wins,
+          "direct_festival_nominations" => direct_nominations,
           "raw_score" => raw_score
         }
         
@@ -270,29 +276,57 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
     ) || 0
   end
   
-  defp count_festival_nominations(person_id) do
+  defp count_festival_nominations_with_breakdown(person_id) do
+    # Count both direct person nominations AND movie nominations they're involved with
     result = Repo.query!(
-      "SELECT COUNT(DISTINCT fn.id) as nomination_count
-      FROM movie_credits mc
-      JOIN festival_nominations fn ON mc.movie_id = fn.movie_id
-      WHERE mc.person_id = $1",
+      "SELECT 
+        COALESCE(direct.count, 0) + COALESCE(movie_based.count, 0) as total_count,
+        COALESCE(direct.count, 0) as direct_count,
+        COALESCE(movie_based.count, 0) as movie_based_count
+      FROM 
+        (SELECT COUNT(*) as count 
+         FROM festival_nominations 
+         WHERE person_id = $1) as direct,
+        (SELECT COUNT(DISTINCT fn.id) as count 
+         FROM movie_credits mc
+         JOIN festival_nominations fn ON mc.movie_id = fn.movie_id
+         WHERE mc.person_id = $1 
+           AND fn.person_id IS NULL) as movie_based",
       [person_id]
     )
     
-    List.first(result.rows) |> List.first() || 0
+    case result.rows do
+      [[total, direct, _movie_based]] -> {total || 0, direct || 0}
+      _ -> {0, 0}
+    end
   end
   
-  defp count_festival_wins(person_id) do
+  defp count_festival_wins_with_breakdown(person_id) do
+    # Count both direct person wins AND movie wins they're involved with
     result = Repo.query!(
-      "SELECT COUNT(DISTINCT fn.id) as win_count
-      FROM movie_credits mc
-      JOIN festival_nominations fn ON mc.movie_id = fn.movie_id
-      WHERE mc.person_id = $1 AND fn.won = true",
+      "SELECT 
+        COALESCE(direct.count, 0) + COALESCE(movie_based.count, 0) as total_count,
+        COALESCE(direct.count, 0) as direct_count,
+        COALESCE(movie_based.count, 0) as movie_based_count
+      FROM 
+        (SELECT COUNT(*) as count 
+         FROM festival_nominations 
+         WHERE person_id = $1 AND won = true) as direct,
+        (SELECT COUNT(DISTINCT fn.id) as count 
+         FROM movie_credits mc
+         JOIN festival_nominations fn ON mc.movie_id = fn.movie_id
+         WHERE mc.person_id = $1 
+           AND fn.won = true
+           AND fn.person_id IS NULL) as movie_based",
       [person_id]
     )
     
-    List.first(result.rows) |> List.first() || 0
+    case result.rows do
+      [[total, direct, _movie_based]] -> {total || 0, direct || 0}
+      _ -> {0, 0}
+    end
   end
+  
   
   defp normalize_score(raw_score, film_count) do
     # Adaptive normalization based on film volume
