@@ -63,12 +63,21 @@ defmodule Cinegraph.ExternalSources do
       {:ok, %ExternalMetric{}}
   """
   def upsert_external_metric(attrs) do
-    %ExternalMetric{}
-    |> ExternalMetric.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: :replace_all_except_primary_key,
-      conflict_target: [:movie_id, :source, :metric_type]
-    )
+    case %ExternalMetric{}
+         |> ExternalMetric.changeset(attrs)
+         |> Repo.insert(
+           on_conflict: :replace_all_except_primary_key,
+           conflict_target: [:movie_id, :source, :metric_type]
+         ) do
+      {:ok, metric} = result ->
+        # Trigger PQS recalculation for external metrics updates
+        if metric.movie_id do
+          Cinegraph.Metrics.PQSTriggerStrategy.trigger_external_metrics_update(metric.movie_id)
+        end
+        result
+      error ->
+        error
+    end
   end
 
   @doc """
