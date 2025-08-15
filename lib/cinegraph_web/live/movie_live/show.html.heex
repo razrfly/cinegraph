@@ -17,7 +17,7 @@
   <!-- Hero Content -->
   <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
     <!-- Navigation -->
-    <div class="mb-8">
+    <div class="mb-8 flex items-center justify-between">
       <.link
         navigate={~p"/movies"}
         class="inline-flex items-center text-white/80 hover:text-white transition-colors"
@@ -26,6 +26,17 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
         Back to Movies
+      </.link>
+      
+      <!-- Legacy Page Button -->
+      <.link
+        navigate={~p"/movies/#{@movie.id}/legacy"}
+        class="inline-flex items-center px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-white text-sm rounded-md transition-colors"
+      >
+        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        View Legacy Page
       </.link>
     </div>
     
@@ -416,7 +427,7 @@
                     <% end %>
                   </div>
                   <%= if cast_member.cast_order do %>
-                    <span class="text-xs text-gray-400">#{cast_member.cast_order}</span>
+                    <span class="text-xs text-gray-400"><%= cast_member.cast_order %></span>
                   <% end %>
                 </div>
               <% end %>
@@ -618,7 +629,7 @@
                     <div class="flex flex-wrap gap-2">
                       <%= if list_item.rank do %>
                         <span class="inline-flex items-center px-2 py-1 rounded text-sm bg-yellow-100 text-yellow-800">
-                          #{list_item.rank}
+                          #<%= list_item.rank %>
                         </span>
                       <% end %>
 
