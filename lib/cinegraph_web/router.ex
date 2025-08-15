@@ -23,6 +23,7 @@ defmodule CinegraphWeb.Router do
     live "/movies", MovieLive.Index, :index
     live "/movies/discover", MovieLive.DiscoveryTuner, :index
     live "/movies/:id", MovieLive.Show, :show
+    live "/movies/:id/legacy", MovieLive.ShowLegacy, :show
     live "/movies/:id/metrics", MovieMetricsLive.Show, :show
 
     # People routes
