@@ -1,4 +1,4 @@
-defmodule CinegraphWeb.MovieLive.Show do
+defmodule CinegraphWeb.MovieLive.ShowLegacy do
   use CinegraphWeb, :live_view
   import CinegraphWeb.CollaborationComponents, only: [format_ordinal: 1]
 
@@ -10,7 +10,7 @@ defmodule CinegraphWeb.MovieLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :active_tab, "overview")}
+    {:ok, socket}
   end
 
   @impl true
@@ -20,14 +20,9 @@ defmodule CinegraphWeb.MovieLive.Show do
     socket =
       socket
       |> assign(:movie, movie)
-      |> assign(:page_title, movie.title)
+      |> assign(:page_title, "#{movie.title} (Legacy)")
 
     {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, :active_tab, tab)}
   end
 
   defp load_movie_with_all_data(id) do
