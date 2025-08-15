@@ -6,10 +6,11 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   """
 
   @default_weights %{
-    popular_opinion: 0.25,
-    critical_acclaim: 0.25,
-    industry_recognition: 0.25,
-    cultural_impact: 0.25
+    popular_opinion: 0.2,
+    critical_acclaim: 0.2,
+    industry_recognition: 0.2,
+    cultural_impact: 0.2,
+    people_quality: 0.2
   }
 
   @doc """
@@ -19,28 +20,32 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
     %{
       balanced: @default_weights,
       crowd_pleaser: %{
-        popular_opinion: 0.5,
-        critical_acclaim: 0.15,
-        industry_recognition: 0.15,
-        cultural_impact: 0.2
+        popular_opinion: 0.4,
+        critical_acclaim: 0.1,
+        industry_recognition: 0.1,
+        cultural_impact: 0.2,
+        people_quality: 0.2
       },
       critics_choice: %{
-        popular_opinion: 0.15,
-        critical_acclaim: 0.5,
-        industry_recognition: 0.25,
-        cultural_impact: 0.1
+        popular_opinion: 0.1,
+        critical_acclaim: 0.4,
+        industry_recognition: 0.2,
+        cultural_impact: 0.1,
+        people_quality: 0.2
       },
       award_winner: %{
         popular_opinion: 0.1,
-        critical_acclaim: 0.2,
-        industry_recognition: 0.6,
-        cultural_impact: 0.1
+        critical_acclaim: 0.15,
+        industry_recognition: 0.5,
+        cultural_impact: 0.1,
+        people_quality: 0.15
       },
       cult_classic: %{
-        popular_opinion: 0.2,
+        popular_opinion: 0.15,
         critical_acclaim: 0.1,
         industry_recognition: 0.1,
-        cultural_impact: 0.6
+        cultural_impact: 0.5,
+        people_quality: 0.15
       }
     }
   end
