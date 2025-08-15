@@ -14,19 +14,21 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   def mount(_params, _session, socket) do
     # Load presets from database
     presets = DiscoveryScoring.get_presets()
-    
+
     # Get the default/balanced weights - now including people_quality
-    weights = Map.get(presets, :balanced, %{
-      popular_opinion: 0.2,
-      critical_acclaim: 0.2,
-      industry_recognition: 0.2,
-      cultural_impact: 0.2,
-      people_quality: 0.2
-    })
-    
+    weights =
+      Map.get(presets, :balanced, %{
+        popular_opinion: 0.2,
+        critical_acclaim: 0.2,
+        industry_recognition: 0.2,
+        cultural_impact: 0.2,
+        people_quality: 0.2
+      })
+
     # Store the current profile for database lookups
-    current_profile = ScoringService.get_profile("Balanced") || 
-                     ScoringService.get_default_profile()
+    current_profile =
+      ScoringService.get_profile("Balanced") ||
+        ScoringService.get_default_profile()
 
     socket =
       socket
@@ -93,19 +95,22 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
 
         preset_name ->
           # Try to get from database first
-          profile_name = preset_name 
-                        |> String.replace("_", " ")
-                        |> String.split()
-                        |> Enum.map(&String.capitalize/1)
-                        |> Enum.join(" ")
-          
+          profile_name =
+            preset_name
+            |> String.replace("_", " ")
+            |> String.split()
+            |> Enum.map(&String.capitalize/1)
+            |> Enum.join(" ")
+
           case ScoringService.get_profile(profile_name) do
             nil ->
               # Fallback to presets if not in database
-              weights = socket.assigns.presets
-                       |> Map.get(String.to_atom(preset_name))
+              weights =
+                socket.assigns.presets
+                |> Map.get(String.to_atom(preset_name))
+
               {weights, nil}
-            
+
             profile ->
               weights = ScoringService.profile_to_discovery_weights(profile)
               {weights, profile}
@@ -142,7 +147,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   def handle_event("toggle_scores", _params, socket) do
     {:noreply, assign(socket, :show_scores, !socket.assigns.show_scores)}
   end
-  
+
   @impl true
   def handle_event("toggle_explanation", _params, socket) do
     {:noreply, assign(socket, :show_explanation, !socket.assigns.show_explanation)}
@@ -162,7 +167,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     query = Movies.Movie
 
     # Use database profile if available, otherwise use weights
-    scoring_input = 
+    scoring_input =
       if socket.assigns[:current_profile] do
         socket.assigns.current_profile
       else
@@ -295,15 +300,29 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           <%= if @show_explanation do %>
             <div class="mt-2 p-3 bg-blue-50 rounded-lg text-sm text-gray-700">
               <p class="font-semibold mb-1">What is Minimum Score Threshold?</p>
-              <p>This filter excludes movies with a total discovery score below the specified percentage. The discovery score is calculated by combining:</p>
+              <p>
+                This filter excludes movies with a total discovery score below the specified percentage. The discovery score is calculated by combining:
+              </p>
               <ul class="list-disc list-inside mt-2 space-y-1">
                 <li><strong>Popular Opinion:</strong> IMDb and TMDb user ratings</li>
-                <li><strong>Critical Acclaim:</strong> Metacritic and Rotten Tomatoes critic scores</li>
-                <li><strong>Industry Recognition:</strong> Festival awards and Oscar nominations/wins</li>
-                <li><strong>Cultural Impact:</strong> Presence in canonical film lists and popularity metrics</li>
-                <li><strong>People Quality:</strong> Quality scores of directors, actors, and crew members</li>
+                <li>
+                  <strong>Critical Acclaim:</strong> Metacritic and Rotten Tomatoes critic scores
+                </li>
+                <li>
+                  <strong>Industry Recognition:</strong> Festival awards and Oscar nominations/wins
+                </li>
+                <li>
+                  <strong>Cultural Impact:</strong>
+                  Presence in canonical film lists and popularity metrics
+                </li>
+                <li>
+                  <strong>People Quality:</strong>
+                  Quality scores of directors, actors, and crew members
+                </li>
               </ul>
-              <p class="mt-2">Setting this to 50% will only show movies that score at least 0.5 out of 1.0 based on your selected weights.</p>
+              <p class="mt-2">
+                Setting this to 50% will only show movies that score at least 0.5 out of 1.0 based on your selected weights.
+              </p>
             </div>
           <% end %>
         </form>

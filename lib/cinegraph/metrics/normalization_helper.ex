@@ -7,10 +7,10 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
   @doc """
   Returns the SQL fragment for normalizing TMDb popularity score using logarithmic normalization.
   This follows the documented approach: log(x+1)/log(threshold+1)
-  
+
   ## Parameters
     - threshold: The threshold value for normalization (default: 1000 as per metric_definitions)
-  
+
   ## Example
       fragment(NormalizationHelper.tmdb_popularity_sql(), ^movie_id)
   """
@@ -34,7 +34,7 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
   @doc """
   Returns the SQL fragment for calculating canonical sources impact.
   Uses a configurable weight multiplier for each canonical source.
-  
+
   ## Parameters
     - weight: The weight multiplier for each canonical source (default: 0.1)
   """
@@ -51,7 +51,7 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
   @doc """
   Returns the complete SQL fragment for cultural impact calculation.
   Combines TMDb popularity (log-normalized) and canonical sources presence.
-  
+
   ## Parameters
     - canonical_weight: Weight for canonical sources (default: 0.1)
     - popularity_threshold: Threshold for TMDb popularity normalization (default: 1000)
@@ -61,7 +61,7 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
     canonical_weight = Keyword.get(opts, :canonical_weight, 0.1)
     popularity_threshold = Keyword.get(opts, :popularity_threshold, 1000)
     max_value = Keyword.get(opts, :max_value, 1.0)
-    
+
     """
     COALESCE(
       LEAST(#{max_value}, 
@@ -91,7 +91,7 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
   @doc """
   Normalizes a value using logarithmic normalization.
   Formula: log(value + 1) / log(threshold + 1)
-  
+
   ## Examples
       iex> NormalizationHelper.logarithmic_normalize(100, 1000)
       0.6648
@@ -102,7 +102,8 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
       iex> NormalizationHelper.logarithmic_normalize(0, 1000)
       0.0
   """
-  def logarithmic_normalize(value, threshold) when is_number(value) and is_number(threshold) and threshold > 0 do
+  def logarithmic_normalize(value, threshold)
+      when is_number(value) and is_number(threshold) and threshold > 0 do
     if value <= 0 do
       0.0
     else
@@ -113,7 +114,7 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
   @doc """
   Normalizes a value using linear normalization.
   Formula: value / max_value
-  
+
   ## Examples
       iex> NormalizationHelper.linear_normalize(50, 100)
       0.5
@@ -121,7 +122,8 @@ defmodule Cinegraph.Metrics.NormalizationHelper do
       iex> NormalizationHelper.linear_normalize(100, 100)
       1.0
   """
-  def linear_normalize(value, max_value) when is_number(value) and is_number(max_value) and max_value > 0 do
+  def linear_normalize(value, max_value)
+      when is_number(value) and is_number(max_value) and max_value > 0 do
     min(value / max_value, 1.0)
   end
 

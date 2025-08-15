@@ -5,7 +5,7 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
   """
 
   use CinegraphWeb, :live_view
-  
+
   alias Cinegraph.Movies
   alias Cinegraph.Metrics.{MetricDefinition, MetricWeightProfile}
   alias Cinegraph.Repo
@@ -15,6 +15,7 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
   def mount(%{"id" => movie_id}, _session, socket) do
     try do
       movie = Movies.get_movie!(movie_id)
+
       {:ok,
        socket
        |> assign(:page_title, "Metrics - #{movie.title}")
@@ -23,7 +24,7 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
        |> load_movie_metrics(movie)}
     rescue
       Ecto.NoResultsError ->
-        {:ok, 
+        {:ok,
          socket
          |> put_flash(:error, "Movie not found")
          |> redirect(to: ~p"/movies")}
@@ -37,8 +38,8 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
 
   @impl true
   def handle_event("select_profile", %{"profile" => profile_name}, socket) do
-    profile = Enum.find(socket.assigns.weight_profiles, & &1.name == profile_name)
-    
+    profile = Enum.find(socket.assigns.weight_profiles, &(&1.name == profile_name))
+
     {:noreply,
      socket
      |> assign(:selected_profile, profile)
@@ -52,10 +53,10 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
     metric_values = get_movie_metric_values(movie.id)
     weight_profiles = get_weight_profiles()
     metric_definitions = get_metric_definitions()
-    
+
     # Calculate scores for all profiles
     profile_scores = calculate_all_profile_scores(movie, weight_profiles)
-    
+
     socket
     |> assign(:metric_values, metric_values)
     |> assign(:weight_profiles, weight_profiles)
@@ -79,7 +80,7 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
     WHERE movie_id = $1
     ORDER BY metric_code
     """
-    
+
     case Repo.query(query, [movie_id]) do
       {:ok, %{rows: rows}} ->
         Enum.map(rows, fn [code, raw_text, raw_numeric, normalized, source_table, source_key] ->
@@ -92,44 +93,47 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
             source_key: source_key
           }
         end)
-      _ -> []
+
+      _ ->
+        []
     end
   end
 
   defp get_weight_profiles do
     Repo.all(
       from wp in MetricWeightProfile,
-      where: wp.active == true,
-      order_by: [desc: wp.is_default, asc: wp.name]
+        where: wp.active == true,
+        order_by: [desc: wp.is_default, asc: wp.name]
     )
   end
 
   defp get_metric_definitions do
     Repo.all(
       from md in MetricDefinition,
-      where: md.active == true,
-      order_by: [asc: md.category, asc: md.name]
-    ) |> Enum.group_by(& &1.category)
+        where: md.active == true,
+        order_by: [asc: md.category, asc: md.name]
+    )
+    |> Enum.group_by(& &1.category)
   end
 
   defp calculate_all_profile_scores(movie, profiles) do
     alias Cinegraph.Metrics.ScoringService
-    
+
     # Use the ScoringService to calculate scores for each profile
     Enum.map(profiles, fn profile ->
       query = from(m in Cinegraph.Movies.Movie, where: m.id == ^movie.id)
-      
+
       try do
         scored_query = ScoringService.apply_scoring(query, profile, %{min_score: 0.0})
-        
-        result = 
+
+        result =
           scored_query
           |> select([m], %{
             discovery_score: m.discovery_score,
             components: m.score_components
           })
           |> Repo.one()
-        
+
         %{
           profile: profile,
           total_score: result[:discovery_score] || 0.0,
@@ -151,7 +155,7 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
     # Recalculate score for the selected profile
     scores = calculate_all_profile_scores(movie, [profile])
     selected_score = List.first(scores)
-    
+
     assign(socket, :selected_score, selected_score)
   end
 
@@ -160,6 +164,7 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
   def format_score(score) when is_number(score) do
     "#{Float.round(score * 100, 1)}%"
   end
+
   def format_score(_), do: "N/A"
 
   def format_raw_value(%{raw_value_numeric: num}) when is_number(num) do
@@ -169,6 +174,7 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
       "#{Float.round(num, 2)}"
     end
   end
+
   def format_raw_value(%{raw_value_text: text}) when is_binary(text), do: text
   def format_raw_value(_), do: "N/A"
 

@@ -30,7 +30,7 @@ defmodule Cinegraph.Movies.Filters do
     # Apply distinct only once at the end if any joins were added
     |> maybe_distinct()
   end
-  
+
   defp maybe_distinct(query) do
     # Apply distinct if the query has joins to avoid duplicate rows
     if has_joins?(query) do
@@ -39,7 +39,7 @@ defmodule Cinegraph.Movies.Filters do
       query
     end
   end
-  
+
   defp has_joins?(%Ecto.Query{joins: joins}) when length(joins) > 0, do: true
   defp has_joins?(_), do: false
 
@@ -103,31 +103,31 @@ defmodule Cinegraph.Movies.Filters do
       # Discovery Metric Sorts
       "popular_opinion" ->
         sort_by_metric_dimension(query, :popular_opinion, :desc)
-      
+
       "popular_opinion_asc" ->
         sort_by_metric_dimension(query, :popular_opinion, :asc)
-      
+
       "critical_acclaim" ->
         sort_by_metric_dimension(query, :critical_acclaim, :desc)
-      
+
       "critical_acclaim_asc" ->
         sort_by_metric_dimension(query, :critical_acclaim, :asc)
-      
+
       "industry_recognition" ->
         sort_by_metric_dimension(query, :industry_recognition, :desc)
-      
+
       "industry_recognition_asc" ->
         sort_by_metric_dimension(query, :industry_recognition, :asc)
-      
+
       "cultural_impact" ->
         sort_by_metric_dimension(query, :cultural_impact, :desc)
-      
+
       "cultural_impact_asc" ->
         sort_by_metric_dimension(query, :cultural_impact, :asc)
-      
+
       "people_quality" ->
         sort_by_metric_dimension(query, :people_quality, :desc)
-      
+
       "people_quality_asc" ->
         sort_by_metric_dimension(query, :people_quality, :asc)
 
@@ -138,179 +138,209 @@ defmodule Cinegraph.Movies.Filters do
   end
 
   # Private sorting functions
-  
+
   defp sort_by_metric_dimension(query, dimension, direction) do
     # Apply the ordering with the specific dimension score calculation
     case {dimension, direction} do
       {:popular_opinion, :desc} ->
-        order_by(query, [m], desc: fragment(
-          """
-          COALESCE((
-            SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
-            FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                 (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
-          ), 0)
-          """,
-          m.id,
-          m.id
-        ))
-      
+        order_by(query, [m],
+          desc:
+            fragment(
+              """
+              COALESCE((
+                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
+              ), 0)
+              """,
+              m.id,
+              m.id
+            )
+        )
+
       {:popular_opinion, :asc} ->
-        order_by(query, [m], asc: fragment(
-          """
-          COALESCE((
-            SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
-            FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                 (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
-          ), 0)
-          """,
-          m.id,
-          m.id
-        ))
-      
+        order_by(query, [m],
+          asc:
+            fragment(
+              """
+              COALESCE((
+                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
+              ), 0)
+              """,
+              m.id,
+              m.id
+            )
+        )
+
       {:critical_acclaim, :desc} ->
-        order_by(query, [m], desc: fragment(
-          """
-          COALESCE((
-            SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-            FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
-                 (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
-          ), 0)
-          """,
-          m.id,
-          m.id
-        ))
-      
+        order_by(query, [m],
+          desc:
+            fragment(
+              """
+              COALESCE((
+                SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
+              ), 0)
+              """,
+              m.id,
+              m.id
+            )
+        )
+
       {:critical_acclaim, :asc} ->
-        order_by(query, [m], asc: fragment(
-          """
-          COALESCE((
-            SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-            FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
-                 (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
-          ), 0)
-          """,
-          m.id,
-          m.id
-        ))
-      
+        order_by(query, [m],
+          asc:
+            fragment(
+              """
+              COALESCE((
+                SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
+              ), 0)
+              """,
+              m.id,
+              m.id
+            )
+        )
+
       {:industry_recognition, :desc} ->
-        order_by(query, [m], desc: fragment(
-          """
-          COALESCE((
-            SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
-            FROM (
-              SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
-                     COUNT(*) as nominations
-              FROM festival_nominations
-              WHERE movie_id = ?
-            ) f
-          ), 0)
-          """,
-          m.id
-        ))
-      
+        order_by(query, [m],
+          desc:
+            fragment(
+              """
+              COALESCE((
+                SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
+                FROM (
+                  SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
+                         COUNT(*) as nominations
+                  FROM festival_nominations
+                  WHERE movie_id = ?
+                ) f
+              ), 0)
+              """,
+              m.id
+            )
+        )
+
       {:industry_recognition, :asc} ->
-        order_by(query, [m], asc: fragment(
-          """
-          COALESCE((
-            SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
-            FROM (
-              SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
-                     COUNT(*) as nominations
-              FROM festival_nominations
-              WHERE movie_id = ?
-            ) f
-          ), 0)
-          """,
-          m.id
-        ))
-      
+        order_by(query, [m],
+          asc:
+            fragment(
+              """
+              COALESCE((
+                SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
+                FROM (
+                  SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
+                         COUNT(*) as nominations
+                  FROM festival_nominations
+                  WHERE movie_id = ?
+                ) f
+              ), 0)
+              """,
+              m.id
+            )
+        )
+
       {:cultural_impact, :desc} ->
-        order_by(query, [m], desc: fragment(
-          """
-          COALESCE(
-            LEAST(1.0, 
+        order_by(query, [m],
+          desc:
+            fragment(
+              """
               COALESCE(
-                (SELECT COUNT(*) * 0.1
-                 FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
-                0
-              ) + 
-              COALESCE(
-                (SELECT CASE 
-                  WHEN value IS NULL OR value = 0 THEN 0
-                  ELSE LN(value + 1) / LN(1001)
-                END
-                FROM external_metrics 
-                WHERE movie_id = ? 
-                  AND source = 'tmdb' 
-                  AND metric_type = 'popularity_score' 
-                LIMIT 1), 
+                LEAST(1.0, 
+                  COALESCE(
+                    (SELECT COUNT(*) * 0.1
+                     FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
+                    0
+                  ) + 
+                  COALESCE(
+                    (SELECT CASE 
+                      WHEN value IS NULL OR value = 0 THEN 0
+                      ELSE LN(value + 1) / LN(1001)
+                    END
+                    FROM external_metrics 
+                    WHERE movie_id = ? 
+                      AND source = 'tmdb' 
+                      AND metric_type = 'popularity_score' 
+                    LIMIT 1), 
+                    0
+                  )
+                ), 
                 0
               )
-            ), 
-            0
-          )
-          """,
-          m.canonical_sources,
-          m.id
-        ))
-      
+              """,
+              m.canonical_sources,
+              m.id
+            )
+        )
+
       {:cultural_impact, :asc} ->
-        order_by(query, [m], asc: fragment(
-          """
-          COALESCE(
-            LEAST(1.0, 
+        order_by(query, [m],
+          asc:
+            fragment(
+              """
               COALESCE(
-                (SELECT COUNT(*) * 0.1
-                 FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
-                0
-              ) + 
-              COALESCE(
-                (SELECT CASE 
-                  WHEN value IS NULL OR value = 0 THEN 0
-                  ELSE LN(value + 1) / LN(1001)
-                END
-                FROM external_metrics 
-                WHERE movie_id = ? 
-                  AND source = 'tmdb' 
-                  AND metric_type = 'popularity_score' 
-                LIMIT 1), 
+                LEAST(1.0, 
+                  COALESCE(
+                    (SELECT COUNT(*) * 0.1
+                     FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
+                    0
+                  ) + 
+                  COALESCE(
+                    (SELECT CASE 
+                      WHEN value IS NULL OR value = 0 THEN 0
+                      ELSE LN(value + 1) / LN(1001)
+                    END
+                    FROM external_metrics 
+                    WHERE movie_id = ? 
+                      AND source = 'tmdb' 
+                      AND metric_type = 'popularity_score' 
+                    LIMIT 1), 
+                    0
+                  )
+                ), 
                 0
               )
-            ), 
-            0
-          )
-          """,
-          m.canonical_sources,
-          m.id
-        ))
-      
+              """,
+              m.canonical_sources,
+              m.id
+            )
+        )
+
       {:people_quality, :desc} ->
-        order_by(query, [m], desc: fragment(
-          """
-          COALESCE((
-            SELECT AVG(pm.score) / 100.0
-            FROM person_metrics pm
-            JOIN movie_credits mc ON pm.person_id = mc.person_id
-            WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
-          ), 0)
-          """,
-          m.id
-        ))
-      
+        order_by(query, [m],
+          desc:
+            fragment(
+              """
+              COALESCE((
+                SELECT AVG(pm.score) / 100.0
+                FROM person_metrics pm
+                JOIN movie_credits mc ON pm.person_id = mc.person_id
+                WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+              ), 0)
+              """,
+              m.id
+            )
+        )
+
       {:people_quality, :asc} ->
-        order_by(query, [m], asc: fragment(
-          """
-          COALESCE((
-            SELECT AVG(pm.score) / 100.0
-            FROM person_metrics pm
-            JOIN movie_credits mc ON pm.person_id = mc.person_id
-            WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
-          ), 0)
-          """,
-          m.id
-        ))
+        order_by(query, [m],
+          asc:
+            fragment(
+              """
+              COALESCE((
+                SELECT AVG(pm.score) / 100.0
+                FROM person_metrics pm
+                JOIN movie_credits mc ON pm.person_id = mc.person_id
+                WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+              ), 0)
+              """,
+              m.id
+            )
+        )
     end
   end
 
@@ -539,7 +569,7 @@ defmodule Cinegraph.Movies.Filters do
   end
 
   # Award-based filtering functions
-  
+
   defp filter_by_awards(query, params) do
     query
     |> filter_by_award_status(params["award_status"])
@@ -559,18 +589,21 @@ defmodule Cinegraph.Movies.Filters do
 
       "won" ->
         query
-        |> join(:inner, [m], nom in "festival_nominations", 
-            on: nom.movie_id == m.id and nom.won == true)
+        |> join(:inner, [m], nom in "festival_nominations",
+          on: nom.movie_id == m.id and nom.won == true
+        )
 
       "nominated_only" ->
         query
         |> join(:inner, [m], nom in "festival_nominations",
-            on: nom.movie_id == m.id and nom.won == false)
+          on: nom.movie_id == m.id and nom.won == false
+        )
 
       "multiple_awards" ->
         query
         |> join(:inner, [m], nom in "festival_nominations",
-            on: nom.movie_id == m.id and nom.won == true)
+          on: nom.movie_id == m.id and nom.won == true
+        )
         |> group_by([m], m.id)
         |> having([m, nom], count(nom.id) > 1)
 
@@ -584,7 +617,7 @@ defmodule Cinegraph.Movies.Filters do
 
   defp filter_by_festival(query, festival_org_id) do
     festival_id = to_integer(festival_org_id)
-    
+
     if festival_id do
       query
       |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
@@ -600,7 +633,7 @@ defmodule Cinegraph.Movies.Filters do
 
   defp filter_by_award_category(query, category_id) do
     cat_id = to_integer(category_id)
-    
+
     if cat_id do
       query
       |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
@@ -616,14 +649,15 @@ defmodule Cinegraph.Movies.Filters do
     from_year = to_integer(year_from)
     to_year = to_integer(year_to)
 
-    query = if from_year do
-      query
-      |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-      |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-      |> where([..., fc], fc.year >= ^from_year)
-    else
-      query
-    end
+    query =
+      if from_year do
+        query
+        |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
+        |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
+        |> where([..., fc], fc.year >= ^from_year)
+      else
+        query
+      end
 
     if to_year do
       query
@@ -636,7 +670,7 @@ defmodule Cinegraph.Movies.Filters do
   end
 
   # Rating-based filtering functions
-  
+
   defp filter_by_ratings(query, params) do
     query
     |> filter_by_tmdb_rating(params["tmdb_min"], params["tmdb_max"])
@@ -651,19 +685,22 @@ defmodule Cinegraph.Movies.Filters do
     min_val = to_float(min)
     max_val = to_float(max)
 
-    query = if min_val do
-      query
-      |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "tmdb" and em.metric_type == "rating_average")
-      |> where([..., em], em.value >= ^min_val)
-    else
-      query
-    end
+    query =
+      if min_val do
+        query
+        |> join(:inner, [m, ...], em in "external_metrics",
+          on: em.movie_id == m.id and em.source == "tmdb" and em.metric_type == "rating_average"
+        )
+        |> where([..., em], em.value >= ^min_val)
+      else
+        query
+      end
 
     if max_val do
       query
       |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "tmdb" and em.metric_type == "rating_average")
+        on: em.movie_id == m.id and em.source == "tmdb" and em.metric_type == "rating_average"
+      )
       |> where([..., em], em.value <= ^max_val)
     else
       query
@@ -676,19 +713,22 @@ defmodule Cinegraph.Movies.Filters do
     min_val = to_float(min)
     max_val = to_float(max)
 
-    query = if min_val do
-      query
-      |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "imdb" and em.metric_type == "rating_average")
-      |> where([..., em], em.value >= ^min_val)
-    else
-      query
-    end
+    query =
+      if min_val do
+        query
+        |> join(:inner, [m, ...], em in "external_metrics",
+          on: em.movie_id == m.id and em.source == "imdb" and em.metric_type == "rating_average"
+        )
+        |> where([..., em], em.value >= ^min_val)
+      else
+        query
+      end
 
     if max_val do
       query
       |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "imdb" and em.metric_type == "rating_average")
+        on: em.movie_id == m.id and em.source == "imdb" and em.metric_type == "rating_average"
+      )
       |> where([..., em], em.value <= ^max_val)
     else
       query
@@ -701,19 +741,22 @@ defmodule Cinegraph.Movies.Filters do
     min_val = to_float(min)
     max_val = to_float(max)
 
-    query = if min_val do
-      query
-      |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "metacritic" and em.metric_type == "metascore")
-      |> where([..., em], em.value >= ^min_val)
-    else
-      query
-    end
+    query =
+      if min_val do
+        query
+        |> join(:inner, [m, ...], em in "external_metrics",
+          on: em.movie_id == m.id and em.source == "metacritic" and em.metric_type == "metascore"
+        )
+        |> where([..., em], em.value >= ^min_val)
+      else
+        query
+      end
 
     if max_val do
       query
       |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "metacritic" and em.metric_type == "metascore")
+        on: em.movie_id == m.id and em.source == "metacritic" and em.metric_type == "metascore"
+      )
       |> where([..., em], em.value <= ^max_val)
     else
       query
@@ -726,19 +769,26 @@ defmodule Cinegraph.Movies.Filters do
     critics_val = to_float(critics_min)
     audience_val = to_float(audience_min)
 
-    query = if critics_val do
-      query
-      |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "rotten_tomatoes" and em.metric_type == "tomatometer")
-      |> where([..., em], em.value >= ^critics_val)
-    else
-      query
-    end
+    query =
+      if critics_val do
+        query
+        |> join(:inner, [m, ...], em in "external_metrics",
+          on:
+            em.movie_id == m.id and em.source == "rotten_tomatoes" and
+              em.metric_type == "tomatometer"
+        )
+        |> where([..., em], em.value >= ^critics_val)
+      else
+        query
+      end
 
     if audience_val do
       query
       |> join(:inner, [m, ...], em in "external_metrics",
-          on: em.movie_id == m.id and em.source == "rotten_tomatoes" and em.metric_type == "audience_score")
+        on:
+          em.movie_id == m.id and em.source == "rotten_tomatoes" and
+            em.metric_type == "audience_score"
+      )
       |> where([..., em], em.value >= ^audience_val)
     else
       query
@@ -746,7 +796,7 @@ defmodule Cinegraph.Movies.Filters do
   end
 
   # People-based filtering functions
-  
+
   defp filter_by_people(query, params) do
     query
     |> filter_by_person_ids(params["person_ids"])
@@ -780,11 +830,12 @@ defmodule Cinegraph.Movies.Filters do
 
   defp filter_by_director_id(query, director_id) do
     dir_id = to_integer(director_id)
-    
+
     if dir_id do
       query
-      |> join(:inner, [m, ...], mc in "movie_credits", 
-          on: mc.movie_id == m.id and mc.person_id == ^dir_id and mc.job == "Director")
+      |> join(:inner, [m, ...], mc in "movie_credits",
+        on: mc.movie_id == m.id and mc.person_id == ^dir_id and mc.job == "Director"
+      )
     else
       query
     end
@@ -803,7 +854,8 @@ defmodule Cinegraph.Movies.Filters do
       Enum.reduce(actor_ids, query, fn actor_id, acc_query ->
         acc_query
         |> join(:inner, [m, ...], mc in "movie_credits",
-            on: mc.movie_id == m.id and mc.person_id == ^actor_id and mc.credit_type == "cast")
+          on: mc.movie_id == m.id and mc.person_id == ^actor_id and mc.credit_type == "cast"
+        )
       end)
     end
   end
@@ -814,13 +866,14 @@ defmodule Cinegraph.Movies.Filters do
   end
 
   # Metric score filtering functions
-  
+
   defp filter_by_metric_scores(query, params) do
     query
     |> filter_by_metric_dimension(params["popular_opinion_min"], :popular_opinion)
     |> filter_by_metric_dimension(params["critical_acclaim_min"], :critical_acclaim)
     |> filter_by_metric_dimension(params["industry_recognition_min"], :industry_recognition)
     |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
+    |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
   end
 
   defp filter_by_metric_dimension(query, nil, _dimension), do: query
@@ -828,89 +881,124 @@ defmodule Cinegraph.Movies.Filters do
 
   defp filter_by_metric_dimension(query, min_value, dimension) do
     min_val = to_float(min_value)
-    
+
     if min_val do
       case dimension do
         :popular_opinion ->
           # Filter by popular opinion score (TMDb + IMDb ratings)
-          where(query, [m], fragment(
-            """
-            COALESCE((
-              SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
-              FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                   (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
-            ), 0) >= ?
-            """,
-            m.id,
-            m.id,
-            ^min_val
-          ))
+          where(
+            query,
+            [m],
+            fragment(
+              """
+              COALESCE((
+                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
+              ), 0) >= ?
+              """,
+              m.id,
+              m.id,
+              ^min_val
+            )
+          )
 
         :critical_acclaim ->
           # Filter by critical acclaim score (Metacritic + Rotten Tomatoes)
-          where(query, [m], fragment(
-            """
-            COALESCE((
-              SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-              FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
-                   (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
-            ), 0) >= ?
-            """,
-            m.id,
-            m.id,
-            ^min_val
-          ))
+          where(
+            query,
+            [m],
+            fragment(
+              """
+              COALESCE((
+                SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
+              ), 0) >= ?
+              """,
+              m.id,
+              m.id,
+              ^min_val
+            )
+          )
 
         :industry_recognition ->
           # Filter by industry recognition (awards)
-          where(query, [m], fragment(
-            """
-            COALESCE((
-              SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
-              FROM (
-                SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
-                       COUNT(*) as nominations
-                FROM festival_nominations
-                WHERE movie_id = ?
-              ) f
-            ), 0) >= ?
-            """,
-            m.id,
-            ^min_val
-          ))
+          where(
+            query,
+            [m],
+            fragment(
+              """
+              COALESCE((
+                SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
+                FROM (
+                  SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
+                         COUNT(*) as nominations
+                  FROM festival_nominations
+                  WHERE movie_id = ?
+                ) f
+              ), 0) >= ?
+              """,
+              m.id,
+              ^min_val
+            )
+          )
 
         :cultural_impact ->
           # Filter by cultural impact (canonical lists + popularity)
-          where(query, [m], fragment(
-            """
-            COALESCE(
-              LEAST(1.0, 
-                COALESCE(
-                  (SELECT COUNT(*) * 0.1
-                   FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
-                  0
-                ) + 
-                COALESCE(
-                  (SELECT CASE 
-                    WHEN value IS NULL OR value = 0 THEN 0
-                    ELSE LN(value + 1) / LN(1001)
-                  END
-                  FROM external_metrics 
-                  WHERE movie_id = ? 
-                    AND source = 'tmdb' 
-                    AND metric_type = 'popularity_score' 
-                  LIMIT 1), 
-                  0
-                )
-              ), 
-              0
-            ) >= ?
-            """,
-            m.canonical_sources,
-            m.id,
-            ^min_val
-          ))
-        
+          where(
+            query,
+            [m],
+            fragment(
+              """
+              COALESCE(
+                LEAST(1.0, 
+                  COALESCE(
+                    (SELECT COUNT(*) * 0.1
+                     FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
+                    0
+                  ) + 
+                  COALESCE(
+                    (SELECT CASE 
+                      WHEN value IS NULL OR value = 0 THEN 0
+                      ELSE LN(value + 1) / LN(1001)
+                    END
+                    FROM external_metrics 
+                    WHERE movie_id = ? 
+                      AND source = 'tmdb' 
+                      AND metric_type = 'popularity_score' 
+                    LIMIT 1), 
+                    0
+                  )
+                ), 
+                0
+              ) >= ?
+              """,
+              m.canonical_sources,
+              m.id,
+              ^min_val
+            )
+          )
+
+        :people_quality ->
+          # Filter by people quality score
+          where(
+            query,
+            [m],
+            fragment(
+              """
+              COALESCE((
+                SELECT AVG(pm.score) / 100.0
+                FROM person_metrics pm
+                JOIN movie_credits mc ON pm.person_id = mc.person_id
+                WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+              ), 0) >= ?
+              """,
+              m.id,
+              ^min_val
+            )
+          )
+
         _ ->
           query
       end
