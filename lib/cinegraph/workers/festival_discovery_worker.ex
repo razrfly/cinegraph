@@ -69,7 +69,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         # Store organization info before any modifications
         organization_abbr = ceremony.organization && ceremony.organization.abbreviation
         organization_id = ceremony.organization && ceremony.organization.id
-        
+
         Logger.info(
           "Processing #{organization_abbr} ceremony #{ceremony.year} (ID: #{ceremony.id})"
         )
@@ -181,10 +181,10 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         # Simple solution: just run it here instead of queuing another job
         if is_binary(organization_abbr) and organization_abbr != "AMPAS" do
           Logger.info("Running person inference for #{organization_abbr} #{ceremony.year}")
-          
+
           # Track timing for comprehensive metrics
           start_time = System.monotonic_time(:millisecond)
-          
+
           {result, duration_ms} =
             try do
               res = FestivalPersonInferrer.infer_all_director_nominations()
@@ -194,18 +194,20 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
               e ->
                 end_time = System.monotonic_time(:millisecond)
                 duration = end_time - start_time
+
                 Logger.error(
                   "Person inference crashed for #{organization_abbr} #{ceremony.year}: " <>
                     Exception.format(:error, e, __STACKTRACE__)
                 )
+
                 {%{success: 0, skipped: 0, failed: 0, error: Exception.message(e)}, duration}
             end
-          
+
           Logger.info(
             "Person inference completed for #{organization_abbr} #{ceremony.year}: " <>
-            "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed (#{duration_ms}ms)"
+              "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed (#{duration_ms}ms)"
           )
-          
+
           # Mark job metadata to indicate inference was invoked inline (always persist)
           updated_meta =
             Map.merge(job_meta, %{
@@ -213,7 +215,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
               person_inference_duration_ms: duration_ms,
               person_inference_result: result
             })
-          
+
           update_job_meta(job, updated_meta)
         else
           update_job_meta(job, job_meta)
@@ -714,11 +716,12 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
             {:ok, result} ->
               tmdb_id = result.movie["id"]
               min_confidence = Application.get_env(:cinegraph, :fuzzy_match_min_confidence, 0.7)
-              
+
               if result.confidence < min_confidence do
                 Logger.warning(
                   "Fuzzy search confidence too low for '#{actual_title}': #{result.confidence} < #{min_confidence}"
                 )
+
                 %{
                   action: :skipped,
                   reason: :low_confidence,
@@ -830,7 +833,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
 
   # Removed fuzzy_search_movie and related functions - now using FallbackSearch module
   # Keep helper functions that are still used elsewhere
-  
+
   defp calculate_title_similarity(movie_title, original_title) do
     # Normalize titles for comparison
     normalized_movie = normalize_title(movie_title)
@@ -839,7 +842,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     # Use Jaro distance for fuzzy matching
     String.jaro_distance(normalized_movie, normalized_original)
   end
-  
+
   defp normalize_title(title) do
     title
     |> String.downcase()
