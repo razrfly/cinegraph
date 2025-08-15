@@ -876,9 +876,12 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Count directors with PQS scores
     Repo.one(
       from pm in Cinegraph.Metrics.PersonMetric,
-        join: p in Cinegraph.Movies.Person, on: pm.person_id == p.id,
-        join: c in Cinegraph.Movies.Credit, on: c.person_id == p.id,
-        where: pm.metric_type == "quality_score" and c.credit_type == "crew" and c.job == "Director",
+        join: p in Cinegraph.Movies.Person,
+        on: pm.person_id == p.id,
+        join: c in Cinegraph.Movies.Credit,
+        on: c.person_id == p.id,
+        where:
+          pm.metric_type == "quality_score" and c.credit_type == "crew" and c.job == "Director",
         select: count(pm.person_id, :distinct)
     ) || 0
   end
@@ -887,8 +890,10 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Count actors with PQS scores
     Repo.one(
       from pm in Cinegraph.Metrics.PersonMetric,
-        join: p in Cinegraph.Movies.Person, on: pm.person_id == p.id,
-        join: c in Cinegraph.Movies.Credit, on: c.person_id == p.id,
+        join: p in Cinegraph.Movies.Person,
+        on: pm.person_id == p.id,
+        join: c in Cinegraph.Movies.Credit,
+        on: c.person_id == p.id,
         where: pm.metric_type == "quality_score" and c.credit_type == "cast",
         select: count(pm.person_id, :distinct)
     ) || 0

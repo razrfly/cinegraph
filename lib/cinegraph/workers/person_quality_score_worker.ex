@@ -1,15 +1,16 @@
 defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   @moduledoc """
   Oban worker for calculating Person Quality Scores using universal algorithm.
-  
+
   Works for all roles: directors, actors, writers, producers, etc.
   Can be run for a single person or all people with significant credits.
   """
-  
+
   use Oban.Worker,
     queue: :metrics,
     max_attempts: 3,
-    unique: [period: 3600]  # Prevent duplicate jobs within 1 hour
+    # Prevent duplicate jobs within 1 hour
+    unique: [period: 3600]
 
   alias Cinegraph.Metrics.PersonQualityScore
   require Logger
@@ -17,17 +18,19 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"person_id" => person_id}}) do
     Logger.info("Calculating universal PQS for person #{person_id}")
-    
+
     case PersonQualityScore.calculate_person_score(person_id) do
       {:ok, score, components} ->
         case PersonQualityScore.store_person_score(person_id, score, components) do
           {:ok, _metric} ->
             Logger.info("Universal PQS calculated and stored for person #{person_id}: #{score}")
             :ok
+
           {:error, reason} ->
             Logger.error("Failed to store PQS for person #{person_id}: #{inspect(reason)}")
             {:error, reason}
         end
+
       {:error, reason} ->
         Logger.error("Failed to calculate PQS for person #{person_id}: #{inspect(reason)}")
         {:error, reason}
@@ -36,19 +39,22 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"batch" => "all_people", "min_credits" => min_credits}}) do
-    Logger.info("Starting batch universal PQS calculation for all people with min #{min_credits} credits")
-    
+    Logger.info(
+      "Starting batch universal PQS calculation for all people with min #{min_credits} credits"
+    )
+
     case PersonQualityScore.calculate_all_person_scores(min_credits) do
       {:ok, %{total: total, successful: successful}} ->
         Logger.info("Universal PQS batch complete: #{successful}/#{total} people processed")
         :ok
+
       {:error, reason} ->
         Logger.error("Failed to calculate batch PQS: #{inspect(reason)}")
         {:error, reason}
     end
   end
 
-  @impl Oban.Worker  
+  @impl Oban.Worker
   def perform(%Oban.Job{args: %{"batch" => "all_directors"}}) do
     # Legacy support - redirect to universal algorithm
     Logger.info("Legacy call: redirecting to universal PQS calculation")
@@ -87,7 +93,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   def schedule_recurring(min_credits \\ 5) do
     # Schedule immediate calculation
     schedule_all_people(min_credits)
-    
+
     # You could also add this to Oban's cron configuration
     # in config.exs for automatic weekly recalculation:
     # 

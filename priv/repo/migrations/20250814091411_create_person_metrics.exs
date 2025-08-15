@@ -10,7 +10,7 @@ defmodule Cinegraph.Repo.Migrations.CreatePersonMetrics do
       add :metadata, :map, default: %{}
       add :calculated_at, :utc_datetime, null: false
       add :valid_until, :utc_datetime
-      
+
       timestamps(type: :utc_datetime)
     end
 
