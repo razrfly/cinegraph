@@ -28,30 +28,35 @@ defmodule Cinegraph.ObanPlugins.FestivalInferenceMonitor do
   
   @impl true
   def handle_info(:check_completed_jobs, state) do
-    check_and_queue_inference(state.last_check)
+    window_end = DateTime.utc_now()
+    check_and_queue_inference(state.last_check, window_end)
     schedule_check()
-    {:noreply, %{state | last_check: DateTime.utc_now()}}
+    {:noreply, %{state | last_check: window_end}}
   end
   
   defp schedule_check do
     Process.send_after(self(), :check_completed_jobs, @check_interval)
   end
   
-  defp check_and_queue_inference(since) do
+  defp check_and_queue_inference(since, until) do
     # Find recently completed discovery jobs
     completed_discovery_jobs = 
       from(j in Oban.Job,
         where: j.worker == "Cinegraph.Workers.FestivalDiscoveryWorker",
         where: j.state == "completed",
-        where: j.completed_at > ^since,
-        select: j.args
+        where: j.completed_at > ^since and j.completed_at <= ^until,
+        select: %{args: j.args, meta: j.meta}
       )
       |> Repo.all()
     
-    Enum.each(completed_discovery_jobs, fn args ->
+    Enum.each(completed_discovery_jobs, fn %{args: args, meta: meta} ->
       ceremony_id = args["ceremony_id"]
       
-      # Check if this is a non-Oscar ceremony
+      # Skip if discovery already ran inference inline
+      if meta && Map.get(meta, "person_inference_invoked") do
+        Logger.debug("Skipping inference enqueue for ceremony #{ceremony_id} — discovery already invoked inference")
+      else
+        # Check if this is a non-Oscar ceremony
       ceremony = 
         from(fc in FestivalCeremony,
           join: fo in assoc(fc, :organization),
@@ -93,6 +98,7 @@ defmodule Cinegraph.ObanPlugins.FestivalInferenceMonitor do
               )
           end
         end
+      end
       end
     end)
   end

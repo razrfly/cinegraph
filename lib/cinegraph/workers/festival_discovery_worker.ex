@@ -174,8 +174,6 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           })
           |> Map.merge(person_linking_summary)
 
-        update_job_meta(job, job_meta)
-
         # Broadcast completion
         broadcast_discovery_complete(ceremony, summary)
 
@@ -184,13 +182,31 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         if is_binary(organization_abbr) and organization_abbr != "AMPAS" do
           Logger.info("Running person inference for #{organization_abbr} #{ceremony.year}")
           
+          # Track timing for comprehensive metrics
+          start_time = System.monotonic_time(:millisecond)
+          
           # Run the inference directly - this is the simple, elegant solution
           result = FestivalPersonInferrer.infer_all_director_nominations()
           
+          end_time = System.monotonic_time(:millisecond)
+          duration_ms = end_time - start_time
+          
           Logger.info(
             "Person inference completed for #{organization_abbr} #{ceremony.year}: " <>
-            "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed"
+            "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed (#{duration_ms}ms)"
           )
+          
+          # Mark job metadata to indicate inference was invoked inline
+          # This prevents FestivalInferenceMonitor from enqueueing duplicate jobs
+          updated_meta = Map.merge(job_meta, %{
+            person_inference_invoked: true,
+            person_inference_duration_ms: duration_ms,
+            person_inference_result: result
+          })
+          
+          update_job_meta(job, updated_meta)
+        else
+          update_job_meta(job, job_meta)
         end
 
         :ok
