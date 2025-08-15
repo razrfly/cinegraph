@@ -105,9 +105,10 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           case ScoringService.get_profile(profile_name) do
             nil ->
               # Fallback to presets if not in database
+              # Try both string and atom keys since DB returns string keys
               weights =
-                socket.assigns.presets
-                |> Map.get(String.to_atom(preset_name))
+                Map.get(socket.assigns.presets, preset_name) ||
+                Map.get(socket.assigns.presets, String.to_atom(preset_name))
 
               {weights, nil}
 
@@ -202,7 +203,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           Adjust the importance of different scoring factors to discover movies that match your preferences
           <%= if @current_profile do %>
             <span class="ml-2 text-sm text-green-600">
-              (Using database profile: {@current_profile.name})
+              (Using database profile: <%= @current_profile.name %>)
             </span>
           <% end %>
         </:subtitle>
@@ -227,7 +228,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                 )
               ]}
             >
-              {humanize_preset(key)}
+              <%= humanize_preset(key) %>
             </button>
             <button
               phx-click="select_preset"
@@ -252,10 +253,10 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
           <div :for={{dimension, weight} <- @weights} class="space-y-1">
             <div class="flex justify-between items-center">
               <label class="text-sm font-medium text-gray-700">
-                {humanize_dimension(dimension)}
+                <%= humanize_dimension(dimension) %>
               </label>
               <span class="text-sm text-gray-600">
-                {round(weight * 100)}%
+                <%= round(weight * 100) %>%
               </span>
             </div>
             <input
@@ -267,7 +268,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
             />
             <p class="text-xs text-gray-500">
-              {dimension_description(dimension)}
+              <%= dimension_description(dimension) %>
             </p>
           </div>
         </form>
@@ -286,7 +287,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
               </button>
             </label>
             <span class="text-sm text-gray-600">
-              {round(@min_score * 100)}%
+              <%= round(@min_score * 100) %>%
             </span>
           </div>
           <input
@@ -333,7 +334,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
             phx-click="toggle_scores"
             class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
           >
-            {if @show_scores, do: "Hide", else: "Show"} Score Breakdown
+            <%= if @show_scores, do: "Hide", else: "Show" %> Score Breakdown
           </button>
         </div>
       </div>
@@ -362,7 +363,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                 <% vote_avg = Cinegraph.Movies.Movie.vote_average(movie) %>
                 <%= if vote_avg && vote_avg > 0 do %>
                   <div class="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-sm px-2 py-1 rounded">
-                    ⭐ {Float.round(vote_avg, 1)}
+                    ⭐ <%= Float.round(vote_avg, 1) %>
                   </div>
                 <% end %>
               </div>
@@ -370,12 +371,12 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     <!-- Movie Info -->
               <div class="p-4">
                 <h3 class="font-semibold text-lg text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                  {movie.title}
+                  <%= movie.title %>
                 </h3>
 
                 <%= if movie.release_date do %>
                   <p class="text-gray-500 text-sm mt-1">
-                    {Calendar.strftime(movie.release_date, "%Y")}
+                    <%= Calendar.strftime(movie.release_date, "%Y") %>
                   </p>
                 <% end %>
                 
@@ -383,13 +384,13 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                 <div class="mt-3 flex flex-wrap gap-2">
                   <%= if movie.runtime do %>
                     <span class="text-xs text-gray-500">
-                      {movie.runtime} min
+                      <%= movie.runtime %> min
                     </span>
                   <% end %>
 
                   <%= if movie.original_language do %>
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {String.upcase(movie.original_language)}
+                      <%= String.upcase(movie.original_language) %>
                     </span>
                   <% end %>
                 </div>
@@ -398,14 +399,14 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                 <%= if @show_scores and movie.score_components do %>
                   <div class="mt-4 space-y-1 text-xs text-gray-600">
                     <div class="font-semibold text-gray-700">
-                      Total Score: {format_score(movie.discovery_score)}
+                      Total Score: <%= format_score(movie.discovery_score) %>
                     </div>
                     <div
                       :for={{dimension, score} <- movie.score_components}
                       class="flex justify-between"
                     >
-                      <span>{humanize_dimension(dimension)}:</span>
-                      <span>{format_score(score)}</span>
+                      <span><%= humanize_dimension(dimension) %>:</span>
+                      <span><%= format_score(score) %></span>
                     </div>
                   </div>
                 <% end %>

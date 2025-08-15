@@ -316,7 +316,7 @@ defmodule Cinegraph.Movies.Filters do
             fragment(
               """
               COALESCE((
-                SELECT AVG(pm.score) / 100.0
+                SELECT AVG(DISTINCT pm.score) / 100.0
                 FROM person_metrics pm
                 JOIN movie_credits mc ON pm.person_id = mc.person_id
                 WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
@@ -332,7 +332,7 @@ defmodule Cinegraph.Movies.Filters do
             fragment(
               """
               COALESCE((
-                SELECT AVG(pm.score) / 100.0
+                SELECT AVG(DISTINCT pm.score) / 100.0
                 FROM person_metrics pm
                 JOIN movie_credits mc ON pm.person_id = mc.person_id
                 WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
@@ -988,7 +988,7 @@ defmodule Cinegraph.Movies.Filters do
             fragment(
               """
               COALESCE((
-                SELECT AVG(pm.score) / 100.0
+                SELECT AVG(DISTINCT pm.score) / 100.0
                 FROM person_metrics pm
                 JOIN movie_credits mc ON pm.person_id = mc.person_id
                 WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
