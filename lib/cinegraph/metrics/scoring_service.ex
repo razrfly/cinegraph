@@ -97,14 +97,23 @@ defmodule Cinegraph.Metrics.ScoringService do
     normalized_weights = normalize_weights(discovery_weights)
     min_score = Map.get(options, :min_score, 0.0)
     
-    # Use the same query structure as DiscoveryScoringSimple but with database weights
-    query
-    |> join_external_metrics()
-    |> join_festival_data()
-    |> join_person_quality_data()
-    |> select_with_scores(normalized_weights)
-    |> filter_by_min_score(normalized_weights, min_score)
-    |> order_by_score(normalized_weights)
+    # Check if the query has GROUP BY (from genre filtering, etc.)
+    if has_group_by?(query) do
+      # Don't add joins when there's GROUP BY - use subqueries instead
+      query
+      |> select_with_scores(normalized_weights)
+      |> filter_by_min_score_grouped(normalized_weights, min_score)
+      |> order_by_score_grouped(normalized_weights)
+    else
+      # Use the same query structure as DiscoveryScoringSimple but with database weights
+      query
+      |> join_external_metrics()
+      |> join_festival_data()
+      |> join_person_quality_data()
+      |> select_with_scores(normalized_weights)
+      |> filter_by_min_score(normalized_weights, min_score)
+      |> order_by_score(normalized_weights)
+    end
   end
   
   def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
@@ -124,11 +133,20 @@ defmodule Cinegraph.Metrics.ScoringService do
     discovery_weights = profile_to_discovery_weights(profile)
     normalized_weights = normalize_weights(discovery_weights)
     
-    query
-    |> join_external_metrics()
-    |> join_festival_data()
-    |> join_person_quality_data()
-    |> select_with_scores(normalized_weights)
+    # Check if the query has GROUP BY (from genre filtering, etc.)
+    # If it does, we need to handle scoring differently
+    if has_group_by?(query) do
+      # Don't add joins when there's GROUP BY - the select function will use subqueries
+      query
+      |> select_with_scores(normalized_weights)
+    else
+      # Normal path with joins for better performance
+      query
+      |> join_external_metrics()
+      |> join_festival_data()
+      |> join_person_quality_data()
+      |> select_with_scores(normalized_weights)
+    end
     # Note: No ordering or filtering - just adds the score fields
   end
   
@@ -282,6 +300,112 @@ defmodule Cinegraph.Metrics.ScoringService do
   end
   
   defp select_with_scores(query, weights) do
+    # Check if the query has GROUP BY (e.g., from genre filtering)
+    # If it does, we need to handle the fields differently
+    if has_group_by?(query) do
+      select_with_scores_grouped(query, weights)
+    else
+      select_with_scores_regular(query, weights)
+    end
+  end
+  
+  defp has_group_by?(%Ecto.Query{group_bys: group_bys}) when length(group_bys) > 0, do: true
+  defp has_group_by?(_), do: false
+  
+  defp select_with_scores_grouped(query, weights) do
+    # When we have GROUP BY, we can't directly reference the joined table fields
+    # Instead, we use subqueries to fetch the metric values
+    select_merge(query, [m], %{
+      discovery_score: fragment(
+        """
+        ? * COALESCE((
+          COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5 + 
+          COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5
+        ), 0) + 
+        ? * COALESCE((
+          COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1), 0) / 100.0 * 0.5 + 
+          COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1), 0) / 100.0 * 0.5
+        ), 0) + 
+        ? * COALESCE(LEAST(1.0, (
+          COALESCE((SELECT COUNT(CASE WHEN won = true THEN 1 END) FROM festival_nominations WHERE movie_id = ?), 0) * 0.2 + 
+          COALESCE((SELECT COUNT(*) FROM festival_nominations WHERE movie_id = ?), 0) * 0.05
+        )), 0) + 
+        ? * COALESCE(LEAST(1.0, 
+          COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + 
+          CASE 
+            WHEN COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) = 0 THEN 0 
+            ELSE LN(COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) + 1) / LN(1001) 
+          END
+        ), 0) +
+        ? * COALESCE((
+          SELECT AVG(pm.score) / 100.0
+          FROM person_metrics pm
+          JOIN movie_credits mc ON pm.person_id = mc.person_id
+          WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+        ), 0)
+        """,
+        ^weights.popular_opinion, m.id, m.id,
+        ^weights.critical_acclaim, m.id, m.id,
+        ^weights.industry_recognition, m.id, m.id,
+        ^weights.cultural_impact, m.canonical_sources, m.id, m.id,
+        ^weights.people_quality, m.id
+      ),
+      score_components: %{
+        popular_opinion: fragment(
+          """
+          COALESCE((
+            COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5 + 
+            COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5
+          ), 0)
+          """,
+          m.id, m.id
+        ),
+        critical_acclaim: fragment(
+          """
+          COALESCE((
+            COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1), 0) / 100.0 * 0.5 + 
+            COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1), 0) / 100.0 * 0.5
+          ), 0)
+          """,
+          m.id, m.id
+        ),
+        industry_recognition: fragment(
+          """
+          COALESCE(LEAST(1.0, (
+            COALESCE((SELECT COUNT(CASE WHEN won = true THEN 1 END) FROM festival_nominations WHERE movie_id = ?), 0) * 0.2 + 
+            COALESCE((SELECT COUNT(*) FROM festival_nominations WHERE movie_id = ?), 0) * 0.05
+          )), 0)
+          """,
+          m.id, m.id
+        ),
+        cultural_impact: fragment(
+          """
+          COALESCE(LEAST(1.0, 
+            COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + 
+            CASE 
+              WHEN COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) = 0 THEN 0 
+              ELSE LN(COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) + 1) / LN(1001) 
+            END
+          ), 0)
+          """,
+          m.canonical_sources, m.id, m.id
+        ),
+        people_quality: fragment(
+          """
+          COALESCE((
+            SELECT AVG(pm.score) / 100.0
+            FROM person_metrics pm
+            JOIN movie_credits mc ON pm.person_id = mc.person_id
+            WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+          ), 0)
+          """,
+          m.id
+        )
+      }
+    })
+  end
+  
+  defp select_with_scores_regular(query, weights) do
     select_merge(query,
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc, 
        rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
@@ -342,6 +466,44 @@ fragment(
     )
   end
   
+  defp filter_by_min_score_grouped(query, weights, min_score) do
+    where(query, [m], fragment(
+      """
+      ? * COALESCE((
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5 + 
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5
+      ), 0) + 
+      ? * COALESCE((
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1), 0) / 100.0 * 0.5 + 
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1), 0) / 100.0 * 0.5
+      ), 0) + 
+      ? * COALESCE(LEAST(1.0, (
+        COALESCE((SELECT COUNT(CASE WHEN won = true THEN 1 END) FROM festival_nominations WHERE movie_id = ?), 0) * 0.2 + 
+        COALESCE((SELECT COUNT(*) FROM festival_nominations WHERE movie_id = ?), 0) * 0.05
+      )), 0) + 
+      ? * COALESCE(LEAST(1.0, 
+        COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + 
+        CASE 
+          WHEN COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) = 0 THEN 0 
+          ELSE LN(COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) + 1) / LN(1001) 
+        END
+      ), 0) +
+      ? * COALESCE((
+        SELECT AVG(pm.score) / 100.0
+        FROM person_metrics pm
+        JOIN movie_credits mc ON pm.person_id = mc.person_id
+        WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+      ), 0) >= ?
+      """,
+      ^weights.popular_opinion, m.id, m.id,
+      ^weights.critical_acclaim, m.id, m.id,
+      ^weights.industry_recognition, m.id, m.id,
+      ^weights.cultural_impact, m.canonical_sources, m.id, m.id,
+      ^weights.people_quality, m.id,
+      ^min_score
+    ))
+  end
+  
   defp order_by_score(query, weights) do
     order_by(query,
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
@@ -355,5 +517,42 @@ desc: fragment(
         ^weights.people_quality, pq.avg_person_quality
       )
     )
+  end
+  
+  defp order_by_score_grouped(query, weights) do
+    order_by(query, [m], desc: fragment(
+      """
+      ? * COALESCE((
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5 + 
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1), 0) / 10.0 * 0.5
+      ), 0) + 
+      ? * COALESCE((
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1), 0) / 100.0 * 0.5 + 
+        COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1), 0) / 100.0 * 0.5
+      ), 0) + 
+      ? * COALESCE(LEAST(1.0, (
+        COALESCE((SELECT COUNT(CASE WHEN won = true THEN 1 END) FROM festival_nominations WHERE movie_id = ?), 0) * 0.2 + 
+        COALESCE((SELECT COUNT(*) FROM festival_nominations WHERE movie_id = ?), 0) * 0.05
+      )), 0) + 
+      ? * COALESCE(LEAST(1.0, 
+        COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + 
+        CASE 
+          WHEN COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) = 0 THEN 0 
+          ELSE LN(COALESCE((SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1), 0) + 1) / LN(1001) 
+        END
+      ), 0) +
+      ? * COALESCE((
+        SELECT AVG(pm.score) / 100.0
+        FROM person_metrics pm
+        JOIN movie_credits mc ON pm.person_id = mc.person_id
+        WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+      ), 0)
+      """,
+      ^weights.popular_opinion, m.id, m.id,
+      ^weights.critical_acclaim, m.id, m.id,
+      ^weights.industry_recognition, m.id, m.id,
+      ^weights.cultural_impact, m.canonical_sources, m.id, m.id,
+      ^weights.people_quality, m.id
+    ))
   end
 end

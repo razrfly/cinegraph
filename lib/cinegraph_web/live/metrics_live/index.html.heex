@@ -161,24 +161,10 @@
           <h3 class="font-semibold text-orange-900 mb-2">👥 PEOPLE</h3>
           <div class="space-y-1 text-sm">
             <div class="flex justify-between">
-              <span>Directors:</span>
+              <span>People Quality Score:</span>
               <span class="font-medium">
-                <%= format_percentage(Map.get(@coverage_stats, "director_quality_score", %{})[:movie_count] || 0, @total_movies) %>
+                <%= format_percentage(Map.get(@coverage_stats, "person_quality_score", %{})[:movie_count] || 0, @total_movies) %>
               </span>
-            </div>
-            <div class="flex justify-between">
-              <span>Actors:</span>
-              <span class="font-medium">
-                <%= format_percentage(Map.get(@coverage_stats, "actor_quality_score", %{})[:movie_count] || 0, @total_movies) %>
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span>Writers:</span>
-              <span class="font-medium">-</span>
-            </div>
-            <div class="flex justify-between">
-              <span>Producers:</span>
-              <span class="font-medium">-</span>
             </div>
           </div>
           <div class="mt-3 pt-3 border-t border-orange-200">

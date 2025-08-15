@@ -93,10 +93,13 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("remove_filter", %{"filter" => filter_key}, socket) do
-    filters = Map.delete(socket.assigns.filters, filter_key)
-    params = build_filter_params(socket) |> Map.merge(stringify_filters(filters)) |> Map.put("page", "1")
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
+    # Remove from current query params directly to ensure deletion
+    params =
+      build_filter_params(socket)
+      |> Map.delete(filter_key)
+      |> Map.put("page", "1")
+    
+    {:noreply, push_patch(socket, to: ~p"/movies?#{params}")}
   end
 
   @impl true
@@ -188,7 +191,8 @@ defmodule CinegraphWeb.MovieLive.Index do
       popular_opinion_min: params["popular_opinion_min"],
       critical_acclaim_min: params["critical_acclaim_min"],
       industry_recognition_min: params["industry_recognition_min"],
-      cultural_impact_min: params["cultural_impact_min"]
+      cultural_impact_min: params["cultural_impact_min"],
+      people_quality_min: params["people_quality_min"]
     })
   end
 
@@ -414,9 +418,9 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp to_percentage(int) when is_integer(int), do: int
   
   defp has_meaningful_score?(nil), do: false
-  defp has_meaningful_score?(%Decimal{} = decimal), do: Decimal.gt?(decimal, 0)
-  defp has_meaningful_score?(float) when is_float(float), do: float > 0
-  defp has_meaningful_score?(int) when is_integer(int), do: int > 0
+  defp has_meaningful_score?(%Decimal{} = decimal), do: Decimal.gt?(decimal, Decimal.new("0.01"))
+  defp has_meaningful_score?(float) when is_float(float), do: float > 0.01
+  defp has_meaningful_score?(int) when is_integer(int), do: int > 1
   
   defp award_worthy_score?(nil), do: false
   defp award_worthy_score?(%Decimal{} = decimal), do: Decimal.gt?(decimal, Decimal.new("0.1"))

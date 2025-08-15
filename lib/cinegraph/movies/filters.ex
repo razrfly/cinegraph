@@ -33,7 +33,8 @@ defmodule Cinegraph.Movies.Filters do
   
   defp maybe_distinct(query) do
     # Apply distinct if the query has joins to avoid duplicate rows
-    if has_joins?(query) do
+    # BUT not if we already have GROUP BY (which already ensures uniqueness)
+    if has_joins?(query) and not has_group_by?(query) do
       distinct(query, true)
     else
       query
@@ -42,6 +43,9 @@ defmodule Cinegraph.Movies.Filters do
   
   defp has_joins?(%Ecto.Query{joins: joins}) when length(joins) > 0, do: true
   defp has_joins?(_), do: false
+  
+  defp has_group_by?(%Ecto.Query{group_bys: group_bys}) when length(group_bys) > 0, do: true
+  defp has_group_by?(_), do: false
 
   @doc """
   Apply sorting to a movie query.
@@ -821,6 +825,7 @@ defmodule Cinegraph.Movies.Filters do
     |> filter_by_metric_dimension(params["critical_acclaim_min"], :critical_acclaim)
     |> filter_by_metric_dimension(params["industry_recognition_min"], :industry_recognition)
     |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
+    |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
   end
 
   defp filter_by_metric_dimension(query, nil, _dimension), do: query
@@ -907,6 +912,21 @@ defmodule Cinegraph.Movies.Filters do
             ) >= ?
             """,
             m.canonical_sources,
+            m.id,
+            ^min_val
+          ))
+
+        :people_quality ->
+          # Filter by people quality score (average person quality score)
+          where(query, [m], fragment(
+            """
+            COALESCE((
+              SELECT AVG(pm.score) / 100.0
+              FROM person_metrics pm
+              JOIN movie_credits mc ON pm.person_id = mc.person_id
+              WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+            ), 0) >= ?
+            """,
             m.id,
             ^min_val
           ))
