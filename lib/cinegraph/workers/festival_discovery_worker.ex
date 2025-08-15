@@ -185,24 +185,34 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           # Track timing for comprehensive metrics
           start_time = System.monotonic_time(:millisecond)
           
-          # Run the inference directly - this is the simple, elegant solution
-          result = FestivalPersonInferrer.infer_all_director_nominations()
-          
-          end_time = System.monotonic_time(:millisecond)
-          duration_ms = end_time - start_time
+          {result, duration_ms} =
+            try do
+              res = FestivalPersonInferrer.infer_all_director_nominations()
+              end_time = System.monotonic_time(:millisecond)
+              {res, end_time - start_time}
+            rescue
+              e ->
+                end_time = System.monotonic_time(:millisecond)
+                duration = end_time - start_time
+                Logger.error(
+                  "Person inference crashed for #{organization_abbr} #{ceremony.year}: " <>
+                    Exception.format(:error, e, __STACKTRACE__)
+                )
+                {%{success: 0, skipped: 0, failed: 0, error: Exception.message(e)}, duration}
+            end
           
           Logger.info(
             "Person inference completed for #{organization_abbr} #{ceremony.year}: " <>
             "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed (#{duration_ms}ms)"
           )
           
-          # Mark job metadata to indicate inference was invoked inline
-          # This prevents FestivalInferenceMonitor from enqueueing duplicate jobs
-          updated_meta = Map.merge(job_meta, %{
-            person_inference_invoked: true,
-            person_inference_duration_ms: duration_ms,
-            person_inference_result: result
-          })
+          # Mark job metadata to indicate inference was invoked inline (always persist)
+          updated_meta =
+            Map.merge(job_meta, %{
+              person_inference_invoked: true,
+              person_inference_duration_ms: duration_ms,
+              person_inference_result: result
+            })
           
           update_job_meta(job, updated_meta)
         else

@@ -50,7 +50,7 @@ defmodule Cinegraph.ObanPlugins.FestivalInferenceMonitor do
       |> Repo.all()
     
     Enum.each(completed_discovery_jobs, fn %{args: args, meta: meta} ->
-      ceremony_id = args["ceremony_id"]
+      ceremony_id = normalize_id(args["ceremony_id"])
       
       # Skip if discovery already ran inference inline
       if meta && Map.get(meta, "person_inference_invoked") do
@@ -72,7 +72,7 @@ defmodule Cinegraph.ObanPlugins.FestivalInferenceMonitor do
           from(j in Oban.Job,
             where: j.worker == "Cinegraph.Workers.FestivalPersonInferenceWorker",
             where: fragment("? @> ?", j.args, ^%{"ceremony_id" => ceremony_id}),
-            where: j.state in ["available", "scheduled", "executing", "completed"]
+            where: j.state in ["available", "scheduled", "executing", "retryable", "completed"]
           )
           |> Repo.one()
         
@@ -101,5 +101,15 @@ defmodule Cinegraph.ObanPlugins.FestivalInferenceMonitor do
       end
       end
     end)
+  end
+  
+  # Normalize ceremony_id type to avoid Ecto/PostgreSQL type mismatch
+  defp normalize_id(nil), do: nil
+  defp normalize_id(id) when is_integer(id), do: id
+  defp normalize_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> raise ArgumentError, "invalid ceremony_id: #{inspect(id)}"
+    end
   end
 end

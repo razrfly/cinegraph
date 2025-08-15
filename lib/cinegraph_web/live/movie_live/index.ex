@@ -93,9 +93,19 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("remove_filter", %{"filter" => filter_key}, socket) do
-    # Convert string key to atom to match socket.assigns.filters structure
-    filter_atom = String.to_existing_atom(filter_key)
-    filters = Map.delete(socket.assigns.filters, filter_atom)
+    # Convert safely to an existing atom if present; otherwise, no-op
+    filter_atom =
+      try do
+        String.to_existing_atom(filter_key)
+      rescue
+        ArgumentError -> nil
+      end
+
+    filters =
+      case filter_atom do
+        nil -> socket.assigns.filters
+        atom -> Map.delete(socket.assigns.filters, atom)
+      end
     
     # Build params directly with updated filters to avoid merge conflicts
     params = %{
@@ -277,15 +287,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp parse_list_param(""), do: []
 
   defp parse_list_param(param) when is_binary(param) do
-    # Only process comma-separated values if they contain actual commas
-    # This prevents single string values from being treated as lists
-    if String.contains?(param, ",") do
-      String.split(param, ",", trim: true)
-    else
-      # Single string value indicates the parameter format changed from array to string
-      # which means the filter should be removed (return empty list)
-      []
-    end
+    String.split(param, ",", trim: true)
   end
 
   defp parse_list_param(param) when is_list(param), do: param

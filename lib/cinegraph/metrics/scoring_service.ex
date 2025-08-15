@@ -353,7 +353,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + 
           ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + 
           ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
-          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
+          ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
           ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)
           """,
           ^weights.popular_opinion, tr.value, ir.value,
@@ -376,7 +376,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             f.wins, f.nominations
           ),
           cultural_impact: fragment(
-            "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0)",
+            "COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0)",
             m.canonical_sources, pop.value, pop.value
           ),
           people_quality: fragment(
@@ -395,7 +395,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
          rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
         fragment(
-          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) >= ?",
+          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) >= ?",
           ^weights.popular_opinion, tr.value, ir.value,
           ^weights.critical_acclaim, mc.value, rt.value,
           ^weights.industry_recognition, f.wins, f.nominations,
@@ -427,7 +427,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
          rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
         desc: fragment(
-          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
+          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
           ^weights.popular_opinion, tr.value, ir.value,
           ^weights.critical_acclaim, mc.value, rt.value,
           ^weights.industry_recognition, f.wins, f.nominations,
