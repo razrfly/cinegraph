@@ -93,8 +93,21 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("remove_filter", %{"filter" => filter_key}, socket) do
-    filters = Map.delete(socket.assigns.filters, filter_key)
-    params = build_filter_params(socket) |> Map.merge(stringify_filters(filters)) |> Map.put("page", "1")
+    # Convert string key to atom to match socket.assigns.filters structure
+    filter_atom = String.to_existing_atom(filter_key)
+    filters = Map.delete(socket.assigns.filters, filter_atom)
+    
+    # Build params directly with updated filters to avoid merge conflicts
+    params = %{
+      "page" => "1",
+      "per_page" => to_string(socket.assigns.per_page),
+      "sort" => socket.assigns.sort,
+      "search" => socket.assigns.search_term
+    }
+    |> Map.merge(stringify_filters(filters))
+    |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
+    |> Map.new()
+    
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
   end
@@ -264,7 +277,15 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp parse_list_param(""), do: []
 
   defp parse_list_param(param) when is_binary(param) do
-    String.split(param, ",", trim: true)
+    # Only process comma-separated values if they contain actual commas
+    # This prevents single string values from being treated as lists
+    if String.contains?(param, ",") do
+      String.split(param, ",", trim: true)
+    else
+      # Single string value indicates the parameter format changed from array to string
+      # which means the filter should be removed (return empty list)
+      []
+    end
   end
 
   defp parse_list_param(param) when is_list(param), do: param
