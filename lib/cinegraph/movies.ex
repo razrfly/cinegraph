@@ -374,9 +374,16 @@ defmodule Cinegraph.Movies do
   Creates a person.
   """
   def create_person(attrs \\ %{}) do
-    %Person{}
-    |> Person.changeset(attrs)
-    |> Repo.insert()
+    case %Person{}
+         |> Person.changeset(attrs)
+         |> Repo.insert() do
+      {:ok, person} = result ->
+        # Trigger PQS calculation for new person
+        Cinegraph.Metrics.PQSTriggerStrategy.trigger_new_person(person.id)
+        result
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -387,7 +394,14 @@ defmodule Cinegraph.Movies do
 
     case get_person_by_tmdb_id(tmdb_data["id"]) do
       nil ->
-        Repo.insert(changeset)
+        case Repo.insert(changeset) do
+          {:ok, person} = result ->
+            # Trigger PQS calculation for new person
+            Cinegraph.Metrics.PQSTriggerStrategy.trigger_new_person(person.id)
+            result
+          error ->
+            error
+        end
 
       existing_person ->
         existing_person
@@ -434,12 +448,21 @@ defmodule Cinegraph.Movies do
   Creates a credit (cast or crew association).
   """
   def create_credit(attrs) do
-    %Credit{}
-    |> Credit.changeset(attrs)
-    |> Repo.insert(
-      on_conflict: :replace_all,
-      conflict_target: :credit_id
-    )
+    case %Credit{}
+         |> Credit.changeset(attrs)
+         |> Repo.insert(
+           on_conflict: :replace_all,
+           conflict_target: :credit_id
+         ) do
+      {:ok, credit} = result ->
+        # Trigger PQS recalculation for credit changes
+        if credit.person_id do
+          Cinegraph.Metrics.PQSTriggerStrategy.trigger_credit_changes(credit.person_id)
+        end
+        result
+      error ->
+        error
+    end
   end
 
   @doc """
