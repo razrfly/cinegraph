@@ -222,8 +222,10 @@ defmodule Cinegraph.Metrics.PQSMonitoring do
     )
     
     case result do
-      nil -> 0
-      seconds -> Float.round(seconds / 86400, 1) # Convert to days
+      nil -> 0.0
+      %Decimal{} = decimal -> Float.round(Decimal.to_float(decimal) / 86400, 1) # Convert to days
+      seconds when is_number(seconds) -> Float.round(seconds / 86400, 1) # Convert to days
+      _ -> 0.0
     end
   end
 
@@ -254,18 +256,29 @@ defmodule Cinegraph.Metrics.PQSMonitoring do
 
   defp calculate_average_duration(jobs) do
     completed_jobs = Enum.filter(jobs, fn job -> 
-      job.state == "completed" and job.completed_at and job.inserted_at
+      job.state == "completed" and not is_nil(job.completed_at) and not is_nil(job.inserted_at)
     end)
     
     if length(completed_jobs) > 0 do
       total_seconds = Enum.reduce(completed_jobs, 0, fn job, acc ->
-        duration = DateTime.diff(job.completed_at, job.inserted_at, :second)
+        # Convert NaiveDateTime to DateTime if needed
+        completed_at = case job.completed_at do
+          %NaiveDateTime{} = naive -> DateTime.from_naive!(naive, "Etc/UTC")
+          %DateTime{} = dt -> dt
+        end
+        
+        inserted_at = case job.inserted_at do
+          %NaiveDateTime{} = naive -> DateTime.from_naive!(naive, "Etc/UTC")
+          %DateTime{} = dt -> dt
+        end
+        
+        duration = DateTime.diff(completed_at, inserted_at, :second)
         acc + duration
       end)
       
       Float.round(total_seconds / length(completed_jobs), 1)
     else
-      0
+      0.0
     end
   end
 

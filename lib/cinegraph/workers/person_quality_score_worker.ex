@@ -62,17 +62,24 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"batch" => "daily_incremental", "trigger" => trigger}}) do
-    Logger.info("Starting daily incremental PQS calculation (trigger: #{trigger})")
+  def perform(%Oban.Job{args: %{"batch" => "daily_incremental", "person_ids" => person_ids, "trigger" => trigger}}) do
+    Logger.info("Starting daily incremental PQS calculation (trigger: #{trigger}, #{length(person_ids)} people)")
     
-    case Cinegraph.Metrics.PQSScheduler.schedule_daily_incremental() do
-      :ok -> 
-        Logger.info("Daily incremental PQS scheduling completed")
-        :ok
-      {:error, reason} ->
-        Logger.error("Daily incremental PQS scheduling failed: #{inspect(reason)}")
-        {:error, reason}
-    end
+    results = Enum.map(person_ids, fn person_id ->
+      case PersonQualityScore.calculate_person_score(person_id) do
+        {:ok, score, components} ->
+          case PersonQualityScore.store_person_score(person_id, score, components) do
+            {:ok, _} -> {:ok, person_id, score}
+            error -> {:error, person_id, error}
+          end
+        {:error, error} ->
+          {:error, person_id, error}
+      end
+    end)
+
+    successful = Enum.count(results, fn {status, _, _} -> status == :ok end)
+    Logger.info("Daily incremental PQS complete: #{successful}/#{length(person_ids)} people processed")
+    :ok
   end
 
   @impl Oban.Worker
@@ -107,28 +114,49 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   def perform(%Oban.Job{args: %{"batch" => "health_check", "trigger" => trigger}}) do
     Logger.info("Starting PQS system health check (trigger: #{trigger})")
     
-    case Cinegraph.Metrics.PQSScheduler.check_system_health() do
-      :ok ->
-        Logger.info("PQS health check completed")
-        :ok
-      {:error, reason} ->
-        Logger.error("PQS health check failed: #{inspect(reason)}")
-        {:error, reason}
+    # Direct health check without calling scheduler to avoid circular dependency
+    alias Cinegraph.Metrics.{PQSMonitoring, PQSTriggerStrategy}
+    
+    coverage = PQSMonitoring.get_coverage_metrics()
+    performance = PQSMonitoring.get_performance_metrics()
+    
+    # Check coverage and trigger emergency if needed
+    if coverage.people_without_pqs_percent > 10.0 do
+      reason = "Coverage below threshold: #{coverage.people_without_pqs_percent}% people without PQS"
+      Logger.warning("PQS system health check failed: #{reason}")
+      PQSTriggerStrategy.trigger_quality_assurance_recalculation(reason)
     end
+    
+    # Check for consecutive failures
+    if performance.recent_failure_count >= 5 do
+      reason = "High failure rate: #{performance.recent_failure_count} consecutive failures"
+      Logger.warning("PQS system health check failed: #{reason}")
+      PQSTriggerStrategy.trigger_quality_assurance_recalculation(reason)
+    end
+    
+    Logger.info("PQS health check completed")
+    :ok
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"batch" => "stale_cleanup", "trigger" => trigger, "max_age_days" => max_age_days}}) do
-    Logger.info("Starting PQS stale cleanup (trigger: #{trigger}, max_age: #{max_age_days} days)")
+  def perform(%Oban.Job{args: %{"batch" => "stale_cleanup", "person_ids" => person_ids, "trigger" => trigger, "max_age_days" => max_age_days}}) do
+    Logger.info("Starting PQS stale cleanup (trigger: #{trigger}, max_age: #{max_age_days} days, #{length(person_ids)} people)")
     
-    case Cinegraph.Metrics.PQSScheduler.schedule_stale_cleanup(max_age_days) do
-      :ok ->
-        Logger.info("PQS stale cleanup completed")
-        :ok
-      {:error, reason} ->
-        Logger.error("PQS stale cleanup failed: #{inspect(reason)}")
-        {:error, reason}
-    end
+    results = Enum.map(person_ids, fn person_id ->
+      case PersonQualityScore.calculate_person_score(person_id) do
+        {:ok, score, components} ->
+          case PersonQualityScore.store_person_score(person_id, score, components) do
+            {:ok, _} -> {:ok, person_id, score}
+            error -> {:error, person_id, error}
+          end
+        {:error, error} ->
+          {:error, person_id, error}
+      end
+    end)
+
+    successful = Enum.count(results, fn {status, _, _} -> status == :ok end)
+    Logger.info("Stale cleanup PQS complete: #{successful}/#{length(person_ids)} people processed")
+    :ok
   end
 
   @impl Oban.Worker

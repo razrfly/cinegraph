@@ -30,8 +30,7 @@ defmodule Cinegraph.Metrics.PQSScheduler do
       %{
         batch: "daily_incremental",
         person_ids: recent_people,
-        trigger: "daily_scheduled",
-        min_credits: 1 # Include all active people
+        trigger: "daily_scheduled"
       }
       |> PersonQualityScoreWorker.new()
       |> Oban.insert()
