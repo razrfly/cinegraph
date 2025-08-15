@@ -22,7 +22,13 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
 
     # Category multipliers (applied after individual weights)
     field :category_weights, :map,
-      default: %{"ratings" => 1.0, "awards" => 1.0, "financial" => 1.0, "cultural" => 1.0}
+      default: %{
+        "ratings" => 1.0,
+        "awards" => 1.0,
+        "financial" => 1.0,
+        "cultural" => 1.0,
+        "people" => 1.0
+      }
 
     # Usage tracking
     field :usage_count, :integer, default: 0
@@ -63,7 +69,7 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
         changeset
 
       weights ->
-        valid_categories = ["ratings", "awards", "financial", "cultural"]
+        valid_categories = ["ratings", "awards", "financial", "cultural", "people"]
 
         cond do
           not Enum.all?(Map.keys(weights), &(&1 in valid_categories)) ->

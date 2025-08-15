@@ -58,13 +58,13 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # Should use defaults: ratings=0.5, awards=0.25, cultural=0.25
-      # 0.5 * 0.5
-      assert result.popular_opinion == 0.25
-      # 0.5 * 0.5
-      assert result.critical_acclaim == 0.25
-      assert result.industry_recognition == 0.25
-      assert result.cultural_impact == 0.25
+      # Should use defaults: ratings=0.4, awards=0.2, cultural=0.2
+      # 0.4 * 0.5 = 0.2
+      assert result.popular_opinion == 0.20
+      # 0.4 * 0.5 = 0.2
+      assert result.critical_acclaim == 0.20
+      assert result.industry_recognition == 0.20
+      assert result.cultural_impact == 0.20
     end
 
     test "handles nil category_weights gracefully" do
@@ -75,11 +75,11 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # Should use defaults
-      assert result.popular_opinion == 0.25
-      assert result.critical_acclaim == 0.25
-      assert result.industry_recognition == 0.25
-      assert result.cultural_impact == 0.25
+      # Should use defaults: ratings=0.4, awards=0.2, cultural=0.2
+      assert result.popular_opinion == 0.20
+      assert result.critical_acclaim == 0.20
+      assert result.industry_recognition == 0.20
+      assert result.cultural_impact == 0.20
     end
 
     test "handles zero ratings weight" do
@@ -135,8 +135,8 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       result = ScoringService.discovery_weights_to_profile(weights, "Custom Test")
 
       assert result.name == "Custom Test"
-      # Note: Current implementation only uses popular_opinion for ratings
-      assert result.category_weights["ratings"] == 0.30
+      # Ratings are derived from both popular_opinion and critical_acclaim
+      assert result.category_weights["ratings"] == 0.50
       assert result.category_weights["awards"] == 0.25
       assert result.category_weights["cultural"] == 0.25
     end
