@@ -5,6 +5,15 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   
   use Phoenix.Component
   
+  @advanced_keys [
+    "award_status", "festival_id", "award_year_from", "award_year_to",
+    "tmdb_min", "tmdb_max", "imdb_min", "imdb_max",
+    "metacritic_min", "metacritic_max", "rt_critics_min", "rt_audience_min",
+    "director_id", "actor_ids", "person_ids",
+    "popular_opinion_min", "critical_acclaim_min", 
+    "industry_recognition_min", "cultural_impact_min", "people_quality_min"
+  ]
+  
   def advanced_filters(assigns) do
     ~H"""
     <div class="space-y-6">
@@ -323,6 +332,24 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             />
           </div>
+          
+          <!-- People Quality -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              👥 People Quality
+              <span class="text-xs text-gray-500 ml-1">(0-1)</span>
+            </label>
+            <input
+              type="number"
+              name="filters[people_quality_min]"
+              value={@filters["people_quality_min"]}
+              placeholder="Min score"
+              min="0"
+              max="1"
+              step="0.1"
+              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            />
+          </div>
         </div>
       </div>
       
@@ -352,33 +379,15 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   end
   
   def has_active_advanced_filters(filters) do
-    advanced_keys = [
-      "award_status", "festival_id", "award_year_from", "award_year_to",
-      "tmdb_min", "tmdb_max", "imdb_min", "imdb_max",
-      "metacritic_min", "metacritic_max", "rt_critics_min", "rt_audience_min",
-      "director_id", "actor_ids", "person_ids",
-      "popular_opinion_min", "critical_acclaim_min", 
-      "industry_recognition_min", "cultural_impact_min"
-    ]
-    
-    Enum.any?(advanced_keys, fn key ->
+    Enum.any?(@advanced_keys, fn key ->
       value = Map.get(filters, key)
       value not in [nil, "", []]
     end)
   end
   
   def get_active_advanced_filters(filters) do
-    advanced_keys = [
-      "award_status", "festival_id", "award_year_from", "award_year_to",
-      "tmdb_min", "tmdb_max", "imdb_min", "imdb_max",
-      "metacritic_min", "metacritic_max", "rt_critics_min", "rt_audience_min",
-      "director_id", "actor_ids", "person_ids",
-      "popular_opinion_min", "critical_acclaim_min", 
-      "industry_recognition_min", "cultural_impact_min"
-    ]
-    
     filters
-    |> Map.take(advanced_keys)
+    |> Map.take(@advanced_keys)
     |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
   end
   
@@ -403,6 +412,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "critical_acclaim_min" -> "Critical Acclaim"
       "industry_recognition_min" -> "Industry Recognition"
       "cultural_impact_min" -> "Cultural Impact"
+      "people_quality_min" -> "People Quality"
       _ -> key |> String.replace("_", " ") |> String.capitalize()
     end
   end

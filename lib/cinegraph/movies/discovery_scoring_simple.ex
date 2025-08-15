@@ -73,6 +73,10 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       on: f.movie_id == m.id,
       as: :festivals
     )
+    |> join(:left, [m], pq in subquery(person_quality_summary()),
+      on: pq.movie_id == m.id,
+      as: :person_quality
+    )
     |> select_merge(
       [
         m,
@@ -81,12 +85,13 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         metacritic: mc,
         rotten_tomatoes: rt,
         popularity: pop,
-        festivals: f
+        festivals: f,
+        person_quality: pq
       ],
       %{
         discovery_score:
           fragment(
-            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
+            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
             ^normalized_weights.popular_opinion,
             tr.value,
             ir.value,
@@ -99,7 +104,9 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
             ^normalized_weights.cultural_impact,
             m.canonical_sources,
             pop.value,
-            pop.value
+            pop.value,
+            ^normalized_weights.people_quality,
+            pq.avg_person_quality
           ),
         score_components: %{
           popular_opinion:
@@ -126,6 +133,11 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
               m.canonical_sources,
               pop.value,
               pop.value
+            ),
+          people_quality:
+            fragment(
+              "COALESCE(COALESCE(?, 0) / 100.0, 0)",
+              pq.avg_person_quality
             )
         }
       }
@@ -138,10 +150,11 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         metacritic: mc,
         rotten_tomatoes: rt,
         popularity: pop,
-        festivals: f
+        festivals: f,
+        person_quality: pq
       ],
       fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) >= ?",
+        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0) >= ?",
         ^normalized_weights.popular_opinion,
         tr.value,
         ir.value,
@@ -155,6 +168,8 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         m.canonical_sources,
         pop.value,
         pop.value,
+        ^normalized_weights.people_quality,
+        pq.avg_person_quality,
         ^min_score
       )
     )
@@ -166,11 +181,12 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         metacritic: mc,
         rotten_tomatoes: rt,
         popularity: pop,
-        festivals: f
+        festivals: f,
+        person_quality: pq
       ],
       desc:
         fragment(
-          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
+          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
           ^normalized_weights.popular_opinion,
           tr.value,
           ir.value,
@@ -183,7 +199,9 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
           ^normalized_weights.cultural_impact,
           m.canonical_sources,
           pop.value,
-          pop.value
+          pop.value,
+          ^normalized_weights.people_quality,
+          pq.avg_person_quality
         )
     )
   end
@@ -227,6 +245,18 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         movie_id: f.movie_id,
         wins: count(fragment("CASE WHEN ? = true THEN 1 END", f.won)),
         nominations: count(f.id)
+      }
+    )
+  end
+  
+  defp person_quality_summary do
+    from(mc in "movie_credits",
+      join: pm in "person_metrics", on: pm.person_id == mc.person_id,
+      where: pm.metric_type == "quality_score",
+      group_by: mc.movie_id,
+      select: %{
+        movie_id: mc.movie_id,
+        avg_person_quality: avg(pm.score)
       }
     )
   end

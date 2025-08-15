@@ -50,6 +50,17 @@ defmodule Cinegraph.Metrics.ScoringService do
     financial_weight = get_category_weight(profile, "financial", 0.0)
     cultural_weight = get_category_weight(profile, "cultural", 0.2)
     people_weight = get_category_weight(profile, "people", 0.2)
+    awards_weight = get_category_weight(profile, "awards", 0.2)
+    
+    # Normalize category weights to sum to 1.0
+    total = ratings_weight + financial_weight + cultural_weight + people_weight + awards_weight
+    {ratings_weight, financial_weight, cultural_weight, people_weight, awards_weight} = 
+      if total > 0 do
+        {ratings_weight / total, financial_weight / total, cultural_weight / total, 
+         people_weight / total, awards_weight / total}
+      else
+        {ratings_weight, financial_weight, cultural_weight, people_weight, awards_weight}
+      end
     
     # Split ratings into popular and critical based on the profile
     # For now, we'll split it 50/50 for popular vs critical within ratings
@@ -57,7 +68,7 @@ defmodule Cinegraph.Metrics.ScoringService do
     %{
       popular_opinion: ratings_weight * 0.5,      # Half of ratings weight
       critical_acclaim: ratings_weight * 0.5,     # Half of ratings weight  
-      industry_recognition: get_category_weight(profile, "awards", 0.2),
+      industry_recognition: awards_weight,
       # Financial success contributes to cultural impact (box office affects cultural penetration)
       cultural_impact: cultural_weight + financial_weight * 0.5,
       # Person quality from directors, actors, writers, etc.
@@ -69,18 +80,28 @@ defmodule Cinegraph.Metrics.ScoringService do
   Converts discovery UI weights back to database format for custom profiles.
   """
   def discovery_weights_to_profile(weights, name \\ "Custom") do
+    # Normalize weights to ensure they sum to 1.0
+    total = Enum.sum(Map.values(weights))
+    normalized_weights = if total > 0 do
+      Map.new(weights, fn {k, v} -> {k, v / total} end)
+    else
+      # Default equal weights if all are zero
+      %{popular_opinion: 0.2, critical_acclaim: 0.2, 
+        industry_recognition: 0.2, cultural_impact: 0.2, people_quality: 0.2}
+    end
+    
     %{
       name: name,
       description: "Custom weight profile created from discovery UI",
       category_weights: %{
-        "ratings" => Map.get(weights, :popular_opinion, 0.2) + Map.get(weights, :critical_acclaim, 0.2),
-        "awards" => Map.get(weights, :industry_recognition, 0.2),
+        "ratings" => Map.get(normalized_weights, :popular_opinion, 0.2) + Map.get(normalized_weights, :critical_acclaim, 0.2),
+        "awards" => Map.get(normalized_weights, :industry_recognition, 0.2),
         # Financial impact is not directly represented in discovery weights
-        "financial" => Map.get(weights, :financial_impact, 0.0),
-        "cultural" => Map.get(weights, :cultural_impact, 0.2),
-        "people" => Map.get(weights, :people_quality, 0.2)
+        "financial" => Map.get(normalized_weights, :financial_impact, 0.0),
+        "cultural" => Map.get(normalized_weights, :cultural_impact, 0.2),
+        "people" => Map.get(normalized_weights, :people_quality, 0.2)
       },
-      weights: build_metric_weights_from_discovery(weights),
+      weights: build_metric_weights_from_discovery(normalized_weights),
       active: true,
       is_system: false
     }
@@ -286,6 +307,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc, 
        rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
       %{
+        # Include the calculated discovery score in the select list
+        # This ensures it's available for ORDER BY when DISTINCT is applied
         discovery_score: fragment(
           """
           ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + 
@@ -346,7 +369,7 @@ fragment(
     order_by(query,
       [m, tmdb_rating: tr, imdb_rating: ir, metacritic: mc,
        rotten_tomatoes: rt, popularity: pop, festivals: f, person_quality: pq],
-desc: fragment(
+      desc: fragment(
         "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
         ^weights.popular_opinion, tr.value, ir.value,
         ^weights.critical_acclaim, mc.value, rt.value,

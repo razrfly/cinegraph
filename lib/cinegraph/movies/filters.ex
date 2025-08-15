@@ -33,8 +33,9 @@ defmodule Cinegraph.Movies.Filters do
   
   defp maybe_distinct(query) do
     # Apply distinct if the query has joins to avoid duplicate rows
+    # Note: We use distinct on movie ID specifically to avoid issues with ORDER BY
     if has_joins?(query) do
-      distinct(query, true)
+      distinct(query, [m], m.id)
     else
       query
     end
@@ -541,11 +542,28 @@ defmodule Cinegraph.Movies.Filters do
   # Award-based filtering functions
   
   defp filter_by_awards(query, params) do
+    # Check if we need to join festival_nominations
+    needs_nomination_join = params["award_status"] || params["festival_id"] || 
+                           params["award_category_id"] || params["award_year_from"] || 
+                           params["award_year_to"]
+    
+    query = if needs_nomination_join && !has_binding?(query, :festival_nom) do
+      join(query, :inner, [m], nom in "festival_nominations", 
+           on: nom.movie_id == m.id, as: :festival_nom)
+    else
+      query
+    end
+    
     query
     |> filter_by_award_status(params["award_status"])
     |> filter_by_festival(params["festival_id"])
     |> filter_by_award_category(params["award_category_id"])
     |> filter_by_award_year_range(params["award_year_from"], params["award_year_to"])
+  end
+  
+  defp has_binding?(query, name) do
+    # Check if a named binding already exists in the query
+    Map.has_key?(query.aliases, name)
   end
 
   defp filter_by_award_status(query, nil), do: query
@@ -554,25 +572,20 @@ defmodule Cinegraph.Movies.Filters do
   defp filter_by_award_status(query, status) do
     case status do
       "any_nomination" ->
+        # Join already added in filter_by_awards
         query
-        |> join(:inner, [m], nom in "festival_nominations", on: nom.movie_id == m.id)
 
       "won" ->
-        query
-        |> join(:inner, [m], nom in "festival_nominations", 
-            on: nom.movie_id == m.id and nom.won == true)
+        where(query, [festival_nom: nom], nom.won == true)
 
       "nominated_only" ->
-        query
-        |> join(:inner, [m], nom in "festival_nominations",
-            on: nom.movie_id == m.id and nom.won == false)
+        where(query, [festival_nom: nom], nom.won == false)
 
       "multiple_awards" ->
         query
-        |> join(:inner, [m], nom in "festival_nominations",
-            on: nom.movie_id == m.id and nom.won == true)
+        |> where([festival_nom: nom], nom.won == true)
         |> group_by([m], m.id)
-        |> having([m, nom], count(nom.id) > 1)
+        |> having([festival_nom: nom], count(nom.id) > 1)
 
       _ ->
         query
@@ -586,10 +599,14 @@ defmodule Cinegraph.Movies.Filters do
     festival_id = to_integer(festival_org_id)
     
     if festival_id do
-      query
-      |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-      |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-      |> where([..., fc], fc.organization_id == ^festival_id)
+      query = if !has_binding?(query, :festival_ceremony) do
+        join(query, :inner, [festival_nom: nom], fc in "festival_ceremonies", 
+             on: fc.id == nom.ceremony_id, as: :festival_ceremony)
+      else
+        query
+      end
+      
+      where(query, [festival_ceremony: fc], fc.organization_id == ^festival_id)
     else
       query
     end
@@ -602,9 +619,7 @@ defmodule Cinegraph.Movies.Filters do
     cat_id = to_integer(category_id)
     
     if cat_id do
-      query
-      |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-      |> where([..., nom], nom.category_id == ^cat_id)
+      where(query, [festival_nom: nom], nom.category_id == ^cat_id)
     else
       query
     end
@@ -615,21 +630,26 @@ defmodule Cinegraph.Movies.Filters do
   defp filter_by_award_year_range(query, year_from, year_to) do
     from_year = to_integer(year_from)
     to_year = to_integer(year_to)
-
-    query = if from_year do
-      query
-      |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-      |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-      |> where([..., fc], fc.year >= ^from_year)
-    else
-      query
-    end
-
-    if to_year do
-      query
-      |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-      |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-      |> where([..., fc], fc.year <= ^to_year)
+    
+    if from_year || to_year do
+      query = if !has_binding?(query, :festival_ceremony) do
+        join(query, :inner, [festival_nom: nom], fc in "festival_ceremonies", 
+             on: fc.id == nom.ceremony_id, as: :festival_ceremony)
+      else
+        query
+      end
+      
+      query = if from_year do
+        where(query, [festival_ceremony: fc], fc.year >= ^from_year)
+      else
+        query
+      end
+      
+      if to_year do
+        where(query, [festival_ceremony: fc], fc.year <= ^to_year)
+      else
+        query
+      end
     else
       query
     end
@@ -821,6 +841,7 @@ defmodule Cinegraph.Movies.Filters do
     |> filter_by_metric_dimension(params["critical_acclaim_min"], :critical_acclaim)
     |> filter_by_metric_dimension(params["industry_recognition_min"], :industry_recognition)
     |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
+    |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
   end
 
   defp filter_by_metric_dimension(query, nil, _dimension), do: query
@@ -907,6 +928,23 @@ defmodule Cinegraph.Movies.Filters do
             ) >= ?
             """,
             m.canonical_sources,
+            m.id,
+            ^min_val
+          ))
+          
+        :people_quality ->
+          # Filter by people quality score (average quality of cast/crew)
+          where(query, [m], fragment(
+            """
+            COALESCE((
+              SELECT AVG(pm.score) / 100.0
+              FROM movie_credits mc
+              JOIN person_metrics pm ON pm.person_id = mc.person_id
+              WHERE mc.movie_id = ?
+                AND pm.metric_type = 'quality_score'
+                AND pm.score IS NOT NULL
+            ), 0) >= ?
+            """,
             m.id,
             ^min_val
           ))

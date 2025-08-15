@@ -31,7 +31,10 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
   """
   @spec calculate_person_score(integer()) :: {:ok, float(), map()} | {:error, any()}
   def calculate_person_score(person_id) do
-    try do
+    if not (is_integer(person_id) and person_id > 0) do
+      {:error, :invalid_person_id}
+    else
+      try do
       # Get all movies this person worked on (any role)
       person_movies = get_person_movies(person_id)
       
@@ -80,9 +83,10 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
         
         {:ok, Float.round(normalized_score, 2), components}
       end
-    rescue
-      error ->
-        {:error, error}
+      rescue
+        error ->
+          {:error, error}
+      end
     end
   end
   
@@ -246,21 +250,18 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
     ) || 0
     
     # Also count individual canonical source appearances for more granular scoring
-    breakdown = Repo.query!(
-      "SELECT 
-        COUNT(CASE WHEN canonical_sources ? $1 THEN 1 END) as count_1001,
-        COUNT(CASE WHEN canonical_sources ? $2 THEN 1 END) as count_criterion,
-        COUNT(CASE WHEN canonical_sources ? $3 THEN 1 END) as count_nfr,
-        COUNT(CASE WHEN canonical_sources ? $4 THEN 1 END) as count_sight_sound
-      FROM movies 
-      WHERE id = ANY($5)",
-      ["1001_movies", "criterion", "national_film_registry", "sight_sound_critics_2022", movie_ids]
-    )
+    sources = ["1001_movies", "criterion", "national_film_registry", "sight_sound_critics_2022"]
     
-    [count_1001, count_criterion, count_nfr, count_sight_sound] = List.first(breakdown.rows)
+    counts = Enum.map(sources, fn source ->
+      Repo.one(
+        from m in Movie,
+        where: m.id in ^movie_ids and fragment("? \\? ?", m.canonical_sources, ^source),
+        select: count(m.id)
+      ) || 0
+    end)
     
     # Return total appearances across all canonical sources
-    count_1001 + count_criterion + count_nfr + count_sight_sound
+    Enum.sum(counts)
   end
   
   defp count_high_rated_movies(movies) do

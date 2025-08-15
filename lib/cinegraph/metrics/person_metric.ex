@@ -6,7 +6,7 @@ defmodule Cinegraph.Metrics.PersonMetric do
   import Ecto.Changeset
 
   schema "person_metrics" do
-    field :person_id, :id
+    belongs_to :person, Cinegraph.Movies.Person, foreign_key: :person_id, type: :id
     field :metric_type, :string
     field :score, :float
     field :components, :map, default: %{}
@@ -36,5 +36,7 @@ defmodule Cinegraph.Metrics.PersonMetric do
       "peer_recognition",
       "cultural_impact"
     ])
+    |> unique_constraint([:person_id, :metric_type], name: :person_metrics_person_id_metric_type_index)
+    |> check_constraint(:score, name: :score_range)
   end
 end

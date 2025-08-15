@@ -358,8 +358,8 @@ defmodule CinegraphWeb.MetricsLive.Index do
   def get_profile_weight_actual(profile, category) do
     # Get the actual weight for displaying what's really in the database
     weights = profile.category_weights || %{}
-    # Default to 20% for 5 categories instead of 25% for 4
-    weight = Map.get(weights, category, 0.20)
+    # Missing weights should be shown as 0.0 to reflect actual stored values
+    weight = Map.get(weights, category, 0.0)
     Float.round(weight * 100, 1)
   end
   

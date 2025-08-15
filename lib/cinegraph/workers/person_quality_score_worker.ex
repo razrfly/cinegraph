@@ -9,13 +9,22 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   use Oban.Worker,
     queue: :metrics,
     max_attempts: 3,
-    unique: [period: 3600]  # Prevent duplicate jobs within 1 hour
+    unique: [
+      period: 3600,
+      fields: [:args, :queue, :worker],
+      states: [:available, :scheduled, :retryable, :executing]
+    ]  # Prevent duplicate jobs within 1 hour
 
   alias Cinegraph.Metrics.PersonQualityScore
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"person_id" => person_id}}) do
+  def perform(%Oban.Job{args: %{"person_id" => person_id}}) when is_binary(person_id) do
+    perform(%Oban.Job{args: %{"person_id" => String.to_integer(person_id)}})
+  end
+  
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"person_id" => person_id}}) when is_integer(person_id) do
     Logger.info("Calculating universal PQS for person #{person_id}")
     
     case PersonQualityScore.calculate_person_score(person_id) do
@@ -26,16 +35,21 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
             :ok
           {:error, reason} ->
             Logger.error("Failed to store PQS for person #{person_id}: #{inspect(reason)}")
-            {:error, reason}
+            raise "PQS store failed for person #{person_id}: #{inspect(reason)}"
         end
       {:error, reason} ->
         Logger.error("Failed to calculate PQS for person #{person_id}: #{inspect(reason)}")
-        {:error, reason}
+        raise "PQS calculate failed for person #{person_id}: #{inspect(reason)}"
     end
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"batch" => "all_people", "min_credits" => min_credits}}) do
+  def perform(%Oban.Job{args: %{"batch" => "all_people", "min_credits" => min_credits}}) when is_binary(min_credits) do
+    perform(%Oban.Job{args: %{"batch" => "all_people", "min_credits" => String.to_integer(min_credits)}})
+  end
+  
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"batch" => "all_people", "min_credits" => min_credits}}) when is_integer(min_credits) do
     Logger.info("Starting batch universal PQS calculation for all people with min #{min_credits} credits")
     
     case PersonQualityScore.calculate_all_person_scores(min_credits) do
@@ -44,7 +58,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
         :ok
       {:error, reason} ->
         Logger.error("Failed to calculate batch PQS: #{inspect(reason)}")
-        {:error, reason}
+        raise "PQS batch failed: #{inspect(reason)}"
     end
   end
 
@@ -59,7 +73,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   Schedule a job to calculate PQS for a specific person.
   """
   def schedule_person(person_id) do
-    %{person_id: person_id}
+    %{"person_id" => person_id}
     |> new()
     |> Oban.insert()
   end
@@ -68,7 +82,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   Schedule a job to calculate PQS for all people with significant credits.
   """
   def schedule_all_people(min_credits \\ 5) do
-    %{batch: "all_people", min_credits: min_credits}
+    %{"batch" => "all_people", "min_credits" => min_credits}
     |> new()
     |> Oban.insert()
   end
