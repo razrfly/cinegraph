@@ -89,12 +89,30 @@ config :cinegraph, Oban,
     # Retry failed canonical source updates
     canonical_retry: 3,
     # CRI calculation jobs
-    cri_calculation: 5
+    cri_calculation: 5,
+    # Person Quality Score calculations
+    metrics: 15
   ],
   plugins: [
     # Keep jobs for 7 days
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
-    {Oban.Plugins.Reindexer, schedule: "@daily"}
+    {Oban.Plugins.Reindexer, schedule: "@daily"},
+    # PQS scheduling (temporarily disabled for basic functionality)
+    # TODO: Fix cron job configuration format
+    # {Oban.Plugins.Cron, 
+    #   crontab: [
+    #     # Daily incremental PQS update at 3 AM
+    #     {"0 3 * * *", Cinegraph.Workers.PersonQualityScoreWorker, batch: "daily_incremental", trigger: "daily_scheduled", min_credits: 1},
+    #     # Weekly full recalculation at 2 AM Sunday
+    #     {"0 2 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker, batch: "weekly_full", trigger: "weekly_scheduled", min_credits: 5},
+    #     # Monthly deep recalculation at 1 AM first Sunday of month
+    #     {"0 1 1-7 * SUN", Cinegraph.Workers.PersonQualityScoreWorker, batch: "monthly_deep", trigger: "monthly_scheduled", min_credits: 1},
+    #     # Health check every 6 hours
+    #     {"0 */6 * * *", Cinegraph.Workers.PersonQualityScoreWorker, batch: "health_check", trigger: "health_scheduled"},
+    #     # Stale cleanup every 12 hours
+    #     {"0 */12 * * *", Cinegraph.Workers.PersonQualityScoreWorker, batch: "stale_cleanup", trigger: "stale_scheduled", max_age_days: 7}
+    #   ]
+    # }
   ]
 
 # Supabase configuration will be set in runtime.exs

@@ -137,9 +137,18 @@ defmodule Cinegraph.Festivals do
   Creates a festival nomination.
   """
   def create_nomination(attrs) do
-    %FestivalNomination{}
-    |> FestivalNomination.changeset(attrs)
-    |> Repo.insert()
+    case %FestivalNomination{}
+         |> FestivalNomination.changeset(attrs)
+         |> Repo.insert() do
+      {:ok, nomination} = result ->
+        # Trigger PQS recalculation for festival nominations
+        if nomination.ceremony_id do
+          Cinegraph.Metrics.PQSTriggerStrategy.trigger_festival_import_completion(nomination.ceremony_id)
+        end
+        result
+      error ->
+        error
+    end
   end
 
   @doc """
