@@ -37,7 +37,8 @@ defmodule Cinegraph.Workers.FestivalPersonInferenceWorker do
         milliseconds = div(microseconds, 1000)
 
         case result do
-          %{success: success, skipped: skipped, failed: failed, total: total} ->
+          %{success: success, skipped: skipped, failed: failed} = r ->
+            total = Map.get(r, :total, success + skipped + failed)
             Logger.info(
               "Person inference completed for #{abbr} #{year} in #{milliseconds}ms: " <>
                 "#{success}/#{total} linked, #{skipped} skipped, #{failed} failed"

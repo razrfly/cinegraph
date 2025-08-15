@@ -464,4 +464,130 @@ defmodule CinegraphWeb.MovieLive.Index do
         [1, "...", current_page - 1, current_page, current_page + 1, "...", total_pages]
     end
   end
+
+  def has_active_basic_filters(filters) do
+    basic_filter_keys = [
+      :genres,
+      :countries,
+      :languages,
+      :lists,
+      :year_from,
+      :year_to,
+      :decade,
+      :runtime_min,
+      :runtime_max,
+      :rating_min
+    ]
+
+    Enum.any?(basic_filter_keys, fn key ->
+      value = Map.get(filters, key)
+      value not in [nil, "", []]
+    end)
+  end
+
+  def get_active_basic_filters(filters) do
+    basic_filter_keys = [
+      :genres,
+      :countries,
+      :languages,
+      :lists,
+      :year_from,
+      :year_to,
+      :decade,
+      :runtime_min,
+      :runtime_max,
+      :rating_min
+    ]
+
+    filters
+    |> Map.take(basic_filter_keys)
+    |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
+  end
+
+  def format_basic_filter_label(key) do
+    case key do
+      :genres -> "Genres"
+      :countries -> "Countries"
+      :languages -> "Languages"
+      :lists -> "Lists"
+      :year_from -> "Year From"
+      :year_to -> "Year To"
+      :decade -> "Decade"
+      :runtime_min -> "Min Runtime"
+      :runtime_max -> "Max Runtime"
+      :rating_min -> "Min Rating"
+      _ -> Phoenix.Naming.humanize(key)
+    end
+  end
+
+  def format_basic_filter_value(key, value, assigns) do
+    case key do
+      :genres ->
+        genre_names =
+          value
+          |> Enum.map(fn id ->
+            genre = Enum.find(assigns.available_genres, &(&1.id == String.to_integer(id)))
+            if genre, do: genre.name, else: id
+          end)
+          |> Enum.join(", ")
+
+        if String.length(genre_names) > 30,
+          do: String.slice(genre_names, 0..27) <> "...",
+          else: genre_names
+
+      :countries ->
+        country_names =
+          value
+          |> Enum.map(fn id ->
+            country = Enum.find(assigns.available_countries, &(&1.id == String.to_integer(id)))
+            if country, do: country.name, else: id
+          end)
+          |> Enum.join(", ")
+
+        if String.length(country_names) > 30,
+          do: String.slice(country_names, 0..27) <> "...",
+          else: country_names
+
+      :languages ->
+        lang_names =
+          value
+          |> Enum.map(fn code ->
+            lang = Enum.find(assigns.available_languages, &(&1.iso_639_1 == code))
+            if lang, do: lang.english_name, else: code
+          end)
+          |> Enum.join(", ")
+
+        if String.length(lang_names) > 30,
+          do: String.slice(lang_names, 0..27) <> "...",
+          else: lang_names
+
+      :lists ->
+        list_names =
+          value
+          |> Enum.map(fn key ->
+            list = Enum.find(assigns.available_lists, &(&1.key == key))
+            if list, do: list.name, else: key
+          end)
+          |> Enum.join(", ")
+
+        if String.length(list_names) > 30,
+          do: String.slice(list_names, 0..27) <> "...",
+          else: list_names
+
+      :decade ->
+        "#{value}s"
+
+      :runtime_min ->
+        "#{value} min"
+
+      :runtime_max ->
+        "#{value} min"
+
+      :rating_min ->
+        "#{value}/10"
+
+      _ ->
+        to_string(value)
+    end
+  end
 end
