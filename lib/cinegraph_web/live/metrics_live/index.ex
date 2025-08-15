@@ -356,9 +356,17 @@ defmodule CinegraphWeb.MetricsLive.Index do
 
   def get_metric_coverage(metric_code, coverage_stats, total_movies) do
     case Map.get(coverage_stats, metric_code) do
-      nil -> {0, 0.0}
-      %{movie_count: count} -> {count, Float.round(count / total_movies * 100, 1)}
-      _ -> {0, 0.0}
+      nil ->
+        {0, 0.0}
+
+      %{movie_count: count} when total_movies > 0 ->
+        {count, Float.round(count / total_movies * 100, 1)}
+
+      %{movie_count: count} ->
+        {count, 0.0}
+
+      _ ->
+        {0, 0.0}
     end
   end
 

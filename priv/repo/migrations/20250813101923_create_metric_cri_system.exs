@@ -91,8 +91,8 @@ defmodule Cinegraph.Repo.Migrations.CreateMetricCriSystem do
             """,
             "DROP INDEX IF EXISTS only_one_default_profile"
 
-    # Note: metric_scores table removed - scores are calculated on-the-fly
-    # The system calculates scores dynamically using SQL queries for better flexibility
+    # Note: metric_scores table exists for caching but most scores are calculated on-the-fly
+    # The system primarily calculates scores dynamically using SQL queries for flexibility
 
     # ========== VIEWS ==========
 
