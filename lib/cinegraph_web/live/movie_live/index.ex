@@ -55,7 +55,7 @@ defmodule CinegraphWeb.MovieLive.Index do
     # Keep current direction, just change criteria
     direction = socket.assigns.sort_direction
     sort_value = build_sort_value(criteria, direction)
-    
+
     params =
       build_filter_params(socket)
       |> Map.put("sort", sort_value)
@@ -71,7 +71,7 @@ defmodule CinegraphWeb.MovieLive.Index do
     new_direction = if socket.assigns.sort_direction == :desc, do: :asc, else: :desc
     criteria = socket.assigns.sort_criteria
     sort_value = build_sort_value(criteria, new_direction)
-    
+
     params =
       build_filter_params(socket)
       |> Map.put("sort", sort_value)
@@ -106,18 +106,19 @@ defmodule CinegraphWeb.MovieLive.Index do
         nil -> socket.assigns.filters
         atom -> Map.delete(socket.assigns.filters, atom)
       end
-    
+
     # Build params directly with updated filters to avoid merge conflicts
-    params = %{
-      "page" => "1",
-      "per_page" => to_string(socket.assigns.per_page),
-      "sort" => socket.assigns.sort,
-      "search" => socket.assigns.search_term
-    }
-    |> Map.merge(stringify_filters(filters))
-    |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
-    |> Map.new()
-    
+    params =
+      %{
+        "page" => "1",
+        "per_page" => to_string(socket.assigns.per_page),
+        "sort" => socket.assigns.sort,
+        "search" => socket.assigns.search_term
+      }
+      |> Map.merge(stringify_filters(filters))
+      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
+      |> Map.new()
+
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
   end
@@ -163,7 +164,7 @@ defmodule CinegraphWeb.MovieLive.Index do
     page = parse_int_param(params["page"], 1, min: 1)
     per_page = parse_int_param(params["per_page"], 50, min: 10, max: 100)
     sort = params["sort"] || "release_date_desc"
-    
+
     # Parse sort into criteria and direction
     {criteria, direction} = parse_sort_value(sort)
 
@@ -211,7 +212,8 @@ defmodule CinegraphWeb.MovieLive.Index do
       popular_opinion_min: params["popular_opinion_min"],
       critical_acclaim_min: params["critical_acclaim_min"],
       industry_recognition_min: params["industry_recognition_min"],
-      cultural_impact_min: params["cultural_impact_min"]
+      cultural_impact_min: params["cultural_impact_min"],
+      people_quality_min: params["people_quality_min"]
     })
   end
 
@@ -370,7 +372,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   end
 
   # Sort helper functions
-  
+
   defp parse_sort_value(sort_value) do
     case sort_value do
       # Basic sorts
@@ -382,7 +384,6 @@ defmodule CinegraphWeb.MovieLive.Index do
       "runtime" -> {"runtime", :asc}
       "rating" -> {"rating", :desc}
       "popularity" -> {"popularity", :desc}
-      
       # Discovery metrics
       "popular_opinion" -> {"popular_opinion", :desc}
       "popular_opinion_asc" -> {"popular_opinion", :asc}
@@ -394,12 +395,11 @@ defmodule CinegraphWeb.MovieLive.Index do
       "cultural_impact_asc" -> {"cultural_impact", :asc}
       "people_quality" -> {"people_quality", :desc}
       "people_quality_asc" -> {"people_quality", :asc}
-      
       # Default
       _ -> {"release_date", :desc}
     end
   end
-  
+
   defp build_sort_value(criteria, direction) do
     case {criteria, direction} do
       # Basic sorts
@@ -409,9 +409,10 @@ defmodule CinegraphWeb.MovieLive.Index do
       {"release_date", :desc} -> "release_date_desc"
       {"runtime", :asc} -> "runtime"
       {"runtime", :desc} -> "runtime_desc"
-      {"rating", _} -> "rating"  # Rating only has desc
-      {"popularity", _} -> "popularity"  # Popularity only has desc
-      
+      # Rating only has desc
+      {"rating", _} -> "rating"
+      # Popularity only has desc
+      {"popularity", _} -> "popularity"
       # Discovery metrics
       {"popular_opinion", :asc} -> "popular_opinion_asc"
       {"popular_opinion", :desc} -> "popular_opinion"
@@ -423,24 +424,23 @@ defmodule CinegraphWeb.MovieLive.Index do
       {"cultural_impact", :desc} -> "cultural_impact"
       {"people_quality", :asc} -> "people_quality_asc"
       {"people_quality", :desc} -> "people_quality"
-      
       # Default
       _ -> "release_date_desc"
     end
   end
 
   # Helper functions for template
-  
+
   defp to_percentage(nil), do: 0
   defp to_percentage(%Decimal{} = decimal), do: Float.round(Decimal.to_float(decimal) * 100, 0)
   defp to_percentage(float) when is_float(float), do: Float.round(float * 100, 0)
   defp to_percentage(int) when is_integer(int), do: int
-  
+
   defp has_meaningful_score?(nil), do: false
-  defp has_meaningful_score?(%Decimal{} = decimal), do: Decimal.gt?(decimal, 0)
-  defp has_meaningful_score?(float) when is_float(float), do: float > 0
-  defp has_meaningful_score?(int) when is_integer(int), do: int > 0
-  
+  defp has_meaningful_score?(%Decimal{} = decimal), do: Decimal.gt?(decimal, Decimal.new("0.01"))
+  defp has_meaningful_score?(float) when is_float(float), do: float > 0.01
+  defp has_meaningful_score?(int) when is_integer(int), do: int > 0.01
+
   defp award_worthy_score?(nil), do: false
   defp award_worthy_score?(%Decimal{} = decimal), do: Decimal.gt?(decimal, Decimal.new("0.1"))
   defp award_worthy_score?(float) when is_float(float), do: float > 0.1

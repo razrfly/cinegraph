@@ -578,6 +578,7 @@ Logger.info("  ✅ Created festival dates for 2024/2025")
 
 # Seed metric definitions and weight profiles for discovery system
 Logger.info("Seeding metric definitions...")
+
 try do
   Code.eval_file(Application.app_dir(:cinegraph, "priv/repo/seeds/metric_definitions.exs"))
 rescue
@@ -587,6 +588,7 @@ rescue
 end
 
 Logger.info("Seeding discovery weight profiles...")
+
 try do
   Code.eval_file(Application.app_dir(:cinegraph, "priv/repo/seeds/metric_weight_profiles.exs"))
 rescue

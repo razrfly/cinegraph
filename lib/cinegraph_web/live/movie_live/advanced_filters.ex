@@ -2,9 +2,9 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   @moduledoc """
   Advanced filtering component for movies including awards, ratings, people, and metric scores.
   """
-  
+
   use Phoenix.Component
-  
+
   def advanced_filters(assigns) do
     ~H"""
     <div class="space-y-6">
@@ -30,7 +30,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </select>
           </div>
           
-          <!-- Festival Selection -->
+    <!-- Festival Selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Festival/Organization
@@ -43,13 +43,13 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
               <option value="">All Festivals</option>
               <%= for org <- @festival_organizations do %>
                 <option value={org.id}>
-                  <%= org.name %> (<%= org.abbreviation %>)
+                  {org.name} ({org.abbreviation})
                 </option>
               <% end %>
             </select>
           </div>
           
-          <!-- Award Year Range -->
+    <!-- Award Year Range -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Award Year Range
@@ -78,7 +78,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
         </div>
       </div>
       
-      <!-- Ratings Section -->
+    <!-- Ratings Section -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">⭐ Ratings</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -111,7 +111,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </div>
           </div>
           
-          <!-- IMDb Rating -->
+    <!-- IMDb Rating -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               IMDb Rating
@@ -140,7 +140,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </div>
           </div>
           
-          <!-- Metacritic Score -->
+    <!-- Metacritic Score -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Metacritic Score
@@ -169,7 +169,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </div>
           </div>
           
-          <!-- Rotten Tomatoes -->
+    <!-- Rotten Tomatoes -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Rotten Tomatoes
@@ -200,7 +200,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
         </div>
       </div>
       
-      <!-- People Section -->
+    <!-- People Section -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">👥 People</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -218,7 +218,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             />
           </div>
           
-          <!-- Actor Search -->
+    <!-- Actor Search -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Actor IDs
@@ -232,7 +232,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             />
           </div>
           
-          <!-- Any Person -->
+    <!-- Any Person -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Any Cast/Crew IDs
@@ -248,15 +248,14 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
         </div>
       </div>
       
-      <!-- Discovery Metrics Section -->
+    <!-- Discovery Metrics Section -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">📊 Discovery Metrics</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <!-- Popular Opinion -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              🎬 Popular Opinion
-              <span class="text-xs text-gray-500 ml-1">(0-1)</span>
+              🎬 Popular Opinion <span class="text-xs text-gray-500 ml-1">(0-1)</span>
             </label>
             <input
               type="number"
@@ -270,11 +269,10 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             />
           </div>
           
-          <!-- Critical Acclaim -->
+    <!-- Critical Acclaim -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              🏆 Critical Acclaim
-              <span class="text-xs text-gray-500 ml-1">(0-1)</span>
+              🏆 Critical Acclaim <span class="text-xs text-gray-500 ml-1">(0-1)</span>
             </label>
             <input
               type="number"
@@ -288,11 +286,10 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             />
           </div>
           
-          <!-- Industry Recognition -->
+    <!-- Industry Recognition -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              🌟 Industry Recognition
-              <span class="text-xs text-gray-500 ml-1">(0-1)</span>
+              🌟 Industry Recognition <span class="text-xs text-gray-500 ml-1">(0-1)</span>
             </label>
             <input
               type="number"
@@ -306,11 +303,10 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             />
           </div>
           
-          <!-- Cultural Impact -->
+    <!-- Cultural Impact -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              📚 Cultural Impact
-              <span class="text-xs text-gray-500 ml-1">(0-1)</span>
+              📚 Cultural Impact <span class="text-xs text-gray-500 ml-1">(0-1)</span>
             </label>
             <input
               type="number"
@@ -326,14 +322,14 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
         </div>
       </div>
       
-      <!-- Active Filters Display -->
+    <!-- Active Filters Display -->
       <%= if has_active_advanced_filters(@filters) do %>
         <div class="border-t pt-4">
           <h3 class="text-sm font-semibold text-gray-900 mb-2">Active Advanced Filters</h3>
           <div class="flex flex-wrap gap-2">
             <%= for {key, value} <- get_active_advanced_filters(@filters) do %>
               <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-                <%= format_filter_label(key) %>: <%= format_filter_value(key, value) %>
+                {format_filter_label(key)}: {format_filter_value(key, value)}
                 <button
                   type="button"
                   phx-click="remove_filter"
@@ -350,38 +346,64 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     </div>
     """
   end
-  
+
   def has_active_advanced_filters(filters) do
     advanced_keys = [
-      "award_status", "festival_id", "award_year_from", "award_year_to",
-      "tmdb_min", "tmdb_max", "imdb_min", "imdb_max",
-      "metacritic_min", "metacritic_max", "rt_critics_min", "rt_audience_min",
-      "director_id", "actor_ids", "person_ids",
-      "popular_opinion_min", "critical_acclaim_min", 
-      "industry_recognition_min", "cultural_impact_min"
+      "award_status",
+      "festival_id",
+      "award_year_from",
+      "award_year_to",
+      "tmdb_min",
+      "tmdb_max",
+      "imdb_min",
+      "imdb_max",
+      "metacritic_min",
+      "metacritic_max",
+      "rt_critics_min",
+      "rt_audience_min",
+      "director_id",
+      "actor_ids",
+      "person_ids",
+      "popular_opinion_min",
+      "critical_acclaim_min",
+      "industry_recognition_min",
+      "cultural_impact_min"
     ]
-    
+
     Enum.any?(advanced_keys, fn key ->
       value = Map.get(filters, key)
       value not in [nil, "", []]
     end)
   end
-  
+
   def get_active_advanced_filters(filters) do
     advanced_keys = [
-      "award_status", "festival_id", "award_year_from", "award_year_to",
-      "tmdb_min", "tmdb_max", "imdb_min", "imdb_max",
-      "metacritic_min", "metacritic_max", "rt_critics_min", "rt_audience_min",
-      "director_id", "actor_ids", "person_ids",
-      "popular_opinion_min", "critical_acclaim_min", 
-      "industry_recognition_min", "cultural_impact_min"
+      "award_status",
+      "festival_id",
+      "award_year_from",
+      "award_year_to",
+      "tmdb_min",
+      "tmdb_max",
+      "imdb_min",
+      "imdb_max",
+      "metacritic_min",
+      "metacritic_max",
+      "rt_critics_min",
+      "rt_audience_min",
+      "director_id",
+      "actor_ids",
+      "person_ids",
+      "popular_opinion_min",
+      "critical_acclaim_min",
+      "industry_recognition_min",
+      "cultural_impact_min"
     ]
-    
+
     filters
     |> Map.take(advanced_keys)
     |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
   end
-  
+
   def format_filter_label(key) do
     case key do
       "award_status" -> "Award Status"
@@ -406,14 +428,14 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       _ -> key |> String.replace("_", " ") |> String.capitalize()
     end
   end
-  
+
   def format_filter_value(_key, value) when is_list(value) do
     Enum.join(value, ", ")
   end
-  
+
   def format_filter_value(key, value) do
     cond do
-      key in ["award_status"] -> 
+      key in ["award_status"] ->
         case value do
           "any_nomination" -> "Any Nomination"
           "won" -> "Winners"
@@ -421,8 +443,10 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           "multiple_awards" -> "Multiple Awards"
           _ -> value
         end
+
       key =~ ~r/_min$|_max$/ and is_binary(value) ->
         value
+
       true ->
         to_string(value)
     end

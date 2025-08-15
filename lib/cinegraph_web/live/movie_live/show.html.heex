@@ -351,7 +351,7 @@
                   <div class="flex-1">
                     <div class="flex items-center gap-2 mb-1">
                       <h5 class="font-medium text-sm text-gray-900">
-                        <%= nomination.category_name %>
+                        {nomination.category_name}
                       </h5>
                       <%= if nomination.won do %>
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-yellow-200 text-yellow-900 border border-yellow-300">
@@ -380,10 +380,10 @@
 
                   <div class="text-right">
                     <span class="text-sm font-bold text-gray-700">
-                      <%= nomination.ceremony_year %>
+                      {nomination.ceremony_year}
                     </span>
                     <p class="text-xs text-gray-500">
-                      <%= format_ordinal(nomination.ceremony_number) %> Ceremony
+                      {format_ordinal(nomination.ceremony_number)} Ceremony
                     </p>
                   </div>
                 </div>

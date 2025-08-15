@@ -17,17 +17,17 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
   Can accept either a weight map (legacy) or a profile name (database-driven).
   """
   def apply_scoring(query, weights \\ @default_weights, options \\ %{})
-  
+
   # Handle database profile by name
   def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
     ScoringService.apply_scoring(query, profile_name, options)
   end
-  
+
   # Handle database profile struct
   def apply_scoring(query, %Cinegraph.Metrics.MetricWeightProfile{} = profile, options) do
     ScoringService.apply_scoring(query, profile, options)
   end
-  
+
   # Legacy hard-coded weights (for backwards compatibility)
   def apply_scoring(query, weights, options) when is_map(weights) do
     normalized_weights = normalize_weights(weights)
@@ -198,15 +198,16 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       [] ->
         # Fallback to hard-coded if database is empty
         DiscoveryCommon.get_presets()
-      
+
       profiles ->
         # Convert database profiles to discovery format
         profiles
         |> Enum.map(fn profile ->
-          key = profile.name 
-                |> String.downcase() 
-                |> String.replace(" ", "_")
-          
+          key =
+            profile.name
+            |> String.downcase()
+            |> String.replace(" ", "_")
+
           weights = ScoringService.profile_to_discovery_weights(profile)
           {key, weights}
         end)
