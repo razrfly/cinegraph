@@ -92,92 +92,127 @@
   <div class="mb-8">
     <!-- Filter Toggle and Sort -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-      <button
-        type="button"
-        phx-click="toggle_filters"
-        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-      >
-        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-          />
-        </svg>
-        <%= if @show_filters do %>
-          Hide Filters
-        <% else %>
-          Show Filters
-        <% end %>
-        <%= if Enum.any?(@filters, fn {_k, v} -> v not in [nil, "", []] end) do %>
-          <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            Active
-          </span>
-        <% end %>
-      </button>
-      
-<!-- Sort Dropdown -->
-      <form phx-change="change_sort" class="flex items-center gap-2">
-        <label for="sort" class="text-sm font-medium text-gray-700">Sort by:</label>
-        <select
-          id="sort"
-          name="sort"
-          value={@sort}
-          class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+      <div class="flex gap-2">
+        <button
+          type="button"
+          phx-click="toggle_filters"
+          class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
-          <optgroup label="Basic">
-            <option value="release_date_desc" selected={@sort == "release_date_desc"}>
-              Release Date (Newest)
-            </option>
-            <option value="release_date" selected={@sort == "release_date"}>
-              Release Date (Oldest)
-            </option>
-            <option value="title" selected={@sort == "title"}>
-              Title (A-Z)
-            </option>
-            <option value="title_desc" selected={@sort == "title_desc"}>
-              Title (Z-A)
-            </option>
-          </optgroup>
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+            />
+          </svg>
+          <%= if @show_filters do %>
+            Hide Basic Filters
+          <% else %>
+            Show Basic Filters
+          <% end %>
+          <%= if Enum.any?(@filters, fn {_k, v} -> v not in [nil, "", []] end) do %>
+            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              Active
+            </span>
+          <% end %>
+        </button>
+        
+        <button
+          type="button"
+          phx-click="toggle_advanced_filters"
+          class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+            />
+          </svg>
+          <%= if @show_advanced_filters do %>
+            Hide Advanced Filters
+          <% else %>
+            Show Advanced Filters
+          <% end %>
+          <%= if AdvancedFilters.has_active_advanced_filters(@filters) do %>
+            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+              Active
+            </span>
+          <% end %>
+        </button>
+      </div>
+      
+<!-- Modern Sort Controls -->
+      <div class="flex items-center gap-3">
+        <label class="text-sm font-medium text-gray-700">Sort by:</label>
+        
+        <div class="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
+          <!-- Sort Criteria Dropdown -->
+          <form phx-change="sort_criteria_changed" class="flex-1">
+            <select 
+              name="criteria" 
+              value={@sort_criteria}
+              class="appearance-none bg-transparent px-3 py-2 text-sm focus:outline-none border-r border-gray-300 min-w-48"
+            >
+              <optgroup label="Basic">
+                <option value="release_date" selected={@sort_criteria == "release_date"}>
+                  📅 Release Date
+                </option>
+                <option value="title" selected={@sort_criteria == "title"}>
+                  🔤 Title
+                </option>
+                <option value="runtime" selected={@sort_criteria == "runtime"}>
+                  ⏱️ Runtime
+                </option>
+              </optgroup>
+              
+              <optgroup label="Ratings">
+                <option value="rating" selected={@sort_criteria == "rating"}>
+                  ⭐ Rating
+                </option>
+                <option value="popularity" selected={@sort_criteria == "popularity"}>
+                  🔥 Popularity
+                </option>
+              </optgroup>
+              
+              <optgroup label="Discovery Metrics">
+                <option value="popular_opinion" selected={@sort_criteria == "popular_opinion"}>
+                  🎬 Popular Opinion
+                </option>
+                <option value="critical_acclaim" selected={@sort_criteria == "critical_acclaim"}>
+                  🏆 Critical Acclaim
+                </option>
+                <option value="industry_recognition" selected={@sort_criteria == "industry_recognition"}>
+                  🌟 Industry Recognition
+                </option>
+                <option value="cultural_impact" selected={@sort_criteria == "cultural_impact"}>
+                  📚 Cultural Impact
+                </option>
+                <option value="people_quality" selected={@sort_criteria == "people_quality"}>
+                  👥 People Quality
+                </option>
+              </optgroup>
+            </select>
+          </form>
           
-          <optgroup label="Ratings & Popularity">
-            <option value="rating" selected={@sort == "rating"}>
-              Rating (Highest)
-            </option>
-            <option value="popularity" selected={@sort == "popularity"}>
-              Popularity
-            </option>
-          </optgroup>
-          
-          <optgroup label="Discovery Metrics">
-            <option value="popular_opinion" selected={@sort == "popular_opinion"}>
-              🎬 Popular Opinion (Highest)
-            </option>
-            <option value="popular_opinion_asc" selected={@sort == "popular_opinion_asc"}>
-              🎬 Popular Opinion (Lowest)
-            </option>
-            <option value="critical_acclaim" selected={@sort == "critical_acclaim"}>
-              🏆 Critical Acclaim (Highest)
-            </option>
-            <option value="critical_acclaim_asc" selected={@sort == "critical_acclaim_asc"}>
-              🏆 Critical Acclaim (Lowest)
-            </option>
-            <option value="industry_recognition" selected={@sort == "industry_recognition"}>
-              🌟 Industry Recognition (Highest)
-            </option>
-            <option value="industry_recognition_asc" selected={@sort == "industry_recognition_asc"}>
-              🌟 Industry Recognition (Lowest)
-            </option>
-            <option value="cultural_impact" selected={@sort == "cultural_impact"}>
-              📚 Cultural Impact (Highest)
-            </option>
-            <option value="cultural_impact_asc" selected={@sort == "cultural_impact_asc"}>
-              📚 Cultural Impact (Lowest)
-            </option>
-          </optgroup>
-        </select>
-      </form>
+          <!-- Direction Toggle Button -->
+          <button 
+            type="button" 
+            phx-click="toggle_sort_direction"
+            class="px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition-colors min-w-20 flex items-center justify-center gap-1"
+            title={if @sort_direction == :desc, do: "Currently: High to Low. Click to sort Low to High.", else: "Currently: Low to High. Click to sort High to Low."}
+          >
+            <span class="font-medium">
+              <%= if @sort_direction == :desc, do: "High→Low", else: "Low→High" %>
+            </span>
+            <svg class={"w-3 h-3 transition-transform #{if @sort_direction == :asc, do: "", else: "rotate-180"}"} viewBox="0 0 12 12" fill="currentColor">
+              <path d="M6 1l5 5H7v5H5V6H1l5-5z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
     
 <!-- Filter Panel -->
@@ -374,6 +409,23 @@
         </form>
       </div>
     <% end %>
+    
+    <!-- Advanced Filter Panel -->
+    <%= if @show_advanced_filters do %>
+      <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mt-4">
+        <form phx-change="apply_filters">
+          <AdvancedFilters.advanced_filters
+            filters={@filters}
+            festival_organizations={@festival_organizations}
+            director_options={@director_options}
+            actor_options={@actor_options}
+            person_options={@person_options}
+            form={@form}
+            myself={nil}
+          />
+        </form>
+      </div>
+    <% end %>
   </div>
   
 <!-- Movies Grid -->
@@ -396,11 +448,10 @@
               </div>
             <% end %>
             
-<!-- Rating Badge (if available) -->
-            <% vote_avg = Cinegraph.Movies.Movie.vote_average(movie) %>
-            <%= if vote_avg && vote_avg > 0 do %>
-              <div class="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-sm px-2 py-1 rounded">
-                ⭐ {Float.round(vote_avg, 1)}
+<!-- Discovery Score Badge -->
+            <%= if movie.discovery_score && has_meaningful_score?(movie.discovery_score) do %>
+              <div class="absolute top-2 left-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm px-3 py-1 rounded-full font-medium shadow-lg">
+                🎯 {to_percentage(movie.discovery_score)}%
               </div>
             <% end %>
           </div>
@@ -417,19 +468,55 @@
               </p>
             <% end %>
             
-<!-- Quick Stats -->
-            <div class="mt-3 flex flex-wrap gap-2">
-              <%= if movie.runtime do %>
-                <span class="text-xs text-gray-500">
-                  {movie.runtime} min
-                </span>
+<!-- Useful Metrics -->
+            <div class="mt-3 space-y-2">
+              <!-- Score Breakdown -->
+              <%= if movie.score_components do %>
+                <div class="flex flex-wrap gap-1 text-xs">
+                  <%= if movie.score_components.popular_opinion && has_meaningful_score?(movie.score_components.popular_opinion) do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
+                      🎬 {to_percentage(movie.score_components.popular_opinion)}%
+                    </span>
+                  <% end %>
+                  <%= if movie.score_components.critical_acclaim && has_meaningful_score?(movie.score_components.critical_acclaim) do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                      🏆 {to_percentage(movie.score_components.critical_acclaim)}%
+                    </span>
+                  <% end %>
+                  <%= if movie.score_components.industry_recognition && has_meaningful_score?(movie.score_components.industry_recognition) do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-200">
+                      🌟 {to_percentage(movie.score_components.industry_recognition)}%
+                    </span>
+                  <% end %>
+                  <%= if movie.score_components.cultural_impact && has_meaningful_score?(movie.score_components.cultural_impact) do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                      📚 {to_percentage(movie.score_components.cultural_impact)}%
+                    </span>
+                  <% end %>
+                  <%= if movie.score_components.people_quality && has_meaningful_score?(movie.score_components.people_quality) do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200">
+                      👥 {to_percentage(movie.score_components.people_quality)}%
+                    </span>
+                  <% end %>
+                </div>
               <% end %>
-
-              <%= if movie.original_language do %>
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {String.upcase(movie.original_language)}
-                </span>
-              <% end %>
+              
+              <!-- Additional Useful Info -->
+              <div class="flex flex-wrap gap-2 text-xs text-gray-500">
+                <!-- Show canonical list presence -->
+                <%= if movie.canonical_sources && map_size(movie.canonical_sources) > 0 do %>
+                  <span class="inline-flex items-center">
+                    📝 Featured in {map_size(movie.canonical_sources)} list#{if map_size(movie.canonical_sources) > 1, do: "s", else: ""}
+                  </span>
+                <% end %>
+                
+                <!-- Show if it has awards -->
+                <%= if movie.score_components && movie.score_components.industry_recognition && award_worthy_score?(movie.score_components.industry_recognition) do %>
+                  <span class="inline-flex items-center text-amber-600">
+                    🏆 Award Winner
+                  </span>
+                <% end %>
+              </div>
             </div>
           </div>
         </div>
