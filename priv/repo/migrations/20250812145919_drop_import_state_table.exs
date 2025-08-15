@@ -43,10 +43,10 @@ defmodule Cinegraph.Repo.Migrations.DropImportStateTable do
           )
         ';
         
-        -- Log the migration
-        RAISE NOTICE ''Migrated data from import_state table to api_lookup_metrics'';
+        -- Migration completed
+        NULL;
       ELSE
-        RAISE NOTICE ''import_state table does not exist, skipping migration'';
+        NULL;
       END IF;
     END
     $$;
@@ -77,6 +77,6 @@ defmodule Cinegraph.Repo.Migrations.DropImportStateTable do
       AND metadata->>'operation_type' = 'migrated_from_import_state'
     """)
 
-    IO.puts("Recreated import_state table and restored data")
+    # Log message removed - can't use IO.puts in migration
   end
 end
