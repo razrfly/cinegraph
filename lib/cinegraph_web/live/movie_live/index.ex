@@ -289,7 +289,15 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp parse_list_param(""), do: []
 
   defp parse_list_param(param) when is_binary(param) do
-    String.split(param, ",", trim: true)
+    # Only process comma-separated values if they contain actual commas
+    # This prevents single string values from being treated as lists
+    if String.contains?(param, ",") do
+      String.split(param, ",", trim: true)
+    else
+      # Single string value indicates the parameter format changed from array to string
+      # which means the filter should be removed (return empty list)
+      []
+    end
   end
 
   defp parse_list_param(param) when is_list(param), do: param
