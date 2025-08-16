@@ -159,25 +159,6 @@ defmodule CinegraphWeb.MovieLive.Index do
     {:noreply, push_patch(socket, to: path)}
   end
 
-  @impl true
-  def handle_event("activate_people_search", params, socket) do
-    # Initialize people search while preserving any typed search term
-    current_filters = socket.assigns.filters
-    
-    # Get any existing search term from params if available
-    search_term = params["value"] || ""
-    
-    # Check if people_search already exists and preserve its values
-    existing_people_search = current_filters["people_search"] || %{}
-    
-    updated_filters = Map.put(current_filters, "people_search", %{
-      "people_ids" => existing_people_search["people_ids"] || "",
-      "role_filter" => existing_people_search["role_filter"] || "any",
-      "search_term" => search_term
-    })
-    
-    {:noreply, assign(socket, :filters, updated_filters)}
-  end
 
   # Handle autocomplete search for people
   @impl true
@@ -203,10 +184,9 @@ defmodule CinegraphWeb.MovieLive.Index do
     people_ids = Enum.map_join(selected_people, ",", & &1.id)
     current_filters = socket.assigns.filters
     
-    updated_filters = Map.put(current_filters, "people_search", %{
-      "people_ids" => people_ids,
-      "role_filter" => (current_filters["people_search"] || %{})["role_filter"] || "any"
-    })
+    # Always use simple people_ids only - no role filtering
+    people_search_filter = %{"people_ids" => people_ids}
+    updated_filters = Map.put(current_filters, "people_search", people_search_filter)
 
     # Apply the updated filters
     params = build_filter_params(%{socket | assigns: %{socket.assigns | filters: updated_filters}})
@@ -216,28 +196,6 @@ defmodule CinegraphWeb.MovieLive.Index do
     {:noreply, push_patch(socket, to: path)}
   end
 
-  # Handle role selection updates from autocomplete component
-  @impl true
-  def handle_info({:role_selected, _component_id, role}, socket) do
-    current_filters = socket.assigns.filters
-    people_search = current_filters["people_search"] || %{"people_ids" => "", "role_filter" => "any"}
-    
-    updated_filters = Map.put(current_filters, "people_search", %{
-      people_search | "role_filter" => role
-    })
-
-    # Apply the updated filters if there are selected people
-    if people_search["people_ids"] != "" do
-      params = build_filter_params(%{socket | assigns: %{socket.assigns | filters: updated_filters}})
-             |> Map.put("page", "1")
-
-      path = ~p"/movies?#{params}"
-      {:noreply, push_patch(socket, to: path)}
-    else
-      # Just update the filter state without triggering a search
-      {:noreply, assign(socket, :filters, updated_filters)}
-    end
-  end
 
   # Private functions
   defp assign_pagination_params(socket, params) do
@@ -367,7 +325,13 @@ defmodule CinegraphWeb.MovieLive.Index do
   # Handle special cases for new filter types
   defp stringify_value(:people_search, %{"people_ids" => people_ids, "role_filter" => role_filter}) do
     if people_ids != "" do
-      %{"people_ids" => people_ids, "role_filter" => role_filter || "any"}
+      # Include role_filter only if it's not the default "any" (for advanced filters)
+      # For basic filters with hidden role dropdown, we exclude role_filter entirely
+      if role_filter && role_filter != "any" do
+        %{"people_ids" => people_ids, "role_filter" => role_filter}
+      else
+        %{"people_ids" => people_ids}
+      end
     else
       nil
     end
@@ -400,16 +364,33 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp parse_people_search_param(params) do
     case {params["people_search"], params["people_search[people_ids]"], params["people_search[role_filter]"]} do
       # New format with nested parameters - only if we have actual people
-      {nil, people_ids, role_filter} when people_ids not in [nil, ""] or role_filter not in [nil, "", "any"] ->
-        %{
-          "people_ids" => people_ids || "",
-          "role_filter" => role_filter || "any"
-        }
+      {nil, people_ids, role_filter} when people_ids not in [nil, ""] ->
+        base_map = %{"people_ids" => people_ids || ""}
+        # Only include role_filter if it's explicitly set and not "any" AND it exists in params
+        # If role_filter param is missing entirely, this indicates basic filter usage
+        if role_filter && role_filter != "any" do
+          Map.put(base_map, "role_filter", role_filter)
+        else
+          base_map
+        end
+      
+      # Handle case where only people_ids is provided (basic filter usage)
+      {nil, people_ids, nil} when people_ids not in [nil, ""] ->
+        # Basic filter usage - no role_filter at all
+        %{"people_ids" => people_ids}
       
       # Existing format (map) - only if it has people
       {people_search, _, _} when is_map(people_search) ->
         case people_search do
-          %{"people_ids" => people_ids} when people_ids not in [nil, ""] -> people_search
+          %{"people_ids" => people_ids} when people_ids not in [nil, ""] -> 
+            # Only preserve role_filter if it exists and is not the default "any"
+            base_map = %{"people_ids" => people_ids}
+            role_filter = people_search["role_filter"]
+            if role_filter && role_filter != "any" do
+              Map.put(base_map, "role_filter", role_filter)
+            else
+              base_map
+            end
           _ -> nil
         end
       
@@ -713,6 +694,47 @@ defmodule CinegraphWeb.MovieLive.Index do
 
       _ ->
         to_string(value)
+    end
+  end
+
+  # Helper functions for people search in basic filters
+  defp get_selected_people_basic(filters) do
+    case filters["people_search"] do
+      %{"people_ids" => people_ids} when people_ids != "" ->
+        ids = 
+          people_ids
+          |> String.split(",", trim: true)
+          |> Enum.map(&String.trim/1)
+          |> Enum.map(&Integer.parse/1)
+          |> Enum.flat_map(fn
+            {id, _} -> [id]
+            :error -> []
+          end)
+        
+        if ids == [] do
+          []
+        else
+          try do
+            # get_people_by_ids returns a list directly, not a tuple
+            people = Cinegraph.People.get_people_by_ids(ids)
+            if is_list(people), do: people, else: []
+          rescue
+            error ->
+              require Logger
+              Logger.error("Failed to get people by IDs: #{inspect(error)}")
+              []
+          end
+        end
+      _ ->
+        []
+    end
+  end
+
+
+  defp get_search_term_basic(filters) do
+    case filters["people_search"] do
+      %{"search_term" => search_term} -> search_term || ""
+      _ -> ""
     end
   end
 end

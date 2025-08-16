@@ -870,6 +870,19 @@ defmodule Cinegraph.Movies.Filters do
   # New unified people search with role filtering - optimized for performance
   defp filter_by_unified_people_search(query, nil), do: query
   defp filter_by_unified_people_search(query, %{"people_ids" => "", "role_filter" => _}), do: query
+  defp filter_by_unified_people_search(query, %{"people_ids" => people_ids}) when people_ids != "" do
+    # Basic filter case - no role filtering, just person IDs
+    person_ids = parse_person_ids(people_ids)
+
+    if Enum.empty?(person_ids) do
+      query
+    else
+      # Single join for better performance - any role
+      query
+      |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id, as: :credits)
+      |> where([m, credits: mc], mc.person_id in ^person_ids)
+    end
+  end
   defp filter_by_unified_people_search(query, %{"people_ids" => people_ids, "role_filter" => role_filter}) do
     person_ids = parse_person_ids(people_ids)
 
