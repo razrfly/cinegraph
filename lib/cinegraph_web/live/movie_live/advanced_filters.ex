@@ -11,13 +11,35 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       <!-- People Search Section -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">👥 People</h3>
-        <.live_component
-          module={CinegraphWeb.Components.PersonAutocomplete}
-          id="people-search"
-          field_name="filters[people_search]"
-          selected_people={get_selected_people(@filters)}
-          selected_role={get_selected_role(@filters)}
-        />
+        <%= if should_render_people_search?(@filters) do %>
+          <.live_component
+            module={CinegraphWeb.Components.PersonAutocomplete}
+            id="people-search"
+            field_name="filters[people_search]"
+            selected_people={get_selected_people(@filters)}
+            selected_role={get_selected_role(@filters)}
+            search_term={get_search_term(@filters)}
+          />
+        <% else %>
+          <!-- Lightweight search input that activates full component -->
+          <div class="space-y-2">
+            <label class="block text-sm font-medium text-gray-700">
+              Search People
+            </label>
+            <input
+              type="text"
+              placeholder="Start typing a person's name..."
+              phx-focus="activate_people_search"
+              phx-keyup="activate_people_search"
+              phx-debounce="100"
+              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              autocomplete="off"
+            />
+            <p class="text-xs text-gray-500">
+              Search and filter movies by cast and crew members
+            </p>
+          </div>
+        <% end %>
       </div>
 
       <!-- Rating Quality Section -->
@@ -448,6 +470,23 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     case filters["people_search"] do
       %{"role_filter" => role_filter} -> role_filter || "any"
       _ -> "any"
+    end
+  end
+
+  defp get_search_term(filters) do
+    case filters["people_search"] do
+      %{"search_term" => search_term} -> search_term || ""
+      _ -> ""
+    end
+  end
+
+  defp should_render_people_search?(filters) do
+    case filters["people_search"] do
+      %{"people_ids" => _people_ids, "role_filter" => _role_filter} -> true
+      %{"people_ids" => _people_ids} -> true  # Allow just people_ids
+      %{"role_filter" => _role_filter} -> true  # Allow just role_filter
+      %{"search_term" => _search_term} -> true  # Allow just search_term
+      _ -> false
     end
   end
 

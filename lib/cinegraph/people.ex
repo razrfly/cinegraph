@@ -153,17 +153,51 @@ defmodule Cinegraph.People do
   end
 
   @doc """
-  Searches for people by name.
+  Searches for people by name with optimized performance.
+  Uses prefix matching first for better index usage, then falls back to contains.
   """
   def search_people(query, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
-    search_term = "%#{query}%"
-
-    Person
-    |> where([p], ilike(p.name, ^search_term))
-    |> order_by([p], desc: p.popularity)
-    |> limit(^limit)
-    |> Repo.all()
+    
+    # Optimize search for better performance
+    # Use prefix matching first, then fallback to contains
+    prefix_term = "#{String.downcase(query)}%"
+    contains_term = "%#{String.downcase(query)}%"
+    
+    # Try prefix match first (uses index if available)
+    prefix_results = 
+      Person
+      |> where([p], fragment("LOWER(?) LIKE ?", p.name, ^prefix_term))
+      |> order_by([p], desc: p.popularity)
+      |> limit(^limit)
+      |> select([p], %{
+        id: p.id,
+        name: p.name,
+        profile_path: p.profile_path,
+        known_for_department: p.known_for_department,
+        popularity: p.popularity
+      })
+      |> Repo.all()
+    
+    # If we don't have enough results, do a contains search
+    if length(prefix_results) < div(limit, 2) do
+      Person
+      |> where([p], fragment("LOWER(?) LIKE ?", p.name, ^contains_term))
+      |> where([p], p.id not in ^Enum.map(prefix_results, & &1.id))
+      |> order_by([p], desc: p.popularity)
+      |> limit(^(limit - length(prefix_results)))
+      |> select([p], %{
+        id: p.id,
+        name: p.name,
+        profile_path: p.profile_path,
+        known_for_department: p.known_for_department,
+        popularity: p.popularity
+      })
+      |> Repo.all()
+      |> then(&(prefix_results ++ &1))
+    else
+      prefix_results
+    end
   end
 
   @doc """
