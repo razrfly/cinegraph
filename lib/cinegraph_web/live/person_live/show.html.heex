@@ -372,7 +372,7 @@
         <div class="space-y-4">
           <%= for credit <- @person.cast_credits do %>
             <.link
-              navigate={~p"/movies/#{credit.movie.id}"}
+              navigate={~p"/movies/#{credit.movie.slug || credit.movie.id}"}
               class="flex items-start space-x-4 p-4 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <div class="flex-shrink-0">
@@ -428,7 +428,7 @@
               <div class="space-y-2">
                 <%= for credit <- credits do %>
                   <.link
-                    navigate={~p"/movies/#{credit.movie.id}"}
+                    navigate={~p"/movies/#{credit.movie.slug || credit.movie.id}"}
                     class="flex items-center justify-between p-3 rounded hover:bg-gray-50 transition-colors"
                   >
                     <div>

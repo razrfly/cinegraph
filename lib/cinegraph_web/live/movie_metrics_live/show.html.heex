@@ -11,7 +11,7 @@
           <% end %>
         </p>
       </div>
-      <.link navigate={~p"/movies/#{@movie.id}"} class="text-blue-600 hover:text-blue-800">
+      <.link navigate={~p"/movies/#{@movie.slug || @movie.id}"} class="text-blue-600 hover:text-blue-800">
         ← Back to Movie
       </.link>
     </div>

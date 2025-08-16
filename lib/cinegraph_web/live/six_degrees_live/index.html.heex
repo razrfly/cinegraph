@@ -339,7 +339,7 @@
                   </div>
                   <div class="relative flex justify-center">
                     <.link
-                      navigate={~p"/movies/#{step.movie.id}"}
+                      navigate={~p"/movies/#{step.movie.slug || step.movie.id}"}
                       class="px-4 py-2 bg-white border-2 border-blue-500 rounded-lg text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors"
                     >
                       {step.movie.title}
