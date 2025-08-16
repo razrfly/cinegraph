@@ -1,7 +1,7 @@
 defmodule CinegraphWeb.Components.PersonAutocomplete do
   @moduledoc """
   Reusable autocomplete component for selecting people with multi-select support.
-  Optimized with caching and improved performance.
+  Simplified version without role filtering.
   """
 
   use Phoenix.LiveComponent
@@ -13,7 +13,6 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
      |> assign(:search_term, "")
      |> assign(:search_results, [])
      |> assign(:selected_people, [])
-     |> assign(:selected_role, "any")
      |> assign(:searching, false)
      |> assign(:show_results, false)
      |> assign(:search_cache, %{})
@@ -26,7 +25,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
     
     # Handle cache updates when search results come back
     socket = if assigns[:cache_query] && assigns[:cache_timestamp] do
-      cache_key = "#{assigns.cache_query}_#{socket.assigns.selected_role}"
+      cache_key = assigns.cache_query
       updated_cache = Map.put(socket.assigns.search_cache, cache_key, %{
         results: assigns[:search_results] || [],
         timestamp: assigns[:cache_timestamp]
@@ -52,8 +51,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
      socket
      |> assign(assigns)
      |> assign(:selected_people, selected_people)
-     |> assign(:search_term, assigns[:search_term] || "")
-     |> assign(:selected_role, assigns[:selected_role] || "any")}
+     |> assign(:search_term, assigns[:search_term] || "")}
   end
 
   def handle_event("search", params, socket) do
@@ -77,7 +75,6 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
         {:noreply,
          socket
          |> assign(:selected_people, selected_people)
-         |> assign(:search_term, "")
          |> assign(:search_results, [])
          |> assign(:show_results, false)}
       else
@@ -86,7 +83,6 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
     else
       {:noreply,
        socket
-       |> assign(:search_term, "")
        |> assign(:search_results, [])
        |> assign(:show_results, false)}
     end
@@ -102,12 +98,6 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
     {:noreply, assign(socket, :selected_people, selected_people)}
   end
 
-  def handle_event("role_changed", %{"role" => role}, socket) do
-    # Send role update to parent
-    send(self(), {:role_selected, socket.assigns.id, role})
-    
-    {:noreply, assign(socket, :selected_role, role)}
-  end
 
   def handle_event("clear_search", _params, socket) do
     {:noreply,
@@ -124,8 +114,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
     
     if String.length(trimmed_query) >= 2 do
       # Check cache first
-      cache_key = "#{trimmed_query}_#{socket.assigns.selected_role}"
-      cached_results = Map.get(socket.assigns.search_cache, cache_key)
+      cached_results = Map.get(socket.assigns.search_cache, trimmed_query)
       
       cond do
         # Use cached results if available and recent (within 30 seconds)
@@ -164,34 +153,8 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
   def render(assigns) do
     ~H"""
     <div id={@id} class="relative">
-      <!-- Role Filter Dropdown -->
-      <div class="mb-2">
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Role Filter
-        </label>
-        <select
-          name="role"
-          phx-change="role_changed"
-          phx-target={@myself}
-          value={@selected_role}
-          class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-        >
-          <option value="any">Any Role</option>
-          <option value="director">Director</option>
-          <option value="cast">Actor/Cast</option>
-          <option value="writer">Writer</option>
-          <option value="producer">Producer</option>
-          <option value="cinematographer">Cinematographer</option>
-          <option value="composer">Composer</option>
-          <option value="editor">Editor</option>
-        </select>
-      </div>
-
       <!-- Search Input -->
       <div class="relative">
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Search People
-        </label>
         <div class="relative">
           <input
             type="text"
@@ -303,9 +266,8 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
         </div>
       <% end %>
 
-      <!-- Hidden inputs for form submission -->
+      <!-- Hidden input for form submission -->
       <input type="hidden" name={@field_name <> "[people_ids]"} value={Enum.map_join(@selected_people, ",", & &1.id)} />
-      <input type="hidden" name={@field_name <> "[role_filter]"} value={@selected_role} />
     </div>
     """
   end
