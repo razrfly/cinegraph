@@ -159,6 +159,57 @@ defmodule CinegraphWeb.MovieLive.Index do
     {:noreply, push_patch(socket, to: path)}
   end
 
+  # Handle autocomplete search for people
+  @impl true
+  def handle_info({:search_people_autocomplete, component_id, query}, socket) do
+    results = Cinegraph.People.search_people(query, limit: 10)
+    send_update(CinegraphWeb.Components.PersonAutocomplete, id: component_id, search_results: results, searching: false)
+    {:noreply, socket}
+  end
+
+  # Handle people selection updates from autocomplete component
+  @impl true
+  def handle_info({:people_selected, _component_id, selected_people}, socket) do
+    # Update the filters with the new people selection
+    people_ids = Enum.map_join(selected_people, ",", & &1.id)
+    current_filters = socket.assigns.filters
+    
+    updated_filters = Map.put(current_filters, :people_search, %{
+      "people_ids" => people_ids,
+      "role_filter" => current_filters.people_search["role_filter"] || "any"
+    })
+
+    # Apply the updated filters
+    params = build_filter_params(%{socket | assigns: %{socket.assigns | filters: updated_filters}})
+           |> Map.put("page", "1")
+
+    path = ~p"/movies?#{params}"
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  # Handle role selection updates from autocomplete component
+  @impl true
+  def handle_info({:role_selected, _component_id, role}, socket) do
+    current_filters = socket.assigns.filters
+    people_search = current_filters.people_search || %{"people_ids" => "", "role_filter" => "any"}
+    
+    updated_filters = Map.put(current_filters, :people_search, %{
+      people_search | "role_filter" => role
+    })
+
+    # Apply the updated filters if there are selected people
+    if people_search["people_ids"] != "" do
+      params = build_filter_params(%{socket | assigns: %{socket.assigns | filters: updated_filters}})
+             |> Map.put("page", "1")
+
+      path = ~p"/movies?#{params}"
+      {:noreply, push_patch(socket, to: path)}
+    else
+      # Just update the filter state without triggering a search
+      {:noreply, assign(socket, :filters, updated_filters)}
+    end
+  end
+
   # Private functions
   defp assign_pagination_params(socket, params) do
     page = parse_int_param(params["page"], 1, min: 1)
@@ -213,7 +264,12 @@ defmodule CinegraphWeb.MovieLive.Index do
       critical_acclaim_min: params["critical_acclaim_min"],
       industry_recognition_min: params["industry_recognition_min"],
       cultural_impact_min: params["cultural_impact_min"],
-      people_quality_min: params["people_quality_min"]
+      people_quality_min: params["people_quality_min"],
+      # New simplified filters
+      people_search: parse_people_search_param(params),
+      rating_preset: params["rating_preset"],
+      discovery_preset: params["discovery_preset"],
+      award_preset: params["award_preset"]
     })
   end
 
@@ -273,17 +329,27 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp stringify_filters(filters) do
     filters
     |> Enum.map(fn {k, v} ->
-      {to_string(k), stringify_value(v)}
+      {to_string(k), stringify_value(k, v)}
     end)
     |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
     |> Map.new()
   end
 
-  defp stringify_value(nil), do: nil
-  defp stringify_value(v) when is_list(v), do: Enum.join(v, ",")
-  defp stringify_value(true), do: "true"
-  defp stringify_value(false), do: "false"
-  defp stringify_value(v), do: to_string(v)
+  # Handle special cases for new filter types
+  defp stringify_value(:people_search, %{"people_ids" => people_ids, "role_filter" => role_filter}) do
+    if people_ids != "" do
+      %{"people_ids" => people_ids, "role_filter" => role_filter || "any"}
+    else
+      nil
+    end
+  end
+  
+  defp stringify_value(_key, nil), do: nil
+  defp stringify_value(_key, v) when is_list(v), do: Enum.join(v, ",")
+  defp stringify_value(_key, true), do: "true"
+  defp stringify_value(_key, false), do: "false"
+  defp stringify_value(_key, v) when is_map(v), do: v
+  defp stringify_value(_key, v), do: to_string(v)
 
   defp parse_list_param(nil), do: []
   defp parse_list_param(""), do: []
@@ -301,6 +367,25 @@ defmodule CinegraphWeb.MovieLive.Index do
   end
 
   defp parse_list_param(param) when is_list(param), do: param
+
+  defp parse_people_search_param(params) do
+    case {params["people_search"], params["people_search[people_ids]"], params["people_search[role_filter]"]} do
+      # New format with nested parameters
+      {nil, people_ids, role_filter} when people_ids != nil or role_filter != nil ->
+        %{
+          "people_ids" => people_ids || "",
+          "role_filter" => role_filter || "any"
+        }
+      
+      # Existing format (map)
+      {people_search, _, _} when is_map(people_search) ->
+        people_search
+      
+      # No people search data
+      _ ->
+        %{"people_ids" => "", "role_filter" => "any"}
+    end
+  end
 
   defp parse_int_param(param, default, opts) do
     min_val = Keyword.get(opts, :min, 1)
