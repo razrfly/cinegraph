@@ -159,11 +159,40 @@ defmodule CinegraphWeb.MovieLive.Index do
     {:noreply, push_patch(socket, to: path)}
   end
 
+  @impl true
+  def handle_event("activate_people_search", params, socket) do
+    # Initialize people search while preserving any typed search term
+    current_filters = socket.assigns.filters
+    
+    # Get any existing search term from params if available
+    search_term = params["value"] || ""
+    
+    # Check if people_search already exists and preserve its values
+    existing_people_search = current_filters["people_search"] || %{}
+    
+    updated_filters = Map.put(current_filters, "people_search", %{
+      "people_ids" => existing_people_search["people_ids"] || "",
+      "role_filter" => existing_people_search["role_filter"] || "any",
+      "search_term" => search_term
+    })
+    
+    {:noreply, assign(socket, :filters, updated_filters)}
+  end
+
   # Handle autocomplete search for people
   @impl true
   def handle_info({:search_people_autocomplete, component_id, query}, socket) do
     results = Cinegraph.People.search_people(query, limit: 10)
-    send_update(CinegraphWeb.Components.PersonAutocomplete, id: component_id, search_results: results, searching: false)
+    
+    # Update component with results and cache them
+    send_update(CinegraphWeb.Components.PersonAutocomplete, 
+      id: component_id, 
+      search_results: results, 
+      searching: false,
+      cache_query: query,
+      cache_timestamp: DateTime.utc_now()
+    )
+    
     {:noreply, socket}
   end
 
@@ -174,9 +203,9 @@ defmodule CinegraphWeb.MovieLive.Index do
     people_ids = Enum.map_join(selected_people, ",", & &1.id)
     current_filters = socket.assigns.filters
     
-    updated_filters = Map.put(current_filters, :people_search, %{
+    updated_filters = Map.put(current_filters, "people_search", %{
       "people_ids" => people_ids,
-      "role_filter" => current_filters.people_search["role_filter"] || "any"
+      "role_filter" => (current_filters["people_search"] || %{})["role_filter"] || "any"
     })
 
     # Apply the updated filters
@@ -191,9 +220,9 @@ defmodule CinegraphWeb.MovieLive.Index do
   @impl true
   def handle_info({:role_selected, _component_id, role}, socket) do
     current_filters = socket.assigns.filters
-    people_search = current_filters.people_search || %{"people_ids" => "", "role_filter" => "any"}
+    people_search = current_filters["people_search"] || %{"people_ids" => "", "role_filter" => "any"}
     
-    updated_filters = Map.put(current_filters, :people_search, %{
+    updated_filters = Map.put(current_filters, "people_search", %{
       people_search | "role_filter" => role
     })
 
@@ -370,20 +399,23 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   defp parse_people_search_param(params) do
     case {params["people_search"], params["people_search[people_ids]"], params["people_search[role_filter]"]} do
-      # New format with nested parameters
-      {nil, people_ids, role_filter} when people_ids != nil or role_filter != nil ->
+      # New format with nested parameters - only if we have actual people
+      {nil, people_ids, role_filter} when people_ids not in [nil, ""] or role_filter not in [nil, "", "any"] ->
         %{
           "people_ids" => people_ids || "",
           "role_filter" => role_filter || "any"
         }
       
-      # Existing format (map)
+      # Existing format (map) - only if it has people
       {people_search, _, _} when is_map(people_search) ->
-        people_search
+        case people_search do
+          %{"people_ids" => people_ids} when people_ids not in [nil, ""] -> people_search
+          _ -> nil
+        end
       
-      # No people search data
+      # No people search data - return nil to avoid unnecessary processing
       _ ->
-        %{"people_ids" => "", "role_filter" => "any"}
+        nil
     end
   end
 
