@@ -4,6 +4,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   """
 
   use Phoenix.Component
+  require Logger
 
   def advanced_filters(assigns) do
     ~H"""
@@ -448,18 +449,28 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           people_ids
           |> String.split(",", trim: true)
           |> Enum.map(&String.trim/1)
-          |> Enum.map(fn id_str ->
-            case Integer.parse(id_str) do
-              {id, _} -> id
-              :error -> nil
-            end
+          |> Enum.map(&Integer.parse/1)
+          |> Enum.flat_map(fn
+            {id, _} -> [id]
+            :error -> []
           end)
-          |> Enum.reject(&is_nil/1)
         
-        if length(ids) > 0 do
-          Cinegraph.People.get_people_by_ids(ids)
-        else
+        if ids == [] do
           []
+        else
+          try do
+            case Cinegraph.People.get_people_by_ids(ids) do
+              {:ok, people} -> people
+              {:error, _reason} -> []
+              nil -> []
+              people when is_list(people) -> people
+              _ -> []
+            end
+          rescue
+            error ->
+              Logger.error("Failed to get people by IDs: #{inspect(error)}")
+              []
+          end
         end
       _ ->
         []
@@ -673,19 +684,40 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       key == "people_search" ->
         # Handle comma-separated person IDs
         if String.contains?(value, ",") do
-          ids = String.split(value, ",") |> Enum.take(3)
-          people_names = Cinegraph.People.get_people_by_ids(Enum.map(ids, &String.to_integer/1))
-                         |> Enum.map(& &1.name)
+          ids = 
+            value
+            |> String.split(",")
+            |> Enum.take(3)
+            |> Enum.map(&String.trim/1)
+            |> Enum.map(&Integer.parse/1)
+            |> Enum.flat_map(fn
+              {id, _} -> [id]
+              :error -> []
+            end)
+          
+          people_names = 
+            if ids == [] do
+              []
+            else
+              Cinegraph.People.get_people_by_ids(ids)
+              |> Enum.map(& &1.name)
+            end
           
           case length(people_names) do
+            0 -> "Unknown People"
             1 -> Enum.at(people_names, 0)
             2 -> Enum.join(people_names, ", ")
             _ -> "#{Enum.at(people_names, 0)}, #{Enum.at(people_names, 1)} +#{length(people_names) - 2} more"
           end
         else
-          case Cinegraph.People.get_person(String.to_integer(value)) do
-            nil -> "Unknown Person"
-            person -> person.name
+          case Integer.parse(value) do
+            {id, _} ->
+              case Cinegraph.People.get_person(id) do
+                nil -> "Unknown Person"
+                person -> person.name
+              end
+            :error ->
+              "Invalid ID"
           end
         end
 

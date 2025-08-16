@@ -31,8 +31,16 @@ defmodule Mix.Tasks.Pqs do
     # Load and run the test module
     test_file = "test/pqs_automation_test.exs"
     if File.exists?(test_file) do
-      Code.require_file(test_file)
-      Cinegraph.PQSAutomationTest.run_comprehensive_test()
+      Code.compile_file(test_file)
+      
+      # Check if module was successfully compiled and loaded
+      module = Cinegraph.PQSAutomationTest
+      if Code.ensure_loaded?(module) do
+        # Use apply to avoid compile-time warning
+        apply(module, :run_comprehensive_test, [])
+      else
+        Mix.shell().error("❌ Failed to load test module")
+      end
     else
       Mix.shell().error("❌ Test file not found: #{test_file}")
       Mix.shell().info("Creating basic test module...")
