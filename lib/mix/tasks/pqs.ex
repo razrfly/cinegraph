@@ -12,8 +12,8 @@ defmodule Mix.Tasks.Pqs do
   """
 
   use Mix.Task
+  import Ecto.Query
   alias Cinegraph.Metrics.{PersonQualityScore, PQSMonitoring, PQSScheduler}
-  alias Cinegraph.Workers.PersonQualityScoreWorker
   require Logger
 
   @shortdoc "Person Quality Score system management"
@@ -29,8 +29,15 @@ defmodule Mix.Tasks.Pqs do
     start_app()
     
     # Load and run the test module
-    Code.require_file("test/pqs_automation_test.exs")
-    Cinegraph.PQSAutomationTest.run_comprehensive_test()
+    test_file = "test/pqs_automation_test.exs"
+    if File.exists?(test_file) do
+      Code.require_file(test_file)
+      Cinegraph.PQSAutomationTest.run_comprehensive_test()
+    else
+      Mix.shell().error("❌ Test file not found: #{test_file}")
+      Mix.shell().info("Creating basic test module...")
+      create_basic_test_module()
+    end
   end
 
   def run(["status"]) do
@@ -177,5 +184,45 @@ defmodule Mix.Tasks.Pqs do
 
   defp start_app do
     Mix.Task.run("app.start")
+  end
+  
+  defp create_basic_test_module do
+    alias Cinegraph.Metrics.PQSTriggerStrategy
+    
+    Mix.shell().info("Testing PQS trigger strategies...")
+    
+    # Test new person trigger (use a sample person ID)
+    case Cinegraph.Repo.one(from p in "people", limit: 1, select: p.id) do
+      nil -> Mix.shell().info("⚠️  No people found in database for testing")
+      person_id -> 
+        case PQSTriggerStrategy.trigger_new_person(person_id) do
+          {:ok, _} -> Mix.shell().info("✅ New person trigger test passed")
+          error -> Mix.shell().error("❌ New person trigger failed: #{inspect(error)}")
+        end
+    end
+    
+    # Test credit changes trigger
+    case Cinegraph.Repo.one(from mc in "movie_credits", limit: 1, select: mc.person_id) do
+      nil -> Mix.shell().info("⚠️  No movie credits found for testing")
+      person_id -> 
+        case PQSTriggerStrategy.trigger_credit_changes(person_id) do
+          {:ok, _} -> Mix.shell().info("✅ Credit changes trigger test passed")
+          :ok -> Mix.shell().info("✅ Credit changes trigger test passed (no jobs needed)")
+          error -> Mix.shell().error("❌ Credit changes trigger failed: #{inspect(error)}")
+        end
+    end
+    
+    # Test external metrics trigger
+    case Cinegraph.Repo.one(from m in "movies", limit: 1, select: m.id) do
+      nil -> Mix.shell().info("⚠️  No movies found for testing")
+      movie_id -> 
+        case PQSTriggerStrategy.trigger_external_metrics_update(movie_id) do
+          {:ok, _} -> Mix.shell().info("✅ External metrics trigger test passed")
+          :ok -> Mix.shell().info("✅ External metrics trigger test passed (no jobs needed)")
+          error -> Mix.shell().error("❌ External metrics trigger failed: #{inspect(error)}")
+        end
+    end
+    
+    Mix.shell().info("✅ Basic PQS automation test completed")
   end
 end
