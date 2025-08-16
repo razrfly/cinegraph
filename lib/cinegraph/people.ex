@@ -167,6 +167,17 @@ defmodule Cinegraph.People do
   end
 
   @doc """
+  Gets multiple people by their IDs.
+  """
+  def get_people_by_ids(ids) when is_list(ids) do
+    Person
+    |> where([p], p.id in ^ids)
+    |> order_by([p], desc: p.popularity)
+    |> Repo.all()
+  end
+  def get_people_by_ids(_), do: []
+
+  @doc """
   Gets all available departments for filtering.
   """
   def get_departments do
