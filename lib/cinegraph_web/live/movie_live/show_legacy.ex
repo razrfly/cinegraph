@@ -18,7 +18,7 @@ defmodule CinegraphWeb.MovieLive.ShowLegacy do
     movie = load_movie_by_id_or_slug(id_or_slug)
 
     # Redirect to canonical URL if accessed by ID
-    socket = 
+    socket =
       if is_numeric_id?(id_or_slug) and movie.slug do
         socket
         |> push_navigate(to: ~p"/movies/#{movie.slug}/legacy")

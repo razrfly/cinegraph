@@ -689,18 +689,24 @@ defmodule Cinegraph.Movies.Filters do
   # New simplified rating filter
   defp filter_by_simple_rating(query, nil), do: query
   defp filter_by_simple_rating(query, ""), do: query
+
   defp filter_by_simple_rating(query, preset) do
     case preset do
       "highly_rated" ->
         # Movies with average TMDb/IMDb rating >= 7.5
         query
         |> join(:left, [m], tmdb in "external_metrics",
-          on: tmdb.movie_id == m.id and tmdb.source == "tmdb" and tmdb.metric_type == "rating_average"
+          on:
+            tmdb.movie_id == m.id and tmdb.source == "tmdb" and
+              tmdb.metric_type == "rating_average"
         )
         |> join(:left, [m, ...], imdb in "external_metrics",
-          on: imdb.movie_id == m.id and imdb.source == "imdb" and imdb.metric_type == "rating_average"
+          on:
+            imdb.movie_id == m.id and imdb.source == "imdb" and
+              imdb.metric_type == "rating_average"
         )
-        |> where([m, tmdb, imdb], 
+        |> where(
+          [m, tmdb, imdb],
           fragment("(COALESCE(?, 0) + COALESCE(?, 0)) / 2 >= 7.5", tmdb.value, imdb.value)
         )
 
@@ -708,12 +714,17 @@ defmodule Cinegraph.Movies.Filters do
         # Movies with average TMDb/IMDb rating >= 6.0
         query
         |> join(:left, [m], tmdb in "external_metrics",
-          on: tmdb.movie_id == m.id and tmdb.source == "tmdb" and tmdb.metric_type == "rating_average"
+          on:
+            tmdb.movie_id == m.id and tmdb.source == "tmdb" and
+              tmdb.metric_type == "rating_average"
         )
         |> join(:left, [m, ...], imdb in "external_metrics",
-          on: imdb.movie_id == m.id and imdb.source == "imdb" and imdb.metric_type == "rating_average"
+          on:
+            imdb.movie_id == m.id and imdb.source == "imdb" and
+              imdb.metric_type == "rating_average"
         )
-        |> where([m, tmdb, imdb], 
+        |> where(
+          [m, tmdb, imdb],
           fragment("(COALESCE(?, 0) + COALESCE(?, 0)) / 2 >= 6.0", tmdb.value, imdb.value)
         )
 
@@ -724,9 +735,12 @@ defmodule Cinegraph.Movies.Filters do
           on: mc.movie_id == m.id and mc.source == "metacritic" and mc.metric_type == "metascore"
         )
         |> join(:left, [m, ...], rt in "external_metrics",
-          on: rt.movie_id == m.id and rt.source == "rotten_tomatoes" and rt.metric_type == "tomatometer"
+          on:
+            rt.movie_id == m.id and rt.source == "rotten_tomatoes" and
+              rt.metric_type == "tomatometer"
         )
-        |> where([m, mc, rt], 
+        |> where(
+          [m, mc, rt],
           fragment("COALESCE(?, 0) >= 70 OR COALESCE(?, 0) >= 80", mc.value, rt.value)
         )
 
@@ -865,12 +879,18 @@ defmodule Cinegraph.Movies.Filters do
 
   # Conditional wrapper to avoid function calls when not needed
   defp maybe_apply_people_search(query, nil), do: query
-  defp maybe_apply_people_search(query, people_search), do: filter_by_unified_people_search(query, people_search)
+
+  defp maybe_apply_people_search(query, people_search),
+    do: filter_by_unified_people_search(query, people_search)
 
   # New unified people search with role filtering - optimized for performance
   defp filter_by_unified_people_search(query, nil), do: query
-  defp filter_by_unified_people_search(query, %{"people_ids" => "", "role_filter" => _}), do: query
-  defp filter_by_unified_people_search(query, %{"people_ids" => people_ids}) when people_ids != "" do
+
+  defp filter_by_unified_people_search(query, %{"people_ids" => "", "role_filter" => _}),
+    do: query
+
+  defp filter_by_unified_people_search(query, %{"people_ids" => people_ids})
+       when people_ids != "" do
     # Basic filter case - no role filtering, just person IDs
     person_ids = parse_person_ids(people_ids)
 
@@ -883,15 +903,20 @@ defmodule Cinegraph.Movies.Filters do
       |> where([m, credits: mc], mc.person_id in ^person_ids)
     end
   end
-  defp filter_by_unified_people_search(query, %{"people_ids" => people_ids, "role_filter" => role_filter}) do
+
+  defp filter_by_unified_people_search(query, %{
+         "people_ids" => people_ids,
+         "role_filter" => role_filter
+       }) do
     person_ids = parse_person_ids(people_ids)
 
     if Enum.empty?(person_ids) do
       query
     else
       # Single join for better performance
-      query = join(query, :inner, [m], mc in "movie_credits", on: mc.movie_id == m.id, as: :credits)
-      
+      query =
+        join(query, :inner, [m], mc in "movie_credits", on: mc.movie_id == m.id, as: :credits)
+
       case role_filter do
         "director" ->
           where(query, [m, credits: mc], mc.person_id in ^person_ids and mc.job == "Director")
@@ -901,33 +926,69 @@ defmodule Cinegraph.Movies.Filters do
 
         "writer" ->
           # Use specific job titles instead of ILIKE for better performance
-          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
-            mc.job in ["Writer", "Screenplay", "Story", "Novel", "Characters", "Teleplay", "Adaptation"])
+          where(
+            query,
+            [m, credits: mc],
+            mc.person_id in ^person_ids and
+              mc.job in [
+                "Writer",
+                "Screenplay",
+                "Story",
+                "Novel",
+                "Characters",
+                "Teleplay",
+                "Adaptation"
+              ]
+          )
 
         "producer" ->
           # Use specific job titles instead of ILIKE for better performance
-          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
-            mc.job in ["Producer", "Executive Producer", "Associate Producer", "Co-Producer", "Line Producer"])
+          where(
+            query,
+            [m, credits: mc],
+            mc.person_id in ^person_ids and
+              mc.job in [
+                "Producer",
+                "Executive Producer",
+                "Associate Producer",
+                "Co-Producer",
+                "Line Producer"
+              ]
+          )
 
         "cinematographer" ->
-          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
-            mc.job in ["Director of Photography", "Cinematography", "Cinematographer"])
+          where(
+            query,
+            [m, credits: mc],
+            mc.person_id in ^person_ids and
+              mc.job in ["Director of Photography", "Cinematography", "Cinematographer"]
+          )
 
         "composer" ->
           # Use specific job titles instead of ILIKE for better performance
-          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
-            mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"])
+          where(
+            query,
+            [m, credits: mc],
+            mc.person_id in ^person_ids and
+              mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"]
+          )
 
         "editor" ->
           # Use specific job titles instead of ILIKE for better performance
-          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
-            mc.job in ["Editor", "Film Editor", "Editorial", "Editing"])
+          where(
+            query,
+            [m, credits: mc],
+            mc.person_id in ^person_ids and
+              mc.job in ["Editor", "Film Editor", "Editorial", "Editing"]
+          )
 
-        _ -> # "any" or default
+        # "any" or default
+        _ ->
           where(query, [m, credits: mc], mc.person_id in ^person_ids)
       end
     end
   end
+
   defp filter_by_unified_people_search(query, _), do: query
 
   defp parse_person_ids(person_ids) when is_binary(person_ids) and person_ids != "" do
@@ -937,6 +998,7 @@ defmodule Cinegraph.Movies.Filters do
     |> Enum.map(&to_integer/1)
     |> Enum.reject(&is_nil/1)
   end
+
   defp parse_person_ids(_), do: []
 
   # Legacy people filtering functions (kept for backward compatibility)
@@ -1026,52 +1088,80 @@ defmodule Cinegraph.Movies.Filters do
   # New simplified discovery metrics filter
   defp filter_by_discovery_preset(query, nil), do: query
   defp filter_by_discovery_preset(query, ""), do: query
+
   defp filter_by_discovery_preset(query, preset) do
     case preset do
       "award_winners" ->
         # Movies with at least one festival win
         query
-        |> join(:inner, [m], festival_nomination in "festival_nominations", on: festival_nomination.movie_id == m.id and festival_nomination.won == true)
+        |> join(:inner, [m], festival_nomination in "festival_nominations",
+          on: festival_nomination.movie_id == m.id and festival_nomination.won == true
+        )
 
       "popular_favorites" ->
         # High popular opinion score (>= 0.7) - optimized with joins
         query
         |> join(:left, [m], tmdb_rating in "external_metrics",
-          on: tmdb_rating.movie_id == m.id and tmdb_rating.source == "tmdb" and tmdb_rating.metric_type == "rating_average"
+          on:
+            tmdb_rating.movie_id == m.id and tmdb_rating.source == "tmdb" and
+              tmdb_rating.metric_type == "rating_average"
         )
         |> join(:left, [m, ...], imdb_rating in "external_metrics",
-          on: imdb_rating.movie_id == m.id and imdb_rating.source == "imdb" and imdb_rating.metric_type == "rating_average"
+          on:
+            imdb_rating.movie_id == m.id and imdb_rating.source == "imdb" and
+              imdb_rating.metric_type == "rating_average"
         )
-        |> where([m, tmdb_rating, imdb_rating], 
-          fragment("(COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5) >= 0.7", 
-            tmdb_rating.value, imdb_rating.value)
+        |> where(
+          [m, tmdb_rating, imdb_rating],
+          fragment(
+            "(COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5) >= 0.7",
+            tmdb_rating.value,
+            imdb_rating.value
+          )
         )
 
       "hidden_gems" ->
         # High critical acclaim but lower popularity (fewer votes)
         query
         |> join(:left, [m], tmdb_rating in "external_metrics",
-          on: tmdb_rating.movie_id == m.id and tmdb_rating.source == "tmdb" and tmdb_rating.metric_type == "rating_average"
+          on:
+            tmdb_rating.movie_id == m.id and tmdb_rating.source == "tmdb" and
+              tmdb_rating.metric_type == "rating_average"
         )
         |> join(:left, [m, ...], tmdb_votes in "external_metrics",
-          on: tmdb_votes.movie_id == m.id and tmdb_votes.source == "tmdb" and tmdb_votes.metric_type == "rating_votes"
+          on:
+            tmdb_votes.movie_id == m.id and tmdb_votes.source == "tmdb" and
+              tmdb_votes.metric_type == "rating_votes"
         )
-        |> where([m, tmdb_rating, tmdb_votes], 
-          fragment("COALESCE(?, 0) >= 7.0 AND COALESCE(?, 0) < 10000", tmdb_rating.value, tmdb_votes.value)
+        |> where(
+          [m, tmdb_rating, tmdb_votes],
+          fragment(
+            "COALESCE(?, 0) >= 7.0 AND COALESCE(?, 0) < 10000",
+            tmdb_rating.value,
+            tmdb_votes.value
+          )
         )
 
       "critically_acclaimed" ->
         # High critical acclaim score (>= 0.6) - optimized with joins
         query
         |> join(:left, [m], metacritic in "external_metrics",
-          on: metacritic.movie_id == m.id and metacritic.source == "metacritic" and metacritic.metric_type == "metascore"
+          on:
+            metacritic.movie_id == m.id and metacritic.source == "metacritic" and
+              metacritic.metric_type == "metascore"
         )
         |> join(:left, [m, ...], rotten_tomatoes in "external_metrics",
-          on: rotten_tomatoes.movie_id == m.id and rotten_tomatoes.source == "rotten_tomatoes" and rotten_tomatoes.metric_type == "tomatometer"
+          on:
+            rotten_tomatoes.movie_id == m.id and rotten_tomatoes.source == "rotten_tomatoes" and
+              rotten_tomatoes.metric_type == "tomatometer"
         )
-        |> where([m, metacritic, rotten_tomatoes], 
-          fragment("(COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5) >= 0.6", 
-            metacritic.value, rotten_tomatoes.value)
+        |> where(
+          [m, metacritic, rotten_tomatoes],
+          fragment(
+            "(COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5) >= 0.6",
+            metacritic.value,
+            rotten_tomatoes.value
+          )
         )
 
       _ ->
@@ -1082,34 +1172,51 @@ defmodule Cinegraph.Movies.Filters do
   # New simplified award filter
   defp filter_by_award_preset(query, nil), do: query
   defp filter_by_award_preset(query, ""), do: query
+
   defp filter_by_award_preset(query, preset) do
     case preset do
       "recent_awards" ->
         # Awards from 2020 onwards
         query
-        |> join(:inner, [m], festival_nomination in "festival_nominations", on: festival_nomination.movie_id == m.id)
-        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies", on: fc.id == festival_nomination.ceremony_id)
+        |> join(:inner, [m], festival_nomination in "festival_nominations",
+          on: festival_nomination.movie_id == m.id
+        )
+        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies",
+          on: fc.id == festival_nomination.ceremony_id
+        )
         |> where([..., fc], fc.year >= 2020)
 
       "2010s" ->
         # Awards from 2010-2019
         query
-        |> join(:inner, [m], festival_nomination in "festival_nominations", on: festival_nomination.movie_id == m.id)
-        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies", on: fc.id == festival_nomination.ceremony_id)
+        |> join(:inner, [m], festival_nomination in "festival_nominations",
+          on: festival_nomination.movie_id == m.id
+        )
+        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies",
+          on: fc.id == festival_nomination.ceremony_id
+        )
         |> where([..., fc], fc.year >= 2010 and fc.year <= 2019)
 
       "2000s" ->
         # Awards from 2000-2009
         query
-        |> join(:inner, [m], festival_nomination in "festival_nominations", on: festival_nomination.movie_id == m.id)
-        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies", on: fc.id == festival_nomination.ceremony_id)
+        |> join(:inner, [m], festival_nomination in "festival_nominations",
+          on: festival_nomination.movie_id == m.id
+        )
+        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies",
+          on: fc.id == festival_nomination.ceremony_id
+        )
         |> where([..., fc], fc.year >= 2000 and fc.year <= 2009)
 
       "classic" ->
         # Awards from before 2000
         query
-        |> join(:inner, [m], festival_nomination in "festival_nominations", on: festival_nomination.movie_id == m.id)
-        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies", on: fc.id == festival_nomination.ceremony_id)
+        |> join(:inner, [m], festival_nomination in "festival_nominations",
+          on: festival_nomination.movie_id == m.id
+        )
+        |> join(:inner, [..., festival_nomination], fc in "festival_ceremonies",
+          on: fc.id == festival_nomination.ceremony_id
+        )
         |> where([..., fc], fc.year < 2000)
 
       _ ->

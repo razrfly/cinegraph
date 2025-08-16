@@ -388,6 +388,7 @@ defmodule Cinegraph.Movies do
         # Trigger PQS calculation for new person
         Cinegraph.Metrics.PQSTriggerStrategy.trigger_new_person(person.id)
         result
+
       error ->
         error
     end
@@ -406,6 +407,7 @@ defmodule Cinegraph.Movies do
             # Trigger PQS calculation for new person
             Cinegraph.Metrics.PQSTriggerStrategy.trigger_new_person(person.id)
             result
+
           error ->
             error
         end
@@ -466,7 +468,9 @@ defmodule Cinegraph.Movies do
         if credit.person_id do
           Cinegraph.Metrics.PQSTriggerStrategy.trigger_credit_changes(credit.person_id)
         end
+
         result
+
       error ->
         error
     end
