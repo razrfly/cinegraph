@@ -1,6 +1,7 @@
 defmodule CinegraphWeb.Components.PersonAutocomplete do
   @moduledoc """
   Reusable autocomplete component for selecting people with multi-select support.
+  Optimized with caching and improved performance.
   """
 
   use Phoenix.LiveComponent
@@ -14,12 +15,38 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
      |> assign(:selected_people, [])
      |> assign(:selected_role, "any")
      |> assign(:searching, false)
-     |> assign(:show_results, false)}
+     |> assign(:show_results, false)
+     |> assign(:search_cache, %{})
+     |> assign(:last_search_time, nil)}
   end
 
   def update(assigns, socket) do
     # Parse selected_people if it comes as a string (from form params)
     selected_people = parse_selected_people(assigns[:selected_people] || [])
+    
+    # Handle cache updates when search results come back
+    socket = if assigns[:cache_query] && assigns[:cache_timestamp] do
+      cache_key = "#{assigns.cache_query}_#{socket.assigns.selected_role}"
+      updated_cache = Map.put(socket.assigns.search_cache, cache_key, %{
+        results: assigns[:search_results] || [],
+        timestamp: assigns[:cache_timestamp]
+      })
+      
+      # Limit cache size to prevent memory issues
+      updated_cache = if map_size(updated_cache) > 50 do
+        # Remove oldest entries
+        updated_cache
+        |> Enum.sort_by(fn {_k, v} -> v.timestamp end, DateTime)
+        |> Enum.drop(10)
+        |> Map.new()
+      else
+        updated_cache
+      end
+      
+      assign(socket, :search_cache, updated_cache)
+    else
+      socket
+    end
     
     {:ok,
      socket
@@ -29,37 +56,10 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
      |> assign(:selected_role, assigns[:selected_role] || "any")}
   end
 
-  def handle_event("search", %{"value" => query}, socket) do
+  def handle_event("search", params, socket) do
+    # Handle various parameter formats that LiveView might send
+    query = params["value"] || params["search"] || params["query"] || ""
     handle_search_query(query, socket)
-  end
-
-  # Fallback for different event formats
-  def handle_event("search", %{"query" => query}, socket) do
-    handle_search_query(query, socket)
-  end
-
-  # Handle any other search event format
-  def handle_event("search", params, socket) when is_map(params) do
-    query = params["value"] || params["query"] || ""
-    handle_search_query(query, socket)
-  end
-
-  defp handle_search_query(query, socket) do
-    if String.length(String.trim(query)) >= 2 do
-      send(self(), {:search_people_autocomplete, socket.assigns.id, query})
-      {:noreply, 
-       socket
-       |> assign(:search_term, query)
-       |> assign(:searching, true)
-       |> assign(:show_results, true)}
-    else
-      {:noreply,
-       socket
-       |> assign(:search_term, query)
-       |> assign(:search_results, [])
-       |> assign(:searching, false)
-       |> assign(:show_results, false)}
-    end
   end
 
   def handle_event("select_person", %{"person_id" => person_id}, socket) do
@@ -118,6 +118,50 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
      |> assign(:show_results, false)}
   end
 
+  # Private helper functions
+  
+  defp handle_search_query(query, socket) do
+    trimmed_query = String.trim(query)
+    
+    if String.length(trimmed_query) >= 2 do
+      # Check cache first
+      cache_key = "#{trimmed_query}_#{socket.assigns.selected_role}"
+      cached_results = Map.get(socket.assigns.search_cache, cache_key)
+      
+      cond do
+        # Use cached results if available and recent (within 30 seconds)
+        cached_results && cache_still_valid?(cached_results.timestamp) ->
+          {:noreply,
+           socket
+           |> assign(:search_term, query)
+           |> assign(:search_results, cached_results.results)
+           |> assign(:searching, false)
+           |> assign(:show_results, true)}
+        
+        # Otherwise, perform new search
+        true ->
+          send(self(), {:search_people_autocomplete, socket.assigns.id, trimmed_query})
+          {:noreply, 
+           socket
+           |> assign(:search_term, query)
+           |> assign(:searching, true)
+           |> assign(:show_results, true)}
+      end
+    else
+      {:noreply,
+       socket
+       |> assign(:search_term, query)
+       |> assign(:search_results, [])
+       |> assign(:searching, false)
+       |> assign(:show_results, false)}
+    end
+  end
+  
+  defp cache_still_valid?(timestamp) do
+    # Cache is valid for 30 seconds
+    DateTime.diff(DateTime.utc_now(), timestamp) < 30
+  end
+
   def render(assigns) do
     ~H"""
     <div id={@id} class="relative">
@@ -151,7 +195,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
         <div class="relative">
           <input
             type="text"
-            name="query"
+            name="search"
             phx-keyup="search"
             phx-target={@myself}
             phx-debounce="300"

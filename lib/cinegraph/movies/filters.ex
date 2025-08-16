@@ -673,13 +673,18 @@ defmodule Cinegraph.Movies.Filters do
 
   defp filter_by_ratings(query, params) do
     query
-    |> filter_by_simple_rating(params["rating_preset"])
+    # Only apply new rating preset if it's actually set
+    |> maybe_apply_simple_rating(params["rating_preset"])
     # Keep legacy support for min/max ranges
     |> filter_by_tmdb_rating(params["tmdb_min"], params["tmdb_max"])
     |> filter_by_imdb_rating(params["imdb_min"], params["imdb_max"])
     |> filter_by_metacritic_rating(params["metacritic_min"], params["metacritic_max"])
     |> filter_by_rotten_tomatoes(params["rt_critics_min"], params["rt_audience_min"])
   end
+
+  # Conditional wrapper to avoid function calls when not needed
+  defp maybe_apply_simple_rating(query, preset) when preset in [nil, ""], do: query
+  defp maybe_apply_simple_rating(query, preset), do: filter_by_simple_rating(query, preset)
 
   # New simplified rating filter
   defp filter_by_simple_rating(query, nil), do: query
@@ -850,14 +855,19 @@ defmodule Cinegraph.Movies.Filters do
 
   defp filter_by_people(query, params) do
     query
-    |> filter_by_unified_people_search(params["people_search"])
+    # Only apply new people search if it's actually set
+    |> maybe_apply_people_search(params["people_search"])
     # Keep legacy support for backward compatibility
     |> filter_by_person_ids(params["person_ids"])
     |> filter_by_director_id(params["director_id"])
     |> filter_by_actor_ids(params["actor_ids"])
   end
 
-  # New unified people search with role filtering
+  # Conditional wrapper to avoid function calls when not needed
+  defp maybe_apply_people_search(query, nil), do: query
+  defp maybe_apply_people_search(query, people_search), do: filter_by_unified_people_search(query, people_search)
+
+  # New unified people search with role filtering - optimized for performance
   defp filter_by_unified_people_search(query, nil), do: query
   defp filter_by_unified_people_search(query, %{"people_ids" => "", "role_filter" => _}), do: query
   defp filter_by_unified_people_search(query, %{"people_ids" => people_ids, "role_filter" => role_filter}) do
@@ -866,46 +876,42 @@ defmodule Cinegraph.Movies.Filters do
     if Enum.empty?(person_ids) do
       query
     else
+      # Single join for better performance
+      query = join(query, :inner, [m], mc in "movie_credits", on: mc.movie_id == m.id, as: :credits)
+      
       case role_filter do
         "director" ->
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids and mc.job == "Director")
+          where(query, [m, credits: mc], mc.person_id in ^person_ids and mc.job == "Director")
 
         "cast" ->
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids and mc.credit_type == "cast")
+          where(query, [m, credits: mc], mc.person_id in ^person_ids and mc.credit_type == "cast")
 
         "writer" ->
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids and ilike(mc.job, "%Writer%"))
+          # Use specific job titles instead of ILIKE for better performance
+          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
+            mc.job in ["Writer", "Screenplay", "Story", "Novel", "Characters", "Teleplay", "Adaptation"])
 
         "producer" ->
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids and ilike(mc.job, "%Producer%"))
+          # Use specific job titles instead of ILIKE for better performance
+          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
+            mc.job in ["Producer", "Executive Producer", "Associate Producer", "Co-Producer", "Line Producer"])
 
         "cinematographer" ->
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids and mc.job == "Director of Photography")
+          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
+            mc.job in ["Director of Photography", "Cinematography", "Cinematographer"])
 
         "composer" ->
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids and ilike(mc.job, "%Composer%"))
+          # Use specific job titles instead of ILIKE for better performance
+          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
+            mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"])
 
         "editor" ->
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids and ilike(mc.job, "%Editor%"))
+          # Use specific job titles instead of ILIKE for better performance
+          where(query, [m, credits: mc], mc.person_id in ^person_ids and 
+            mc.job in ["Editor", "Film Editor", "Editorial", "Editing"])
 
         _ -> # "any" or default
-          query
-          |> join(:inner, [m], mc in "movie_credits", on: mc.movie_id == m.id)
-          |> where([m, mc], mc.person_id in ^person_ids)
+          where(query, [m, credits: mc], mc.person_id in ^person_ids)
       end
     end
   end
@@ -986,8 +992,9 @@ defmodule Cinegraph.Movies.Filters do
 
   defp filter_by_metric_scores(query, params) do
     query
-    |> filter_by_discovery_preset(params["discovery_preset"])
-    |> filter_by_award_preset(params["award_preset"])
+    # Only apply new preset filters if they're actually set
+    |> maybe_apply_discovery_preset(params["discovery_preset"])
+    |> maybe_apply_award_preset(params["award_preset"])
     # Keep legacy support for numeric thresholds
     |> filter_by_metric_dimension(params["popular_opinion_min"], :popular_opinion)
     |> filter_by_metric_dimension(params["critical_acclaim_min"], :critical_acclaim)
@@ -995,6 +1002,13 @@ defmodule Cinegraph.Movies.Filters do
     |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
     |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
   end
+
+  # Conditional wrappers to avoid function calls when not needed
+  defp maybe_apply_discovery_preset(query, preset) when preset in [nil, ""], do: query
+  defp maybe_apply_discovery_preset(query, preset), do: filter_by_discovery_preset(query, preset)
+
+  defp maybe_apply_award_preset(query, preset) when preset in [nil, ""], do: query
+  defp maybe_apply_award_preset(query, preset), do: filter_by_award_preset(query, preset)
 
   # New simplified discovery metrics filter
   defp filter_by_discovery_preset(query, nil), do: query
