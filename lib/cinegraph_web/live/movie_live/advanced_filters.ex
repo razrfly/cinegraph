@@ -4,6 +4,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   """
 
   use Phoenix.Component
+  require Logger
 
   def advanced_filters(assigns) do
     ~H"""
@@ -457,7 +458,19 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
         if ids == [] do
           []
         else
-          Cinegraph.People.get_people_by_ids(ids)
+          try do
+            case Cinegraph.People.get_people_by_ids(ids) do
+              {:ok, people} -> people
+              {:error, _reason} -> []
+              nil -> []
+              people when is_list(people) -> people
+              _ -> []
+            end
+          rescue
+            error ->
+              Logger.error("Failed to get people by IDs: #{inspect(error)}")
+              []
+          end
         end
       _ ->
         []
