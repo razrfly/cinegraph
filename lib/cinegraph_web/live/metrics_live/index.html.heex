@@ -901,7 +901,7 @@
                   <span class="text-lg font-bold text-gray-400 mr-4">#{index}</span>
                   <div>
                     <.link
-                      navigate={~p"/movies/#{movie.id}"}
+                      navigate={~p"/movies/#{movie.slug || movie.id}"}
                       class="font-medium text-gray-900 hover:text-blue-600"
                     >
                       {movie.title}

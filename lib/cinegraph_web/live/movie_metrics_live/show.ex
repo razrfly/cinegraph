@@ -12,9 +12,9 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
   import Ecto.Query
 
   @impl true
-  def mount(%{"id" => movie_id}, _session, socket) do
+  def mount(%{"id_or_slug" => id_or_slug}, _session, socket) do
     try do
-      movie = Movies.get_movie!(movie_id)
+      movie = load_movie_by_id_or_slug(id_or_slug)
 
       {:ok,
        socket
@@ -186,5 +186,20 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
 
   def get_metric_by_code(metric_values, code) do
     Enum.find(metric_values, &(&1.metric_code == code))
+  end
+
+  defp load_movie_by_id_or_slug(id_or_slug) do
+    if is_numeric_id?(id_or_slug) do
+      Movies.get_movie!(id_or_slug)
+    else
+      Movies.get_movie_by_slug!(id_or_slug)
+    end
+  end
+
+  defp is_numeric_id?(str) do
+    case Integer.parse(str) do
+      {_num, ""} -> true
+      _ -> false
+    end
   end
 end

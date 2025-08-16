@@ -464,7 +464,7 @@
 <!-- Movies Grid -->
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
     <%= for movie <- @movies do %>
-      <.link navigate={~p"/movies/#{movie.id}"} class="group block">
+      <.link navigate={~p"/movies/#{movie.slug || movie.id}"} class="group block">
         <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden">
           <!-- Movie Poster -->
           <div class="aspect-[2/3] bg-gray-200 relative">

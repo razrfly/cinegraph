@@ -30,7 +30,7 @@
       
       <!-- Legacy Page Button -->
       <.link
-        navigate={~p"/movies/#{@movie.id}/legacy"}
+        navigate={~p"/movies/#{@movie.slug || @movie.id}/legacy"}
         class="inline-flex items-center px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-white text-sm rounded-md transition-colors"
       >
         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

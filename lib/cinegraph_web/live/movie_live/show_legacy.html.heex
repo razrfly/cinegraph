@@ -20,7 +20,7 @@
       </svg>
       <div>
         <h3 class="text-amber-800 font-medium">Legacy Movie Show Page</h3>
-        <p class="text-amber-700 text-sm">This is the original movie show page design for comparison. <.link navigate={~p"/movies/#{@movie.id}"} class="underline text-amber-800 font-medium">View new design</.link></p>
+        <p class="text-amber-700 text-sm">This is the original movie show page design for comparison. <.link navigate={~p"/movies/#{@movie.slug || @movie.id}"} class="underline text-amber-800 font-medium">View new design</.link></p>
       </div>
     </div>
   </div>

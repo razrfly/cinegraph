@@ -193,6 +193,13 @@ defmodule Cinegraph.Movies do
   def get_movie!(id), do: Repo.get!(Movie, id)
 
   @doc """
+  Gets a movie by slug.
+  """
+  def get_movie_by_slug!(slug) do
+    Repo.get_by!(Movie, slug: slug)
+  end
+
+  @doc """
   Gets a movie by TMDB ID.
   """
   def get_movie_by_tmdb_id(tmdb_id) do
