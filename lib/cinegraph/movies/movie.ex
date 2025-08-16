@@ -2,6 +2,7 @@ defmodule Cinegraph.Movies.Movie do
   use Ecto.Schema
   import Ecto.Changeset
   import Ecto.Query
+  alias Cinegraph.Movies.MovieSlug
 
   @primary_key {:id, :id, autogenerate: true}
   schema "movies" do
@@ -13,6 +14,7 @@ defmodule Cinegraph.Movies.Movie do
     field :title, :string
     field :original_title, :string
     field :release_date, :date
+    field :slug, MovieSlug.Type
     field :runtime, :integer
     field :overview, :string
     field :tagline, :string
@@ -102,6 +104,8 @@ defmodule Cinegraph.Movies.Movie do
       :canonical_sources
     ])
     |> validate_required([:title])
+    |> MovieSlug.maybe_generate_slug()
+    |> MovieSlug.unique_constraint()
     |> unique_constraint(:tmdb_id)
     |> unique_constraint(:imdb_id)
   end

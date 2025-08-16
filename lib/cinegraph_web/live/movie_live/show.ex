@@ -14,13 +14,19 @@ defmodule CinegraphWeb.MovieLive.Show do
   end
 
   @impl true
-  def handle_params(%{"id" => id}, _url, socket) do
-    movie = load_movie_with_all_data(id)
+  def handle_params(%{"id_or_slug" => id_or_slug}, _url, socket) do
+    movie = load_movie_by_id_or_slug(id_or_slug)
 
-    socket =
-      socket
-      |> assign(:movie, movie)
-      |> assign(:page_title, movie.title)
+    # Redirect to canonical URL if accessed by ID
+    socket = 
+      if is_numeric_id?(id_or_slug) and movie.slug do
+        socket
+        |> push_navigate(to: ~p"/movies/#{movie.slug}")
+      else
+        socket
+        |> assign(:movie, load_movie_with_all_data(movie.id))
+        |> assign(:page_title, movie.title)
+      end
 
     {:noreply, socket}
   end
@@ -28,6 +34,21 @@ defmodule CinegraphWeb.MovieLive.Show do
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :active_tab, tab)}
+  end
+
+  defp load_movie_by_id_or_slug(id_or_slug) do
+    if is_numeric_id?(id_or_slug) do
+      Movies.get_movie!(id_or_slug)
+    else
+      Movies.get_movie_by_slug!(id_or_slug)
+    end
+  end
+
+  defp is_numeric_id?(str) do
+    case Integer.parse(str) do
+      {_num, ""} -> true
+      _ -> false
+    end
   end
 
   defp load_movie_with_all_data(id) do
