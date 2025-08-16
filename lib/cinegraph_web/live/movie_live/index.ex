@@ -2,10 +2,12 @@ defmodule CinegraphWeb.MovieLive.Index do
   use CinegraphWeb, :live_view
 
   import Ecto.Query, only: [from: 2]
+  require Logger
 
   alias Cinegraph.Movies
   alias Cinegraph.Movies.{Genre, ProductionCountry, SpokenLanguage, MovieLists}
   alias Cinegraph.Repo
+  alias Cinegraph.Metrics.PersonMetric
   alias CinegraphWeb.MovieLive.AdvancedFilters
 
   @impl true
@@ -92,19 +94,33 @@ defmodule CinegraphWeb.MovieLive.Index do
   end
 
   @impl true
-  def handle_event("remove_filter", %{"filter" => filter_key}, socket) do
-    # Convert safely to an existing atom if present; otherwise, no-op
-    filter_atom =
-      try do
-        String.to_existing_atom(filter_key)
-      rescue
-        ArgumentError -> nil
-      end
+  def handle_event("remove_filter", %{"filter" => filter_key} = params, socket) do
+    filter_type = params["filter_type"] || "basic"
 
-    filters =
-      case filter_atom do
-        nil -> socket.assigns.filters
-        atom -> Map.delete(socket.assigns.filters, atom)
+    updated_filters =
+      case filter_type do
+        "basic" ->
+          remove_basic_filter(socket.assigns.filters, filter_key)
+
+        "advanced" ->
+          remove_advanced_filter(socket.assigns.filters, filter_key)
+
+        "people" ->
+          remove_people_filter(socket.assigns.filters, filter_key)
+
+        _ ->
+          # Fallback to legacy behavior for backwards compatibility
+          filter_atom =
+            try do
+              String.to_existing_atom(filter_key)
+            rescue
+              ArgumentError -> nil
+            end
+
+          case filter_atom do
+            nil -> socket.assigns.filters
+            atom -> Map.delete(socket.assigns.filters, atom)
+          end
       end
 
     # Build params directly with updated filters to avoid merge conflicts
@@ -115,9 +131,21 @@ defmodule CinegraphWeb.MovieLive.Index do
         "sort" => socket.assigns.sort,
         "search" => socket.assigns.search_term
       }
-      |> Map.merge(stringify_filters(filters))
+      |> Map.merge(stringify_filters(updated_filters))
       |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
       |> Map.new()
+
+    path = ~p"/movies?#{params}"
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  @impl true
+  def handle_event("clear_all_filters", _params, socket) do
+    params = %{
+      "page" => "1",
+      "per_page" => to_string(socket.assigns.per_page),
+      "sort" => socket.assigns.sort
+    }
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -159,21 +187,23 @@ defmodule CinegraphWeb.MovieLive.Index do
     {:noreply, push_patch(socket, to: path)}
   end
 
-
   # Handle autocomplete search for people
   @impl true
   def handle_info({:search_people_autocomplete, component_id, query}, socket) do
     results = Cinegraph.People.search_people(query, limit: 10)
-    
+
+    # Enhance results with person quality metrics
+    enhanced_results = enhance_people_with_metrics(results)
+
     # Update component with results and cache them
-    send_update(CinegraphWeb.Components.PersonAutocomplete, 
-      id: component_id, 
-      search_results: results, 
+    send_update(CinegraphWeb.Components.PersonAutocomplete,
+      id: component_id,
+      search_results: enhanced_results,
       searching: false,
       cache_query: query,
       cache_timestamp: DateTime.utc_now()
     )
-    
+
     {:noreply, socket}
   end
 
@@ -183,21 +213,41 @@ defmodule CinegraphWeb.MovieLive.Index do
     # Update the filters with the new people selection
     people_ids = Enum.map_join(selected_people, ",", & &1.id)
     current_filters = socket.assigns.filters
-    
+
     # Always use simple people_ids only - no role filtering
     people_search_filter = %{"people_ids" => people_ids}
-    updated_filters = Map.put(current_filters, "people_search", people_search_filter)
+    updated_filters = Map.put(current_filters, :people_search, people_search_filter)
 
     # Apply the updated filters
-    params = build_filter_params(%{socket | assigns: %{socket.assigns | filters: updated_filters}})
-           |> Map.put("page", "1")
+    params =
+      build_filter_params(%{socket | assigns: %{socket.assigns | filters: updated_filters}})
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
   end
 
-
   # Private functions
+
+  defp enhance_people_with_metrics(people) do
+    person_ids = Enum.map(people, & &1.id)
+
+    # Get quality scores for these people
+    metrics =
+      from(pm in PersonMetric,
+        where: pm.person_id in ^person_ids and pm.metric_type == "quality_score",
+        select: %{person_id: pm.person_id, score: pm.score}
+      )
+      |> Repo.all()
+      |> Map.new(fn %{person_id: id, score: score} -> {id, score} end)
+
+    # Add quality scores to people
+    Enum.map(people, fn person ->
+      score = Map.get(metrics, person.id)
+      Map.put(person, :quality_score, score)
+    end)
+  end
+
   defp assign_pagination_params(socket, params) do
     page = parse_int_param(params["page"], 1, min: 1)
     per_page = parse_int_param(params["per_page"], 50, min: 10, max: 100)
@@ -215,13 +265,16 @@ defmodule CinegraphWeb.MovieLive.Index do
   end
 
   defp assign_filter_params(socket, params) do
+    # Handle both array notation and regular params for genres
+    genres_param = params["genres[]"] || params["genres"]
+    
     socket
     |> assign(:search_term, params["search"] || "")
     |> assign(:filters, %{
-      genres: parse_list_param(params["genres"]),
-      countries: parse_list_param(params["countries"]),
-      languages: parse_list_param(params["languages"]),
-      lists: parse_list_param(params["lists"]),
+      genres: parse_list_param(genres_param),
+      countries: parse_list_param(params["countries[]"] || params["countries"]),
+      languages: parse_list_param(params["languages[]"] || params["languages"]),
+      lists: parse_list_param(params["lists[]"] || params["lists"]),
       year: params["year"],
       year_from: params["year_from"],
       year_to: params["year_to"],
@@ -281,7 +334,9 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp load_paginated_movies(socket) do
     %{page: page, per_page: per_page, sort: sort, filters: filters, search_term: search_term} =
       socket.assigns
-
+    
+    query_filters = stringify_filters_for_query(filters)
+    
     params =
       %{
         "page" => to_string(page),
@@ -289,7 +344,7 @@ defmodule CinegraphWeb.MovieLive.Index do
         "sort" => sort,
         "search" => search_term
       }
-      |> Map.merge(stringify_filters(filters))
+      |> Map.merge(query_filters)
 
     movies = Movies.list_movies(params)
     total_movies = Movies.count_movies(params)
@@ -313,12 +368,109 @@ defmodule CinegraphWeb.MovieLive.Index do
     |> Map.new()
   end
 
+  # For database queries - uses simple keys like "genres"
+  defp stringify_filters_for_query(filters) do
+    filters
+    |> Enum.flat_map(fn {k, v} ->
+      case {k, v} do
+        # Handle people_search specially to preserve nested structure for database
+        {:people_search, value} when is_map(value) ->
+          # For database queries, we need to pass the map directly
+          # not as nested parameters
+          [{"people_search", value}]
+        
+        {"people_search", value} when is_map(value) ->
+          # For database queries, we need to pass the map directly
+          # not as nested parameters
+          [{"people_search", value}]
+        
+        # Handle regular parameters - just convert to string key
+        {k, v} ->
+          stringified = stringify_value(k, v)
+          if is_nil(stringified) or stringified == "" or stringified == [] do
+            []
+          else
+            [{to_string(k), stringified}]
+          end
+      end
+    end)
+    |> Map.new()
+  end
+
+  # For URLs - uses array notation like "genres[]"
   defp stringify_filters(filters) do
     filters
-    |> Enum.map(fn {k, v} ->
-      {to_string(k), stringify_value(k, v)}
+    |> Enum.flat_map(fn {k, v} ->
+      case {k, v} do
+        # Handle list/array parameters with proper array notation
+        {key, value} when is_list(value) and value != [] ->
+          # For list parameters, we need to preserve the array notation
+          key_str =
+            case key do
+              :genres -> "genres[]"
+              :countries -> "countries[]"
+              :languages -> "languages[]"
+              :lists -> "lists[]"
+              # These stay as comma-separated
+              :actor_ids -> "actor_ids"
+              # These stay as comma-separated
+              :person_ids -> "person_ids"
+              _ when is_atom(key) -> to_string(key)
+              _ -> to_string(key)
+            end
+
+          [{key_str, value}]
+
+        # Handle people_search specially to preserve nested structure
+        {:people_search, value} when is_map(value) ->
+          case stringify_value(:people_search, value) do
+            nil ->
+              []
+
+            %{"people_ids" => people_ids} = result ->
+              # Return nested parameters
+              base = [{"people_search[people_ids]", people_ids}]
+
+              if Map.has_key?(result, "role_filter") do
+                base ++ [{"people_search[role_filter]", result["role_filter"]}]
+              else
+                base
+              end
+
+            _ ->
+              []
+          end
+
+        {"people_search", value} when is_map(value) ->
+          case stringify_value("people_search", value) do
+            nil ->
+              []
+
+            %{"people_ids" => people_ids} = result ->
+              # Return nested parameters
+              base = [{"people_search[people_ids]", people_ids}]
+
+              if Map.has_key?(result, "role_filter") do
+                base ++ [{"people_search[role_filter]", result["role_filter"]}]
+              else
+                base
+              end
+
+            _ ->
+              []
+          end
+
+        # Handle regular parameters
+        {k, v} ->
+          stringified = stringify_value(k, v)
+
+          if is_nil(stringified) or stringified == "" or stringified == [] do
+            []
+          else
+            [{to_string(k), stringified}]
+          end
+      end
     end)
-    |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
     |> Map.new()
   end
 
@@ -336,7 +488,7 @@ defmodule CinegraphWeb.MovieLive.Index do
       nil
     end
   end
-  
+
   defp stringify_value(_key, nil), do: nil
   defp stringify_value(_key, v) when is_list(v), do: Enum.join(v, ",")
   defp stringify_value(_key, true), do: "true"
@@ -348,21 +500,21 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp parse_list_param(""), do: []
 
   defp parse_list_param(param) when is_binary(param) do
-    # Only process comma-separated values if they contain actual commas
-    # This prevents single string values from being treated as lists
+    # Handle comma-separated values
     if String.contains?(param, ",") do
       String.split(param, ",", trim: true)
     else
-      # Single string value indicates the parameter format changed from array to string
-      # which means the filter should be removed (return empty list)
-      []
+      # Single value - keep it as a single-item list
+      # This ensures filters persist when rebuilt
+      [param]
     end
   end
 
   defp parse_list_param(param) when is_list(param), do: param
 
   defp parse_people_search_param(params) do
-    case {params["people_search"], params["people_search[people_ids]"], params["people_search[role_filter]"]} do
+    case {params["people_search"], params["people_search[people_ids]"],
+          params["people_search[role_filter]"]} do
       # New format with nested parameters - only if we have actual people
       {nil, people_ids, role_filter} when people_ids not in [nil, ""] ->
         base_map = %{"people_ids" => people_ids || ""}
@@ -373,27 +525,30 @@ defmodule CinegraphWeb.MovieLive.Index do
         else
           base_map
         end
-      
+
       # Handle case where only people_ids is provided (basic filter usage)
       {nil, people_ids, nil} when people_ids not in [nil, ""] ->
         # Basic filter usage - no role_filter at all
         %{"people_ids" => people_ids}
-      
+
       # Existing format (map) - only if it has people
       {people_search, _, _} when is_map(people_search) ->
         case people_search do
-          %{"people_ids" => people_ids} when people_ids not in [nil, ""] -> 
+          %{"people_ids" => people_ids} when people_ids not in [nil, ""] ->
             # Only preserve role_filter if it exists and is not the default "any"
             base_map = %{"people_ids" => people_ids}
             role_filter = people_search["role_filter"]
+
             if role_filter && role_filter != "any" do
               Map.put(base_map, "role_filter", role_filter)
             else
               base_map
             end
-          _ -> nil
+
+          _ ->
+            nil
         end
-      
+
       # No people search data - return nil to avoid unnecessary processing
       _ ->
         nil
@@ -632,8 +787,20 @@ defmodule CinegraphWeb.MovieLive.Index do
         genre_names =
           value
           |> Enum.map(fn id ->
-            genre = Enum.find(assigns.available_genres, &(&1.id == String.to_integer(id)))
-            if genre, do: genre.name, else: id
+            # Handle both string and list values
+            id_int =
+              case id do
+                id when is_binary(id) -> String.to_integer(id)
+                id when is_integer(id) -> id
+                _ -> nil
+              end
+
+            if id_int do
+              genre = Enum.find(assigns.available_genres, &(&1.id == id_int))
+              if genre, do: genre.name, else: id
+            else
+              to_string(id)
+            end
           end)
           |> Enum.join(", ")
 
@@ -645,8 +812,20 @@ defmodule CinegraphWeb.MovieLive.Index do
         country_names =
           value
           |> Enum.map(fn id ->
-            country = Enum.find(assigns.available_countries, &(&1.id == String.to_integer(id)))
-            if country, do: country.name, else: id
+            # Handle both string and list values
+            id_int =
+              case id do
+                id when is_binary(id) -> String.to_integer(id)
+                id when is_integer(id) -> id
+                _ -> nil
+              end
+
+            if id_int do
+              country = Enum.find(assigns.available_countries, &(&1.id == id_int))
+              if country, do: country.name, else: id
+            else
+              to_string(id)
+            end
           end)
           |> Enum.join(", ")
 
@@ -699,9 +878,9 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   # Helper functions for people search in basic filters
   defp get_selected_people_basic(filters) do
-    case filters["people_search"] do
+    case filters[:people_search] || filters["people_search"] do
       %{"people_ids" => people_ids} when people_ids != "" ->
-        ids = 
+        ids =
           people_ids
           |> String.split(",", trim: true)
           |> Enum.map(&String.trim/1)
@@ -710,14 +889,19 @@ defmodule CinegraphWeb.MovieLive.Index do
             {id, _} -> [id]
             :error -> []
           end)
-        
+
         if ids == [] do
           []
         else
           try do
             # get_people_by_ids returns a list directly, not a tuple
             people = Cinegraph.People.get_people_by_ids(ids)
-            if is_list(people), do: people, else: []
+
+            if is_list(people) do
+              enhance_people_with_metrics(people)
+            else
+              []
+            end
           rescue
             error ->
               require Logger
@@ -725,16 +909,166 @@ defmodule CinegraphWeb.MovieLive.Index do
               []
           end
         end
+
       _ ->
         []
     end
   end
 
-
   defp get_search_term_basic(filters) do
-    case filters["people_search"] do
+    case filters[:people_search] || filters["people_search"] do
       %{"search_term" => search_term} -> search_term || ""
       _ -> ""
     end
   end
+
+  # Unified Active Filter System
+
+  def has_any_active_filters(filters) do
+    has_active_basic_filters(filters) ||
+      AdvancedFilters.has_active_advanced_filters(filters) ||
+      has_active_people_search(filters)
+  end
+
+  def get_all_active_filters(filters, assigns) do
+    basic_filters = get_active_basic_filters(filters)
+    advanced_filters = AdvancedFilters.get_active_advanced_filters(filters)
+    people_filters = get_active_people_search_filters(filters)
+
+    []
+    |> append_normalized_filters(basic_filters, :basic, assigns)
+    |> append_normalized_filters(advanced_filters, :advanced, assigns)
+    |> append_normalized_filters(people_filters, :people, assigns)
+  end
+
+  defp append_normalized_filters(acc, filters, type, assigns) do
+    normalized =
+      Enum.map(filters, fn {key, value} ->
+        %{
+          key: to_string(key),
+          type: to_string(type),
+          label: format_unified_filter_label(key, type),
+          display_value: format_unified_filter_value(key, value, type, assigns),
+          removable: true
+        }
+      end)
+
+    acc ++ normalized
+  end
+
+  def has_active_people_search(filters) do
+    case filters[:people_search] || filters["people_search"] do
+      %{"people_ids" => people_ids} -> people_ids not in [nil, ""]
+      _ -> false
+    end
+  end
+
+  def get_active_people_search_filters(filters) do
+    case filters[:people_search] || filters["people_search"] do
+      %{"people_ids" => people_ids} when people_ids not in [nil, ""] ->
+        [{"people_search", people_ids}]
+
+      _ ->
+        []
+    end
+  end
+
+  defp format_unified_filter_label(key, type) do
+    case {type, key} do
+      {:basic, key} when is_atom(key) ->
+        format_basic_filter_label(key)
+
+      {:basic, key} when is_binary(key) ->
+        try do
+          format_basic_filter_label(String.to_existing_atom(key))
+        rescue
+          ArgumentError -> Phoenix.Naming.humanize(key)
+        end
+
+      {:advanced, key} ->
+        AdvancedFilters.format_filter_label(key)
+
+      {:people, "people_search"} ->
+        "Cast & Crew"
+
+      _ ->
+        Phoenix.Naming.humanize(to_string(key))
+    end
+  end
+
+  defp format_unified_filter_value(key, value, type, assigns) do
+    case {type, key} do
+      {:basic, key} when is_atom(key) ->
+        format_basic_filter_value(key, value, assigns)
+
+      {:basic, key} when is_binary(key) ->
+        try do
+          atom_key = String.to_existing_atom(key)
+          format_basic_filter_value(atom_key, value, assigns)
+        rescue
+          ArgumentError -> to_string(value)
+        end
+
+      {:advanced, key} ->
+        AdvancedFilters.format_filter_value(key, value)
+
+      {:people, "people_search"} ->
+        format_people_search_value(value)
+
+      _ ->
+        to_string(value)
+    end
+  end
+
+  defp format_people_search_value(people_ids) when is_binary(people_ids) do
+    ids =
+      people_ids
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.map(&Integer.parse/1)
+      |> Enum.flat_map(fn
+        {id, _} -> [id]
+        :error -> []
+      end)
+
+    if ids == [] do
+      "No people selected"
+    else
+      try do
+        people = Cinegraph.People.get_people_by_ids(ids)
+        names = Enum.map(people, & &1.name)
+
+        case length(names) do
+          0 -> "No people found"
+          1 -> hd(names)
+          2 -> Enum.join(names, " & ")
+          count when count <= 3 -> Enum.join(names, ", ")
+          count -> "#{hd(names)} & #{count - 1} others"
+        end
+      rescue
+        _ -> "#{length(ids)} people selected"
+      end
+    end
+  end
+
+  # Filter removal helpers
+
+  defp remove_basic_filter(filters, filter_key) when is_binary(filter_key) do
+    try do
+      atom_key = String.to_existing_atom(filter_key)
+      Map.delete(filters, atom_key)
+    rescue
+      ArgumentError -> filters
+    end
+  end
+
+  defp remove_advanced_filter(filters, filter_key) do
+    Map.delete(filters, filter_key)
+  end
+
+  defp remove_people_filter(filters, "people_search") do
+    Map.delete(filters, "people_search")
+  end
+
+  defp remove_people_filter(filters, _), do: filters
 end
