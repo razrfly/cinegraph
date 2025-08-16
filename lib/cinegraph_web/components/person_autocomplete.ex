@@ -61,7 +61,6 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
     query = params["value"] || params["search"] || params["query"] || ""
     handle_search_query(query, socket)
   end
-
   def handle_event("select_person", %{"person_id" => person_id}, socket) do
     person_id = String.to_integer(person_id)
     
@@ -171,6 +170,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
           Role Filter
         </label>
         <select
+          name="role"
           phx-change="role_changed"
           phx-target={@myself}
           value={@selected_role}
@@ -310,21 +310,51 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
     """
   end
 
-  defp parse_selected_people(selected) when is_list(selected), do: selected
-  defp parse_selected_people(selected) when is_binary(selected) do
-    # Parse comma-separated IDs and fetch people
-    if selected != "" do
-      ids = 
+  defp parse_selected_people(selected) when is_list(selected) do
+    cond do
+      selected == [] ->
+        []
+      Enum.all?(selected, &match?(%{id: _}, &1)) ->
+        # Already person structs
         selected
-        |> String.split(",")
-        |> Enum.map(&String.trim/1)
-        |> Enum.map(&String.to_integer/1)
-        |> Enum.reject(&is_nil/1)
-      
-      People.get_people_by_ids(ids)
-    else
-      []
+      Enum.all?(selected, &is_integer/1) ->
+        # List of integer IDs
+        People.get_people_by_ids(selected)
+      Enum.all?(selected, &is_binary/1) ->
+        # List of string IDs
+        ids =
+          selected
+          |> Enum.map(&Integer.parse/1)
+          |> Enum.flat_map(fn
+            {id, _} -> [id]
+            :error -> []
+          end)
+        if ids == [], do: [], else: People.get_people_by_ids(ids)
+      true ->
+        []
     end
   end
+  
+  defp parse_selected_people(selected) when is_binary(selected) do
+    # Parse comma-separated IDs and fetch people
+    ids =
+      selected
+      |> String.trim()
+      |> case do
+        "" -> []
+        s ->
+          s
+          |> String.split(",", trim: true)
+          |> Enum.map(&String.trim/1)
+          |> Enum.map(&Integer.parse/1)
+          |> Enum.flat_map(fn
+            {id, _} -> [id]
+            :error -> []
+          end)
+      end
+    
+    if ids == [], do: [], else: People.get_people_by_ids(ids)
+  end
+  
   defp parse_selected_people(_), do: []
 end
