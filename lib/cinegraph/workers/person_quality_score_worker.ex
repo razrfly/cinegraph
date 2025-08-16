@@ -110,33 +110,8 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
     end
   end
 
-  @impl Oban.Worker 
-  def perform(%Oban.Job{args: %{"batch" => "health_check", "trigger" => trigger}}) do
-    Logger.info("Starting PQS system health check (trigger: #{trigger})")
-    
-    # Direct health check without calling scheduler to avoid circular dependency
-    alias Cinegraph.Metrics.{PQSMonitoring, PQSTriggerStrategy}
-    
-    coverage = PQSMonitoring.get_coverage_metrics()
-    performance = PQSMonitoring.get_performance_metrics()
-    
-    # Check coverage and trigger emergency if needed
-    if coverage.people_without_pqs_percent > 10.0 do
-      reason = "Coverage below threshold: #{coverage.people_without_pqs_percent}% people without PQS"
-      Logger.warning("PQS system health check failed: #{reason}")
-      PQSTriggerStrategy.trigger_quality_assurance_recalculation(reason)
-    end
-    
-    # Check for consecutive failures
-    if performance.recent_failure_count >= 5 do
-      reason = "High failure rate: #{performance.recent_failure_count} consecutive failures"
-      Logger.warning("PQS system health check failed: #{reason}")
-      PQSTriggerStrategy.trigger_quality_assurance_recalculation(reason)
-    end
-    
-    Logger.info("PQS health check completed")
-    :ok
-  end
+  # Health check removed - handled by PQSScheduler.check_system_health/0 via cron
+  # to avoid duplicate triggers of emergency recalculations
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"batch" => "stale_cleanup", "person_ids" => person_ids, "trigger" => trigger, "max_age_days" => max_age_days}}) do

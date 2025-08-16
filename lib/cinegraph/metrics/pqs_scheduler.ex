@@ -125,7 +125,18 @@ defmodule Cinegraph.Metrics.PQSScheduler do
 
   @doc """
   Get cron configuration for Oban scheduling.
-  Call this from application configuration.
+  
+  To enable automated PQS scheduling, add this to your Oban config:
+  
+      config :cinegraph, Oban,
+        plugins: [
+          # ... other plugins ...
+          {Oban.Plugins.Cron, 
+            crontab: Cinegraph.Metrics.PQSScheduler.get_cron_config()}
+        ]
+  
+  Note: The health check is handled here centrally to avoid duplicate 
+  triggers. Do not schedule health_check jobs directly to the worker.
   """
   def get_cron_config do
     [
@@ -135,7 +146,7 @@ defmodule Cinegraph.Metrics.PQSScheduler do
       {"0 2 * * SUN", __MODULE__, :schedule_weekly_full, []},
       # Monthly deep recalculation at 1 AM first Sunday of month
       {"0 1 1-7 * SUN", __MODULE__, :schedule_monthly_deep, []},
-      # Health check every 6 hours
+      # Health check every 6 hours (single source of truth for health checks)
       {"0 */6 * * *", __MODULE__, :check_system_health, []},
       # Stale cleanup every 12 hours
       {"0 */12 * * *", __MODULE__, :schedule_stale_cleanup, []}
