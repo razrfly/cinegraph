@@ -123,7 +123,7 @@
                 <div class="mt-3 flex flex-wrap gap-2">
                   <%= for movie <- Enum.take(Map.get(result, :movies), 5) do %>
                     <.link
-                      navigate={~p"/movies/#{movie.id}"}
+                      navigate={~p"/movies/#{movie.slug || movie.id}"}
                       class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                     >
                       {movie.title} ({movie.release_date.year})
