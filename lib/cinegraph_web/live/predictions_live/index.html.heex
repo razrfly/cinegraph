@@ -1,0 +1,343 @@
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">2020s Movie Predictions</h1>
+    <p class="mt-2 text-gray-600">Which films will make future 1001 Movies lists?</p>
+  </div>
+
+  <%= if @loading do %>
+    <div class="flex justify-center items-center py-12">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span class="ml-3 text-gray-600">Recalculating predictions...</span>
+    </div>
+  <% end %>
+
+  <%= unless @loading do %>
+    <!-- Algorithm Confidence Banner -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-medium text-blue-900">Algorithm Confidence</h3>
+          <p class="text-blue-800">
+            <span class="font-bold text-2xl"><%= @validation_result.overall_accuracy %>%</span>
+            accuracy based on historical data
+          </p>
+        </div>
+        <button
+          phx-click="toggle_weight_tuner"
+          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        >
+          <%= if @show_weight_tuner, do: "Hide", else: "Tune Algorithm" %>
+        </button>
+      </div>
+    </div>
+
+    <!-- Weight Tuner Panel -->
+    <%= if @show_weight_tuner do %>
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <h3 class="text-lg font-semibold mb-4">Algorithm Weight Tuner</h3>
+        
+        <form phx-submit="update_weights" class="space-y-4">
+          <%= for {criterion, weight} <- @algorithm_weights do %>
+            <div class="flex items-center space-x-4">
+              <label class="w-40 text-sm font-medium text-gray-700">
+                <%= criterion_label(criterion) %>:
+              </label>
+              <input
+                type="range"
+                name={to_string(criterion)}
+                min="0"
+                max="50"
+                step="1"
+                value={round(weight * 100)}
+                class="flex-1"
+              />
+              <span class="w-12 text-sm text-gray-600"><%= round(weight * 100) %>%</span>
+            </div>
+          <% end %>
+          
+          <div class="flex space-x-3 pt-4">
+            <button
+              type="submit"
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Recalculate
+            </button>
+            <button
+              type="button"
+              phx-click="reset_weights"
+              class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+            >
+              Reset to Default
+            </button>
+          </div>
+        </form>
+      </div>
+    <% end %>
+
+    <!-- View Mode Toggle -->
+    <div class="mb-6 flex space-x-4">
+      <button
+        phx-click="switch_view"
+        phx-value-mode="predictions"
+        class={[
+          "px-4 py-2 rounded-lg font-medium transition-colors",
+          @view_mode == :predictions && "bg-blue-600 text-white",
+          @view_mode != :predictions && "bg-gray-200 text-gray-700 hover:bg-gray-300"
+        ]}
+      >
+        2020s Predictions
+      </button>
+      <button
+        phx-click="switch_view"
+        phx-value-mode="validation"
+        class={[
+          "px-4 py-2 rounded-lg font-medium transition-colors",
+          @view_mode == :validation && "bg-blue-600 text-white",
+          @view_mode != :validation && "bg-gray-200 text-gray-700 hover:bg-gray-300"
+        ]}
+      >
+        Historical Validation
+      </button>
+      <button
+        phx-click="switch_view"
+        phx-value-mode="confirmed"
+        class={[
+          "px-4 py-2 rounded-lg font-medium transition-colors",
+          @view_mode == :confirmed && "bg-blue-600 text-white",
+          @view_mode != :confirmed && "bg-gray-200 text-gray-700 hover:bg-gray-300"
+        ]}
+      >
+        Confirmed Additions
+      </button>
+    </div>
+
+    <!-- Predictions View -->
+    <%= if @view_mode == :predictions do %>
+      <div class="bg-white rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-semibold mb-4">
+          Top <%= length(@predictions_result.predictions) %> 2020s Movies Most Likely to Be Added
+        </h2>
+        
+        <div class="space-y-2">
+          <div class="grid grid-cols-12 gap-4 text-sm font-medium text-gray-500 border-b pb-2">
+            <div class="col-span-1">Rank</div>
+            <div class="col-span-5">Movie</div>
+            <div class="col-span-2">Year</div>
+            <div class="col-span-2">Likelihood</div>
+            <div class="col-span-2">Status</div>
+          </div>
+          
+          <%= for {prediction, index} <- Enum.with_index(@predictions_result.predictions, 1) do %>
+            <div
+              class="grid grid-cols-12 gap-4 py-3 border-b hover:bg-gray-50 cursor-pointer transition-colors"
+              phx-click="select_movie"
+              phx-value-movie_id={prediction.id}
+            >
+              <div class="col-span-1 text-gray-600 font-medium"><%= index %></div>
+              
+              <div class="col-span-5">
+                <div class="font-medium text-gray-900"><%= prediction.title %></div>
+              </div>
+              
+              <div class="col-span-2 text-gray-600">
+                <%= prediction.year %>
+              </div>
+              
+              <div class="col-span-2">
+                <% {likelihood_text, likelihood_class} = format_likelihood(prediction.prediction.likelihood_percentage) %>
+                <span class={likelihood_class}><%= likelihood_text %></span>
+              </div>
+              
+              <div class="col-span-2">
+                <% {status_text, status_class} = format_status(prediction.status) %>
+                <span class={status_class}><%= status_text %></span>
+              </div>
+            </div>
+          <% end %>
+        </div>
+        
+        <div class="mt-6 text-sm text-gray-600">
+          <p>Total 2020s candidates analyzed: <%= @predictions_result.total_candidates %></p>
+          <p>Algorithm confidence: <%= @validation_result.overall_accuracy %>% based on historical validation</p>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Historical Validation View -->
+    <%= if @view_mode == :validation do %>
+      <div class="space-y-6">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <h2 class="text-xl font-semibold mb-4">Algorithm Validation Results</h2>
+          <p class="text-gray-600 mb-6">Historical accuracy by decade (why you should trust our predictions):</p>
+          
+          <div class="space-y-4">
+            <%= for decade_result <- @validation_result.decade_results do %>
+              <div class="border rounded-lg p-4">
+                <div class="flex justify-between items-center mb-2">
+                  <h3 class="text-lg font-medium text-gray-900"><%= decade_result.decade %>s Movies</h3>
+                  <span class={["text-lg font-bold", accuracy_color(decade_result.accuracy_percentage)]}>
+                    <%= decade_result.accuracy_percentage %>% ✅
+                  </span>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <div class="text-gray-600">Total in 1001 List</div>
+                    <div class="font-semibold"><%= decade_result.total_1001_movies %> movies</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-600">Correctly Predicted</div>
+                    <div class="font-semibold"><%= decade_result.correctly_predicted %> movies</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-600">False Positives</div>
+                    <div class="font-semibold"><%= length(decade_result.false_positives) %> movies</div>
+                  </div>
+                  <div>
+                    <div class="text-gray-600">Misses</div>
+                    <div class="font-semibold"><%= length(decade_result.missed_movies) %> movies</div>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          </div>
+          
+          <div class="mt-6 p-4 bg-green-50 rounded-lg">
+            <h3 class="font-medium text-green-900 mb-2">Overall Algorithm Accuracy</h3>
+            <p class="text-green-800">
+              <span class="text-2xl font-bold"><%= @validation_result.overall_accuracy %>%</span>
+              - This is why you should trust our 2020s predictions
+            </p>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Confirmed Additions View -->
+    <%= if @view_mode == :confirmed do %>
+      <div class="bg-white rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-semibold mb-4">2020s Movies Already on 1001 Movies List</h2>
+        <p class="text-gray-600 mb-6">These films validate our prediction algorithm:</p>
+        
+        <div class="space-y-3">
+          <%= for confirmed <- @confirmed_additions do %>
+            <div class="flex justify-between items-center py-3 border-b">
+              <div>
+                <div class="font-medium text-gray-900"><%= confirmed.title %></div>
+                <div class="text-sm text-gray-600"><%= confirmed.year %></div>
+              </div>
+              <div class="text-right">
+                <% {likelihood_text, likelihood_class} = format_likelihood(confirmed.prediction.likelihood_percentage) %>
+                <div class={["font-semibold", likelihood_class]}>
+                  <%= likelihood_text %> predicted
+                </div>
+                <div class="text-sm text-green-600">✅ Confirmed</div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Movie Detail Modal -->
+    <%= if @selected_movie do %>
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div class="p-6">
+            <div class="flex justify-between items-start mb-4">
+              <div>
+                <h2 class="text-2xl font-bold text-gray-900"><%= @selected_movie.movie.title %></h2>
+                <p class="text-gray-600">
+                  <%= extract_year(@selected_movie.movie.release_date) %> • 
+                  <%= @selected_movie.prediction.likelihood_percentage %>% Likelihood
+                </p>
+              </div>
+              <button
+                phx-click="close_movie_detail"
+                class="text-gray-400 hover:text-gray-600"
+              >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            
+            <div class="mb-6">
+              <% {status_text, status_class} = format_status(@selected_movie.status) %>
+              <span class={["px-3 py-1 rounded-full text-sm font-medium", status_class]}>
+                <%= status_text %>
+              </span>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <!-- Scoring Breakdown -->
+              <div>
+                <h3 class="text-lg font-semibold mb-3">Scoring Breakdown</h3>
+                <div class="space-y-3">
+                  <%= for breakdown <- @selected_movie.prediction.breakdown do %>
+                    <div class="border rounded-lg p-3">
+                      <div class="flex justify-between items-center mb-1">
+                        <span class="font-medium text-gray-900">
+                          <%= criterion_label(breakdown.criterion) %>
+                        </span>
+                        <span class="font-bold text-blue-600">
+                          <%= breakdown.weighted_points %> points
+                        </span>
+                      </div>
+                      <div class="text-sm text-gray-600">
+                        Raw Score: <%= breakdown.raw_score %>/100 × 
+                        Weight: <%= round(breakdown.weight * 100) %>%
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+                
+                <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <div class="text-lg font-semibold text-blue-900">
+                    Total Score: <%= @selected_movie.prediction.total_score %>/100
+                  </div>
+                  <div class="text-blue-800">
+                    Likelihood: <%= @selected_movie.prediction.likelihood_percentage %>%
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Historical Patterns & Timeline -->
+              <div>
+                <h3 class="text-lg font-semibold mb-3">Historical Patterns</h3>
+                <div class="space-y-3">
+                  <%= for pattern <- @selected_movie.similar_patterns do %>
+                    <div class="bg-gray-50 p-3 rounded">
+                      <div class="font-medium text-gray-900"><%= pattern.title %></div>
+                      <div class="text-sm text-gray-600">
+                        <%= pattern.year %> → Added <%= pattern.added_year %> 
+                        (<%= pattern.years_later %> years later)
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+                
+                <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
+                  <h4 class="font-medium text-yellow-900">Estimated Addition Timeline</h4>
+                  <p class="text-yellow-800"><%= @selected_movie.estimated_timeline %></p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
+</div>
+
+<script>
+  // Auto-update range input displays
+  document.addEventListener('input', function(e) {
+    if (e.target.type === 'range') {
+      const span = e.target.parentNode.querySelector('span');
+      if (span) {
+        span.textContent = e.target.value + '%';
+      }
+    }
+  });
+</script>
