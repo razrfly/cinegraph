@@ -16,6 +16,9 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       validation_result = PredictionsCache.get_validation(default_profile)
       confirmed_count = PredictionsCache.get_confirmed_additions_count(predictions_result)
       
+      # Load profile comparison data (cached)
+      profile_comparison = PredictionsCache.get_profile_comparison()
+      
       # Optionally enable debug logging during development only (safe in releases)
       if @dev_logging? do
         require Logger
@@ -40,6 +43,8 @@ defmodule CinegraphWeb.PredictionsLive.Index do
        |> assign(:available_profiles, ScoringService.get_all_profiles())
        |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(default_profile))
        |> assign(:show_weight_tuner, false)
+       |> assign(:profile_comparison, profile_comparison)
+       |> assign(:show_comparison, false)
        |> assign(:last_updated, DateTime.utc_now())}
     rescue
       error ->
@@ -82,6 +87,8 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> assign(:available_profiles, ScoringService.get_all_profiles() || [])
          |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(default_profile) || %{popular_opinion: 0.2, critical_acclaim: 0.2, industry_recognition: 0.2, cultural_impact: 0.2, people_quality: 0.2})
          |> assign(:show_weight_tuner, false)
+         |> assign(:profile_comparison, nil)
+         |> assign(:show_comparison, false)
          |> assign(:last_updated, DateTime.utc_now())}
     end
   end
@@ -108,6 +115,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       case mode do
         "predictions" -> :predictions
         "validation" -> :validation
+        "comparison" -> :comparison
         _ -> socket.assigns.view_mode
       end
     {:noreply, assign(socket, :view_mode, view_mode)}
@@ -154,12 +162,30 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   def handle_event("update_weights", params, socket) do
     try do
       # Extract weights from form params with validation
+      # Define helper function inline for parsing weight parameters
+      parse_param = fn value ->
+        cond do
+          is_nil(value) -> 0.0
+          is_binary(value) ->
+            case Integer.parse(value) do
+              {int_val, ""} -> int_val / 100.0
+              _ -> 
+                case Float.parse(value) do
+                  {float_val, ""} -> float_val / 100.0
+                  _ -> 0.0
+                end
+            end
+          is_number(value) -> value / 100.0
+          true -> 0.0
+        end
+      end
+      
       new_weights = %{
-        popular_opinion: String.to_float(params["popular_opinion"]) / 100,
-        critical_acclaim: String.to_float(params["critical_acclaim"]) / 100,
-        industry_recognition: String.to_float(params["industry_recognition"]) / 100,
-        cultural_impact: String.to_float(params["cultural_impact"]) / 100,
-        people_quality: String.to_float(params["people_quality"]) / 100
+        popular_opinion: parse_param.(params["popular_opinion"]),
+        critical_acclaim: parse_param.(params["critical_acclaim"]),
+        industry_recognition: parse_param.(params["industry_recognition"]),
+        cultural_impact: parse_param.(params["cultural_impact"]),
+        people_quality: parse_param.(params["people_quality"])
       }
       
       # Validate weights sum to approximately 1.0
