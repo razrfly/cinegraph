@@ -79,7 +79,7 @@ defmodule Cinegraph.Imports.ImportStats do
 
   defp update_import_stats do
     current_time = DateTime.utc_now()
-    current_movie_count = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
+    current_movie_count = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count, :id)
 
     prev_stats =
       case :ets.lookup(@table_name, :current_stats) do
@@ -128,7 +128,8 @@ defmodule Cinegraph.Imports.ImportStats do
       from(j in Oban.Job,
         where: j.queue == ^queue_name and j.state in ["available", "executing"]
       ),
-      :count
+      :count,
+      :id
     )
   end
 
@@ -141,19 +142,22 @@ defmodule Cinegraph.Imports.ImportStats do
       available =
         Cinegraph.Repo.aggregate(
           from(j in Oban.Job, where: j.queue == ^queue and j.state == "available"),
-          :count
+          :count,
+          :id
         )
 
       executing =
         Cinegraph.Repo.aggregate(
           from(j in Oban.Job, where: j.queue == ^queue and j.state == "executing"),
-          :count
+          :count,
+          :id
         )
 
       completed =
         Cinegraph.Repo.aggregate(
           from(j in Oban.Job, where: j.queue == ^queue and j.state == "completed"),
-          :count
+          :count,
+          :id
         )
 
       %{
