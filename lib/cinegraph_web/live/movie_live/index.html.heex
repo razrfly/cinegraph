@@ -236,6 +236,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Genres
               </label>
+              <input type="hidden" name="filters[genres][]" value="" />
               <.multi_select_dropdown
                 id="genres-select"
                 name="filters[genres][]"
@@ -247,27 +248,13 @@
               />
             </div>
             
-<!-- Country Filter -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Production Countries
-              </label>
-              <.multi_select_dropdown
-                id="countries-select"
-                name="filters[countries][]"
-                options={@available_countries}
-                selected={@filters.countries || []}
-                placeholder="Select countries..."
-                label_field={:name}
-                value_field={:id}
-              />
-            </div>
             
 <!-- Language Filter -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Languages
               </label>
+              <input type="hidden" name="filters[languages][]" value="" />
               <.multi_select_dropdown
                 id="languages-select"
                 name="filters[languages][]"
@@ -284,6 +271,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Lists
               </label>
+              <input type="hidden" name="filters[lists][]" value="" />
               <.multi_select_dropdown
                 id="lists-select"
                 name="filters[lists][]"
@@ -295,31 +283,38 @@
               />
             </div>
             
-<!-- Year Range -->
+            <!-- Festival Organization Filter (moved from advanced) -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">
-                Year Range
+                Festivals/Awards
               </label>
-              <div class="flex gap-2">
-                <input
-                  type="number"
-                  name="filters[year_from]"
-                  value={@filters.year_from}
-                  placeholder="From"
-                  min="1900"
-                  max={Date.utc_today().year}
-                  class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-                <input
-                  type="number"
-                  name="filters[year_to]"
-                  value={@filters.year_to}
-                  placeholder="To"
-                  min="1900"
-                  max={Date.utc_today().year}
-                  class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
+              <input type="hidden" name="filters[festivals][]" value="" />
+              <.multi_select_dropdown
+                id="festivals-select"
+                name="filters[festivals][]"
+                options={@festival_organizations}
+                selected={@filters.festivals || []}
+                placeholder="Select festivals..."
+                label_field={:name}
+                value_field={:id}
+              />
+            </div>
+            
+            <!-- Rating Threshold (moved from advanced) -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Rating Quality
+              </label>
+              <select
+                name="filters[rating_preset]"
+                value={@filters.rating_preset}
+                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              >
+                <option value="">Any Rating</option>
+                <option value="highly_rated" selected={@filters.rating_preset == "highly_rated"}>Highly Rated (7.5+)</option>
+                <option value="well_reviewed" selected={@filters.rating_preset == "well_reviewed"}>Well Reviewed (6.0+)</option>
+                <option value="critically_acclaimed" selected={@filters.rating_preset == "critically_acclaimed"}>Critically Acclaimed</option>
+              </select>
             </div>
             
 <!-- Decade Filter -->
@@ -343,50 +338,6 @@
               </select>
             </div>
             
-<!-- Runtime Range -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Runtime (minutes)
-              </label>
-              <div class="flex gap-2">
-                <input
-                  type="number"
-                  name="filters[runtime_min]"
-                  value={@filters.runtime_min}
-                  placeholder="Min"
-                  min="0"
-                  max="500"
-                  class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-                <input
-                  type="number"
-                  name="filters[runtime_max]"
-                  value={@filters.runtime_max}
-                  placeholder="Max"
-                  min="0"
-                  max="500"
-                  class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-            </div>
-            
-<!-- Minimum Rating -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                Minimum Rating
-              </label>
-              <input
-                type="number"
-                name="filters[rating_min]"
-                value={@filters.rating_min}
-                placeholder="e.g., 7.0"
-                min="0"
-                max="10"
-                step="0.1"
-                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              />
-            </div>
-            
 <!-- People Search (moved from advanced filters) -->
             <div class="col-span-1 md:col-span-2 lg:col-span-3 xl:col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -396,8 +347,8 @@
                 module={CinegraphWeb.Components.PersonAutocomplete}
                 id="people-search-basic"
                 field_name="filters[people_search]"
-                selected_people={get_selected_people_basic(@filters)}
-                search_term={get_search_term_basic(@filters)}
+                selected_people={[]}
+                search_term=""
               />
             </div>
             
@@ -445,7 +396,6 @@
             director_options={@director_options}
             actor_options={@actor_options}
             person_options={@person_options}
-            form={@form}
             myself={nil}
           />
         </form>

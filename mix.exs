@@ -65,7 +65,9 @@ defmodule Cinegraph.MixProject do
       {:oban_web, "~> 2.11"},
       {:dotenvy, "~> 0.8.0"},
       {:number, "~> 1.0"},
-      {:ecto_autoslug_field, "~> 3.1"}
+      {:ecto_autoslug_field, "~> 3.1"},
+      {:flop, "~> 0.26"},
+      {:flop_phoenix, "~> 0.22"}
     ]
   end
 

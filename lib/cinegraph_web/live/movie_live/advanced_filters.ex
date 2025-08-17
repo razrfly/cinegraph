@@ -9,23 +9,90 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   def advanced_filters(assigns) do
     ~H"""
     <div class="space-y-6">
-      <!-- Rating Quality Section -->
+      <!-- Date & Time Filters (moved from basic) -->
       <div class="border-t pt-4">
-        <h3 class="text-sm font-semibold text-gray-900 mb-3">⭐ Rating Quality</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <h3 class="text-sm font-semibold text-gray-900 mb-3">📅 Date & Duration</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Year Range -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Rating Threshold
+              Year Range
+            </label>
+            <div class="flex gap-2">
+              <input
+                type="number"
+                name="filters[year_from]"
+                value={@filters["year_from"]}
+                placeholder="From"
+                min="1900"
+                max={Date.utc_today().year}
+                class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+              <input
+                type="number"
+                name="filters[year_to]"
+                value={@filters["year_to"]}
+                placeholder="To"
+                min="1900"
+                max={Date.utc_today().year}
+                class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+            </div>
+          </div>
+
+          <!-- Runtime Range -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Runtime (minutes)
+            </label>
+            <div class="flex gap-2">
+              <input
+                type="number"
+                name="filters[runtime_min]"
+                value={@filters["runtime_min"]}
+                placeholder="Min"
+                min="0"
+                max="500"
+                class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+              <input
+                type="number"
+                name="filters[runtime_max]"
+                value={@filters["runtime_max"]}
+                placeholder="Max"
+                min="0"
+                max="500"
+                class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Production Details (moved from basic) -->
+      <div class="border-t pt-4">
+        <h3 class="text-sm font-semibold text-gray-900 mb-3">🌍 Production Details</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Country Filter -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Production Countries
             </label>
             <select
-              name="filters[rating_preset]"
-              value={@filters["rating_preset"]}
+              name="filters[country_id]"
+              value={@filters["country_id"]}
               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
-              <option value="">Any Rating</option>
-              <option value="highly_rated">Highly Rated (7.5+ avg)</option>
-              <option value="well_reviewed">Well Reviewed (6.0+ avg)</option>
-              <option value="critically_acclaimed">Critically Acclaimed (Critics' Choice)</option>
+              <option value="">All Countries</option>
+              <option value="US">United States</option>
+              <option value="GB">United Kingdom</option>
+              <option value="FR">France</option>
+              <option value="DE">Germany</option>
+              <option value="JP">Japan</option>
+              <option value="KR">South Korea</option>
+              <option value="IN">India</option>
+              <option value="CN">China</option>
+              <!-- Add more countries as needed -->
             </select>
           </div>
         </div>
@@ -75,7 +142,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       
     <!-- Traditional Awards Section (Simplified) -->
       <div class="border-t pt-4">
-        <h3 class="text-sm font-semibold text-gray-900 mb-3">🎪 Traditional Awards</h3>
+        <h3 class="text-sm font-semibold text-gray-900 mb-3">🎪 Award Filters</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Award Status -->
           <div>
@@ -94,302 +161,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
               <option value="multiple_awards">Multiple Awards</option>
             </select>
           </div>
-          
-    <!-- Festival Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Festival/Organization
-            </label>
-            <select
-              name="filters[festival_id]"
-              value={@filters["festival_id"]}
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-            >
-              <option value="">All Festivals</option>
-              <%= for org <- @festival_organizations do %>
-                <option value={org.id}>
-                  {org.name} ({org.abbreviation})
-                </option>
-              <% end %>
-            </select>
-          </div>
         </div>
-      </div>
-      
-    <!-- Legacy Filters (Collapsible) -->
-      <div class="border-t pt-4">
-        <details class="group">
-          <summary class="flex items-center justify-between cursor-pointer text-sm font-semibold text-gray-900 mb-3">
-            <span>⚙️ Legacy Filters (Advanced Users)</span>
-            <svg
-              class="w-4 h-4 text-gray-500 group-open:rotate-180 transition-transform"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </summary>
-          <div class="mt-4 space-y-4">
-            <!-- Legacy People IDs -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Director ID
-                </label>
-                <input
-                  type="number"
-                  name="filters[director_id]"
-                  value={@filters["director_id"]}
-                  placeholder="Director ID"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Actor IDs
-                </label>
-                <input
-                  type="text"
-                  name="filters[actor_ids]"
-                  value={@filters["actor_ids"]}
-                  placeholder="Comma-separated IDs"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Any Cast/Crew IDs
-                </label>
-                <input
-                  type="text"
-                  name="filters[person_ids]"
-                  value={@filters["person_ids"]}
-                  placeholder="Comma-separated IDs"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-            </div>
-            
-    <!-- Legacy Rating Ranges -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  TMDb Rating Range
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    type="number"
-                    name="filters[tmdb_min]"
-                    value={@filters["tmdb_min"]}
-                    placeholder="Min"
-                    min="0"
-                    max="10"
-                    step="0.1"
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                  <input
-                    type="number"
-                    name="filters[tmdb_max]"
-                    value={@filters["tmdb_max"]}
-                    placeholder="Max"
-                    min="0"
-                    max="10"
-                    step="0.1"
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  IMDb Rating Range
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    type="number"
-                    name="filters[imdb_min]"
-                    value={@filters["imdb_min"]}
-                    placeholder="Min"
-                    min="0"
-                    max="10"
-                    step="0.1"
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                  <input
-                    type="number"
-                    name="filters[imdb_max]"
-                    value={@filters["imdb_max"]}
-                    placeholder="Max"
-                    min="0"
-                    max="10"
-                    step="0.1"
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Metacritic Range
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    type="number"
-                    name="filters[metacritic_min]"
-                    value={@filters["metacritic_min"]}
-                    placeholder="Min"
-                    min="0"
-                    max="100"
-                    step="1"
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                  <input
-                    type="number"
-                    name="filters[metacritic_max]"
-                    value={@filters["metacritic_max"]}
-                    placeholder="Max"
-                    min="0"
-                    max="100"
-                    step="1"
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Rotten Tomatoes
-                </label>
-                <div class="space-y-1">
-                  <input
-                    type="number"
-                    name="filters[rt_critics_min]"
-                    value={@filters["rt_critics_min"]}
-                    placeholder="Critics Min %"
-                    min="0"
-                    max="100"
-                    step="1"
-                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                  <input
-                    type="number"
-                    name="filters[rt_audience_min]"
-                    value={@filters["rt_audience_min"]}
-                    placeholder="Audience Min %"
-                    min="0"
-                    max="100"
-                    step="1"
-                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-            
-    <!-- Legacy Discovery Metrics -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  🎬 Popular Opinion <span class="text-xs text-gray-500 ml-1">(0-1)</span>
-                </label>
-                <input
-                  type="number"
-                  name="filters[popular_opinion_min]"
-                  value={@filters["popular_opinion_min"]}
-                  placeholder="Min score"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  🏆 Critical Acclaim <span class="text-xs text-gray-500 ml-1">(0-1)</span>
-                </label>
-                <input
-                  type="number"
-                  name="filters[critical_acclaim_min]"
-                  value={@filters["critical_acclaim_min"]}
-                  placeholder="Min score"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  🌟 Industry Recognition <span class="text-xs text-gray-500 ml-1">(0-1)</span>
-                </label>
-                <input
-                  type="number"
-                  name="filters[industry_recognition_min]"
-                  value={@filters["industry_recognition_min"]}
-                  placeholder="Min score"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  📚 Cultural Impact <span class="text-xs text-gray-500 ml-1">(0-1)</span>
-                </label>
-                <input
-                  type="number"
-                  name="filters[cultural_impact_min]"
-                  value={@filters["cultural_impact_min"]}
-                  placeholder="Min score"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                />
-              </div>
-            </div>
-            
-    <!-- Legacy Award Year Range -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Award Year Range
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    type="number"
-                    name="filters[award_year_from]"
-                    value={@filters["award_year_from"]}
-                    placeholder="From"
-                    min="1920"
-                    max={Date.utc_today().year}
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                  <input
-                    type="number"
-                    name="filters[award_year_to]"
-                    value={@filters["award_year_to"]}
-                    placeholder="To"
-                    min="1920"
-                    max={Date.utc_today().year}
-                    class="w-1/2 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </details>
       </div>
     </div>
     """
