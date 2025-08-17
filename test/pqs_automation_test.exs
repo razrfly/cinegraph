@@ -234,7 +234,7 @@ defmodule Cinegraph.PQSAutomationTest do
   end
 
   defp assert_ok_result(result, description) do
-    Logger.warn("⚠️ #{description}: Unexpected result #{inspect(result)}")
+    Logger.warning("⚠️ #{description}: Unexpected result #{inspect(result)}")
   end
 
   defp assert_map_with_keys(map, expected_keys, description) when is_map(map) do
@@ -243,7 +243,7 @@ defmodule Cinegraph.PQSAutomationTest do
     if Enum.empty?(missing_keys) do
       Logger.info("✅ #{description}: Contains all expected keys")
     else
-      Logger.warn("⚠️ #{description}: Missing keys #{inspect(missing_keys)}")
+      Logger.warning("⚠️ #{description}: Missing keys #{inspect(missing_keys)}")
     end
   end
 
@@ -264,7 +264,7 @@ defmodule Cinegraph.PQSAutomationTest do
   end
 
   defp assert_oban_job(result, description) do
-    Logger.warn("⚠️ #{description}: Unexpected job result #{inspect(result)}")
+    Logger.warning("⚠️ #{description}: Unexpected job result #{inspect(result)}")
   end
 
   defp assert_module_exists(module, description) do
