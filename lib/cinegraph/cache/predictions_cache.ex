@@ -138,16 +138,18 @@ defmodule Cinegraph.Cache.PredictionsCache do
   Clear caches for a specific profile.
   """
   def clear_profile(profile_name) do
-    pattern = "*#{profile_name}*"
-    
-    case Cachex.keys(@cache_name, pattern) do
-      {:ok, keys} ->
-        Enum.each(keys, fn key ->
-          Cachex.del(@cache_name, key)
-        end)
-        Logger.info("Cleared #{length(keys)} cache entries for profile: #{profile_name}")
+    case Cachex.keys(@cache_name) do
+      {:ok, keys} when is_list(keys) ->
+        keys_to_delete =
+          Enum.filter(keys, fn
+            k when is_binary(k) -> String.contains?(k, profile_name)
+            _ -> false
+          end)
+
+        Enum.each(keys_to_delete, &Cachex.del(@cache_name, &1))
+        Logger.info("Cleared #{length(keys_to_delete)} cache entries for profile: #{profile_name}")
         :ok
-        
+
       {:error, reason} ->
         Logger.error("Failed to clear profile cache: #{inspect(reason)}")
         :error
@@ -220,8 +222,10 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
   # Create a hash of profile weights to detect changes
   defp profile_hash(profile) do
-    weights_string = inspect(profile.category_weights)
-    :crypto.hash(:md5, weights_string) |> Base.encode16()
+    profile.category_weights
+    |> :erlang.term_to_binary()
+    |> :crypto.hash(:md5)
+    |> Base.encode16(case: :lower)
   end
 
   defp calculate_predictions(limit, profile) do
