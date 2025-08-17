@@ -11,13 +11,16 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       validation_result = HistoricalValidator.validate_all_decades()
       confirmed_additions = MoviePredictor.get_confirmed_2020s_additions()
       
-      # Debug: Log first few predictions
-      IO.puts("=== PREDICTIONS DEBUG ===")
-      predictions_result.predictions
-      |> Enum.take(5)
-      |> Enum.each(fn pred ->
-        IO.inspect(pred.prediction.likelihood_percentage, label: "#{pred.title} likelihood")
-      end)
+      # Optionally enable debug logging during development only
+      if Mix.env() == :dev do
+        require Logger
+        Logger.debug("=== PREDICTIONS DEBUG ===")
+        predictions_result.predictions
+        |> Enum.take(5)
+        |> Enum.each(fn pred ->
+          Logger.debug("#{pred.title} likelihood=#{pred.prediction.likelihood_percentage}")
+        end)
+      end
       
       {:ok,
        socket
@@ -150,6 +153,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
           name: "Custom",
           description: "Custom weights from UI",
           category_weights: profile_map.category_weights,
+          weights: Map.get(profile_map, :weights, %{}),
           active: true
         }
         

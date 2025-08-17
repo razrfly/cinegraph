@@ -4,7 +4,7 @@ defmodule Cinegraph.Predictions.IntegrationTest do
   These tests verify the entire system works together correctly.
   """
   
-  use ExUnit.Case, async: false
+  use Cinegraph.DataCase
   
   alias Cinegraph.Predictions.{MoviePredictor, CriteriaScoring}
   
