@@ -16,6 +16,8 @@ defmodule Cinegraph.Application do
       {Finch, name: Cinegraph.Finch},
       # Start Oban
       {Oban, Application.fetch_env!(:cinegraph, Oban)},
+      # Start Cachex for performance caching
+      {Cachex, name: :predictions_cache},
       # Start Rate Limiter
       Cinegraph.RateLimiter,
       # Start Import Stats
@@ -31,7 +33,19 @@ defmodule Cinegraph.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Cinegraph.Supervisor]
-    Supervisor.start_link(children, opts)
+    
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        # Schedule cache warmup after application starts
+        Task.start(fn ->
+          Process.sleep(5000)  # Wait 5 seconds for app to fully initialize
+          Cinegraph.Workers.CacheWarmupWorker.schedule_warmup()
+        end)
+        {:ok, pid}
+      
+      error ->
+        error
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

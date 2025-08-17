@@ -13,35 +13,40 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   @doc """
   Get top 2020s movies ranked by likelihood of being added to future 1001 Movies lists.
   Uses database weight profiles or custom weights.
+  Combines predictions with confirmed additions in proper ranking order.
   """
   def predict_2020s_movies(limit \\ 100, profile_or_weights \\ nil) do
     # Get the weight profile to use
     profile = get_weight_profile(profile_or_weights)
+    weights = ScoringService.profile_to_discovery_weights(profile)
     
-    # Build base query for 2020s movies not on 1001 list
-    base_query = 
+    # Get ALL 2020s movies (both confirmed and unconfirmed) with scoring
+    all_movies_query = 
       from m in Movie,
         where: m.release_date >= ^~D[2020-01-01],
         where: m.release_date < ^~D[2030-01-01],
         where: m.import_status == "full",
-        where: is_nil(fragment("? -> ?", m.canonical_sources, "1001_movies")),
-        limit: 500  # Get more candidates for better selection
+        limit: 1000  # Get more candidates for better selection
     
-    # Apply database-driven scoring
-    scored_query = ScoringService.apply_scoring(base_query, profile)
+    # Apply database-driven scoring to all movies
+    scored_query = ScoringService.apply_scoring(all_movies_query, profile)
+    all_movies_with_scores = Repo.all(scored_query)
     
-    # Execute query and format results
-    movies_with_scores = Repo.all(scored_query)
-    
-    weights = ScoringService.profile_to_discovery_weights(profile)
-    scored_movies =
-      movies_with_scores
+    # Format and sort all movies by score
+    all_scored_movies = 
+      all_movies_with_scores
       |> Enum.map(&format_prediction_result_from_scored(&1, weights))
+      |> Enum.sort_by(& &1.prediction.total_score, :desc)
       |> Enum.take(limit)
+    
+    # Count candidates (movies not already on 1001 list)
+    total_candidates = Enum.count(all_movies_with_scores, fn movie ->
+      is_nil(Map.get(movie.canonical_sources || %{}, "1001_movies"))
+    end)
 
     %{
-      predictions: scored_movies,
-      total_candidates: length(movies_with_scores),
+      predictions: all_scored_movies,
+      total_candidates: total_candidates,
       algorithm_info: %{
         profile_used: profile.name,
         weights_used: weights,

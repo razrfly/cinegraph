@@ -20,7 +20,8 @@ defmodule Cinegraph.Repo.Migrations.AddMoviePredictionIndexes do
     create_if_not_exists index(:external_metrics, [:movie_id, :source, :metric_type],
            name: :external_metrics_movie_id_source_metric_type_index)
     
-    # Index for historical validation queries by decade
+    # Index for historical validation queries by decade (drop existing if needed)
+    execute("DROP INDEX IF EXISTS idx_movies_1001_by_decade")
     create index(:movies, ["FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10", :id],
            where: "canonical_sources ? '1001_movies'",
            name: :idx_movies_1001_by_decade)
