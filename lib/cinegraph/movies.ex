@@ -556,7 +556,7 @@ defmodule Cinegraph.Movies do
   """
   def count_canonical_movies(source_key) do
     from(m in Movie, where: fragment("? \\? ?", m.canonical_sources, ^source_key))
-    |> Repo.aggregate(:count)
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """
@@ -564,7 +564,7 @@ defmodule Cinegraph.Movies do
   """
   def count_any_canonical_movies do
     from(m in Movie, where: m.canonical_sources != ^%{})
-    |> Repo.aggregate(:count)
+    |> Repo.aggregate(:count, :id)
   end
 
   @doc """

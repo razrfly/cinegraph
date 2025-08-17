@@ -213,7 +213,7 @@ Watch the import progress at http://localhost:4001/imports or check in IEx:
 Cinegraph.Imports.TMDbImporter.get_import_status()
 
 # Get current movie count
-Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
+Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count, :id)
 ```
 
 ##### Recommendations
