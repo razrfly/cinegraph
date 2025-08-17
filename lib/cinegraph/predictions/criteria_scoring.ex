@@ -212,7 +212,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     
     base_score = if length(technical_nominations) > 0 do
       # Score technical nominations
-      Enum.reduce(technical_nominations, 0.0, fn [festival, category, won], acc ->
+      Enum.reduce(technical_nominations, 0.0, fn [_festival, _category, won], acc ->
         points = if won, do: 20.0, else: 10.0
         acc + points
       end)
@@ -360,13 +360,13 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     {rating, votes}
   end
 
-  defp score_genre_cultural_impact(movie) do
+  defp score_genre_cultural_impact(_movie) do
     # This would need to query movie genres and apply cultural impact scores
     # For now, return base score
     10.0
   end
 
-  defp score_international_impact(movie) do
+  defp score_international_impact(_movie) do
     # Check if non-English film with significant recognition
     # For now, return base score  
     5.0
