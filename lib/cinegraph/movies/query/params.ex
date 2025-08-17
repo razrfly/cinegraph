@@ -250,9 +250,19 @@ defmodule Cinegraph.Movies.Query.Params do
 
     Enum.reduce(enum_fields, params, fn f, acc ->
       case Map.get(acc, f) do
-        "" -> Map.delete(acc, f)
-        v when is_binary(v) -> Map.put(acc, f, String.trim(v))
-        _ -> acc
+        nil ->
+          acc
+
+        v when is_binary(v) ->
+          trimmed = String.trim(v)
+          if trimmed == "" do
+            Map.delete(acc, f)
+          else
+            Map.put(acc, f, trimmed)
+          end
+
+        _ ->
+          acc
       end
     end)
   end
