@@ -252,7 +252,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
           where: mc.person_id in ^director_ids,
           where: mc.credit_type == "crew",
           where: mc.department == "Directing",
-          select: count()
+          select: count(m.id, :distinct)
 
       existing_1001_count = Repo.one(existing_1001_query) || 0
       

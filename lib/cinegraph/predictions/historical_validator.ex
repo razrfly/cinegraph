@@ -185,12 +185,23 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
       end)
       |> Enum.sort_by(& &1.overall_accuracy, :desc)
     
-    %{
-      best_profile: hd(results).profile_name,
-      best_accuracy: hd(results).overall_accuracy,
-      all_results: results,
-      decades_tested: length(decades)
-    }
+    case results do
+      [best | _] ->
+        %{
+          best_profile: best.profile_name,
+          best_accuracy: best.overall_accuracy,
+          all_results: results,
+          decades_tested: length(decades)
+        }
+
+      [] ->
+        %{
+          best_profile: nil,
+          best_accuracy: 0.0,
+          all_results: [],
+          decades_tested: length(decades)
+        }
+    end
   end
 
   # Private functions
