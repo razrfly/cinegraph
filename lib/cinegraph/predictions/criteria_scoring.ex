@@ -55,7 +55,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         external_metrics[movie.id] || [],
         festival_nominations[movie.id] || [],
         technical_nominations[movie.id] || [],
-        director_info[movie.id] || []
+        director_info[movie.id] || 0
       )
       
       %{movie: movie, prediction: prediction}
@@ -460,9 +460,9 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
     weighted_total = 
       Enum.reduce(scores, 0, fn {criterion, score}, acc ->
-        score = score || 0.0
+        safe_score = score || 0.0
         weight = weights[criterion] || 0.0
-        acc + (score * weight)
+        acc + (safe_score * weight)
       end)
 
     %{
