@@ -224,7 +224,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
   defp profile_hash(profile) do
     profile.category_weights
     |> :erlang.term_to_binary()
-    |> :crypto.hash(:md5)
+    |> then(&:crypto.hash(:md5, &1))
     |> Base.encode16(case: :lower)
   end
 

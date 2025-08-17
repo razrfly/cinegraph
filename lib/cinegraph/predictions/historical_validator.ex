@@ -38,23 +38,28 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     profile = get_weight_profile(profile_or_weights)
     decades = get_all_decades()
     
-    # Only validate decades before 2020 (since 2020s are our prediction target)
-    historical_decades = Enum.filter(decades, & &1 < 2020)
+    # Include ALL decades with data, including 2020s if they have confirmed additions
+    # This gives us a complete picture of how well our algorithm works
+    all_decades_with_data = decades
     
     decade_results = 
-      Enum.map(historical_decades, fn decade ->
+      Enum.map(all_decades_with_data, fn decade ->
         validate_decade(decade, profile)
       end)
     
     overall_accuracy = calculate_overall_accuracy(decade_results)
+    
+    # Calculate the actual range dynamically
+    min_decade = if length(all_decades_with_data) > 0, do: Enum.min(all_decades_with_data), else: 1920
+    max_decade = if length(all_decades_with_data) > 0, do: Enum.max(all_decades_with_data), else: 2020
     
     %{
       decade_results: decade_results,
       overall_accuracy: overall_accuracy,
       profile_used: profile.name,
       weights_used: ScoringService.profile_to_discovery_weights(profile),
-      decades_analyzed: length(historical_decades),
-      decade_range: "#{Enum.min(historical_decades, fn -> 1920 end)}s-#{Enum.max(historical_decades, fn -> 2010 end)}s"
+      decades_analyzed: length(all_decades_with_data),
+      decade_range: "#{min_decade}s-#{max_decade}s"
     }
   end
 
