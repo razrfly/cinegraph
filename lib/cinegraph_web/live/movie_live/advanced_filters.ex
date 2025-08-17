@@ -39,8 +39,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
               />
             </div>
           </div>
-
-          <!-- Runtime Range -->
+          
+    <!-- Runtime Range -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Runtime (minutes)
@@ -68,8 +68,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           </div>
         </div>
       </div>
-
-      <!-- Production Details (moved from basic) -->
+      
+    <!-- Production Details (moved from basic) -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">🌍 Production Details</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -80,18 +80,17 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </label>
             <select
               name="filters[country_id]"
-              value={@filters["country_id"]}
               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
-              <option value="">All Countries</option>
-              <option value="US">United States</option>
-              <option value="GB">United Kingdom</option>
-              <option value="FR">France</option>
-              <option value="DE">Germany</option>
-              <option value="JP">Japan</option>
-              <option value="KR">South Korea</option>
-              <option value="IN">India</option>
-              <option value="CN">China</option>
+              <option value="" selected={@filters["country_id"] in [nil, ""]}>All Countries</option>
+              <option value="US" selected={@filters["country_id"] == "US"}>United States</option>
+              <option value="GB" selected={@filters["country_id"] == "GB"}>United Kingdom</option>
+              <option value="FR" selected={@filters["country_id"] == "FR"}>France</option>
+              <option value="DE" selected={@filters["country_id"] == "DE"}>Germany</option>
+              <option value="JP" selected={@filters["country_id"] == "JP"}>Japan</option>
+              <option value="KR" selected={@filters["country_id"] == "KR"}>South Korea</option>
+              <option value="IN" selected={@filters["country_id"] == "IN"}>India</option>
+              <option value="CN" selected={@filters["country_id"] == "CN"}>China</option>
               <!-- Add more countries as needed -->
             </select>
           </div>
@@ -109,14 +108,29 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </label>
             <select
               name="filters[discovery_preset]"
-              value={@filters["discovery_preset"]}
               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
-              <option value="">All Movies</option>
-              <option value="award_winners">🏆 Award Winners</option>
-              <option value="popular_favorites">🎬 Popular Favorites</option>
-              <option value="critically_acclaimed">📰 Critically Acclaimed</option>
-              <option value="hidden_gems">💎 Hidden Gems</option>
+              <option value="" selected={@filters["discovery_preset"] in [nil, ""]}>
+                All Movies
+              </option>
+              <option value="award_winners" selected={@filters["discovery_preset"] == "award_winners"}>
+                🏆 Award Winners
+              </option>
+              <option
+                value="popular_favorites"
+                selected={@filters["discovery_preset"] == "popular_favorites"}
+              >
+                🎬 Popular Favorites
+              </option>
+              <option
+                value="critically_acclaimed"
+                selected={@filters["discovery_preset"] == "critically_acclaimed"}
+              >
+                📰 Critically Acclaimed
+              </option>
+              <option value="hidden_gems" selected={@filters["discovery_preset"] == "hidden_gems"}>
+                💎 Hidden Gems
+              </option>
             </select>
           </div>
           
@@ -127,14 +141,17 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </label>
             <select
               name="filters[award_preset]"
-              value={@filters["award_preset"]}
               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
-              <option value="">All Time</option>
-              <option value="recent_awards">Recent Awards (2020s)</option>
-              <option value="2010s">2010s</option>
-              <option value="2000s">2000s</option>
-              <option value="classic">Classic Era (pre-2000)</option>
+              <option value="" selected={@filters["award_preset"] in [nil, ""]}>All Time</option>
+              <option value="recent_awards" selected={@filters["award_preset"] == "recent_awards"}>
+                Recent Awards (2020s)
+              </option>
+              <option value="2010s" selected={@filters["award_preset"] == "2010s"}>2010s</option>
+              <option value="2000s" selected={@filters["award_preset"] == "2000s"}>2000s</option>
+              <option value="classic" selected={@filters["award_preset"] == "classic"}>
+                Classic Era (pre-2000)
+              </option>
             </select>
           </div>
         </div>
@@ -151,14 +168,19 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </label>
             <select
               name="filters[award_status]"
-              value={@filters["award_status"]}
               class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
-              <option value="">All Movies</option>
-              <option value="any_nomination">Any Nomination</option>
-              <option value="won">Award Winners</option>
-              <option value="nominated_only">Nominated Only</option>
-              <option value="multiple_awards">Multiple Awards</option>
+              <option value="" selected={@filters["award_status"] in [nil, ""]}>All Movies</option>
+              <option value="any_nomination" selected={@filters["award_status"] == "any_nomination"}>
+                Any Nomination
+              </option>
+              <option value="won" selected={@filters["award_status"] == "won"}>Award Winners</option>
+              <option value="nominated_only" selected={@filters["award_status"] == "nominated_only"}>
+                Nominated Only
+              </option>
+              <option value="multiple_awards" selected={@filters["award_status"] == "multiple_awards"}>
+                Multiple Awards
+              </option>
             </select>
           </div>
         </div>
