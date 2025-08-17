@@ -10,7 +10,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   def mount(_params, _session, socket) do
     # Get filter options from the Search module
     filter_options = Search.get_filter_options()
-    
+
     {:ok,
      socket
      |> assign(:movies, [])
@@ -38,7 +38,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   def handle_params(params, _url, socket) do
     # Ensure filter options are always available
     socket = ensure_filter_options(socket)
-    
+
     case Search.search_movies(params) do
       {:ok, {movies, meta}} ->
         {:noreply,
@@ -52,7 +52,7 @@ defmodule CinegraphWeb.MovieLive.Index do
          |> assign(:sort_direction, extract_sort_direction(params["sort"] || "release_date_desc"))
          |> assign_pagination_from_meta(meta)
          |> apply_action(socket.assigns.live_action, params)}
-      
+
       {:error, _changeset} ->
         # If params are invalid, try with empty params to show default results
         case Search.search_movies(%{}) do
@@ -69,7 +69,7 @@ defmodule CinegraphWeb.MovieLive.Index do
              |> assign_pagination_from_meta(meta)
              |> put_flash(:error, "Invalid search parameters, showing all movies")
              |> apply_action(socket.assigns.live_action, params)}
-          
+
           {:error, _} ->
             # Fallback to empty state
             {:noreply,
@@ -92,9 +92,10 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("change_sort", %{"sort" => sort}, socket) do
-    params = socket.assigns.params
-    |> Map.put("sort", sort)
-    |> Map.put("page", "1")
+    params =
+      socket.assigns.params
+      |> Map.put("sort", sort)
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -103,25 +104,28 @@ defmodule CinegraphWeb.MovieLive.Index do
   @impl true
   def handle_event("sort_criteria_changed", %{"criteria" => criteria}, socket) do
     current_criteria = socket.assigns.sort_criteria
-    
+
     # When changing to a different criteria, default to descending
     # This is more intuitive for most metrics (highest first)
-    direction = if criteria != current_criteria do
-      :desc
-    else
-      socket.assigns.sort_direction
-    end
-    
+    direction =
+      if criteria != current_criteria do
+        :desc
+      else
+        socket.assigns.sort_direction
+      end
+
     # Convert the criteria to the format expected (always add explicit direction suffix)
-    sort = if direction == :asc do
-      "#{criteria}_asc"
-    else
-      "#{criteria}_desc"
-    end
-    
-    params = socket.assigns.params
-    |> Map.put("sort", sort)
-    |> Map.put("page", "1")
+    sort =
+      if direction == :asc do
+        "#{criteria}_asc"
+      else
+        "#{criteria}_desc"
+      end
+
+    params =
+      socket.assigns.params
+      |> Map.put("sort", sort)
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -131,20 +135,22 @@ defmodule CinegraphWeb.MovieLive.Index do
   def handle_event("toggle_sort_direction", _params, socket) do
     current_sort = socket.assigns.sort_criteria
     current_direction = socket.assigns.sort_direction
-    
+
     # Toggle the direction
     new_direction = if current_direction == :desc, do: :asc, else: :desc
-    
+
     # Build the new sort parameter with explicit direction suffix
-    sort = if new_direction == :asc do
-      "#{current_sort}_asc"
-    else
-      "#{current_sort}_desc"
-    end
-    
-    params = socket.assigns.params
-    |> Map.put("sort", sort)
-    |> Map.put("page", "1")
+    sort =
+      if new_direction == :asc do
+        "#{current_sort}_asc"
+      else
+        "#{current_sort}_desc"
+      end
+
+    params =
+      socket.assigns.params
+      |> Map.put("sort", sort)
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -162,9 +168,10 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("search", %{"search" => search_term}, socket) do
-    params = socket.assigns.params
-    |> Map.put("search", search_term)
-    |> Map.put("page", "1")
+    params =
+      socket.assigns.params
+      |> Map.put("search", search_term)
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -173,21 +180,28 @@ defmodule CinegraphWeb.MovieLive.Index do
   @impl true
   def handle_event("apply_filters", %{"filters" => filters}, socket) do
     # Clean up filters to handle empty arrays from hidden fields
-    cleaned_filters = filters
-    |> Enum.map(fn 
-      {key, [""]} -> {key, []}  # Convert single empty string to empty array
-      {key, value} when is_list(value) -> 
-        # Filter out empty strings from arrays
-        {key, Enum.reject(value, &(&1 == "" || &1 == nil))}
-      other -> other
-    end)
-    |> Map.new()
-    
-    params = socket.assigns.params
-    |> Map.merge(cleaned_filters)
-    |> Map.put("page", "1")
-    |> Enum.reject(fn {_k, v} -> v == "" or v == [] end)
-    |> Map.new()
+    cleaned_filters =
+      filters
+      |> Enum.map(fn
+        # Convert single empty string to empty array
+        {key, [""]} ->
+          {key, []}
+
+        {key, value} when is_list(value) ->
+          # Filter out empty strings from arrays
+          {key, Enum.reject(value, &(&1 == "" || &1 == nil))}
+
+        other ->
+          other
+      end)
+      |> Map.new()
+
+    params =
+      socket.assigns.params
+      |> Map.merge(cleaned_filters)
+      |> Map.put("page", "1")
+      |> Enum.reject(fn {_k, v} -> v == "" or v == [] end)
+      |> Map.new()
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -210,10 +224,11 @@ defmodule CinegraphWeb.MovieLive.Index do
   @impl true
   def handle_event("remove_filter", %{"filter" => filter_key, "filter-type" => _type}, socket) do
     # Remove the specific filter from params
-    params = socket.assigns.params
-    |> Map.delete(filter_key)
-    |> Map.put("page", "1")
-    
+    params =
+      socket.assigns.params
+      |> Map.delete(filter_key)
+      |> Map.put("page", "1")
+
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
   end
@@ -226,7 +241,7 @@ defmodule CinegraphWeb.MovieLive.Index do
     else
       # Reload filter options if missing
       filter_options = Search.get_filter_options()
-      
+
       socket
       |> assign(:available_genres, filter_options.genres)
       |> assign(:available_countries, filter_options.countries)
@@ -262,10 +277,11 @@ defmodule CinegraphWeb.MovieLive.Index do
   def handle_info({:people_selected, _component_id, selected_people}, socket) do
     # Update the filters with the new people selection
     people_ids = Enum.map_join(selected_people, ",", & &1.id)
-    
-    params = socket.assigns.params
-    |> Map.put("people_ids", people_ids)
-    |> Map.put("page", "1")
+
+    params =
+      socket.assigns.params
+      |> Map.put("people_ids", people_ids)
+      |> Map.put("page", "1")
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -292,7 +308,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp normalize_filters_for_template(params) do
     %{
       genres: parse_array_param(params["genres"]),
-      countries: parse_array_param(params["countries"]), 
+      countries: parse_array_param(params["countries"]),
       languages: parse_array_param(params["languages"]),
       lists: parse_array_param(params["lists"]),
       festivals: parse_array_param(params["festivals"]),
@@ -320,6 +336,7 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp parse_array_param(nil), do: []
   defp parse_array_param([]), do: []
   defp parse_array_param(value) when is_list(value), do: value
+
   defp parse_array_param(value) when is_binary(value) do
     String.split(value, ",", trim: true)
   end
@@ -328,10 +345,10 @@ defmodule CinegraphWeb.MovieLive.Index do
     cond do
       params["people_ids"] not in [nil, ""] ->
         %{"people_ids" => params["people_ids"]}
-      
+
       params["people_search[people_ids]"] not in [nil, ""] ->
         %{"people_ids" => params["people_search[people_ids]"]}
-      
+
       true ->
         nil
     end
@@ -340,36 +357,57 @@ defmodule CinegraphWeb.MovieLive.Index do
   # Helper functions for building URLs and pagination
   def build_pagination_path(params_or_assigns, new_params \\ %{}) do
     # Extract only the URL params from assigns if full assigns are passed
-    params = case params_or_assigns do
-      %{params: url_params} when is_map(url_params) -> url_params
-      %{} = map -> extract_url_params(map)
-      _ -> %{}
-    end
-    
+    params =
+      case params_or_assigns do
+        %{params: url_params} when is_map(url_params) -> url_params
+        %{} = map -> extract_url_params(map)
+        _ -> %{}
+      end
+
     params
     |> Map.merge(new_params)
     |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
     |> Map.new()
     |> then(&~p"/movies?#{&1}")
   end
-  
+
   # Extract only URL-safe parameters from assigns
   defp extract_url_params(assigns) do
     url_param_keys = [
-      "search", "sort", "page", "per_page",
-      "genres", "countries", "languages", "lists", "festivals",
-      "year", "year_from", "year_to", "decade", "show_unreleased",
-      "runtime_min", "runtime_max", "rating_min",
-      "award_status", "festival_id", "award_category_id",
-      "award_year_from", "award_year_to",
-      "rating_preset", "discovery_preset", "award_preset",
-      "people_ids", "people_role"
+      "search",
+      "sort",
+      "page",
+      "per_page",
+      "genres",
+      "countries",
+      "languages",
+      "lists",
+      "festivals",
+      "year",
+      "year_from",
+      "year_to",
+      "decade",
+      "show_unreleased",
+      "runtime_min",
+      "runtime_max",
+      "rating_min",
+      "award_status",
+      "festival_id",
+      "award_category_id",
+      "award_year_from",
+      "award_year_to",
+      "rating_preset",
+      "discovery_preset",
+      "award_preset",
+      "people_ids",
+      "people_role"
     ]
-    
+
     case Map.get(assigns, :params) do
-      params when is_map(params) -> 
+      params when is_map(params) ->
         Map.take(params, url_param_keys)
-      _ -> 
+
+      _ ->
         Map.take(assigns, url_param_keys)
     end
   end
@@ -409,11 +447,16 @@ defmodule CinegraphWeb.MovieLive.Index do
   defp award_worthy_score?(float) when is_float(float), do: float > 0.1
   defp award_worthy_score?(int) when is_integer(int), do: int > 0.1
 
-
   def has_active_basic_filters(params) when is_map(params) do
     basic_filter_keys = [
-      "genres", "languages", "lists", "festivals",
-      "decade", "show_unreleased", "rating_preset", "people_ids"
+      "genres",
+      "languages",
+      "lists",
+      "festivals",
+      "decade",
+      "show_unreleased",
+      "rating_preset",
+      "people_ids"
     ]
 
     Enum.any?(basic_filter_keys, fn key ->
@@ -424,8 +467,14 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   def get_active_basic_filters(params) when is_map(params) do
     basic_filter_keys = [
-      "genres", "languages", "lists", "festivals",
-      "decade", "show_unreleased", "rating_preset", "people_ids"
+      "genres",
+      "languages",
+      "lists",
+      "festivals",
+      "decade",
+      "show_unreleased",
+      "rating_preset",
+      "people_ids"
     ]
 
     params
@@ -458,6 +507,7 @@ defmodule CinegraphWeb.MovieLive.Index do
     case key do
       "genres" ->
         genres_list = Map.get(assigns, :available_genres, Map.get(assigns, :genres, []))
+
         genre_names =
           value
           |> List.wrap()
@@ -475,6 +525,7 @@ defmodule CinegraphWeb.MovieLive.Index do
 
       "countries" ->
         countries_list = Map.get(assigns, :available_countries, Map.get(assigns, :countries, []))
+
         country_names =
           value
           |> List.wrap()
@@ -492,6 +543,7 @@ defmodule CinegraphWeb.MovieLive.Index do
 
       "languages" ->
         languages_list = Map.get(assigns, :available_languages, Map.get(assigns, :languages, []))
+
         lang_names =
           value
           |> List.wrap()
@@ -507,6 +559,7 @@ defmodule CinegraphWeb.MovieLive.Index do
 
       "lists" ->
         lists_list = Map.get(assigns, :available_lists, Map.get(assigns, :lists, []))
+
         list_names =
           value
           |> List.wrap()
@@ -522,6 +575,7 @@ defmodule CinegraphWeb.MovieLive.Index do
 
       "festivals" ->
         festivals_list = Map.get(assigns, :festival_organizations, [])
+
         festival_names =
           value
           |> List.wrap()
@@ -581,88 +635,126 @@ defmodule CinegraphWeb.MovieLive.Index do
         Map.get(filters_or_params, "people_ids") not in [nil, ""]
     end
   end
-  
+
   defp check_normalized_filters(filters) do
     # Check basic filters
-    basic_active = Enum.any?([:genres, :languages, :lists, :festivals,
-                              :decade, :show_unreleased, :rating_preset], fn key ->
-      value = Map.get(filters, key)
-      # Handle both nil/empty and also arrays that might contain strings
-      case value do
-        nil -> false
-        "" -> false
-        [] -> false
-        list when is_list(list) -> length(list) > 0
-        _ -> true
-      end
-    end)
-    
+    basic_active =
+      Enum.any?(
+        [:genres, :languages, :lists, :festivals, :decade, :show_unreleased, :rating_preset],
+        fn key ->
+          value = Map.get(filters, key)
+          # Handle both nil/empty and also arrays that might contain strings
+          case value do
+            nil -> false
+            "" -> false
+            [] -> false
+            list when is_list(list) -> length(list) > 0
+            _ -> true
+          end
+        end
+      )
+
     # Check advanced filters
-    advanced_active = Enum.any?([:countries, :year_from, :year_to, 
-                                  :runtime_min, :runtime_max,
-                                  :award_status, :festival_id, :award_category_id,
-                                  :award_year_from, :award_year_to,
-                                  :discovery_preset, :award_preset], fn key ->
-      value = Map.get(filters, key)
-      value not in [nil, "", []]
-    end)
-    
+    advanced_active =
+      Enum.any?(
+        [
+          :countries,
+          :year_from,
+          :year_to,
+          :runtime_min,
+          :runtime_max,
+          :award_status,
+          :festival_id,
+          :award_category_id,
+          :award_year_from,
+          :award_year_to,
+          :discovery_preset,
+          :award_preset
+        ],
+        fn key ->
+          value = Map.get(filters, key)
+          value not in [nil, "", []]
+        end
+      )
+
     # Check people search
-    people_active = case Map.get(filters, :people_search) do
-      %{"people_ids" => ids} when ids not in [nil, ""] -> true
-      _ -> false
-    end
-    
+    people_active =
+      case Map.get(filters, :people_search) do
+        %{"people_ids" => ids} when ids not in [nil, ""] -> true
+        _ -> false
+      end
+
     basic_active || advanced_active || people_active
   end
 
   def get_all_active_filters(filters_or_params, assigns) do
     # Convert normalized filters back to params format if needed
-    params = if Map.has_key?(filters_or_params, :genres) or Map.has_key?(filters_or_params, :countries) do
-      # It's the normalized filters, convert back to params format
-      filters_to_params(filters_or_params)
-    else
-      filters_or_params
-    end
-    
+    params =
+      if Map.has_key?(filters_or_params, :genres) or Map.has_key?(filters_or_params, :countries) do
+        # It's the normalized filters, convert back to params format
+        filters_to_params(filters_or_params)
+      else
+        filters_or_params
+      end
+
     basic_filters = get_active_basic_filters(params)
     advanced_filters = AdvancedFilters.get_active_advanced_filters(params)
-    people_filters = if Map.get(params, "people_ids") not in [nil, ""], do: [{"people_ids", params["people_ids"]}], else: []
+
+    # Note: people_ids is now handled in advanced_filters, no need for separate people_filters
 
     []
     |> append_normalized_filters(basic_filters, :basic, assigns)
     |> append_normalized_filters(advanced_filters, :advanced, assigns)
-    |> append_normalized_filters(people_filters, :people, assigns)
   end
-  
+
   defp filters_to_params(filters) do
     params = %{}
-    
+
     # Convert array filters (including festivals)
-    params = Enum.reduce([:genres, :countries, :languages, :lists, :festivals], params, fn key, acc ->
-      case Map.get(filters, key) do
-        nil -> acc
-        [] -> acc
-        value -> Map.put(acc, Atom.to_string(key), value)
-      end
-    end)
-    
+    params =
+      Enum.reduce([:genres, :countries, :languages, :lists, :festivals], params, fn key, acc ->
+        case Map.get(filters, key) do
+          nil -> acc
+          [] -> acc
+          value -> Map.put(acc, Atom.to_string(key), value)
+        end
+      end)
+
     # Convert single value filters
-    params = Enum.reduce([:year_from, :year_to, :decade, :runtime_min, :runtime_max, 
-                          :rating_min, :show_unreleased, :award_status, :festival_id,
-                          :award_category_id, :award_year_from, :award_year_to,
-                          :rating_preset, :discovery_preset, :award_preset], params, fn key, acc ->
-      case Map.get(filters, key) do
-        nil -> acc
-        "" -> acc
-        value -> Map.put(acc, Atom.to_string(key), value)
-      end
-    end)
-    
+    params =
+      Enum.reduce(
+        [
+          :year_from,
+          :year_to,
+          :decade,
+          :runtime_min,
+          :runtime_max,
+          :rating_min,
+          :show_unreleased,
+          :award_status,
+          :festival_id,
+          :award_category_id,
+          :award_year_from,
+          :award_year_to,
+          :rating_preset,
+          :discovery_preset,
+          :award_preset
+        ],
+        params,
+        fn key, acc ->
+          case Map.get(filters, key) do
+            nil -> acc
+            "" -> acc
+            value -> Map.put(acc, Atom.to_string(key), value)
+          end
+        end
+      )
+
     # Convert people search
     case Map.get(filters, :people_search) do
       %{"people_ids" => ids} when ids not in [nil, ""] ->
         Map.put(params, "people_ids", ids)
+
       _ ->
         params
     end
@@ -719,16 +811,19 @@ defmodule CinegraphWeb.MovieLive.Index do
     cond do
       String.ends_with?(sort_param, "_desc") -> :desc
       String.ends_with?(sort_param, "_asc") -> :asc
-      true -> :desc  # default to descending when no suffix (most intuitive for ratings)
+      # default to descending when no suffix (most intuitive for ratings)
+      true -> :desc
     end
   end
-  
+
   defp extract_sort_criteria(sort_param) do
     cond do
       String.ends_with?(sort_param, "_desc") ->
         String.replace_suffix(sort_param, "_desc", "")
+
       String.ends_with?(sort_param, "_asc") ->
         String.replace_suffix(sort_param, "_asc", "")
+
       true ->
         sort_param
     end

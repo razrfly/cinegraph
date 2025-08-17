@@ -248,7 +248,6 @@
               />
             </div>
             
-            
 <!-- Language Filter -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -283,7 +282,7 @@
               />
             </div>
             
-            <!-- Festival Organization Filter (moved from advanced) -->
+<!-- Festival Organization Filter (moved from advanced) -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Festivals/Awards
@@ -300,7 +299,7 @@
               />
             </div>
             
-            <!-- Rating Threshold (moved from advanced) -->
+<!-- Rating Threshold (moved from advanced) -->
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Rating Quality
@@ -311,9 +310,18 @@
                 class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
               >
                 <option value="">Any Rating</option>
-                <option value="highly_rated" selected={@filters.rating_preset == "highly_rated"}>Highly Rated (7.5+)</option>
-                <option value="well_reviewed" selected={@filters.rating_preset == "well_reviewed"}>Well Reviewed (6.0+)</option>
-                <option value="critically_acclaimed" selected={@filters.rating_preset == "critically_acclaimed"}>Critically Acclaimed</option>
+                <option value="highly_rated" selected={@filters.rating_preset == "highly_rated"}>
+                  Highly Rated (7.5+)
+                </option>
+                <option value="well_reviewed" selected={@filters.rating_preset == "well_reviewed"}>
+                  Well Reviewed (6.0+)
+                </option>
+                <option
+                  value="critically_acclaimed"
+                  selected={@filters.rating_preset == "critically_acclaimed"}
+                >
+                  Critically Acclaimed
+                </option>
               </select>
             </div>
             

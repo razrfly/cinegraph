@@ -110,10 +110,11 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
               # Try both string and atom keys since DB returns string keys
               # Avoid creating new atoms from user input
               weights =
-                case Enum.find(Map.keys(socket.assigns.presets), fn k -> 
-                  to_string(k) == preset_name 
-                end) do
-                  nil -> Map.get(socket.assigns.presets, preset_name) # fallback if string keys exist
+                case Enum.find(Map.keys(socket.assigns.presets), fn k ->
+                       to_string(k) == preset_name
+                     end) do
+                  # fallback if string keys exist
+                  nil -> Map.get(socket.assigns.presets, preset_name)
                   atom_key -> Map.get(socket.assigns.presets, atom_key)
                 end
 

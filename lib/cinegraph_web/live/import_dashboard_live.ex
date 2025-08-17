@@ -784,8 +784,10 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Get database stats
     stats = %{
       total_movies: Repo.aggregate(Movie, :count, :id),
-      movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count, :id),
-      movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count, :id),
+      movies_with_tmdb:
+        Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count, :id),
+      movies_with_omdb:
+        Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count, :id),
       canonical_movies: get_canonical_movies_count(),
       festival_nominations: get_festival_nominations_count(),
       festival_wins: get_festival_wins_count(),
