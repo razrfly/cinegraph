@@ -783,19 +783,19 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
     # Get database stats
     stats = %{
-      total_movies: Repo.aggregate(Movie, :count),
-      movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count),
-      movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count),
+      total_movies: Repo.aggregate(Movie, :count, :id),
+      movies_with_tmdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count, :id),
+      movies_with_omdb: Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count, :id),
       canonical_movies: get_canonical_movies_count(),
       festival_nominations: get_festival_nominations_count(),
       festival_wins: get_festival_wins_count(),
-      total_people: Repo.aggregate(Cinegraph.Movies.Person, :count),
+      total_people: Repo.aggregate(Cinegraph.Movies.Person, :count, :id),
       directors_with_pqs: get_directors_with_pqs_count(),
       actors_with_pqs: get_actors_with_pqs_count(),
-      total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count),
-      total_genres: Repo.aggregate(Cinegraph.Movies.Genre, :count),
-      total_keywords: Repo.aggregate(Cinegraph.Movies.Keyword, :count),
-      unique_collaborations: Repo.aggregate(Cinegraph.Collaborations.Collaboration, :count),
+      total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count, :id),
+      total_genres: Repo.aggregate(Cinegraph.Movies.Genre, :count, :id),
+      total_keywords: Repo.aggregate(Cinegraph.Movies.Keyword, :count, :id),
+      unique_collaborations: Repo.aggregate(Cinegraph.Collaborations.Collaboration, :count, :id),
       multi_collaborations:
         Repo.aggregate(
           from(c in Cinegraph.Collaborations.Collaboration, where: c.collaboration_count > 1),

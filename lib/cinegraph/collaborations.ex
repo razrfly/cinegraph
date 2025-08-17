@@ -484,7 +484,7 @@ defmodule Cinegraph.Collaborations do
         acc_count + batch_new_count
       end)
 
-    total_collaborations = Repo.aggregate(Collaboration, :count)
+    total_collaborations = Repo.aggregate(Collaboration, :count, :id)
     IO.puts("✓ Created #{total_collaborations} collaborations")
 
     {:ok, total_collaborations}
