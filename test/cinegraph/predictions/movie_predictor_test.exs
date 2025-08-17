@@ -55,11 +55,11 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
     
     test "handles custom weights correctly" do
       custom_weights = %{
-        critical_acclaim: 0.40,
-        festival_recognition: 0.25,
-        cultural_impact: 0.20,
-        technical_innovation: 0.10,
-        auteur_recognition: 0.05
+        popular_opinion: 0.30,
+        critical_acclaim: 0.30,
+        industry_recognition: 0.20,
+        cultural_impact: 0.10,
+        people_quality: 0.10
       }
       
       result = MoviePredictor.predict_2020s_movies(10, custom_weights)

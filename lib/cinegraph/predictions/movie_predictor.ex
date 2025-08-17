@@ -38,12 +38,17 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       |> Enum.map(&format_prediction_result_from_scored/1)
       |> Enum.take(limit)
     
+    weights = ScoringService.profile_to_discovery_weights(profile)
+    scored_movies =
+      scored_movies
+      |> Enum.map(&put_in(&1, [:prediction, :weights_used], weights))
+
     %{
       predictions: scored_movies,
       total_candidates: length(movies_with_scores),
       algorithm_info: %{
         profile_used: profile.name,
-        weights_used: ScoringService.profile_to_discovery_weights(profile),
+        weights_used: weights,
         criteria_count: 5,
         decade: "2020s"
       }
@@ -55,17 +60,18 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   """
   def calculate_movie_prediction(movie, profile_or_weights \\ nil) do
     profile = get_weight_profile(profile_or_weights)
+    weights = ScoringService.profile_to_discovery_weights(profile)
     
     # Build single movie query
     query = from m in Movie, where: m.id == ^movie.id
     
     # Apply scoring
-    scored_query = ScoringService.apply_scoring(query, profile)
+    scored_query = ScoringService.apply_scoring(query, profile, %{})
     
     # Get scored result
     case Repo.one(scored_query) do
-      nil -> format_prediction_result_from_movie(movie, 0.0)
-      scored_movie -> format_prediction_result_from_scored(scored_movie)
+      nil -> format_prediction_result_from_movie(movie, 0.0) |> put_in([:prediction, :weights_used], weights)
+      scored_movie -> format_prediction_result_from_scored(scored_movie) |> put_in([:prediction, :weights_used], weights)
     end
   end
 
@@ -110,6 +116,12 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   """
   def get_high_confidence_predictions(min_score \\ 0.8, profile_or_weights \\ nil) do
     profile = get_weight_profile(profile_or_weights)
+    normalized_min =
+      cond do
+        is_integer(min_score) and min_score > 1 -> min_score / 100.0
+        is_float(min_score) and min_score > 1.0 -> min_score / 100.0
+        true -> min_score * 1.0
+      end
     
     # Build query with minimum score filter
     query = 
@@ -120,7 +132,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         where: is_nil(fragment("? -> ?", m.canonical_sources, "1001_movies"))
     
     # Apply scoring with min score filter
-    scored_query = ScoringService.apply_scoring(query, profile, %{min_score: min_score})
+    scored_query = ScoringService.apply_scoring(query, profile, %{min_score: normalized_min})
     
     Repo.all(scored_query)
     |> Enum.map(&format_prediction_result_from_scored/1)
@@ -148,15 +160,27 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   end
 
   defp convert_ui_weights_to_categories(weights) do
-    # Map UI weights back to database categories
-    %{
-      "ratings" => (Map.get(weights, :critical_acclaim, 0.2) + Map.get(weights, :popular_opinion, 0.0)) / 2,
-      "awards" => Map.get(weights, :festival_recognition, 0.3) || Map.get(weights, :industry_recognition, 0.2),
-      "cultural" => Map.get(weights, :cultural_impact, 0.2),
-      "people" => Map.get(weights, :auteur_recognition, 0.05) || Map.get(weights, :people_quality, 0.2),
-      "financial" => 0.0  # Not used in predictions
+    # Coerce non-numeric values to 0.0 and delegate to ScoringService for consistent mapping
+    sanitized = %{
+      popular_opinion: to_float(Map.get(weights, :popular_opinion, 0.0)),
+      critical_acclaim: to_float(Map.get(weights, :critical_acclaim, 0.0)),
+      industry_recognition:
+        to_float(Map.get(weights, :industry_recognition, Map.get(weights, :festival_recognition, 0.0))),
+      cultural_impact: to_float(Map.get(weights, :cultural_impact, 0.0)),
+      people_quality:
+        to_float(Map.get(weights, :people_quality, Map.get(weights, :auteur_recognition, 0.0)))
     }
+    ScoringService.discovery_weights_to_profile(sanitized).category_weights
   end
+
+  defp to_float(value) when is_number(value), do: value * 1.0
+  defp to_float(value) when is_binary(value) do
+    case Float.parse(value) do
+      {float_val, _} -> float_val
+      :error -> 0.0
+    end
+  end
+  defp to_float(_), do: 0.0
 
   defp format_prediction_result_from_scored(movie) do
     # Convert discovery_score (0-1) to likelihood percentage (0-100)
@@ -236,12 +260,6 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       }
     ]
   end
-  
-  defp to_float(nil), do: 0.0
-  defp to_float(%Decimal{} = d), do: Decimal.to_float(d)
-  defp to_float(f) when is_float(f), do: f
-  defp to_float(i) when is_integer(i), do: i * 1.0
-  defp to_float(_), do: 0.0
 
   defp convert_score_to_likelihood(score) when is_nil(score), do: 0.0
   defp convert_score_to_likelihood(score) do

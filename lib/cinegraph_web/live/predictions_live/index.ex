@@ -40,7 +40,12 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          socket
          |> assign(:page_title, "2020s Movie Predictions")
          |> assign(:loading, false)
-         |> assign(:error, "Failed to load predictions: #{inspect(error)}")
+         |> assign(:error, "Failed to load predictions. Please try again.")
+         |> then(fn s -> 
+           require Logger
+           Logger.error("Predictions mount failed: #{Exception.format(:error, error, __STACKTRACE__)}")
+           s 
+         end)
          |> assign(:view_mode, :predictions)
          |> assign(:predictions_result, %{predictions: [], total_candidates: 0})
          |> assign(:validation_result, %{overall_accuracy: 0, decade_results: []})
@@ -60,14 +65,26 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       nil ->
         {:noreply, assign(socket, :selected_movie, nil)}
       movie_id ->
-        movie_details = MoviePredictor.get_movie_scoring_details(String.to_integer(movie_id))
-        {:noreply, assign(socket, :selected_movie, movie_details)}
+        case Integer.parse(movie_id) do
+          {id, ""} ->
+            movie_details = MoviePredictor.get_movie_scoring_details(id)
+            {:noreply, assign(socket, :selected_movie, movie_details)}
+          _ ->
+            {:noreply, assign(socket, :selected_movie, nil)}
+        end
     end
   end
 
   @impl true
   def handle_event("switch_view", %{"mode" => mode}, socket) do
-    {:noreply, assign(socket, :view_mode, String.to_atom(mode))}
+    view_mode =
+      case mode do
+        "predictions" -> :predictions
+        "validation" -> :validation
+        "confirmed" -> :confirmed
+        _ -> socket.assigns.view_mode
+      end
+    {:noreply, assign(socket, :view_mode, view_mode)}
   end
 
   @impl true
@@ -128,10 +145,11 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> put_flash(:error, "Weights must sum to 100%. Current total: #{round(total_weight * 100)}%")}
       else
         # Create a custom profile from the weights
+        profile_map = ScoringService.discovery_weights_to_profile(new_weights)
         custom_profile = %Cinegraph.Metrics.MetricWeightProfile{
           name: "Custom",
           description: "Custom weights from UI",
-          category_weights: ScoringService.discovery_weights_to_profile(new_weights)["category_weights"],
+          category_weights: profile_map.category_weights,
           active: true
         }
         
@@ -150,7 +168,12 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       error ->
         {:noreply,
          socket
-         |> put_flash(:error, "Invalid weight values: #{inspect(error)}")}
+         |> put_flash(:error, "Invalid weight values. Please check your inputs.")
+         |> then(fn s -> 
+           require Logger
+           Logger.warning("update_weights invalid input: #{Exception.format(:error, error, __STACKTRACE__)}")
+           s 
+         end)}
     end
   end
 
@@ -191,7 +214,12 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         {:noreply,
          socket
          |> assign(:loading, false)
-         |> put_flash(:error, "Failed to recalculate predictions: #{inspect(error)}")}
+         |> put_flash(:error, "Failed to recalculate predictions. Please try again.")
+         |> then(fn s -> 
+           require Logger
+           Logger.error("Recalculate failed: #{Exception.format(:error, error, __STACKTRACE__)}")
+           s 
+         end)}
     end
   end
 
