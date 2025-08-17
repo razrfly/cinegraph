@@ -4,22 +4,44 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    # Load initial data
-    predictions_result = MoviePredictor.predict_2020s_movies(100)
-    validation_result = HistoricalValidator.validate_all_decades()
-    confirmed_additions = MoviePredictor.get_confirmed_2020s_additions()
-    
-    {:ok,
-     socket
-     |> assign(:page_title, "2020s Movie Predictions")
-     |> assign(:loading, false)
-     |> assign(:view_mode, :predictions)
-     |> assign(:predictions_result, predictions_result)
-     |> assign(:validation_result, validation_result)
-     |> assign(:confirmed_additions, confirmed_additions)
-     |> assign(:selected_movie, nil)
-     |> assign(:algorithm_weights, CriteriaScoring.get_default_weights())
-     |> assign(:show_weight_tuner, false)}
+    # Load initial data with error handling
+    try do
+      predictions_result = MoviePredictor.predict_2020s_movies(100)
+      validation_result = HistoricalValidator.validate_all_decades()
+      confirmed_additions = MoviePredictor.get_confirmed_2020s_additions()
+      
+      # Debug: Log first few predictions
+      IO.puts("=== PREDICTIONS DEBUG ===")
+      predictions_result.predictions
+      |> Enum.take(5)
+      |> Enum.each(fn pred ->
+        IO.inspect(pred.prediction.likelihood_percentage, label: "#{pred.title} likelihood")
+      end)
+      
+      {:ok,
+       socket
+       |> assign(:page_title, "2020s Movie Predictions")
+       |> assign(:loading, false)
+       |> assign(:view_mode, :predictions)
+       |> assign(:predictions_result, predictions_result)
+       |> assign(:validation_result, validation_result)
+       |> assign(:confirmed_additions, confirmed_additions)
+       |> assign(:selected_movie, nil)
+       |> assign(:algorithm_weights, CriteriaScoring.get_default_weights())
+       |> assign(:show_weight_tuner, false)
+       |> assign(:last_updated, DateTime.utc_now())}
+    rescue
+      error ->
+        {:ok,
+         socket
+         |> assign(:page_title, "2020s Movie Predictions")
+         |> assign(:loading, false)
+         |> assign(:error, "Failed to load predictions: #{inspect(error)}")
+         |> assign(:view_mode, :predictions)
+         |> assign(:predictions_result, %{predictions: [], total_candidates: 0})
+         |> assign(:validation_result, %{overall_accuracy: 0, decade_results: []})
+         |> assign(:confirmed_additions, [])}
+    end
   end
 
   @impl true
@@ -60,28 +82,63 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   @impl true
   def handle_event("update_weights", params, socket) do
-    # Extract weights from form params
-    new_weights = %{
-      critical_acclaim: String.to_float(params["critical_acclaim"]) / 100,
-      festival_recognition: String.to_float(params["festival_recognition"]) / 100,
-      cultural_impact: String.to_float(params["cultural_impact"]) / 100,
-      technical_innovation: String.to_float(params["technical_innovation"]) / 100,
-      auteur_recognition: String.to_float(params["auteur_recognition"]) / 100
-    }
-    
-    # Recalculate predictions with new weights
-    socket = assign(socket, :loading, true)
-    
-    # This would be better as a background job for production
-    predictions_result = MoviePredictor.predict_2020s_movies(100, new_weights)
-    validation_result = HistoricalValidator.validate_all_decades(new_weights)
-    
-    {:noreply,
-     socket
-     |> assign(:loading, false)
-     |> assign(:algorithm_weights, new_weights)
-     |> assign(:predictions_result, predictions_result)
-     |> assign(:validation_result, validation_result)}
+    try do
+      # Extract weights from form params with validation
+      new_weights = %{
+        critical_acclaim: String.to_float(params["critical_acclaim"]) / 100,
+        festival_recognition: String.to_float(params["festival_recognition"]) / 100,
+        cultural_impact: String.to_float(params["cultural_impact"]) / 100,
+        technical_innovation: String.to_float(params["technical_innovation"]) / 100,
+        auteur_recognition: String.to_float(params["auteur_recognition"]) / 100
+      }
+      
+      # Validate weights sum to approximately 1.0
+      total_weight = new_weights |> Map.values() |> Enum.sum()
+      
+      if abs(total_weight - 1.0) > 0.01 do
+        {:noreply, 
+         socket
+         |> put_flash(:error, "Weights must sum to 100%. Current total: #{round(total_weight * 100)}%")}
+      else
+        # Start progressive loading
+        send(self(), {:recalculate_predictions, new_weights})
+        
+        {:noreply,
+         socket
+         |> assign(:loading, true)
+         |> assign(:algorithm_weights, new_weights)
+         |> assign(:last_updated, DateTime.utc_now())
+         |> clear_flash()}
+      end
+    rescue
+      error ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Invalid weight values: #{inspect(error)}")}
+    end
+  end
+  
+  @impl true
+  def handle_info({:recalculate_predictions, weights}, socket) do
+    try do
+      # Perform calculations in background
+      predictions_result = MoviePredictor.predict_2020s_movies(100, weights)
+      validation_result = HistoricalValidator.validate_all_decades(weights)
+      
+      {:noreply,
+       socket
+       |> assign(:loading, false)
+       |> assign(:predictions_result, predictions_result)
+       |> assign(:validation_result, validation_result)
+       |> assign(:last_updated, DateTime.utc_now())
+       |> put_flash(:info, "Predictions updated successfully!")}
+    rescue
+      error ->
+        {:noreply,
+         socket
+         |> assign(:loading, false)
+         |> put_flash(:error, "Failed to recalculate predictions: #{inspect(error)}")}
+    end
   end
 
   @impl true
