@@ -21,7 +21,7 @@
             <div class="text-sm text-gray-500">Accuracy</div>
           </div>
           <div class="text-center">
-            <div class="text-2xl font-bold text-purple-600"><%= length(@confirmed_additions) %></div>
+            <div class="text-2xl font-bold text-purple-600"><%= @confirmed_count %></div>
             <div class="text-sm text-gray-500">Confirmed</div>
           </div>
         </div>
@@ -244,23 +244,6 @@
             </div>
           </button>
           
-          <button
-            phx-click="switch_view"
-            phx-value-mode="confirmed"
-            class={[
-              "py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200",
-              @view_mode == :confirmed && "border-blue-500 text-blue-600",
-              @view_mode != :confirmed && "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            ]}
-          >
-            <div class="flex items-center space-x-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-              </svg>
-              <span>Confirmed Additions</span>
-              <span class="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full"><%= length(@confirmed_additions) %></span>
-            </div>
-          </button>
         </nav>
       </div>
     </div>
@@ -376,7 +359,7 @@
           <p class="text-gray-600 mb-6">Historical accuracy by decade (why you should trust our predictions):</p>
           
           <div class="space-y-4">
-            <%= for decade_result <- @validation_result.decade_results do %>
+            <%= for decade_result <- Enum.reverse(@validation_result.decade_results) do %>
               <div class="border rounded-lg p-4">
                 <div class="flex justify-between items-center mb-2">
                   <h3 class="text-lg font-medium text-gray-900"><%= decade_result.decade %>s Movies</h3>
@@ -418,31 +401,6 @@
       </div>
     <% end %>
 
-    <!-- Confirmed Additions View -->
-    <%= if @view_mode == :confirmed do %>
-      <div class="bg-white rounded-lg shadow-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">2020s Movies Already on 1001 Movies List</h2>
-        <p class="text-gray-600 mb-6">These films validate our prediction algorithm:</p>
-        
-        <div class="space-y-3">
-          <%= for confirmed <- @confirmed_additions do %>
-            <div class="flex justify-between items-center py-3 border-b">
-              <div>
-                <div class="font-medium text-gray-900"><%= confirmed.title %></div>
-                <div class="text-sm text-gray-600"><%= confirmed.year %></div>
-              </div>
-              <div class="text-right">
-                <% {likelihood_text, likelihood_class} = format_likelihood(confirmed.prediction.likelihood_percentage) %>
-                <div class={["font-semibold", likelihood_class]}>
-                  <%= likelihood_text %> predicted
-                </div>
-                <div class="text-sm text-green-600">✅ Confirmed</div>
-              </div>
-            </div>
-          <% end %>
-        </div>
-      </div>
-    <% end %>
 
     <!-- Enhanced Movie Detail Modal -->
     <%= if @selected_movie do %>
