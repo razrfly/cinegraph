@@ -15,10 +15,11 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     # Get all 2020s movies (both on and not on 1001 list for comparison)
     movies_2020s = get_2020s_movies()
     
-    # Score each movie
+    # Batch score all movies for better performance
     scored_movies = 
       movies_2020s
-      |> Enum.map(&add_prediction_score(&1, weights))
+      |> CriteriaScoring.batch_score_movies(weights)
+      |> Enum.map(&format_prediction_result/1)
       |> Enum.sort_by(& &1.prediction.likelihood_percentage, :desc)
       |> Enum.take(limit)
     
@@ -99,7 +100,10 @@ defmodule Cinegraph.Predictions.MoviePredictor do
 
   defp add_prediction_score(movie, weights \\ nil) do
     prediction = CriteriaScoring.calculate_movie_score(movie, weights)
-    
+    format_prediction_result(%{movie: movie, prediction: prediction})
+  end
+
+  defp format_prediction_result(%{movie: movie, prediction: prediction}) do
     %{
       id: movie.id,
       title: movie.title,
