@@ -1,7 +1,7 @@
 defmodule Cinegraph.Metrics.PQSScheduler do
   @moduledoc """
   Handles periodic recalculation scheduling for Person Quality Scores (PQS).
-  
+
   Implements the periodic strategies defined in issue #292:
   - Daily Incremental Update (3 AM daily, recent active people)
   - Weekly Full Recalculation (2 AM Sunday, people with ≥5 credits)  
@@ -20,13 +20,16 @@ defmodule Cinegraph.Metrics.PQSScheduler do
   """
   def schedule_daily_incremental do
     Logger.info("Starting daily incremental PQS update")
-    
+
     # Get people with recent activity (new credits, festival nominations, etc.)
-    recent_people = get_recently_active_people(7) # Last 7 days
-    
+    # Last 7 days
+    recent_people = get_recently_active_people(7)
+
     if length(recent_people) > 0 do
-      Logger.info("Scheduling daily incremental PQS for #{length(recent_people)} recently active people")
-      
+      Logger.info(
+        "Scheduling daily incremental PQS for #{length(recent_people)} recently active people"
+      )
+
       %{
         batch: "daily_incremental",
         person_ids: recent_people,
@@ -46,7 +49,7 @@ defmodule Cinegraph.Metrics.PQSScheduler do
   """
   def schedule_weekly_full do
     Logger.info("Starting weekly full PQS recalculation")
-    
+
     %{
       batch: "weekly_full",
       trigger: "weekly_scheduled",
@@ -61,12 +64,13 @@ defmodule Cinegraph.Metrics.PQSScheduler do
   Comprehensive recalculation of all people regardless of credit count.
   """
   def schedule_monthly_deep do
-    Logger.info("Starting monthly deep PQS recalculation") 
-    
+    Logger.info("Starting monthly deep PQS recalculation")
+
     %{
       batch: "monthly_deep",
-      trigger: "monthly_scheduled", 
-      min_credits: 1 # Include everyone
+      trigger: "monthly_scheduled",
+      # Include everyone
+      min_credits: 1
     }
     |> PersonQualityScoreWorker.new()
     |> Oban.insert()
@@ -78,10 +82,12 @@ defmodule Cinegraph.Metrics.PQSScheduler do
   """
   def schedule_stale_cleanup(max_age_days \\ 7) do
     stale_people = get_people_with_stale_scores(max_age_days)
-    
+
     if length(stale_people) > 0 do
-      Logger.info("Scheduling stale score cleanup for #{length(stale_people)} people (scores older than #{max_age_days} days)")
-      
+      Logger.info(
+        "Scheduling stale score cleanup for #{length(stale_people)} people (scores older than #{max_age_days} days)"
+      )
+
       %{
         batch: "stale_cleanup",
         person_ids: stale_people,
@@ -102,39 +108,42 @@ defmodule Cinegraph.Metrics.PQSScheduler do
   """
   def check_system_health do
     coverage = PQSMonitoring.get_coverage_metrics()
-    
+
     # Trigger emergency recalculation if >10% of people lack PQS for 48+ hours
     if coverage.people_without_pqs_percent > 10.0 do
-      reason = "Coverage below threshold: #{coverage.people_without_pqs_percent}% people without PQS"
+      reason =
+        "Coverage below threshold: #{coverage.people_without_pqs_percent}% people without PQS"
+
       Logger.warning("PQS system health check failed: #{reason}")
-      
+
       Cinegraph.Metrics.PQSTriggerStrategy.trigger_quality_assurance_recalculation(reason)
     end
-    
+
     # Check for consecutive failures
     performance = PQSMonitoring.get_performance_metrics()
+
     if performance.recent_failure_count >= 5 do
       reason = "High failure rate: #{performance.recent_failure_count} consecutive failures"
       Logger.warning("PQS system health check failed: #{reason}")
-      
+
       Cinegraph.Metrics.PQSTriggerStrategy.trigger_quality_assurance_recalculation(reason)
     end
-    
+
     :ok
   end
 
   @doc """
   Get cron configuration for Oban scheduling.
-  
+
   To enable automated PQS scheduling, add this to your Oban config:
-  
+
       config :cinegraph, Oban,
         plugins: [
           # ... other plugins ...
           {Oban.Plugins.Cron, 
             crontab: Cinegraph.Metrics.PQSScheduler.get_cron_config()}
         ]
-  
+
   Note: The health check is handled here centrally to avoid duplicate 
   triggers. Do not schedule health_check jobs directly to the worker.
   """
@@ -157,9 +166,9 @@ defmodule Cinegraph.Metrics.PQSScheduler do
 
   defp get_recently_active_people(days_back) do
     cutoff_date = DateTime.utc_now() |> DateTime.add(-days_back, :day)
-    
+
     # People with recent movie credits
-    recent_credits = 
+    recent_credits =
       from(mc in "movie_credits",
         where: mc.inserted_at >= ^cutoff_date,
         distinct: [mc.person_id],
@@ -169,7 +178,7 @@ defmodule Cinegraph.Metrics.PQSScheduler do
 
     # People with recent festival nominations
     recent_festivals =
-      from(nom in "festival_nominations", 
+      from(nom in "festival_nominations",
         where: nom.inserted_at >= ^cutoff_date and not is_nil(nom.person_id),
         distinct: [nom.person_id],
         select: nom.person_id
@@ -180,7 +189,8 @@ defmodule Cinegraph.Metrics.PQSScheduler do
     recent_metrics =
       from(em in "external_metrics",
         where: em.updated_at >= ^cutoff_date,
-        join: mc in "movie_credits", on: mc.movie_id == em.movie_id,
+        join: mc in "movie_credits",
+        on: mc.movie_id == em.movie_id,
         distinct: [mc.person_id],
         select: mc.person_id
       )
@@ -192,7 +202,7 @@ defmodule Cinegraph.Metrics.PQSScheduler do
 
   defp get_people_with_stale_scores(max_age_days) do
     cutoff_date = DateTime.utc_now() |> DateTime.add(-max_age_days, :day)
-    
+
     from(pm in "person_metrics",
       where: pm.metric_type == "quality_score" and pm.calculated_at < ^cutoff_date,
       select: pm.person_id

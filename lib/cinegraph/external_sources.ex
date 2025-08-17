@@ -74,7 +74,9 @@ defmodule Cinegraph.ExternalSources do
         if metric.movie_id do
           Cinegraph.Metrics.PQSTriggerStrategy.trigger_external_metrics_update(metric.movie_id)
         end
+
         result
+
       error ->
         error
     end

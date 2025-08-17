@@ -30,8 +30,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           </div>
         </div>
       </div>
-
-      <!-- Discovery & Awards Section -->
+      
+    <!-- Discovery & Awards Section -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">🏆 Discovery & Awards</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -52,8 +52,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
               <option value="hidden_gems">💎 Hidden Gems</option>
             </select>
           </div>
-
-          <!-- Award Era -->
+          
+    <!-- Award Era -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Award Era
@@ -72,8 +72,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           </div>
         </div>
       </div>
-
-      <!-- Traditional Awards Section (Simplified) -->
+      
+    <!-- Traditional Awards Section (Simplified) -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">🎪 Traditional Awards</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -95,7 +95,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
             </select>
           </div>
           
-          <!-- Festival Selection -->
+    <!-- Festival Selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
               Festival/Organization
@@ -115,14 +115,24 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           </div>
         </div>
       </div>
-
-      <!-- Legacy Filters (Collapsible) -->
+      
+    <!-- Legacy Filters (Collapsible) -->
       <div class="border-t pt-4">
         <details class="group">
           <summary class="flex items-center justify-between cursor-pointer text-sm font-semibold text-gray-900 mb-3">
             <span>⚙️ Legacy Filters (Advanced Users)</span>
-            <svg class="w-4 h-4 text-gray-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            <svg
+              class="w-4 h-4 text-gray-500 group-open:rotate-180 transition-transform"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </summary>
           <div class="mt-4 space-y-4">
@@ -140,7 +150,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                   Actor IDs
@@ -153,7 +163,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                   Any Cast/Crew IDs
@@ -167,8 +177,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                 />
               </div>
             </div>
-
-            <!-- Legacy Rating Ranges -->
+            
+    <!-- Legacy Rating Ranges -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -197,7 +207,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                   />
                 </div>
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                   IMDb Rating Range
@@ -282,8 +292,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                 </div>
               </div>
             </div>
-
-            <!-- Legacy Discovery Metrics -->
+            
+    <!-- Legacy Discovery Metrics -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -300,7 +310,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                   🏆 Critical Acclaim <span class="text-xs text-gray-500 ml-1">(0-1)</span>
@@ -316,7 +326,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                   🌟 Industry Recognition <span class="text-xs text-gray-500 ml-1">(0-1)</span>
@@ -332,7 +342,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                   class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>
-              
+
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
                   📚 Cultural Impact <span class="text-xs text-gray-500 ml-1">(0-1)</span>
@@ -349,8 +359,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
                 />
               </div>
             </div>
-
-            <!-- Legacy Award Year Range -->
+            
+    <!-- Legacy Award Year Range -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -381,28 +391,6 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           </div>
         </details>
       </div>
-      
-      <!-- Active Filters Display -->
-      <%= if has_active_advanced_filters(@filters) do %>
-        <div class="border-t pt-4">
-          <h3 class="text-sm font-semibold text-gray-900 mb-2">Active Advanced Filters</h3>
-          <div class="flex flex-wrap gap-2">
-            <%= for {key, value} <- get_active_advanced_filters(@filters) do %>
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-                {format_filter_label(key)}: {format_filter_value(key, value)}
-                <button
-                  type="button"
-                  phx-click="remove_filter"
-                  phx-value-filter={key}
-                  class="ml-2 inline-flex items-center justify-center w-4 h-4 text-blue-600 hover:text-blue-800"
-                >
-                  ×
-                </button>
-              </span>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
     </div>
     """
   end
@@ -413,7 +401,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     # New simplified filters (removed people_search since it's now in basic filters)
     new_filter_keys = [
       "rating_preset",
-      "discovery_preset", 
+      "discovery_preset",
       "award_preset"
     ]
 
@@ -441,24 +429,27 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     ]
 
     # Check new simplified filters
-    new_filters_active = Enum.any?(new_filter_keys, fn key ->
-      case key do
-        "people_search" ->
-          case Map.get(filters, key) do
-            %{"people_ids" => people_ids} -> people_ids not in [nil, ""]
-            _ -> false
-          end
-        _ ->
-          value = Map.get(filters, key)
-          value not in [nil, "", []]
-      end
-    end)
+    new_filters_active =
+      Enum.any?(new_filter_keys, fn key ->
+        case key do
+          "people_search" ->
+            case Map.get(filters, key) do
+              %{"people_ids" => people_ids} -> people_ids not in [nil, ""]
+              _ -> false
+            end
+
+          _ ->
+            value = Map.get(filters, key)
+            value not in [nil, "", []]
+        end
+      end)
 
     # Check legacy filters
-    legacy_filters_active = Enum.any?(legacy_keys, fn key ->
-      value = Map.get(filters, key)
-      value not in [nil, "", []]
-    end)
+    legacy_filters_active =
+      Enum.any?(legacy_keys, fn key ->
+        value = Map.get(filters, key)
+        value not in [nil, "", []]
+      end)
 
     new_filters_active || legacy_filters_active
   end
@@ -468,13 +459,13 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     new_filter_keys = [
       "people_search",
       "rating_preset",
-      "discovery_preset", 
+      "discovery_preset",
       "award_preset"
     ]
 
     legacy_keys = [
       "award_status",
-      "festival_id", 
+      "festival_id",
       "award_year_from",
       "award_year_to",
       "tmdb_min",
@@ -495,7 +486,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     ]
 
     # Get active new filters
-    new_active = 
+    new_active =
       new_filter_keys
       |> Enum.map(fn key ->
         case Map.get(filters, key) do
@@ -506,7 +497,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       |> Enum.reject(&is_nil/1)
 
     # Get active legacy filters  
-    legacy_active = 
+    legacy_active =
       filters
       |> Map.take(legacy_keys)
       |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
@@ -520,7 +511,6 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "rating_preset" -> "Rating Quality"
       "discovery_preset" -> "Discovery Type"
       "award_preset" -> "Award Era"
-      
       # Legacy filters
       "award_status" -> "Award Status"
       "festival_id" -> "Festival"

@@ -11,10 +11,11 @@
       <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
     </div>
   <% else %>
-    <div class="absolute inset-0 h-96 md:h-[500px] bg-gradient-to-br from-gray-900 to-gray-700"></div>
+    <div class="absolute inset-0 h-96 md:h-[500px] bg-gradient-to-br from-gray-900 to-gray-700">
+    </div>
   <% end %>
   
-  <!-- Hero Content -->
+<!-- Hero Content -->
   <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
     <!-- Navigation -->
     <div class="mb-8 flex items-center justify-between">
@@ -23,24 +24,34 @@
         class="inline-flex items-center text-white/80 hover:text-white transition-colors"
       >
         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
         </svg>
         Back to Movies
       </.link>
       
-      <!-- Legacy Page Button -->
+<!-- Legacy Page Button -->
       <.link
         navigate={~p"/movies/#{@movie.slug || @movie.id}/legacy"}
         class="inline-flex items-center px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-white text-sm rounded-md transition-colors"
       >
         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
         </svg>
         View Legacy Page
       </.link>
     </div>
     
-    <!-- Movie Info -->
+<!-- Movie Info -->
     <div class="flex flex-col md:flex-row gap-8 items-start">
       <!-- Poster -->
       <div class="flex-shrink-0">
@@ -57,7 +68,7 @@
         <% end %>
       </div>
       
-      <!-- Movie Details -->
+<!-- Movie Details -->
       <div class="flex-1 text-white min-h-0">
         <div class="flex items-start justify-between mb-4">
           <div class="min-w-0">
@@ -68,7 +79,7 @@
           </div>
         </div>
         
-        <!-- Quick Info -->
+<!-- Quick Info -->
         <div class="flex flex-wrap gap-4 mb-6 text-sm">
           <%= if @movie.release_date do %>
             <span class="bg-white/20 backdrop-blur px-3 py-1 rounded-full">
@@ -87,15 +98,17 @@
           <% end %>
         </div>
         
-        <!-- Overview -->
+<!-- Overview -->
         <%= if @movie.overview && @movie.overview != "" do %>
           <p class="text-white/90 text-lg leading-relaxed mb-6 max-w-3xl">{@movie.overview}</p>
         <% end %>
         
-        <!-- Key People -->
+<!-- Key People -->
         <%= if length(@movie.directors) > 0 do %>
           <div class="mb-4">
-            <h3 class="text-sm font-semibold text-white/60 uppercase tracking-wide mb-2">Directed by</h3>
+            <h3 class="text-sm font-semibold text-white/60 uppercase tracking-wide mb-2">
+              Directed by
+            </h3>
             <div class="flex flex-wrap gap-2">
               <%= for director <- @movie.directors do %>
                 <.link
@@ -110,11 +123,11 @@
         <% end %>
       </div>
       
-      <!-- Cinegraph Score Card -->
+<!-- Cinegraph Score Card -->
       <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 min-w-[300px]">
         <h3 class="text-white text-lg font-semibold mb-4 text-center">Cinegraph Score</h3>
         
-        <!-- Main Score -->
+<!-- Main Score -->
         <div class="text-center mb-6">
           <div class="text-5xl font-bold text-white mb-2">
             <!-- Mock score - would come from scoring service -->
@@ -123,7 +136,7 @@
           <div class="text-white/60 text-sm">Overall Quality</div>
         </div>
         
-        <!-- 6-Category Breakdown -->
+<!-- 6-Category Breakdown -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-white/80 text-sm">Popular Opinion</span>
@@ -134,7 +147,7 @@
               <span class="text-white text-sm w-8">7.5</span>
             </div>
           </div>
-          
+
           <div class="flex items-center justify-between">
             <span class="text-white/80 text-sm">Critical Acclaim</span>
             <div class="flex items-center">
@@ -144,7 +157,7 @@
               <span class="text-white text-sm w-8">8.0</span>
             </div>
           </div>
-          
+
           <div class="flex items-center justify-between">
             <span class="text-white/80 text-sm">Industry Recognition</span>
             <div class="flex items-center">
@@ -154,7 +167,7 @@
               <span class="text-white text-sm w-8">8.3</span>
             </div>
           </div>
-          
+
           <div class="flex items-center justify-between">
             <span class="text-white/80 text-sm">Cultural Impact</span>
             <div class="flex items-center">
@@ -164,7 +177,7 @@
               <span class="text-white text-sm w-8">8.0</span>
             </div>
           </div>
-          
+
           <div class="flex items-center justify-between">
             <span class="text-white/80 text-sm">People Quality</span>
             <div class="flex items-center">
@@ -174,7 +187,7 @@
               <span class="text-white text-sm w-8">8.3</span>
             </div>
           </div>
-          
+
           <div class="flex items-center justify-between">
             <span class="text-white/80 text-sm">Collaboration Intelligence</span>
             <div class="flex items-center">
@@ -186,18 +199,22 @@
           </div>
         </div>
         
-        <!-- External Ratings -->
+<!-- External Ratings -->
         <div class="mt-6 pt-4 border-t border-white/20">
           <div class="grid grid-cols-2 gap-4 text-center">
             <%= if get_in(@movie.omdb_data, ["imdbRating"]) && get_in(@movie.omdb_data, ["imdbRating"]) != "N/A" do %>
               <div>
-                <div class="text-yellow-400 font-bold">{get_in(@movie.omdb_data, ["imdbRating"])}</div>
+                <div class="text-yellow-400 font-bold">
+                  {get_in(@movie.omdb_data, ["imdbRating"])}
+                </div>
                 <div class="text-white/60 text-xs">IMDb</div>
               </div>
             <% end %>
             <%= if get_in(@movie.omdb_data, ["Metascore"]) && get_in(@movie.omdb_data, ["Metascore"]) != "N/A" do %>
               <div>
-                <div class="text-green-400 font-bold">{get_in(@movie.omdb_data, ["Metascore"])}</div>
+                <div class="text-green-400 font-bold">
+                  {get_in(@movie.omdb_data, ["Metascore"])}
+                </div>
                 <div class="text-white/60 text-xs">Metacritic</div>
               </div>
             <% end %>
@@ -211,7 +228,7 @@
 <!-- Main Content Container -->
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   
-  <!-- Tab Navigation -->
+<!-- Tab Navigation -->
   <div class="border-b border-gray-200 mb-8">
     <nav class="-mb-px flex space-x-8" aria-label="Tabs">
       <button
@@ -219,7 +236,10 @@
         phx-value-tab="overview"
         class={[
           "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
-          if(@active_tab == "overview", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300")
+          if(@active_tab == "overview",
+            do: "border-blue-500 text-blue-600",
+            else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )
         ]}
       >
         Overview
@@ -229,7 +249,10 @@
         phx-value-tab="cast-crew"
         class={[
           "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
-          if(@active_tab == "cast-crew", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300")
+          if(@active_tab == "cast-crew",
+            do: "border-blue-500 text-blue-600",
+            else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )
         ]}
       >
         Cast & Crew
@@ -239,7 +262,10 @@
         phx-value-tab="reviews"
         class={[
           "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
-          if(@active_tab == "reviews", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300")
+          if(@active_tab == "reviews",
+            do: "border-blue-500 text-blue-600",
+            else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )
         ]}
       >
         Reviews
@@ -249,7 +275,10 @@
         phx-value-tab="awards"
         class={[
           "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
-          if(@active_tab == "awards", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300")
+          if(@active_tab == "awards",
+            do: "border-blue-500 text-blue-600",
+            else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )
         ]}
       >
         Awards & Recognition
@@ -259,7 +288,10 @@
         phx-value-tab="collaborations"
         class={[
           "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
-          if(@active_tab == "collaborations", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300")
+          if(@active_tab == "collaborations",
+            do: "border-blue-500 text-blue-600",
+            else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )
         ]}
       >
         Collaborations
@@ -269,7 +301,10 @@
         phx-value-tab="media"
         class={[
           "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
-          if(@active_tab == "media", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300")
+          if(@active_tab == "media",
+            do: "border-blue-500 text-blue-600",
+            else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )
         ]}
       >
         Media
@@ -279,52 +314,63 @@
         phx-value-tab="details"
         class={[
           "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
-          if(@active_tab == "details", do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300")
+          if(@active_tab == "details",
+            do: "border-blue-500 text-blue-600",
+            else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+          )
         ]}
       >
         Details
       </button>
     </nav>
   </div>
-
-  <!-- Tab Content -->
+  
+<!-- Tab Content -->
   <div class="tab-content">
     
-    <!-- Overview Tab -->
+<!-- Overview Tab -->
     <%= if @active_tab == "overview" do %>
       
-      <!-- Movie Stats Grid -->
+<!-- Movie Stats Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <%= if (budget = Map.get(@movie, :budget)) && budget > 0 do %>
           <div class="bg-white rounded-lg shadow p-6 text-center">
-            <div class="text-2xl font-bold text-green-600 mb-1">${trunc(budget / 1_000_000)}M</div>
+            <div class="text-2xl font-bold text-green-600 mb-1">
+              ${trunc(budget / 1_000_000)}M
+            </div>
             <div class="text-sm text-gray-500">Budget</div>
           </div>
         <% end %>
-        
+
         <%= if (revenue = Map.get(@movie, :revenue)) && revenue > 0 do %>
           <div class="bg-white rounded-lg shadow p-6 text-center">
-            <div class="text-2xl font-bold text-blue-600 mb-1">${trunc(revenue / 1_000_000)}M</div>
+            <div class="text-2xl font-bold text-blue-600 mb-1">
+              ${trunc(revenue / 1_000_000)}M
+            </div>
             <div class="text-sm text-gray-500">Box Office</div>
           </div>
         <% end %>
-        
+
         <div class="bg-white rounded-lg shadow p-6 text-center">
-          <div class="text-2xl font-bold text-purple-600 mb-1">{length(@movie.cast) + length(@movie.crew)}</div>
+          <div class="text-2xl font-bold text-purple-600 mb-1">
+            {length(@movie.cast) + length(@movie.crew)}
+          </div>
           <div class="text-sm text-gray-500">Cast & Crew</div>
         </div>
-        
+
         <div class="bg-white rounded-lg shadow p-6 text-center">
-          <div class="text-2xl font-bold text-orange-600 mb-1">{length(@movie.oscar_nominations)}</div>
+          <div class="text-2xl font-bold text-orange-600 mb-1">
+            {length(@movie.oscar_nominations)}
+          </div>
           <div class="text-sm text-gray-500">Oscar Nominations</div>
         </div>
       </div>
-
-      <!-- Key Collaborations -->
+      
+<!-- Key Collaborations -->
       <%= if @movie.key_collaborations.total_reunions > 0 do %>
         <div class="bg-white rounded-lg shadow p-6 mb-8">
           <h3 class="text-xl font-bold text-gray-900 mb-4">🎬 Notable Collaborations</h3>
-          
+
           <%= if length(@movie.key_collaborations.director_actor_reunions) > 0 do %>
             <div class="mb-6">
               <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
@@ -346,7 +392,7 @@
               </div>
             </div>
           <% end %>
-          
+
           <%= if length(@movie.key_collaborations.actor_partnerships) > 0 do %>
             <div>
               <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
@@ -371,7 +417,7 @@
         </div>
       <% end %>
       
-      <!-- External Ratings -->
+<!-- External Ratings -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h3 class="text-xl font-bold text-gray-900 mb-4">External Ratings</h3>
         <%= if length(@movie.external_ratings) > 0 do %>
@@ -393,7 +439,9 @@
                       {rating.value}
                   <% end %>
                 </div>
-                <div class="text-sm text-gray-500">{rating.metadata["source_name"] || rating.source.name}</div>
+                <div class="text-sm text-gray-500">
+                  {rating.metadata["source_name"] || rating.source.name}
+                </div>
               </div>
             <% end %>
           </div>
@@ -401,14 +449,13 @@
           <p class="text-gray-600">No external ratings available.</p>
         <% end %>
       </div>
-      
     <% end %>
-
-    <!-- Cast & Crew Tab -->
+    
+<!-- Cast & Crew Tab -->
     <%= if @active_tab == "cast-crew" do %>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        <!-- Cast -->
+<!-- Cast -->
         <div class="bg-white rounded-lg shadow p-6">
           <h3 class="text-xl font-bold text-gray-900 mb-4">Cast ({length(@movie.cast)})</h3>
           <%= if length(@movie.cast) > 0 do %>
@@ -427,7 +474,7 @@
                     <% end %>
                   </div>
                   <%= if cast_member.cast_order do %>
-                    <span class="text-xs text-gray-400"><%= cast_member.cast_order %></span>
+                    <span class="text-xs text-gray-400">{cast_member.cast_order}</span>
                   <% end %>
                 </div>
               <% end %>
@@ -442,7 +489,7 @@
           <% end %>
         </div>
         
-        <!-- Crew -->
+<!-- Crew -->
         <div class="bg-white rounded-lg shadow p-6">
           <h3 class="text-xl font-bold text-gray-900 mb-4">Key Crew</h3>
           <%= if length(@movie.crew) > 0 do %>
@@ -468,16 +515,15 @@
             <p class="text-gray-600">No crew data available.</p>
           <% end %>
         </div>
-        
       </div>
     <% end %>
-
-    <!-- Reviews Tab -->
+    
+<!-- Reviews Tab -->
     <%= if @active_tab == "reviews" do %>
       <div class="bg-white rounded-lg shadow p-6">
         <h3 class="text-xl font-bold text-gray-900 mb-6">User Reviews</h3>
         
-        <!-- Mock reviews since review system doesn't exist yet -->
+<!-- Mock reviews since review system doesn't exist yet -->
         <div class="space-y-6">
           <div class="border-b border-gray-200 pb-6">
             <div class="flex items-start justify-between mb-3">
@@ -486,7 +532,11 @@
                 <div class="flex items-center mt-1">
                   <div class="flex items-center">
                     <%= for i <- 1..5 do %>
-                      <svg class={"w-4 h-4 #{if i <= 4, do: "text-yellow-400", else: "text-gray-300"}"} fill="currentColor" viewBox="0 0 20 20">
+                      <svg
+                        class={"w-4 h-4 #{if i <= 4, do: "text-yellow-400", else: "text-gray-300"}"}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                     <% end %>
@@ -496,9 +546,11 @@
               </div>
               <span class="text-sm text-gray-500">2 days ago</span>
             </div>
-            <p class="text-gray-700 leading-relaxed">Outstanding cinematography and performances. The director's vision really comes through in every frame. Highly recommended for fans of the genre.</p>
+            <p class="text-gray-700 leading-relaxed">
+              Outstanding cinematography and performances. The director's vision really comes through in every frame. Highly recommended for fans of the genre.
+            </p>
           </div>
-          
+
           <div class="border-b border-gray-200 pb-6">
             <div class="flex items-start justify-between mb-3">
               <div>
@@ -506,7 +558,11 @@
                 <div class="flex items-center mt-1">
                   <div class="flex items-center">
                     <%= for i <- 1..5 do %>
-                      <svg class={"w-4 h-4 #{if i <= 5, do: "text-yellow-400", else: "text-gray-300"}"} fill="currentColor" viewBox="0 0 20 20">
+                      <svg
+                        class={"w-4 h-4 #{if i <= 5, do: "text-yellow-400", else: "text-gray-300"}"}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                     <% end %>
@@ -516,27 +572,32 @@
               </div>
               <span class="text-sm text-gray-500">1 week ago</span>
             </div>
-            <p class="text-gray-700 leading-relaxed">Absolutely brilliant! This movie exceeded all my expectations. The storytelling is masterful and the cast delivers phenomenal performances.</p>
+            <p class="text-gray-700 leading-relaxed">
+              Absolutely brilliant! This movie exceeded all my expectations. The storytelling is masterful and the cast delivers phenomenal performances.
+            </p>
           </div>
-          
+
           <div class="text-center">
-            <button class="text-blue-600 hover:text-blue-800 font-medium">Load More Reviews</button>
+            <button class="text-blue-600 hover:text-blue-800 font-medium">
+              Load More Reviews
+            </button>
           </div>
         </div>
         
-        <!-- Note about missing functionality -->
+<!-- Note about missing functionality -->
         <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p class="text-blue-800 text-sm">
-            <strong>Note:</strong> This is a mockup of the review system. The actual review functionality would need to be implemented.
+            <strong>Note:</strong>
+            This is a mockup of the review system. The actual review functionality would need to be implemented.
           </p>
         </div>
       </div>
     <% end %>
-
-    <!-- Awards & Recognition Tab -->
+    
+<!-- Awards & Recognition Tab -->
     <%= if @active_tab == "awards" do %>
       
-      <!-- OMDb Awards Summary -->
+<!-- OMDb Awards Summary -->
       <%= if @movie.omdb_data && @movie.omdb_data["Awards"] && @movie.omdb_data["Awards"] != "N/A" do %>
         <div class="bg-white rounded-lg shadow p-6 mb-8">
           <div class="flex items-start gap-4">
@@ -550,7 +611,7 @@
         </div>
       <% end %>
       
-      <!-- Oscar Nominations -->
+<!-- Oscar Nominations -->
       <%= if length(@movie.oscar_nominations) > 0 do %>
         <div class="bg-white rounded-lg shadow p-6 mb-8">
           <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
@@ -587,7 +648,8 @@
 
                     <%= if nomination.details["nominee_names"] && nomination.details["nominee_names"] != @movie.title do %>
                       <p class="text-sm text-gray-600">
-                        Nominee: <span class="font-medium">{nomination.details["nominee_names"]}</span>
+                        Nominee:
+                        <span class="font-medium">{nomination.details["nominee_names"]}</span>
                       </p>
                     <% end %>
                   </div>
@@ -607,7 +669,7 @@
         </div>
       <% end %>
       
-      <!-- Cultural Lists -->
+<!-- Cultural Lists -->
       <%= if length(@movie.cultural_lists) > 0 do %>
         <div class="bg-white rounded-lg shadow p-6 mb-8">
           <h3 class="text-xl font-bold text-gray-900 mb-4">📚 Cultural Lists</h3>
@@ -629,7 +691,7 @@
                     <div class="flex flex-wrap gap-2">
                       <%= if list_item.rank do %>
                         <span class="inline-flex items-center px-2 py-1 rounded text-sm bg-yellow-100 text-yellow-800">
-                          #<%= list_item.rank %>
+                          #{list_item.rank}
                         </span>
                       <% end %>
 
@@ -660,41 +722,47 @@
           </div>
         </div>
       <% end %>
-      
+
       <%= if length(@movie.oscar_nominations) == 0 && length(@movie.cultural_lists) == 0 && (!@movie.omdb_data || !@movie.omdb_data["Awards"] || @movie.omdb_data["Awards"] == "N/A") do %>
         <div class="bg-white rounded-lg shadow p-6">
-          <p class="text-gray-600 text-center">No awards or cultural list appearances recorded.</p>
+          <p class="text-gray-600 text-center">
+            No awards or cultural list appearances recorded.
+          </p>
         </div>
       <% end %>
-      
     <% end %>
-
-    <!-- Collaborations Tab -->
+    
+<!-- Collaborations Tab -->
     <%= if @active_tab == "collaborations" do %>
       
-      <!-- Enhanced Collaboration Analysis -->
+<!-- Enhanced Collaboration Analysis -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h3 class="text-xl font-bold text-gray-900 mb-6">🔗 Collaboration Intelligence</h3>
         
-        <!-- Collaboration Stats -->
+<!-- Collaboration Stats -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div class="text-center p-4 bg-blue-50 rounded-lg">
-            <div class="text-2xl font-bold text-blue-600 mb-1">{@movie.key_collaborations.total_reunions}</div>
+            <div class="text-2xl font-bold text-blue-600 mb-1">
+              {@movie.key_collaborations.total_reunions}
+            </div>
             <div class="text-sm text-gray-600">Notable Reunions</div>
           </div>
           <div class="text-center p-4 bg-green-50 rounded-lg">
-            <div class="text-2xl font-bold text-green-600 mb-1">{length(@movie.key_collaborations.director_actor_reunions)}</div>
+            <div class="text-2xl font-bold text-green-600 mb-1">
+              {length(@movie.key_collaborations.director_actor_reunions)}
+            </div>
             <div class="text-sm text-gray-600">Director-Actor Partnerships</div>
           </div>
           <div class="text-center p-4 bg-purple-50 rounded-lg">
-            <div class="text-2xl font-bold text-purple-600 mb-1">{length(@movie.key_collaborations.actor_partnerships)}</div>
+            <div class="text-2xl font-bold text-purple-600 mb-1">
+              {length(@movie.key_collaborations.actor_partnerships)}
+            </div>
             <div class="text-sm text-gray-600">Actor Partnerships</div>
           </div>
         </div>
         
-        <!-- Detailed Collaborations -->
+<!-- Detailed Collaborations -->
         <%= if @movie.key_collaborations.total_reunions > 0 do %>
-          
           <%= if length(@movie.key_collaborations.director_actor_reunions) > 0 do %>
             <div class="mb-8">
               <h4 class="text-lg font-semibold text-gray-800 mb-4">🎬 Director-Actor Reunions</h4>
@@ -721,7 +789,7 @@
               </div>
             </div>
           <% end %>
-          
+
           <%= if length(@movie.key_collaborations.actor_partnerships) > 0 do %>
             <div class="mb-8">
               <h4 class="text-lg font-semibold text-gray-800 mb-4">🎭 Actor Partnerships</h4>
@@ -748,22 +816,27 @@
               </div>
             </div>
           <% end %>
-          
         <% else %>
           <div class="text-center py-8">
             <div class="text-4xl mb-4">🔍</div>
             <p class="text-gray-600">No notable collaborations detected for this film.</p>
-            <p class="text-sm text-gray-500 mt-2">Our system looks for recurring partnerships between cast and crew members.</p>
+            <p class="text-sm text-gray-500 mt-2">
+              Our system looks for recurring partnerships between cast and crew members.
+            </p>
           </div>
         <% end %>
       </div>
       
-      <!-- Six Degrees Link -->
+<!-- Six Degrees Link -->
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
         <div class="flex items-center justify-between">
           <div>
-            <h4 class="text-lg font-semibold text-blue-900 mb-2">Explore Six Degrees of Cinema</h4>
-            <p class="text-blue-700">Discover how the people in this film connect to the broader film industry.</p>
+            <h4 class="text-lg font-semibold text-blue-900 mb-2">
+              Explore Six Degrees of Cinema
+            </h4>
+            <p class="text-blue-700">
+              Discover how the people in this film connect to the broader film industry.
+            </p>
           </div>
           <.link
             navigate={~p"/six-degrees"}
@@ -773,13 +846,12 @@
           </.link>
         </div>
       </div>
-      
     <% end %>
-
-    <!-- Media Tab -->
+    
+<!-- Media Tab -->
     <%= if @active_tab == "media" do %>
       
-      <!-- Videos -->
+<!-- Videos -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h3 class="text-xl font-bold text-gray-900 mb-4">🎥 Videos ({length(@movie.videos)})</h3>
         <%= if length(@movie.videos) > 0 do %>
@@ -812,34 +884,38 @@
         <% end %>
       </div>
       
-      <!-- Images Gallery Placeholder -->
+<!-- Images Gallery Placeholder -->
       <div class="bg-white rounded-lg shadow p-6">
         <h3 class="text-xl font-bold text-gray-900 mb-4">🖼️ Images</h3>
         <div class="text-center py-8">
           <div class="text-4xl mb-4">🎨</div>
           <p class="text-gray-600">Image gallery not yet implemented.</p>
-          <p class="text-sm text-gray-500 mt-2">Would show backdrop images, stills, and promotional materials.</p>
+          <p class="text-sm text-gray-500 mt-2">
+            Would show backdrop images, stills, and promotional materials.
+          </p>
         </div>
         
-        <!-- Note about missing functionality -->
+<!-- Note about missing functionality -->
         <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p class="text-blue-800 text-sm">
-            <strong>Note:</strong> Image gallery functionality would need to be implemented along with image data storage.
+            <strong>Note:</strong>
+            Image gallery functionality would need to be implemented along with image data storage.
           </p>
         </div>
       </div>
-      
     <% end %>
-
-    <!-- Details Tab -->
+    
+<!-- Details Tab -->
     <%= if @active_tab == "details" do %>
       
-      <!-- Production Details -->
+<!-- Production Details -->
       <div class="space-y-8">
         
-        <!-- Keywords -->
+<!-- Keywords -->
         <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-xl font-bold text-gray-900 mb-4">🏷️ Keywords ({length(@movie.keywords)})</h3>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">
+            🏷️ Keywords ({length(@movie.keywords)})
+          </h3>
           <%= if length(@movie.keywords) > 0 do %>
             <div class="flex flex-wrap gap-2">
               <%= for keyword <- @movie.keywords do %>
@@ -853,9 +929,11 @@
           <% end %>
         </div>
         
-        <!-- Production Companies -->
+<!-- Production Companies -->
         <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-xl font-bold text-gray-900 mb-4">🏢 Production Companies ({length(@movie.production_companies)})</h3>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">
+            🏢 Production Companies ({length(@movie.production_companies)})
+          </h3>
           <%= if length(@movie.production_companies) > 0 do %>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <%= for company <- @movie.production_companies do %>
@@ -872,9 +950,11 @@
           <% end %>
         </div>
         
-        <!-- Release Information -->
+<!-- Release Information -->
         <div class="bg-white rounded-lg shadow p-6">
-          <h3 class="text-xl font-bold text-gray-900 mb-4">📅 Release Information ({length(@movie.release_dates)})</h3>
+          <h3 class="text-xl font-bold text-gray-900 mb-4">
+            📅 Release Information ({length(@movie.release_dates)})
+          </h3>
           <%= if length(@movie.release_dates) > 0 do %>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <%= for release <- @movie.release_dates do %>
@@ -898,7 +978,7 @@
           <% end %>
         </div>
         
-        <!-- Technical Details -->
+<!-- Technical Details -->
         <div class="bg-white rounded-lg shadow p-6">
           <h3 class="text-xl font-bold text-gray-900 mb-4">⚙️ Technical Details</h3>
           <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -926,12 +1006,14 @@
             <% end %>
             <div>
               <dt class="text-sm font-medium text-gray-500">Last Updated</dt>
-              <dd class="text-sm text-gray-900">{Calendar.strftime(@movie.updated_at, "%Y-%m-%d %H:%M")}</dd>
+              <dd class="text-sm text-gray-900">
+                {Calendar.strftime(@movie.updated_at, "%Y-%m-%d %H:%M")}
+              </dd>
             </div>
           </dl>
         </div>
         
-        <!-- Data Collection Status (moved from top) -->
+<!-- Data Collection Status (moved from top) -->
         <div class="bg-red-50 border border-red-200 rounded-lg p-6">
           <h3 class="text-lg font-bold text-red-800 mb-4">⚠️ Data Collection Status</h3>
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -973,9 +1055,7 @@
             </div>
           </div>
         </div>
-        
       </div>
     <% end %>
-    
   </div>
 </div>

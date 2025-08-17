@@ -96,7 +96,7 @@ config :cinegraph, Oban,
   plugins: [
     # Keep jobs for 7 days
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
-    {Oban.Plugins.Reindexer, schedule: "@daily"},
+    {Oban.Plugins.Reindexer, schedule: "@daily"}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format
     # {Oban.Plugins.Cron, 

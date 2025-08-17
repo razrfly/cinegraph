@@ -158,14 +158,14 @@ defmodule Cinegraph.People do
   """
   def search_people(query, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
-    
+
     # Optimize search for better performance
     # Use prefix matching first, then fallback to contains
     prefix_term = "#{String.downcase(query)}%"
     contains_term = "%#{String.downcase(query)}%"
-    
+
     # Try prefix match first (uses index if available)
-    prefix_results = 
+    prefix_results =
       Person
       |> where([p], fragment("LOWER(?) LIKE ?", p.name, ^prefix_term))
       |> order_by([p], desc: p.popularity)
@@ -178,7 +178,7 @@ defmodule Cinegraph.People do
         popularity: p.popularity
       })
       |> Repo.all()
-    
+
     # If we don't have enough results, do a contains search
     if length(prefix_results) < div(limit, 2) do
       Person
@@ -209,6 +209,7 @@ defmodule Cinegraph.People do
     |> order_by([p], desc: p.popularity)
     |> Repo.all()
   end
+
   def get_people_by_ids(_), do: []
 
   @doc """

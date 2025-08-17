@@ -143,9 +143,13 @@ defmodule Cinegraph.Festivals do
       {:ok, nomination} = result ->
         # Trigger PQS recalculation for festival nominations
         if nomination.ceremony_id do
-          Cinegraph.Metrics.PQSTriggerStrategy.trigger_festival_import_completion(nomination.ceremony_id)
+          Cinegraph.Metrics.PQSTriggerStrategy.trigger_festival_import_completion(
+            nomination.ceremony_id
+          )
         end
+
         result
+
       error ->
         error
     end

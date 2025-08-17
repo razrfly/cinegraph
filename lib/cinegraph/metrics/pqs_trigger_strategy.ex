@@ -1,7 +1,7 @@
 defmodule Cinegraph.Metrics.PQSTriggerStrategy do
   @moduledoc """
   Handles event-based triggers for Person Quality Score (PQS) calculations.
-  
+
   Implements the trigger strategies defined in issue #292:
   - New Person Creation (5-minute delay)
   - Credit Changes (batch every 30 minutes) 
@@ -20,9 +20,10 @@ defmodule Cinegraph.Metrics.PQSTriggerStrategy do
   """
   def trigger_new_person(person_id) do
     Logger.info("Scheduling PQS calculation for new person #{person_id} (5-minute delay)")
-    
+
     %{person_id: person_id, trigger: "new_person"}
-    |> PersonQualityScoreWorker.new(schedule_in: 300) # 5 minutes
+    # 5 minutes
+    |> PersonQualityScoreWorker.new(schedule_in: 300)
     |> Oban.insert()
   end
 
@@ -33,12 +34,14 @@ defmodule Cinegraph.Metrics.PQSTriggerStrategy do
   def trigger_credit_changes(person_ids) when is_list(person_ids) do
     # Filter to people with significant credits
     eligible_people = get_people_with_min_credits(person_ids, 3)
-    
+
     if length(eligible_people) > 0 do
-      Logger.info("Scheduling PQS batch for #{length(eligible_people)} people with credit changes")
-      
+      Logger.info(
+        "Scheduling PQS batch for #{length(eligible_people)} people with credit changes"
+      )
+
       %{
-        batch: "credit_changes", 
+        batch: "credit_changes",
         person_ids: eligible_people,
         trigger: "credit_changes"
       }
@@ -61,12 +64,14 @@ defmodule Cinegraph.Metrics.PQSTriggerStrategy do
   def trigger_festival_import_completion(ceremony_id) do
     # Get people affected by this ceremony's nominations
     affected_people = get_people_with_festival_nominations(ceremony_id)
-    
+
     if length(affected_people) > 0 do
-      Logger.info("Scheduling PQS batch for #{length(affected_people)} people after festival import (ceremony #{ceremony_id})")
-      
+      Logger.info(
+        "Scheduling PQS batch for #{length(affected_people)} people after festival import (ceremony #{ceremony_id})"
+      )
+
       %{
-        batch: "festival_import", 
+        batch: "festival_import",
         person_ids: affected_people,
         ceremony_id: ceremony_id,
         trigger: "festival_import"
@@ -86,12 +91,14 @@ defmodule Cinegraph.Metrics.PQSTriggerStrategy do
   def trigger_external_metrics_update(movie_ids) when is_list(movie_ids) do
     # Get people who worked on these movies
     affected_people = get_people_in_movies(movie_ids)
-    
+
     if length(affected_people) > 0 do
-      Logger.info("Scheduling PQS batch for #{length(affected_people)} people after external metrics update")
-      
+      Logger.info(
+        "Scheduling PQS batch for #{length(affected_people)} people after external metrics update"
+      )
+
       %{
-        batch: "external_metrics", 
+        batch: "external_metrics",
         person_ids: affected_people,
         movie_ids: movie_ids,
         trigger: "external_metrics"
@@ -114,14 +121,15 @@ defmodule Cinegraph.Metrics.PQSTriggerStrategy do
   """
   def trigger_quality_assurance_recalculation(reason) do
     Logger.warning("Triggering emergency PQS recalculation: #{reason}")
-    
+
     %{
       batch: "emergency_recalculation",
       trigger: "quality_assurance",
       reason: reason,
       min_credits: 3
     }
-    |> PersonQualityScoreWorker.new(priority: 3) # High priority
+    # High priority
+    |> PersonQualityScoreWorker.new(priority: 3)
     |> Oban.insert()
   end
 
@@ -139,7 +147,7 @@ defmodule Cinegraph.Metrics.PQSTriggerStrategy do
 
   defp get_people_with_festival_nominations(ceremony_id) do
     # Get people directly nominated
-    direct_nominations = 
+    direct_nominations =
       from(nom in "festival_nominations",
         where: nom.ceremony_id == ^ceremony_id and not is_nil(nom.person_id),
         select: nom.person_id
@@ -150,7 +158,8 @@ defmodule Cinegraph.Metrics.PQSTriggerStrategy do
     movie_based_nominations =
       from(nom in "festival_nominations",
         where: nom.ceremony_id == ^ceremony_id and not is_nil(nom.movie_id),
-        join: mc in "movie_credits", on: mc.movie_id == nom.movie_id,
+        join: mc in "movie_credits",
+        on: mc.movie_id == nom.movie_id,
         select: mc.person_id
       )
       |> Repo.all()
