@@ -8,7 +8,6 @@ defmodule Cinegraph.Movies.Search do
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.Query.{Params, CustomFilters, CustomSorting}
-  alias Cinegraph.Metrics.ScoringService
 
   @doc """
   Search movies with validated parameters.

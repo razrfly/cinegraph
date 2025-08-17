@@ -85,11 +85,11 @@ defmodule ResetAndPopulate do
     
     # Only try to query if app is started and not in dry run
     try do
-      movies = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
-      keywords = Cinegraph.Repo.aggregate(Cinegraph.Movies.Keyword, :count)
-      videos = Cinegraph.Repo.aggregate(Cinegraph.Movies.MovieVideo, :count)
-      credits = Cinegraph.Repo.aggregate(Cinegraph.Movies.Credit, :count)
-      ratings = Cinegraph.Repo.aggregate(Cinegraph.ExternalSources.Rating, :count)
+      movies = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count, :id)
+      keywords = Cinegraph.Repo.aggregate(Cinegraph.Movies.Keyword, :count, :id)
+      videos = Cinegraph.Repo.aggregate(Cinegraph.Movies.MovieVideo, :count, :id)
+      credits = Cinegraph.Repo.aggregate(Cinegraph.Movies.Credit, :count, :id)
+      ratings = Cinegraph.Repo.aggregate(Cinegraph.ExternalSources.Rating, :count, :id)
       
       IO.puts("  Movies: #{movies}")
       IO.puts("  Keywords: #{keywords}")
