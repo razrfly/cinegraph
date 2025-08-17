@@ -136,7 +136,7 @@
           <% else %>
             Show Advanced Filters
           <% end %>
-          <%= if AdvancedFilters.has_active_advanced_filters(@filters) do %>
+          <%= if AdvancedFilters.has_active_advanced_filters(@params) do %>
             <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
               Active
             </span>

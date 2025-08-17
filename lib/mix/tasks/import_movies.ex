@@ -298,12 +298,13 @@ defmodule Mix.Tasks.ImportMovies do
     Mix.shell().info("\n📊 Import Summary:")
 
     try do
-      movies = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count)
-      keywords = Cinegraph.Repo.aggregate(Cinegraph.Movies.Keyword, :count)
-      videos = Cinegraph.Repo.aggregate(Cinegraph.Movies.MovieVideo, :count)
-      credits = Cinegraph.Repo.aggregate(Cinegraph.Movies.Credit, :count)
-      people = Cinegraph.Repo.aggregate(Cinegraph.Movies.Person, :count)
-      ratings = Cinegraph.Repo.aggregate(Cinegraph.ExternalSources.Rating, :count)
+      movies = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count, :id)
+      keywords = Cinegraph.Repo.aggregate(Cinegraph.Movies.Keyword, :count, :id)
+      videos = Cinegraph.Repo.aggregate(Cinegraph.Movies.MovieVideo, :count, :id)
+      credits = Cinegraph.Repo.aggregate(Cinegraph.Movies.Credit, :count, :id)
+      people = Cinegraph.Repo.aggregate(Cinegraph.Movies.Person, :count, :id)
+      # Note: ExternalSources.Rating is deprecated, using 0 for now
+      ratings = 0
 
       Mix.shell().info("  Movies: #{movies}")
       Mix.shell().info("  People: #{people}")
