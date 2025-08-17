@@ -92,7 +92,7 @@ defmodule Cinegraph.MovieImporter do
   Get a summary of API data coverage across all movies.
   """
   def get_api_coverage_summary do
-    total_movies = Repo.aggregate(Movie, :count)
+    total_movies = Repo.aggregate(Movie, :count, :id)
 
     coverage =
       Enum.map(@default_apis, fn api ->

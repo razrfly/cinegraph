@@ -39,7 +39,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
           if map_size(updated_cache) > 50 do
             # Remove oldest entries
             updated_cache
-            |> Enum.sort_by(fn {_k, v} -> v.timestamp end, DateTime)
+            |> Enum.sort_by(fn {_k, v} -> v.timestamp end, {:asc, DateTime})
             |> Enum.drop(10)
             |> Map.new()
           else
