@@ -223,7 +223,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
                       <%= if person.known_for_department do %>
                         <div class="text-xs text-gray-500">{person.known_for_department}</div>
                       <% end %>
-                      <%= if person.quality_score do %>
+                      <%= if Map.get(person, :quality_score) do %>
                         <div class="text-xs font-medium px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
                           Quality: {Float.round(person.quality_score, 1)}
                         </div>
@@ -287,7 +287,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
                   <% end %>
                   <span class="flex items-center space-x-1">
                     <span>{person.name}</span>
-                    <%= if person.quality_score do %>
+                    <%= if Map.get(person, :quality_score) do %>
                       <span class="text-xs bg-green-200 text-green-800 px-1 rounded">
                         {Float.round(person.quality_score, 1)}
                       </span>

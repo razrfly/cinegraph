@@ -738,17 +738,29 @@ defmodule CinegraphWeb.CoreComponents do
             return this.selected.includes(value);
           },
           removeItem(value) {
+            console.log('Removing item:', value, 'from', this.selected);
             const index = this.selected.indexOf(value);
             if (index !== -1) {
               this.selected.splice(index, 1);
             }
             const sel = this.$refs.backing;
             if (sel) {
+              console.log('Updating hidden select, current selected:', this.selected);
               Array.from(sel.options).forEach(opt => {
                 if (opt.value === value) opt.selected = false;
               });
+              console.log('Dispatching change event');
               const evtInit = { bubbles: true, cancelable: true };
               sel.dispatchEvent(new Event('change', evtInit));
+              
+              // Force a form change event
+              setTimeout(() => {
+                const form = sel.form;
+                if (form) {
+                  console.log('Found form, dispatching change on form');
+                  form.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+              }, 0);
             }
           },
           getLabel(value) {
@@ -845,7 +857,8 @@ defmodule CinegraphWeb.CoreComponents do
         <%= for option <- @options do %>
           <% val = Map.get(option, @value_field) %>
           <% lab = Map.get(option, @label_field) %>
-          <option value={val} selected={to_string(val) in (@selected || [])}>
+          <% selected_strings = Enum.map(@selected || [], &to_string/1) %>
+          <option value={val} selected={to_string(val) in selected_strings}>
             {lab}
           </option>
         <% end %>

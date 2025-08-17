@@ -4,6 +4,34 @@ defmodule Cinegraph.Movies.Movie do
   import Ecto.Query
   alias Cinegraph.Movies.MovieSlug
 
+  @derive {
+    Flop.Schema,
+    filterable: [
+      :title,
+      :original_title,
+      :release_date,
+      :runtime,
+      :overview,
+      :tagline,
+      :original_language,
+      :status,
+      :adult,
+      :import_status
+    ],
+    sortable: [
+      :title,
+      :release_date,
+      :runtime,
+      :inserted_at
+    ],
+    default_limit: 50,
+    max_limit: 100,
+    default_order: %{
+      order_by: [:release_date],
+      order_directions: [:desc]
+    }
+  }
+
   @primary_key {:id, :id, autogenerate: true}
   schema "movies" do
     # Core Identity (Never Changes)
