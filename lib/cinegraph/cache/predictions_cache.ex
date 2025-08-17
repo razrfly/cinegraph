@@ -137,13 +137,20 @@ defmodule Cinegraph.Cache.PredictionsCache do
   @doc """
   Clear caches for a specific profile.
   """
-  def clear_profile(profile_name) do
+  def clear_profile(profile_name) when is_binary(profile_name) do
     case Cachex.keys(@cache_name) do
       {:ok, keys} when is_list(keys) ->
         keys_to_delete =
           Enum.filter(keys, fn
-            k when is_binary(k) -> String.contains?(k, profile_name)
-            _ -> false
+            k when is_binary(k) ->
+              case String.split(k, ":", parts: 4) do
+                ["predictions", _limit, ^profile_name, _hash] -> true
+                ["validation", ^profile_name, _hash] -> true
+                ["profile", ^profile_name] -> true
+                _ -> false
+              end
+            _ ->
+              false
           end)
 
         Enum.each(keys_to_delete, &Cachex.del(@cache_name, &1))
