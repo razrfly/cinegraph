@@ -7,33 +7,41 @@ IO.puts("====================================\n")
 # Test 1: Basic URL parameter parsing
 test_params = [
   {"release_date_desc", "release_date", :desc},
-  {"title", "title", :desc},  # default when no suffix
+  # default when no suffix
+  {"title", "title", :desc},
   {"popular_opinion_desc", "popular_opinion", :desc},
   {"rating_asc", "rating", :asc}
 ]
 
 for {input, expected_criteria, expected_direction} <- test_params do
   # Extract criteria
-  criteria = cond do
-    String.ends_with?(input, "_desc") ->
-      String.replace_suffix(input, "_desc", "")
-    String.ends_with?(input, "_asc") ->
-      String.replace_suffix(input, "_asc", "")
-    true ->
-      input
-  end
-  
+  criteria =
+    cond do
+      String.ends_with?(input, "_desc") ->
+        String.replace_suffix(input, "_desc", "")
+
+      String.ends_with?(input, "_asc") ->
+        String.replace_suffix(input, "_asc", "")
+
+      true ->
+        input
+    end
+
   # Extract direction
-  direction = cond do
-    String.ends_with?(input, "_desc") -> :desc
-    String.ends_with?(input, "_asc") -> :asc
-    true -> :desc  # default
-  end
-  
+  direction =
+    cond do
+      String.ends_with?(input, "_desc") -> :desc
+      String.ends_with?(input, "_asc") -> :asc
+      # default
+      true -> :desc
+    end
+
   if criteria == expected_criteria and direction == expected_direction do
     IO.puts("✅ PASS: '#{input}' -> criteria: #{criteria}, direction: #{direction}")
   else
-    IO.puts("❌ FAIL: '#{input}' -> expected: #{expected_criteria}/#{expected_direction}, got: #{criteria}/#{direction}")
+    IO.puts(
+      "❌ FAIL: '#{input}' -> expected: #{expected_criteria}/#{expected_direction}, got: #{criteria}/#{direction}"
+    )
   end
 end
 
