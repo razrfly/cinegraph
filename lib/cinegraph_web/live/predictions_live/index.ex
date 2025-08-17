@@ -1,6 +1,7 @@
 defmodule CinegraphWeb.PredictionsLive.Index do
   use CinegraphWeb, :live_view
-  alias Cinegraph.Predictions.{MoviePredictor, HistoricalValidator, CriteriaScoring}
+  alias Cinegraph.Predictions.{MoviePredictor, HistoricalValidator}
+  alias Cinegraph.Metrics.ScoringService
 
   @impl true
   def mount(_params, _session, socket) do
@@ -27,11 +28,14 @@ defmodule CinegraphWeb.PredictionsLive.Index do
        |> assign(:validation_result, validation_result)
        |> assign(:confirmed_additions, confirmed_additions)
        |> assign(:selected_movie, nil)
-       |> assign(:algorithm_weights, CriteriaScoring.get_default_weights())
+       |> assign(:current_profile, ScoringService.get_default_profile())
+       |> assign(:available_profiles, ScoringService.get_all_profiles())
+       |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(ScoringService.get_default_profile()))
        |> assign(:show_weight_tuner, false)
        |> assign(:last_updated, DateTime.utc_now())}
     rescue
       error ->
+        default_profile = ScoringService.get_default_profile() || %Cinegraph.Metrics.MetricWeightProfile{name: "Balanced", category_weights: %{"ratings" => 0.4, "awards" => 0.2, "cultural" => 0.2, "financial" => 0.0, "people" => 0.2}}
         {:ok,
          socket
          |> assign(:page_title, "2020s Movie Predictions")
@@ -40,7 +44,13 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> assign(:view_mode, :predictions)
          |> assign(:predictions_result, %{predictions: [], total_candidates: 0})
          |> assign(:validation_result, %{overall_accuracy: 0, decade_results: []})
-         |> assign(:confirmed_additions, [])}
+         |> assign(:confirmed_additions, [])
+         |> assign(:selected_movie, nil)
+         |> assign(:current_profile, default_profile)
+         |> assign(:available_profiles, [])
+         |> assign(:algorithm_weights, %{popular_opinion: 0.2, critical_acclaim: 0.2, industry_recognition: 0.2, cultural_impact: 0.2, people_quality: 0.2})
+         |> assign(:show_weight_tuner, false)
+         |> assign(:last_updated, DateTime.utc_now())}
     end
   end
 
@@ -81,15 +91,32 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   end
 
   @impl true
+  def handle_event("select_profile", %{"profile" => profile_name}, socket) do
+    case ScoringService.get_profile(profile_name) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Profile not found")}
+      profile ->
+        # Use the profile for predictions
+        send(self(), {:recalculate_with_profile, profile})
+        
+        {:noreply,
+         socket
+         |> assign(:loading, true)
+         |> assign(:current_profile, profile)
+         |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(profile))
+         |> clear_flash()}
+    end
+  end
+
   def handle_event("update_weights", params, socket) do
     try do
       # Extract weights from form params with validation
       new_weights = %{
+        popular_opinion: String.to_float(params["popular_opinion"]) / 100,
         critical_acclaim: String.to_float(params["critical_acclaim"]) / 100,
-        festival_recognition: String.to_float(params["festival_recognition"]) / 100,
+        industry_recognition: String.to_float(params["industry_recognition"]) / 100,
         cultural_impact: String.to_float(params["cultural_impact"]) / 100,
-        technical_innovation: String.to_float(params["technical_innovation"]) / 100,
-        auteur_recognition: String.to_float(params["auteur_recognition"]) / 100
+        people_quality: String.to_float(params["people_quality"]) / 100
       }
       
       # Validate weights sum to approximately 1.0
@@ -100,12 +127,21 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          socket
          |> put_flash(:error, "Weights must sum to 100%. Current total: #{round(total_weight * 100)}%")}
       else
+        # Create a custom profile from the weights
+        custom_profile = %Cinegraph.Metrics.MetricWeightProfile{
+          name: "Custom",
+          description: "Custom weights from UI",
+          category_weights: ScoringService.discovery_weights_to_profile(new_weights)["category_weights"],
+          active: true
+        }
+        
         # Start progressive loading
-        send(self(), {:recalculate_predictions, new_weights})
+        send(self(), {:recalculate_with_profile, custom_profile})
         
         {:noreply,
          socket
          |> assign(:loading, true)
+         |> assign(:current_profile, custom_profile)
          |> assign(:algorithm_weights, new_weights)
          |> assign(:last_updated, DateTime.utc_now())
          |> clear_flash()}
@@ -117,33 +153,10 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> put_flash(:error, "Invalid weight values: #{inspect(error)}")}
     end
   end
-  
-  @impl true
-  def handle_info({:recalculate_predictions, weights}, socket) do
-    try do
-      # Perform calculations in background
-      predictions_result = MoviePredictor.predict_2020s_movies(100, weights)
-      validation_result = HistoricalValidator.validate_all_decades(weights)
-      
-      {:noreply,
-       socket
-       |> assign(:loading, false)
-       |> assign(:predictions_result, predictions_result)
-       |> assign(:validation_result, validation_result)
-       |> assign(:last_updated, DateTime.utc_now())
-       |> put_flash(:info, "Predictions updated successfully!")}
-    rescue
-      error ->
-        {:noreply,
-         socket
-         |> assign(:loading, false)
-         |> put_flash(:error, "Failed to recalculate predictions: #{inspect(error)}")}
-    end
-  end
 
-  @impl true
   def handle_event("reset_weights", _params, socket) do
-    default_weights = CriteriaScoring.get_default_weights()
+    default_profile = ScoringService.get_default_profile()
+    default_weights = ScoringService.profile_to_discovery_weights(default_profile)
     
     socket = assign(socket, :loading, true)
     
@@ -153,9 +166,33 @@ defmodule CinegraphWeb.PredictionsLive.Index do
     {:noreply,
      socket
      |> assign(:loading, false)
+     |> assign(:current_profile, default_profile)
      |> assign(:algorithm_weights, default_weights)
      |> assign(:predictions_result, predictions_result)
      |> assign(:validation_result, validation_result)}
+  end
+  
+  @impl true
+  def handle_info({:recalculate_with_profile, profile}, socket) do
+    try do
+      # Perform calculations in background using the profile
+      predictions_result = MoviePredictor.predict_2020s_movies(100, profile)
+      validation_result = HistoricalValidator.validate_all_decades(profile)
+      
+      {:noreply,
+       socket
+       |> assign(:loading, false)
+       |> assign(:predictions_result, predictions_result)
+       |> assign(:validation_result, validation_result)
+       |> assign(:last_updated, DateTime.utc_now())
+       |> put_flash(:info, "Predictions updated successfully using #{profile.name} profile!")}
+    rescue
+      error ->
+        {:noreply,
+         socket
+         |> assign(:loading, false)
+         |> put_flash(:error, "Failed to recalculate predictions: #{inspect(error)}")}
+    end
   end
 
   defp format_status(:already_added), do: {"✅ Added", "text-green-600"}
@@ -166,11 +203,11 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   defp format_likelihood(percentage) when percentage >= 70, do: {"#{percentage}%", "text-yellow-600"}
   defp format_likelihood(percentage), do: {"#{percentage}%", "text-gray-600"}
 
+  defp criterion_label(:popular_opinion), do: "Popular Opinion"
   defp criterion_label(:critical_acclaim), do: "Critical Acclaim"
-  defp criterion_label(:festival_recognition), do: "Festival Recognition"
+  defp criterion_label(:industry_recognition), do: "Industry Recognition"
   defp criterion_label(:cultural_impact), do: "Cultural Impact"
-  defp criterion_label(:technical_innovation), do: "Technical Innovation"
-  defp criterion_label(:auteur_recognition), do: "Auteur Recognition"
+  defp criterion_label(:people_quality), do: "People Quality"
   defp criterion_label(other), do: to_string(other)
 
   defp accuracy_color(percentage) when percentage >= 90, do: "text-green-600"
