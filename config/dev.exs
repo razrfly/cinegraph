@@ -63,6 +63,9 @@ config :cinegraph, CinegraphWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :cinegraph, dev_routes: true
 
+# Enable debug logging in development
+config :cinegraph, dev_logging?: true
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"
 

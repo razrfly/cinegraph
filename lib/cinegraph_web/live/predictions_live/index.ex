@@ -1,18 +1,23 @@
 defmodule CinegraphWeb.PredictionsLive.Index do
   use CinegraphWeb, :live_view
-  alias Cinegraph.Predictions.{MoviePredictor, HistoricalValidator}
+  alias Cinegraph.Predictions.MoviePredictor
   alias Cinegraph.Metrics.ScoringService
+  alias Cinegraph.Cache.PredictionsCache
+
+  # Compile-time flag for debug logging (safe in releases)
+  @dev_logging? Application.compile_env(:cinegraph, :dev_logging?, false)
 
   @impl true
   def mount(_params, _session, socket) do
-    # Load initial data with error handling
+    # Load initial data with error handling and caching
     try do
-      predictions_result = MoviePredictor.predict_2020s_movies(100)
-      validation_result = HistoricalValidator.validate_all_decades()
-      confirmed_additions = MoviePredictor.get_confirmed_2020s_additions()
+      default_profile = PredictionsCache.get_default_profile()
+      predictions_result = PredictionsCache.get_predictions(100, default_profile)
+      validation_result = PredictionsCache.get_validation(default_profile)
+      confirmed_count = PredictionsCache.get_confirmed_additions_count(predictions_result)
       
-      # Optionally enable debug logging during development only
-      if Mix.env() == :dev do
+      # Optionally enable debug logging during development only (safe in releases)
+      if @dev_logging? do
         require Logger
         Logger.debug("=== PREDICTIONS DEBUG ===")
         predictions_result.predictions
@@ -29,34 +34,53 @@ defmodule CinegraphWeb.PredictionsLive.Index do
        |> assign(:view_mode, :predictions)
        |> assign(:predictions_result, predictions_result)
        |> assign(:validation_result, validation_result)
-       |> assign(:confirmed_additions, confirmed_additions)
+       |> assign(:confirmed_count, confirmed_count)
        |> assign(:selected_movie, nil)
-       |> assign(:current_profile, ScoringService.get_default_profile())
+       |> assign(:current_profile, default_profile)
        |> assign(:available_profiles, ScoringService.get_all_profiles())
-       |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(ScoringService.get_default_profile()))
+       |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(default_profile))
        |> assign(:show_weight_tuner, false)
        |> assign(:last_updated, DateTime.utc_now())}
     rescue
       error ->
-        default_profile = ScoringService.get_default_profile() || %Cinegraph.Metrics.MetricWeightProfile{name: "Balanced", category_weights: %{"ratings" => 0.4, "awards" => 0.2, "cultural" => 0.2, "financial" => 0.0, "people" => 0.2}}
+        require Logger
+        Logger.error("Predictions mount failed: #{Exception.format(:error, error, __STACKTRACE__)}")
+        
+        # Try to use fallback data instead of empty results
+        default_profile = PredictionsCache.get_default_profile() || %Cinegraph.Metrics.MetricWeightProfile{name: "Balanced", category_weights: %{"ratings" => 0.4, "awards" => 0.2, "cultural" => 0.2, "financial" => 0.0, "people" => 0.2}}
+        
+        # Try to get cached results if available
+        fallback_predictions = try do
+          PredictionsCache.get_predictions(100, default_profile)
+        rescue
+          _ -> %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+        end
+        
+        fallback_validation = try do
+          PredictionsCache.get_validation(default_profile)
+        rescue
+          _ -> %{overall_accuracy: 0, decade_results: []}
+        end
+        
+        fallback_confirmed_count = try do
+          PredictionsCache.get_confirmed_additions_count(fallback_predictions)
+        rescue
+          _ -> 0
+        end
+        
         {:ok,
          socket
          |> assign(:page_title, "2020s Movie Predictions")
          |> assign(:loading, false)
-         |> assign(:error, "Failed to load predictions. Please try again.")
-         |> then(fn s -> 
-           require Logger
-           Logger.error("Predictions mount failed: #{Exception.format(:error, error, __STACKTRACE__)}")
-           s 
-         end)
+         |> assign(:error, "Some data may be loading in the background. Refresh if needed.")
          |> assign(:view_mode, :predictions)
-         |> assign(:predictions_result, %{predictions: [], total_candidates: 0})
-         |> assign(:validation_result, %{overall_accuracy: 0, decade_results: []})
-         |> assign(:confirmed_additions, [])
+         |> assign(:predictions_result, fallback_predictions)
+         |> assign(:validation_result, fallback_validation)
+         |> assign(:confirmed_count, fallback_confirmed_count)
          |> assign(:selected_movie, nil)
          |> assign(:current_profile, default_profile)
-         |> assign(:available_profiles, [])
-         |> assign(:algorithm_weights, %{popular_opinion: 0.2, critical_acclaim: 0.2, industry_recognition: 0.2, cultural_impact: 0.2, people_quality: 0.2})
+         |> assign(:available_profiles, ScoringService.get_all_profiles() || [])
+         |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(default_profile) || %{popular_opinion: 0.2, critical_acclaim: 0.2, industry_recognition: 0.2, cultural_impact: 0.2, people_quality: 0.2})
          |> assign(:show_weight_tuner, false)
          |> assign(:last_updated, DateTime.utc_now())}
     end
@@ -84,7 +108,6 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       case mode do
         "predictions" -> :predictions
         "validation" -> :validation
-        "confirmed" -> :confirmed
         _ -> socket.assigns.view_mode
       end
     {:noreply, assign(socket, :view_mode, view_mode)}
@@ -112,11 +135,11 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   @impl true
   def handle_event("select_profile", %{"profile" => profile_name}, socket) do
-    case ScoringService.get_profile(profile_name) do
+    case PredictionsCache.get_cached_profile(profile_name) do
       nil ->
         {:noreply, put_flash(socket, :error, "Profile not found")}
       profile ->
-        # Use the profile for predictions
+        # Use the profile for predictions with caching
         send(self(), {:recalculate_with_profile, profile})
         
         {:noreply,
@@ -182,13 +205,14 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   end
 
   def handle_event("reset_weights", _params, socket) do
-    default_profile = ScoringService.get_default_profile()
+    default_profile = PredictionsCache.get_default_profile()
     default_weights = ScoringService.profile_to_discovery_weights(default_profile)
     
     socket = assign(socket, :loading, true)
     
-    predictions_result = MoviePredictor.predict_2020s_movies(100, default_weights)
-    validation_result = HistoricalValidator.validate_all_decades(default_weights)
+    predictions_result = PredictionsCache.get_predictions(100, default_profile)
+    validation_result = PredictionsCache.get_validation(default_profile)
+    confirmed_count = PredictionsCache.get_confirmed_additions_count(predictions_result)
     
     {:noreply,
      socket
@@ -196,21 +220,24 @@ defmodule CinegraphWeb.PredictionsLive.Index do
      |> assign(:current_profile, default_profile)
      |> assign(:algorithm_weights, default_weights)
      |> assign(:predictions_result, predictions_result)
-     |> assign(:validation_result, validation_result)}
+     |> assign(:validation_result, validation_result)
+     |> assign(:confirmed_count, confirmed_count)}
   end
   
   @impl true
   def handle_info({:recalculate_with_profile, profile}, socket) do
     try do
-      # Perform calculations in background using the profile
-      predictions_result = MoviePredictor.predict_2020s_movies(100, profile)
-      validation_result = HistoricalValidator.validate_all_decades(profile)
+      # Perform calculations in background using the profile with caching
+      predictions_result = PredictionsCache.get_predictions(100, profile)
+      validation_result = PredictionsCache.get_validation(profile)
+      confirmed_count = PredictionsCache.get_confirmed_additions_count(predictions_result)
       
       {:noreply,
        socket
        |> assign(:loading, false)
        |> assign(:predictions_result, predictions_result)
        |> assign(:validation_result, validation_result)
+       |> assign(:confirmed_count, confirmed_count)
        |> assign(:last_updated, DateTime.utc_now())
        |> put_flash(:info, "Predictions updated successfully using #{profile.name} profile!")}
     rescue
