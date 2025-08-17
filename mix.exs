@@ -67,7 +67,7 @@ defmodule Cinegraph.MixProject do
       {:number, "~> 1.0"},
       {:ecto_autoslug_field, "~> 3.1"},
       {:flop, "~> 0.26"},
-      {:flop_phoenix, "~> 0.22"}
+      {:flop_phoenix, "~> 0.25.3"}
     ]
   end
 

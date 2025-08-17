@@ -18,10 +18,10 @@ defmodule Cinegraph.Movies.Search do
     with {:ok, validated_params} <- Params.validate(params) do
       # Start with base query for fully imported movies
       base_query = from(m in Movie, where: m.import_status == "full")
-      
+
       # Apply custom filters first (genres, awards, people, etc.)
       filtered_query = CustomFilters.apply_all(base_query, validated_params)
-      
+
       # Check if we need custom sorting
       needs_custom_sort = validated_params.sort in ~w(
         rating rating_asc rating_desc
@@ -32,31 +32,33 @@ defmodule Cinegraph.Movies.Search do
         cultural_impact cultural_impact_asc cultural_impact_desc
         people_quality people_quality_asc people_quality_desc
       )
-      
+
       # Apply custom sorting if needed
-      sorted_query = if needs_custom_sort do
-        CustomSorting.apply(filtered_query, validated_params.sort)
-      else
-        filtered_query
-      end
-      
+      sorted_query =
+        if needs_custom_sort do
+          CustomSorting.apply(filtered_query, validated_params.sort)
+        else
+          filtered_query
+        end
+
       # Convert params to Flop format
       flop_params = Params.to_flop_params(validated_params)
-      
+
       # If we applied custom sorting, remove order from Flop params
-      flop_params = if needs_custom_sort do
-        Map.delete(flop_params, :order_by)
-      else
-        flop_params
-      end
-      
+      flop_params =
+        if needs_custom_sort do
+          Map.delete(flop_params, :order_by)
+        else
+          flop_params
+        end
+
       # Use Flop for remaining filters, sorting (if not custom), and pagination
       case Flop.validate_and_run(sorted_query, flop_params, for: Movie, repo: Repo) do
         {:ok, {movies, meta}} ->
           # Add discovery scores for display if not using discovery sorting
           movies = maybe_add_discovery_scores(movies, validated_params.sort)
           {:ok, {movies, meta}}
-        
+
         {:error, changeset} ->
           {:error, changeset}
       end
@@ -71,16 +73,17 @@ defmodule Cinegraph.Movies.Search do
     with {:ok, validated_params} <- Params.validate(params) do
       base_query = from(m in Movie, where: m.import_status == "full")
       filtered_query = CustomFilters.apply_all(base_query, validated_params)
-      
+
       # Handle special case for genre filtering with GROUP BY
-      count = if validated_params.genres && validated_params.genres != [] do
-        # Wrap the grouped query in a subquery and count the results
-        from(m in subquery(filtered_query), select: count())
-        |> Repo.one()
-      else
-        Repo.aggregate(filtered_query, :count, :id)
-      end
-      
+      count =
+        if validated_params.genres && validated_params.genres != [] do
+          # Wrap the grouped query in a subquery and count the results
+          from(m in subquery(filtered_query), select: count())
+          |> Repo.one()
+        else
+          Repo.aggregate(filtered_query, :count, :id)
+        end
+
       {:ok, count}
     end
   end
@@ -133,10 +136,19 @@ defmodule Cinegraph.Movies.Search do
   end
 
   defp uses_discovery_sorting?(sort) do
-    sort in ~w(
-      popular_opinion critical_acclaim
-      industry_recognition cultural_impact people_quality
-    )
+    base =
+      cond do
+        is_binary(sort) and String.ends_with?(sort, "_desc") ->
+          String.replace_suffix(sort, "_desc", "")
+
+        is_binary(sort) and String.ends_with?(sort, "_asc") ->
+          String.replace_suffix(sort, "_asc", "")
+
+        true ->
+          sort
+      end
+
+    base in ~w(popular_opinion critical_acclaim industry_recognition cultural_impact people_quality)
   end
 
   defp list_genres do
@@ -168,7 +180,7 @@ defmodule Cinegraph.Movies.Search do
   defp generate_decades do
     current_year = Date.utc_today().year
     start_decade = 1900
-    
+
     for decade <- start_decade..current_year//10 do
       %{id: decade, value: decade, label: "#{decade}s"}
     end
