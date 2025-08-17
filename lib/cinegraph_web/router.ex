@@ -22,6 +22,7 @@ defmodule CinegraphWeb.Router do
     # Movie routes
     live "/movies", MovieLive.Index, :index
     live "/movies/discover", MovieLive.DiscoveryTuner, :index
+    live "/movies/decades", DecadeTrackerLive.Index, :index
     # Support both ID and slug for backward compatibility
     live "/movies/:id_or_slug", MovieLive.Show, :show
     live "/movies/:id_or_slug/legacy", MovieLive.ShowLegacy, :show

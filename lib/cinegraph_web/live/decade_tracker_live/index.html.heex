@@ -1,0 +1,401 @@
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">1001 Movies Decade Tracker</h1>
+    <p class="mt-2 text-gray-600">Analyzing movie distribution across decades with predictive insights</p>
+  </div>
+
+  <!-- View Mode Toggle -->
+  <div class="mb-6 flex flex-wrap gap-3">
+    <button
+      phx-click="toggle_view"
+      phx-value-mode="actual"
+      class={[
+        "px-4 py-2 rounded-lg font-medium transition-colors",
+        @view_mode == :actual && "bg-blue-600 text-white",
+        @view_mode != :actual && "bg-gray-200 text-gray-700 hover:bg-gray-300"
+      ]}
+    >
+      Actual List Data
+    </button>
+    <button
+      phx-click="toggle_view"
+      phx-value-mode="predicted"
+      class={[
+        "px-4 py-2 rounded-lg font-medium transition-colors",
+        @view_mode == :predicted && "bg-blue-600 text-white",
+        @view_mode != :predicted && "bg-gray-200 text-gray-700 hover:bg-gray-300"
+      ]}
+    >
+      Predictive Analysis
+    </button>
+    <button
+      phx-click="toggle_comparison"
+      class={[
+        "px-4 py-2 rounded-lg font-medium transition-colors",
+        @comparison_mode && "bg-green-600 text-white",
+        !@comparison_mode && "bg-gray-200 text-gray-700 hover:bg-gray-300"
+      ]}
+    >
+      Edition Comparison
+    </button>
+  </div>
+
+  <!-- Key Statistics Summary -->
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-sm font-medium text-gray-500">Total Movies</div>
+      <div class="text-2xl font-bold text-gray-900">
+        <%= @decade_data |> Enum.map(& &1.count) |> Enum.sum() %>
+      </div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-sm font-medium text-gray-500">Peak Decade</div>
+      <div class="text-2xl font-bold text-gray-900">
+        <% peak = @decade_data |> Enum.max_by(& &1.count, fn -> %{decade: 0} end) %>
+        <%= format_decade_label(peak.decade) %>
+      </div>
+      <div class="text-sm text-gray-600"><%= peak.count %> films</div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-sm font-medium text-gray-500">Average per Decade</div>
+      <div class="text-2xl font-bold text-gray-900">
+        <%= Float.round((@decade_data |> Enum.map(& &1.count) |> Enum.sum()) / length(@decade_data), 1) %>
+      </div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="text-sm font-medium text-gray-500">Decades Covered</div>
+      <div class="text-2xl font-bold text-gray-900">
+        <%= length(@decade_data) %>
+      </div>
+      <div class="text-sm text-gray-600">1920s - 2020s</div>
+    </div>
+  </div>
+
+  <!-- Timeline Visualization -->
+  <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">Decade Distribution Timeline</h2>
+    
+    <div class="space-y-3">
+      <%= for decade_info <- @decade_data do %>
+        <% max_count = calculate_max_count(@decade_data) %>
+        <% bar_width = if max_count > 0, do: decade_info.count / max_count * 100, else: 0 %>
+        
+        <div
+          class="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+          phx-click="select_decade"
+          phx-value-decade={decade_info.decade}
+        >
+          <div class="w-20 text-sm font-medium text-gray-700">
+            <%= format_decade_label(decade_info.decade) %>
+          </div>
+          
+          <div class="flex-1 mx-4">
+            <div class="bg-gray-200 rounded-full h-8 relative overflow-hidden">
+              <div
+                class={[
+                  "h-full rounded-full transition-all duration-500",
+                  decade_info.decade >= 1960 && decade_info.decade <= 1990 && "bg-blue-600",
+                  decade_info.decade >= 2020 && "bg-yellow-500",
+                  decade_info.decade < 1960 && "bg-blue-400",
+                  decade_info.decade >= 2000 && decade_info.decade < 2020 && "bg-blue-500"
+                ]}
+                style={"width: #{bar_width}%"}
+              >
+              </div>
+            </div>
+          </div>
+          
+          <div class="w-36 text-right">
+            <span class="text-lg font-semibold text-gray-900"><%= decade_info.count %></span>
+            <span class="text-sm text-gray-500 ml-2">(<%= decade_info.percentage %>%)</span>
+          </div>
+        </div>
+      <% end %>
+    </div>
+    
+    <div class="mt-6 flex justify-center flex-wrap gap-6 text-sm">
+      <div class="flex items-center">
+        <div class="w-4 h-4 bg-blue-400 rounded mr-2"></div>
+        <span class="text-gray-600">Early Cinema (1920s-1950s)</span>
+      </div>
+      <div class="flex items-center">
+        <div class="w-4 h-4 bg-blue-600 rounded mr-2"></div>
+        <span class="text-gray-600">Peak Decades (1960s-1990s)</span>
+      </div>
+      <div class="flex items-center">
+        <div class="w-4 h-4 bg-blue-500 rounded mr-2"></div>
+        <span class="text-gray-600">Modern Era (2000s-2010s)</span>
+      </div>
+      <div class="flex items-center">
+        <div class="w-4 h-4 bg-yellow-500 rounded mr-2"></div>
+        <span class="text-gray-600">Incomplete (2020s)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Trends (2010+) -->
+  <%= if @view_mode == :actual do %>
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Recent Year-by-Year Trends (2010+)</h2>
+      
+      <div class="grid grid-cols-5 md:grid-cols-10 gap-2">
+        <%= for trend <- @recent_trends do %>
+          <div class="text-center p-2 bg-gray-50 rounded">
+            <div class="text-xs text-gray-600 mb-1"><%= trend.year %></div>
+            <div class={[
+              "text-lg font-semibold",
+              trend.count >= 12 && "text-green-600",
+              trend.count >= 8 && trend.count < 12 && "text-blue-600",
+              trend.count >= 5 && trend.count < 8 && "text-yellow-600",
+              trend.count < 5 && "text-red-500"
+            ]}>
+              <%= trend.count %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+      
+      <div class="mt-4 text-sm text-gray-600">
+        <p><strong>Pattern Analysis:</strong> Average 2010-2019: <%= Float.round((@recent_trends |> Enum.filter(&(&1.year <= 2019)) |> Enum.map(& &1.count) |> Enum.sum()) / 10, 1) %> films/year</p>
+        <p>2020s impact: <%= @recent_trends |> Enum.filter(&(&1.year >= 2020)) |> Enum.map(& &1.count) |> Enum.sum() %> films so far (COVID + incomplete decade)</p>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- Selected Decade Details -->
+  <%= if @selected_decade do %>
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">
+        <%= format_decade_label(@selected_decade.decade) %> Details
+      </h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div class="bg-gray-50 p-4 rounded">
+          <div class="text-sm text-gray-600">Total Movies</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @selected_decade.total_count %></div>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+          <div class="text-sm text-gray-600">Average per Year</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @selected_decade.average_per_year %></div>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+          <div class="text-sm text-gray-600">Peak Year</div>
+          <div class="text-2xl font-bold text-gray-900"><%= @selected_decade.peak_year || "N/A" %></div>
+        </div>
+      </div>
+      
+      <div class="mb-6">
+        <p class="text-gray-600 italic bg-blue-50 p-3 rounded"><%= @selected_decade.historical_context %></p>
+      </div>
+      
+      <!-- Year distribution within decade -->
+      <div class="mb-6">
+        <h3 class="text-lg font-medium mb-3">Year-by-Year Distribution</h3>
+        <div class="grid grid-cols-5 md:grid-cols-10 gap-2">
+          <%= for year <- @selected_decade.decade..(@selected_decade.decade + 9) do %>
+            <% count = Map.get(@selected_decade.year_distribution, year, 0) %>
+            <div class="text-center p-2 bg-gray-50 rounded">
+              <div class="text-xs text-gray-600 mb-1"><%= year %></div>
+              <div class={[
+                "text-lg font-semibold",
+                count > 15 && "text-blue-600",
+                count > 10 && count <= 15 && "text-blue-500",
+                count > 5 && count <= 10 && "text-gray-700",
+                count <= 5 && "text-gray-400"
+              ]}>
+                <%= count %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+
+      <!-- Sample movies from decade -->
+      <div>
+        <h3 class="text-lg font-medium mb-3">Sample Films from This Decade</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-60 overflow-y-auto">
+          <%= for movie <- Enum.take(@selected_decade.movies, 12) do %>
+            <div class="text-sm p-2 bg-gray-50 rounded">
+              <div class="font-medium text-gray-900"><%= movie.title %></div>
+              <div class="text-gray-600"><%= format_year(movie.year) %></div>
+            </div>
+          <% end %>
+          <%= if length(@selected_decade.movies) > 12 do %>
+            <div class="text-sm p-2 bg-gray-100 rounded text-center text-gray-600 italic">
+              ... and <%= length(@selected_decade.movies) - 12 %> more films
+            </div>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- Predictions Panel -->
+  <%= if @view_mode == :predicted do %>
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+      <h2 class="text-xl font-semibold mb-4">Future Predictions (Next 5 Years)</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <%= for prediction <- @predictions do %>
+          <div class="border rounded-lg p-4">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-lg font-medium"><%= prediction.year %></span>
+              <button 
+                phx-click="get_prediction_candidates"
+                phx-value-year={prediction.year}
+                class="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
+              >
+                Show Candidates
+              </button>
+            </div>
+            
+            <div class="mb-2">
+              <span class="text-2xl font-bold text-blue-600"><%= prediction.predicted_count %></span>
+              <span class="text-gray-600 ml-2">predicted films</span>
+            </div>
+            
+            <div class="text-sm text-gray-500 space-y-1">
+              <div>Range: <%= elem(prediction.confidence_range, 0) %> - <%= elem(prediction.confidence_range, 1) %></div>
+              <div>Base avg: <%= prediction.factors.base_average %></div>
+              <div>Trend adj: <%= prediction.factors.trend_adjustment %></div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+      
+      <!-- Prediction Candidates -->
+      <%= if length(@prediction_candidates) > 0 do %>
+        <div class="border-t pt-6">
+          <h3 class="text-lg font-medium mb-3">High-Confidence Prediction Candidates</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <%= for candidate <- @prediction_candidates do %>
+              <div class="bg-gray-50 p-3 rounded">
+                <div class="font-medium text-gray-900"><%= candidate.title %></div>
+                <div class="text-sm text-gray-600">
+                  Score: <%= Float.round(candidate.avg_score, 1) %> | 
+                  Prediction: <%= candidate.prediction_score %>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+      
+      <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+        <h3 class="font-medium text-blue-900 mb-2">Prediction Methodology</h3>
+        <ul class="text-sm text-blue-800 space-y-1">
+          <li>• Historical baseline: 2010-2019 average (~11 films/year)</li>
+          <li>• Festival winner tracking (Cannes, Venice, Berlin, Sundance)</li>
+          <li>• Critical acclaim threshold: 7.5+ average rating</li>
+          <li>• Genre diversity and geographic representation factors</li>
+          <li>• Declining trend adjustment: ~5% per decade reduction</li>
+          <li>• Anniversary year boosts for retrospective additions</li>
+        </ul>
+      </div>
+    </div>
+  <% end %>
+
+  <!-- Edition Comparison Tool -->
+  <%= if @comparison_mode do %>
+    <div class="bg-white rounded-lg shadow-lg p-6">
+      <h2 class="text-xl font-semibold mb-4">Edition Comparison Tool</h2>
+      
+      <form phx-submit="compare_editions" class="flex flex-wrap gap-4 mb-6">
+        <div class="flex-1 min-w-32">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Edition 1</label>
+          <select 
+            name="edition1" 
+            class="w-full px-3 py-2 border border-gray-300 rounded-md"
+          >
+            <%= for edition <- @available_editions do %>
+              <option value={edition} selected={edition == @edition1}><%= edition %></option>
+            <% end %>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <span class="text-gray-500 pb-2">vs</span>
+        </div>
+        <div class="flex-1 min-w-32">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Edition 2</label>
+          <select 
+            name="edition2" 
+            class="w-full px-3 py-2 border border-gray-300 rounded-md"
+          >
+            <%= for edition <- @available_editions do %>
+              <option value={edition} selected={edition == @edition2}><%= edition %></option>
+            <% end %>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button
+            type="submit"
+            class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            Compare
+          </button>
+        </div>
+      </form>
+      
+      <%= if @comparison_result do %>
+        <div class="border-t pt-6">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="text-center">
+              <div class="text-sm text-gray-600">Edition <%= @comparison_result.edition1 %></div>
+              <div class="text-2xl font-bold text-gray-900"><%= @comparison_result.total_edition1 %></div>
+              <div class="text-sm text-gray-500">total films</div>
+            </div>
+            <div class="text-center">
+              <div class="text-sm text-gray-600">Net Change</div>
+              <div class={[
+                "text-2xl font-bold",
+                @comparison_result.net_change > 0 && "text-green-600",
+                @comparison_result.net_change < 0 && "text-red-600", 
+                @comparison_result.net_change == 0 && "text-gray-600"
+              ]}>
+                <%= if @comparison_result.net_change > 0, do: "+", else: "" %><%= @comparison_result.net_change %>
+              </div>
+              <div class="text-sm text-gray-500">films</div>
+            </div>
+            <div class="text-center">
+              <div class="text-sm text-gray-600">Edition <%= @comparison_result.edition2 %></div>
+              <div class="text-2xl font-bold text-gray-900"><%= @comparison_result.total_edition2 %></div>
+              <div class="text-sm text-gray-500">total films</div>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="border-l-4 border-green-500 pl-4">
+              <h3 class="font-medium text-green-700 mb-3">
+                Added in <%= @comparison_result.edition2 %>
+                (<%= length(@comparison_result.added) %> films)
+              </h3>
+              <div class="space-y-2 max-h-64 overflow-y-auto">
+                <%= for movie <- @comparison_result.added do %>
+                  <div class="text-sm p-2 bg-green-50 rounded">
+                    <div class="font-medium text-gray-900"><%= movie.title %></div>
+                    <div class="text-gray-600"><%= format_year(movie.year) %></div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+            
+            <div class="border-l-4 border-red-500 pl-4">
+              <h3 class="font-medium text-red-700 mb-3">
+                Removed from <%= @comparison_result.edition1 %>
+                (<%= length(@comparison_result.removed) %> films)
+              </h3>
+              <div class="space-y-2 max-h-64 overflow-y-auto">
+                <%= for movie <- @comparison_result.removed do %>
+                  <div class="text-sm p-2 bg-red-50 rounded">
+                    <div class="font-medium text-gray-900"><%= movie.title %></div>
+                    <div class="text-gray-600"><%= format_year(movie.year) %></div>
+                  </div>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+</div>
