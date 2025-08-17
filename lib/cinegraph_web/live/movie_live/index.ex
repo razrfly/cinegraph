@@ -200,7 +200,7 @@ defmodule CinegraphWeb.MovieLive.Index do
       socket.assigns.params
       |> Map.merge(cleaned_filters)
       |> Map.put("page", "1")
-      |> Enum.reject(fn {_k, v} -> v == "" or v == [] end)
+      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
       |> Map.new()
 
     path = ~p"/movies?#{params}"
