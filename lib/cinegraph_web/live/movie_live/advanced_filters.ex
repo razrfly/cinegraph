@@ -9,40 +9,6 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   def advanced_filters(assigns) do
     ~H"""
     <div class="space-y-6">
-      <!-- People Search Section -->
-      <div class="border-t pt-4">
-        <h3 class="text-sm font-semibold text-gray-900 mb-3">👥 People</h3>
-        <%= if should_render_people_search?(@filters) do %>
-          <.live_component
-            module={CinegraphWeb.Components.PersonAutocomplete}
-            id="people-search"
-            field_name="filters[people_search]"
-            selected_people={get_selected_people(@filters)}
-            selected_role={get_selected_role(@filters)}
-            search_term={get_search_term(@filters)}
-          />
-        <% else %>
-          <!-- Lightweight search input that activates full component -->
-          <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700">
-              Search People
-            </label>
-            <input
-              type="text"
-              placeholder="Start typing a person's name..."
-              phx-focus="activate_people_search"
-              phx-keyup="activate_people_search"
-              phx-debounce="100"
-              class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              autocomplete="off"
-            />
-            <p class="text-xs text-gray-500">
-              Search and filter movies by cast and crew members
-            </p>
-          </div>
-        <% end %>
-      </div>
-
       <!-- Rating Quality Section -->
       <div class="border-t pt-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">⭐ Rating Quality</h3>
@@ -441,70 +407,11 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     """
   end
 
-  defp get_selected_people(filters) do
-    case filters["people_search"] do
-      %{"people_ids" => people_ids} when people_ids != "" ->
-        # Parse existing selected people from filters
-        ids = 
-          people_ids
-          |> String.split(",", trim: true)
-          |> Enum.map(&String.trim/1)
-          |> Enum.map(&Integer.parse/1)
-          |> Enum.flat_map(fn
-            {id, _} -> [id]
-            :error -> []
-          end)
-        
-        if ids == [] do
-          []
-        else
-          try do
-            case Cinegraph.People.get_people_by_ids(ids) do
-              {:ok, people} -> people
-              {:error, _reason} -> []
-              nil -> []
-              people when is_list(people) -> people
-              _ -> []
-            end
-          rescue
-            error ->
-              Logger.error("Failed to get people by IDs: #{inspect(error)}")
-              []
-          end
-        end
-      _ ->
-        []
-    end
-  end
-
-  defp get_selected_role(filters) do
-    case filters["people_search"] do
-      %{"role_filter" => role_filter} -> role_filter || "any"
-      _ -> "any"
-    end
-  end
-
-  defp get_search_term(filters) do
-    case filters["people_search"] do
-      %{"search_term" => search_term} -> search_term || ""
-      _ -> ""
-    end
-  end
-
-  defp should_render_people_search?(filters) do
-    case filters["people_search"] do
-      %{"people_ids" => _people_ids, "role_filter" => _role_filter} -> true
-      %{"people_ids" => _people_ids} -> true  # Allow just people_ids
-      %{"role_filter" => _role_filter} -> true  # Allow just role_filter
-      %{"search_term" => _search_term} -> true  # Allow just search_term
-      _ -> false
-    end
-  end
+  # People search helper functions removed - moved to index.ex for basic filters
 
   def has_active_advanced_filters(filters) do
-    # New simplified filters
+    # New simplified filters (removed people_search since it's now in basic filters)
     new_filter_keys = [
-      "people_search",
       "rating_preset",
       "discovery_preset", 
       "award_preset"
@@ -591,18 +498,9 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     new_active = 
       new_filter_keys
       |> Enum.map(fn key ->
-        case key do
-          "people_search" ->
-            case Map.get(filters, key) do
-              %{"people_ids" => people_ids} when people_ids not in [nil, ""] ->
-                {key, people_ids}
-              _ -> nil
-            end
-          _ ->
-            case Map.get(filters, key) do
-              value when value not in [nil, "", []] -> {key, value}
-              _ -> nil
-            end
+        case Map.get(filters, key) do
+          value when value not in [nil, "", []] -> {key, value}
+          _ -> nil
         end
       end)
       |> Enum.reject(&is_nil/1)
@@ -619,7 +517,6 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
   def format_filter_label(key) do
     case key do
       # New simplified filters
-      "people_search" -> "People"
       "rating_preset" -> "Rating Quality"
       "discovery_preset" -> "Discovery Type"
       "award_preset" -> "Award Era"
@@ -679,46 +576,6 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           "2000s" -> "2000s"
           "classic" -> "Classic Era (pre-2000)"
           _ -> value
-        end
-
-      key == "people_search" ->
-        # Handle comma-separated person IDs
-        if String.contains?(value, ",") do
-          ids = 
-            value
-            |> String.split(",")
-            |> Enum.take(3)
-            |> Enum.map(&String.trim/1)
-            |> Enum.map(&Integer.parse/1)
-            |> Enum.flat_map(fn
-              {id, _} -> [id]
-              :error -> []
-            end)
-          
-          people_names = 
-            if ids == [] do
-              []
-            else
-              Cinegraph.People.get_people_by_ids(ids)
-              |> Enum.map(& &1.name)
-            end
-          
-          case length(people_names) do
-            0 -> "Unknown People"
-            1 -> Enum.at(people_names, 0)
-            2 -> Enum.join(people_names, ", ")
-            _ -> "#{Enum.at(people_names, 0)}, #{Enum.at(people_names, 1)} +#{length(people_names) - 2} more"
-          end
-        else
-          case Integer.parse(value) do
-            {id, _} ->
-              case Cinegraph.People.get_person(id) do
-                nil -> "Unknown Person"
-                person -> person.name
-              end
-            :error ->
-              "Invalid ID"
-          end
         end
 
       # Legacy filter values
