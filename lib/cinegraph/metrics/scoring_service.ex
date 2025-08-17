@@ -161,7 +161,13 @@ defmodule Cinegraph.Metrics.ScoringService do
   # Private functions
 
   defp get_category_weight(%MetricWeightProfile{category_weights: weights}, category, default) do
-    Map.get(weights || %{}, category, default)
+    value = Map.get(weights || %{}, category, default)
+    # Ensure we always return a number
+    case value do
+      nil -> default
+      v when is_number(v) -> v
+      _ -> default
+    end
   end
 
   # Note: SQL fragment extraction isn't feasible with Ecto's query compilation
