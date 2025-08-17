@@ -71,7 +71,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     all_decade_query = get_decade_movies_query(decade)
     
     # Apply scoring to all decade movies
-    scored_query = ScoringService.apply_scoring(all_decade_query, profile)
+    scored_query = ScoringService.apply_scoring(all_decade_query, profile, %{})
     all_decade_movies = Repo.all(scored_query)
     
     # Sort by score and take top N where N = number of actual 1001 movies

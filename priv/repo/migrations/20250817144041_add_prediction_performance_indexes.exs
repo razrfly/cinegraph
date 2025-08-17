@@ -17,15 +17,8 @@ defmodule Cinegraph.Repo.Migrations.AddPredictionPerformanceIndexes do
       name: :idx_movies_1001_list
     )
     
-    # Index for external metrics joins
-    create index(:external_metrics, [:movie_id, :source, :metric_type],
-      name: :idx_external_metrics_scoring
-    )
-    
-    # Index for festival nominations
-    create index(:festival_nominations, [:movie_id, :won],
-      name: :idx_festival_nominations_scoring
-    )
+    # External metrics index already created in earlier migration
+    # Festival nominations index already created in earlier migration
     
     # Index for person quality scores
     create index(:person_metrics, [:person_id, :metric_type],
@@ -44,10 +37,8 @@ defmodule Cinegraph.Repo.Migrations.AddPredictionPerformanceIndexes do
     CREATE INDEX idx_movies_by_decade ON movies 
     ((FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10), import_status)
     WHERE release_date IS NOT NULL
-    """
-    
-    # Rollback command for the execute statement
-    execute "DROP INDEX IF EXISTS idx_movies_by_decade", ""
+    """,
+    "DROP INDEX IF EXISTS idx_movies_by_decade"
     
     # Index for weight profiles lookup
     create index(:metric_weight_profiles, [:active, :name],

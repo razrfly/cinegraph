@@ -96,11 +96,13 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   Returns 0-100 score.
   """
   def score_critical_acclaim(movie) do
-    query = 
+    query =
       from em in "external_metrics",
         where: em.movie_id == ^movie.id,
-        where: em.source in ["metacritic", "rotten_tomatoes", "imdb"],
-        where: em.metric_type in ["rating_average", "metascore", "tomatometer"],
+        where:
+          (em.source == "imdb" and em.metric_type == "rating_average") or
+          (em.source == "metacritic" and em.metric_type == "metascore") or
+          (em.source == "rotten_tomatoes" and em.metric_type == "tomatometer"),
         select: [em.source, em.metric_type, em.value]
 
     metrics = Repo.all(query)

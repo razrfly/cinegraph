@@ -8,7 +8,7 @@ defmodule Cinegraph.Repo.Migrations.AddMoviePredictionIndexes do
            name: :idx_movies_2020s_prediction_candidates)
     
     # Index for director lookups in movie credits
-    create index(:movie_credits, [:person_id], 
+    create_if_not_exists index(:movie_credits, [:person_id], 
            where: "credit_type = 'crew' AND department = 'Directing'",
            name: :idx_movie_credits_directors)
     
@@ -17,8 +17,8 @@ defmodule Cinegraph.Repo.Migrations.AddMoviePredictionIndexes do
            name: :idx_festival_nominations_movie_scoring)
     
     # Index for external metrics by movie and source
-    create index(:external_metrics, [:movie_id, :source, :metric_type],
-           name: :idx_external_metrics_movie_source)
+    create_if_not_exists index(:external_metrics, [:movie_id, :source, :metric_type],
+           name: :external_metrics_movie_id_source_metric_type_index)
     
     # Index for historical validation queries by decade
     create index(:movies, ["DATE_PART('decade', release_date)", :id],

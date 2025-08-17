@@ -387,7 +387,8 @@ defmodule Cinegraph.Movies.Query.Params do
     # Add search filter
     filters =
       if params.search && params.search != "" do
-        filters ++ [%{field: :title, op: :ilike, value: params.search}]
+        pattern = "%#{params.search}%"
+        filters ++ [%{field: :title, op: :ilike, value: pattern}]
       else
         filters
       end

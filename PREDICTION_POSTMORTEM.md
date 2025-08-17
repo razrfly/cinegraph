@@ -16,7 +16,7 @@ A movie prediction system that would:
 4. Load quickly with good UI/UX
 
 ### Expected Output
-```
+```text
 Rank │ Movie                           │ Likelihood │ Status
 ─────┼─────────────────────────────────┼────────────┼────────
   1  │ Everything Everywhere All...    │    94%     │ 🔮 Future

@@ -165,7 +165,8 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
                FROM external_metrics 
                WHERE movie_id = ? 
                  AND source = 'tmdb' 
-                 AND metric_type = 'popularity_score' 
+                 AND metric_type = 'popularity_score'
+               ORDER BY fetched_at DESC
                LIMIT 1), 
                0
              )

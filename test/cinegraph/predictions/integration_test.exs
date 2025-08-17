@@ -123,9 +123,9 @@ defmodule Cinegraph.Predictions.IntegrationTest do
     
     test "high confidence filtering works" do
       # Test different confidence thresholds
-      high_confidence = MoviePredictor.get_high_confidence_predictions(90)
-      medium_confidence = MoviePredictor.get_high_confidence_predictions(70)
-      low_confidence = MoviePredictor.get_high_confidence_predictions(50)
+      high_confidence = MoviePredictor.get_high_confidence_predictions(0.90)
+      medium_confidence = MoviePredictor.get_high_confidence_predictions(0.70)
+      low_confidence = MoviePredictor.get_high_confidence_predictions(0.50)
       
       # Higher thresholds should return fewer or equal results
       assert length(high_confidence) <= length(medium_confidence)
