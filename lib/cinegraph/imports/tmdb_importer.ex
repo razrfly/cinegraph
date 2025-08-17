@@ -218,7 +218,7 @@ defmodule Cinegraph.Imports.TMDbImporter do
   # Private functions
 
   defp count_our_movies do
-    Repo.aggregate(Movies.Movie, :count)
+    Repo.aggregate(Movies.Movie, :count, :id)
   end
 
   defp calculate_discovery_delay(page_position) do
