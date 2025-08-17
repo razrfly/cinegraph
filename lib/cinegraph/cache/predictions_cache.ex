@@ -184,6 +184,33 @@ defmodule Cinegraph.Cache.PredictionsCache do
   end
 
   @doc """
+  Get comprehensive profile comparison with caching.
+  Compares all profiles across all decades.
+  """
+  def get_profile_comparison do
+    cache_key = "profile_comparison:#{Date.utc_today()}"
+    
+    case Cachex.get(@cache_name, cache_key) do
+      {:ok, nil} ->
+        Logger.debug("Cache miss for profile comparison")
+        result = calculate_profile_comparison()
+        
+        # Cache for 1 hour (comparison is expensive but stable)
+        Cachex.put(@cache_name, cache_key, result, ttl: :timer.hours(1))
+        
+        result
+        
+      {:ok, cached_result} ->
+        Logger.debug("Cache hit for profile comparison")
+        cached_result
+        
+      {:error, reason} ->
+        Logger.warning("Cache error for profile comparison: #{inspect(reason)}")
+        calculate_profile_comparison()
+    end
+  end
+  
+  @doc """
   Warm up cache with common prediction requests.
   Should be called via Oban background job.
   """
@@ -202,6 +229,9 @@ defmodule Cinegraph.Cache.PredictionsCache do
         
         # Warm up validation
         get_validation(default_profile)
+        
+        # Warm up profile comparison (new!)
+        get_profile_comparison()
         
         Logger.info("Prediction cache warmup completed successfully")
         :ok
@@ -242,7 +272,10 @@ defmodule Cinegraph.Cache.PredictionsCache do
   defp calculate_validation(profile) do
     Cinegraph.Predictions.HistoricalValidator.validate_all_decades(profile)
   end
-
+  
+  defp calculate_profile_comparison do
+    Cinegraph.Predictions.HistoricalValidator.get_comprehensive_comparison()
+  end
 
   defp calculate_hit_rate(stats) do
     hits = Map.get(stats, :hit_count, 0)
