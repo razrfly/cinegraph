@@ -12,14 +12,19 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   Get top 100 2020s movies ranked by likelihood of being added to future 1001 Movies lists.
   """
   def predict_2020s_movies(limit \\ 100, weights \\ nil) do
-    # Get all 2020s movies (both on and not on 1001 list for comparison)
+    # Get all 2020s movies not already on the list
     movies_2020s = get_2020s_movies()
     
-    # Batch score all movies for better performance
+    # Process movies in smaller chunks for better performance
     scored_movies = 
       movies_2020s
-      |> CriteriaScoring.batch_score_movies(weights)
-      |> Enum.map(&format_prediction_result/1)
+      |> Enum.chunk_every(25)  # Smaller chunks for faster processing
+      |> Enum.flat_map(fn chunk ->
+        chunk
+        |> CriteriaScoring.batch_score_movies(weights)
+        |> Enum.map(&format_prediction_result/1)
+      end)
+      # No need to filter - all percentages should be valid now
       |> Enum.sort_by(& &1.prediction.likelihood_percentage, :desc)
       |> Enum.take(limit)
     
@@ -88,12 +93,15 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   # Private functions
 
   defp get_2020s_movies do
+    # More efficient query with proper date filtering
     query =
       from m in Movie,
-        where: fragment("EXTRACT(YEAR FROM ?) >= 2020", m.release_date),
+        where: m.release_date >= ^~D[2020-01-01],
+        where: m.release_date < ^~D[2030-01-01],
         where: m.import_status == "full",
+        where: is_nil(fragment("? -> ?", m.canonical_sources, "1001_movies")),
         order_by: [desc: m.release_date],
-        preload: [:external_metrics]
+        limit: 300
 
     Repo.all(query)
   end
