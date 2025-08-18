@@ -33,16 +33,18 @@ defmodule Cinegraph.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Cinegraph.Supervisor]
-    
+
     case Supervisor.start_link(children, opts) do
       {:ok, pid} ->
         # Schedule cache warmup after application starts
         Task.start(fn ->
-          Process.sleep(5000)  # Wait 5 seconds for app to fully initialize
+          # Wait 5 seconds for app to fully initialize
+          Process.sleep(5000)
           Cinegraph.Workers.CacheWarmupWorker.schedule_warmup()
         end)
+
         {:ok, pid}
-      
+
       error ->
         error
     end

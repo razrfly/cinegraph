@@ -12,12 +12,12 @@ defmodule Cinegraph.Workers.CacheWarmupWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"operation" => "warmup_predictions"}}) do
     Logger.info("Starting prediction cache warmup job")
-    
+
     case PredictionsCache.warm_cache() do
       :ok ->
         Logger.info("Cache warmup job completed successfully")
         :ok
-        
+
       :error ->
         Logger.error("Cache warmup job failed")
         {:error, "Cache warmup failed"}
@@ -45,9 +45,10 @@ defmodule Cinegraph.Workers.CacheWarmupWorker do
   def schedule_periodic_warmup do
     # Schedule warmup to run every hour
     %{operation: "warmup_predictions"}
-    |> new(schedule_in: 3600)  # 1 hour
+    # 1 hour
+    |> new(schedule_in: 3600)
     |> Oban.insert()
-    
+
     Logger.info("Scheduled periodic cache warmup (every hour)")
   end
 end
