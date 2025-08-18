@@ -14,22 +14,22 @@ defmodule Cinegraph.Cache.PredictionsCache do
   """
   def get_predictions(limit, profile) do
     cache_key = predictions_cache_key(limit, profile)
-    
+
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
         # Cache miss - calculate and store
         Logger.debug("Cache miss for predictions: limit=#{limit}, profile=#{profile.name}")
         result = calculate_predictions(limit, profile)
-        
+
         # Cache for 15 minutes with async write for speed
         Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(15))
-        
+
         result
-        
+
       {:ok, cached_result} ->
         Logger.debug("Cache hit for predictions: limit=#{limit}, profile=#{profile.name}")
         cached_result
-        
+
       {:error, reason} ->
         Logger.warning("Cache error for predictions: #{inspect(reason)}")
         # Fallback to direct calculation
@@ -42,21 +42,21 @@ defmodule Cinegraph.Cache.PredictionsCache do
   """
   def get_validation(profile) do
     cache_key = validation_cache_key(profile)
-    
+
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
         Logger.debug("Cache miss for validation: profile=#{profile.name}")
         result = calculate_validation(profile)
-        
+
         # Cache validation for 30 minutes (more stable data)
         Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(30))
-        
+
         result
-        
+
       {:ok, cached_result} ->
         Logger.debug("Cache hit for validation: profile=#{profile.name}")
         cached_result
-        
+
       {:error, reason} ->
         Logger.warning("Cache error for validation: #{inspect(reason)}")
         calculate_validation(profile)
@@ -78,19 +78,21 @@ defmodule Cinegraph.Cache.PredictionsCache do
   """
   def get_cached_profile(profile_name) when is_binary(profile_name) do
     cache_key = "profile:#{profile_name}"
-    
+
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
         result = Cinegraph.Metrics.ScoringService.get_profile(profile_name)
+
         if result do
           # Cache profiles for 2 hours (very stable)
           Cachex.put(@cache_name, cache_key, result, ttl: :timer.hours(2))
         end
+
         result
-        
+
       {:ok, cached_result} ->
         cached_result
-        
+
       {:error, _reason} ->
         Cinegraph.Metrics.ScoringService.get_profile(profile_name)
     end
@@ -103,18 +105,20 @@ defmodule Cinegraph.Cache.PredictionsCache do
   """
   def get_default_profile do
     cache_key = "default_profile"
-    
+
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
         result = Cinegraph.Metrics.ScoringService.get_default_profile()
+
         if result do
           Cachex.put(@cache_name, cache_key, result, ttl: :timer.hours(2))
         end
+
         result
-        
+
       {:ok, cached_result} ->
         cached_result
-        
+
       {:error, _reason} ->
         Cinegraph.Metrics.ScoringService.get_default_profile()
     end
@@ -128,6 +132,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
       {:ok, count} ->
         Logger.info("Cleared #{count} prediction cache entries")
         :ok
+
       {:error, reason} ->
         Logger.error("Failed to clear prediction cache: #{inspect(reason)}")
         :error
@@ -149,12 +154,17 @@ defmodule Cinegraph.Cache.PredictionsCache do
                 ["profile", ^profile_name] -> true
                 _ -> false
               end
+
             _ ->
               false
           end)
 
         Enum.each(keys_to_delete, &Cachex.del(@cache_name, &1))
-        Logger.info("Cleared #{length(keys_to_delete)} cache entries for profile: #{profile_name}")
+
+        Logger.info(
+          "Cleared #{length(keys_to_delete)} cache entries for profile: #{profile_name}"
+        )
+
         :ok
 
       {:error, reason} ->
@@ -177,9 +187,16 @@ defmodule Cinegraph.Cache.PredictionsCache do
           entry_count: Map.get(stats, :entry_count, 0),
           memory_usage: Map.get(stats, :memory_usage, 0)
         }
-        
+
       {:error, _reason} ->
-        %{hit_rate: 0.0, total_hits: 0, total_misses: 0, total_operations: 0, entry_count: 0, memory_usage: 0}
+        %{
+          hit_rate: 0.0,
+          total_hits: 0,
+          total_misses: 0,
+          total_operations: 0,
+          entry_count: 0,
+          memory_usage: 0
+        }
     end
   end
 
@@ -189,50 +206,50 @@ defmodule Cinegraph.Cache.PredictionsCache do
   """
   def get_profile_comparison do
     cache_key = "profile_comparison:#{Date.utc_today()}"
-    
+
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
         Logger.debug("Cache miss for profile comparison")
         result = calculate_profile_comparison()
-        
+
         # Cache for 1 hour (comparison is expensive but stable)
         Cachex.put(@cache_name, cache_key, result, ttl: :timer.hours(1))
-        
+
         result
-        
+
       {:ok, cached_result} ->
         Logger.debug("Cache hit for profile comparison")
         cached_result
-        
+
       {:error, reason} ->
         Logger.warning("Cache error for profile comparison: #{inspect(reason)}")
         calculate_profile_comparison()
     end
   end
-  
+
   @doc """
   Warm up cache with common prediction requests.
   Should be called via Oban background job.
   """
   def warm_cache do
     Logger.info("Starting prediction cache warmup")
-    
+
     try do
       # Get default profile
       default_profile = get_default_profile()
-      
+
       if default_profile do
         # Warm up common prediction queries
         get_predictions(100, default_profile)
         get_predictions(50, default_profile)
         get_predictions(200, default_profile)
-        
+
         # Warm up validation
         get_validation(default_profile)
-        
+
         # Warm up profile comparison (new!)
         get_profile_comparison()
-        
+
         Logger.info("Prediction cache warmup completed successfully")
         :ok
       else
@@ -256,7 +273,6 @@ defmodule Cinegraph.Cache.PredictionsCache do
     "validation:#{profile.name}:#{profile_hash(profile)}"
   end
 
-
   # Create a hash of profile weights to detect changes
   defp profile_hash(profile) do
     profile.category_weights
@@ -272,7 +288,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
   defp calculate_validation(profile) do
     Cinegraph.Predictions.HistoricalValidator.validate_all_decades(profile)
   end
-  
+
   defp calculate_profile_comparison do
     Cinegraph.Predictions.HistoricalValidator.get_comprehensive_comparison()
   end
@@ -281,7 +297,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
     hits = Map.get(stats, :hit_count, 0)
     misses = Map.get(stats, :miss_count, 0)
     total = hits + misses
-    
+
     if total > 0 do
       Float.round(hits / total * 100, 2)
     else

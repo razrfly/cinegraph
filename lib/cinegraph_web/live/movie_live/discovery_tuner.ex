@@ -111,7 +111,9 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
               # Avoid creating new atoms from user input
               # Resolve key from either atom or string keys; default to :balanced if not found
               resolved_key =
-                Enum.find(Map.keys(socket.assigns.presets), fn k -> to_string(k) == preset_name end)
+                Enum.find(Map.keys(socket.assigns.presets), fn k ->
+                  to_string(k) == preset_name
+                end)
 
               weights =
                 case resolved_key do

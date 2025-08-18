@@ -1,7 +1,7 @@
 defmodule Cinegraph.Predictions.CriteriaScoring do
   @moduledoc """
   Implements the 5-criteria scoring system for predicting 1001 Movies list additions.
-  
+
   The 5 criteria with default weights:
   1. Critical Acclaim (35%)
   2. Festival Recognition (30%) 
@@ -34,30 +34,31 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   def batch_score_movies(movies, weights \\ @default_weights) do
     # Preload all external metrics for these movies
     movie_ids = Enum.map(movies, & &1.id)
-    
+
     # Batch load external metrics
     external_metrics = batch_load_external_metrics(movie_ids)
-    
+
     # Batch load festival nominations
     festival_nominations = batch_load_festival_nominations(movie_ids)
-    
+
     # Batch load technical nominations
     technical_nominations = batch_load_technical_nominations(movie_ids)
-    
+
     # Batch load director info
     director_info = batch_load_director_info(movie_ids)
-    
+
     # Score each movie using the batched data
     Enum.map(movies, fn movie ->
-      prediction = calculate_movie_score_from_batch(
-        movie, 
-        weights,
-        external_metrics[movie.id] || [],
-        festival_nominations[movie.id] || [],
-        technical_nominations[movie.id] || [],
-        director_info[movie.id] || 0
-      )
-      
+      prediction =
+        calculate_movie_score_from_batch(
+          movie,
+          weights,
+          external_metrics[movie.id] || [],
+          festival_nominations[movie.id] || [],
+          technical_nominations[movie.id] || [],
+          director_info[movie.id] || 0
+        )
+
       %{movie: movie, prediction: prediction}
     end)
   end
@@ -75,11 +76,11 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
       auteur_recognition: score_auteur_recognition(movie) || 0.0
     }
 
-    weighted_total = 
+    weighted_total =
       Enum.reduce(scores, 0, fn {criterion, score}, acc ->
         score = score || 0.0
         weight = weights[criterion] || 0.0
-        acc + (score * weight)
+        acc + score * weight
       end)
 
     %{
@@ -101,22 +102,22 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         where: em.movie_id == ^movie.id,
         where:
           (em.source == "imdb" and em.metric_type == "rating_average") or
-          (em.source == "metacritic" and em.metric_type == "metascore") or
-          (em.source == "rotten_tomatoes" and em.metric_type == "tomatometer"),
+            (em.source == "metacritic" and em.metric_type == "metascore") or
+            (em.source == "rotten_tomatoes" and em.metric_type == "tomatometer"),
         select: [em.source, em.metric_type, em.value]
 
     metrics = Repo.all(query)
-    
+
     if length(metrics) == 0 do
       0.0
     else
       # Convert all scores to 0-100 scale and average
-      normalized_scores = 
+      normalized_scores =
         Enum.map(metrics, fn [source, metric_type, value] ->
           normalize_critic_score(source, metric_type, value)
         end)
         |> Enum.filter(&(&1 > 0))
-        
+
       if length(normalized_scores) > 0 do
         Enum.sum(normalized_scores) / length(normalized_scores)
       else
@@ -132,21 +133,31 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   def score_festival_recognition(movie) do
     query =
       from fnom in "festival_nominations",
-        join: fc in "festival_categories", on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies", on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations", on: fcer.organization_id == fo.id,
+        join: fc in "festival_categories",
+        on: fnom.category_id == fc.id,
+        join: fcer in "festival_ceremonies",
+        on: fnom.ceremony_id == fcer.id,
+        join: fo in "festival_organizations",
+        on: fcer.organization_id == fo.id,
         where: fnom.movie_id == ^movie.id,
         select: [fo.abbreviation, fc.name, fnom.won, fcer.year]
 
     nominations = Repo.all(query)
-    
+
     if length(nominations) == 0 do
       0.0
     else
       # Score each nomination and take the highest
-      scores = Enum.map(nominations, fn [festival, category, won, year] ->
-        score_festival_nomination(%{festival: festival, category: category, won: won, year: year})
-      end)
+      scores =
+        Enum.map(nominations, fn [festival, category, won, year] ->
+          score_festival_nomination(%{
+            festival: festival,
+            category: category,
+            won: won,
+            year: year
+          })
+        end)
+
       Enum.max(scores, fn -> 0.0 end)
     end
   end
@@ -160,38 +171,46 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     tmdb_data = movie.tmdb_data || %{}
     budget = get_in(tmdb_data, ["budget"]) || 0
     revenue = get_in(tmdb_data, ["revenue"]) || 0
-    
+
     # Base cultural impact score
     base_score = 0.0
-    
+
     # Box office performance (0-40 points)
-    roi_score = if budget > 0 and revenue > 0 do
-      roi = revenue / budget
-      cond do
-        roi >= 10.0 -> 40.0  # 10x return = excellent
-        roi >= 5.0 -> 30.0   # 5x return = very good
-        roi >= 2.0 -> 20.0   # 2x return = good
-        roi >= 1.0 -> 10.0   # Break even = poor
-        true -> 0.0          # Loss = no points
+    roi_score =
+      if budget > 0 and revenue > 0 do
+        roi = revenue / budget
+
+        cond do
+          # 10x return = excellent
+          roi >= 10.0 -> 40.0
+          # 5x return = very good
+          roi >= 5.0 -> 30.0
+          # 2x return = good
+          roi >= 2.0 -> 20.0
+          # Break even = poor
+          roi >= 1.0 -> 10.0
+          # Loss = no points
+          true -> 0.0
+        end
+      else
+        0.0
       end
-    else
-      0.0
-    end
-    
+
     # Critical mass indicator (0-30 points) - high rating + high vote count
-    popularity_score = case get_imdb_popularity(movie) do
-      {rating, votes} when rating >= 7.5 and votes >= 100_000 -> 30.0
-      {rating, votes} when rating >= 7.0 and votes >= 50_000 -> 20.0
-      {rating, votes} when rating >= 6.5 and votes >= 25_000 -> 10.0
-      _ -> 0.0
-    end
-    
+    popularity_score =
+      case get_imdb_popularity(movie) do
+        {rating, votes} when rating >= 7.5 and votes >= 100_000 -> 30.0
+        {rating, votes} when rating >= 7.0 and votes >= 50_000 -> 20.0
+        {rating, votes} when rating >= 6.5 and votes >= 25_000 -> 10.0
+        _ -> 0.0
+      end
+
     # Genre diversity bonus (0-15 points) - certain genres get cultural impact boost
     genre_score = score_genre_cultural_impact(movie)
-    
+
     # International recognition (0-15 points) - non-English films get bonus for crossing over
     international_score = score_international_impact(movie)
-    
+
     base_score + roi_score + popularity_score + genre_score + international_score
   end
 
@@ -203,25 +222,33 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Look for technical category nominations/wins
     query =
       from fnom in "festival_nominations",
-        join: fc in "festival_categories", on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies", on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations", on: fcer.organization_id == fo.id,
+        join: fc in "festival_categories",
+        on: fnom.category_id == fc.id,
+        join: fcer in "festival_ceremonies",
+        on: fnom.ceremony_id == fcer.id,
+        join: fo in "festival_organizations",
+        on: fcer.organization_id == fo.id,
         where: fnom.movie_id == ^movie.id,
-        where: fragment("LOWER(?) LIKE ANY(ARRAY['%cinematography%', '%sound%', '%editing%', '%visual%', '%technical%'])", fc.name),
+        where:
+          fragment(
+            "LOWER(?) LIKE ANY(ARRAY['%cinematography%', '%sound%', '%editing%', '%visual%', '%technical%'])",
+            fc.name
+          ),
         select: [fo.abbreviation, fc.name, fnom.won]
 
     technical_nominations = Repo.all(query)
-    
-    base_score = if length(technical_nominations) > 0 do
-      # Score technical nominations
-      Enum.reduce(technical_nominations, 0.0, fn [_festival, _category, won], acc ->
-        points = if won, do: 20.0, else: 10.0
-        acc + points
-      end)
-    else
-      0.0
-    end
-    
+
+    base_score =
+      if length(technical_nominations) > 0 do
+        # Score technical nominations
+        Enum.reduce(technical_nominations, 0.0, fn [_festival, _category, won], acc ->
+          points = if won, do: 20.0, else: 10.0
+          acc + points
+        end)
+      else
+        0.0
+      end
+
     # Cap at 100
     min(base_score, 100.0)
   end
@@ -240,14 +267,15 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         select: mc.person_id
 
     director_ids = Repo.all(directors_query)
-    
+
     if length(director_ids) == 0 do
       0.0
     else
       # Check how many movies by these directors are in 1001 Movies list
       existing_1001_query =
         from m in Movie,
-          join: mc in "movie_credits", on: m.id == mc.movie_id,
+          join: mc in "movie_credits",
+          on: m.id == mc.movie_id,
           where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
           where: mc.person_id in ^director_ids,
           where: mc.credit_type == "crew",
@@ -255,13 +283,17 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
           select: count(m.id, :distinct)
 
       existing_1001_count = Repo.one(existing_1001_query) || 0
-      
+
       # Score based on director's 1001 Movies presence
       cond do
-        existing_1001_count >= 5 -> 100.0  # Established auteur
-        existing_1001_count >= 3 -> 80.0   # Recognized auteur
-        existing_1001_count >= 1 -> 60.0   # Emerging auteur
-        true -> 20.0                       # New director
+        # Established auteur
+        existing_1001_count >= 5 -> 100.0
+        # Recognized auteur
+        existing_1001_count >= 3 -> 80.0
+        # Emerging auteur
+        existing_1001_count >= 1 -> 60.0
+        # New director
+        true -> 20.0
       end
     end
   end
@@ -272,6 +304,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Convert 0-100 weighted score to likelihood percentage
     # Use sigmoid-like curve to compress high scores toward 100%
     score = weighted_score || 0.0
+
     cond do
       score >= 90 -> 95 + (score - 90) * 0.5
       score >= 80 -> 85 + (score - 80) * 1.0
@@ -285,6 +318,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     Enum.map(scores, fn {criterion, score} ->
       safe_score = score || 0.0
       safe_weight = weights[criterion] || 0.0
+
       %{
         criterion: criterion,
         raw_score: Float.round(safe_score, 1),
@@ -298,7 +332,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Metacritic metascore is already 0-100
     value || 0.0
   end
-  
+
   defp normalize_critic_score("metacritic", "rating_average", value) do
     # Metacritic is already 0-100
     value || 0.0
@@ -308,7 +342,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # RT Tomatometer is already 0-100
     value || 0.0
   end
-  
+
   defp normalize_critic_score("rotten_tomatoes", "critics_score", value) do
     # RT Critics is already 0-100
     value || 0.0
@@ -322,22 +356,30 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   defp normalize_critic_score(_, _, value), do: value || 0.0
 
   defp score_festival_nomination(%{festival: festival, won: won, category: category}) do
-    base_score = case festival do
-      "AMPAS" -> if won, do: 100.0, else: 80.0  # Oscars
-      "CANNES" -> if won, do: 95.0, else: 75.0   # Cannes
-      "VIFF" -> if won, do: 90.0, else: 70.0     # Venice
-      "BIFF" -> if won, do: 90.0, else: 70.0     # Berlin  
-      "SUNDANCE" -> if won, do: 75.0, else: 60.0 # Sundance
-      _ -> if won, do: 50.0, else: 30.0          # Other festivals
-    end
-    
+    base_score =
+      case festival do
+        # Oscars
+        "AMPAS" -> if won, do: 100.0, else: 80.0
+        # Cannes
+        "CANNES" -> if won, do: 95.0, else: 75.0
+        # Venice
+        "VIFF" -> if won, do: 90.0, else: 70.0
+        # Berlin  
+        "BIFF" -> if won, do: 90.0, else: 70.0
+        # Sundance
+        "SUNDANCE" -> if won, do: 75.0, else: 60.0
+        # Other festivals
+        _ -> if won, do: 50.0, else: 30.0
+      end
+
     # Boost for prestigious categories
-    category_boost = if String.contains?(String.downcase(category), ["picture", "film", "director"]) do
-      10.0
-    else
-      0.0
-    end
-    
+    category_boost =
+      if String.contains?(String.downcase(category), ["picture", "film", "director"]) do
+        10.0
+      else
+        0.0
+      end
+
     base_score + category_boost
   end
 
@@ -350,15 +392,17 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         select: [em.metric_type, em.value]
 
     metrics = Repo.all(query)
-    
-    rating = Enum.find_value(metrics, 0.0, fn [metric_type, value] -> 
-      if metric_type == "rating_average", do: value, else: nil 
-    end)
-    
-    votes = Enum.find_value(metrics, 0, fn [metric_type, value] -> 
-      if metric_type == "rating_votes", do: round(value), else: nil 
-    end)
-    
+
+    rating =
+      Enum.find_value(metrics, 0.0, fn [metric_type, value] ->
+        if metric_type == "rating_average", do: value, else: nil
+      end)
+
+    votes =
+      Enum.find_value(metrics, 0, fn [metric_type, value] ->
+        if metric_type == "rating_votes", do: round(value), else: nil
+      end)
+
     {rating, votes}
   end
 
@@ -391,9 +435,12 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   defp batch_load_festival_nominations(movie_ids) do
     query =
       from fnom in "festival_nominations",
-        join: fc in "festival_categories", on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies", on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations", on: fcer.organization_id == fo.id,
+        join: fc in "festival_categories",
+        on: fnom.category_id == fc.id,
+        join: fcer in "festival_ceremonies",
+        on: fnom.ceremony_id == fcer.id,
+        join: fo in "festival_organizations",
+        on: fcer.organization_id == fo.id,
         where: fnom.movie_id in ^movie_ids,
         select: [fnom.movie_id, fo.abbreviation, fc.name, fnom.won, fcer.year]
 
@@ -406,11 +453,18 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   defp batch_load_technical_nominations(movie_ids) do
     query =
       from fnom in "festival_nominations",
-        join: fc in "festival_categories", on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies", on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations", on: fcer.organization_id == fo.id,
+        join: fc in "festival_categories",
+        on: fnom.category_id == fc.id,
+        join: fcer in "festival_ceremonies",
+        on: fnom.ceremony_id == fcer.id,
+        join: fo in "festival_organizations",
+        on: fcer.organization_id == fo.id,
         where: fnom.movie_id in ^movie_ids,
-        where: fragment("LOWER(?) LIKE ANY(ARRAY['%cinematography%', '%sound%', '%editing%', '%visual%', '%technical%'])", fc.name),
+        where:
+          fragment(
+            "LOWER(?) LIKE ANY(ARRAY['%cinematography%', '%sound%', '%editing%', '%visual%', '%technical%'])",
+            fc.name
+          ),
         select: [fnom.movie_id, fo.abbreviation, fc.name, fnom.won]
 
     Repo.all(query)
@@ -428,63 +482,76 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         where: mc.department == "Directing",
         select: [mc.movie_id, mc.person_id]
 
-    director_map = 
+    director_map =
       Repo.all(directors_query)
       |> Enum.group_by(&hd/1, fn [_movie_id, person_id] -> person_id end)
 
     # Get 1001 movie counts for all directors
-    all_director_ids = 
+    all_director_ids =
       director_map
       |> Map.values()
       |> List.flatten()
       |> Enum.uniq()
 
-    director_1001_counts = if length(all_director_ids) > 0 do
-      existing_1001_query =
-        from m in Movie,
-          join: mc in "movie_credits", on: m.id == mc.movie_id,
-          where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
-          where: mc.person_id in ^all_director_ids,
-          where: mc.credit_type == "crew",
-          where: mc.department == "Directing",
-          group_by: mc.person_id,
-          select: {mc.person_id, count()}
+    director_1001_counts =
+      if length(all_director_ids) > 0 do
+        existing_1001_query =
+          from m in Movie,
+            join: mc in "movie_credits",
+            on: m.id == mc.movie_id,
+            where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+            where: mc.person_id in ^all_director_ids,
+            where: mc.credit_type == "crew",
+            where: mc.department == "Directing",
+            group_by: mc.person_id,
+            select: {mc.person_id, count()}
 
-      Repo.all(existing_1001_query) |> Map.new()
-    else
-      %{}
-    end
+        Repo.all(existing_1001_query) |> Map.new()
+      else
+        %{}
+      end
 
     # Return director info per movie
     Map.new(director_map, fn {movie_id, director_ids} ->
-      total_1001_count = 
+      total_1001_count =
         director_ids
         |> Enum.map(&Map.get(director_1001_counts, &1, 0))
         |> Enum.sum()
-      
+
       {movie_id, total_1001_count}
     end)
   end
 
-  defp calculate_movie_score_from_batch(movie, weights, external_metrics, festival_nominations, technical_nominations, director_1001_count) do
+  defp calculate_movie_score_from_batch(
+         movie,
+         weights,
+         external_metrics,
+         festival_nominations,
+         technical_nominations,
+         director_1001_count
+       ) do
     # Use default weights if nil is passed
     actual_weights = weights || @default_weights
-    
+
     # Calculate individual scores, ensuring they're all 0-100 range
     scores = %{
       critical_acclaim: min(score_critical_acclaim_from_batch(external_metrics) || 0.0, 100.0),
-      festival_recognition: min(score_festival_recognition_from_batch(festival_nominations) || 0.0, 100.0),
-      cultural_impact: min(score_cultural_impact_from_batch(movie, external_metrics) || 0.0, 100.0),
-      technical_innovation: min(score_technical_innovation_from_batch(technical_nominations) || 0.0, 100.0),
-      auteur_recognition: min(score_auteur_recognition_from_batch(director_1001_count) || 0.0, 100.0)
+      festival_recognition:
+        min(score_festival_recognition_from_batch(festival_nominations) || 0.0, 100.0),
+      cultural_impact:
+        min(score_cultural_impact_from_batch(movie, external_metrics) || 0.0, 100.0),
+      technical_innovation:
+        min(score_technical_innovation_from_batch(technical_nominations) || 0.0, 100.0),
+      auteur_recognition:
+        min(score_auteur_recognition_from_batch(director_1001_count) || 0.0, 100.0)
     }
 
     # Calculate weighted total (should be 0-100 since weights sum to 1.0)
-    weighted_total = 
+    weighted_total =
       Enum.reduce(scores, 0.0, fn {criterion, score}, acc ->
         safe_score = min(score || 0.0, 100.0)
         weight = actual_weights[criterion] || 0.0
-        acc + (safe_score * weight)
+        acc + safe_score * weight
       end)
 
     # Ensure weighted_total is within valid range
@@ -505,7 +572,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     else
       # Filter to only rating metrics and normalize
       # Fixed: Use actual metric types from database
-      normalized_scores = 
+      normalized_scores =
         metrics
         |> Enum.filter(fn [source, metric_type, _value] ->
           case source do
@@ -519,7 +586,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
           normalize_critic_score(source, metric_type, value || 0.0)
         end)
         |> Enum.filter(&(&1 > 0))
-        
+
       if length(normalized_scores) > 0 do
         # Average the scores, but cap at 100
         min(Enum.sum(normalized_scores) / length(normalized_scores), 100.0)
@@ -534,10 +601,19 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
       0.0
     else
       # Score each nomination and take the highest, cap at 100
-      scores = Enum.map(nominations, fn [festival, category, won, year] ->
-        min(score_festival_nomination(%{festival: festival, category: category, won: won, year: year}), 100.0)
-      end)
-      
+      scores =
+        Enum.map(nominations, fn [festival, category, won, year] ->
+          min(
+            score_festival_nomination(%{
+              festival: festival,
+              category: category,
+              won: won,
+              year: year
+            }),
+            100.0
+          )
+        end)
+
       if length(scores) > 0 do
         Enum.max(scores)
       else
@@ -551,50 +627,61 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     tmdb_data = movie.tmdb_data || %{}
     budget = get_in(tmdb_data, ["budget"]) || 0
     revenue = get_in(tmdb_data, ["revenue"]) || 0
-    
+
     # Box office performance (0-40 points)
-    roi_score = if budget > 0 and revenue > 0 do
-      roi = revenue / budget
-      cond do
-        roi >= 10.0 -> 40.0  # 10x return = excellent
-        roi >= 5.0 -> 30.0   # 5x return = very good
-        roi >= 2.0 -> 20.0   # 2x return = good
-        roi >= 1.0 -> 10.0   # Break even = poor
-        true -> 0.0          # Loss = no points
+    roi_score =
+      if budget > 0 and revenue > 0 do
+        roi = revenue / budget
+
+        cond do
+          # 10x return = excellent
+          roi >= 10.0 -> 40.0
+          # 5x return = very good
+          roi >= 5.0 -> 30.0
+          # 2x return = good
+          roi >= 2.0 -> 20.0
+          # Break even = poor
+          roi >= 1.0 -> 10.0
+          # Loss = no points
+          true -> 0.0
+        end
+      else
+        0.0
       end
-    else
-      0.0
-    end
-    
+
     # Critical mass indicator (0-30 points) - high rating + high vote count
-    popularity_score = case get_imdb_popularity_from_batch(metrics) do
-      {rating, votes} when rating >= 7.5 and votes >= 100_000 -> 30.0
-      {rating, votes} when rating >= 7.0 and votes >= 50_000 -> 20.0
-      {rating, votes} when rating >= 6.5 and votes >= 25_000 -> 10.0
-      _ -> 0.0
-    end
-    
+    popularity_score =
+      case get_imdb_popularity_from_batch(metrics) do
+        {rating, votes} when rating >= 7.5 and votes >= 100_000 -> 30.0
+        {rating, votes} when rating >= 7.0 and votes >= 50_000 -> 20.0
+        {rating, votes} when rating >= 6.5 and votes >= 25_000 -> 10.0
+        _ -> 0.0
+      end
+
     # Genre diversity bonus (0-15 points) - certain genres get cultural impact boost
-    genre_score = 10.0  # Simplified for now
-    
+    # Simplified for now
+    genre_score = 10.0
+
     # International recognition (0-15 points) - non-English films get bonus for crossing over
-    international_score = 5.0  # Simplified for now
-    
+    # Simplified for now
+    international_score = 5.0
+
     # Sum all scores and cap at 100
     min(roi_score + popularity_score + genre_score + international_score, 100.0)
   end
 
   defp score_technical_innovation_from_batch(nominations) do
-    base_score = if length(nominations) > 0 do
-      # Score technical nominations
-      Enum.reduce(nominations, 0.0, fn [_festival, _category, won], acc ->
-        points = if won, do: 20.0, else: 10.0
-        acc + points
-      end)
-    else
-      0.0
-    end
-    
+    base_score =
+      if length(nominations) > 0 do
+        # Score technical nominations
+        Enum.reduce(nominations, 0.0, fn [_festival, _category, won], acc ->
+          points = if won, do: 20.0, else: 10.0
+          acc + points
+        end)
+      else
+        0.0
+      end
+
     # Cap at 100
     min(base_score, 100.0)
   end
@@ -602,22 +689,28 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   defp score_auteur_recognition_from_batch(director_1001_count) do
     # Score based on director's 1001 Movies presence
     cond do
-      director_1001_count >= 5 -> 100.0  # Established auteur
-      director_1001_count >= 3 -> 80.0   # Recognized auteur
-      director_1001_count >= 1 -> 60.0   # Emerging auteur
-      true -> 20.0                       # New director
+      # Established auteur
+      director_1001_count >= 5 -> 100.0
+      # Recognized auteur
+      director_1001_count >= 3 -> 80.0
+      # Emerging auteur
+      director_1001_count >= 1 -> 60.0
+      # New director
+      true -> 20.0
     end
   end
 
   defp get_imdb_popularity_from_batch(metrics) do
-    rating = Enum.find_value(metrics, 0.0, fn [source, metric_type, value] -> 
-      if source == "imdb" and metric_type == "rating_average", do: value, else: nil 
-    end)
-    
-    votes = Enum.find_value(metrics, 0, fn [source, metric_type, value] -> 
-      if source == "imdb" and metric_type == "rating_votes", do: round(value), else: nil 
-    end)
-    
+    rating =
+      Enum.find_value(metrics, 0.0, fn [source, metric_type, value] ->
+        if source == "imdb" and metric_type == "rating_average", do: value, else: nil
+      end)
+
+    votes =
+      Enum.find_value(metrics, 0, fn [source, metric_type, value] ->
+        if source == "imdb" and metric_type == "rating_votes", do: round(value), else: nil
+      end)
+
     {rating, votes}
   end
 end
