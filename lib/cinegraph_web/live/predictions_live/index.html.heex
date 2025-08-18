@@ -16,18 +16,18 @@
         <div class="mt-6 lg:mt-0 flex space-x-6">
           <div class="text-center">
             <div class="text-2xl font-bold text-blue-600">
-              {@predictions_result.total_candidates}
+              <%= @predictions_result.total_candidates %>
             </div>
             <div class="text-sm text-gray-500">Candidates</div>
           </div>
           <div class="text-center">
             <div class="text-2xl font-bold text-green-600">
-              {@validation_result.overall_accuracy}%
+              <%= @validation_result.overall_accuracy %>%
             </div>
             <div class="text-sm text-gray-500">Accuracy</div>
           </div>
           <div class="text-center">
-            <div class="text-2xl font-bold text-purple-600">{@confirmed_count}</div>
+            <div class="text-2xl font-bold text-purple-600"><%= @confirmed_count %></div>
             <div class="text-sm text-gray-500">Confirmed</div>
           </div>
         </div>
@@ -95,7 +95,7 @@
           <div>
             <h3 class="text-xl font-semibold text-blue-900">Algorithm Confidence</h3>
             <p class="text-blue-800">
-              <span class="font-bold text-3xl">{@validation_result.overall_accuracy}%</span>
+              <span class="font-bold text-3xl"><%= @validation_result.overall_accuracy %>%</span>
               <span class="text-lg ml-1">accuracy based on historical validation</span>
             </p>
             <p class="text-sm text-blue-600 mt-1">
@@ -118,7 +118,7 @@
               >
               </path>
             </svg>
-            <span>{if @show_weight_tuner, do: "Hide Tuner", else: "Tune Algorithm"}</span>
+            <span><%= if @show_weight_tuner, do: "Hide Tuner", else: "Tune Algorithm" %></span>
           </button>
         </div>
       </div>
@@ -158,7 +158,7 @@
             >
               <%= for profile <- @available_profiles do %>
                 <option value={profile.name} selected={profile.name == @current_profile.name}>
-                  {profile.name} - {profile.description}
+                  <%= profile.name %> - <%= profile.description %>
                 </option>
               <% end %>
             </select>
@@ -171,7 +171,7 @@
                 <div class="bg-gray-50 rounded-lg p-4">
                   <div class="flex items-center justify-between mb-3">
                     <label class="text-sm font-semibold text-gray-900">
-                      {criterion_label(criterion)}
+                      <%= criterion_label(criterion) %>
                     </label>
                     <span class="text-lg font-bold text-blue-600 min-w-[60px] text-right">
                       <span class="weight-display"><%= round(weight * 100) %></span>%
@@ -195,7 +195,7 @@
                   
 <!-- Criterion Description -->
                   <div class="mt-2 text-xs text-gray-600">
-                    {case criterion do
+                    <%= case criterion do
                       :popular_opinion ->
                         "IMDb and TMDb user ratings and votes"
 
@@ -213,7 +213,7 @@
 
                       _ ->
                         ""
-                    end}
+                    end %>
                   </div>
                 </div>
               <% end %>
@@ -294,7 +294,7 @@
               </svg>
               <span>2020s Predictions</span>
               <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                {length(@predictions_result.predictions)}
+                <%= length(@predictions_result.predictions) %>
               </span>
             </div>
           </button>
@@ -321,7 +321,7 @@
               </svg>
               <span>Historical Validation</span>
               <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                {@validation_result.overall_accuracy}%
+                <%= @validation_result.overall_accuracy %>%
               </span>
             </div>
           </button>
@@ -362,7 +362,7 @@
         <!-- Header -->
         <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
           <h2 class="text-2xl font-bold text-white">
-            Top {length(@predictions_result.predictions)} 2020s Movies Most Likely to Be Added
+            Top <%= length(@predictions_result.predictions) %> 2020s Movies Most Likely to Be Added
           </h2>
           <p class="text-blue-100 mt-1">Ranked by our 5-criteria algorithm</p>
         </div>
@@ -407,7 +407,7 @@
                         "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium",
                         rank_color
                       ]}>
-                        #{index}
+                        #<%= index %>
                       </span>
                     </div>
                   </td>
@@ -418,12 +418,12 @@
                       phx-click="select_movie"
                       phx-value-movie_id={prediction.id}
                     >
-                      {prediction.title}
+                      <%= prediction.title %>
                     </div>
                   </td>
 
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {prediction.year}
+                    <%= prediction.year %>
                   </td>
 
                   <td class="px-6 py-4 whitespace-nowrap">
@@ -447,7 +447,7 @@
                         </div>
                       </div>
                       <span class={["text-sm font-semibold", likelihood_class]}>
-                        {likelihood_text}
+                        <%= likelihood_text %>
                       </span>
                     </div>
                   </td>
@@ -461,7 +461,7 @@
                         else: "bg-blue-100 text-blue-800"
                       )
                     ]}>
-                      {status_text}
+                      <%= status_text %>
                     </span>
                   </td>
 
@@ -485,10 +485,10 @@
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600">
             <div class="flex space-x-6">
               <span>
-                <strong>{@predictions_result.total_candidates}</strong> candidates analyzed
+                <strong><%= @predictions_result.total_candidates %></strong> candidates analyzed
               </span>
               <span>
-                <strong>{@validation_result.overall_accuracy}%</strong> historical accuracy
+                <strong><%= @validation_result.overall_accuracy %>%</strong> historical accuracy
               </span>
             </div>
             <div class="mt-2 sm:mt-0">
@@ -515,32 +515,32 @@
               <div class="border rounded-lg p-4">
                 <div class="flex justify-between items-center mb-2">
                   <h3 class="text-lg font-medium text-gray-900">
-                    {decade_result.decade}s Movies
+                    <%= decade_result.decade %>s Movies
                   </h3>
                   <span class={[
                     "text-lg font-bold",
                     accuracy_color(decade_result.accuracy_percentage)
                   ]}>
-                    {decade_result.accuracy_percentage}% ✅
+                    <%= decade_result.accuracy_percentage %>% ✅
                   </span>
                 </div>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
                     <div class="text-gray-600">Total in 1001 List</div>
-                    <div class="font-semibold">{decade_result.total_1001_movies} movies</div>
+                    <div class="font-semibold"><%= decade_result.total_1001_movies %> movies</div>
                   </div>
                   <div>
                     <div class="text-gray-600">Correctly Predicted</div>
-                    <div class="font-semibold">{decade_result.correctly_predicted} movies</div>
+                    <div class="font-semibold"><%= decade_result.correctly_predicted %> movies</div>
                   </div>
                   <div>
                     <div class="text-gray-600">False Positives</div>
-                    <div class="font-semibold">{decade_result.false_positive_count} movies</div>
+                    <div class="font-semibold"><%= decade_result.false_positive_count %> movies</div>
                   </div>
                   <div>
                     <div class="text-gray-600">Misses</div>
-                    <div class="font-semibold">{decade_result.missed_count} movies</div>
+                    <div class="font-semibold"><%= decade_result.missed_count %> movies</div>
                   </div>
                 </div>
               </div>
@@ -550,7 +550,7 @@
           <div class="mt-6 p-4 bg-green-50 rounded-lg">
             <h3 class="font-medium text-green-900 mb-2">Overall Algorithm Accuracy</h3>
             <p class="text-green-800">
-              <span class="text-2xl font-bold">{@validation_result.overall_accuracy}%</span>
+              <span class="text-2xl font-bold"><%= @validation_result.overall_accuracy %>%</span>
               - This is why you should trust our 2020s predictions
             </p>
           </div>
@@ -568,12 +568,12 @@
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-3xl font-bold">
-                  {@profile_comparison.best_overall.profile_name}
+                  <%= @profile_comparison.best_overall.profile_name %>
                 </h3>
-                <p class="text-purple-100 mt-1">{@profile_comparison.best_overall.description}</p>
+                <p class="text-purple-100 mt-1"><%= @profile_comparison.best_overall.description %></p>
               </div>
               <div class="text-right">
-                <div class="text-4xl font-bold">{@profile_comparison.best_overall.accuracy}%</div>
+                <div class="text-4xl font-bold"><%= @profile_comparison.best_overall.accuracy %>%</div>
                 <div class="text-purple-100">Overall Accuracy</div>
               </div>
             </div>
@@ -600,7 +600,7 @@
                   <%= if @profile_comparison.profiles && length(@profile_comparison.profiles) > 0 do %>
                     <%= for decade <- @profile_comparison.profiles |> hd() |> Map.get(:decade_accuracies, %{}) |> Map.keys() |> Enum.sort() do %>
                       <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        {decade}s
+                        <%= decade %>s
                       </th>
                     <% end %>
                   <% end %>
@@ -615,10 +615,10 @@
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div class="text-sm font-medium text-gray-900">
-                          {profile_data.profile.name}
+                          <%= profile_data.profile.name %>
                         </div>
                         <div class="text-xs text-gray-500">
-                          {profile_data.profile.description}
+                          <%= profile_data.profile.description %>
                         </div>
                       </div>
                     </td>
@@ -627,7 +627,7 @@
                         "text-lg font-bold",
                         accuracy_color(profile_data.overall_accuracy)
                       ]}>
-                        {profile_data.overall_accuracy}%
+                        <%= profile_data.overall_accuracy %>%
                       </span>
                     </td>
                     <%= for decade <- profile_data.decade_accuracies |> Map.keys() |> Enum.sort() do %>
@@ -643,7 +643,7 @@
                           !is_best && accuracy < 60 && accuracy >= 40 && "text-gray-600",
                           !is_best && accuracy < 40 && "text-red-600"
                         ]}>
-                          {accuracy}%
+                          <%= accuracy %>%
                           <%= if is_best do %>
                             <span class="text-xs">👑</span>
                           <% end %>
@@ -651,7 +651,7 @@
                       </td>
                     <% end %>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                      <span class="text-xs text-gray-600">{profile_data.strengths}</span>
+                      <span class="text-xs text-gray-600"><%= profile_data.strengths %></span>
                     </td>
                   </tr>
                 <% end %>
@@ -668,11 +668,11 @@
               <h3 class="text-lg font-semibold text-blue-900 mb-2">Most Consistent</h3>
               <p class="text-blue-800">
                 <span class="font-bold">
-                  {elem(@profile_comparison.insights.most_consistent, 0)}
+                  <%= elem(@profile_comparison.insights.most_consistent, 0) %>
                 </span>
               </p>
               <p class="text-sm text-blue-600 mt-1">
-                Variance: {elem(@profile_comparison.insights.most_consistent, 1)}%
+                Variance: <%= elem(@profile_comparison.insights.most_consistent, 1) %>%
               </p>
             </div>
             
@@ -681,11 +681,11 @@
               <h3 class="text-lg font-semibold text-yellow-900 mb-2">Most Variable</h3>
               <p class="text-yellow-800">
                 <span class="font-bold">
-                  {elem(@profile_comparison.insights.highest_variance, 0)}
+                  <%= elem(@profile_comparison.insights.highest_variance, 0) %>
                 </span>
               </p>
               <p class="text-sm text-yellow-600 mt-1">
-                Variance: {elem(@profile_comparison.insights.highest_variance, 1)}%
+                Variance: <%= elem(@profile_comparison.insights.highest_variance, 1) %>%
               </p>
             </div>
             
@@ -694,13 +694,13 @@
               <h3 class="text-lg font-semibold text-purple-900 mb-2">Era Specialists</h3>
               <div class="space-y-1 text-sm">
                 <div class="text-purple-800">
-                  <span class="font-medium">Classic:</span> {@profile_comparison.insights.era_specialists.classic_era.profile}
+                  <span class="font-medium">Classic:</span> <%= @profile_comparison.insights.era_specialists.classic_era.profile %>
                 </div>
                 <div class="text-purple-800">
-                  <span class="font-medium">Golden:</span> {@profile_comparison.insights.era_specialists.golden_age.profile}
+                  <span class="font-medium">Golden:</span> <%= @profile_comparison.insights.era_specialists.golden_age.profile %>
                 </div>
                 <div class="text-purple-800">
-                  <span class="font-medium">Modern:</span> {@profile_comparison.insights.era_specialists.modern_era.profile}
+                  <span class="font-medium">Modern:</span> <%= @profile_comparison.insights.era_specialists.modern_era.profile %>
                 </div>
               </div>
             </div>
@@ -713,12 +713,12 @@
           <p class="text-green-800">
             Based on comprehensive analysis, the
             <strong>
-              {(@profile_comparison.best_overall && @profile_comparison.best_overall.profile_name) ||
-                "Balanced"}
+              <%= (@profile_comparison.best_overall && @profile_comparison.best_overall.profile_name) ||
+                "Balanced" %>
             </strong>
             profile
-            performs best overall with {(@profile_comparison.best_overall &&
-                                           @profile_comparison.best_overall.accuracy) || 0}% accuracy.
+            performs best overall with <%= (@profile_comparison.best_overall &&
+                                           @profile_comparison.best_overall.accuracy) || 0 %>% accuracy.
             However, consider using specialized profiles for specific eras to maximize prediction accuracy.
           </p>
         </div>
@@ -732,16 +732,16 @@
           <!-- Modal Header -->
           <div class="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex justify-between items-start">
             <div class="text-white">
-              <h2 class="text-3xl font-bold">{@selected_movie.movie.title}</h2>
+              <h2 class="text-3xl font-bold"><%= @selected_movie.movie.title %></h2>
               <div class="flex items-center space-x-4 mt-2">
                 <span class="text-blue-100">
-                  {extract_year(@selected_movie.movie.release_date)}
+                  <%= extract_year(@selected_movie.movie.release_date) %>
                 </span>
                 <span class="text-blue-100">•</span>
                 <% {likelihood_text, _} =
                   format_likelihood(@selected_movie.prediction.likelihood_percentage) %>
                 <span class="text-xl font-semibold text-yellow-300">
-                  {likelihood_text} Likelihood
+                  <%= likelihood_text %> Likelihood
                 </span>
                 <% {status_text, _} = format_status(@selected_movie.status) %>
                 <span class={[
@@ -798,10 +798,10 @@
                       <div class="bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500">
                         <div class="flex justify-between items-center mb-2">
                           <span class="font-semibold text-gray-900">
-                            {criterion_label(breakdown.criterion)}
+                            <%= criterion_label(breakdown.criterion) %>
                           </span>
                           <span class="text-xl font-bold text-blue-600">
-                            {breakdown.weighted_points} pts
+                            <%= breakdown.weighted_points %> pts
                           </span>
                         </div>
                         
@@ -817,8 +817,8 @@
                         </div>
 
                         <div class="text-sm text-gray-600 flex justify-between">
-                          <span>Raw Score: <strong>{breakdown.raw_score}/100</strong></span>
-                          <span>Weight: <strong>{round(breakdown.weight * 100)}%</strong></span>
+                          <span>Raw Score: <strong><%= breakdown.raw_score %>/100</strong></span>
+                          <span>Weight: <strong><%= round(breakdown.weight * 100) %>%</strong></span>
                         </div>
                       </div>
                     <% end %>
@@ -828,11 +828,11 @@
                   <div class="mt-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
                     <div class="text-center">
                       <div class="text-4xl font-bold mb-2">
-                        {@selected_movie.prediction.total_score}
+                        <%= @selected_movie.prediction.total_score %>
                       </div>
                       <div class="text-blue-100 text-sm mb-3">Total Score (out of 100)</div>
                       <div class="text-2xl font-semibold text-yellow-300">
-                        {@selected_movie.prediction.likelihood_percentage}% Likelihood
+                        <%= @selected_movie.prediction.likelihood_percentage %>% Likelihood
                       </div>
                     </div>
                   </div>
@@ -862,13 +862,13 @@
                   <div class="space-y-3">
                     <%= for pattern <- @selected_movie.similar_patterns do %>
                       <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <div class="font-semibold text-purple-900">{pattern.title}</div>
+                        <div class="font-semibold text-purple-900"><%= pattern.title %></div>
                         <div class="text-sm text-purple-700 mt-1">
-                          Released: <strong>{pattern.year}</strong> →
-                          Added to 1001 Movies: <strong>{pattern.added_year}</strong>
+                          Released: <strong><%= pattern.year %></strong> →
+                          Added to 1001 Movies: <strong><%= pattern.added_year %></strong>
                         </div>
                         <div class="text-xs text-purple-600 mt-2">
-                          ⏱️ Added after <strong>{pattern.years_later} years</strong>
+                          ⏱️ Added after <strong><%= pattern.years_later %> years</strong>
                         </div>
                       </div>
                     <% end %>
@@ -895,7 +895,7 @@
                     Estimated Addition Timeline
                   </h4>
                   <p class="text-yellow-100 text-lg font-medium">
-                    {@selected_movie.estimated_timeline}
+                    <%= @selected_movie.estimated_timeline %>
                   </p>
                   <p class="text-yellow-200 text-sm mt-2">
                     Based on historical patterns and current likelihood score
@@ -909,17 +909,17 @@
                     <li class="flex items-start">
                       <span class="text-green-600 mr-2">•</span>
                       Algorithm confidence:
-                      <strong>{@validation_result.overall_accuracy}%</strong>
+                      <strong><%= @validation_result.overall_accuracy %>%</strong>
                       based on historical data
                     </li>
                     <li class="flex items-start">
                       <span class="text-blue-600 mr-2">•</span>
                       Top criterion:
                       <strong>
-                        {@selected_movie.prediction.breakdown
+                        <%= @selected_movie.prediction.breakdown
                         |> Enum.max_by(& &1.weighted_points)
                         |> Map.get(:criterion)
-                        |> criterion_label()}
+                        |> criterion_label() %>
                       </strong>
                     </li>
                     <li class="flex items-start">
