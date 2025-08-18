@@ -172,11 +172,12 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
   @doc """
   Calculate optimal weights by testing different profiles against historical data.
+  Now includes all decades (including 2020s) for comprehensive comparison.
   """
   def compare_profiles do
     # Get all available profiles from database
     profiles = ScoringService.get_all_profiles()
-    decades = get_all_decades() |> Enum.filter(& &1 < 2020)
+    decades = get_all_decades()  # Include ALL decades for full comparison
     
     results = 
       Enum.map(profiles, fn profile ->
@@ -185,10 +186,14 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
           profile_name: profile.name,
           description: profile.description,
           overall_accuracy: validation.overall_accuracy,
-          decade_results: validation.decade_results
+          decade_results: validation.decade_results,
+          weights_used: validation.weights_used
         }
       end)
       |> Enum.sort_by(& &1.overall_accuracy, :desc)
+    
+    # Calculate per-decade winners
+    decade_winners = calculate_decade_winners(results)
     
     case results do
       [best | _] ->
@@ -196,7 +201,8 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
           best_profile: best.profile_name,
           best_accuracy: best.overall_accuracy,
           all_results: results,
-          decades_tested: length(decades)
+          decades_tested: length(decades),
+          decade_winners: decade_winners
         }
 
       [] ->
@@ -204,9 +210,43 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
           best_profile: nil,
           best_accuracy: 0.0,
           all_results: [],
-          decades_tested: length(decades)
+          decades_tested: length(decades),
+          decade_winners: %{}
         }
     end
+  end
+  
+  @doc """
+  Compare all profiles and return detailed comparison data for UI display.
+  Includes caching for performance.
+  """
+  def get_comprehensive_comparison do
+    # This will be cached by PredictionsCache
+    profiles = ScoringService.get_all_profiles()
+    decades = get_all_decades()
+    
+    comparison_data = Enum.map(profiles, fn profile ->
+      decade_accuracies = Enum.map(decades, fn decade ->
+        result = validate_decade(decade, profile)
+        {decade, result.accuracy_percentage}
+      end) |> Map.new()
+      
+      overall = calculate_overall_from_decades(decade_accuracies)
+      
+      %{
+        profile: profile,
+        overall_accuracy: overall,
+        decade_accuracies: decade_accuracies,
+        strengths: identify_profile_strengths(decade_accuracies, decades)
+      }
+    end)
+    
+    %{
+      profiles: comparison_data,
+      best_overall: find_best_overall(comparison_data),
+      best_per_decade: find_best_per_decade(comparison_data, decades),
+      insights: generate_insights(comparison_data, decades)
+    }
   end
 
   # Private functions
@@ -315,6 +355,143 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
       ["Algorithm performing well for this decade"]
     else
       suggestions
+    end
+  end
+  
+  # New helper functions for comprehensive comparison
+  
+  defp calculate_decade_winners(results) do
+    all_decades = results 
+      |> Enum.flat_map(& &1.decade_results) 
+      |> Enum.map(& &1.decade) 
+      |> Enum.uniq()
+      |> Enum.sort()
+    
+    Enum.map(all_decades, fn decade ->
+      winner = results
+        |> Enum.map(fn result ->
+          decade_result = Enum.find(result.decade_results, fn dr -> dr.decade == decade end)
+          {result.profile_name, decade_result && decade_result.accuracy_percentage || 0.0}
+        end)
+        |> Enum.max_by(fn {_name, accuracy} -> accuracy end)
+      
+      {decade, winner}
+    end)
+    |> Map.new()
+  end
+  
+  defp calculate_overall_from_decades(decade_accuracies) do
+    values = Map.values(decade_accuracies)
+    if length(values) > 0 do
+      Float.round(Enum.sum(values) / length(values), 1)
+    else
+      0.0
+    end
+  end
+  
+  defp find_best_overall(comparison_data) do
+    case Enum.max_by(comparison_data, & &1.overall_accuracy, fn -> nil end) do
+      nil -> nil
+      best -> %{
+        profile_name: best.profile.name,
+        accuracy: best.overall_accuracy,
+        description: best.profile.description
+      }
+    end
+  end
+  
+  defp find_best_per_decade(comparison_data, decades) do
+    Enum.map(decades, fn decade ->
+      best = comparison_data
+        |> Enum.map(fn data ->
+          accuracy = Map.get(data.decade_accuracies, decade, 0.0)
+          {data.profile.name, accuracy}
+        end)
+        |> Enum.max_by(fn {_name, acc} -> acc end)
+      
+      {decade, best}
+    end)
+    |> Map.new()
+  end
+  
+  defp identify_profile_strengths(decade_accuracies, decades) do
+    early_decades = Enum.filter(decades, & &1 <= 1960)
+    modern_decades = Enum.filter(decades, & &1 >= 1990)
+    
+    early_avg = average_accuracy_for_decades(decade_accuracies, early_decades)
+    modern_avg = average_accuracy_for_decades(decade_accuracies, modern_decades)
+    
+    cond do
+      early_avg > modern_avg + 10 -> "Strong for classic cinema (pre-1960s)"
+      modern_avg > early_avg + 10 -> "Strong for modern cinema (1990s+)"
+      true -> "Consistent across all eras"
+    end
+  end
+  
+  defp average_accuracy_for_decades(decade_accuracies, decades) do
+    accuracies = Enum.map(decades, &Map.get(decade_accuracies, &1, 0.0))
+    if length(accuracies) > 0 do
+      Float.round(Enum.sum(accuracies) / length(accuracies), 1)
+    else
+      0.0
+    end
+  end
+  
+  defp generate_insights(comparison_data, decades) do
+    %{
+      total_decades: length(decades),
+      highest_variance: find_highest_variance_profile(comparison_data),
+      most_consistent: find_most_consistent_profile(comparison_data),
+      era_specialists: find_era_specialists(comparison_data, decades)
+    }
+  end
+  
+  defp find_highest_variance_profile(comparison_data) do
+    comparison_data
+    |> Enum.map(fn data ->
+      accuracies = Map.values(data.decade_accuracies)
+      variance = if length(accuracies) > 0 do
+        avg = Enum.sum(accuracies) / length(accuracies)
+        Enum.sum(Enum.map(accuracies, fn x -> :math.pow(x - avg, 2) end)) / length(accuracies)
+      else
+        0.0
+      end
+      {data.profile.name, Float.round(:math.sqrt(variance), 1)}
+    end)
+    |> Enum.max_by(fn {_name, var} -> var end)
+  end
+  
+  defp find_most_consistent_profile(comparison_data) do
+    comparison_data
+    |> Enum.map(fn data ->
+      accuracies = Map.values(data.decade_accuracies)
+      variance = if length(accuracies) > 0 do
+        avg = Enum.sum(accuracies) / length(accuracies)
+        Enum.sum(Enum.map(accuracies, fn x -> :math.pow(x - avg, 2) end)) / length(accuracies)
+      else
+        999.0
+      end
+      {data.profile.name, Float.round(:math.sqrt(variance), 1)}
+    end)
+    |> Enum.min_by(fn {_name, var} -> var end)
+  end
+  
+  defp find_era_specialists(comparison_data, decades) do
+    %{
+      classic_era: find_best_for_era(comparison_data, Enum.filter(decades, & &1 <= 1960)),
+      golden_age: find_best_for_era(comparison_data, Enum.filter(decades, & &1 >= 1950 and &1 <= 1970)),
+      modern_era: find_best_for_era(comparison_data, Enum.filter(decades, & &1 >= 1990))
+    }
+  end
+  
+  defp find_best_for_era(comparison_data, era_decades) do
+    case comparison_data
+         |> Enum.map(fn data ->
+           avg = average_accuracy_for_decades(data.decade_accuracies, era_decades)
+           {data.profile.name, avg}
+         end)
+         |> Enum.max_by(fn {_name, avg} -> avg end, fn -> {"None", 0.0} end) do
+      {name, accuracy} -> %{profile: name, accuracy: accuracy}
     end
   end
 end
