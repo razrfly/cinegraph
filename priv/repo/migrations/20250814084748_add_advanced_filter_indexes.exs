@@ -10,8 +10,10 @@ defmodule Cinegraph.Repo.Migrations.AddAdvancedFilterIndexes do
     create_if_not_exists index(:festival_ceremonies, [:organization_id, :year])
 
     # Rating filtering indexes
-    create_if_not_exists index(:external_metrics, [:movie_id, :source, :metric_type], 
-                               name: :external_metrics_movie_id_source_metric_type_index)
+    create_if_not_exists index(:external_metrics, [:movie_id, :source, :metric_type],
+                           name: :external_metrics_movie_id_source_metric_type_index
+                         )
+
     create_if_not_exists index(:external_metrics, [:source, :metric_type])
 
     # People filtering indexes

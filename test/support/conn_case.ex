@@ -36,5 +36,5 @@ defmodule CinegraphWeb.ConnCase do
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 
-# User authentication functions removed as this project doesn't use user accounts
+  # User authentication functions removed as this project doesn't use user accounts
 end

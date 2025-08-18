@@ -6,30 +6,36 @@
         <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
           2020s Movie Predictions
         </h1>
-        <p class="mt-2 text-lg text-gray-600">AI-powered predictions for future 1001 Movies list additions</p>
+        <p class="mt-2 text-lg text-gray-600">
+          AI-powered predictions for future 1001 Movies list additions
+        </p>
       </div>
       
-      <!-- Quick Stats -->
+<!-- Quick Stats -->
       <%= unless @loading do %>
         <div class="mt-6 lg:mt-0 flex space-x-6">
           <div class="text-center">
-            <div class="text-2xl font-bold text-blue-600"><%= @predictions_result.total_candidates %></div>
+            <div class="text-2xl font-bold text-blue-600">
+              {@predictions_result.total_candidates}
+            </div>
             <div class="text-sm text-gray-500">Candidates</div>
           </div>
           <div class="text-center">
-            <div class="text-2xl font-bold text-green-600"><%= @validation_result.overall_accuracy %>%</div>
+            <div class="text-2xl font-bold text-green-600">
+              {@validation_result.overall_accuracy}%
+            </div>
             <div class="text-sm text-gray-500">Accuracy</div>
           </div>
           <div class="text-center">
-            <div class="text-2xl font-bold text-purple-600"><%= @confirmed_count %></div>
+            <div class="text-2xl font-bold text-purple-600">{@confirmed_count}</div>
             <div class="text-sm text-gray-500">Confirmed</div>
           </div>
         </div>
       <% end %>
     </div>
   </div>
-
-  <!-- Progressive Loading States -->
+  
+<!-- Progressive Loading States -->
   <%= if @loading do %>
     <div class="space-y-6">
       <!-- Loading Banner -->
@@ -43,7 +49,7 @@
         </div>
       </div>
       
-      <!-- Skeleton Loading -->
+<!-- Skeleton Loading -->
       <div class="bg-white rounded-lg shadow-lg p-6">
         <div class="animate-pulse">
           <div class="h-8 bg-gray-200 rounded mb-6"></div>
@@ -70,56 +76,89 @@
         <div class="flex items-center space-x-4">
           <div class="flex-shrink-0">
             <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-              <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              <svg
+                class="w-8 h-8 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                >
+                </path>
               </svg>
             </div>
           </div>
           <div>
             <h3 class="text-xl font-semibold text-blue-900">Algorithm Confidence</h3>
             <p class="text-blue-800">
-              <span class="font-bold text-3xl"><%= @validation_result.overall_accuracy %>%</span>
+              <span class="font-bold text-3xl">{@validation_result.overall_accuracy}%</span>
               <span class="text-lg ml-1">accuracy based on historical validation</span>
             </p>
-            <p class="text-sm text-blue-600 mt-1">Validated against 1001 Movies from 1950s-2010s</p>
+            <p class="text-sm text-blue-600 mt-1">
+              Validated against 1001 Movies from 1950s-2010s
+            </p>
           </div>
         </div>
-        
+
         <div class="mt-4 lg:mt-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
           <button
             phx-click="toggle_weight_tuner"
             class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium flex items-center justify-center space-x-2 shadow-sm"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"></path>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"
+              >
+              </path>
             </svg>
-            <span><%= if @show_weight_tuner, do: "Hide Tuner", else: "Tune Algorithm" %></span>
+            <span>{if @show_weight_tuner, do: "Hide Tuner", else: "Tune Algorithm"}</span>
           </button>
         </div>
       </div>
     </div>
-
-    <!-- Enhanced Weight Tuner Panel -->
+    
+<!-- Enhanced Weight Tuner Panel -->
     <%= if @show_weight_tuner do %>
       <div class="bg-white rounded-xl shadow-lg mb-8 overflow-hidden border border-gray-200">
         <div class="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4">
           <h3 class="text-xl font-semibold text-white flex items-center">
             <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"></path>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"
+              >
+              </path>
             </svg>
             Algorithm Weight Tuner
           </h3>
-          <p class="text-purple-100 text-sm mt-1">Adjust the importance of each criterion to see how it affects predictions</p>
+          <p class="text-purple-100 text-sm mt-1">
+            Adjust the importance of each criterion to see how it affects predictions
+          </p>
         </div>
-        
+
         <div class="p-6">
           <!-- Profile Selector -->
           <div class="mb-6">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Select Weight Profile</label>
-            <select phx-change="select_profile" name="profile" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Select Weight Profile
+            </label>
+            <select
+              phx-change="select_profile"
+              name="profile"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
               <%= for profile <- @available_profiles do %>
                 <option value={profile.name} selected={profile.name == @current_profile.name}>
-                  <%= profile.name %> - <%= profile.description %>
+                  {profile.name} - {profile.description}
                 </option>
               <% end %>
             </select>
@@ -128,83 +167,108 @@
           <div class="border-t pt-6">
             <h4 class="text-sm font-medium text-gray-700 mb-4">Custom Weight Adjustment</h4>
             <form phx-submit="update_weights" class="space-y-6">
-            <%= for {criterion, weight} <- @algorithm_weights do %>
-              <div class="bg-gray-50 rounded-lg p-4">
-                <div class="flex items-center justify-between mb-3">
-                  <label class="text-sm font-semibold text-gray-900">
-                    <%= criterion_label(criterion) %>
-                  </label>
-                  <span class="text-lg font-bold text-blue-600 min-w-[60px] text-right">
-                    <span class="weight-display"><%= round(weight * 100) %></span>%
-                  </span>
+              <%= for {criterion, weight} <- @algorithm_weights do %>
+                <div class="bg-gray-50 rounded-lg p-4">
+                  <div class="flex items-center justify-between mb-3">
+                    <label class="text-sm font-semibold text-gray-900">
+                      {criterion_label(criterion)}
+                    </label>
+                    <span class="text-lg font-bold text-blue-600 min-w-[60px] text-right">
+                      <span class="weight-display"><%= round(weight * 100) %></span>%
+                    </span>
+                  </div>
+
+                  <div class="flex items-center space-x-4">
+                    <span class="text-xs text-gray-500 w-8">0%</span>
+                    <input
+                      type="range"
+                      name={to_string(criterion)}
+                      min="0"
+                      max="50"
+                      step="1"
+                      value={round(weight * 100)}
+                      class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      data-criterion={to_string(criterion)}
+                    />
+                    <span class="text-xs text-gray-500 w-8">50%</span>
+                  </div>
+                  
+<!-- Criterion Description -->
+                  <div class="mt-2 text-xs text-gray-600">
+                    {case criterion do
+                      :popular_opinion ->
+                        "IMDb and TMDb user ratings and votes"
+
+                      :critical_acclaim ->
+                        "Metacritic and Rotten Tomatoes critic scores"
+
+                      :industry_recognition ->
+                        "Oscars, Cannes, Venice, Berlin awards and nominations"
+
+                      :cultural_impact ->
+                        "Canonical lists (1001 Movies, Criterion, NFR) and cultural significance"
+
+                      :people_quality ->
+                        "Quality scores of directors, actors, and key crew members"
+
+                      _ ->
+                        ""
+                    end}
+                  </div>
                 </div>
-                
-                <div class="flex items-center space-x-4">
-                  <span class="text-xs text-gray-500 w-8">0%</span>
-                  <input
-                    type="range"
-                    name={to_string(criterion)}
-                    min="0"
-                    max="50"
-                    step="1"
-                    value={round(weight * 100)}
-                    class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                    data-criterion={to_string(criterion)}
-                  />
-                  <span class="text-xs text-gray-500 w-8">50%</span>
-                </div>
-                
-                <!-- Criterion Description -->
-                <div class="mt-2 text-xs text-gray-600">
-                  <%= case criterion do
-                    :popular_opinion -> "IMDb and TMDb user ratings and votes"
-                    :critical_acclaim -> "Metacritic and Rotten Tomatoes critic scores"
-                    :industry_recognition -> "Oscars, Cannes, Venice, Berlin awards and nominations"
-                    :cultural_impact -> "Canonical lists (1001 Movies, Criterion, NFR) and cultural significance"
-                    :people_quality -> "Quality scores of directors, actors, and key crew members"
-                    _ -> ""
-                  end %>
+              <% end %>
+              
+<!-- Weight Summary -->
+              <div class="bg-blue-50 rounded-lg p-4">
+                <h4 class="text-sm font-medium text-blue-900 mb-2">
+                  Current Weight Distribution
+                </h4>
+                <div class="text-xs text-blue-800">
+                  Total: <span id="total-weight"><%= (@algorithm_weights |> Map.values() |> Enum.sum() |> Kernel.*(100) |> round()) %></span>%
+                  <span class="ml-2 text-blue-600">(should equal 100%)</span>
                 </div>
               </div>
-            <% end %>
-            
-            <!-- Weight Summary -->
-            <div class="bg-blue-50 rounded-lg p-4">
-              <h4 class="text-sm font-medium text-blue-900 mb-2">Current Weight Distribution</h4>
-              <div class="text-xs text-blue-800">
-                Total: <span id="total-weight"><%= (@algorithm_weights |> Map.values() |> Enum.sum() |> Kernel.*(100) |> round()) %></span>% 
-                <span class="ml-2 text-blue-600">(should equal 100%)</span>
+
+              <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
+                <button
+                  type="submit"
+                  class="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium flex items-center justify-center space-x-2 shadow-sm"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    >
+                    </path>
+                  </svg>
+                  <span>Recalculate Predictions</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="reset_weights"
+                  class="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all duration-200 font-medium flex items-center justify-center space-x-2"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                    >
+                    </path>
+                  </svg>
+                  <span>Reset to Default</span>
+                </button>
               </div>
-            </div>
-            
-            <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 pt-2">
-              <button
-                type="submit"
-                class="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200 font-medium flex items-center justify-center space-x-2 shadow-sm"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                <span>Recalculate Predictions</span>
-              </button>
-              <button
-                type="button"
-                phx-click="reset_weights"
-                class="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all duration-200 font-medium flex items-center justify-center space-x-2"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                </svg>
-                <span>Reset to Default</span>
-              </button>
-            </div>
-          </form>
+            </form>
           </div>
         </div>
       </div>
     <% end %>
-
-    <!-- Enhanced View Mode Toggle -->
+    
+<!-- Enhanced View Mode Toggle -->
     <div class="mb-8">
       <div class="border-b border-gray-200">
         <nav class="-mb-px flex space-x-8">
@@ -214,80 +278,118 @@
             class={[
               "py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200",
               @view_mode == :predictions && "border-blue-500 text-blue-600",
-              @view_mode != :predictions && "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              @view_mode != :predictions &&
+                "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             ]}
           >
             <div class="flex items-center space-x-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                >
+                </path>
               </svg>
               <span>2020s Predictions</span>
-              <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"><%= length(@predictions_result.predictions) %></span>
+              <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
+                {length(@predictions_result.predictions)}
+              </span>
             </div>
           </button>
-          
+
           <button
             phx-click="switch_view"
             phx-value-mode="validation"
             class={[
               "py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200",
               @view_mode == :validation && "border-blue-500 text-blue-600",
-              @view_mode != :validation && "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              @view_mode != :validation &&
+                "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             ]}
           >
             <div class="flex items-center space-x-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                >
+                </path>
               </svg>
               <span>Historical Validation</span>
-              <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full"><%= @validation_result.overall_accuracy %>%</span>
+              <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                {@validation_result.overall_accuracy}%
+              </span>
             </div>
           </button>
-          
+
           <button
             phx-click="switch_view"
             phx-value-mode="comparison"
             class={[
               "py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200",
               @view_mode == :comparison && "border-blue-500 text-blue-600",
-              @view_mode != :comparison && "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              @view_mode != :comparison &&
+                "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
             ]}
           >
             <div class="flex items-center space-x-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                >
+                </path>
               </svg>
               <span>Profile Comparison</span>
-              <span class="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">NEW</span>
+              <span class="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                NEW
+              </span>
             </div>
           </button>
-          
         </nav>
       </div>
     </div>
-
-    <!-- Enhanced Predictions View -->
+    
+<!-- Enhanced Predictions View -->
     <%= if @view_mode == :predictions do %>
       <div class="bg-white rounded-xl shadow-lg overflow-hidden">
         <!-- Header -->
         <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
           <h2 class="text-2xl font-bold text-white">
-            Top <%= length(@predictions_result.predictions) %> 2020s Movies Most Likely to Be Added
+            Top {length(@predictions_result.predictions)} 2020s Movies Most Likely to Be Added
           </h2>
           <p class="text-blue-100 mt-1">Ranked by our 5-criteria algorithm</p>
         </div>
         
-        <!-- Table -->
+<!-- Table -->
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Movie</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Likelihood</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Rank
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Movie
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Year
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Likelihood
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -295,50 +397,74 @@
                 <tr class="hover:bg-gray-50 transition-colors duration-150">
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
-                      <% rank_color = cond do
-                        index <= 3 -> "bg-yellow-100 text-yellow-800"
-                        index <= 10 -> "bg-blue-100 text-blue-800"
-                        true -> "bg-gray-100 text-gray-800"
-                      end %>
-                      <span class={["inline-flex items-center px-3 py-1 rounded-full text-sm font-medium", rank_color]}>
-                        #<%= index %>
+                      <% rank_color =
+                        cond do
+                          index <= 3 -> "bg-yellow-100 text-yellow-800"
+                          index <= 10 -> "bg-blue-100 text-blue-800"
+                          true -> "bg-gray-100 text-gray-800"
+                        end %>
+                      <span class={[
+                        "inline-flex items-center px-3 py-1 rounded-full text-sm font-medium",
+                        rank_color
+                      ]}>
+                        #{index}
                       </span>
                     </div>
                   </td>
-                  
+
                   <td class="px-6 py-4">
-                    <div class="text-sm font-medium text-gray-900 hover:text-blue-600 cursor-pointer"
-                         phx-click="select_movie" phx-value-movie_id={prediction.id}>
-                      <%= prediction.title %>
+                    <div
+                      class="text-sm font-medium text-gray-900 hover:text-blue-600 cursor-pointer"
+                      phx-click="select_movie"
+                      phx-value-movie_id={prediction.id}
+                    >
+                      {prediction.title}
                     </div>
                   </td>
-                  
+
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <%= prediction.year %>
+                    {prediction.year}
                   </td>
-                  
+
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <% {likelihood_text, likelihood_class} = format_likelihood(prediction.prediction.likelihood_percentage) %>
+                    <% {likelihood_text, likelihood_class} =
+                      format_likelihood(prediction.prediction.likelihood_percentage) %>
                     <div class="flex items-center">
                       <% progress_width = prediction.prediction.likelihood_percentage %>
                       <div class="flex-1 mr-3">
                         <div class="w-20 bg-gray-200 rounded-full h-2">
-                          <div class={["h-2 rounded-full", likelihood_class |> String.replace("text-", "bg-") |> String.replace("font-bold", "") |> String.replace("font-semibold", "")]} 
-                               style={"width: #{progress_width}%"}></div>
+                          <div
+                            class={[
+                              "h-2 rounded-full",
+                              likelihood_class
+                              |> String.replace("text-", "bg-")
+                              |> String.replace("font-bold", "")
+                              |> String.replace("font-semibold", "")
+                            ]}
+                            style={"width: #{progress_width}%"}
+                          >
+                          </div>
                         </div>
                       </div>
-                      <span class={["text-sm font-semibold", likelihood_class]}><%= likelihood_text %></span>
+                      <span class={["text-sm font-semibold", likelihood_class]}>
+                        {likelihood_text}
+                      </span>
                     </div>
                   </td>
-                  
+
                   <td class="px-6 py-4 whitespace-nowrap">
                     <% {status_text, _status_class} = format_status(prediction.status) %>
-                    <span class={["inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium", 
-                                  if(prediction.status == :already_added, do: "bg-green-100 text-green-800", else: "bg-blue-100 text-blue-800")]}>
-                      <%= status_text %>
+                    <span class={[
+                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+                      if(prediction.status == :already_added,
+                        do: "bg-green-100 text-green-800",
+                        else: "bg-blue-100 text-blue-800"
+                      )
+                    ]}>
+                      {status_text}
                     </span>
                   </td>
-                  
+
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <button
                       phx-click="select_movie"
@@ -354,64 +480,77 @@
           </table>
         </div>
         
-        <!-- Footer Stats -->
+<!-- Footer Stats -->
         <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600">
             <div class="flex space-x-6">
-              <span><strong><%= @predictions_result.total_candidates %></strong> candidates analyzed</span>
-              <span><strong><%= @validation_result.overall_accuracy %>%</strong> historical accuracy</span>
+              <span>
+                <strong>{@predictions_result.total_candidates}</strong> candidates analyzed
+              </span>
+              <span>
+                <strong>{@validation_result.overall_accuracy}%</strong> historical accuracy
+              </span>
             </div>
             <div class="mt-2 sm:mt-0">
-              <span class="text-xs text-gray-500">Updated in real-time • Powered by 5-criteria algorithm</span>
+              <span class="text-xs text-gray-500">
+                Updated in real-time • Powered by 5-criteria algorithm
+              </span>
             </div>
           </div>
         </div>
       </div>
     <% end %>
-
-    <!-- Historical Validation View -->
+    
+<!-- Historical Validation View -->
     <%= if @view_mode == :validation do %>
       <div class="space-y-6">
         <div class="bg-white rounded-lg shadow-lg p-6">
           <h2 class="text-xl font-semibold mb-4">Algorithm Validation Results</h2>
-          <p class="text-gray-600 mb-6">Historical accuracy by decade (why you should trust our predictions):</p>
-          
+          <p class="text-gray-600 mb-6">
+            Historical accuracy by decade (why you should trust our predictions):
+          </p>
+
           <div class="space-y-4">
             <%= for decade_result <- Enum.reverse(@validation_result.decade_results) do %>
               <div class="border rounded-lg p-4">
                 <div class="flex justify-between items-center mb-2">
-                  <h3 class="text-lg font-medium text-gray-900"><%= decade_result.decade %>s Movies</h3>
-                  <span class={["text-lg font-bold", accuracy_color(decade_result.accuracy_percentage)]}>
-                    <%= decade_result.accuracy_percentage %>% ✅
+                  <h3 class="text-lg font-medium text-gray-900">
+                    {decade_result.decade}s Movies
+                  </h3>
+                  <span class={[
+                    "text-lg font-bold",
+                    accuracy_color(decade_result.accuracy_percentage)
+                  ]}>
+                    {decade_result.accuracy_percentage}% ✅
                   </span>
                 </div>
-                
+
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
                     <div class="text-gray-600">Total in 1001 List</div>
-                    <div class="font-semibold"><%= decade_result.total_1001_movies %> movies</div>
+                    <div class="font-semibold">{decade_result.total_1001_movies} movies</div>
                   </div>
                   <div>
                     <div class="text-gray-600">Correctly Predicted</div>
-                    <div class="font-semibold"><%= decade_result.correctly_predicted %> movies</div>
+                    <div class="font-semibold">{decade_result.correctly_predicted} movies</div>
                   </div>
                   <div>
                     <div class="text-gray-600">False Positives</div>
-                    <div class="font-semibold"><%= decade_result.false_positive_count %> movies</div>
+                    <div class="font-semibold">{decade_result.false_positive_count} movies</div>
                   </div>
                   <div>
                     <div class="text-gray-600">Misses</div>
-                    <div class="font-semibold"><%= decade_result.missed_count %> movies</div>
+                    <div class="font-semibold">{decade_result.missed_count} movies</div>
                   </div>
                 </div>
               </div>
             <% end %>
           </div>
-          
+
           <div class="mt-6 p-4 bg-green-50 rounded-lg">
             <h3 class="font-medium text-green-900 mb-2">Overall Algorithm Accuracy</h3>
             <p class="text-green-800">
-              <span class="text-2xl font-bold"><%= @validation_result.overall_accuracy %>%</span>
+              <span class="text-2xl font-bold">{@validation_result.overall_accuracy}%</span>
               - This is why you should trust our 2020s predictions
             </p>
           </div>
@@ -419,7 +558,7 @@
       </div>
     <% end %>
     
-    <!-- Profile Comparison View -->
+<!-- Profile Comparison View -->
     <%= if @view_mode == :comparison && @profile_comparison do %>
       <div class="space-y-6">
         <!-- Best Overall Profile Card -->
@@ -428,36 +567,46 @@
             <h2 class="text-2xl font-bold mb-2">🏆 Best Overall Profile</h2>
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="text-3xl font-bold"><%= @profile_comparison.best_overall.profile_name %></h3>
-                <p class="text-purple-100 mt-1"><%= @profile_comparison.best_overall.description %></p>
+                <h3 class="text-3xl font-bold">
+                  {@profile_comparison.best_overall.profile_name}
+                </h3>
+                <p class="text-purple-100 mt-1">{@profile_comparison.best_overall.description}</p>
               </div>
               <div class="text-right">
-                <div class="text-4xl font-bold"><%= @profile_comparison.best_overall.accuracy %>%</div>
+                <div class="text-4xl font-bold">{@profile_comparison.best_overall.accuracy}%</div>
                 <div class="text-purple-100">Overall Accuracy</div>
               </div>
             </div>
           </div>
         <% end %>
         
-        <!-- Comparison Table -->
+<!-- Comparison Table -->
         <div class="bg-white rounded-xl shadow-lg overflow-hidden">
           <div class="bg-gray-50 px-6 py-4 border-b">
             <h2 class="text-xl font-semibold">All Profiles Performance Comparison</h2>
             <p class="text-gray-600 text-sm mt-1">Accuracy percentages across all decades</p>
           </div>
-          
+
           <div class="overflow-x-auto">
             <table class="min-w-full">
               <thead class="bg-gray-100">
                 <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Profile</th>
-                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Overall</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Profile
+                  </th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Overall
+                  </th>
                   <%= if @profile_comparison.profiles && length(@profile_comparison.profiles) > 0 do %>
                     <%= for decade <- @profile_comparison.profiles |> hd() |> Map.get(:decade_accuracies, %{}) |> Map.keys() |> Enum.sort() do %>
-                      <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider"><%= decade %>s</th>
+                      <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {decade}s
+                      </th>
                     <% end %>
                   <% end %>
-                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Strength</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Strength
+                  </th>
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
@@ -465,18 +614,27 @@
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div class="text-sm font-medium text-gray-900"><%= profile_data.profile.name %></div>
-                        <div class="text-xs text-gray-500"><%= profile_data.profile.description %></div>
+                        <div class="text-sm font-medium text-gray-900">
+                          {profile_data.profile.name}
+                        </div>
+                        <div class="text-xs text-gray-500">
+                          {profile_data.profile.description}
+                        </div>
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                      <span class={["text-lg font-bold", accuracy_color(profile_data.overall_accuracy)]}>
-                        <%= profile_data.overall_accuracy %>%
+                      <span class={[
+                        "text-lg font-bold",
+                        accuracy_color(profile_data.overall_accuracy)
+                      ]}>
+                        {profile_data.overall_accuracy}%
                       </span>
                     </td>
                     <%= for decade <- profile_data.decade_accuracies |> Map.keys() |> Enum.sort() do %>
                       <% accuracy = Map.get(profile_data.decade_accuracies, decade, 0.0) %>
-                      <% is_best = Map.get(@profile_comparison.best_per_decade, decade, {nil, 0.0}) |> elem(0) == profile_data.profile.name %>
+                      <% is_best =
+                        Map.get(@profile_comparison.best_per_decade, decade, {nil, 0.0})
+                        |> elem(0) == profile_data.profile.name %>
                       <td class="px-4 py-4 whitespace-nowrap text-center">
                         <span class={[
                           "text-sm",
@@ -485,7 +643,7 @@
                           !is_best && accuracy < 60 && accuracy >= 40 && "text-gray-600",
                           !is_best && accuracy < 40 && "text-red-600"
                         ]}>
-                          <%= accuracy %>%
+                          {accuracy}%
                           <%= if is_best do %>
                             <span class="text-xs">👑</span>
                           <% end %>
@@ -493,7 +651,7 @@
                       </td>
                     <% end %>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                      <span class="text-xs text-gray-600"><%= profile_data.strengths %></span>
+                      <span class="text-xs text-gray-600">{profile_data.strengths}</span>
                     </td>
                   </tr>
                 <% end %>
@@ -502,79 +660,98 @@
           </div>
         </div>
         
-        <!-- Insights Section -->
+<!-- Insights Section -->
         <%= if @profile_comparison.insights do %>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Most Consistent Profile -->
             <div class="bg-blue-50 rounded-lg p-6">
               <h3 class="text-lg font-semibold text-blue-900 mb-2">Most Consistent</h3>
               <p class="text-blue-800">
-                <span class="font-bold"><%= elem(@profile_comparison.insights.most_consistent, 0) %></span>
+                <span class="font-bold">
+                  {elem(@profile_comparison.insights.most_consistent, 0)}
+                </span>
               </p>
               <p class="text-sm text-blue-600 mt-1">
-                Variance: <%= elem(@profile_comparison.insights.most_consistent, 1) %>%
+                Variance: {elem(@profile_comparison.insights.most_consistent, 1)}%
               </p>
             </div>
             
-            <!-- Highest Variance Profile -->
+<!-- Highest Variance Profile -->
             <div class="bg-yellow-50 rounded-lg p-6">
               <h3 class="text-lg font-semibold text-yellow-900 mb-2">Most Variable</h3>
               <p class="text-yellow-800">
-                <span class="font-bold"><%= elem(@profile_comparison.insights.highest_variance, 0) %></span>
+                <span class="font-bold">
+                  {elem(@profile_comparison.insights.highest_variance, 0)}
+                </span>
               </p>
               <p class="text-sm text-yellow-600 mt-1">
-                Variance: <%= elem(@profile_comparison.insights.highest_variance, 1) %>%
+                Variance: {elem(@profile_comparison.insights.highest_variance, 1)}%
               </p>
             </div>
             
-            <!-- Era Specialists -->
+<!-- Era Specialists -->
             <div class="bg-purple-50 rounded-lg p-6">
               <h3 class="text-lg font-semibold text-purple-900 mb-2">Era Specialists</h3>
               <div class="space-y-1 text-sm">
                 <div class="text-purple-800">
-                  <span class="font-medium">Classic:</span> <%= @profile_comparison.insights.era_specialists.classic_era.profile %>
+                  <span class="font-medium">Classic:</span> {@profile_comparison.insights.era_specialists.classic_era.profile}
                 </div>
                 <div class="text-purple-800">
-                  <span class="font-medium">Golden:</span> <%= @profile_comparison.insights.era_specialists.golden_age.profile %>
+                  <span class="font-medium">Golden:</span> {@profile_comparison.insights.era_specialists.golden_age.profile}
                 </div>
                 <div class="text-purple-800">
-                  <span class="font-medium">Modern:</span> <%= @profile_comparison.insights.era_specialists.modern_era.profile %>
+                  <span class="font-medium">Modern:</span> {@profile_comparison.insights.era_specialists.modern_era.profile}
                 </div>
               </div>
             </div>
           </div>
         <% end %>
         
-        <!-- Recommendation -->
+<!-- Recommendation -->
         <div class="bg-green-50 border border-green-200 rounded-lg p-6">
           <h3 class="text-lg font-semibold text-green-900 mb-2">💡 Recommendation</h3>
           <p class="text-green-800">
-            Based on comprehensive analysis, the <strong><%= @profile_comparison.best_overall && @profile_comparison.best_overall.profile_name || "Balanced" %></strong> profile 
-            performs best overall with <%= @profile_comparison.best_overall && @profile_comparison.best_overall.accuracy || 0 %>% accuracy.
+            Based on comprehensive analysis, the
+            <strong>
+              {(@profile_comparison.best_overall && @profile_comparison.best_overall.profile_name) ||
+                "Balanced"}
+            </strong>
+            profile
+            performs best overall with {(@profile_comparison.best_overall &&
+                                           @profile_comparison.best_overall.accuracy) || 0}% accuracy.
             However, consider using specialized profiles for specific eras to maximize prediction accuracy.
           </p>
         </div>
       </div>
     <% end %>
-
-
-    <!-- Enhanced Movie Detail Modal -->
+    
+<!-- Enhanced Movie Detail Modal -->
     <%= if @selected_movie do %>
       <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 transition-opacity duration-300">
         <div class="bg-white rounded-xl max-w-6xl w-full max-h-[95vh] overflow-y-auto shadow-2xl transform transition-all duration-300">
           <!-- Modal Header -->
           <div class="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex justify-between items-start">
             <div class="text-white">
-              <h2 class="text-3xl font-bold"><%= @selected_movie.movie.title %></h2>
+              <h2 class="text-3xl font-bold">{@selected_movie.movie.title}</h2>
               <div class="flex items-center space-x-4 mt-2">
-                <span class="text-blue-100"><%= extract_year(@selected_movie.movie.release_date) %></span>
+                <span class="text-blue-100">
+                  {extract_year(@selected_movie.movie.release_date)}
+                </span>
                 <span class="text-blue-100">•</span>
-                <% {likelihood_text, _} = format_likelihood(@selected_movie.prediction.likelihood_percentage) %>
-                <span class="text-xl font-semibold text-yellow-300"><%= likelihood_text %> Likelihood</span>
+                <% {likelihood_text, _} =
+                  format_likelihood(@selected_movie.prediction.likelihood_percentage) %>
+                <span class="text-xl font-semibold text-yellow-300">
+                  {likelihood_text} Likelihood
+                </span>
                 <% {status_text, _} = format_status(@selected_movie.status) %>
-                <span class={["px-3 py-1 rounded-full text-sm font-medium", 
-                            if(@selected_movie.status == :already_added, do: "bg-green-500 text-white", else: "bg-blue-500 text-white")]}>
-                  <%= status_text %>
+                <span class={[
+                  "px-3 py-1 rounded-full text-sm font-medium",
+                  if(@selected_movie.status == :already_added,
+                    do: "bg-green-500 text-white",
+                    else: "bg-blue-500 text-white"
+                  )
+                ]}>
+                  {status_text}
                 </span>
               </div>
             </div>
@@ -583,19 +760,36 @@
               class="text-white hover:text-gray-300 transition-colors duration-200 p-1"
             >
               <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                >
+                </path>
               </svg>
             </button>
           </div>
-          
+
           <div class="p-6">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <!-- Scoring Breakdown -->
               <div class="space-y-6">
                 <div>
                   <h3 class="text-xl font-semibold mb-4 flex items-center">
-                    <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    <svg
+                      class="w-6 h-6 mr-2 text-blue-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      >
+                      </path>
                     </svg>
                     Scoring Breakdown
                   </h3>
@@ -604,98 +798,134 @@
                       <div class="bg-gray-50 rounded-lg p-4 border-l-4 border-blue-500">
                         <div class="flex justify-between items-center mb-2">
                           <span class="font-semibold text-gray-900">
-                            <%= criterion_label(breakdown.criterion) %>
+                            {criterion_label(breakdown.criterion)}
                           </span>
                           <span class="text-xl font-bold text-blue-600">
-                            <%= breakdown.weighted_points %> pts
+                            {breakdown.weighted_points} pts
                           </span>
                         </div>
                         
-                        <!-- Progress Bar -->
+<!-- Progress Bar -->
                         <div class="mb-2">
                           <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="bg-blue-600 h-2 rounded-full" style={"width: #{breakdown.raw_score}%"}></div>
+                            <div
+                              class="bg-blue-600 h-2 rounded-full"
+                              style={"width: #{breakdown.raw_score}%"}
+                            >
+                            </div>
                           </div>
                         </div>
-                        
+
                         <div class="text-sm text-gray-600 flex justify-between">
-                          <span>Raw Score: <strong><%= breakdown.raw_score %>/100</strong></span>
-                          <span>Weight: <strong><%= round(breakdown.weight * 100) %>%</strong></span>
+                          <span>Raw Score: <strong>{breakdown.raw_score}/100</strong></span>
+                          <span>Weight: <strong>{round(breakdown.weight * 100)}%</strong></span>
                         </div>
                       </div>
                     <% end %>
                   </div>
                   
-                  <!-- Total Score Card -->
+<!-- Total Score Card -->
                   <div class="mt-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg p-6 text-white">
                     <div class="text-center">
-                      <div class="text-4xl font-bold mb-2"><%= @selected_movie.prediction.total_score %></div>
+                      <div class="text-4xl font-bold mb-2">
+                        {@selected_movie.prediction.total_score}
+                      </div>
                       <div class="text-blue-100 text-sm mb-3">Total Score (out of 100)</div>
                       <div class="text-2xl font-semibold text-yellow-300">
-                        <%= @selected_movie.prediction.likelihood_percentage %>% Likelihood
+                        {@selected_movie.prediction.likelihood_percentage}% Likelihood
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
               
-              <!-- Historical Patterns & Timeline -->
+<!-- Historical Patterns & Timeline -->
               <div class="space-y-6">
                 <div>
                   <h3 class="text-xl font-semibold mb-4 flex items-center">
-                    <svg class="w-6 h-6 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    <svg
+                      class="w-6 h-6 mr-2 text-purple-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      >
+                      </path>
                     </svg>
                     Historical Patterns
                   </h3>
                   <div class="space-y-3">
                     <%= for pattern <- @selected_movie.similar_patterns do %>
                       <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <div class="font-semibold text-purple-900"><%= pattern.title %></div>
+                        <div class="font-semibold text-purple-900">{pattern.title}</div>
                         <div class="text-sm text-purple-700 mt-1">
-                          Released: <strong><%= pattern.year %></strong> → 
-                          Added to 1001 Movies: <strong><%= pattern.added_year %></strong>
+                          Released: <strong>{pattern.year}</strong> →
+                          Added to 1001 Movies: <strong>{pattern.added_year}</strong>
                         </div>
                         <div class="text-xs text-purple-600 mt-2">
-                          ⏱️ Added after <strong><%= pattern.years_later %> years</strong>
+                          ⏱️ Added after <strong>{pattern.years_later} years</strong>
                         </div>
                       </div>
                     <% end %>
                   </div>
                 </div>
                 
-                <!-- Timeline Prediction -->
+<!-- Timeline Prediction -->
                 <div class="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg p-6 text-white">
                   <h4 class="font-semibold text-lg mb-2 flex items-center">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    <svg
+                      class="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                      >
+                      </path>
                     </svg>
                     Estimated Addition Timeline
                   </h4>
-                  <p class="text-yellow-100 text-lg font-medium"><%= @selected_movie.estimated_timeline %></p>
-                  <p class="text-yellow-200 text-sm mt-2">Based on historical patterns and current likelihood score</p>
+                  <p class="text-yellow-100 text-lg font-medium">
+                    {@selected_movie.estimated_timeline}
+                  </p>
+                  <p class="text-yellow-200 text-sm mt-2">
+                    Based on historical patterns and current likelihood score
+                  </p>
                 </div>
                 
-                <!-- Additional Insights -->
+<!-- Additional Insights -->
                 <div class="bg-gray-50 rounded-lg p-4">
                   <h4 class="font-semibold text-gray-900 mb-3">Key Insights</h4>
                   <ul class="space-y-2 text-sm text-gray-700">
                     <li class="flex items-start">
                       <span class="text-green-600 mr-2">•</span>
-                      Algorithm confidence: <strong><%= @validation_result.overall_accuracy %>%</strong> based on historical data
+                      Algorithm confidence:
+                      <strong>{@validation_result.overall_accuracy}%</strong>
+                      based on historical data
                     </li>
                     <li class="flex items-start">
                       <span class="text-blue-600 mr-2">•</span>
-                      Top criterion: <strong><%= 
-                        @selected_movie.prediction.breakdown 
-                        |> Enum.max_by(& &1.weighted_points) 
-                        |> Map.get(:criterion) 
-                        |> criterion_label()
-                      %></strong>
+                      Top criterion:
+                      <strong>
+                        {@selected_movie.prediction.breakdown
+                        |> Enum.max_by(& &1.weighted_points)
+                        |> Map.get(:criterion)
+                        |> criterion_label()}
+                      </strong>
                     </li>
                     <li class="flex items-start">
                       <span class="text-purple-600 mr-2">•</span>
-                      Similar films typically added within <strong>3-5 years</strong> of release
+                      Similar films typically added within <strong>3-5 years</strong>
+                      of release
                     </li>
                   </ul>
                 </div>
@@ -743,7 +973,7 @@
       }
     }
   });
-  
+
   // Smooth animations for modal
   document.addEventListener('DOMContentLoaded', function() {
     // Add entrance animation to modals
@@ -753,7 +983,7 @@
       setTimeout(() => modal.classList.remove('opacity-0'), 50);
     });
   });
-  
+
   // Add progressive loading animation for table rows
   document.addEventListener('DOMContentLoaded', function() {
     const tableRows = document.querySelectorAll('tbody tr');

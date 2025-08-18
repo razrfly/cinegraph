@@ -255,6 +255,7 @@ defmodule Cinegraph.Movies.Query.Params do
 
         v when is_binary(v) ->
           trimmed = String.trim(v)
+
           if trimmed == "" do
             Map.delete(acc, f)
           else

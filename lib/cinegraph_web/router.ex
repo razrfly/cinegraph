@@ -45,7 +45,7 @@ defmodule CinegraphWeb.Router do
 
     # Festival Events management
     live "/festival-events", FestivalEventLive.Index, :index
-    
+
     # Movie Predictions for 1001 Movies list
     live "/predictions", PredictionsLive.Index, :index
   end
