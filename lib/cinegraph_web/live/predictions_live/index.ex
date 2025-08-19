@@ -107,11 +107,10 @@ defmodule CinegraphWeb.PredictionsLive.Index do
            :algorithm_weights,
            ScoringService.profile_to_discovery_weights(default_profile) ||
              %{
-               popular_opinion: 0.2,
-               critical_acclaim: 0.2,
-               industry_recognition: 0.2,
-               cultural_impact: 0.2,
-               people_quality: 0.2
+               popular_opinion: 0.25,
+               industry_recognition: 0.25,
+               cultural_impact: 0.25,
+               people_quality: 0.25
              }
          )
          |> assign(:show_weight_tuner, false)
@@ -222,7 +221,6 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
       new_weights = %{
         popular_opinion: parse_param.(params["popular_opinion"]),
-        critical_acclaim: parse_param.(params["critical_acclaim"]),
         industry_recognition: parse_param.(params["industry_recognition"]),
         cultural_impact: parse_param.(params["cultural_impact"]),
         people_quality: parse_param.(params["people_quality"])
@@ -343,7 +341,6 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   defp format_likelihood(percentage), do: {"#{percentage}%", "text-gray-600"}
 
   defp criterion_label(:popular_opinion), do: "Popular Opinion"
-  defp criterion_label(:critical_acclaim), do: "Critical Acclaim"
   defp criterion_label(:industry_recognition), do: "Industry Recognition"
   defp criterion_label(:cultural_impact), do: "Cultural Impact"
   defp criterion_label(:people_quality), do: "People Quality"

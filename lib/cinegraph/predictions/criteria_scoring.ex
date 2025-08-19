@@ -3,7 +3,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   Implements the 5-criteria scoring system for predicting 1001 Movies list additions.
 
   The 5 criteria with default weights:
-  1. Critical Acclaim (35%)
+  1. Popular Opinion (35%) - All rating sources combined
   2. Festival Recognition (30%) 
   3. Cultural Impact (20%)
   4. Technical Innovation (10%)
@@ -15,7 +15,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   alias Cinegraph.Movies.Movie
 
   @default_weights %{
-    critical_acclaim: 0.35,
+    popular_opinion: 0.35,
     festival_recognition: 0.30,
     cultural_impact: 0.20,
     technical_innovation: 0.10,
@@ -69,7 +69,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   """
   def calculate_movie_score(movie, weights \\ @default_weights) do
     scores = %{
-      critical_acclaim: score_critical_acclaim(movie) || 0.0,
+      popular_opinion: score_popular_opinion(movie) || 0.0,
       festival_recognition: score_festival_recognition(movie) || 0.0,
       cultural_impact: score_cultural_impact(movie) || 0.0,
       technical_innovation: score_technical_innovation(movie) || 0.0,
@@ -93,15 +93,16 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   end
 
   @doc """
-  Score based on critical acclaim (Metacritic, RT Critics, awards).
+  Score based on popular opinion (all rating sources combined).
   Returns 0-100 score.
   """
-  def score_critical_acclaim(movie) do
+  def score_popular_opinion(movie) do
     query =
       from em in "external_metrics",
         where: em.movie_id == ^movie.id,
         where:
           (em.source == "imdb" and em.metric_type == "rating_average") or
+            (em.source == "tmdb" and em.metric_type == "rating_average") or
             (em.source == "metacritic" and em.metric_type == "metascore") or
             (em.source == "rotten_tomatoes" and em.metric_type == "tomatometer"),
         select: [em.source, em.metric_type, em.value]
@@ -114,7 +115,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
       # Convert all scores to 0-100 scale and average
       normalized_scores =
         Enum.map(metrics, fn [source, metric_type, value] ->
-          normalize_critic_score(source, metric_type, value)
+          normalize_rating_score(source, metric_type, value)
         end)
         |> Enum.filter(&(&1 > 0))
 
@@ -328,32 +329,37 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     end)
   end
 
-  defp normalize_critic_score("metacritic", "metascore", value) do
+  defp normalize_rating_score("metacritic", "metascore", value) do
     # Metacritic metascore is already 0-100
     value || 0.0
   end
 
-  defp normalize_critic_score("metacritic", "rating_average", value) do
+  defp normalize_rating_score("metacritic", "rating_average", value) do
     # Metacritic is already 0-100
     value || 0.0
   end
 
-  defp normalize_critic_score("rotten_tomatoes", "tomatometer", value) do
+  defp normalize_rating_score("rotten_tomatoes", "tomatometer", value) do
     # RT Tomatometer is already 0-100
     value || 0.0
   end
 
-  defp normalize_critic_score("rotten_tomatoes", "critics_score", value) do
+  defp normalize_rating_score("rotten_tomatoes", "critics_score", value) do
     # RT Critics is already 0-100
     value || 0.0
   end
 
-  defp normalize_critic_score("imdb", "rating_average", value) do
+  defp normalize_rating_score("imdb", "rating_average", value) do
     # IMDB is 0-10, convert to 0-100
     (value || 0.0) * 10
   end
 
-  defp normalize_critic_score(_, _, value), do: value || 0.0
+  defp normalize_rating_score("tmdb", "rating_average", value) do
+    # TMDb is 0-10, convert to 0-100
+    (value || 0.0) * 10
+  end
+
+  defp normalize_rating_score(_, _, value), do: value || 0.0
 
   defp score_festival_nomination(%{festival: festival, won: won, category: category}) do
     base_score =
@@ -535,7 +541,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
     # Calculate individual scores, ensuring they're all 0-100 range
     scores = %{
-      critical_acclaim: min(score_critical_acclaim_from_batch(external_metrics) || 0.0, 100.0),
+      popular_opinion: min(score_popular_opinion_from_batch(external_metrics) || 0.0, 100.0),
       festival_recognition:
         min(score_festival_recognition_from_batch(festival_nominations) || 0.0, 100.0),
       cultural_impact:
@@ -566,7 +572,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     }
   end
 
-  defp score_critical_acclaim_from_batch(metrics) do
+  defp score_popular_opinion_from_batch(metrics) do
     if length(metrics) == 0 do
       0.0
     else
@@ -577,13 +583,14 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         |> Enum.filter(fn [source, metric_type, _value] ->
           case source do
             "imdb" -> metric_type == "rating_average"
+            "tmdb" -> metric_type == "rating_average"
             "metacritic" -> metric_type == "metascore"
             "rotten_tomatoes" -> metric_type == "tomatometer"
             _ -> false
           end
         end)
         |> Enum.map(fn [source, metric_type, value] ->
-          normalize_critic_score(source, metric_type, value || 0.0)
+          normalize_rating_score(source, metric_type, value || 0.0)
         end)
         |> Enum.filter(&(&1 > 0))
 

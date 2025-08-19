@@ -113,7 +113,6 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     # Calculate component scores (0-10 scale)
     popular_opinion = calculate_popular_opinion(metrics)
-    critical_acclaim = calculate_critical_acclaim(metrics)
     industry_recognition = calculate_industry_recognition(festival_data)
     cultural_impact = calculate_cultural_impact(movie, metrics)
     # Convert from 0-100 to 0-10
@@ -123,8 +122,7 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     # Calculate overall score (weighted average)
     overall =
-      popular_opinion * 0.25 +
-        critical_acclaim * 0.20 +
+      popular_opinion * 0.45 +
         industry_recognition * 0.15 +
         cultural_impact * 0.15 +
         people_quality_score * 0.15 +
@@ -134,7 +132,6 @@ defmodule Cinegraph.Movies.MovieScoring do
       overall_score: Float.round(overall, 1),
       components: %{
         popular_opinion: Float.round(popular_opinion, 1),
-        critical_acclaim: Float.round(critical_acclaim, 1),
         industry_recognition: Float.round(industry_recognition, 1),
         cultural_impact: Float.round(cultural_impact, 1),
         people_quality: Float.round(people_quality_score, 1),
@@ -145,30 +142,22 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate popular opinion score based on audience ratings.
+  Calculate popular opinion score based on all rating sources.
   """
   def calculate_popular_opinion(metrics) do
     imdb = Map.get(metrics, :imdb_rating, 0) || 0
     tmdb = Map.get(metrics, :tmdb_rating, 0) || 0
     rt_audience = Map.get(metrics, :rt_audience, 0) || 0
-
-    scores = [imdb, tmdb, rt_audience / 10.0] |> Enum.filter(&(&1 > 0))
-
-    if length(scores) > 0 do
-      Enum.sum(scores) / length(scores)
-    else
-      5.0
-    end
-  end
-
-  @doc """
-  Calculate critical acclaim based on critic scores.
-  """
-  def calculate_critical_acclaim(metrics) do
     metacritic = Map.get(metrics, :metacritic, 0) || 0
     rt_tomatometer = Map.get(metrics, :rt_tomatometer, 0) || 0
 
-    scores = [metacritic / 10.0, rt_tomatometer / 10.0] |> Enum.filter(&(&1 > 0))
+    scores = [
+      imdb,
+      tmdb,
+      rt_audience / 10.0,
+      metacritic / 10.0,
+      rt_tomatometer / 10.0
+    ] |> Enum.filter(&(&1 > 0))
 
     if length(scores) > 0 do
       Enum.sum(scores) / length(scores)
