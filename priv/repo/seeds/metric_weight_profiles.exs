@@ -10,13 +10,11 @@ Repo.delete_all(from mwp in "metric_weight_profiles", where: field(mwp, :is_syst
 weight_profiles = [
   %{
     name: "Balanced",
-    description: "Equal weight across critical acclaim, cultural impact, industry recognition, and popular opinion",
+    description: "Equal weight across popular opinion, cultural impact, industry recognition, and people quality",
     weights: %{
-      # Critical Acclaim
+      # Popular Opinion (all rating sources)
       "metacritic_metascore" => 1.0,
       "rotten_tomatoes_tomatometer" => 1.0,
-      
-      # Popular Opinion
       "imdb_rating" => 1.0,
       "tmdb_rating" => 1.0,
       "imdb_rating_votes" => 0.5,
@@ -45,11 +43,11 @@ weight_profiles = [
       "person_quality_score" => 1.5
     },
     category_weights: %{
-      "ratings" => 0.40,     # 40% (Popular + Critical combined, reduced from 50%)
-      "awards" => 0.20,      # 20% (reduced from 25%)
-      "financial" => 0.00,   # 0% (not used in current scoring)
-      "cultural" => 0.20,    # 20% (reduced from 25%)
-      "people" => 0.20       # 20% (new - person quality scores)
+      "popular_opinion" => 0.40,  # 40% (all rating sources combined)
+      "awards" => 0.20,           # 20% (industry recognition)
+      "financial" => 0.00,        # 0% (not used in current scoring)
+      "cultural" => 0.20,         # 20% (cultural impact)
+      "people" => 0.20            # 20% (person quality scores)
     },
     active: true,
     is_default: true,
@@ -58,37 +56,35 @@ weight_profiles = [
   
   %{
     name: "Award Winner",
-    description: "Emphasizes festival awards and industry recognition (50% awards, 20% critics, 20% cultural, 10% popular)",
+    description: "Emphasizes festival awards and industry recognition (45% awards, 20% cultural, 25% popular opinion, 10% people)",
     weights: %{
-      # Industry Recognition (50%)
+      # Industry Recognition (45%)
       "oscar_wins" => 3.0,
       "oscar_nominations" => 2.0,
       "cannes_palme_dor" => 2.5,
       "venice_golden_lion" => 2.5,
       "berlin_golden_bear" => 2.5,
       
-      # Critical Acclaim (20%)
-      "metacritic_metascore" => 1.5,
-      "rotten_tomatoes_tomatometer" => 1.5,
+      # Popular Opinion (25% - all rating sources)
+      "metacritic_metascore" => 1.0,
+      "rotten_tomatoes_tomatometer" => 1.0,
+      "imdb_rating" => 0.8,
+      "tmdb_rating" => 0.8,
       
       # Cultural Impact (20%)
       "1001_movies" => 1.0,
       "criterion" => 1.0,
       "sight_sound_critics_2022" => 1.0,
       
-      # Popular Opinion (10%)
-      "imdb_rating" => 0.5,
-      "tmdb_rating" => 0.5,
-      
       # People Quality (10%)
       "person_quality_score" => 1.0
     },
     category_weights: %{
-      "ratings" => 0.25,     # 25% (reduced from 30%)
-      "awards" => 0.45,      # 45% (reduced from 50%)
-      "financial" => 0.00,   # 0%
-      "cultural" => 0.20,    # 20% (unchanged)
-      "people" => 0.10       # 10% (new - person quality scores)
+      "popular_opinion" => 0.25,  # 25% (all rating sources combined)
+      "awards" => 0.45,           # 45% (industry recognition)
+      "financial" => 0.00,        # 0%
+      "cultural" => 0.20,         # 20% (cultural impact)
+      "people" => 0.10            # 10% (person quality scores)
     },
     active: true,
     is_default: false,
@@ -97,11 +93,13 @@ weight_profiles = [
   
   %{
     name: "Critics Choice",
-    description: "Prioritizes critical acclaim (45% critics) with cultural impact (30%), some awards (15%), minimal popular (10%)",
+    description: "Prioritizes critic-favored platforms (50% ratings with Metacritic/RT weighted higher) with cultural impact (30%), some awards (15%), minimal people (5%)",
     weights: %{
-      # Critical Acclaim (45%)
+      # Popular Opinion with critic platforms weighted higher (50%)
       "metacritic_metascore" => 3.0,
       "rotten_tomatoes_tomatometer" => 3.0,
+      "imdb_rating" => 0.5,
+      "tmdb_rating" => 0.5,
       
       # Cultural Impact (30%)
       "sight_sound_critics_2022" => 2.0,
@@ -114,19 +112,15 @@ weight_profiles = [
       "oscar_nominations" => 0.8,
       "cannes_palme_dor" => 1.0,
       
-      # Popular Opinion (10%)
-      "imdb_rating" => 0.3,
-      "tmdb_rating" => 0.3,
-      
       # People Quality (5%)
       "person_quality_score" => 0.5
     },
     category_weights: %{
-      "ratings" => 0.50,     # 50% (reduced from 55%, critics still favored)
-      "awards" => 0.15,      # 15% (unchanged)
-      "financial" => 0.00,   # 0%
-      "cultural" => 0.30,    # 30% (unchanged)
-      "people" => 0.05       # 5% (new - minimal for critics choice)
+      "popular_opinion" => 0.50,  # 50% (all ratings, but Metacritic/RT weighted higher)
+      "awards" => 0.15,           # 15% (industry recognition)
+      "financial" => 0.00,        # 0%
+      "cultural" => 0.30,         # 30% (cultural impact)
+      "people" => 0.05            # 5% (person quality scores)
     },
     active: true,
     is_default: false,
@@ -135,35 +129,33 @@ weight_profiles = [
   
   %{
     name: "Crowd Pleaser", 
-    description: "Focuses on popular opinion (40%), with some awards (15%), minimal critics (10%), and cultural (35%)",
+    description: "Focuses on popular opinion (40% with IMDb/TMDb weighted higher), cultural impact (35%), minimal awards (10%), financial success (10%)",
     weights: %{
-      # Popular Opinion (40%)
+      # Popular Opinion with mainstream platforms weighted higher (40%)
       "imdb_rating" => 2.5,
       "tmdb_rating" => 2.0,
       "imdb_rating_votes" => 1.5,
       "rotten_tomatoes_audience_score" => 2.0,
+      "metacritic_metascore" => 0.5,
+      "rotten_tomatoes_tomatometer" => 0.5,
       
       # Financial Success (not directly in categories but influences cultural)
       "tmdb_revenue_worldwide" => 2.0,
       "tmdb_budget" => 0.5,
       
-      # Industry Recognition (15%)
+      # Industry Recognition (10%)
       "oscar_wins" => 0.5,
       "oscar_nominations" => 0.3,
-      
-      # Critical Acclaim (10%)
-      "metacritic_metascore" => 0.3,
-      "rotten_tomatoes_tomatometer" => 0.3,
       
       # People Quality (5%)
       "person_quality_score" => 0.5
     },
     category_weights: %{
-      "ratings" => 0.40,     # 40% (reduced from 45%)
-      "awards" => 0.10,      # 10% (unchanged)
-      "financial" => 0.10,   # 10% (box office success matters for crowd pleasers)
-      "cultural" => 0.35,    # 35% (includes popularity metrics)
-      "people" => 0.05       # 5% (new - minimal for crowd pleasers)
+      "popular_opinion" => 0.45,  # 45% (all ratings, IMDb/TMDb weighted higher)
+      "awards" => 0.10,           # 10% (minimal awards focus)
+      "financial" => 0.10,        # 10% (box office success matters for crowd pleasers)
+      "cultural" => 0.30,         # 30% (includes popularity metrics)
+      "people" => 0.05            # 5% (minimal for crowd pleasers)
     },
     active: true,
     is_default: false,
@@ -172,16 +164,18 @@ weight_profiles = [
   
   %{
     name: "Cult Classic",
-    description: "Finds films with dedicated followings: cultural lists (40%), moderate ratings (35%), some awards (10%), popularity (15%)",
+    description: "Finds films with dedicated followings: cultural lists (35%), moderate ratings (40%), some awards (10%), people (15%)",
     weights: %{
-      # Cultural Lists (40%)
+      # Cultural Lists (35%)
       "criterion" => 2.5,
       "1001_movies" => 2.0,
       "sight_sound_critics_2022" => 1.5,
       
-      # Moderate ratings with specific engagement patterns (35%)
+      # Moderate ratings with specific engagement patterns (40%)
       "imdb_rating" => 1.0,
+      "tmdb_rating" => 0.8,
       "metacritic_metascore" => 0.8,
+      "rotten_tomatoes_tomatometer" => 0.6,
       "imdb_rating_votes" => 0.3,  # Some votes but not too mainstream
       
       # Festival presence (10%)
@@ -197,11 +191,11 @@ weight_profiles = [
       # Setting these to 0 or excluding them entirely
     },
     category_weights: %{
-      "ratings" => 0.40,     # 40% (reduced from 50%)
-      "awards" => 0.10,      # 10% (unchanged)
-      "financial" => 0.00,   # 0%
-      "cultural" => 0.35,    # 35% (reduced from 40%)
-      "people" => 0.15       # 15% (new - important for cult classics)
+      "popular_opinion" => 0.40,  # 40% (moderate ratings from all sources)
+      "awards" => 0.10,           # 10% (festival presence)
+      "financial" => 0.00,        # 0%
+      "cultural" => 0.35,         # 35% (cultural lists)
+      "people" => 0.15            # 15% (important for cult classics)
     },
     active: true,
     is_default: false,
@@ -217,17 +211,17 @@ Enum.each(weight_profiles, fn profile ->
   weights = profile.category_weights || %{}
   
   # Check relevant weights (excluding financial which is typically 0)
-  relevant_weights = Map.take(weights, ["ratings", "awards", "cultural", "people"])
+  relevant_weights = Map.take(weights, ["popular_opinion", "awards", "cultural", "people"])
   sum = Map.values(relevant_weights) |> Enum.sum()
   
   # Provide detailed validation feedback
   cond do
     sum > 1.01 ->
       IO.puts "WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (> 1.01)"
-      IO.puts "  Breakdown: ratings=#{weights["ratings"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}"
+      IO.puts "  Breakdown: popular_opinion=#{weights["popular_opinion"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}"
     sum < 0.99 ->
       IO.puts "WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (< 0.99)"
-      IO.puts "  Breakdown: ratings=#{weights["ratings"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}"
+      IO.puts "  Breakdown: popular_opinion=#{weights["popular_opinion"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}"
     true ->
       :ok
   end

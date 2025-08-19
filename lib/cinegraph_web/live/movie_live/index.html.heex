@@ -181,9 +181,6 @@
                 <option value="popular_opinion" selected={@sort_criteria == "popular_opinion"}>
                   🎬 Popular Opinion
                 </option>
-                <option value="critical_acclaim" selected={@sort_criteria == "critical_acclaim"}>
-                  🏆 Critical Acclaim
-                </option>
                 <option
                   value="industry_recognition"
                   selected={@sort_criteria == "industry_recognition"}
@@ -492,11 +489,6 @@
                   <%= if movie.score_components.popular_opinion && has_meaningful_score?(movie.score_components.popular_opinion) do %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
                       🎬 {to_percentage(movie.score_components.popular_opinion)}%
-                    </span>
-                  <% end %>
-                  <%= if movie.score_components.critical_acclaim && has_meaningful_score?(movie.score_components.critical_acclaim) do %>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                      🏆 {to_percentage(movie.score_components.critical_acclaim)}%
                     </span>
                   <% end %>
                   <%= if movie.score_components.industry_recognition && has_meaningful_score?(movie.score_components.industry_recognition) do %>

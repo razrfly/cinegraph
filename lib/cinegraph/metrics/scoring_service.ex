@@ -38,27 +38,24 @@ defmodule Cinegraph.Metrics.ScoringService do
 
   @doc """
   Converts a database weight profile to the format expected by the discovery UI.
-  Maps category_weights to the five main dimensions including People quality.
+  Maps category_weights to the four main dimensions including People quality.
 
   Note: 
-  - "ratings" category is split into popular_opinion and critical_acclaim
+  - "popular_opinion" category includes all rating sources (IMDb, TMDb, Metacritic, RT)
   - "financial" category is folded into cultural_impact (box office success affects cultural penetration)
   - "people" category represents person quality scores (directors, actors, etc.)
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
-    ratings_weight = get_category_weight(profile, "ratings", 0.4)
+    # Use popular_opinion if it exists, otherwise fall back to ratings for backward compatibility
+    popular_weight = get_category_weight(profile, "popular_opinion", 
+                                        get_category_weight(profile, "ratings", 0.4))
     financial_weight = get_category_weight(profile, "financial", 0.0)
     cultural_weight = get_category_weight(profile, "cultural", 0.2)
     people_weight = get_category_weight(profile, "people", 0.2)
 
-    # Split ratings into popular and critical based on the profile
-    # For now, we'll split it 50/50 for popular vs critical within ratings
-    # This could be refined based on individual metric weights
+    # All rating sources are now combined into popular_opinion
     %{
-      # Half of ratings weight
-      popular_opinion: ratings_weight * 0.5,
-      # Half of ratings weight  
-      critical_acclaim: ratings_weight * 0.5,
+      popular_opinion: popular_weight,
       industry_recognition: get_category_weight(profile, "awards", 0.2),
       # Financial success contributes to cultural impact (box office affects cultural penetration)
       cultural_impact: cultural_weight + financial_weight * 0.5,
@@ -75,8 +72,7 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: name,
       description: "Custom weight profile created from discovery UI",
       category_weights: %{
-        "ratings" =>
-          Map.get(weights, :popular_opinion, 0.2) + Map.get(weights, :critical_acclaim, 0.2),
+        "popular_opinion" => Map.get(weights, :popular_opinion, 0.4),
         "awards" => Map.get(weights, :industry_recognition, 0.2),
         # Financial impact is not directly represented in discovery weights
         "financial" => Map.get(weights, :financial_impact, 0.0),
@@ -174,21 +170,19 @@ defmodule Cinegraph.Metrics.ScoringService do
   # The discovery score calculation is kept inline in each context for now
 
   defp build_metric_weights_from_discovery(weights) do
-    pop_weight = Map.get(weights, :popular_opinion, 0.25)
-    crit_weight = Map.get(weights, :critical_acclaim, 0.25)
-    award_weight = Map.get(weights, :industry_recognition, 0.25)
-    cultural_weight = Map.get(weights, :cultural_impact, 0.25)
+    # All rating sources now combined under popular_opinion
+    pop_weight = Map.get(weights, :popular_opinion, 0.4)
+    award_weight = Map.get(weights, :industry_recognition, 0.2)
+    cultural_weight = Map.get(weights, :cultural_impact, 0.2)
 
     %{
-      # Popular Opinion metrics
-      "imdb_rating" => pop_weight * 2,
-      "tmdb_rating" => pop_weight * 2,
-      "rotten_tomatoes_audience_score" => pop_weight * 1.5,
+      # Popular Opinion metrics (all rating sources)
+      "imdb_rating" => pop_weight * 1.0,
+      "tmdb_rating" => pop_weight * 1.0,
+      "metacritic_metascore" => pop_weight * 1.0,
+      "rotten_tomatoes_tomatometer" => pop_weight * 1.0,
+      "rotten_tomatoes_audience_score" => pop_weight * 0.8,
       "imdb_rating_votes" => pop_weight * 0.5,
-
-      # Critical Acclaim metrics
-      "metacritic_metascore" => crit_weight * 2,
-      "rotten_tomatoes_tomatometer" => crit_weight * 2,
 
       # Industry Recognition metrics
       "oscar_wins" => award_weight * 3,
@@ -210,11 +204,10 @@ defmodule Cinegraph.Metrics.ScoringService do
 
     if total == 0 do
       %{
-        popular_opinion: 0.2,
-        critical_acclaim: 0.2,
-        industry_recognition: 0.2,
-        cultural_impact: 0.2,
-        people_quality: 0.2
+        popular_opinion: 0.25,
+        industry_recognition: 0.25,
+        cultural_impact: 0.25,
+        people_quality: 0.25
       }
     else
       Map.new(weights, fn {k, v} -> {k, v / total} end)
@@ -337,8 +330,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         discovery_score:
           fragment(
             """
-            ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + 
-            ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + 
+            ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + 
             ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
             ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(?, 0) / 100.0, 0)
@@ -346,7 +338,6 @@ defmodule Cinegraph.Metrics.ScoringService do
             ^weights.popular_opinion,
             tr.value,
             ir.value,
-            ^weights.critical_acclaim,
             mc.value,
             rt.value,
             ^weights.industry_recognition,
@@ -362,13 +353,9 @@ defmodule Cinegraph.Metrics.ScoringService do
         score_components: %{
           popular_opinion:
             fragment(
-              "COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0)",
+              "COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0)",
               tr.value,
-              ir.value
-            ),
-          critical_acclaim:
-            fragment(
-              "COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0)",
+              ir.value,
               mc.value,
               rt.value
             ),
@@ -414,8 +401,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         discovery_score:
           fragment(
             """
-            ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + 
-            ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + 
+            ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + 
             ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
             ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)
@@ -423,7 +409,6 @@ defmodule Cinegraph.Metrics.ScoringService do
             ^weights.popular_opinion,
             tr.value,
             ir.value,
-            ^weights.critical_acclaim,
             mc.value,
             rt.value,
             ^weights.industry_recognition,
@@ -439,13 +424,9 @@ defmodule Cinegraph.Metrics.ScoringService do
         score_components: %{
           popular_opinion:
             fragment(
-              "COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0)",
+              "COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0)",
               tr.value,
-              ir.value
-            ),
-          critical_acclaim:
-            fragment(
-              "COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0)",
+              ir.value,
               mc.value,
               rt.value
             ),
@@ -488,11 +469,10 @@ defmodule Cinegraph.Metrics.ScoringService do
           person_quality: pq
         ],
         fragment(
-          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) >= ?",
+          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) >= ?",
           ^weights.popular_opinion,
           tr.value,
           ir.value,
-          ^weights.critical_acclaim,
           mc.value,
           rt.value,
           ^weights.industry_recognition,
@@ -521,11 +501,10 @@ defmodule Cinegraph.Metrics.ScoringService do
           person_quality: pq
         ],
         fragment(
-          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0) >= ?",
+          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0) >= ?",
           ^weights.popular_opinion,
           tr.value,
           ir.value,
-          ^weights.critical_acclaim,
           mc.value,
           rt.value,
           ^weights.industry_recognition,
@@ -559,11 +538,10 @@ defmodule Cinegraph.Metrics.ScoringService do
         ],
         desc:
           fragment(
-            "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.5 + COALESCE(MAX(?), 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(MAX(?), 0) / 100.0 * 0.5 + COALESCE(MAX(?), 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
+            "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
             ^weights.popular_opinion,
             tr.value,
             ir.value,
-            ^weights.critical_acclaim,
             mc.value,
             rt.value,
             ^weights.industry_recognition,
@@ -592,11 +570,10 @@ defmodule Cinegraph.Metrics.ScoringService do
         ],
         desc:
           fragment(
-            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
+            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
             ^weights.popular_opinion,
             tr.value,
             ir.value,
-            ^weights.critical_acclaim,
             mc.value,
             rt.value,
             ^weights.industry_recognition,

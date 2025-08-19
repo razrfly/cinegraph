@@ -86,11 +86,10 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       %{
         discovery_score:
           fragment(
-            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
+            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
             ^normalized_weights.popular_opinion,
             tr.value,
             ir.value,
-            ^normalized_weights.critical_acclaim,
             mc.value,
             rt.value,
             ^normalized_weights.industry_recognition,
@@ -104,13 +103,9 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         score_components: %{
           popular_opinion:
             fragment(
-              "COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0)",
+              "COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0)",
               tr.value,
-              ir.value
-            ),
-          critical_acclaim:
-            fragment(
-              "COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0)",
+              ir.value,
               mc.value,
               rt.value
             ),
@@ -141,11 +136,10 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
         festivals: f
       ],
       fragment(
-        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) >= ?",
+        "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) >= ?",
         ^normalized_weights.popular_opinion,
         tr.value,
         ir.value,
-        ^normalized_weights.critical_acclaim,
         mc.value,
         rt.value,
         ^normalized_weights.industry_recognition,
@@ -170,11 +164,10 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       ],
       desc:
         fragment(
-          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5), 0) + ? * COALESCE((COALESCE(?, 0) / 100.0 * 0.5 + COALESCE(?, 0) / 100.0 * 0.5), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
+          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
           ^normalized_weights.popular_opinion,
           tr.value,
           ir.value,
-          ^normalized_weights.critical_acclaim,
           mc.value,
           rt.value,
           ^normalized_weights.industry_recognition,

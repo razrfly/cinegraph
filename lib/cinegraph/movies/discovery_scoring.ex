@@ -6,10 +6,10 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
   in their movie search and browsing experience.
 
   Scoring Dimensions:
-  - Popular Opinion (TMDb/IMDb ratings and votes)
-  - Critical Acclaim (Metacritic, Rotten Tomatoes)
+  - Popular Opinion (All rating sources: IMDb, TMDb, Metacritic, Rotten Tomatoes)
   - Industry Recognition (Festival awards, Oscar nominations)
   - Cultural Impact (Canonical lists, popularity metrics)
+  - People Quality (Director and cast quality scores)
   """
 
   import Ecto.Query, warn: false
@@ -47,7 +47,6 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
   def calculate_movie_scores(movie_id) do
     %{
       popular_opinion: calculate_popular_opinion(movie_id),
-      critical_acclaim: calculate_critical_acclaim(movie_id),
       industry_recognition: calculate_industry_recognition(movie_id),
       cultural_impact: calculate_cultural_impact(movie_id)
     }
@@ -72,12 +71,14 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
         scores in fragment(
           """
             SELECT 
-              -- Popular Opinion Score (TMDb + IMDb ratings)
+              -- Popular Opinion Score (All rating sources combined)
               COALESCE(
                 (
                   SELECT 
-                    (COALESCE(tmdb.value, 0) / 10.0 * 0.5) +
-                    (COALESCE(imdb.value, 0) / 10.0 * 0.5)
+                    (COALESCE(tmdb.value, 0) / 10.0 * 0.25) +
+                    (COALESCE(imdb.value, 0) / 10.0 * 0.25) +
+                    (COALESCE(mc.value, 0) / 100.0 * 0.25) +
+                    (COALESCE(rt.value, 0) / 100.0 * 0.25)
                   FROM movies m2
                   LEFT JOIN LATERAL (
                     SELECT value FROM external_metrics 
@@ -89,17 +90,6 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                     WHERE movie_id = m2.id AND source = 'imdb' AND metric_type = 'rating_average'
                     ORDER BY fetched_at DESC LIMIT 1
                   ) imdb ON true
-                  WHERE m2.id = ?
-                ), 0
-              ) * ? AS popular_opinion,
-              
-              -- Critical Acclaim Score (Metacritic + Rotten Tomatoes)
-              COALESCE(
-                (
-                  SELECT 
-                    (COALESCE(mc.value, 0) / 100.0 * 0.5) +
-                    (COALESCE(rt.value, 0) / 100.0 * 0.5)
-                  FROM movies m2
                   LEFT JOIN LATERAL (
                     SELECT value FROM external_metrics 
                     WHERE movie_id = m2.id AND source = 'metacritic' AND metric_type = 'metascore'
@@ -112,7 +102,7 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                   ) rt ON true
                   WHERE m2.id = ?
                 ), 0
-              ) * ? AS critical_acclaim,
+              ) * ? AS popular_opinion,
               
               -- Industry Recognition Score (Festival awards + nominations)
               COALESCE(
@@ -159,8 +149,10 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                 COALESCE(
                   (
                     SELECT 
-                      (COALESCE(tmdb.value, 0) / 10.0 * 0.5) +
-                      (COALESCE(imdb.value, 0) / 10.0 * 0.5)
+                      (COALESCE(tmdb.value, 0) / 10.0 * 0.25) +
+                      (COALESCE(imdb.value, 0) / 10.0 * 0.25) +
+                      (COALESCE(mc.value, 0) / 100.0 * 0.25) +
+                      (COALESCE(rt.value, 0) / 100.0 * 0.25)
                     FROM movies m2
                     LEFT JOIN LATERAL (
                       SELECT value FROM external_metrics 
@@ -172,17 +164,6 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
                       WHERE movie_id = m2.id AND source = 'imdb' AND metric_type = 'rating_average'
                       ORDER BY fetched_at DESC LIMIT 1
                     ) imdb ON true
-                    WHERE m2.id = ?
-                  ), 0
-                ) * ?
-              ) +
-              (
-                COALESCE(
-                  (
-                    SELECT 
-                      (COALESCE(mc.value, 0) / 100.0 * 0.5) +
-                      (COALESCE(rt.value, 0) / 100.0 * 0.5)
-                    FROM movies m2
                     LEFT JOIN LATERAL (
                       SELECT value FROM external_metrics 
                       WHERE movie_id = m2.id AND source = 'metacritic' AND metric_type = 'metascore'
@@ -236,15 +217,11 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
           m.id,
           ^weights.popular_opinion,
           m.id,
-          ^weights.critical_acclaim,
-          m.id,
           ^weights.industry_recognition,
           m.id,
           ^weights.cultural_impact,
           m.id,
           ^weights.popular_opinion,
-          m.id,
-          ^weights.critical_acclaim,
           m.id,
           ^weights.industry_recognition,
           m.id,
@@ -255,7 +232,6 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
         discovery_score: scores.total_score,
         score_components: %{
           popular_opinion: scores.popular_opinion,
-          critical_acclaim: scores.critical_acclaim,
           industry_recognition: scores.industry_recognition,
           cultural_impact: scores.cultural_impact
         }
@@ -280,8 +256,10 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
   defp calculate_popular_opinion(movie_id) do
     query = """
     SELECT 
-      (COALESCE(tmdb.value, 0) / 10.0 * 0.5) +
-      (COALESCE(imdb.value, 0) / 10.0 * 0.5) as score
+      (COALESCE(tmdb.value, 0) / 10.0 * 0.25) +
+      (COALESCE(imdb.value, 0) / 10.0 * 0.25) +
+      (COALESCE(mc.value, 0) / 100.0 * 0.25) +
+      (COALESCE(rt.value, 0) / 100.0 * 0.25) as score
     FROM movies m
     LEFT JOIN LATERAL (
       SELECT value FROM external_metrics 
@@ -293,21 +271,6 @@ defmodule Cinegraph.Movies.DiscoveryScoring do
       WHERE movie_id = m.id AND source = 'imdb' AND metric_type = 'rating_average'
       ORDER BY fetched_at DESC LIMIT 1
     ) imdb ON true
-    WHERE m.id = $1
-    """
-
-    case Repo.query(query, [movie_id]) do
-      {:ok, %{rows: [[score]]}} when not is_nil(score) -> score
-      _ -> 0.0
-    end
-  end
-
-  defp calculate_critical_acclaim(movie_id) do
-    query = """
-    SELECT 
-      (COALESCE(mc.value, 0) / 100.0 * 0.5) +
-      (COALESCE(rt.value, 0) / 100.0 * 0.5) as score
-    FROM movies m
     LEFT JOIN LATERAL (
       SELECT value FROM external_metrics 
       WHERE movie_id = m.id AND source = 'metacritic' AND metric_type = 'metascore'

@@ -26,7 +26,6 @@ defmodule Cinegraph.Movies.Search do
         rating rating_asc rating_desc
         popularity popularity_asc popularity_desc
         popular_opinion popular_opinion_asc popular_opinion_desc
-        critical_acclaim critical_acclaim_asc critical_acclaim_desc
         industry_recognition industry_recognition_asc industry_recognition_desc
         cultural_impact cultural_impact_asc cultural_impact_desc
         people_quality people_quality_asc people_quality_desc
@@ -147,7 +146,7 @@ defmodule Cinegraph.Movies.Search do
           sort
       end
 
-    base in ~w(popular_opinion critical_acclaim industry_recognition cultural_impact people_quality)
+    base in ~w(popular_opinion industry_recognition cultural_impact people_quality)
   end
 
   defp list_genres do
@@ -205,7 +204,6 @@ defmodule Cinegraph.Movies.Search do
       %{id: "rating", value: "rating", label: "Rating (Highest)"},
       %{id: "popularity", value: "popularity", label: "Popularity"},
       %{id: "popular_opinion", value: "popular_opinion", label: "Popular Opinion"},
-      %{id: "critical_acclaim", value: "critical_acclaim", label: "Critical Acclaim"},
       %{id: "industry_recognition", value: "industry_recognition", label: "Industry Recognition"},
       %{id: "cultural_impact", value: "cultural_impact", label: "Cultural Impact"},
       %{id: "people_quality", value: "people_quality", label: "People Quality"}

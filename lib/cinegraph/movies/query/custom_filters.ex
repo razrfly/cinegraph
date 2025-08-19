@@ -443,7 +443,6 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_metric_thresholds(query, params) do
     query
     |> filter_by_metric(:popular_opinion, params.popular_opinion_min)
-    |> filter_by_metric(:critical_acclaim, params.critical_acclaim_min)
     |> filter_by_metric(:industry_recognition, params.industry_recognition_min)
     |> filter_by_metric(:cultural_impact, params.cultural_impact_min)
     |> filter_by_metric(:people_quality, params.people_quality_min)
@@ -458,7 +457,10 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
       fragment(
         """
         COALESCE((
-          SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+          SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
+                  COALESCE(ir.value, 0) / 10.0 * 0.25 +
+                  COALESCE(mc.value, 0) / 100.0 * 0.25 + 
+                  COALESCE(rt.value, 0) / 100.0 * 0.25)
           FROM (
                 SELECT value FROM external_metrics
                 WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
@@ -468,25 +470,8 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
                 SELECT value FROM external_metrics
                 WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
                 ORDER BY fetched_at DESC LIMIT 1
-               ) ir
-        ), 0) >= ?
-        """,
-        m.id,
-        m.id,
-        ^min_value
-      )
-    )
-  end
-
-  defp filter_by_metric(query, :critical_acclaim, min_value) do
-    where(
-      query,
-      [m],
-      fragment(
-        """
-        COALESCE((
-          SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-          FROM (
+               ) ir,
+               (
                 SELECT value FROM external_metrics
                 WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
                 ORDER BY fetched_at DESC LIMIT 1
@@ -498,6 +483,8 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
                ) rt
         ), 0) >= ?
         """,
+        m.id,
+        m.id,
         m.id,
         m.id,
         ^min_value
