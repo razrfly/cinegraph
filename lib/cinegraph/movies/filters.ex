@@ -146,10 +146,10 @@ defmodule Cinegraph.Movies.Filters do
                         COALESCE(ir.value, 0) / 10.0 * 0.25 +
                         COALESCE(mc.value, 0) / 100.0 * 0.25 + 
                         COALESCE(rt.value, 0) / 100.0 * 0.25)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) tr,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' ORDER BY fetched_at DESC LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' ORDER BY fetched_at DESC LIMIT 1) rt
               ), 0)
               """,
               m.id,
@@ -169,10 +169,10 @@ defmodule Cinegraph.Movies.Filters do
                         COALESCE(ir.value, 0) / 10.0 * 0.25 +
                         COALESCE(mc.value, 0) / 100.0 * 0.25 + 
                         COALESCE(rt.value, 0) / 100.0 * 0.25)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) tr,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' ORDER BY fetched_at DESC LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' ORDER BY fetched_at DESC LIMIT 1) rt
               ), 0)
               """,
               m.id,
@@ -1219,10 +1219,10 @@ defmodule Cinegraph.Movies.Filters do
                         COALESCE(ir.value, 0) / 10.0 * 0.25 +
                         COALESCE(mc.value, 0) / 100.0 * 0.25 + 
                         COALESCE(rt.value, 0) / 100.0 * 0.25)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
+                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) tr,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' ORDER BY fetched_at DESC LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' ORDER BY fetched_at DESC LIMIT 1) rt
               ), 0) >= ?
               """,
               m.id,
