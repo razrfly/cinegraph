@@ -13,6 +13,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   require Logger
   alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker}
   alias Cinegraph.Cultural
+  alias Cinegraph.Predictions.RefreshManager
   import Ecto.Query
 
   # 5 seconds
@@ -49,6 +50,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:fallback_stats, %{})
       |> assign(:strategy_breakdown, [])
       |> assign(:import_metrics, [])
+      |> assign(:prediction_status, %{})
+      |> assign(:prediction_refresh_running, false)
+      |> assign(:prediction_refresh_progress, nil)
       |> load_data()
       |> schedule_refresh()
 
@@ -281,6 +285,63 @@ defmodule CinegraphWeb.ImportDashboardLive do
         socket = Phoenix.LiveView.put_flash(socket, :error, "Invalid number of pages")
         {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_event("refresh_predictions", _params, socket) do
+    case RefreshManager.refresh_all_predictions() do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Prediction refresh started. This may take several minutes.")
+          |> assign(:prediction_refresh_running, true)
+          |> assign(:prediction_refresh_progress, %{progress: 0, message: "Starting..."})
+          |> load_data()
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket =
+          put_flash(socket, :error, "Failed to start prediction refresh: #{inspect(reason)}")
+
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("refresh_selected_decades", %{"decades" => decades}, socket) do
+    decade_list = decades |> String.split(",") |> Enum.map(&String.to_integer/1)
+    
+    case RefreshManager.refresh_decades(decade_list) do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Refreshing predictions for decades: #{Enum.join(decade_list, ", ")}")
+          |> assign(:prediction_refresh_running, true)
+          |> load_data()
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket =
+          put_flash(socket, :error, "Failed to start selective refresh: #{inspect(reason)}")
+
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_prediction_refresh", _params, socket) do
+    RefreshManager.cancel_refresh()
+    
+    socket =
+      socket
+      |> put_flash(:info, "Prediction refresh cancelled")
+      |> assign(:prediction_refresh_running, false)
+      |> assign(:prediction_refresh_progress, nil)
+      |> load_data()
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -780,6 +841,15 @@ defmodule CinegraphWeb.ImportDashboardLive do
   defp load_data(socket) do
     # Get progress
     progress = TMDbImporter.get_progress()
+    
+    # Get prediction cache status
+    prediction_status = RefreshManager.check_staleness()
+    prediction_refresh_progress = 
+      if RefreshManager.refresh_in_progress?() do
+        RefreshManager.get_refresh_progress()
+      else
+        nil
+      end
 
     # Get database stats
     stats = %{
@@ -838,6 +908,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
     |> assign(:api_metrics, api_metrics)
     |> assign(:fallback_stats, fallback_stats)
+    |> assign(:prediction_status, prediction_status)
+    |> assign(:prediction_refresh_running, prediction_refresh_progress != nil)
+    |> assign(:prediction_refresh_progress, prediction_refresh_progress)
     |> assign(:strategy_breakdown, strategy_breakdown)
     |> assign(:import_metrics, import_metrics)
   end
