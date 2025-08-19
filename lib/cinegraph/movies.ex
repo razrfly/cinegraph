@@ -217,18 +217,54 @@ defmodule Cinegraph.Movies do
   Creates a movie.
   """
   def create_movie(attrs \\ %{}) do
-    %Movie{}
-    |> Movie.changeset(attrs)
-    |> Repo.insert()
+    result = 
+      %Movie{}
+      |> Movie.changeset(attrs)
+      |> Repo.insert()
+    
+    case result do
+      {:ok, movie} ->
+        # Track change for staleness detection
+        if movie.release_date do
+          decade = div(movie.release_date.year, 10) * 10
+          Cinegraph.Predictions.StalenessTracker.track_change(
+            :movie_created, 
+            movie.id,
+            entity_type: "movie",
+            affected_decades: [decade]
+          )
+        end
+        {:ok, movie}
+        
+      error -> error
+    end
   end
 
   @doc """
   Updates a movie.
   """
   def update_movie(%Movie{} = movie, attrs) do
-    movie
-    |> Movie.changeset(attrs)
-    |> Repo.update()
+    result = 
+      movie
+      |> Movie.changeset(attrs)
+      |> Repo.update()
+    
+    case result do
+      {:ok, updated_movie} ->
+        # Track change for staleness detection
+        if updated_movie.release_date do
+          decade = div(updated_movie.release_date.year, 10) * 10
+          Cinegraph.Predictions.StalenessTracker.track_change(
+            :movie_updated, 
+            updated_movie.id,
+            entity_type: "movie",
+            affected_decades: [decade]
+          )
+        end
+        {:ok, updated_movie}
+        
+      error -> error
+    end
   end
 
   @doc """

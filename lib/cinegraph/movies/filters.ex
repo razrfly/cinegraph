@@ -241,6 +241,7 @@ defmodule Cinegraph.Movies.Filters do
                     WHERE movie_id = ? 
                       AND source = 'tmdb' 
                       AND metric_type = 'popularity_score' 
+                    ORDER BY fetched_at DESC NULLS LAST
                     LIMIT 1), 
                     0
                   )
@@ -274,6 +275,7 @@ defmodule Cinegraph.Movies.Filters do
                     WHERE movie_id = ? 
                       AND source = 'tmdb' 
                       AND metric_type = 'popularity_score' 
+                    ORDER BY fetched_at DESC NULLS LAST
                     LIMIT 1), 
                     0
                   )
@@ -1278,6 +1280,7 @@ defmodule Cinegraph.Movies.Filters do
                     WHERE movie_id = ? 
                       AND source = 'tmdb' 
                       AND metric_type = 'popularity_score' 
+                    ORDER BY fetched_at DESC NULLS LAST
                     LIMIT 1), 
                     0
                   )

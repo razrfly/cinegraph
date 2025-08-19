@@ -11,29 +11,81 @@ defmodule Cinegraph.Cache.PredictionsCache do
   @doc """
   Get or calculate predictions for 2020s movies with caching.
   Cache key includes profile and limit for proper isolation.
+  Uses database-backed cache first, then Cachex for hot data.
   """
   def get_predictions(limit, profile) do
+    # First try in-memory cache for hot data
     cache_key = predictions_cache_key(limit, profile)
 
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
-        # Cache miss - calculate and store
-        Logger.debug("Cache miss for predictions: limit=#{limit}, profile=#{profile.name}")
-        result = calculate_predictions(limit, profile)
-
-        # Cache for 15 minutes with async write for speed
-        Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(15))
-
-        result
+        # Try database cache for 2020s decade
+        decade = 2020
+        
+        case Cinegraph.Predictions.PredictionCache.get_sorted_predictions(decade, profile.id, limit: limit) do
+          [] ->
+            # No database cache exists - return error instead of calculating
+            Logger.info("No cache available for predictions: decade=#{decade}, profile=#{profile.name}")
+            
+            # Check if a calculation job is already running
+            job_status = check_calculation_job_status(decade, profile.id)
+            
+            {:error, :cache_missing, job_status}
+            
+          db_predictions ->
+            # Transform DB cache format to expected format
+            Logger.debug("DB cache hit for predictions: decade=#{decade}, profile=#{profile.name}")
+            
+            result = %{
+              predictions: transform_db_predictions(db_predictions, limit),
+              total_candidates: length(db_predictions),
+              algorithm_info: %{
+                source: "database_cache",
+                cached_at: get_cache_timestamp(decade, profile.id)
+              }
+            }
+            
+            # Cache in memory for hot access
+            Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(15))
+            
+            result
+        end
 
       {:ok, cached_result} ->
-        Logger.debug("Cache hit for predictions: limit=#{limit}, profile=#{profile.name}")
+        Logger.debug("Memory cache hit for predictions: limit=#{limit}, profile=#{profile.name}")
         cached_result
 
       {:error, reason} ->
         Logger.warning("Cache error for predictions: #{inspect(reason)}")
-        # Fallback to direct calculation
-        calculate_predictions(limit, profile)
+        # Return error instead of calculating
+        {:error, :cache_error, reason}
+    end
+  end
+  
+  defp transform_db_predictions(db_predictions, limit) do
+    db_predictions
+    |> Enum.take(limit)
+    |> Enum.map(fn movie_data ->
+      %{
+        id: movie_data.id,
+        title: movie_data.title,
+        release_date: movie_data.release_date,
+        canonical_sources: movie_data.canonical_sources,
+        prediction: %{
+          likelihood_percentage: round(movie_data.score * 100),
+          score: movie_data.score
+        },
+        status: if(movie_data.canonical_sources && map_size(movie_data.canonical_sources) > 0, 
+                   do: :already_added, 
+                   else: :predicted)
+      }
+    end)
+  end
+  
+  defp get_cache_timestamp(decade, profile_id) do
+    case Cinegraph.Predictions.PredictionCache.get_cached_predictions(decade, profile_id) do
+      nil -> nil
+      cache -> cache.calculated_at
     end
   end
 
@@ -45,13 +97,9 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
-        Logger.debug("Cache miss for validation: profile=#{profile.name}")
-        result = calculate_validation(profile)
-
-        # Cache validation for 30 minutes (more stable data)
-        Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(30))
-
-        result
+        Logger.info("No cache available for validation: profile=#{profile.name}")
+        # Return error instead of calculating
+        {:error, :cache_missing, :no_validation_cache}
 
       {:ok, cached_result} ->
         Logger.debug("Cache hit for validation: profile=#{profile.name}")
@@ -59,7 +107,8 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
       {:error, reason} ->
         Logger.warning("Cache error for validation: #{inspect(reason)}")
-        calculate_validation(profile)
+        # Return error instead of calculating
+        {:error, :cache_error, reason}
     end
   end
 
@@ -281,14 +330,6 @@ defmodule Cinegraph.Cache.PredictionsCache do
     |> Base.encode16(case: :lower)
   end
 
-  defp calculate_predictions(limit, profile) do
-    Cinegraph.Predictions.MoviePredictor.predict_2020s_movies(limit, profile)
-  end
-
-  defp calculate_validation(profile) do
-    Cinegraph.Predictions.HistoricalValidator.validate_all_decades(profile)
-  end
-
   defp calculate_profile_comparison do
     Cinegraph.Predictions.HistoricalValidator.get_comprehensive_comparison()
   end
@@ -302,6 +343,29 @@ defmodule Cinegraph.Cache.PredictionsCache do
       Float.round(hits / total * 100, 2)
     else
       0.0
+    end
+  end
+  
+  defp check_calculation_job_status(decade, profile_id) do
+    # Check if there's an active or scheduled job for this decade/profile
+    import Ecto.Query
+    
+    job = Cinegraph.Repo.one(
+      from j in Oban.Job,
+        where: j.worker == "Cinegraph.Workers.PredictionCalculator" and
+               j.state in ["available", "executing", "scheduled"] and
+               fragment("(? ->> 'decade')::int = ?", j.args, ^decade) and
+               fragment("(? ->> 'profile_id')::int = ?", j.args, ^profile_id),
+        order_by: [desc: j.inserted_at],
+        limit: 1
+    )
+    
+    case job do
+      nil -> :no_job_running
+      %{state: "executing"} -> :calculating
+      %{state: "scheduled"} -> :scheduled
+      %{state: "available"} -> :queued
+      _ -> :no_job_running
     end
   end
 end
