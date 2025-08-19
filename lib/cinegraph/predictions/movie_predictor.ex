@@ -167,9 +167,12 @@ defmodule Cinegraph.Predictions.MoviePredictor do
 
   defp convert_ui_weights_to_categories(weights) do
     # Coerce non-numeric values to 0.0 and delegate to ScoringService for consistent mapping
+    # Combine critical_acclaim into popular_opinion if it exists
+    pop_opinion_weight = to_float(Map.get(weights, :popular_opinion, 0.0)) +
+                         to_float(Map.get(weights, :critical_acclaim, 0.0))
+    
     sanitized = %{
-      popular_opinion: to_float(Map.get(weights, :popular_opinion, 0.0)),
-      critical_acclaim: to_float(Map.get(weights, :critical_acclaim, 0.0)),
+      popular_opinion: pop_opinion_weight,
       industry_recognition:
         to_float(
           Map.get(weights, :industry_recognition, Map.get(weights, :festival_recognition, 0.0))
@@ -240,11 +243,10 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     components = Map.get(movie, :score_components, %{})
     # Use provided weights or fallback to equal weights
     default_weights = %{
-      popular_opinion: 0.2,
-      critical_acclaim: 0.2,
-      industry_recognition: 0.2,
-      cultural_impact: 0.2,
-      people_quality: 0.2
+      popular_opinion: 0.25,
+      industry_recognition: 0.25,
+      cultural_impact: 0.25,
+      people_quality: 0.25
     }
 
     actual_weights = weights || default_weights
@@ -253,22 +255,11 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       %{
         criterion: :popular_opinion,
         raw_score: Float.round(to_float(components[:popular_opinion]) * 100, 1),
-        weight: Map.get(actual_weights, :popular_opinion, 0.2),
+        weight: Map.get(actual_weights, :popular_opinion, 0.25),
         weighted_points:
           Float.round(
             to_float(components[:popular_opinion]) *
-              Map.get(actual_weights, :popular_opinion, 0.2) * 100,
-            1
-          )
-      },
-      %{
-        criterion: :critical_acclaim,
-        raw_score: Float.round(to_float(components[:critical_acclaim]) * 100, 1),
-        weight: Map.get(actual_weights, :critical_acclaim, 0.2),
-        weighted_points:
-          Float.round(
-            to_float(components[:critical_acclaim]) *
-              Map.get(actual_weights, :critical_acclaim, 0.2) * 100,
+              Map.get(actual_weights, :popular_opinion, 0.25) * 100,
             1
           )
       },

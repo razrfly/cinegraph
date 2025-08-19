@@ -295,8 +295,8 @@
               <td class="px-4 py-2 text-center text-sm font-mono">0-100</td>
               <td class="px-4 py-2 text-sm font-mono">value / 100</td>
               <td class="px-4 py-2 text-center">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                  Critical Acclaim
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Popular Opinion
                 </span>
               </td>
               <td class="px-4 py-2 text-center text-sm font-medium">50%</td>
@@ -307,8 +307,8 @@
               <td class="px-4 py-2 text-center text-sm font-mono">0-100%</td>
               <td class="px-4 py-2 text-sm font-mono">value / 100</td>
               <td class="px-4 py-2 text-center">
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                  Critical Acclaim
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  Popular Opinion
                 </span>
               </td>
               <td class="px-4 py-2 text-center text-sm font-medium">50%</td>
@@ -385,37 +385,27 @@
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div class="border border-blue-200 rounded-lg p-4">
           <h3 class="font-semibold text-blue-900 mb-2">📊 Popular Opinion</h3>
-          <p class="text-sm text-gray-600 mb-2">Average of audience ratings:</p>
+          <p class="text-sm text-gray-600 mb-2">Average of all rating sources:</p>
           <ul class="space-y-1 text-sm">
             <li class="flex justify-between">
               <span>• IMDb Rating</span>
-              <span class="font-mono">50%</span>
+              <span class="font-mono">25%</span>
             </li>
             <li class="flex justify-between">
               <span>• TMDb Rating</span>
-              <span class="font-mono">50%</span>
+              <span class="font-mono">25%</span>
+            </li>
+            <li class="flex justify-between">
+              <span>• Metacritic Metascore</span>
+              <span class="font-mono">25%</span>
+            </li>
+            <li class="flex justify-between">
+              <span>• Rotten Tomatoes</span>
+              <span class="font-mono">25%</span>
             </li>
           </ul>
           <div class="mt-2 p-2 bg-blue-50 rounded text-xs">
-            Formula: <code>(IMDb/10 * 0.5 + TMDb/10 * 0.5)</code>
-          </div>
-        </div>
-
-        <div class="border border-purple-200 rounded-lg p-4">
-          <h3 class="font-semibold text-purple-900 mb-2">🎭 Critical Acclaim</h3>
-          <p class="text-sm text-gray-600 mb-2">Average of critic scores:</p>
-          <ul class="space-y-1 text-sm">
-            <li class="flex justify-between">
-              <span>• Metacritic Metascore</span>
-              <span class="font-mono">50%</span>
-            </li>
-            <li class="flex justify-between">
-              <span>• Rotten Tomatoes Tomatometer</span>
-              <span class="font-mono">50%</span>
-            </li>
-          </ul>
-          <div class="mt-2 p-2 bg-purple-50 rounded text-xs">
-            Formula: <code>(Meta/100 * 0.5 + RT/100 * 0.5)</code>
+            Formula: <code>(IMDb/10 * 0.25 + TMDb/10 * 0.25 + Meta/100 * 0.25 + RT/100 * 0.25)</code>
           </div>
         </div>
 
@@ -523,7 +513,7 @@
             <tr>
               <td class="px-4 py-2 text-sm font-medium text-gray-900">
                 Popular Opinion<br />
-                <span class="text-xs text-gray-500">(ratings)</span>
+                <span class="text-xs text-gray-500">(all ratings)</span>
               </td>
               <%= for profile <- @weight_profiles do %>
                 <td class="px-4 py-2 text-center">
@@ -531,35 +521,12 @@
                     <div class="w-20 bg-gray-200 rounded-full h-2 mr-2">
                       <div
                         class="bg-blue-600 h-2 rounded-full"
-                        style={"width: #{min(100, get_profile_weight_actual(profile, "ratings"))}%"}
+                        style={"width: #{min(100, get_profile_weight_actual(profile, "popular_opinion"))}%"}
                       >
                       </div>
                     </div>
                     <span class="text-sm font-medium">
-                      {get_profile_weight_actual(profile, "ratings")}%
-                    </span>
-                  </div>
-                </td>
-              <% end %>
-            </tr>
-
-            <tr class="bg-gray-50">
-              <td class="px-4 py-2 text-sm font-medium text-gray-900">
-                Critical Acclaim<br />
-                <span class="text-xs text-gray-500">(critic ratings)</span>
-              </td>
-              <%= for profile <- @weight_profiles do %>
-                <td class="px-4 py-2 text-center">
-                  <div class="inline-flex items-center">
-                    <div class="w-20 bg-gray-200 rounded-full h-2 mr-2">
-                      <div
-                        class="bg-purple-600 h-2 rounded-full"
-                        style={"width: #{min(100, div(round(get_profile_weight_actual(profile, "ratings")), 2))}%"}
-                      >
-                      </div>
-                    </div>
-                    <span class="text-sm font-medium">
-                      {Float.round(get_profile_weight_actual(profile, "ratings") / 2, 1)}%
+                      {get_profile_weight_actual(profile, "popular_opinion")}%
                     </span>
                   </div>
                 </td>
@@ -917,9 +884,9 @@
                   </div>
                   <div class="text-xs text-gray-500">
                     Pop: {Float.round((movie.components["popular_opinion"] || 0) * 100, 0)}% |
-                    Crit: {Float.round((movie.components["critical_acclaim"] || 0) * 100, 0)}% |
                     Ind: {Float.round((movie.components["industry_recognition"] || 0) * 100, 0)}% |
-                    Cult: {Float.round((movie.components["cultural_impact"] || 0) * 100, 0)}%
+                    Cult: {Float.round((movie.components["cultural_impact"] || 0) * 100, 0)}% |
+                    People: {Float.round((movie.components["people_quality"] || 0) * 100, 0)}%
                   </div>
                 </div>
               </div>

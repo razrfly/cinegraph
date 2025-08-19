@@ -286,12 +286,12 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
   defp convert_weights_to_categories(weights) do
     # Map validation weights to database categories
+    # Popular opinion now includes all rating sources (critical_acclaim merged in)
     %{
-      "ratings" =>
-        (Map.get(weights, :critical_acclaim, 0.2) + Map.get(weights, :popular_opinion, 0.2)) / 2,
-      "awards" => Map.get(weights, :industry_recognition, 0.2),
-      "cultural" => Map.get(weights, :cultural_impact, 0.2),
-      "people" => Map.get(weights, :people_quality, 0.2),
+      "ratings" => Map.get(weights, :popular_opinion, 0.25) + Map.get(weights, :critical_acclaim, 0.0),
+      "awards" => Map.get(weights, :industry_recognition, 0.25),
+      "cultural" => Map.get(weights, :cultural_impact, 0.25),
+      "people" => Map.get(weights, :people_quality, 0.25),
       "financial" => 0.0
     }
   end
