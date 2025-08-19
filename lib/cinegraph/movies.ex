@@ -59,8 +59,6 @@ defmodule Cinegraph.Movies do
     sort in [
       "popular_opinion",
       "popular_opinion_asc",
-      "critical_acclaim",
-      "critical_acclaim_asc",
       "industry_recognition",
       "industry_recognition_asc",
       "cultural_impact",

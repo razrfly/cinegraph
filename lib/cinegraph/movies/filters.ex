@@ -107,12 +107,6 @@ defmodule Cinegraph.Movies.Filters do
       "popular_opinion_asc" ->
         sort_by_metric_dimension(query, :popular_opinion, :asc)
 
-      "critical_acclaim" ->
-        sort_by_metric_dimension(query, :critical_acclaim, :desc)
-
-      "critical_acclaim_asc" ->
-        sort_by_metric_dimension(query, :critical_acclaim, :asc)
-
       "industry_recognition" ->
         sort_by_metric_dimension(query, :industry_recognition, :desc)
 
@@ -148,11 +142,18 @@ defmodule Cinegraph.Movies.Filters do
             fragment(
               """
               COALESCE((
-                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
+                        COALESCE(ir.value, 0) / 10.0 * 0.25 +
+                        COALESCE(mc.value, 0) / 100.0 * 0.25 + 
+                        COALESCE(rt.value, 0) / 100.0 * 0.25)
                 FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
               ), 0)
               """,
+              m.id,
+              m.id,
               m.id,
               m.id
             )
@@ -164,43 +165,18 @@ defmodule Cinegraph.Movies.Filters do
             fragment(
               """
               COALESCE((
-                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
+                        COALESCE(ir.value, 0) / 10.0 * 0.25 +
+                        COALESCE(mc.value, 0) / 100.0 * 0.25 + 
+                        COALESCE(rt.value, 0) / 100.0 * 0.25)
                 FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
-              ), 0)
-              """,
-              m.id,
-              m.id
-            )
-        )
-
-      {:critical_acclaim, :desc} ->
-        order_by(query, [m],
-          desc:
-            fragment(
-              """
-              COALESCE((
-                SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
                      (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
               ), 0)
               """,
               m.id,
-              m.id
-            )
-        )
-
-      {:critical_acclaim, :asc} ->
-        order_by(query, [m],
-          asc:
-            fragment(
-              """
-              COALESCE((
-                SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
-              ), 0)
-              """,
+              m.id,
               m.id,
               m.id
             )
@@ -1072,7 +1048,6 @@ defmodule Cinegraph.Movies.Filters do
     |> maybe_apply_award_preset(params["award_preset"])
     # Keep legacy support for numeric thresholds
     |> filter_by_metric_dimension(params["popular_opinion_min"], :popular_opinion)
-    |> filter_by_metric_dimension(params["critical_acclaim_min"], :critical_acclaim)
     |> filter_by_metric_dimension(params["industry_recognition_min"], :industry_recognition)
     |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
     |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
@@ -1233,37 +1208,25 @@ defmodule Cinegraph.Movies.Filters do
     if min_val do
       case dimension do
         :popular_opinion ->
-          # Filter by popular opinion score (TMDb + IMDb ratings)
+          # Filter by popular opinion score (all rating sources: TMDb + IMDb + Metacritic + RT)
           where(
             query,
             [m],
             fragment(
               """
               COALESCE((
-                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
+                        COALESCE(ir.value, 0) / 10.0 * 0.25 +
+                        COALESCE(mc.value, 0) / 100.0 * 0.25 + 
+                        COALESCE(rt.value, 0) / 100.0 * 0.25)
                 FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir
-              ), 0) >= ?
-              """,
-              m.id,
-              m.id,
-              ^min_val
-            )
-          )
-
-        :critical_acclaim ->
-          # Filter by critical acclaim score (Metacritic + Rotten Tomatoes)
-          where(
-            query,
-            [m],
-            fragment(
-              """
-              COALESCE((
-                SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' LIMIT 1) ir,
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' LIMIT 1) mc,
                      (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' LIMIT 1) rt
               ), 0) >= ?
               """,
+              m.id,
+              m.id,
               m.id,
               m.id,
               ^min_val

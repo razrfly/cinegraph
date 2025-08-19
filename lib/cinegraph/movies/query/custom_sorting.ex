@@ -13,7 +13,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in ~w(popular_opinion critical_acclaim industry_recognition cultural_impact people_quality) ->
+      field in ~w(popular_opinion industry_recognition cultural_impact people_quality) ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->
@@ -75,7 +75,10 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
        fragment(
          """
          COALESCE((
-           SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 + COALESCE(ir.value, 0) / 10.0 * 0.5)
+           SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
+                   COALESCE(ir.value, 0) / 10.0 * 0.25 +
+                   COALESCE(mc.value, 0) / 100.0 * 0.25 + 
+                   COALESCE(rt.value, 0) / 100.0 * 0.25)
            FROM (
                  SELECT value FROM external_metrics
                  WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
@@ -85,25 +88,8 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
                  SELECT value FROM external_metrics
                  WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
                  ORDER BY fetched_at DESC LIMIT 1
-                ) ir
-         ), 0)
-         """,
-         m.id,
-         m.id
-       )}
-    ])
-  end
-
-  defp apply_discovery_metric_sort(query, "critical_acclaim", direction) do
-    order_func = if direction == :desc, do: :desc, else: :asc
-
-    order_by(query, [m], [
-      {^order_func,
-       fragment(
-         """
-         COALESCE((
-           SELECT (COALESCE(mc.value, 0) / 100.0 * 0.5 + COALESCE(rt.value, 0) / 100.0 * 0.5)
-           FROM (
+                ) ir,
+                (
                  SELECT value FROM external_metrics
                  WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
                  ORDER BY fetched_at DESC LIMIT 1
@@ -115,6 +101,8 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
                 ) rt
          ), 0)
          """,
+         m.id,
+         m.id,
          m.id,
          m.id
        )}
