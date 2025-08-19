@@ -310,7 +310,17 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
   @impl true
   def handle_event("refresh_selected_decades", %{"decades" => decades}, socket) do
-    decade_list = decades |> String.split(",") |> Enum.map(&String.to_integer/1)
+    decade_list =
+      decades
+      |> String.split(",", trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.flat_map(fn s ->
+        case Integer.parse(s) do
+          {d, ""} when rem(d, 10) == 0 and d >= 1900 and d <= 2030 -> [d]
+          _ -> []
+        end
+      end)
+      |> Enum.uniq()
     
     case RefreshManager.refresh_decades(decade_list) do
       {:ok, _job} ->

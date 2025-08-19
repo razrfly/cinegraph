@@ -22,8 +22,11 @@ defmodule Cinegraph.Cache.PredictionsCache do
         # Try database cache for 2020s decade
         decade = 2020
         
-        case Cinegraph.Predictions.PredictionCache.get_sorted_predictions(decade, profile.id, limit: limit) do
-          [] ->
+        # Get the cache directly to avoid duplicate queries
+        cache = Cinegraph.Predictions.PredictionCache.get_cached_predictions(decade, profile.id)
+        
+        case cache do
+          nil ->
             # No database cache exists - return error instead of calculating
             Logger.info("No cache available for predictions: decade=#{decade}, profile=#{profile.name}")
             
@@ -32,16 +35,35 @@ defmodule Cinegraph.Cache.PredictionsCache do
             
             {:error, :cache_missing, job_status}
             
-          db_predictions ->
+          cache_data ->
             # Transform DB cache format to expected format
             Logger.debug("DB cache hit for predictions: decade=#{decade}, profile=#{profile.name}")
             
+            # Transform the cache data directly here to avoid another query
+            movie_scores = cache_data.movie_scores || %{}
+            
+            sorted_predictions = 
+              movie_scores
+              |> Map.to_list()
+              |> Enum.map(fn {movie_id, data} ->
+                # Handle both string and atom keys for compatibility
+                %{
+                  id: movie_id,
+                  title: Map.get(data, "title") || Map.get(data, :title),
+                  score: Map.get(data, "score") || Map.get(data, :score, 0),
+                  release_date: Map.get(data, "release_date") || Map.get(data, :release_date),
+                  canonical_sources: Map.get(data, "canonical_sources") || Map.get(data, :canonical_sources, %{})
+                }
+              end)
+              |> Enum.sort_by(& &1.score, :desc)
+              |> Enum.take(limit)
+            
             result = %{
-              predictions: transform_db_predictions(db_predictions, limit),
-              total_candidates: length(db_predictions),
+              predictions: transform_db_predictions(sorted_predictions, limit),
+              total_candidates: map_size(movie_scores),
               algorithm_info: %{
                 source: "database_cache",
-                cached_at: get_cache_timestamp(decade, profile.id)
+                cached_at: cache_data.calculated_at
               }
             }
             
@@ -70,8 +92,15 @@ defmodule Cinegraph.Cache.PredictionsCache do
         id: movie_data.id,
         title: movie_data.title,
         release_date: movie_data.release_date,
+        year: case movie_data.release_date do
+          %Date{year: y} -> y
+          %NaiveDateTime{year: y} -> y
+          %DateTime{year: y} -> y
+          _ -> nil
+        end,
         canonical_sources: movie_data.canonical_sources,
         prediction: %{
+          # Scores are in 0-1 range, convert to percentage
           likelihood_percentage: round(movie_data.score * 100),
           score: movie_data.score
         },
@@ -80,13 +109,6 @@ defmodule Cinegraph.Cache.PredictionsCache do
                    else: :predicted)
       }
     end)
-  end
-  
-  defp get_cache_timestamp(decade, profile_id) do
-    case Cinegraph.Predictions.PredictionCache.get_cached_predictions(decade, profile_id) do
-      nil -> nil
-      cache -> cache.calculated_at
-    end
   end
 
   @doc """

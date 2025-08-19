@@ -180,12 +180,23 @@ defmodule Cinegraph.Predictions.PredictionCache do
       }
     else
       sorted_ages = Enum.sort(ages)
+      len = length(sorted_ages)
+      
+      # Calculate median properly for even/odd length arrays
+      median = if rem(len, 2) == 1 do
+        # Odd number of elements - take the middle one
+        Enum.at(sorted_ages, div(len, 2))
+      else
+        # Even number of elements - average the two middle ones
+        mid_idx = div(len, 2)
+        (Enum.at(sorted_ages, mid_idx - 1) + Enum.at(sorted_ages, mid_idx)) / 2
+      end
       
       %{
         oldest_hours: Enum.max(ages),
         newest_hours: Enum.min(ages),
         average_hours: Enum.sum(ages) / length(ages),
-        median_hours: Enum.at(sorted_ages, div(length(sorted_ages), 2))
+        median_hours: median
       }
     end
   end
@@ -204,10 +215,23 @@ defmodule Cinegraph.Predictions.PredictionCache do
         []
         
       cache ->
-        cache.movie_scores
+        # Safely access movie_scores with default empty map
+        movie_scores = Map.get(cache, :movie_scores, %{})
+        
+        movie_scores
         |> Map.to_list()
         |> Enum.map(fn {movie_id, data} ->
-          Map.put(data, :id, movie_id)
+          # Safely handle data that might be nil or not a map
+          data = if is_map(data), do: data, else: %{}
+          
+          # Handle both string and atom keys for compatibility using Map.get with defaults
+          %{
+            id: movie_id,
+            title: Map.get(data, "title") || Map.get(data, :title),
+            score: Map.get(data, "score") || Map.get(data, :score, 0),
+            release_date: Map.get(data, "release_date") || Map.get(data, :release_date),
+            canonical_sources: Map.get(data, "canonical_sources") || Map.get(data, :canonical_sources, %{})
+          }
         end)
         |> maybe_filter_canonical(canonical_filter)
         |> Enum.filter(fn movie -> movie.score >= min_score end)

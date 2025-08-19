@@ -5,10 +5,10 @@ defmodule Cinegraph.Repo.Migrations.CreatePredictionCache do
     create table(:prediction_cache) do
       add :decade, :integer, null: false
       add :profile_id, :bigint, null: false
-      add :movie_scores, :jsonb, default: "{}", null: false
-      add :statistics, :jsonb, default: "{}", null: false
+      add :movie_scores, :jsonb, default: fragment("'{}'::jsonb"), null: false
+      add :statistics, :jsonb, default: fragment("'{}'::jsonb"), null: false
       add :calculated_at, :utc_datetime, null: false
-      add :metadata, :jsonb, default: "{}"
+      add :metadata, :jsonb, default: fragment("'{}'::jsonb")
       
       timestamps()
     end
@@ -22,7 +22,7 @@ defmodule Cinegraph.Repo.Migrations.CreatePredictionCache do
       add :change_type, :string, null: false  # movie_updated, metric_updated, festival_added, etc.
       add :entity_id, :bigint
       add :entity_type, :string
-      add :metadata, :jsonb, default: "{}"
+      add :metadata, :jsonb, default: fragment("'{}'::jsonb")
       add :affected_decades, {:array, :integer}, default: []
       
       timestamps(updated_at: false)

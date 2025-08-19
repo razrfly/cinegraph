@@ -155,7 +155,7 @@ defmodule Cinegraph.Movies.MovieScoring do
       imdb,
       tmdb,
       rt_audience / 10.0,
-      metacritic / 10.0,
+      metacritic / 100.0,
       rt_tomatometer / 10.0
     ] |> Enum.filter(&(&1 > 0))
 

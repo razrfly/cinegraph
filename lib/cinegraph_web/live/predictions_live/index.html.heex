@@ -1,6 +1,6 @@
 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
   <!-- Cache Missing State -->
-  <%= if @cache_status.missing && !@loading do %>
+  <%= if Map.get(@cache_status || %{}, :missing, false) && !@loading do %>
     <div class="mb-8 bg-amber-50 border-2 border-amber-200 rounded-xl p-8">
       <div class="flex flex-col items-center text-center">
         <div class="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mb-4">
@@ -386,9 +386,11 @@
                 </path>
               </svg>
               <span>Historical Validation</span>
-              <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                <%= @validation_result.overall_accuracy %>%
-              </span>
+              <%= if @validation_result do %>
+                <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                  <%= @validation_result.overall_accuracy %>%
+                </span>
+              <% end %>
             </div>
           </button>
 
@@ -553,9 +555,11 @@
               <span>
                 <strong><%= @predictions_result.total_candidates %></strong> candidates analyzed
               </span>
-              <span>
-                <strong><%= @validation_result.overall_accuracy %>%</strong> historical accuracy
-              </span>
+              <%= if @validation_result do %>
+                <span>
+                  <strong><%= @validation_result.overall_accuracy %>%</strong> historical accuracy
+                </span>
+              <% end %>
             </div>
             <div class="mt-2 sm:mt-0">
               <span class="text-xs text-gray-500">
@@ -572,54 +576,61 @@
       <div class="space-y-6">
         <div class="bg-white rounded-lg shadow-lg p-6">
           <h2 class="text-xl font-semibold mb-4">Algorithm Validation Results</h2>
-          <p class="text-gray-600 mb-6">
-            Historical accuracy by decade (why you should trust our predictions):
-          </p>
-
-          <div class="space-y-4">
-            <%= for decade_result <- Enum.reverse(@validation_result.decade_results) do %>
-              <div class="border rounded-lg p-4">
-                <div class="flex justify-between items-center mb-2">
-                  <h3 class="text-lg font-medium text-gray-900">
-                    <%= decade_result.decade %>s Movies
-                  </h3>
-                  <span class={[
-                    "text-lg font-bold",
-                    accuracy_color(decade_result.accuracy_percentage)
-                  ]}>
-                    <%= decade_result.accuracy_percentage %>% ✅
-                  </span>
-                </div>
-
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <div class="text-gray-600">Total in 1001 List</div>
-                    <div class="font-semibold"><%= decade_result.total_1001_movies %> movies</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-600">Correctly Predicted</div>
-                    <div class="font-semibold"><%= decade_result.correctly_predicted %> movies</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-600">False Positives</div>
-                    <div class="font-semibold"><%= decade_result.false_positive_count %> movies</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-600">Misses</div>
-                    <div class="font-semibold"><%= decade_result.missed_count %> movies</div>
-                  </div>
-                </div>
-              </div>
-            <% end %>
-          </div>
-
-          <div class="mt-6 p-4 bg-green-50 rounded-lg">
-            <h3 class="font-medium text-green-900 mb-2">Overall Algorithm Accuracy</h3>
-            <p class="text-green-800">
-              <span class="text-2xl font-bold"><%= @validation_result.overall_accuracy %>%</span>
-              - This is why you should trust our 2020s predictions
+          <%= if @validation_result do %>
+            <p class="text-gray-600 mb-6">
+              Historical accuracy by decade (why you should trust our predictions):
             </p>
-          </div>
+
+            <div class="space-y-4">
+              <%= for decade_result <- Enum.reverse(@validation_result.decade_results) do %>
+                <div class="border rounded-lg p-4">
+                  <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-medium text-gray-900">
+                      <%= decade_result.decade %>s Movies
+                    </h3>
+                    <span class={[
+                      "text-lg font-bold",
+                      accuracy_color(decade_result.accuracy_percentage)
+                    ]}>
+                      <%= decade_result.accuracy_percentage %>% ✅
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <div class="text-gray-600">Total in 1001 List</div>
+                      <div class="font-semibold"><%= decade_result.total_1001_movies %> movies</div>
+                    </div>
+                    <div>
+                      <div class="text-gray-600">Correctly Predicted</div>
+                      <div class="font-semibold"><%= decade_result.correctly_predicted %> movies</div>
+                    </div>
+                    <div>
+                      <div class="text-gray-600">False Positives</div>
+                      <div class="font-semibold"><%= decade_result.false_positive_count %> movies</div>
+                    </div>
+                    <div>
+                      <div class="text-gray-600">Misses</div>
+                      <div class="font-semibold"><%= decade_result.missed_count %> movies</div>
+                    </div>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+
+            <div class="mt-6 p-4 bg-green-50 rounded-lg">
+              <h3 class="font-medium text-green-900 mb-2">Overall Algorithm Accuracy</h3>
+              <p class="text-green-800">
+                <span class="text-2xl font-bold"><%= @validation_result.overall_accuracy %>%</span>
+                - This is why you should trust our 2020s predictions
+              </p>
+            </div>
+          <% else %>
+            <div class="text-center py-12">
+              <p class="text-gray-500 text-lg mb-4">Validation data not available</p>
+              <p class="text-gray-400">Please refresh predictions to calculate validation metrics</p>
+            </div>
+          <% end %>
         </div>
       </div>
     <% end %>
@@ -986,12 +997,14 @@
                 <div class="bg-gray-50 rounded-lg p-4">
                   <h4 class="font-semibold text-gray-900 mb-3">Key Insights</h4>
                   <ul class="space-y-2 text-sm text-gray-700">
-                    <li class="flex items-start">
-                      <span class="text-green-600 mr-2">•</span>
-                      Algorithm confidence:
-                      <strong><%= @validation_result.overall_accuracy %>%</strong>
-                      based on historical data
-                    </li>
+                    <%= if @validation_result do %>
+                      <li class="flex items-start">
+                        <span class="text-green-600 mr-2">•</span>
+                        Algorithm confidence:
+                        <strong><%= @validation_result.overall_accuracy %>%</strong>
+                        based on historical data
+                      </li>
+                    <% end %>
                     <li class="flex items-start">
                       <span class="text-blue-600 mr-2">•</span>
                       Top criterion:

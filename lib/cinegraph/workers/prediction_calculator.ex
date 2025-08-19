@@ -22,17 +22,20 @@ defmodule Cinegraph.Workers.PredictionCalculator do
     decades = args["decades"] || [1960, 1970, 1980, 1990, 2000, 2010, 2020]
     
     total = length(profiles) * length(decades)
-    current = 0
     
-    for profile_id <- profiles, decade <- decades do
-      current = current + 1
+    # Create a list of all combinations with their index
+    combinations = for profile_id <- profiles, decade <- decades, do: {profile_id, decade}
+    
+    combinations
+    |> Enum.with_index(1)
+    |> Enum.each(fn {{profile_id, decade}, current} ->
       progress = round(current / total * 100)
       
       # Update job progress metadata
       update_job_progress(args["job_id"], progress, "Processing decade #{decade} for profile #{profile_id}")
       
       calculate_and_cache_predictions(profile_id, decade)
-    end
+    end)
     
     Logger.info("Completed full prediction refresh")
     :ok
@@ -79,37 +82,40 @@ defmodule Cinegraph.Workers.PredictionCalculator do
   end
   
   defp calculate_predictions_for_decade(profile, decade) do
-    # This replicates the complex query logic but runs it once and caches
-    # We'll fetch all movies for the decade with their scores
-    
+    # Use the ORIGINAL MoviePredictor logic that actually works
     start_date = Date.new!(decade, 1, 1)
     end_date = Date.new!(decade + 9, 12, 31)
     
-    movies = Repo.all(
+    # Build the query with the decade filter
+    query = 
       from m in Movies.Movie,
-        where: m.release_date >= ^start_date and m.release_date <= ^end_date
-    )
+        where: m.release_date >= ^start_date and m.release_date <= ^end_date,
+        where: m.import_status == "full",
+        limit: 2000
     
-    # Calculate scores for each movie
-    Enum.reduce(movies, %{}, fn movie, acc ->
-      score = calculate_movie_score(movie, profile)
+    # Use the REAL scoring service that was working before
+    scored_query = Metrics.ScoringService.apply_scoring(query, profile)
+    movies_with_scores = Repo.all(scored_query)
+    
+    # Convert to the cache format, keeping the ACTUAL scores from the database
+    Enum.reduce(movies_with_scores, %{}, fn movie, acc ->
+      # The score is in the discovery_score field from the query
+      score = Map.get(movie, :discovery_score, 0.0)
+      
       Map.put(acc, movie.id, %{
         title: movie.title,
-        score: score,
+        score: score,  # This is already in the correct 0-100 range
         release_date: movie.release_date,
         canonical_sources: movie.canonical_sources
       })
     end)
   end
   
-  defp calculate_movie_score(movie, profile) do
+  defp calculate_movie_score_with_metrics(movie, profile, metrics) do
     # This implements the scoring logic from the complex query
     # but in application code rather than SQL
     
     weights = profile.category_weights
-    
-    # Get all the metrics for this movie
-    metrics = get_movie_metrics(movie.id)
     
     score = 0.0
     
@@ -117,8 +123,8 @@ defmodule Cinegraph.Workers.PredictionCalculator do
     score = 
       if metrics.metacritic || metrics.rotten_tomatoes do
         critical_score = 
-          ((metrics.metacritic || 0) / 10.0 * 0.5) +
-          ((metrics.rotten_tomatoes || 0) / 10.0 * 0.5)
+          ((metrics.metacritic || 0) / 100.0 * 0.5) +
+          ((metrics.rotten_tomatoes || 0) / 100.0 * 0.5)
         score + (weights["critical_acclaim"] || 0.2) * critical_score
       else
         score
@@ -282,5 +288,82 @@ defmodule Cinegraph.Workers.PredictionCalculator do
     # For now, skip job progress updates as they're not critical
     # This would need a more complex implementation with Oban's API
     :ok
+  end
+  
+  defp batch_get_movie_metrics([]) do
+    %{}
+  end
+  
+  defp batch_get_movie_metrics(movie_ids) do
+    # Batch fetch all metrics for multiple movies at once to avoid N+1 queries
+    
+    # Get all external metrics in one query
+    external_metrics = Repo.all(
+      from em in "external_metrics",
+        where: em.movie_id in ^movie_ids,
+        select: {em.movie_id, em.source, em.metric_type, em.value}
+    )
+    
+    # Get all festival wins in one query
+    festival_wins = Repo.all(
+      from f in "festival_nominations",
+        where: f.movie_id in ^movie_ids and f.won == true,
+        group_by: f.movie_id,
+        select: {f.movie_id, count(f.id)}
+    ) |> Map.new()
+    
+    # Get all cast quality scores in one query
+    cast_scores = Repo.all(
+      from mc in "movie_credits",
+        join: pm in "person_metrics",
+          on: pm.person_id == mc.person_id,
+        where: mc.movie_id in ^movie_ids and 
+               mc.credit_type == "cast" and 
+               pm.metric_type == "quality_score",
+        group_by: mc.movie_id,
+        select: {mc.movie_id, avg(pm.score)}
+    ) |> Map.new()
+    
+    # Get all director quality scores in one query
+    director_scores = Repo.all(
+      from mc in "movie_credits",
+        join: pm in "person_metrics",
+          on: pm.person_id == mc.person_id,
+        where: mc.movie_id in ^movie_ids and 
+               mc.department == "Directing" and 
+               pm.metric_type == "quality_score",
+        group_by: mc.movie_id,
+        select: {mc.movie_id, avg(pm.score)}
+    ) |> Map.new()
+    
+    # Build metrics map for each movie
+    Enum.reduce(movie_ids, %{}, fn movie_id, acc ->
+      movie_external_metrics = 
+        Enum.filter(external_metrics, fn {id, _, _, _} -> id == movie_id end)
+      
+      metacritic = Enum.find_value(movie_external_metrics, fn 
+        {_, "metacritic", _, value} -> value
+        _ -> nil
+      end)
+      
+      rotten_tomatoes = Enum.find_value(movie_external_metrics, fn 
+        {_, "rotten_tomatoes", _, value} -> value
+        _ -> nil
+      end)
+      
+      imdb_rating = Enum.find_value(movie_external_metrics, fn 
+        {_, "imdb", "rating_average", value} -> value
+        _ -> nil
+      end)
+      
+      Map.put(acc, movie_id, %{
+        metacritic: metacritic,
+        rotten_tomatoes: rotten_tomatoes,
+        imdb_rating: imdb_rating,
+        festival_wins: Map.get(festival_wins, movie_id, 0),
+        cast_quality_score: Map.get(cast_scores, movie_id),
+        director_quality_score: Map.get(director_scores, movie_id)
+      })
+    end)
   end
 end

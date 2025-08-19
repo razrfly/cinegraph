@@ -104,15 +104,28 @@ defmodule Cinegraph.Predictions.RefreshManager do
   
   @doc """
   Cancel any running refresh jobs.
+  Uses Oban API for proper job cancellation.
   """
   def cancel_refresh do
-    Repo.update_all(
-      from(j in "oban_jobs",
-        where: j.worker == "Elixir.Cinegraph.Workers.PredictionCalculator",
-        where: j.state in ["available", "scheduled"]
-      ),
-      set: [state: "cancelled"]
-    )
+    # Get jobs to cancel using Ecto query
+    jobs_to_cancel = 
+      Repo.all(
+        from(j in Oban.Job,
+          where: j.worker == "Elixir.Cinegraph.Workers.PredictionCalculator",
+          where: j.state in ["available", "scheduled"]
+        )
+      )
+    
+    # Cancel each job using Oban API
+    cancelled_count = 
+      Enum.reduce(jobs_to_cancel, 0, fn job, acc ->
+        case Oban.cancel_job(job) do
+          {:ok, _cancelled_job} -> acc + 1
+          _ -> acc
+        end
+      end)
+    
+    {cancelled_count, nil}
   end
   
   @doc """

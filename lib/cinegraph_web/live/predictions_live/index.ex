@@ -69,7 +69,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
        |> assign(:profile_comparison, profile_comparison)
        |> assign(:show_comparison, false)
        |> assign(:cache_status, cache_status)
-       |> assign(:last_updated, get_cache_timestamp())}
+       |> assign(:last_updated, get_cache_timestamp(default_profile.id))}
     rescue
       error ->
         require Logger
@@ -93,25 +93,39 @@ defmodule CinegraphWeb.PredictionsLive.Index do
             }
 
         # Try to get cached results if available
-        fallback_predictions =
+        {fallback_predictions, fallback_cache_status} =
           try do
-            PredictionsCache.get_predictions(100, default_profile)
+            case PredictionsCache.get_predictions(100, default_profile) do
+              {:error, :cache_missing, job_status} ->
+                {nil, %{missing: true, job_status: job_status}}
+              {:error, :cache_error, _reason} ->
+                {nil, %{missing: true, job_status: :error}}
+              result ->
+                {result, %{missing: false, job_status: :ready}}
+            end
           rescue
-            _ -> %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+            _ -> {nil, %{missing: true, job_status: :error}}
           end
 
         fallback_validation =
           try do
-            PredictionsCache.get_validation(default_profile)
+            case PredictionsCache.get_validation(default_profile) do
+              {:error, _, _} -> nil
+              result -> result
+            end
           rescue
-            _ -> %{overall_accuracy: 0, decade_results: []}
+            _ -> nil
           end
 
         fallback_confirmed_count =
-          try do
-            PredictionsCache.get_confirmed_additions_count(fallback_predictions)
-          rescue
-            _ -> 0
+          if fallback_predictions do
+            try do
+              PredictionsCache.get_confirmed_additions_count(fallback_predictions)
+            rescue
+              _ -> 0
+            end
+          else
+            0
           end
 
         {:ok,
@@ -139,6 +153,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> assign(:show_weight_tuner, false)
          |> assign(:profile_comparison, nil)
          |> assign(:show_comparison, false)
+         |> assign(:cache_status, fallback_cache_status)
          |> assign(:last_updated, DateTime.utc_now())}
     end
   end
@@ -388,7 +403,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> assign(:validation_result, validation_result)
          |> assign(:confirmed_count, confirmed_count)
          |> assign(:cache_status, cache_status)
-         |> assign(:last_updated, get_cache_timestamp())
+         |> assign(:last_updated, get_cache_timestamp(profile.id))
          |> put_flash(:info, "Predictions loaded successfully using #{profile.name} profile!")}
       else
         {:noreply,
@@ -415,6 +430,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   end
 
   defp format_status(:already_added), do: {"✅ Added", "text-green-600"}
+  defp format_status(:predicted), do: {"📊 Predicted", "text-purple-600"}
   defp format_status(:future_prediction), do: {"🔮 Future", "text-blue-600"}
 
   defp format_likelihood(percentage) when percentage >= 90,
@@ -455,8 +471,10 @@ defmodule CinegraphWeb.PredictionsLive.Index do
     end
   end
   
-  defp get_cache_timestamp do
-    case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, 1) do
+  defp get_cache_timestamp(profile_id \\ nil) do
+    # Use provided profile_id or default to 1 for backward compatibility
+    pid = profile_id || 1
+    case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, pid) do
       nil -> nil
       cache -> cache.calculated_at
     end
