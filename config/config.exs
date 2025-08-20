@@ -91,7 +91,9 @@ config :cinegraph, Oban,
     # CRI calculation jobs
     cri_calculation: 5,
     # Person Quality Score calculations
-    metrics: 15
+    metrics: 15,
+    # Predictions calculation jobs
+    predictions: 3
   ],
   plugins: [
     # Keep jobs for 7 days

@@ -17,14 +17,9 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
-        # Cache miss - calculate and store
+        # Cache miss - check database cache only, never calculate inline
         Logger.debug("Cache miss for predictions: limit=#{limit}, profile=#{profile.name}")
-        result = calculate_predictions(limit, profile)
-
-        # Cache for 15 minutes with async write for speed
-        Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(15))
-
-        result
+        check_database_for_predictions(2020, profile, limit, cache_key)
 
       {:ok, cached_result} ->
         Logger.debug("Cache hit for predictions: limit=#{limit}, profile=#{profile.name}")
@@ -32,8 +27,8 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
       {:error, reason} ->
         Logger.warning("Cache error for predictions: #{inspect(reason)}")
-        # Fallback to direct calculation
-        calculate_predictions(limit, profile)
+        # Return nil instead of calculating
+        nil
     end
   end
 
@@ -46,12 +41,8 @@ defmodule Cinegraph.Cache.PredictionsCache do
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
         Logger.debug("Cache miss for validation: profile=#{profile.name}")
-        result = calculate_validation(profile)
-
-        # Cache validation for 30 minutes (more stable data)
-        Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(30))
-
-        result
+        # Check database cache only, never calculate inline
+        check_database_for_validation(profile, cache_key)
 
       {:ok, cached_result} ->
         Logger.debug("Cache hit for validation: profile=#{profile.name}")
@@ -59,7 +50,8 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
       {:error, reason} ->
         Logger.warning("Cache error for validation: #{inspect(reason)}")
-        calculate_validation(profile)
+        # Return nil instead of calculating
+        nil
     end
   end
 
@@ -174,6 +166,29 @@ defmodule Cinegraph.Cache.PredictionsCache do
   end
 
   @doc """
+  Get cache status for a profile including last calculation time.
+  """
+  def get_cache_status(profile) do
+    case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, profile.id) do
+      nil -> 
+        %{
+          cached: false,
+          last_calculated: nil,
+          has_validation: false,
+          has_predictions: false
+        }
+      
+      db_cache ->
+        %{
+          cached: true,
+          last_calculated: db_cache.calculated_at,
+          has_validation: Map.has_key?(db_cache.metadata || %{}, "profile_comparison"),
+          has_predictions: map_size(db_cache.movie_scores || %{}) > 0
+        }
+    end
+  end
+
+  @doc """
   Get cache statistics for monitoring.
   """
   def get_stats do
@@ -210,12 +225,8 @@ defmodule Cinegraph.Cache.PredictionsCache do
     case Cachex.get(@cache_name, cache_key) do
       {:ok, nil} ->
         Logger.debug("Cache miss for profile comparison")
-        result = calculate_profile_comparison()
-
-        # Cache for 1 hour (comparison is expensive but stable)
-        Cachex.put(@cache_name, cache_key, result, ttl: :timer.hours(1))
-
-        result
+        # Check database cache only, never calculate inline
+        check_database_for_profile_comparison(cache_key)
 
       {:ok, cached_result} ->
         Logger.debug("Cache hit for profile comparison")
@@ -223,7 +234,8 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
       {:error, reason} ->
         Logger.warning("Cache error for profile comparison: #{inspect(reason)}")
-        calculate_profile_comparison()
+        # Return nil instead of calculating
+        nil
     end
   end
 
@@ -281,16 +293,187 @@ defmodule Cinegraph.Cache.PredictionsCache do
     |> Base.encode16(case: :lower)
   end
 
-  defp calculate_predictions(limit, profile) do
-    Cinegraph.Predictions.MoviePredictor.predict_2020s_movies(limit, profile)
+  # NOTE: We intentionally DO NOT provide calculate_* functions
+  # to prevent accidental inline calculations. All expensive
+  # calculations should be done via background Oban jobs only.
+
+  defp check_database_for_predictions(decade, profile, limit, cache_key) do
+    # Try to get from database cache
+    case Cinegraph.Predictions.PredictionCache.get_cached_predictions(decade, profile.id) do
+      nil -> 
+        Logger.info("No database cache found for predictions: decade=#{decade}, profile=#{profile.name}")
+        nil
+      db_cache ->
+        # Extract and format the predictions from movie_scores
+        if db_cache.movie_scores && map_size(db_cache.movie_scores) > 0 do
+          # Convert the cached scores into prediction format
+          predictions = 
+            db_cache.movie_scores
+            |> Enum.map(fn {movie_id_str, score_data} ->
+              # Parse movie_id string to integer
+              {movie_id, _} = Integer.parse(movie_id_str)
+              
+              # Get the total score and calculate likelihood percentage
+              total_score = Map.get(score_data, "total_score", Map.get(score_data, "score", 0))
+              
+              # Calculate likelihood percentage from score (0-100 scale)
+              # Scores typically range from 0-100, with 50+ being strong candidates
+              likelihood = cond do
+                total_score >= 90 -> 95
+                total_score >= 80 -> 90
+                total_score >= 70 -> 85
+                total_score >= 60 -> 80
+                total_score >= 50 -> 75
+                total_score >= 45 -> 70
+                total_score >= 40 -> 65
+                total_score >= 35 -> 60
+                total_score >= 30 -> 55
+                total_score >= 25 -> 50
+                total_score >= 20 -> 45
+                total_score >= 15 -> 40
+                total_score >= 10 -> 35
+                true -> round(total_score * 3)
+              end
+              
+              # Extract year from release_date for compatibility with MoviePredictor
+              year = case Map.get(score_data, "release_date") do
+                nil -> nil
+                date_str when is_binary(date_str) ->
+                  case Date.from_iso8601(date_str) do
+                    {:ok, date} -> date.year
+                    _ -> nil
+                  end
+                _ -> nil
+              end
+              
+              # Build prediction structure matching what MoviePredictor returns
+              %{
+                id: movie_id,
+                title: Map.get(score_data, "title", "Unknown"),
+                year: year,  # Add year field to match MoviePredictor
+                release_date: Map.get(score_data, "release_date"),
+                prediction: %{
+                  likelihood_percentage: likelihood,
+                  score: total_score,
+                  total_score: total_score,
+                  breakdown: Map.get(score_data, "breakdown", [])
+                },
+                status: String.to_atom(Map.get(score_data, "status", "future_prediction"))
+              }
+            end)
+            |> Enum.sort_by(& &1.prediction.score, :desc)
+            |> Enum.take(limit)
+
+          result = %{
+            predictions: predictions,
+            total_candidates: map_size(db_cache.movie_scores),
+            algorithm_info: Map.get(db_cache.statistics, "algorithm_info", %{})
+          }
+
+          # Cache in memory for fast access
+          Cachex.put(@cache_name, cache_key, result, ttl: :timer.minutes(30))
+          result
+        else
+          Logger.info("No movie scores in database cache for decade #{decade}")
+          nil
+        end
+    end
   end
 
-  defp calculate_validation(profile) do
-    Cinegraph.Predictions.HistoricalValidator.validate_all_decades(profile)
+  defp check_database_for_validation(profile, cache_key) do
+    # Try to get validation data from database cache metadata
+    case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, profile.id) do
+      nil -> 
+        Logger.info("No database cache found for validation: profile=#{profile.name}")
+        nil
+      db_cache ->
+        # Check for validation_data in metadata
+        validation_data = Map.get(db_cache.metadata || %{}, "validation_data")
+        
+        if validation_data do
+          # Cache in memory for fast access
+          Cachex.put(@cache_name, cache_key, validation_data, ttl: :timer.hours(24))
+          validation_data
+        else
+          # Try to extract from profile_comparison if available
+          profile_comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
+          
+          if profile_comparison do
+            # Extract validation data from profile comparison
+            profiles = Map.get(profile_comparison, "profiles", [])
+            current_profile_data = Enum.find(profiles, fn p -> 
+              Map.get(p, "profile_name") == profile.name 
+            end)
+            
+            if current_profile_data do
+              # Create validation result from profile comparison data
+              decade_accuracies = Map.get(current_profile_data, "decade_accuracies", %{})
+              
+              decade_results = Enum.map(decade_accuracies, fn {decade, accuracy} ->
+                # We don't have individual counts, so estimate based on overall pattern
+                estimated_total = case decade do
+                  d when d >= 2000 -> 50  # Recent decades have fewer 1001 movies
+                  d when d >= 1970 -> 75
+                  d when d >= 1950 -> 100
+                  _ -> 125
+                end
+                
+                correctly_predicted = round(accuracy * estimated_total / 100)
+                
+                %{
+                  decade: decade,
+                  accuracy_percentage: accuracy,
+                  correctly_predicted: correctly_predicted,
+                  total_1001_movies: estimated_total
+                }
+              end)
+              |> Enum.sort_by(& &1.decade)
+              
+              validation_result = %{
+                overall_accuracy: Map.get(current_profile_data, "overall_accuracy", 0.0),
+                decade_results: decade_results,
+                profile_used: profile.name,
+                decades_analyzed: map_size(decade_accuracies)
+              }
+              
+              # Cache this extracted validation
+              Cachex.put(@cache_name, cache_key, validation_result, ttl: :timer.hours(24))
+              validation_result
+            else
+              Logger.info("Profile not found in comparison data")
+              nil
+            end
+          else
+            Logger.info("No validation or comparison data in database cache")
+            nil
+          end
+        end
+    end
   end
 
-  defp calculate_profile_comparison do
-    Cinegraph.Predictions.HistoricalValidator.get_comprehensive_comparison()
+  defp check_database_for_profile_comparison(cache_key) do
+    # Try to get from database cache metadata
+    default_profile = get_default_profile()
+    
+    if default_profile do
+      case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, default_profile.id) do
+        nil -> 
+          Logger.info("No database cache found for profile comparison")
+          nil
+        db_cache ->
+          comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
+          if comparison do
+            # Cache in memory for fast access
+            Cachex.put(@cache_name, cache_key, comparison, ttl: :timer.hours(1))
+            comparison
+          else
+            Logger.info("Profile comparison not in database cache")
+            nil
+          end
+      end
+    else
+      nil
+    end
   end
 
   defp calculate_hit_rate(stats) do

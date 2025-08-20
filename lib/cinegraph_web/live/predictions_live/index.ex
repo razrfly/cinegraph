@@ -12,12 +12,25 @@ defmodule CinegraphWeb.PredictionsLive.Index do
     # Load initial data with error handling and caching
     try do
       default_profile = PredictionsCache.get_default_profile()
+      
+      # Get cached data - these return nil if not cached (no auto-calculation!)
       predictions_result = PredictionsCache.get_predictions(100, default_profile)
       validation_result = PredictionsCache.get_validation(default_profile)
-      confirmed_count = PredictionsCache.get_confirmed_additions_count(predictions_result)
-
-      # Load profile comparison data (cached)
       profile_comparison = PredictionsCache.get_profile_comparison()
+      cache_status = PredictionsCache.get_cache_status(default_profile)
+      
+      # Handle nil results gracefully
+      predictions_result = predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+      validation_result = validation_result || %{overall_accuracy: 0, decade_results: []}
+      
+      confirmed_count = if predictions_result.predictions == [] do
+        0
+      else
+        PredictionsCache.get_confirmed_additions_count(predictions_result)
+      end
+      
+      # Check if cache is empty and show appropriate message
+      cache_empty = predictions_result.predictions == []
 
       # Optionally enable debug logging during development only (safe in releases)
       if @dev_logging? do
@@ -31,22 +44,33 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         end)
       end
 
-      {:ok,
-       socket
-       |> assign(:page_title, "2020s Movie Predictions")
-       |> assign(:loading, false)
-       |> assign(:view_mode, :predictions)
-       |> assign(:predictions_result, predictions_result)
-       |> assign(:validation_result, validation_result)
-       |> assign(:confirmed_count, confirmed_count)
-       |> assign(:selected_movie, nil)
-       |> assign(:current_profile, default_profile)
-       |> assign(:available_profiles, ScoringService.get_all_profiles())
-       |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(default_profile))
-       |> assign(:show_weight_tuner, false)
-       |> assign(:profile_comparison, profile_comparison)
-       |> assign(:show_comparison, false)
-       |> assign(:last_updated, DateTime.utc_now())}
+      socket_assigns = 
+        socket
+        |> assign(:page_title, "2020s Movie Predictions")
+        |> assign(:loading, false)
+        |> assign(:view_mode, :predictions)
+        |> assign(:predictions_result, predictions_result)
+        |> assign(:validation_result, validation_result)
+        |> assign(:confirmed_count, confirmed_count)
+        |> assign(:selected_movie, nil)
+        |> assign(:current_profile, default_profile)
+        |> assign(:available_profiles, ScoringService.get_all_profiles())
+        |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(default_profile))
+        |> assign(:show_weight_tuner, false)
+        |> assign(:profile_comparison, profile_comparison)
+        |> assign(:show_comparison, false)
+        |> assign(:last_updated, DateTime.utc_now())
+        |> assign(:cache_empty, cache_empty)
+        |> assign(:cache_status, cache_status)
+
+      # Add flash message if cache is empty
+      socket_assigns = if cache_empty do
+        put_flash(socket_assigns, :info, "Cache is empty or stale. Click 'Refresh Cache' to calculate predictions in the background.")
+      else
+        socket_assigns
+      end
+
+      {:ok, socket_assigns}
     rescue
       error ->
         require Logger
@@ -144,6 +168,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       case mode do
         "predictions" -> :predictions
         "validation" -> :validation
+        "cache_status" -> :cache_status
         "comparison" -> :comparison
         _ -> socket.assigns.view_mode
       end
@@ -284,7 +309,16 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
     predictions_result = PredictionsCache.get_predictions(100, default_profile)
     validation_result = PredictionsCache.get_validation(default_profile)
-    confirmed_count = PredictionsCache.get_confirmed_additions_count(predictions_result)
+    
+    # Handle nil results
+    predictions_result = predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+    validation_result = validation_result || %{overall_accuracy: 0, decade_results: []}
+    
+    confirmed_count = if predictions_result.predictions == [] do
+      0
+    else
+      PredictionsCache.get_confirmed_additions_count(predictions_result)
+    end
 
     {:noreply,
      socket
@@ -293,16 +327,52 @@ defmodule CinegraphWeb.PredictionsLive.Index do
      |> assign(:algorithm_weights, default_weights)
      |> assign(:predictions_result, predictions_result)
      |> assign(:validation_result, validation_result)
-     |> assign(:confirmed_count, confirmed_count)}
+     |> assign(:confirmed_count, confirmed_count)
+     |> assign(:cache_empty, predictions_result.predictions == [])}
+  end
+
+  @impl true
+  def handle_event("refresh_cache", _params, socket) do
+    # Queue background job to refresh cache
+    case Cinegraph.Workers.PredictionsOrchestrator.orchestrate_default_profile() do
+      {:ok, _job} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Cache refresh started! This will take a few minutes to complete in the background.")
+         |> assign(:cache_refreshing, true)}
+      
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to start cache refresh: #{inspect(reason)}")}
+    end
   end
 
   @impl true
   def handle_info({:recalculate_with_profile, profile}, socket) do
     try do
-      # Perform calculations in background using the profile with caching
+      # Get cached data ONLY - no calculations!
       predictions_result = PredictionsCache.get_predictions(100, profile)
       validation_result = PredictionsCache.get_validation(profile)
-      confirmed_count = PredictionsCache.get_confirmed_additions_count(predictions_result)
+      cache_status = PredictionsCache.get_cache_status(profile)
+      
+      # Handle nil results
+      predictions_result = predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+      validation_result = validation_result || %{overall_accuracy: 0, decade_results: []}
+      
+      confirmed_count = if predictions_result.predictions == [] do
+        0
+      else
+        PredictionsCache.get_confirmed_additions_count(predictions_result)
+      end
+      
+      cache_empty = predictions_result.predictions == []
+      
+      flash_message = if cache_empty do
+        "No cached data for #{profile.name} profile. Click 'Refresh Cache' to calculate."
+      else
+        "Loaded cached predictions for #{profile.name} profile!"
+      end
 
       {:noreply,
        socket
@@ -310,8 +380,10 @@ defmodule CinegraphWeb.PredictionsLive.Index do
        |> assign(:predictions_result, predictions_result)
        |> assign(:validation_result, validation_result)
        |> assign(:confirmed_count, confirmed_count)
+       |> assign(:cache_empty, cache_empty)
+       |> assign(:cache_status, cache_status)
        |> assign(:last_updated, DateTime.utc_now())
-       |> put_flash(:info, "Predictions updated successfully using #{profile.name} profile!")}
+       |> put_flash(:info, flash_message)}
     rescue
       error ->
         {:noreply,
