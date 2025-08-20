@@ -120,6 +120,24 @@
             </svg>
             <span><%= if @show_weight_tuner, do: "Hide Tuner", else: "Tune Algorithm" %></span>
           </button>
+          
+          <%= if assigns[:cache_empty] || @cache_empty do %>
+            <button
+              phx-click="refresh_cache"
+              class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 font-medium flex items-center justify-center space-x-2 shadow-sm"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                >
+                </path>
+              </svg>
+              <span>Refresh Cache</span>
+            </button>
+          <% end %>
         </div>
       </div>
     </div>
@@ -317,8 +335,41 @@
                 </path>
               </svg>
               <span>Historical Validation</span>
-              <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+              <span class={[
+                "text-xs px-2 py-1 rounded-full",
+                if(@validation_result.overall_accuracy > 0, do: "bg-green-100 text-green-800", else: "bg-yellow-100 text-yellow-800")
+              ]}>
                 <%= @validation_result.overall_accuracy %>%
+              </span>
+            </div>
+          </button>
+
+          <button
+            phx-click="switch_view"
+            phx-value-mode="cache_status"
+            class={[
+              "py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200",
+              @view_mode == :cache_status && "border-blue-500 text-blue-600",
+              @view_mode != :cache_status &&
+                "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            ]}
+          >
+            <div class="flex items-center space-x-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                >
+                </path>
+              </svg>
+              <span>Cache Status</span>
+              <span class={[
+                "text-xs px-2 py-1 rounded-full",
+                if(@cache_status.cached, do: "bg-green-100 text-green-800", else: "bg-red-100 text-red-800")
+              ]}>
+                <%= if @cache_status.cached, do: "✅ Cached", else: "❌ Empty" %>
               </span>
             </div>
           </button>
@@ -420,7 +471,7 @@
                   </td>
 
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <%= prediction.year %>
+                    <%= extract_year(prediction.release_date) %>
                   </td>
 
                   <td class="px-6 py-4 whitespace-nowrap">
@@ -501,56 +552,168 @@
 <!-- Historical Validation View -->
     <%= if @view_mode == :validation do %>
       <div class="space-y-6">
-        <div class="bg-white rounded-lg shadow-lg p-6">
-          <h2 class="text-xl font-semibold mb-4">Algorithm Validation Results</h2>
-          <p class="text-gray-600 mb-6">
-            Historical accuracy by decade (why you should trust our predictions):
-          </p>
+        <!-- Validation Overview -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+          <div class="bg-gradient-to-r from-green-600 to-blue-600 px-6 py-4">
+            <h2 class="text-2xl font-bold text-white">Historical Algorithm Validation</h2>
+            <p class="text-green-100 mt-1">
+              Performance tested against 1001 Movies additions from the 1950s-2010s
+            </p>
+          </div>
 
-          <div class="space-y-4">
-            <%= for decade_result <- Enum.reverse(@validation_result.decade_results) do %>
-              <div class="border rounded-lg p-4">
-                <div class="flex justify-between items-center mb-2">
-                  <h3 class="text-lg font-medium text-gray-900">
-                    <%= decade_result.decade %>s Movies
-                  </h3>
-                  <span class={[
-                    "text-lg font-bold",
-                    accuracy_color(decade_result.accuracy_percentage)
-                  ]}>
-                    <%= decade_result.accuracy_percentage %>% ✅
-                  </span>
-                </div>
+          <div class="p-6">
+            <!-- Overall Accuracy -->
+            <div class="text-center mb-8 p-6 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg">
+              <div class="text-5xl font-bold text-blue-600 mb-2">
+                <%= @validation_result.overall_accuracy %>%
+              </div>
+              <div class="text-lg text-gray-700">Overall Accuracy</div>
+              <div class="text-sm text-gray-600 mt-2">
+                Across <%= length(@validation_result.decade_results) %> decades of validation data
+              </div>
+            </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <div class="text-gray-600">Total in 1001 List</div>
-                    <div class="font-semibold"><%= decade_result.total_1001_movies %> movies</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-600">Correctly Predicted</div>
-                    <div class="font-semibold"><%= decade_result.correctly_predicted %> movies</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-600">False Positives</div>
-                    <div class="font-semibold"><%= decade_result.false_positive_count %> movies</div>
-                  </div>
-                  <div>
-                    <div class="text-gray-600">Misses</div>
-                    <div class="font-semibold"><%= decade_result.missed_count %> movies</div>
-                  </div>
+            <!-- Decade Breakdown -->
+            <%= if length(@validation_result.decade_results) > 0 do %>
+              <div class="space-y-4">
+                <h3 class="text-xl font-semibold mb-4">Decade-by-Decade Performance</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <%= for decade_result <- @validation_result.decade_results do %>
+                    <div class="bg-gray-50 rounded-lg p-4 border">
+                      <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-semibold text-gray-900">
+                          <%= decade_result.decade %>s
+                        </h4>
+                        <span class={[
+                          "text-lg font-bold",
+                          accuracy_color(decade_result.accuracy_percentage)
+                        ]}>
+                          <%= decade_result.accuracy_percentage %>%
+                        </span>
+                      </div>
+                      
+                      <div class="w-full bg-gray-200 rounded-full h-2 mb-3">
+                        <div 
+                          class={[
+                            "h-2 rounded-full",
+                            if(decade_result.accuracy_percentage >= 80, do: "bg-green-500", else: 
+                              if(decade_result.accuracy_percentage >= 60, do: "bg-blue-500", else: "bg-red-500"))
+                          ]}
+                          style={"width: #{decade_result.accuracy_percentage}%"}
+                        ></div>
+                      </div>
+                      
+                      <div class="text-sm text-gray-600 space-y-1">
+                        <div>
+                          Predicted: <strong><%= decade_result.correctly_predicted %></strong>/<strong><%= decade_result.total_1001_movies %></strong>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                          1001 Movies from this decade
+                        </div>
+                      </div>
+                    </div>
+                  <% end %>
                 </div>
+              </div>
+            <% else %>
+              <div class="text-center py-8">
+                <div class="text-gray-500 mb-4">
+                  <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                  </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No Validation Data Available</h3>
+                <p class="text-gray-600 mb-4">
+                  Historical validation has not been calculated yet.
+                </p>
+                <button 
+                  phx-click="refresh_cache"
+                  class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-semibold"
+                >
+                  Calculate Validation Data
+                </button>
               </div>
             <% end %>
           </div>
+        </div>
+      </div>
+    <% end %>
 
-          <div class="mt-6 p-4 bg-green-50 rounded-lg">
-            <h3 class="font-medium text-green-900 mb-2">Overall Algorithm Accuracy</h3>
-            <p class="text-green-800">
-              <span class="text-2xl font-bold"><%= @validation_result.overall_accuracy %>%</span>
-              - This is why you should trust our 2020s predictions
-            </p>
+    <!-- Cache Status View -->
+    <%= if @view_mode == :cache_status do %>
+      <div class="space-y-6">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-semibold">Cache Status</h2>
+            <button 
+              phx-click="refresh_cache"
+              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              🔄 Refresh Cache
+            </button>
           </div>
+          
+          <%= if @cache_status.cached do %>
+            <div class="space-y-4">
+              <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <h3 class="font-medium text-green-900 mb-2">✅ Cache Status: Active</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <div class="text-gray-600">Last Calculated</div>
+                    <div class="font-semibold">
+                      <%= if @cache_status.last_calculated do %>
+                        <%= Calendar.strftime(@cache_status.last_calculated, "%Y-%m-%d %H:%M UTC") %>
+                      <% else %>
+                        Unknown
+                      <% end %>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-gray-600">Predictions Available</div>
+                    <div class="font-semibold">
+                      <%= if @cache_status.has_predictions, do: "✅ Yes", else: "❌ No" %>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-gray-600">Validation Available</div>
+                    <div class="font-semibold">
+                      <%= if @cache_status.has_validation, do: "✅ Yes", else: "❌ No" %>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <%= if @cache_status.has_validation do %>
+                <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h3 class="font-medium text-blue-900 mb-2">📊 Historical Validation Available</h3>
+                  <p class="text-blue-800">
+                    Algorithm performance data is cached and ready. View in the Historical Validation tab to see detailed accuracy percentages across all decades.
+                  </p>
+                </div>
+              <% else %>
+                <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h3 class="font-medium text-yellow-900 mb-2">⚠️ Validation Data Missing</h3>
+                  <p class="text-yellow-800">
+                    Historical validation data is not cached. Click "Refresh Cache" to calculate validation data for all decades.
+                  </p>
+                </div>
+              <% end %>
+            </div>
+          <% else %>
+            <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <h3 class="font-medium text-red-900 mb-2">❌ Cache Empty</h3>
+              <p class="text-red-800 mb-4">
+                No prediction cache found for the current profile. This will take several minutes to calculate.
+              </p>
+              <button 
+                phx-click="refresh_cache"
+                class="px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 font-semibold"
+              >
+                🚀 Calculate Cache Now
+              </button>
+            </div>
+          <% end %>
         </div>
       </div>
     <% end %>
@@ -559,18 +722,18 @@
     <%= if @view_mode == :comparison && @profile_comparison do %>
       <div class="space-y-6">
         <!-- Best Overall Profile Card -->
-        <%= if @profile_comparison.best_overall do %>
+        <%= if Map.get(@profile_comparison, "best_overall") do %>
           <div class="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-6 text-white shadow-lg">
             <h2 class="text-2xl font-bold mb-2">🏆 Best Overall Profile</h2>
             <div class="flex items-center justify-between">
               <div>
                 <h3 class="text-3xl font-bold">
-                  <%= @profile_comparison.best_overall.profile_name %>
+                  <%= Map.get(@profile_comparison["best_overall"], "profile_name") %>
                 </h3>
-                <p class="text-purple-100 mt-1"><%= @profile_comparison.best_overall.description %></p>
+                <p class="text-purple-100 mt-1"><%= Map.get(@profile_comparison["best_overall"], "description") %></p>
               </div>
               <div class="text-right">
-                <div class="text-4xl font-bold"><%= @profile_comparison.best_overall.accuracy %>%</div>
+                <div class="text-4xl font-bold"><%= Map.get(@profile_comparison["best_overall"], "accuracy") %>%</div>
                 <div class="text-purple-100">Overall Accuracy</div>
               </div>
             </div>
@@ -595,10 +758,10 @@
                     Overall
                   </th>
                   <% # Compute all decades from all profiles to ensure consistent columns %>
-                  <% profiles = @profile_comparison.profiles || [] %>
+                  <% profiles = Map.get(@profile_comparison, "profiles", []) %>
                   <% all_decades =
                     profiles
-                    |> Enum.flat_map(fn p -> Map.keys(p.decade_accuracies || %{}) end)
+                    |> Enum.flat_map(fn p -> Map.keys(Map.get(p, "decade_accuracies", %{})) end)
                     |> Enum.uniq()
                     |> Enum.sort()
                   %>
@@ -614,38 +777,38 @@
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
                 <% # Recompute all_decades for the table body rows %>
-                <% profiles = @profile_comparison.profiles || [] %>
+                <% profiles = Map.get(@profile_comparison, "profiles", []) %>
                 <% all_decades =
                   profiles
-                  |> Enum.flat_map(fn p -> Map.keys(p.decade_accuracies || %{}) end)
+                  |> Enum.flat_map(fn p -> Map.keys(Map.get(p, "decade_accuracies", %{})) end)
                   |> Enum.uniq()
                   |> Enum.sort()
                 %>
-                <%= for profile_data <- @profile_comparison.profiles do %>
+                <%= for profile_data <- Map.get(@profile_comparison, "profiles", []) do %>
                   <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div class="text-sm font-medium text-gray-900">
-                          <%= profile_data.profile.name %>
+                          <%= Map.get(profile_data, "profile_name") %>
                         </div>
                         <div class="text-xs text-gray-500">
-                          <%= profile_data.profile.description %>
+                          <%= Map.get(profile_data, "profile_description") %>
                         </div>
                       </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
                       <span class={[
                         "text-lg font-bold",
-                        accuracy_color(profile_data.overall_accuracy)
+                        accuracy_color(Map.get(profile_data, "overall_accuracy", 0))
                       ]}>
-                        <%= profile_data.overall_accuracy %>%
+                        <%= Map.get(profile_data, "overall_accuracy", 0) %>%
                       </span>
                     </td>
                     <%= for decade <- all_decades do %>
-                      <% accuracy = Map.get(profile_data.decade_accuracies || %{}, decade, 0.0) %>
+                      <% accuracy = Map.get(Map.get(profile_data, "decade_accuracies", %{}), decade, 0.0) %>
                       <% is_best =
-                        Map.get(@profile_comparison.best_per_decade, decade, {nil, 0.0})
-                        |> elem(0) == profile_data.profile.name %>
+                        Map.get(Map.get(@profile_comparison, "best_per_decade", %{}), decade, ["", 0.0])
+                        |> Enum.at(0) == Map.get(profile_data, "profile_name") %>
                       <td class="px-4 py-4 whitespace-nowrap text-center">
                         <span class={[
                           "text-sm",
@@ -672,49 +835,34 @@
         </div>
         
 <!-- Insights Section -->
-        <%= if @profile_comparison.insights do %>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <!-- Most Consistent Profile -->
+        <%= if Map.get(@profile_comparison, "insights") do %>
+          <% insights = Map.get(@profile_comparison, "insights", %{}) %>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Profiles Compared -->
             <div class="bg-blue-50 rounded-lg p-6">
-              <h3 class="text-lg font-semibold text-blue-900 mb-2">Most Consistent</h3>
+              <h3 class="text-lg font-semibold text-blue-900 mb-2">Analysis Summary</h3>
               <p class="text-blue-800">
-                <span class="font-bold">
-                  <%= elem(@profile_comparison.insights.most_consistent, 0) %>
-                </span>
+                <span class="font-bold"><%= Map.get(insights, "profiles_compared", 0) %></span> profiles compared
               </p>
               <p class="text-sm text-blue-600 mt-1">
-                Variance: <%= elem(@profile_comparison.insights.most_consistent, 1) %>%
+                Across <%= Map.get(insights, "total_decades", 0) %> decades
               </p>
             </div>
             
-<!-- Highest Variance Profile -->
-            <div class="bg-yellow-50 rounded-lg p-6">
-              <h3 class="text-lg font-semibold text-yellow-900 mb-2">Most Variable</h3>
-              <p class="text-yellow-800">
-                <span class="font-bold">
-                  <%= elem(@profile_comparison.insights.highest_variance, 0) %>
-                </span>
-              </p>
-              <p class="text-sm text-yellow-600 mt-1">
-                Variance: <%= elem(@profile_comparison.insights.highest_variance, 1) %>%
-              </p>
-            </div>
-            
-<!-- Era Specialists -->
-            <div class="bg-purple-50 rounded-lg p-6">
-              <h3 class="text-lg font-semibold text-purple-900 mb-2">Era Specialists</h3>
-              <div class="space-y-1 text-sm">
-                <div class="text-purple-800">
-                  <span class="font-medium">Classic:</span> <%= @profile_comparison.insights.era_specialists.classic_era.profile %>
-                </div>
-                <div class="text-purple-800">
-                  <span class="font-medium">Golden:</span> <%= @profile_comparison.insights.era_specialists.golden_age.profile %>
-                </div>
-                <div class="text-purple-800">
-                  <span class="font-medium">Modern:</span> <%= @profile_comparison.insights.era_specialists.modern_era.profile %>
-                </div>
+            <!-- Best Profile Info -->
+            <%= if Map.get(@profile_comparison, "best_overall") do %>
+              <div class="bg-green-50 rounded-lg p-6">
+                <h3 class="text-lg font-semibold text-green-900 mb-2">Top Performer</h3>
+                <p class="text-green-800">
+                  <span class="font-bold">
+                    <%= Map.get(@profile_comparison["best_overall"], "profile_name") %>
+                  </span>
+                </p>
+                <p class="text-sm text-green-600 mt-1">
+                  <%= Map.get(@profile_comparison["best_overall"], "accuracy") %>% overall accuracy
+                </p>
               </div>
-            </div>
+            <% end %>
           </div>
         <% end %>
         
@@ -724,12 +872,12 @@
           <p class="text-green-800">
             Based on comprehensive analysis, the
             <strong>
-              <%= (@profile_comparison.best_overall && @profile_comparison.best_overall.profile_name) ||
+              <%= (Map.get(@profile_comparison, "best_overall") && Map.get(@profile_comparison["best_overall"], "profile_name")) ||
                 "Balanced" %>
             </strong>
             profile
-            performs best overall with <%= (@profile_comparison.best_overall &&
-                                           @profile_comparison.best_overall.accuracy) || 0 %>% accuracy.
+            performs best overall with <%= (Map.get(@profile_comparison, "best_overall") &&
+                                           Map.get(@profile_comparison["best_overall"], "accuracy")) || 0 %>% accuracy.
             However, consider using specialized profiles for specific eras to maximize prediction accuracy.
           </p>
         </div>

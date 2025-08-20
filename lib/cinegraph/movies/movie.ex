@@ -4,6 +4,8 @@ defmodule Cinegraph.Movies.Movie do
   import Ecto.Query
   alias Cinegraph.Movies.MovieSlug
 
+  @derive {Jason.Encoder, except: [:__meta__, :movie_credits, :people, :genres, :production_countries, :spoken_languages, :keywords, :production_companies, :movie_videos, :movie_release_dates, :external_metrics, :external_recommendations]}
+  
   @derive {
     Flop.Schema,
     filterable: [
