@@ -132,6 +132,31 @@ defmodule Cinegraph.Cache.PredictionsCache do
   end
 
   @doc """
+  Clear both in-memory and database prediction cache.
+  """
+  def clear_cache do
+    # Clear in-memory cache first
+    in_memory_result = clear_all()
+    
+    # Clear database cache
+    try do
+      case Cinegraph.Repo.delete_all(Cinegraph.Predictions.PredictionCache) do
+        {count, _} ->
+          Logger.info("Cleared #{count} database cache entries")
+          {:ok, count}
+        
+        error ->
+          Logger.error("Failed to clear database cache: #{inspect(error)}")
+          {:error, error}
+      end
+    rescue
+      error ->
+        Logger.error("Failed to clear database cache: #{Exception.message(error)}")
+        {:error, error}
+    end
+  end
+
+  @doc """
   Clear caches for a specific profile.
   """
   def clear_profile(profile_name) when is_binary(profile_name) do

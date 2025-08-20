@@ -102,7 +102,7 @@ defmodule Cinegraph.Workers.PredictionsWorker do
     end
     
     aggregated_validation = %{
-      decade_results: decade_results,
+      decade_results: sanitize_decade_results(decade_results),
       overall_accuracy: overall_accuracy,
       profile_used: profile.name,
       decades_analyzed: length(decades)
@@ -277,13 +277,46 @@ defmodule Cinegraph.Workers.PredictionsWorker do
     Enum.map(breakdown, fn item ->
       %{
         "criterion" => Atom.to_string(item.criterion),
-        "raw_score" => item.raw_score,
-        "weight" => item.weight,
-        "weighted_points" => item.weighted_points
+        "raw_score" => to_float(item.raw_score),
+        "weight" => to_float(item.weight),
+        "weighted_points" => to_float(item.weighted_points)
       }
     end)
   end
   defp format_breakdown(_), do: []
+  
+  defp to_float(%Decimal{} = value), do: Decimal.to_float(value)
+  defp to_float(value) when is_number(value), do: value
+  defp to_float(nil), do: 0.0
+  defp to_float(_), do: 0.0
+  
+  defp sanitize_decade_results(decade_results) do
+    Enum.map(decade_results, &sanitize_decade_result/1)
+  end
+  
+  defp sanitize_decade_result(%{} = result) do
+    result
+    |> Enum.map(fn {key, value} -> {key, sanitize_value(value)} end)
+    |> Map.new()
+  end
+  defp sanitize_decade_result(result), do: result
+  
+  defp sanitize_value(%Decimal{} = value), do: Decimal.to_float(value)
+  defp sanitize_value(value) when is_list(value), do: Enum.map(value, &sanitize_value/1)
+  defp sanitize_value(value) when is_tuple(value) do
+    # Convert tuples to lists for JSON compatibility
+    value
+    |> Tuple.to_list()
+    |> Enum.map(&sanitize_value/1)
+  end
+  defp sanitize_value(%{__struct__: _} = struct) do
+    # Handle structs (like Movie) - convert to map and sanitize
+    struct
+    |> Map.from_struct()
+    |> Map.new(fn {k, v} -> {k, sanitize_value(v)} end)
+  end
+  defp sanitize_value(%{} = value), do: Map.new(value, fn {k, v} -> {k, sanitize_value(v)} end)
+  defp sanitize_value(value), do: value
   
   defp identify_profile_strengths(decade_accuracies, decades) do
     early_decades = Enum.filter(decades, &(&1 <= 1960))
