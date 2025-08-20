@@ -99,7 +99,7 @@
               <span class="text-lg ml-1">accuracy based on historical validation</span>
             </p>
             <p class="text-sm text-blue-600 mt-1">
-              Validated against 1001 Movies from 1950s-2010s
+              Validated against 1001 Movies from 1900s-2020s
             </p>
           </div>
         </div>
@@ -557,7 +557,7 @@
           <div class="bg-gradient-to-r from-green-600 to-blue-600 px-6 py-4">
             <h2 class="text-2xl font-bold text-white">Historical Algorithm Validation</h2>
             <p class="text-green-100 mt-1">
-              Performance tested against 1001 Movies additions from the 1950s-2010s
+              Performance tested against 1001 Movies additions from the 1900s-2020s
             </p>
           </div>
 
@@ -646,12 +646,20 @@
         <div class="bg-white rounded-lg shadow-lg p-6">
           <div class="flex justify-between items-center mb-6">
             <h2 class="text-xl font-semibold">Cache Status</h2>
-            <button 
-              phx-click="refresh_cache"
-              class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              🔄 Refresh Cache
-            </button>
+            <div class="flex space-x-3">
+              <button 
+                phx-click="refresh_cache"
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                🔄 Refresh Cache
+              </button>
+              <button 
+                phx-click="clear_cache"
+                class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                🗑️ Clear Cache
+              </button>
+            </div>
           </div>
           
           <%= if @cache_status.cached do %>
