@@ -182,7 +182,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
         %{
           cached: true,
           last_calculated: db_cache.calculated_at,
-          has_validation: Map.has_key?(db_cache.metadata || %{}, "profile_comparison"),
+          has_validation: Map.has_key?(db_cache.metadata || %{}, "validation_data") || Map.has_key?(db_cache.metadata || %{}, "profile_comparison"),
           has_predictions: map_size(db_cache.movie_scores || %{}) > 0
         }
     end
@@ -310,11 +310,20 @@ defmodule Cinegraph.Cache.PredictionsCache do
           predictions = 
             db_cache.movie_scores
             |> Enum.map(fn {movie_id_str, score_data} ->
-              # Parse movie_id string to integer
-              {movie_id, _} = Integer.parse(movie_id_str)
+              # Parse movie_id string to integer safely
+              movie_id = case Integer.parse(movie_id_str) do
+                {id, ""} -> id
+                {id, _} -> id  # Accept partial parse
+                :error -> 
+                  # Log error and skip this entry
+                  Logger.warning("Invalid movie_id in cache: #{inspect(movie_id_str)}")
+                  nil
+              end
               
-              # Get the total score and calculate likelihood percentage
-              total_score = Map.get(score_data, "total_score", Map.get(score_data, "score", 0))
+              # Skip entries with invalid movie_id
+              if movie_id do
+                # Get the total score and calculate likelihood percentage
+                total_score = Map.get(score_data, "total_score", Map.get(score_data, "score", 0))
               
               # Calculate likelihood percentage from score (0-100 scale)
               # Scores typically range from 0-100, with 50+ being strong candidates
@@ -358,16 +367,20 @@ defmodule Cinegraph.Cache.PredictionsCache do
                   total_score: total_score,
                   breakdown: Map.get(score_data, "breakdown", [])
                 },
-                status: String.to_atom(Map.get(score_data, "status", "future_prediction"))
+                status: parse_status(Map.get(score_data, "status", "future_prediction"))
               }
+              else
+                nil  # Return nil for invalid entries
+              end
             end)
+            |> Enum.reject(&is_nil/1)  # Filter out nil entries
             |> Enum.sort_by(& &1.prediction.score, :desc)
             |> Enum.take(limit)
 
           result = %{
             predictions: predictions,
             total_candidates: map_size(db_cache.movie_scores),
-            algorithm_info: Map.get(db_cache.statistics, "algorithm_info", %{})
+            algorithm_info: Map.get(db_cache.statistics || %{}, "algorithm_info", %{})
           }
 
           # Cache in memory for fast access
@@ -487,4 +500,16 @@ defmodule Cinegraph.Cache.PredictionsCache do
       0.0
     end
   end
+
+  # Safe status parsing with whitelist of allowed atoms
+  defp parse_status(status) when is_binary(status) do
+    case status do
+      "already_added" -> :already_added
+      "future_prediction" -> :future_prediction
+      "confirmed" -> :already_added  # Alias for already_added
+      "predicted" -> :future_prediction  # Alias for future_prediction
+      _ -> :future_prediction  # Default fallback
+    end
+  end
+  defp parse_status(_), do: :future_prediction
 end

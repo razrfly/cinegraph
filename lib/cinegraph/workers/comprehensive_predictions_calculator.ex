@@ -82,6 +82,7 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
               strengths: data.strengths
             }
           end),
+          # best_overall is already a map, not a tuple
           best_overall: result.best_overall,
           # Convert tuples in best_per_decade to lists
           best_per_decade: convert_tuples_to_lists(result.best_per_decade),
