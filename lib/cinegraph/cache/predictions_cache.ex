@@ -429,9 +429,15 @@ defmodule Cinegraph.Cache.PredictionsCache do
         validation_data = Map.get(db_cache.metadata || %{}, "validation_data")
         
         if validation_data do
+          # Wrap validation data in expected structure with overall_accuracy
+          result = %{
+            overall_accuracy: Map.get(validation_data, "accuracy_percentage", 0.0),
+            decade_results: [validation_data]  # Wrap single decade in list
+          }
+          
           # Cache in memory for fast access
-          Cachex.put(@cache_name, cache_key, validation_data, ttl: :timer.hours(24))
-          validation_data
+          Cachex.put(@cache_name, cache_key, result, ttl: :timer.hours(24))
+          result
         else
           # Try to extract from profile_comparison if available
           profile_comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
