@@ -10,6 +10,6 @@ defmodule Cinegraph.Repo.Migrations.UpdatePredictionCacheDecadeConstraint do
 
   def down do
     # Remove the constraint we added
-    drop constraint(:prediction_cache, "prediction_cache_decade_check")
+    drop constraint(:prediction_cache, :prediction_cache_decade_check)
   end
 end
