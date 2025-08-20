@@ -16,15 +16,27 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   Combines predictions with confirmed additions in proper ranking order.
   """
   def predict_2020s_movies(limit \\ 100, profile_or_weights \\ nil) do
+    predict_decade_movies(2020, limit, profile_or_weights)
+  end
+  
+  @doc """
+  Get top movies from ANY decade ranked by likelihood of being added to 1001 Movies lists.
+  This is the generic version that works for all decades.
+  """
+  def predict_decade_movies(decade, limit \\ 100, profile_or_weights \\ nil) do
     # Get the weight profile to use
     profile = get_weight_profile(profile_or_weights)
     weights = ScoringService.profile_to_discovery_weights(profile)
 
-    # Get ALL 2020s movies (both confirmed and unconfirmed) with scoring
+    # Calculate date range for the decade
+    start_date = Date.new!(decade, 1, 1)
+    end_date = Date.new!(decade + 9, 12, 31)
+
+    # Get ALL movies from the decade (both confirmed and unconfirmed) with scoring
     all_movies_query =
       from m in Movie,
-        where: m.release_date >= ^~D[2020-01-01],
-        where: m.release_date < ^~D[2030-01-01],
+        where: m.release_date >= ^start_date,
+        where: m.release_date <= ^end_date,
         where: m.import_status == "full",
         # Get more candidates for better selection
         limit: 1000
@@ -53,7 +65,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         profile_used: profile.name,
         weights_used: weights,
         criteria_count: 5,
-        decade: "2020s"
+        decade: "#{decade}s"
       }
     }
   end
