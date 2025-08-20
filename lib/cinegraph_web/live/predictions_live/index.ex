@@ -349,6 +349,28 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   end
 
   @impl true
+  def handle_event("clear_cache", _params, socket) do
+    # Clear the prediction cache table
+    case PredictionsCache.clear_cache() do
+      {:ok, count} ->
+        # Update socket assigns to reflect empty cache
+        {:noreply,
+         socket
+         |> assign(:cache_empty, true)
+         |> assign(:cache_status, %{cached: false, has_predictions: false, has_validation: false, last_calculated: nil})
+         |> assign(:predictions_result, %{predictions: [], total_candidates: 0, algorithm_info: %{}})
+         |> assign(:validation_result, %{overall_accuracy: 0, decade_results: []})
+         |> assign(:confirmed_count, 0)
+         |> put_flash(:info, "Cache cleared successfully! #{count} entries removed.")}
+      
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to clear cache: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
   def handle_info({:recalculate_with_profile, profile}, socket) do
     try do
       # Get cached data ONLY - no calculations!
