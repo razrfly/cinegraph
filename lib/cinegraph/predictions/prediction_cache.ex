@@ -25,7 +25,7 @@ defmodule Cinegraph.Predictions.PredictionCache do
     cache
     |> cast(attrs, [:decade, :profile_id, :movie_scores, :statistics, :calculated_at, :metadata])
     |> validate_required([:decade, :profile_id, :movie_scores, :statistics, :calculated_at])
-    |> validate_inclusion(:decade, [1960, 1970, 1980, 1990, 2000, 2010, 2020])
+    |> validate_inclusion(:decade, [1920, 1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020])
     |> unique_constraint([:decade, :profile_id])
   end
   
