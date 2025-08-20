@@ -42,14 +42,14 @@ defmodule Cinegraph.Workers.PredictionsWorker do
     {:ok, _cache} = PredictionCache.upsert_cache(%{
       decade: decade,
       profile_id: profile_id,
-      movie_scores: movie_scores,
-      statistics: statistics,
+      movie_scores: deep_convert_decimals(movie_scores),
+      statistics: deep_convert_decimals(statistics),
       calculated_at: DateTime.utc_now(),
-      metadata: %{
+      metadata: deep_convert_decimals(%{
         "algorithm_info" => predictions_result.algorithm_info,
         "total_candidates" => predictions_result.total_candidates,
         "calculation_timestamp" => DateTime.utc_now()
-      }
+      })
     })
     
     Logger.info("Successfully cached #{map_size(movie_scores)} predictions for decade #{decade}, profile #{profile_id}")
@@ -82,18 +82,34 @@ defmodule Cinegraph.Workers.PredictionsWorker do
     # Collect all decade results from cache
     decade_results = Enum.map(decades, fn decade ->
       cache_key = "validation:#{profile_id}:#{decade}"
-      case Cachex.get(:predictions_cache, cache_key) do
+      result = case Cachex.get(:predictions_cache, cache_key) do
         {:ok, nil} -> 
           # If not in cache, calculate it (shouldn't happen normally)
           HistoricalValidator.validate_decade(decade, profile)
         {:ok, result} -> 
           result
       end
+      # Convert any Decimals in the result immediately
+      if result, do: deep_convert_decimals(result), else: nil
     end)
+    |> Enum.filter(&(&1 != nil))
     
-    # Calculate overall accuracy
-    total_movies = Enum.sum(Enum.map(decade_results, & &1.total_1001_movies))
-    total_correct = Enum.sum(Enum.map(decade_results, & &1.correctly_predicted))
+    # Calculate overall accuracy - access via map keys if needed
+    total_movies = Enum.sum(Enum.map(decade_results, fn result ->
+      case result do
+        %{total_1001_movies: count} -> count
+        %{"total_1001_movies" => count} -> count
+        _ -> 0
+      end
+    end))
+    
+    total_correct = Enum.sum(Enum.map(decade_results, fn result ->
+      case result do
+        %{correctly_predicted: count} -> count
+        %{"correctly_predicted" => count} -> count
+        _ -> 0
+      end
+    end))
     
     overall_accuracy = if total_movies > 0 do
       Float.round(total_correct / total_movies * 100, 1)
@@ -102,10 +118,10 @@ defmodule Cinegraph.Workers.PredictionsWorker do
     end
     
     aggregated_validation = %{
-      decade_results: decade_results,
+      decade_results: decade_results,  # Already converted above
       overall_accuracy: overall_accuracy,
       profile_used: profile.name,
-      decades_analyzed: length(decades)
+      decades_analyzed: length(decade_results)  # Use actual count after filtering
     }
     
     # Update the database cache with validation data
@@ -114,14 +130,14 @@ defmodule Cinegraph.Workers.PredictionsWorker do
         Logger.warning("No prediction cache found for profile #{profile_id}")
       
       db_cache ->
-        updated_metadata = Map.put(db_cache.metadata || %{}, "validation_data", aggregated_validation)
+        updated_metadata = Map.put(db_cache.metadata || %{}, "validation_data", deep_convert_decimals(aggregated_validation))
         PredictionCache.upsert_cache(%{
           decade: 2020,
           profile_id: profile_id,
-          movie_scores: db_cache.movie_scores,
-          statistics: db_cache.statistics,
+          movie_scores: deep_convert_decimals(db_cache.movie_scores),
+          statistics: deep_convert_decimals(db_cache.statistics),
           calculated_at: db_cache.calculated_at,
-          metadata: updated_metadata
+          metadata: deep_convert_decimals(updated_metadata)
         })
         
         # Also cache in memory for fast access
@@ -213,14 +229,14 @@ defmodule Cinegraph.Workers.PredictionsWorker do
         Logger.warning("No prediction cache found for default profile")
       
       db_cache ->
-        updated_metadata = Map.put(db_cache.metadata || %{}, "profile_comparison", profile_comparison)
+        updated_metadata = Map.put(db_cache.metadata || %{}, "profile_comparison", deep_convert_decimals(profile_comparison))
         PredictionCache.upsert_cache(%{
           decade: 2020,
           profile_id: default_profile.id,
-          movie_scores: db_cache.movie_scores,
-          statistics: db_cache.statistics,
+          movie_scores: deep_convert_decimals(db_cache.movie_scores),
+          statistics: deep_convert_decimals(db_cache.statistics),
           calculated_at: db_cache.calculated_at,
-          metadata: updated_metadata
+          metadata: deep_convert_decimals(updated_metadata)
         })
     end
     
@@ -308,4 +324,24 @@ defmodule Cinegraph.Workers.PredictionsWorker do
       0.0
     end
   end
+  
+  # Deep convert all Decimals in any nested structure
+  defp deep_convert_decimals(%Decimal{} = decimal), do: Decimal.to_float(decimal)
+  defp deep_convert_decimals(%DateTime{} = dt), do: dt
+  defp deep_convert_decimals(%Date{} = date), do: date
+  defp deep_convert_decimals(%Time{} = time), do: time
+  defp deep_convert_decimals(%NaiveDateTime{} = ndt), do: ndt
+  defp deep_convert_decimals(map) when is_map(map) and not is_struct(map) do
+    Map.new(map, fn {k, v} -> {k, deep_convert_decimals(v)} end)
+  end
+  defp deep_convert_decimals(list) when is_list(list) do
+    Enum.map(list, &deep_convert_decimals/1)
+  end
+  defp deep_convert_decimals(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&deep_convert_decimals/1)
+    |> List.to_tuple()
+  end
+  defp deep_convert_decimals(value), do: value
 end

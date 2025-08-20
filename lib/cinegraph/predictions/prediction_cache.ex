@@ -78,13 +78,57 @@ defmodule Cinegraph.Predictions.PredictionCache do
   Upsert cache entry for a decade and profile.
   """
   def upsert_cache(attrs) do
+    # Convert any Decimal values to floats before saving
+    safe_attrs = deep_convert_decimals(attrs)
+    
     %__MODULE__{}
-    |> changeset(attrs)
+    |> changeset(safe_attrs)
     |> Repo.insert(
       on_conflict: {:replace_all_except, [:id, :inserted_at]},
       conflict_target: [:decade, :profile_id]
     )
   end
+  
+  # Deep convert all Decimals in any nested structure with more comprehensive coverage
+  defp deep_convert_decimals(%Decimal{} = decimal) do
+    # Add logging to see what we're converting
+    require Logger
+    Logger.debug("Converting Decimal to float: #{inspect(decimal)} -> #{Decimal.to_float(decimal)}")
+    Decimal.to_float(decimal)
+  end
+  
+  # Handle other struct types that might contain Decimals
+  defp deep_convert_decimals(%{__struct__: struct_name} = struct_data) when struct_name not in [DateTime, Date, Time, NaiveDateTime] do
+    # Convert struct to map, process, but keep as map (don't reconstruct struct)
+    require Logger
+    Logger.warning("Found unexpected struct type: #{inspect(struct_name)}, converting to map")
+    
+    struct_data
+    |> Map.from_struct()
+    |> deep_convert_decimals()
+  end
+  
+  defp deep_convert_decimals(%DateTime{} = dt), do: dt
+  defp deep_convert_decimals(%Date{} = date), do: date
+  defp deep_convert_decimals(%Time{} = time), do: time
+  defp deep_convert_decimals(%NaiveDateTime{} = ndt), do: ndt
+  
+  defp deep_convert_decimals(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {k, deep_convert_decimals(v)} end)
+  end
+  
+  defp deep_convert_decimals(list) when is_list(list) do
+    Enum.map(list, &deep_convert_decimals/1)
+  end
+  
+  defp deep_convert_decimals(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&deep_convert_decimals/1)
+    |> List.to_tuple()
+  end
+  
+  defp deep_convert_decimals(value), do: value
   
   @doc """
   Delete cache for a specific decade and profile.

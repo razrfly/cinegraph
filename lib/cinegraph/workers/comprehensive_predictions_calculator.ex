@@ -32,12 +32,12 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
       Enum.reduce(predictions_result.predictions, %{}, fn pred, acc ->
         Map.put(acc, to_string(pred.id), %{
           "title" => pred.title,
-          "score" => pred.prediction.likelihood_percentage, # Already 0-100
+          "score" => convert_to_float(pred.prediction.likelihood_percentage), # Convert in case it's Decimal
           "release_date" => Date.to_iso8601(pred.release_date),
           "year" => pred.year,
           "status" => Atom.to_string(pred.status),
-          "canonical_sources" => pred.movie.canonical_sources || %{},
-          "total_score" => pred.prediction.total_score,
+          "canonical_sources" => deep_convert_decimals(pred.movie.canonical_sources || %{}),
+          "total_score" => convert_to_float(pred.prediction.total_score),
           "breakdown" => format_breakdown(pred.prediction.breakdown)
         })
       end)
@@ -45,7 +45,9 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
     # Step 2: Calculate historical validation for ALL decades
     Logger.info("Calculating historical validation for all decades...")
     validation_result = try do
-      HistoricalValidator.validate_all_decades(profile)
+      result = HistoricalValidator.validate_all_decades(profile)
+      # Convert any Decimals in the validation result
+      if result, do: deep_convert_decimals(result), else: nil
     rescue
       error ->
         Logger.error("Failed to calculate validation: #{inspect(error)}")
@@ -77,13 +79,13 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
               profile_name: profile_map.name,
               profile_id: profile_map.id,
               profile_description: profile_map[:description],
-              overall_accuracy: data.overall_accuracy,
-              decade_accuracies: data.decade_accuracies,
+              overall_accuracy: convert_to_float(data.overall_accuracy),
+              decade_accuracies: convert_decade_accuracies(data.decade_accuracies),
               strengths: data.strengths
             }
           end),
-          # best_overall is already a map, not a tuple
-          best_overall: result.best_overall,
+          # Convert best_overall accuracy if it's a Decimal
+          best_overall: convert_best_overall(result.best_overall),
           # Convert tuples in best_per_decade to lists
           best_per_decade: convert_tuples_to_lists(result.best_per_decade),
           # Also convert tuples in insights
@@ -101,21 +103,21 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
     
     # Build comprehensive metadata
     metadata = %{
-      "algorithm_info" => predictions_result.algorithm_info,
+      "algorithm_info" => deep_convert_decimals(predictions_result.algorithm_info),
       "total_candidates" => predictions_result.total_candidates,
       "calculation_timestamp" => DateTime.utc_now(),
       "validation_data" => validation_result,
       "profile_comparison" => profile_comparison
     }
     
-    # Store everything in database cache
+    # Store everything in database cache with all Decimals converted
     {:ok, _cache} = PredictionCache.upsert_cache(%{
       decade: 2020,
       profile_id: profile_id,
-      movie_scores: movie_scores,
-      statistics: statistics,
+      movie_scores: deep_convert_decimals(movie_scores),
+      statistics: deep_convert_decimals(statistics),
       calculated_at: DateTime.utc_now(),
-      metadata: metadata
+      metadata: deep_convert_decimals(metadata)
     })
     
     Logger.info("Successfully cached comprehensive predictions data")
@@ -178,7 +180,10 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
   end
   
   defp calculate_statistics(predictions) do
-    scores = Enum.map(predictions, & &1.prediction.likelihood_percentage)
+    scores = Enum.map(predictions, fn pred ->
+      score = pred.prediction.likelihood_percentage
+      if is_struct(score, Decimal), do: Decimal.to_float(score), else: score
+    end)
     
     %{
       "total_predictions" => length(predictions),
@@ -213,9 +218,9 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
     Enum.map(breakdown, fn item ->
       %{
         "criterion" => Atom.to_string(item.criterion),
-        "raw_score" => item.raw_score,
-        "weight" => item.weight,
-        "weighted_points" => item.weighted_points
+        "raw_score" => convert_to_float(item.raw_score),
+        "weight" => convert_to_float(item.weight),
+        "weighted_points" => convert_to_float(item.weighted_points)
       }
     end)
   end
@@ -224,7 +229,12 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
   # Convert tuples to lists for JSON encoding
   defp convert_tuples_to_lists(map) when is_map(map) do
     Enum.map(map, fn 
+      {k, {name, %Decimal{} = value}} -> {k, [name, Decimal.to_float(value)]}
       {k, {name, value}} -> {k, [name, value]}
+      {k, %{"accuracy" => %Decimal{} = acc} = v} -> 
+        {k, Map.put(v, "accuracy", Decimal.to_float(acc))}
+      {k, %{accuracy: %Decimal{} = acc} = v} -> 
+        {k, Map.put(v, :accuracy, Decimal.to_float(acc))}
       {k, v} -> {k, v}
     end)
     |> Map.new()
@@ -242,4 +252,53 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
     |> Map.new()
   end
   defp convert_insights_tuples(other), do: other
+  
+  # Convert Decimal to float for JSON encoding
+  defp convert_to_float(%Decimal{} = decimal), do: Decimal.to_float(decimal)
+  defp convert_to_float(value) when is_float(value), do: value
+  defp convert_to_float(value) when is_integer(value), do: value / 1.0
+  defp convert_to_float(_), do: 0.0
+  
+  # Convert best_overall map with possible Decimal values
+  defp convert_best_overall(nil), do: nil
+  defp convert_best_overall(best) when is_map(best) do
+    Map.new(best, fn
+      {"accuracy", %Decimal{} = value} -> {"accuracy", Decimal.to_float(value)}
+      {:accuracy, %Decimal{} = value} -> {:accuracy, Decimal.to_float(value)}
+      {k, v} -> {k, v}
+    end)
+  end
+  defp convert_best_overall(other), do: other
+  
+  # Convert decade accuracies map with Decimal values
+  defp convert_decade_accuracies(nil), do: %{}
+  defp convert_decade_accuracies(accuracies) when is_map(accuracies) do
+    Map.new(accuracies, fn 
+      {decade, %Decimal{} = value} -> {decade, Decimal.to_float(value)}
+      {decade, value} when is_float(value) -> {decade, value}
+      {decade, value} when is_integer(value) -> {decade, value / 1.0}
+      {decade, _} -> {decade, 0.0}
+    end)
+  end
+  defp convert_decade_accuracies(_), do: %{}
+  
+  # Deep convert all Decimals in any nested structure
+  defp deep_convert_decimals(%Decimal{} = decimal), do: Decimal.to_float(decimal)
+  defp deep_convert_decimals(%DateTime{} = dt), do: dt
+  defp deep_convert_decimals(%Date{} = date), do: date
+  defp deep_convert_decimals(%Time{} = time), do: time
+  defp deep_convert_decimals(%NaiveDateTime{} = ndt), do: ndt
+  defp deep_convert_decimals(map) when is_map(map) and not is_struct(map) do
+    Map.new(map, fn {k, v} -> {k, deep_convert_decimals(v)} end)
+  end
+  defp deep_convert_decimals(list) when is_list(list) do
+    Enum.map(list, &deep_convert_decimals/1)
+  end
+  defp deep_convert_decimals(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&deep_convert_decimals/1)
+    |> List.to_tuple()
+  end
+  defp deep_convert_decimals(value), do: value
 end

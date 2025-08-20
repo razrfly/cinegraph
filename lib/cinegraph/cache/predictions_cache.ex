@@ -465,27 +465,48 @@ defmodule Cinegraph.Cache.PredictionsCache do
   end
 
   defp check_database_for_profile_comparison(cache_key) do
-    # Try to get from database cache metadata
-    default_profile = get_default_profile()
+    # Aggregate profile comparison data from all available profile caches
+    comparison = aggregate_profile_comparisons()
     
-    if default_profile do
-      case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, default_profile.id) do
-        nil -> 
-          Logger.info("No database cache found for profile comparison")
-          nil
-        db_cache ->
-          comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
-          if comparison do
-            # Cache in memory for fast access
-            Cachex.put(@cache_name, cache_key, comparison, ttl: :timer.hours(1))
-            comparison
-          else
-            Logger.info("Profile comparison not in database cache")
-            nil
-          end
-      end
+    if comparison do
+      # Cache in memory for fast access
+      Cachex.put(@cache_name, cache_key, comparison, ttl: :timer.hours(6))
+      comparison
     else
+      Logger.info("No profile comparison data found in database cache")
       nil
+    end
+  end
+  
+  defp aggregate_profile_comparisons do
+    # Query all prediction_cache entries that have profile_comparison data
+    import Ecto.Query
+    
+    query = from pc in Cinegraph.Predictions.PredictionCache,
+      where: fragment("? -> 'profile_comparison' IS NOT NULL", pc.metadata),
+      select: {pc.profile_id, pc.metadata}
+    
+    case Cinegraph.Repo.all(query) do
+      [] -> 
+        Logger.info("No profile comparison data found in any cache entries")
+        nil
+        
+      results ->
+        # Extract and merge profile comparison data
+        profiles_data = 
+          results
+          |> Enum.map(fn {_profile_id, metadata} ->
+            Map.get(metadata, "profile_comparison", %{})
+          end)
+          |> Enum.filter(&(map_size(&1) > 0))
+        
+        if length(profiles_data) > 0 do
+          # Use the first complete comparison found (they should all be the same)
+          # as each cache entry contains the full comparison of all profiles
+          hd(profiles_data)
+        else
+          nil
+        end
     end
   end
 
