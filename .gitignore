@@ -60,6 +60,10 @@ Thumbs.db
 # MCP configuration with API keys
 .mcp.json
 
+# Claude configuration files (may contain sensitive data)
+.claude/
+*.backup
+
 
 # Archive directories
 /docs/archive/
