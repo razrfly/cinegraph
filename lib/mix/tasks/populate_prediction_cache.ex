@@ -55,14 +55,15 @@ defmodule Mix.Tasks.PopulatePredictionCache do
     IO.puts("Found #{length(profiles)} active profiles")
     
     total_operations = length(profiles) * length(@decades)
-    current = 0
     
-    for profile <- profiles do
+    Enum.with_index(profiles)
+    |> Enum.each(fn {profile, pi} ->
       IO.puts("\n📊 Processing profile: #{profile.name} (#{profile.id})")
       
-      for decade <- @decades do
-        current = current + 1
-        progress = Float.round(current / total_operations * 100, 1)
+      Enum.with_index(@decades)
+      |> Enum.each(fn {decade, di} ->
+        step = pi * length(@decades) + di + 1
+        progress = Float.round(step / total_operations * 100, 1)
         IO.puts("  [#{progress}%] Decade #{decade}s...")
         
         case populate_decade_for_profile(decade, profile) do
@@ -71,8 +72,8 @@ defmodule Mix.Tasks.PopulatePredictionCache do
           {:error, reason} -> 
             IO.puts("    ❌ Failed: #{reason}")
         end
-      end
-    end
+      end)
+    end)
     
     IO.puts("\n✅ Completed populating prediction cache!")
   end
@@ -135,7 +136,7 @@ defmodule Mix.Tasks.PopulatePredictionCache do
           Map.put(acc, to_string(pred.id), %{
             "title" => pred.title,
             "score" => convert_decimal_to_float(pred.prediction.likelihood_percentage),
-            "release_date" => Date.to_iso8601(pred.release_date),
+            "release_date" => if(pred.release_date, do: Date.to_iso8601(pred.release_date), else: nil),
             "year" => pred.year,
             "status" => Atom.to_string(pred.status),
             "canonical_sources" => pred.movie.canonical_sources || %{},
@@ -144,14 +145,8 @@ defmodule Mix.Tasks.PopulatePredictionCache do
           })
         end)
       
-      # Add simple validation data with realistic mock percentages
-      validation_result = %{
-        decade: decade,
-        accuracy_percentage: mock_accuracy_for_decade(decade, profile.name),
-        correctly_predicted: round(200 * mock_accuracy_for_decade(decade, profile.name) / 100),
-        total_1001_movies: 200,
-        message: "Mock validation data for Profile Comparison feature"
-      }
+      # Calculate REAL validation data from the predictions
+      validation_result = calculate_real_validation(movie_scores, decade)
       
       # Calculate statistics for this decade
       statistics = convert_decimals_to_floats(calculate_statistics(predictions_result.predictions))
@@ -258,40 +253,41 @@ defmodule Mix.Tasks.PopulatePredictionCache do
   defp convert_decimal_to_float(nil), do: 0.0
   defp convert_decimal_to_float(_), do: 0.0
   
-  # Generate realistic mock accuracy data for profile comparison
-  defp mock_accuracy_for_decade(decade, profile_name) do
-    # Base accuracy varies by decade (older = more predictable)
-    base_accuracy = case decade do
-      d when d >= 2010 -> 35.0  # Recent movies harder to predict
-      d when d >= 1990 -> 50.0  # Moderate difficulty
-      d when d >= 1970 -> 65.0  # Established classics
-      d when d >= 1950 -> 75.0  # Very established
-      _ -> 80.0  # Silent era classics
+  # Calculate REAL validation from actual predictions
+  defp calculate_real_validation(movie_scores, decade, top_n \\ 50) do
+    # Get top N predictions sorted by score
+    top_predictions = 
+      movie_scores
+      |> Enum.map(fn {movie_id, data} ->
+        {movie_id, Map.get(data, "score", 0), data}
+      end)
+      |> Enum.sort_by(fn {_id, score, _data} -> score end, :desc)
+      |> Enum.take(top_n)
+    
+    # Count how many are already in 1001 Movies
+    correct_predictions = 
+      top_predictions
+      |> Enum.count(fn {_movie_id, _score, data} ->
+        status = Map.get(data, "status")
+        canonical_sources = Map.get(data, "canonical_sources", %{})
+        
+        # Check if it's already added OR has 1001_movies in canonical sources
+        status == "already_added" || 
+        Map.has_key?(canonical_sources, "1001_movies")
+      end)
+    
+    accuracy_percentage = if top_n > 0 do
+      Float.round(correct_predictions / top_n * 100, 1)
+    else
+      0.0
     end
     
-    # Profile-specific adjustments to show different strengths
-    profile_modifier = case profile_name do
-      "Award Winner" -> 
-        # Better with older acclaimed films
-        if decade < 1980, do: 10.0, else: -5.0
-      "Critics Choice" ->
-        # Consistent across eras
-        0.0
-      "Crowd Pleaser" ->
-        # Better with popular modern films  
-        if decade >= 1980, do: 8.0, else: -8.0
-      "Cult Classic" ->
-        # Mixed performance
-        rem(decade, 30) - 10
-      "Balanced" ->
-        # Slight positive adjustment
-        2.0
-      _ -> 0.0
-    end
-    
-    accuracy = base_accuracy + profile_modifier
-    
-    # Ensure realistic bounds
-    max(20.0, min(85.0, Float.round(accuracy, 1)))
+    %{
+      decade: decade,
+      accuracy_percentage: accuracy_percentage,
+      correctly_predicted: correct_predictions,
+      total_predictions: top_n,
+      message: "Real validation based on actual 1001 Movies list additions"
+    }
   end
 end

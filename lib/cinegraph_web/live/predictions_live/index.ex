@@ -463,30 +463,62 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         decade_accuracies = 
           records
           |> Enum.reduce(%{}, fn record, acc ->
-            # Handle both direct validation data and JSON-encoded validation data
-            validation_data = case record.validation_data do
-              nil -> %{}
-              data when is_binary(data) ->
-                case Jason.decode(data) do
-                  {:ok, decoded} -> decoded
-                  {:error, _} -> %{}
-                end
-              data when is_map(data) -> data
-              _ -> %{}
-            end
-            
-            # Try both string and atom keys for accuracy
-            accuracy = 
+            # Prefer map (from query); tolerate legacy string payloads
+            validation_data =
+              cond do
+                is_map(record.validation_data) -> record.validation_data
+                is_binary(record.validation_data) ->
+                  case Jason.decode(record.validation_data) do
+                    {:ok, decoded} when is_map(decoded) -> decoded
+                    _ -> %{}
+                  end
+                true -> %{}
+              end
+
+            # Extract accuracy from either legacy flat shape or new wrapped shape
+            accuracy_from_wrapper =
+              case Map.get(validation_data, "decade_results") || Map.get(validation_data, :decade_results) do
+                list when is_list(list) ->
+                  list
+                  |> Enum.find_value(fn dr ->
+                    d = Map.get(dr, "decade") || Map.get(dr, :decade)
+                    if d == record.decade do
+                      Map.get(dr, "accuracy_percentage") || Map.get(dr, :accuracy_percentage)
+                    end
+                  end)
+                _ -> nil
+              end
+
+            # First try to get decade-specific accuracy, then fall back to legacy format
+            raw_accuracy =
+              accuracy_from_wrapper ||
               Map.get(validation_data, "accuracy_percentage") ||
-              Map.get(validation_data, :accuracy_percentage) ||
-              # If no validation data, use mock data based on decade for demonstration
-              mock_accuracy_for_decade(record.decade)
+              Map.get(validation_data, :accuracy_percentage)
+
+            # Normalize to float; NO fallback to mock data
+            accuracy =
+              cond do
+                is_float(raw_accuracy) -> raw_accuracy
+                is_integer(raw_accuracy) -> raw_accuracy / 1.0
+                is_binary(raw_accuracy) ->
+                  case Float.parse(raw_accuracy) do
+                    {f, ""} -> f
+                    _ -> nil  # Return nil if no valid accuracy
+                  end
+                function_exported?(Decimal, :to_float, 1) and is_struct(raw_accuracy, Decimal) ->
+                  Decimal.to_float(raw_accuracy)
+                true ->
+                  nil  # Return nil if no valid accuracy
+              end
             
             Map.put(acc, record.decade, accuracy)
           end)
         
-        # Calculate overall accuracy
-        accuracies = Map.values(decade_accuracies)
+        # Calculate overall accuracy (only from non-nil values)
+        accuracies = 
+          Map.values(decade_accuracies)
+          |> Enum.filter(&(&1 != nil))
+        
         overall_accuracy = if length(accuracies) > 0 do
           Float.round(Enum.sum(accuracies) / length(accuracies), 1)
         else
@@ -516,12 +548,32 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       }
     end
     
+    decades =
+      cache_records
+      |> Enum.map(& &1.decade)
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    best_per_decade =
+      decades
+      |> Enum.map(fn decade ->
+        best =
+          profiles_data
+          |> Enum.map(fn p ->
+            {Map.get(p, "profile_name"), Map.get(p, "decade_accuracies", %{}) |> Map.get(decade, 0.0)}
+          end)
+          |> Enum.max_by(fn {_name, acc} -> acc end, fn -> {"", 0.0} end)
+        {decade, Tuple.to_list(best)}
+      end)
+      |> Map.new()
+
     %{
       "profiles" => profiles_data,
       "best_overall" => best_overall,
+      "best_per_decade" => best_per_decade,
       "insights" => %{
         "profiles_compared" => length(profiles_data),
-        "total_decades" => count_unique_decades(cache_records)
+        "total_decades" => length(decades)
       }
     }
   end
@@ -561,26 +613,6 @@ defmodule CinegraphWeb.PredictionsLive.Index do
     |> length()
   end
   
-  # Mock accuracy data for demonstration when validation_data is missing
-  # This simulates different profile strengths across decades
-  defp mock_accuracy_for_decade(decade) do
-    # Simulate realistic accuracy percentages based on decade
-    base_accuracy = case decade do
-      d when d >= 2010 -> 45.0  # Harder to predict recent movies
-      d when d >= 1990 -> 55.0  # Moderate difficulty
-      d when d >= 1970 -> 65.0  # Easier to predict established classics
-      d when d >= 1950 -> 70.0  # Very established classics
-      _ -> 75.0  # Silent era classics are well established
-    end
-    
-    # Add deterministic variance based on decade (instead of random)
-    # This makes different profiles have different strengths
-    variance = rem(decade, 20) - 10  # -10 to +10 based on decade
-    accuracy = base_accuracy + variance
-    
-    # Ensure bounds
-    max(10.0, min(95.0, accuracy))
-  end
 
   # Helper functions
   
