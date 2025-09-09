@@ -833,7 +833,7 @@
                       </td>
                     <% end %>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                      <span class="text-xs text-gray-600"><%= profile_data.strengths %></span>
+                      <span class="text-xs text-gray-600"><%= Map.get(profile_data, "strengths") %></span>
                     </td>
                   </tr>
                 <% end %>

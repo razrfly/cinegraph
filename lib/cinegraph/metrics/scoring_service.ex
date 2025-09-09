@@ -32,8 +32,29 @@ defmodule Cinegraph.Metrics.ScoringService do
   Gets the default weight profile from the database.
   """
   def get_default_profile do
-    Repo.get_by(MetricWeightProfile, is_default: true, active: true) ||
-      get_profile("Balanced")
+    try do
+      Repo.get_by(MetricWeightProfile, is_default: true, active: true) ||
+        get_profile("Balanced")
+    rescue
+      e ->
+        require Logger
+        Logger.error("Failed to load default profile: #{inspect(e)}")
+        # Return a fallback profile with safe defaults
+        %MetricWeightProfile{
+          name: "Fallback",
+          description: "Emergency fallback profile",
+          category_weights: %{
+            "popular_opinion" => 0.20,
+            "awards" => 0.20,
+            "cultural" => 0.20,
+            "people" => 0.20,
+            "financial" => 0.20
+          },
+          weights: %{},
+          active: true,
+          is_default: true
+        }
+    end
   end
 
   @doc """
