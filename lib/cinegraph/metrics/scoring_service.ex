@@ -7,6 +7,8 @@ defmodule Cinegraph.Metrics.ScoringService do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Metrics.MetricWeightProfile
+  
+  require Logger
 
   @doc """
   Gets a weight profile by name from the database.
@@ -36,25 +38,38 @@ defmodule Cinegraph.Metrics.ScoringService do
       Repo.get_by(MetricWeightProfile, is_default: true, active: true) ||
         get_profile("Balanced")
     rescue
-      e ->
-        require Logger
-        Logger.error("Failed to load default profile: #{inspect(e)}")
-        # Return a fallback profile with safe defaults
-        %MetricWeightProfile{
-          name: "Fallback",
-          description: "Emergency fallback profile",
-          category_weights: %{
-            "popular_opinion" => 0.20,
-            "awards" => 0.20,
-            "cultural" => 0.20,
-            "people" => 0.20,
-            "financial" => 0.20
-          },
-          weights: %{},
-          active: true,
-          is_default: true
-        }
+      e in [DBConnection.ConnectionError, Postgrex.Error, Ecto.QueryError] ->
+        Logger.error("Failed to load default profile (DB error): #{inspect(e)}")
+        fallback_profile()
+    else
+      nil ->
+        # No default/Balanced rows found; use fallback to honor non-nil contract
+        Logger.warning("No default or Balanced profile found, using fallback")
+        fallback_profile()
+      profile ->
+        profile
     end
+  end
+
+  # Private helper to create consistent fallback profile
+  defp fallback_profile do
+    # Emit telemetry for ops visibility when fallback is used
+    :telemetry.execute([:cinegraph, :scoring_service, :fallback_profile_used], %{count: 1}, %{})
+    
+    %MetricWeightProfile{
+      name: "Fallback",
+      description: "Emergency fallback profile",
+      category_weights: %{
+        "popular_opinion" => 0.20,
+        "awards" => 0.20,
+        "cultural" => 0.20,
+        "people" => 0.20,
+        "financial" => 0.20
+      },
+      weights: %{},
+      active: true,
+      is_default: true
+    }
   end
 
   @doc """
