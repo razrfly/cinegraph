@@ -257,10 +257,11 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     components = Map.get(movie, :score_components, %{})
     # Use provided weights or fallback to equal weights
     default_weights = %{
-      popular_opinion: 0.25,
-      industry_recognition: 0.25,
-      cultural_impact: 0.25,
-      people_quality: 0.25
+      popular_opinion: 0.30,
+      industry_recognition: 0.20,
+      financial_success: 0.20,
+      cultural_impact: 0.15,
+      people_quality: 0.15
     }
 
     actual_weights = weights || default_weights
@@ -269,44 +270,55 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       %{
         criterion: :popular_opinion,
         raw_score: Float.round(to_float(components[:popular_opinion]) * 100, 1),
-        weight: Map.get(actual_weights, :popular_opinion, 0.25),
+        weight: Map.get(actual_weights, :popular_opinion, 0.30),
         weighted_points:
           Float.round(
             to_float(components[:popular_opinion]) *
-              Map.get(actual_weights, :popular_opinion, 0.25) * 100,
+              Map.get(actual_weights, :popular_opinion, 0.30) * 100,
             1
           )
       },
       %{
         criterion: :industry_recognition,
         raw_score: Float.round(to_float(components[:industry_recognition]) * 100, 1),
-        weight: Map.get(actual_weights, :industry_recognition, 0.2),
+        weight: Map.get(actual_weights, :industry_recognition, 0.20),
         weighted_points:
           Float.round(
             to_float(components[:industry_recognition]) *
-              Map.get(actual_weights, :industry_recognition, 0.2) * 100,
+              Map.get(actual_weights, :industry_recognition, 0.20) * 100,
             1
           )
       },
       %{
         criterion: :cultural_impact,
         raw_score: Float.round(to_float(components[:cultural_impact]) * 100, 1),
-        weight: Map.get(actual_weights, :cultural_impact, 0.2),
+        weight: Map.get(actual_weights, :cultural_impact, 0.15),
         weighted_points:
           Float.round(
             to_float(components[:cultural_impact]) *
-              Map.get(actual_weights, :cultural_impact, 0.2) * 100,
+              Map.get(actual_weights, :cultural_impact, 0.15) * 100,
             1
           )
       },
       %{
         criterion: :people_quality,
         raw_score: Float.round(to_float(components[:people_quality]) * 100, 1),
-        weight: Map.get(actual_weights, :people_quality, 0.2),
+        weight: Map.get(actual_weights, :people_quality, 0.15),
         weighted_points:
           Float.round(
-            to_float(components[:people_quality]) * Map.get(actual_weights, :people_quality, 0.2) *
+            to_float(components[:people_quality]) * Map.get(actual_weights, :people_quality, 0.15) *
               100,
+            1
+          )
+      },
+      %{
+        criterion: :financial_success,
+        raw_score: Float.round(to_float(components[:financial_success]) * 100, 1),
+        weight: Map.get(actual_weights, :financial_success, 0.20),
+        weighted_points:
+          Float.round(
+            to_float(components[:financial_success]) *
+              Map.get(actual_weights, :financial_success, 0.20) * 100,
             1
           )
       }
