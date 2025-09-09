@@ -10,7 +10,7 @@ Repo.delete_all(from mwp in "metric_weight_profiles", where: field(mwp, :is_syst
 weight_profiles = [
   %{
     name: "Balanced",
-    description: "Equal weight across popular opinion, cultural impact, industry recognition, and people quality",
+    description: "Balanced weight across all five criteria: popular opinion (30%), awards (20%), financial success (20%), cultural impact (15%), people quality (15%)",
     weights: %{
       # Popular Opinion (all rating sources)
       "metacritic_metascore" => 1.0,
@@ -43,11 +43,11 @@ weight_profiles = [
       "person_quality_score" => 1.5
     },
     category_weights: %{
-      "popular_opinion" => 0.40,  # 40% (all rating sources combined)
+      "popular_opinion" => 0.30,  # 30% (all rating sources combined)
       "awards" => 0.20,           # 20% (industry recognition)
-      "financial" => 0.00,        # 0% (not used in current scoring)
-      "cultural" => 0.20,         # 20% (cultural impact)
-      "people" => 0.20            # 20% (person quality scores)
+      "financial" => 0.20,        # 20% (financial success)
+      "cultural" => 0.15,         # 15% (cultural impact)
+      "people" => 0.15            # 15% (person quality scores)
     },
     active: true,
     is_default: true,
@@ -210,8 +210,8 @@ now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 Enum.each(weight_profiles, fn profile ->
   weights = profile.category_weights || %{}
   
-  # Check relevant weights (excluding financial which is typically 0)
-  relevant_weights = Map.take(weights, ["popular_opinion", "awards", "cultural", "people"])
+  # Check all weights (now including financial as it's no longer typically 0)
+  relevant_weights = Map.take(weights, ["popular_opinion", "awards", "cultural", "people", "financial"])
   sum = Map.values(relevant_weights) |> Enum.sum()
   
   # Provide detailed validation feedback

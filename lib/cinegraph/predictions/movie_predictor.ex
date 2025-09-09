@@ -192,7 +192,8 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         ),
       cultural_impact: to_float(Map.get(weights, :cultural_impact, 0.0)),
       people_quality:
-        to_float(Map.get(weights, :people_quality, Map.get(weights, :auteur_recognition, 0.0)))
+        to_float(Map.get(weights, :people_quality, Map.get(weights, :auteur_recognition, 0.0))),
+      financial_success: to_float(Map.get(weights, :financial_success, 0.0))
     }
 
     ScoringService.discovery_weights_to_profile(sanitized).category_weights
