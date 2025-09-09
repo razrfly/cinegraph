@@ -458,8 +458,10 @@ defmodule Cinegraph.Cache.PredictionsCache do
         if validation_data do
           # Normalize keys to ensure consistent atom keys
           normalized_validation_data = normalize_validation_keys(validation_data)
-          # Cache in memory for fast access
-          Cachex.put(@cache_name, cache_key, normalized_validation_data, ttl: :timer.hours(24))
+          # Cache in memory for fast access (only if valid)
+          if normalized_validation_data do
+            Cachex.put(@cache_name, cache_key, normalized_validation_data, ttl: :timer.hours(24))
+          end
           normalized_validation_data
         else
           # Try to extract from profile_comparison if available
@@ -503,9 +505,15 @@ defmodule Cinegraph.Cache.PredictionsCache do
                 decades_analyzed: map_size(decade_accuracies)
               }
               
-              # Cache this extracted validation
-              Cachex.put(@cache_name, cache_key, validation_result, ttl: :timer.hours(24))
-              validation_result
+              # Normalize and cache extracted validation (only if valid)
+              case normalize_validation_keys(validation_result) do
+                nil ->
+                  Logger.info("Derived validation from profile_comparison was invalid")
+                  nil
+                normalized ->
+                  Cachex.put(@cache_name, cache_key, normalized, ttl: :timer.hours(24))
+                  normalized
+              end
             else
               Logger.info("Profile not found in comparison data")
               nil
@@ -576,11 +584,12 @@ defmodule Cinegraph.Cache.PredictionsCache do
     
     # Check if data is valid/complete
     if is_valid_validation_data?(overall_accuracy, decade_results) do
+      normalized_decades = normalize_decade_results(decade_results)
       %{
         overall_accuracy: overall_accuracy || 0.0,
-        decade_results: normalize_decade_results(decade_results),
+        decade_results: normalized_decades,
         profile_used: profile_used,
-        decades_analyzed: decades_analyzed
+        decades_analyzed: decades_analyzed || length(normalized_decades)
       }
     else
       # Return nil for invalid data to trigger cache refresh
@@ -597,8 +606,19 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
   defp normalize_decade_results(decade_results) when is_list(decade_results) do
     Enum.map(decade_results, fn result when is_map(result) ->
+      decade_raw = Map.get(result, "decade") || Map.get(result, :decade)
+      decade =
+        cond do
+          is_integer(decade_raw) -> decade_raw
+          is_binary(decade_raw) ->
+            case Integer.parse(decade_raw) do
+              {n, ""} -> n
+              _ -> decade_raw
+            end
+          true -> decade_raw
+        end
       %{
-        decade: Map.get(result, "decade") || Map.get(result, :decade),
+        decade: decade,
         accuracy_percentage: Map.get(result, "accuracy_percentage") || Map.get(result, :accuracy_percentage),
         correctly_predicted: Map.get(result, "correctly_predicted") || Map.get(result, :correctly_predicted),
         total_1001_movies: Map.get(result, "total_1001_movies") || Map.get(result, :total_1001_movies),
