@@ -12,23 +12,26 @@ defmodule CinegraphWeb.PredictionsLive.Index do
     # Load initial data with error handling and caching
     try do
       default_profile = PredictionsCache.get_default_profile()
-      
+
       # Get cached data - these return nil if not cached (no auto-calculation!)
       predictions_result = PredictionsCache.get_predictions(100, default_profile)
       validation_result = PredictionsCache.get_validation(default_profile)
       profile_comparison = PredictionsCache.get_profile_comparison()
       cache_status = PredictionsCache.get_cache_status(default_profile)
-      
+
       # Handle nil results gracefully
-      predictions_result = predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+      predictions_result =
+        predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+
       validation_result = validation_result || %{overall_accuracy: 0, decade_results: []}
-      
-      confirmed_count = if predictions_result.predictions == [] do
-        0
-      else
-        PredictionsCache.get_confirmed_additions_count(predictions_result)
-      end
-      
+
+      confirmed_count =
+        if predictions_result.predictions == [] do
+          0
+        else
+          PredictionsCache.get_confirmed_additions_count(predictions_result)
+        end
+
       # Check if cache is empty or needs refresh based on enhanced status
       cache_empty = predictions_result.predictions == []
       cache_needs_refresh = Map.get(cache_status, :needs_refresh, true)
@@ -45,7 +48,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         end)
       end
 
-      socket_assigns = 
+      socket_assigns =
         socket
         |> assign(:page_title, "2020s Movie Predictions")
         |> assign(:loading, false)
@@ -56,7 +59,10 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         |> assign(:selected_movie, nil)
         |> assign(:current_profile, default_profile)
         |> assign(:available_profiles, ScoringService.get_all_profiles())
-        |> assign(:algorithm_weights, ScoringService.profile_to_discovery_weights(default_profile))
+        |> assign(
+          :algorithm_weights,
+          ScoringService.profile_to_discovery_weights(default_profile)
+        )
         |> assign(:show_weight_tuner, false)
         |> assign(:profile_comparison, profile_comparison)
         |> assign(:show_comparison, false)
@@ -66,14 +72,25 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         |> assign(:cache_status, cache_status)
 
       # Add flash message if cache is empty or needs refresh
-      socket_assigns = cond do
-        cache_empty ->
-          put_flash(socket_assigns, :info, "Cache is empty. Click 'Refresh Cache' to calculate predictions in the background.")
-        cache_needs_refresh ->
-          put_flash(socket_assigns, :warning, "Cache data is incomplete or invalid. Click 'Refresh Cache' to recalculate predictions.")
-        true ->
-          socket_assigns
-      end
+      socket_assigns =
+        cond do
+          cache_empty ->
+            put_flash(
+              socket_assigns,
+              :info,
+              "Cache is empty. Click 'Refresh Cache' to calculate predictions in the background."
+            )
+
+          cache_needs_refresh ->
+            put_flash(
+              socket_assigns,
+              :warning,
+              "Cache data is incomplete or invalid. Click 'Refresh Cache' to recalculate predictions."
+            )
+
+          true ->
+            socket_assigns
+        end
 
       {:ok, socket_assigns}
     rescue
@@ -136,10 +153,11 @@ defmodule CinegraphWeb.PredictionsLive.Index do
            :algorithm_weights,
            ScoringService.profile_to_discovery_weights(default_profile) ||
              %{
-               popular_opinion: 0.25,
-               industry_recognition: 0.25,
-               cultural_impact: 0.25,
-               people_quality: 0.25
+               popular_opinion: 0.20,
+               industry_recognition: 0.20,
+               cultural_impact: 0.20,
+               people_quality: 0.20,
+               financial_success: 0.20
              }
          )
          |> assign(:show_weight_tuner, false)
@@ -253,7 +271,8 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         popular_opinion: parse_param.(params["popular_opinion"]),
         industry_recognition: parse_param.(params["industry_recognition"]),
         cultural_impact: parse_param.(params["cultural_impact"]),
-        people_quality: parse_param.(params["people_quality"])
+        people_quality: parse_param.(params["people_quality"]),
+        financial_success: parse_param.(params["financial_success"])
       }
 
       # Validate weights sum to approximately 1.0
@@ -314,16 +333,19 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
     predictions_result = PredictionsCache.get_predictions(100, default_profile)
     validation_result = PredictionsCache.get_validation(default_profile)
-    
+
     # Handle nil results
-    predictions_result = predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+    predictions_result =
+      predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+
     validation_result = validation_result || %{overall_accuracy: 0, decade_results: []}
-    
-    confirmed_count = if predictions_result.predictions == [] do
-      0
-    else
-      PredictionsCache.get_confirmed_additions_count(predictions_result)
-    end
+
+    confirmed_count =
+      if predictions_result.predictions == [] do
+        0
+      else
+        PredictionsCache.get_confirmed_additions_count(predictions_result)
+      end
 
     {:noreply,
      socket
@@ -343,9 +365,12 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       {:ok, _job} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Cache refresh started! This will take a few minutes to complete in the background.")
+         |> put_flash(
+           :info,
+           "Cache refresh started! This will take a few minutes to complete in the background."
+         )
          |> assign(:cache_refreshing, true)}
-      
+
       {:error, reason} ->
         {:noreply,
          socket
@@ -362,12 +387,21 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         {:noreply,
          socket
          |> assign(:cache_empty, true)
-         |> assign(:cache_status, %{cached: false, has_predictions: false, has_validation: false, last_calculated: nil})
-         |> assign(:predictions_result, %{predictions: [], total_candidates: 0, algorithm_info: %{}})
+         |> assign(:cache_status, %{
+           cached: false,
+           has_predictions: false,
+           has_validation: false,
+           last_calculated: nil
+         })
+         |> assign(:predictions_result, %{
+           predictions: [],
+           total_candidates: 0,
+           algorithm_info: %{}
+         })
          |> assign(:validation_result, %{overall_accuracy: 0, decade_results: []})
          |> assign(:confirmed_count, 0)
          |> put_flash(:info, "Cache cleared successfully! #{count} entries removed.")}
-      
+
       {:error, reason} ->
         {:noreply,
          socket
@@ -382,24 +416,28 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       predictions_result = PredictionsCache.get_predictions(100, profile)
       validation_result = PredictionsCache.get_validation(profile)
       cache_status = PredictionsCache.get_cache_status(profile)
-      
+
       # Handle nil results
-      predictions_result = predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+      predictions_result =
+        predictions_result || %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+
       validation_result = validation_result || %{overall_accuracy: 0, decade_results: []}
-      
-      confirmed_count = if predictions_result.predictions == [] do
-        0
-      else
-        PredictionsCache.get_confirmed_additions_count(predictions_result)
-      end
-      
+
+      confirmed_count =
+        if predictions_result.predictions == [] do
+          0
+        else
+          PredictionsCache.get_confirmed_additions_count(predictions_result)
+        end
+
       cache_empty = predictions_result.predictions == []
-      
-      flash_message = if cache_empty do
-        "No cached data for #{profile.name} profile. Click 'Refresh Cache' to calculate."
-      else
-        "Loaded cached predictions for #{profile.name} profile!"
-      end
+
+      flash_message =
+        if cache_empty do
+          "No cached data for #{profile.name} profile. Click 'Refresh Cache' to calculate."
+        else
+          "Loaded cached predictions for #{profile.name} profile!"
+        end
 
       {:noreply,
        socket
@@ -443,6 +481,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   defp criterion_label(:industry_recognition), do: "Industry Recognition"
   defp criterion_label(:cultural_impact), do: "Cultural Impact"
   defp criterion_label(:people_quality), do: "People Quality"
+  defp criterion_label(:financial_success), do: "Financial Success"
   defp criterion_label(other), do: to_string(other)
 
   defp accuracy_color(percentage) when percentage >= 90, do: "text-green-600"

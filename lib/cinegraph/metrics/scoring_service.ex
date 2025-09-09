@@ -7,7 +7,7 @@ defmodule Cinegraph.Metrics.ScoringService do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Metrics.MetricWeightProfile
-  
+
   require Logger
 
   @doc """
@@ -46,6 +46,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         # No default/Balanced rows found; use fallback to honor non-nil contract
         Logger.warning("No default or Balanced profile found, using fallback")
         fallback_profile()
+
       profile ->
         profile
     end
@@ -55,7 +56,7 @@ defmodule Cinegraph.Metrics.ScoringService do
   defp fallback_profile do
     # Emit telemetry for ops visibility when fallback is used
     :telemetry.execute([:cinegraph, :scoring_service, :fallback_profile_used], %{count: 1}, %{})
-    
+
     %MetricWeightProfile{
       name: "Fallback",
       description: "Emergency fallback profile",
@@ -83,8 +84,13 @@ defmodule Cinegraph.Metrics.ScoringService do
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
     # Use popular_opinion if it exists, otherwise fall back to ratings for backward compatibility
-    popular_weight = get_category_weight(profile, "popular_opinion", 
-                                        get_category_weight(profile, "ratings", 0.4))
+    popular_weight =
+      get_category_weight(
+        profile,
+        "popular_opinion",
+        get_category_weight(profile, "ratings", 0.4)
+      )
+
     financial_weight = get_category_weight(profile, "financial", 0.0)
     cultural_weight = get_category_weight(profile, "cultural", 0.2)
     people_weight = get_category_weight(profile, "people", 0.2)
@@ -93,10 +99,12 @@ defmodule Cinegraph.Metrics.ScoringService do
     %{
       popular_opinion: popular_weight,
       industry_recognition: get_category_weight(profile, "awards", 0.2),
-      # Financial success contributes to cultural impact (box office affects cultural penetration)
-      cultural_impact: cultural_weight + financial_weight * 0.5,
+      # Cultural impact (separate from financial now that we expose both)
+      cultural_impact: cultural_weight,
       # Person quality from directors, actors, writers, etc.
-      people_quality: people_weight
+      people_quality: people_weight,
+      # Financial success as separate dimension for UI control
+      financial_success: financial_weight
     }
   end
 
@@ -108,10 +116,9 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: name,
       description: "Custom weight profile created from discovery UI",
       category_weights: %{
-        "popular_opinion" => Map.get(weights, :popular_opinion, 0.4),
+        "popular_opinion" => Map.get(weights, :popular_opinion, 0.2),
         "awards" => Map.get(weights, :industry_recognition, 0.2),
-        # Financial impact is not directly represented in discovery weights
-        "financial" => Map.get(weights, :financial_impact, 0.0),
+        "financial" => Map.get(weights, :financial_success, 0.2),
         "cultural" => Map.get(weights, :cultural_impact, 0.2),
         "people" => Map.get(weights, :people_quality, 0.2)
       },
@@ -240,10 +247,11 @@ defmodule Cinegraph.Metrics.ScoringService do
 
     if total == 0 do
       %{
-        popular_opinion: 0.25,
-        industry_recognition: 0.25,
-        cultural_impact: 0.25,
-        people_quality: 0.25
+        popular_opinion: 0.20,
+        industry_recognition: 0.20,
+        cultural_impact: 0.20,
+        people_quality: 0.20,
+        financial_success: 0.20
       }
     else
       Map.new(weights, fn {k, v} -> {k, v / total} end)

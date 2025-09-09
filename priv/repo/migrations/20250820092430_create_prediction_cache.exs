@@ -9,7 +9,7 @@ defmodule Cinegraph.Repo.Migrations.CreatePredictionCache do
       add :statistics, :map, default: %{}
       add :calculated_at, :utc_datetime, null: false
       add :metadata, :map, default: %{}
-      
+
       timestamps()
     end
 

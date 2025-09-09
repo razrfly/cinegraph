@@ -18,7 +18,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   def predict_2020s_movies(limit \\ 100, profile_or_weights \\ nil) do
     predict_decade_movies(2020, limit, profile_or_weights)
   end
-  
+
   @doc """
   Get top movies from ANY decade ranked by likelihood of being added to 1001 Movies lists.
   This is the generic version that works for all decades.
@@ -180,9 +180,10 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   defp convert_ui_weights_to_categories(weights) do
     # Coerce non-numeric values to 0.0 and delegate to ScoringService for consistent mapping
     # Combine critical_acclaim into popular_opinion if it exists
-    pop_opinion_weight = to_float(Map.get(weights, :popular_opinion, 0.0)) +
-                         to_float(Map.get(weights, :critical_acclaim, 0.0))
-    
+    pop_opinion_weight =
+      to_float(Map.get(weights, :popular_opinion, 0.0)) +
+        to_float(Map.get(weights, :critical_acclaim, 0.0))
+
     sanitized = %{
       popular_opinion: pop_opinion_weight,
       industry_recognition:

@@ -151,13 +151,15 @@ defmodule Cinegraph.Movies.MovieScoring do
     metacritic = Map.get(metrics, :metacritic, 0) || 0
     rt_tomatometer = Map.get(metrics, :rt_tomatometer, 0) || 0
 
-    scores = [
-      imdb,
-      tmdb,
-      rt_audience / 10.0,
-      metacritic / 10.0,
-      rt_tomatometer / 10.0
-    ] |> Enum.filter(&(&1 > 0))
+    scores =
+      [
+        imdb,
+        tmdb,
+        rt_audience / 10.0,
+        metacritic / 10.0,
+        rt_tomatometer / 10.0
+      ]
+      |> Enum.filter(&(&1 > 0))
 
     if length(scores) > 0 do
       Enum.sum(scores) / length(scores)
