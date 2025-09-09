@@ -139,14 +139,18 @@ defmodule Cinegraph.Metrics.ScoringService do
     normalized_weights = normalize_weights(discovery_weights)
     min_score = Map.get(options, :min_score, 0.0)
 
+    # Drop financial_success for query execution since SQL fragments only handle 4 dimensions
+    # TODO: In the future, integrate financial data joins and scoring fragments
+    query_weights = Map.drop(normalized_weights, [:financial_success])
+
     # Use the same query structure as DiscoveryScoringSimple but with database weights
     query
     |> join_external_metrics()
     |> join_festival_data()
     |> join_person_quality_data()
-    |> select_with_scores(normalized_weights)
-    |> filter_by_min_score(normalized_weights, min_score)
-    |> order_by_score(normalized_weights)
+    |> select_with_scores(query_weights)
+    |> filter_by_min_score(query_weights, min_score)
+    |> order_by_score(query_weights)
   end
 
   def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
@@ -166,11 +170,14 @@ defmodule Cinegraph.Metrics.ScoringService do
     discovery_weights = profile_to_discovery_weights(profile)
     normalized_weights = normalize_weights(discovery_weights)
 
+    # Drop financial_success for query execution since SQL fragments only handle 4 dimensions
+    query_weights = Map.drop(normalized_weights, [:financial_success])
+
     query
     |> join_external_metrics()
     |> join_festival_data()
     |> join_person_quality_data()
-    |> select_with_scores(normalized_weights)
+    |> select_with_scores(query_weights)
 
     # Note: No ordering or filtering - just adds the score fields
   end
