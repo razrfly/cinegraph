@@ -29,8 +29,9 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         PredictionsCache.get_confirmed_additions_count(predictions_result)
       end
       
-      # Check if cache is empty and show appropriate message
+      # Check if cache is empty or needs refresh based on enhanced status
       cache_empty = predictions_result.predictions == []
+      cache_needs_refresh = Map.get(cache_status, :needs_refresh, true)
 
       # Optionally enable debug logging during development only (safe in releases)
       if @dev_logging? do
@@ -61,13 +62,17 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         |> assign(:show_comparison, false)
         |> assign(:last_updated, DateTime.utc_now())
         |> assign(:cache_empty, cache_empty)
+        |> assign(:cache_needs_refresh, cache_needs_refresh)
         |> assign(:cache_status, cache_status)
 
-      # Add flash message if cache is empty
-      socket_assigns = if cache_empty do
-        put_flash(socket_assigns, :info, "Cache is empty or stale. Click 'Refresh Cache' to calculate predictions in the background.")
-      else
-        socket_assigns
+      # Add flash message if cache is empty or needs refresh
+      socket_assigns = cond do
+        cache_empty ->
+          put_flash(socket_assigns, :info, "Cache is empty. Click 'Refresh Cache' to calculate predictions in the background.")
+        cache_needs_refresh ->
+          put_flash(socket_assigns, :warning, "Cache data is incomplete or invalid. Click 'Refresh Cache' to recalculate predictions.")
+        true ->
+          socket_assigns
       end
 
       {:ok, socket_assigns}

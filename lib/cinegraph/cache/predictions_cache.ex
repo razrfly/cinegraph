@@ -46,7 +46,14 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
       {:ok, cached_result} ->
         Logger.debug("Cache hit for validation: profile=#{profile.name}")
-        cached_result
+        # Ensure cached results also have normalized keys - if invalid, treat as cache miss
+        case normalize_validation_keys(cached_result) do
+          nil -> 
+            Logger.info("Cached validation data is invalid, checking database cache")
+            check_database_for_validation(profile, cache_key)
+          normalized_data -> 
+            normalized_data
+        end
 
       {:error, reason} ->
         Logger.warning("Cache error for validation: #{inspect(reason)}")
@@ -136,7 +143,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
   """
   def clear_cache do
     # Clear in-memory cache first
-    in_memory_result = clear_all()
+    _in_memory_result = clear_all()
     
     # Clear database cache
     try do
@@ -191,7 +198,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
   end
 
   @doc """
-  Get cache status for a profile including last calculation time.
+  Get cache status for a profile including last calculation time and data validity.
   """
   def get_cache_status(profile) do
     case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, profile.id) do
@@ -200,15 +207,35 @@ defmodule Cinegraph.Cache.PredictionsCache do
           cached: false,
           last_calculated: nil,
           has_validation: false,
-          has_predictions: false
+          has_predictions: false,
+          validation_valid: false,
+          needs_refresh: true
         }
       
       db_cache ->
+        # Check validation data validity
+        validation_data = Map.get(db_cache.metadata || %{}, "validation_data")
+        validation_valid = if validation_data do
+          case normalize_validation_keys(validation_data) do
+            nil -> false
+            _ -> true
+          end
+        else
+          # Check profile_comparison fallback
+          profile_comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
+          not is_nil(profile_comparison)
+        end
+
+        has_predictions = map_size(db_cache.movie_scores || %{}) > 0
+        has_validation = not is_nil(validation_data) or not is_nil(Map.get(db_cache.metadata || %{}, "profile_comparison"))
+        
         %{
           cached: true,
           last_calculated: db_cache.calculated_at,
-          has_validation: Map.has_key?(db_cache.metadata || %{}, "validation_data") || Map.has_key?(db_cache.metadata || %{}, "profile_comparison"),
-          has_predictions: map_size(db_cache.movie_scores || %{}) > 0
+          has_validation: has_validation,
+          has_predictions: has_predictions,
+          validation_valid: validation_valid,
+          needs_refresh: not validation_valid or not has_predictions
         }
     end
   end
@@ -429,9 +456,11 @@ defmodule Cinegraph.Cache.PredictionsCache do
         validation_data = Map.get(db_cache.metadata || %{}, "validation_data")
         
         if validation_data do
+          # Normalize keys to ensure consistent atom keys
+          normalized_validation_data = normalize_validation_keys(validation_data)
           # Cache in memory for fast access
-          Cachex.put(@cache_name, cache_key, validation_data, ttl: :timer.hours(24))
-          validation_data
+          Cachex.put(@cache_name, cache_key, normalized_validation_data, ttl: :timer.hours(24))
+          normalized_validation_data
         else
           # Try to extract from profile_comparison if available
           profile_comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
@@ -537,4 +566,47 @@ defmodule Cinegraph.Cache.PredictionsCache do
     end
   end
   defp parse_status(_), do: :future_prediction
+
+  # Normalize validation data to ensure consistent atom keys and detect invalid data
+  defp normalize_validation_keys(validation_data) when is_map(validation_data) do
+    overall_accuracy = Map.get(validation_data, "overall_accuracy") || Map.get(validation_data, :overall_accuracy)
+    decade_results = Map.get(validation_data, "decade_results") || Map.get(validation_data, :decade_results, [])
+    profile_used = Map.get(validation_data, "profile_used") || Map.get(validation_data, :profile_used)
+    decades_analyzed = Map.get(validation_data, "decades_analyzed") || Map.get(validation_data, :decades_analyzed)
+    
+    # Check if data is valid/complete
+    if is_valid_validation_data?(overall_accuracy, decade_results) do
+      %{
+        overall_accuracy: overall_accuracy || 0.0,
+        decade_results: normalize_decade_results(decade_results),
+        profile_used: profile_used,
+        decades_analyzed: decades_analyzed
+      }
+    else
+      # Return nil for invalid data to trigger cache refresh
+      Logger.warning("Invalid validation cache data detected - missing overall_accuracy or decade_results")
+      nil
+    end
+  end
+
+  # Check if validation data is complete and valid
+  defp is_valid_validation_data?(overall_accuracy, decade_results) do
+    # Must have overall_accuracy and at least some decade results
+    not is_nil(overall_accuracy) && is_list(decade_results) && length(decade_results) > 0
+  end
+
+  defp normalize_decade_results(decade_results) when is_list(decade_results) do
+    Enum.map(decade_results, fn result when is_map(result) ->
+      %{
+        decade: Map.get(result, "decade") || Map.get(result, :decade),
+        accuracy_percentage: Map.get(result, "accuracy_percentage") || Map.get(result, :accuracy_percentage),
+        correctly_predicted: Map.get(result, "correctly_predicted") || Map.get(result, :correctly_predicted),
+        total_1001_movies: Map.get(result, "total_1001_movies") || Map.get(result, :total_1001_movies),
+        false_positive_count: Map.get(result, "false_positive_count") || Map.get(result, :false_positive_count),
+        missed_count: Map.get(result, "missed_count") || Map.get(result, :missed_count),
+        top_predictions: Map.get(result, "top_predictions") || Map.get(result, :top_predictions, [])
+      }
+    end)
+  end
+  defp normalize_decade_results(_), do: []
 end
