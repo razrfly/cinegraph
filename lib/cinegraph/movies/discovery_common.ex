@@ -6,7 +6,8 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   """
 
   @default_weights %{
-    popular_opinion: 0.25,    # Combined all rating sources
+    # Combined all rating sources
+    popular_opinion: 0.25,
     industry_recognition: 0.25,
     cultural_impact: 0.25,
     people_quality: 0.25
@@ -19,25 +20,29 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
     %{
       balanced: @default_weights,
       crowd_pleaser: %{
-        popular_opinion: 0.5,     # Focus on popular ratings
+        # Focus on popular ratings
+        popular_opinion: 0.5,
         industry_recognition: 0.1,
         cultural_impact: 0.2,
         people_quality: 0.2
       },
       critics_choice: %{
-        popular_opinion: 0.5,     # All ratings, but Metacritic/RT weighted higher in implementation
+        # All ratings, but Metacritic/RT weighted higher in implementation
+        popular_opinion: 0.5,
         industry_recognition: 0.2,
         cultural_impact: 0.1,
         people_quality: 0.2
       },
       award_winner: %{
-        popular_opinion: 0.25,    # Some consideration of ratings
+        # Some consideration of ratings
+        popular_opinion: 0.25,
         industry_recognition: 0.5,
         cultural_impact: 0.1,
         people_quality: 0.15
       },
       cult_classic: %{
-        popular_opinion: 0.25,    # Moderate ratings consideration
+        # Moderate ratings consideration
+        popular_opinion: 0.25,
         industry_recognition: 0.1,
         cultural_impact: 0.5,
         people_quality: 0.15

@@ -288,13 +288,14 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     # Map validation weights to database categories
     # If both popular_opinion and critical_acclaim are present (legacy data),
     # only use popular_opinion since it now includes all rating sources
-    ratings_weight = if Map.has_key?(weights, :critical_acclaim) do
-      # Legacy case: ignore critical_acclaim, use only popular_opinion
-      Map.get(weights, :popular_opinion, 0.25)
-    else
-      # Modern case: popular_opinion includes all rating sources
-      Map.get(weights, :popular_opinion, 0.25)
-    end
+    ratings_weight =
+      if Map.has_key?(weights, :critical_acclaim) do
+        # Legacy case: ignore critical_acclaim, use only popular_opinion
+        Map.get(weights, :popular_opinion, 0.25)
+      else
+        # Modern case: popular_opinion includes all rating sources
+        Map.get(weights, :popular_opinion, 0.25)
+      end
 
     %{
       "ratings" => ratings_weight,

@@ -48,10 +48,11 @@ defmodule Cinegraph.Cache.PredictionsCache do
         Logger.debug("Cache hit for validation: profile=#{profile.name}")
         # Ensure cached results also have normalized keys - if invalid, treat as cache miss
         case normalize_validation_keys(cached_result) do
-          nil -> 
+          nil ->
             Logger.info("Cached validation data is invalid, checking database cache")
             check_database_for_validation(profile, cache_key)
-          normalized_data -> 
+
+          normalized_data ->
             normalized_data
         end
 
@@ -144,14 +145,14 @@ defmodule Cinegraph.Cache.PredictionsCache do
   def clear_cache do
     # Clear in-memory cache first
     _in_memory_result = clear_all()
-    
+
     # Clear database cache
     try do
       case Cinegraph.Repo.delete_all(Cinegraph.Predictions.PredictionCache) do
         {count, _} ->
           Logger.info("Cleared #{count} database cache entries")
           {:ok, count}
-        
+
         error ->
           Logger.error("Failed to clear database cache: #{inspect(error)}")
           {:error, error}
@@ -202,7 +203,7 @@ defmodule Cinegraph.Cache.PredictionsCache do
   """
   def get_cache_status(profile) do
     case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, profile.id) do
-      nil -> 
+      nil ->
         %{
           cached: false,
           last_calculated: nil,
@@ -211,24 +212,29 @@ defmodule Cinegraph.Cache.PredictionsCache do
           validation_valid: false,
           needs_refresh: true
         }
-      
+
       db_cache ->
         # Check validation data validity
         validation_data = Map.get(db_cache.metadata || %{}, "validation_data")
-        validation_valid = if validation_data do
-          case normalize_validation_keys(validation_data) do
-            nil -> false
-            _ -> true
+
+        validation_valid =
+          if validation_data do
+            case normalize_validation_keys(validation_data) do
+              nil -> false
+              _ -> true
+            end
+          else
+            # Check profile_comparison fallback
+            profile_comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
+            not is_nil(profile_comparison)
           end
-        else
-          # Check profile_comparison fallback
-          profile_comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
-          not is_nil(profile_comparison)
-        end
 
         has_predictions = map_size(db_cache.movie_scores || %{}) > 0
-        has_validation = not is_nil(validation_data) or not is_nil(Map.get(db_cache.metadata || %{}, "profile_comparison"))
-        
+
+        has_validation =
+          not is_nil(validation_data) or
+            not is_nil(Map.get(db_cache.metadata || %{}, "profile_comparison"))
+
         %{
           cached: true,
           last_calculated: db_cache.calculated_at,
@@ -352,80 +358,99 @@ defmodule Cinegraph.Cache.PredictionsCache do
   defp check_database_for_predictions(decade, profile, limit, cache_key) do
     # Try to get from database cache
     case Cinegraph.Predictions.PredictionCache.get_cached_predictions(decade, profile.id) do
-      nil -> 
-        Logger.info("No database cache found for predictions: decade=#{decade}, profile=#{profile.name}")
+      nil ->
+        Logger.info(
+          "No database cache found for predictions: decade=#{decade}, profile=#{profile.name}"
+        )
+
         nil
+
       db_cache ->
         # Extract and format the predictions from movie_scores
         if db_cache.movie_scores && map_size(db_cache.movie_scores) > 0 do
           # Convert the cached scores into prediction format
-          predictions = 
+          predictions =
             db_cache.movie_scores
             |> Enum.map(fn {movie_id_str, score_data} ->
               # Parse movie_id string to integer safely
-              movie_id = case Integer.parse(movie_id_str) do
-                {id, ""} -> id
-                {id, _} -> id  # Accept partial parse
-                :error -> 
-                  # Log error and skip this entry
-                  Logger.warning("Invalid movie_id in cache: #{inspect(movie_id_str)}")
-                  nil
-              end
-              
+              movie_id =
+                case Integer.parse(movie_id_str) do
+                  {id, ""} ->
+                    id
+
+                  # Accept partial parse
+                  {id, _} ->
+                    id
+
+                  :error ->
+                    # Log error and skip this entry
+                    Logger.warning("Invalid movie_id in cache: #{inspect(movie_id_str)}")
+                    nil
+                end
+
               # Skip entries with invalid movie_id
               if movie_id do
                 # Get the total score and calculate likelihood percentage
                 total_score = Map.get(score_data, "total_score", Map.get(score_data, "score", 0))
-              
-              # Calculate likelihood percentage from score (0-100 scale)
-              # Scores typically range from 0-100, with 50+ being strong candidates
-              likelihood = cond do
-                total_score >= 90 -> 95
-                total_score >= 80 -> 90
-                total_score >= 70 -> 85
-                total_score >= 60 -> 80
-                total_score >= 50 -> 75
-                total_score >= 45 -> 70
-                total_score >= 40 -> 65
-                total_score >= 35 -> 60
-                total_score >= 30 -> 55
-                total_score >= 25 -> 50
-                total_score >= 20 -> 45
-                total_score >= 15 -> 40
-                total_score >= 10 -> 35
-                true -> round(total_score * 3)
-              end
-              
-              # Extract year from release_date for compatibility with MoviePredictor
-              year = case Map.get(score_data, "release_date") do
-                nil -> nil
-                date_str when is_binary(date_str) ->
-                  case Date.from_iso8601(date_str) do
-                    {:ok, date} -> date.year
-                    _ -> nil
+
+                # Calculate likelihood percentage from score (0-100 scale)
+                # Scores typically range from 0-100, with 50+ being strong candidates
+                likelihood =
+                  cond do
+                    total_score >= 90 -> 95
+                    total_score >= 80 -> 90
+                    total_score >= 70 -> 85
+                    total_score >= 60 -> 80
+                    total_score >= 50 -> 75
+                    total_score >= 45 -> 70
+                    total_score >= 40 -> 65
+                    total_score >= 35 -> 60
+                    total_score >= 30 -> 55
+                    total_score >= 25 -> 50
+                    total_score >= 20 -> 45
+                    total_score >= 15 -> 40
+                    total_score >= 10 -> 35
+                    true -> round(total_score * 3)
                   end
-                _ -> nil
-              end
-              
-              # Build prediction structure matching what MoviePredictor returns
-              %{
-                id: movie_id,
-                title: Map.get(score_data, "title", "Unknown"),
-                year: year,  # Add year field to match MoviePredictor
-                release_date: Map.get(score_data, "release_date"),
-                prediction: %{
-                  likelihood_percentage: likelihood,
-                  score: total_score,
-                  total_score: total_score,
-                  breakdown: Map.get(score_data, "breakdown", [])
-                },
-                status: parse_status(Map.get(score_data, "status", "future_prediction"))
-              }
+
+                # Extract year from release_date for compatibility with MoviePredictor
+                year =
+                  case Map.get(score_data, "release_date") do
+                    nil ->
+                      nil
+
+                    date_str when is_binary(date_str) ->
+                      case Date.from_iso8601(date_str) do
+                        {:ok, date} -> date.year
+                        _ -> nil
+                      end
+
+                    _ ->
+                      nil
+                  end
+
+                # Build prediction structure matching what MoviePredictor returns
+                %{
+                  id: movie_id,
+                  title: Map.get(score_data, "title", "Unknown"),
+                  # Add year field to match MoviePredictor
+                  year: year,
+                  release_date: Map.get(score_data, "release_date"),
+                  prediction: %{
+                    likelihood_percentage: likelihood,
+                    score: total_score,
+                    total_score: total_score,
+                    breakdown: Map.get(score_data, "breakdown", [])
+                  },
+                  status: parse_status(Map.get(score_data, "status", "future_prediction"))
+                }
               else
-                nil  # Return nil for invalid entries
+                # Return nil for invalid entries
+                nil
               end
             end)
-            |> Enum.reject(&is_nil/1)  # Filter out nil entries
+            # Filter out nil entries
+            |> Enum.reject(&is_nil/1)
             |> Enum.sort_by(& &1.prediction.score, :desc)
             |> Enum.take(limit)
 
@@ -448,13 +473,14 @@ defmodule Cinegraph.Cache.PredictionsCache do
   defp check_database_for_validation(profile, cache_key) do
     # Try to get validation data from database cache metadata
     case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, profile.id) do
-      nil -> 
+      nil ->
         Logger.info("No database cache found for validation: profile=#{profile.name}")
         nil
+
       db_cache ->
         # Check for validation_data in metadata
         validation_data = Map.get(db_cache.metadata || %{}, "validation_data")
-        
+
         if validation_data do
           # Normalize keys to ensure consistent atom keys
           normalized_validation_data = normalize_validation_keys(validation_data)
@@ -462,54 +488,61 @@ defmodule Cinegraph.Cache.PredictionsCache do
           if normalized_validation_data do
             Cachex.put(@cache_name, cache_key, normalized_validation_data, ttl: :timer.hours(24))
           end
+
           normalized_validation_data
         else
           # Try to extract from profile_comparison if available
           profile_comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
-          
+
           if profile_comparison do
             # Extract validation data from profile comparison
             profiles = Map.get(profile_comparison, "profiles", [])
-            current_profile_data = Enum.find(profiles, fn p -> 
-              Map.get(p, "profile_name") == profile.name 
-            end)
-            
+
+            current_profile_data =
+              Enum.find(profiles, fn p ->
+                Map.get(p, "profile_name") == profile.name
+              end)
+
             if current_profile_data do
               # Create validation result from profile comparison data
               decade_accuracies = Map.get(current_profile_data, "decade_accuracies", %{})
-              
-              decade_results = Enum.map(decade_accuracies, fn {decade, accuracy} ->
-                # We don't have individual counts, so estimate based on overall pattern
-                estimated_total = case decade do
-                  d when d >= 2000 -> 50  # Recent decades have fewer 1001 movies
-                  d when d >= 1970 -> 75
-                  d when d >= 1950 -> 100
-                  _ -> 125
-                end
-                
-                correctly_predicted = round(accuracy * estimated_total / 100)
-                
-                %{
-                  decade: decade,
-                  accuracy_percentage: accuracy,
-                  correctly_predicted: correctly_predicted,
-                  total_1001_movies: estimated_total
-                }
-              end)
-              |> Enum.sort_by(& &1.decade)
-              
+
+              decade_results =
+                Enum.map(decade_accuracies, fn {decade, accuracy} ->
+                  # We don't have individual counts, so estimate based on overall pattern
+                  estimated_total =
+                    case decade do
+                      # Recent decades have fewer 1001 movies
+                      d when d >= 2000 -> 50
+                      d when d >= 1970 -> 75
+                      d when d >= 1950 -> 100
+                      _ -> 125
+                    end
+
+                  correctly_predicted = round(accuracy * estimated_total / 100)
+
+                  %{
+                    decade: decade,
+                    accuracy_percentage: accuracy,
+                    correctly_predicted: correctly_predicted,
+                    total_1001_movies: estimated_total
+                  }
+                end)
+                |> Enum.sort_by(& &1.decade)
+
               validation_result = %{
                 overall_accuracy: Map.get(current_profile_data, "overall_accuracy", 0.0),
                 decade_results: decade_results,
                 profile_used: profile.name,
                 decades_analyzed: map_size(decade_accuracies)
               }
-              
+
               # Normalize and cache extracted validation (only if valid)
               case normalize_validation_keys(validation_result) do
                 nil ->
                   Logger.info("Derived validation from profile_comparison was invalid")
                   nil
+
                 normalized ->
                   Cachex.put(@cache_name, cache_key, normalized, ttl: :timer.hours(24))
                   normalized
@@ -529,14 +562,16 @@ defmodule Cinegraph.Cache.PredictionsCache do
   defp check_database_for_profile_comparison(cache_key) do
     # Try to get from database cache metadata
     default_profile = get_default_profile()
-    
+
     if default_profile do
       case Cinegraph.Predictions.PredictionCache.get_cached_predictions(2020, default_profile.id) do
-        nil -> 
+        nil ->
           Logger.info("No database cache found for profile comparison")
           nil
+
         db_cache ->
           comparison = Map.get(db_cache.metadata || %{}, "profile_comparison")
+
           if comparison do
             # Cache in memory for fast access
             Cachex.put(@cache_name, cache_key, comparison, ttl: :timer.hours(1))
@@ -568,23 +603,35 @@ defmodule Cinegraph.Cache.PredictionsCache do
     case status do
       "already_added" -> :already_added
       "future_prediction" -> :future_prediction
-      "confirmed" -> :already_added  # Alias for already_added
-      "predicted" -> :future_prediction  # Alias for future_prediction
-      _ -> :future_prediction  # Default fallback
+      # Alias for already_added
+      "confirmed" -> :already_added
+      # Alias for future_prediction
+      "predicted" -> :future_prediction
+      # Default fallback
+      _ -> :future_prediction
     end
   end
+
   defp parse_status(_), do: :future_prediction
 
   # Normalize validation data to ensure consistent atom keys and detect invalid data
   defp normalize_validation_keys(validation_data) when is_map(validation_data) do
-    overall_accuracy = Map.get(validation_data, "overall_accuracy") || Map.get(validation_data, :overall_accuracy)
-    decade_results = Map.get(validation_data, "decade_results") || Map.get(validation_data, :decade_results, [])
-    profile_used = Map.get(validation_data, "profile_used") || Map.get(validation_data, :profile_used)
-    decades_analyzed = Map.get(validation_data, "decades_analyzed") || Map.get(validation_data, :decades_analyzed)
-    
+    overall_accuracy =
+      Map.get(validation_data, "overall_accuracy") || Map.get(validation_data, :overall_accuracy)
+
+    decade_results =
+      Map.get(validation_data, "decade_results") || Map.get(validation_data, :decade_results, [])
+
+    profile_used =
+      Map.get(validation_data, "profile_used") || Map.get(validation_data, :profile_used)
+
+    decades_analyzed =
+      Map.get(validation_data, "decades_analyzed") || Map.get(validation_data, :decades_analyzed)
+
     # Check if data is valid/complete
     if is_valid_validation_data?(overall_accuracy, decade_results) do
       normalized_decades = normalize_decade_results(decade_results)
+
       %{
         overall_accuracy: overall_accuracy || 0.0,
         decade_results: normalized_decades,
@@ -593,7 +640,10 @@ defmodule Cinegraph.Cache.PredictionsCache do
       }
     else
       # Return nil for invalid data to trigger cache refresh
-      Logger.warning("Invalid validation cache data detected - missing overall_accuracy or decade_results")
+      Logger.warning(
+        "Invalid validation cache data detected - missing overall_accuracy or decade_results"
+      )
+
       nil
     end
   end
@@ -607,26 +657,38 @@ defmodule Cinegraph.Cache.PredictionsCache do
   defp normalize_decade_results(decade_results) when is_list(decade_results) do
     Enum.map(decade_results, fn result when is_map(result) ->
       decade_raw = Map.get(result, "decade") || Map.get(result, :decade)
+
       decade =
         cond do
-          is_integer(decade_raw) -> decade_raw
+          is_integer(decade_raw) ->
+            decade_raw
+
           is_binary(decade_raw) ->
             case Integer.parse(decade_raw) do
               {n, ""} -> n
               _ -> decade_raw
             end
-          true -> decade_raw
+
+          true ->
+            decade_raw
         end
+
       %{
         decade: decade,
-        accuracy_percentage: Map.get(result, "accuracy_percentage") || Map.get(result, :accuracy_percentage),
-        correctly_predicted: Map.get(result, "correctly_predicted") || Map.get(result, :correctly_predicted),
-        total_1001_movies: Map.get(result, "total_1001_movies") || Map.get(result, :total_1001_movies),
-        false_positive_count: Map.get(result, "false_positive_count") || Map.get(result, :false_positive_count),
+        accuracy_percentage:
+          Map.get(result, "accuracy_percentage") || Map.get(result, :accuracy_percentage),
+        correctly_predicted:
+          Map.get(result, "correctly_predicted") || Map.get(result, :correctly_predicted),
+        total_1001_movies:
+          Map.get(result, "total_1001_movies") || Map.get(result, :total_1001_movies),
+        false_positive_count:
+          Map.get(result, "false_positive_count") || Map.get(result, :false_positive_count),
         missed_count: Map.get(result, "missed_count") || Map.get(result, :missed_count),
-        top_predictions: Map.get(result, "top_predictions") || Map.get(result, :top_predictions, [])
+        top_predictions:
+          Map.get(result, "top_predictions") || Map.get(result, :top_predictions, [])
       }
     end)
   end
+
   defp normalize_decade_results(_), do: []
 end
