@@ -75,11 +75,11 @@ defmodule Cinegraph.Metrics.ScoringService do
 
   @doc """
   Converts a database weight profile to the format expected by the discovery UI.
-  Maps category_weights to the four main dimensions including People quality.
+  Maps category_weights to the five main dimensions including financial success.
 
   Note: 
   - "popular_opinion" category includes all rating sources (IMDb, TMDb, Metacritic, RT)
-  - "financial" category is folded into cultural_impact (box office success affects cultural penetration)
+  - "financial" category represents box office success (revenue, budget, ROI)
   - "people" category represents person quality scores (directors, actors, etc.)
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
@@ -139,18 +139,14 @@ defmodule Cinegraph.Metrics.ScoringService do
     normalized_weights = normalize_weights(discovery_weights)
     min_score = Map.get(options, :min_score, 0.0)
 
-    # Drop financial_success for query execution since SQL fragments only handle 4 dimensions
-    # TODO: In the future, integrate financial data joins and scoring fragments
-    query_weights = Map.drop(normalized_weights, [:financial_success])
-
     # Use the same query structure as DiscoveryScoringSimple but with database weights
     query
     |> join_external_metrics()
     |> join_festival_data()
     |> join_person_quality_data()
-    |> select_with_scores(query_weights)
-    |> filter_by_min_score(query_weights, min_score)
-    |> order_by_score(query_weights)
+    |> select_with_scores(normalized_weights)
+    |> filter_by_min_score(normalized_weights, min_score)
+    |> order_by_score(normalized_weights)
   end
 
   def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
@@ -170,14 +166,11 @@ defmodule Cinegraph.Metrics.ScoringService do
     discovery_weights = profile_to_discovery_weights(profile)
     normalized_weights = normalize_weights(discovery_weights)
 
-    # Drop financial_success for query execution since SQL fragments only handle 4 dimensions
-    query_weights = Map.drop(normalized_weights, [:financial_success])
-
     query
     |> join_external_metrics()
     |> join_festival_data()
     |> join_person_quality_data()
-    |> select_with_scores(query_weights)
+    |> select_with_scores(normalized_weights)
 
     # Note: No ordering or filtering - just adds the score fields
   end
@@ -302,6 +295,20 @@ defmodule Cinegraph.Metrics.ScoringService do
           em_pop.metric_type == "popularity_score",
       as: :popularity
     )
+    |> join(:left, [m], em_budget in "external_metrics",
+      on:
+        em_budget.movie_id == m.id and
+          em_budget.source == "tmdb" and
+          em_budget.metric_type == "budget",
+      as: :budget
+    )
+    |> join(:left, [m], em_revenue in "external_metrics",
+      on:
+        em_revenue.movie_id == m.id and
+          em_revenue.source == "tmdb" and
+          em_revenue.metric_type == "revenue_worldwide",
+      as: :revenue
+    )
   end
 
   defp join_festival_data(query) do
@@ -375,7 +382,9 @@ defmodule Cinegraph.Metrics.ScoringService do
         rotten_tomatoes: rt,
         popularity: pop,
         festivals: f,
-        person_quality: pq
+        person_quality: pq,
+        budget: b,
+        revenue: r
       ],
       %{
         discovery_score:
@@ -384,7 +393,12 @@ defmodule Cinegraph.Metrics.ScoringService do
             ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + 
             ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
             ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
-            ? * COALESCE(COALESCE(?, 0) / 100.0, 0)
+            ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
+            ? * COALESCE(CASE 
+              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+              THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
+              ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
+            END, 0)
             """,
             ^weights.popular_opinion,
             tr.value,
@@ -399,7 +413,14 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             pop.value,
             ^weights.people_quality,
-            pq.avg_person_quality
+            pq.avg_person_quality,
+            ^Map.get(weights, :financial_success, 0.0),
+            b.value,
+            r.value,
+            r.value,
+            r.value,
+            b.value,
+            r.value
           ),
         score_components: %{
           popular_opinion:
@@ -427,6 +448,22 @@ defmodule Cinegraph.Metrics.ScoringService do
             fragment(
               "COALESCE(COALESCE(?, 0) / 100.0, 0)",
               pq.avg_person_quality
+            ),
+          financial_success:
+            fragment(
+              """
+              COALESCE(CASE 
+                WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+                THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
+                ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
+              END, 0)
+              """,
+              b.value,
+              r.value,
+              r.value,
+              r.value,
+              b.value,
+              r.value
             )
         }
       }
@@ -446,7 +483,9 @@ defmodule Cinegraph.Metrics.ScoringService do
         rotten_tomatoes: rt,
         popularity: pop,
         festivals: f,
-        person_quality: pq
+        person_quality: pq,
+        budget: b,
+        revenue: r
       ],
       %{
         discovery_score:
@@ -455,7 +494,12 @@ defmodule Cinegraph.Metrics.ScoringService do
             ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + 
             ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
             ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
-            ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)
+            ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
+            ? * COALESCE(CASE 
+              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+              THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
+              ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
+            END, 0)
             """,
             ^weights.popular_opinion,
             tr.value,
@@ -470,7 +514,14 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             pop.value,
             ^weights.people_quality,
-            pq.avg_person_quality
+            pq.avg_person_quality,
+            ^Map.get(weights, :financial_success, 0.0),
+            b.value,
+            r.value,
+            r.value,
+            r.value,
+            b.value,
+            r.value
           ),
         score_components: %{
           popular_opinion:
@@ -498,6 +549,22 @@ defmodule Cinegraph.Metrics.ScoringService do
             fragment(
               "COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
               pq.avg_person_quality
+            ),
+          financial_success:
+            fragment(
+              """
+              COALESCE(CASE 
+                WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+                THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
+                ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
+              END, 0)
+              """,
+              b.value,
+              r.value,
+              r.value,
+              r.value,
+              b.value,
+              r.value
             )
         }
       }
@@ -517,10 +584,22 @@ defmodule Cinegraph.Metrics.ScoringService do
           rotten_tomatoes: rt,
           popularity: pop,
           festivals: f,
-          person_quality: pq
+          person_quality: pq,
+          budget: b,
+          revenue: r
         ],
         fragment(
-          "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) >= ?",
+          """
+          ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + 
+          ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
+          ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + 
+          ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
+          ? * COALESCE(CASE 
+            WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+            THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
+            ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
+          END, 0) >= ?
+          """,
           ^weights.popular_opinion,
           tr.value,
           ir.value,
@@ -535,6 +614,13 @@ defmodule Cinegraph.Metrics.ScoringService do
           pop.value,
           ^weights.people_quality,
           pq.avg_person_quality,
+          ^Map.get(weights, :financial_success, 0.0),
+          b.value,
+          r.value,
+          r.value,
+          r.value,
+          b.value,
+          r.value,
           ^min_score
         )
       )
@@ -549,10 +635,22 @@ defmodule Cinegraph.Metrics.ScoringService do
           rotten_tomatoes: rt,
           popularity: pop,
           festivals: f,
-          person_quality: pq
+          person_quality: pq,
+          budget: b,
+          revenue: r
         ],
         fragment(
-          "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0) >= ?",
+          """
+          ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + 
+          ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
+          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + 
+          ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
+          ? * COALESCE(CASE 
+            WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+            THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
+            ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
+          END, 0) >= ?
+          """,
           ^weights.popular_opinion,
           tr.value,
           ir.value,
@@ -567,6 +665,13 @@ defmodule Cinegraph.Metrics.ScoringService do
           pop.value,
           ^weights.people_quality,
           pq.avg_person_quality,
+          ^Map.get(weights, :financial_success, 0.0),
+          b.value,
+          r.value,
+          r.value,
+          r.value,
+          b.value,
+          r.value,
           ^min_score
         )
       )
@@ -585,11 +690,23 @@ defmodule Cinegraph.Metrics.ScoringService do
           rotten_tomatoes: rt,
           popularity: pop,
           festivals: f,
-          person_quality: pq
+          person_quality: pq,
+          budget: b,
+          revenue: r
         ],
         desc:
           fragment(
-            "? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
+            """
+            ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + 
+            ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
+            ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + 
+            ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
+            ? * COALESCE(CASE 
+              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+              THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
+              ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
+            END, 0)
+            """,
             ^weights.popular_opinion,
             tr.value,
             ir.value,
@@ -603,7 +720,14 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             pop.value,
             ^weights.people_quality,
-            pq.avg_person_quality
+            pq.avg_person_quality,
+            ^Map.get(weights, :financial_success, 0.0),
+            b.value,
+            r.value,
+            r.value,
+            r.value,
+            b.value,
+            r.value
           )
       )
     else
@@ -617,11 +741,23 @@ defmodule Cinegraph.Metrics.ScoringService do
           rotten_tomatoes: rt,
           popularity: pop,
           festivals: f,
-          person_quality: pq
+          person_quality: pq,
+          budget: b,
+          revenue: r
         ],
         desc:
           fragment(
-            "? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + ? * COALESCE(COALESCE(?, 0) / 100.0, 0)",
+            """
+            ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + 
+            ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
+            ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + 
+            ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
+            ? * COALESCE(CASE 
+              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+              THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
+              ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
+            END, 0)
+            """,
             ^weights.popular_opinion,
             tr.value,
             ir.value,
@@ -635,7 +771,14 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             pop.value,
             ^weights.people_quality,
-            pq.avg_person_quality
+            pq.avg_person_quality,
+            ^Map.get(weights, :financial_success, 0.0),
+            b.value,
+            r.value,
+            r.value,
+            r.value,
+            b.value,
+            r.value
           )
       )
     end
