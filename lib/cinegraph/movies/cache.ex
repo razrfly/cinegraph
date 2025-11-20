@@ -32,7 +32,13 @@ defmodule Cinegraph.Movies.Cache do
         # Cache miss - fetch and store
         Logger.debug("[Movies.Cache] Filter options cache miss, fetching from database")
         options = fetch_fn.()
-        {:ok, true} = Cachex.put(@cache_name, @filter_options_key, options, ttl: @filter_options_ttl)
+
+        case Cachex.put(@cache_name, @filter_options_key, options, ttl: @filter_options_ttl) do
+          {:ok, true} -> :ok
+          {:error, reason} ->
+            Logger.warning("[Movies.Cache] Failed to cache filter options: #{inspect(reason)}")
+        end
+
         options
 
       {:ok, cached_options} ->
@@ -108,7 +114,12 @@ defmodule Cinegraph.Movies.Cache do
 
         case fetch_fn.() do
           {:ok, {movies, meta}} = result ->
-            {:ok, true} = Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @query_results_ttl)
+            case Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @query_results_ttl) do
+              {:ok, true} -> :ok
+              {:error, reason} ->
+                Logger.warning("[Movies.Cache] Failed to cache search results: #{inspect(reason)}")
+            end
+
             result
 
           error ->
@@ -188,7 +199,11 @@ defmodule Cinegraph.Movies.Cache do
         scores = fetch_fn.()
 
         if scores do
-          {:ok, true} = Cachex.put(@cache_name, cache_key, scores, ttl: @discovery_scores_ttl)
+          case Cachex.put(@cache_name, cache_key, scores, ttl: @discovery_scores_ttl) do
+            {:ok, true} -> :ok
+            {:error, reason} ->
+              Logger.warning("[Movies.Cache] Failed to cache discovery scores: #{inspect(reason)}")
+          end
         end
 
         scores
@@ -279,7 +294,6 @@ defmodule Cinegraph.Movies.Cache do
       %{"decade" => "2020"},
       %{"decade" => "2010"},
       %{"rating_preset" => "highly_rated"},
-      %{"festivals" => ["1"]},  # Oscars if it's ID 1
     ]
 
     warmed_keys = Enum.map(popular_queries, fn params ->

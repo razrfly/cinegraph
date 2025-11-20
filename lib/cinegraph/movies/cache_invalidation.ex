@@ -20,7 +20,8 @@ defmodule Cinegraph.Movies.CacheInvalidation do
 
   @doc """
   Invalidate caches when a new movie is imported.
-  Invalidates search results and discovery scores for the movie.
+  Invalidates ALL search results (since new movie affects all result pages)
+  and discovery scores for the specific movie(s).
   """
   def on_movie_import(movie_id) when is_integer(movie_id) do
     Logger.info("[CacheInvalidation] Movie #{movie_id} imported, invalidating caches")
@@ -48,7 +49,8 @@ defmodule Cinegraph.Movies.CacheInvalidation do
 
   @doc """
   Invalidate caches when movie metrics are updated.
-  Only invalidates the specific movie's discovery scores and search results.
+  Invalidates ALL search results (since metrics affect sorting/filtering)
+  and discovery scores for the specific movie(s).
   """
   def on_metrics_updated(movie_id) when is_integer(movie_id) do
     Logger.info("[CacheInvalidation] Metrics updated for movie #{movie_id}")
