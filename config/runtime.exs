@@ -119,6 +119,14 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
+    check_origin: [
+      # Allow connections from actual production domain
+      "https://cinegraph.org",
+      "https://www.cinegraph.org",
+      # Also allow Fly.io internal domain for health checks
+      "https://cinegraph.fly.dev",
+      "https://#{host}"
+    ],
     secret_key_base: secret_key_base
 
   # ## SSL Support
