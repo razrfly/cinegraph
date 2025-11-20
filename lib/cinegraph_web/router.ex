@@ -14,6 +14,10 @@ defmodule CinegraphWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :admin do
+    plug :admin_auth
+  end
+
   scope "/", CinegraphWeb do
     pipe_through :browser
 
@@ -59,8 +63,7 @@ defmodule CinegraphWeb.Router do
   import Oban.Web.Router
 
   scope "/admin" do
-    pipe_through :browser
-    pipe_through :admin_auth
+    pipe_through [:browser, :admin]
 
     oban_dashboard("/oban")
   end
