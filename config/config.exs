@@ -117,8 +117,6 @@ config :cinegraph, Oban,
     # }
   ]
 
-# Supabase configuration will be set in runtime.exs
-
 # Import movie import configuration
 import_config "import.exs"
 

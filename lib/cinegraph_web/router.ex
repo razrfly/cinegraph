@@ -55,6 +55,24 @@ defmodule CinegraphWeb.Router do
   #   pipe_through :api
   # end
 
+  # Admin dashboard - protected with basic auth
+  import Oban.Web.Router
+
+  scope "/admin" do
+    pipe_through :browser
+    pipe_through :admin_auth
+
+    oban_dashboard("/oban")
+  end
+
+  # Basic auth for admin routes
+  defp admin_auth(conn, _opts) do
+    username = System.get_env("ADMIN_USERNAME") || "admin"
+    password = System.get_env("ADMIN_PASSWORD") || raise "ADMIN_PASSWORD must be set"
+
+    Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+  end
+
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:cinegraph, :dev_routes) do
     # If you want to use the LiveDashboard in production, you should put
