@@ -12,24 +12,21 @@ if config_env() == :dev do
   ])
 end
 
-# Configure Supabase
-config :supabase_potion,
-  base_url: env!("SUPABASE_URL", :string!),
-  api_key: env!("SUPABASE_ANON_KEY", :string!)
-
 # Configure TMDb
-config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: env!("TMDB_API_KEY", :string!)
+# Use System.get_env since Dotenvy loads .env into system env in dev,
+# and Fly.io sets env vars directly in production
+# API key is optional at config time - the service will handle missing keys at runtime
+config :cinegraph, Cinegraph.Services.TMDb.Client,
+  api_key: System.get_env("TMDB_API_KEY")
 
-# Configure OMDb (if used)
+# Configure OMDb (optional)
 config :cinegraph, Cinegraph.Services.OMDb.Client,
-  # Optional with default
-  api_key: env!("OMDB_API_KEY", :string, "")
+  api_key: System.get_env("OMDB_API_KEY") || ""
 
-# Configure Zyte API (for Oscar scraping)
+# Configure Zyte API (optional, for Oscar scraping)
 config :cinegraph,
-       :zyte_api_key,
-       # Optional with default
-       env!("ZYTE_API_KEY", :string, "")
+  :zyte_api_key,
+  System.get_env("ZYTE_API_KEY") || ""
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -51,37 +48,49 @@ if System.get_env("PHX_SERVER") do
   config :cinegraph, CinegraphWeb.Endpoint, server: true
 end
 
-# Configure database URL for all environments that have it set
-if config_env() == :dev do
-  config :cinegraph, Cinegraph.Repo,
-    url:
-      env!(
-        "SUPABASE_DATABASE_URL",
-        :string,
-        "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-      )
-else
-  if database_url = System.get_env("SUPABASE_DATABASE_URL") || System.get_env("DATABASE_URL") do
+# Development uses config/dev.exs settings (Postgres.app)
+# Test environment uses DATABASE_URL environment variable
+if config_env() == :test do
+  if database_url = System.get_env("DATABASE_URL") do
     config :cinegraph, Cinegraph.Repo, url: database_url
   end
 end
 
 if config_env() == :prod do
-  database_url =
-    System.get_env("SUPABASE_DATABASE_URL") ||
-      System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable SUPABASE_DATABASE_URL or DATABASE_URL is missing.
-      For example: postgresql://postgres:password@host:5432/database
-      """
+  # Get database credentials from environment variables
+  username = System.get_env("DATABASE_USERNAME") ||
+    raise "environment variable DATABASE_USERNAME is missing"
+  password = System.get_env("DATABASE_PASSWORD") ||
+    raise "environment variable DATABASE_PASSWORD is missing"
+  hostname = System.get_env("DATABASE_HOST") ||
+    raise "environment variable DATABASE_HOST is missing"
+  port_num = String.to_integer(System.get_env("DATABASE_PORT") || "5432")
+  database = System.get_env("DATABASE") || "postgres"
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
+  # Force IPv4 unless IPv6 is explicitly enabled
+  # PlanetScale requires IPv4 for reliable connectivity from Fly.io
+  socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
 
   config :cinegraph, Cinegraph.Repo,
-    # ssl: true,
-    url: database_url,
+    username: username,
+    password: password,
+    hostname: hostname,
+    port: port_num,
+    database: database,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    socket_options: maybe_ipv6
+    socket_options: socket_opts,
+    connect_timeout: 30_000,
+    timeout: 15_000,
+    handshake_timeout: 15_000,
+    ssl: true,
+    ssl_opts: [
+      verify: :verify_peer,
+      cacertfile: CAStore.file_path(),
+      server_name_indication: String.to_charlist(hostname),
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

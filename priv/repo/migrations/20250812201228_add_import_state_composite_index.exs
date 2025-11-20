@@ -3,6 +3,7 @@ defmodule Cinegraph.Repo.Migrations.AddImportStateCompositeIndex do
 
   # Enable concurrent index creation for large tables
   @disable_ddl_transaction true
+  @disable_migration_lock true
 
   def change do
     # Add a composite index for efficient import_state lookups

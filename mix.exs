@@ -37,7 +37,6 @@ defmodule Cinegraph.MixProject do
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
-      {:supabase_potion, "~> 0.6"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.0.0"},
@@ -68,7 +67,8 @@ defmodule Cinegraph.MixProject do
       {:ecto_autoslug_field, "~> 3.1"},
       {:flop, "~> 0.26"},
       {:flop_phoenix, "~> 0.25.3"},
-      {:cachex, "~> 3.6"}
+      {:cachex, "~> 3.6"},
+      {:castore, "~> 1.0"}
     ]
   end
 

@@ -25,14 +25,11 @@ defmodule Cinegraph.Repo.Migrations.AddMoviePredictionIndexes do
                          )
 
     # Index for historical validation queries by decade (reversible)
-    execute(
-      "DROP INDEX IF EXISTS idx_movies_1001_by_decade",
-      "SELECT 1"
-    )
+    execute("DROP INDEX IF EXISTS idx_movies_1001_by_decade")
 
-    create index(:movies, ["FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10", :id],
-             where: "canonical_sources ? '1001_movies'",
-             name: :idx_movies_1001_by_decade
-           )
+    execute(
+      "CREATE INDEX idx_movies_1001_by_decade ON movies ((FLOOR(EXTRACT(YEAR FROM release_date) / 10) * 10), id) WHERE canonical_sources ? '1001_movies'",
+      "DROP INDEX IF EXISTS idx_movies_1001_by_decade"
+    )
   end
 end

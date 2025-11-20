@@ -1,9 +1,12 @@
 import Config
 
 # Configure your database
-# For Supabase local development
+# Using local Postgres.app
 config :cinegraph, Cinegraph.Repo,
-  url: "postgresql://postgres:postgres@127.0.0.1:54332/postgres",
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "cinegraph_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10

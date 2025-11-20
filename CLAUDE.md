@@ -3,6 +3,9 @@
 ## Project Overview
 Cinegraph is an Elixir/Phoenix LiveView application for movie discovery, tracking film industry relationships, and managing awards data.
 
+## ⚠️ IMPORTANT: Version Control Policy
+**DO NOT USE GIT COMMANDS** - The user manages all git operations themselves. Never run `git add`, `git commit`, `git push`, or any other git commands unless explicitly instructed to do so.
+
 ## Tech Stack
 - **Backend**: Elixir 1.18, Phoenix 1.7.17, LiveView
 - **Database**: PostgreSQL (via Supabase)
