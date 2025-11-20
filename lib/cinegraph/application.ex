@@ -17,7 +17,12 @@ defmodule Cinegraph.Application do
       # Start Oban
       {Oban, Application.fetch_env!(:cinegraph, Oban)},
       # Start Cachex for performance caching
-      {Cachex, name: :predictions_cache},
+      Supervisor.child_spec({Cachex, name: :predictions_cache}, id: :predictions_cache),
+      # Start Cachex for movies page caching (Phase 1 optimization)
+      Supervisor.child_spec(
+        {Cachex, name: :movies_cache, limit: 10_000, stats: true},
+        id: :movies_cache
+      ),
       # Start Rate Limiter
       Cinegraph.RateLimiter,
       # Start Import Stats
@@ -41,6 +46,10 @@ defmodule Cinegraph.Application do
           # Wait 5 seconds for app to fully initialize
           Process.sleep(5000)
           Cinegraph.Workers.CacheWarmupWorker.schedule_warmup()
+
+          # Schedule initial movies cache warming (Phase 2 optimization)
+          # This warms the cache for popular queries immediately on startup
+          Cinegraph.Workers.MoviesCacheWarmer.schedule()
         end)
 
         {:ok, pid}

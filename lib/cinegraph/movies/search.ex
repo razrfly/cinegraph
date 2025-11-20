@@ -12,8 +12,20 @@ defmodule Cinegraph.Movies.Search do
   @doc """
   Search movies with validated parameters.
   Returns {movies, meta} tuple where meta contains pagination info.
+  Phase 2: Uses cache to avoid repeated database queries.
   """
   def search_movies(params \\ %{}) do
+    # Use cache wrapper for search results (Phase 2 optimization)
+    Cinegraph.Movies.Cache.get_search_results(params, fn ->
+      search_movies_uncached(params)
+    end)
+  end
+
+  @doc """
+  Search movies without caching (internal use).
+  This is the actual search implementation that gets cached.
+  """
+  def search_movies_uncached(params) do
     with {:ok, validated_params} <- Params.validate(params) do
       # Start with base query for fully imported movies
       base_query = from(m in Movie, where: m.import_status == "full")
@@ -89,21 +101,24 @@ defmodule Cinegraph.Movies.Search do
   @doc """
   Get filter options for the UI.
   Returns all available values for dropdowns and multiselects.
+  Uses cache to avoid repeated database queries (Phase 1 optimization).
   """
   def get_filter_options do
-    %{
-      genres: list_genres(),
-      countries: list_production_countries(),
-      languages: list_spoken_languages(),
-      lists: list_canonical_lists(),
-      decades: generate_decades(),
-      festivals: list_festival_organizations(),
-      sort_options: get_sort_options(),
-      rating_presets: get_rating_presets(),
-      discovery_presets: get_discovery_presets(),
-      award_presets: get_award_presets(),
-      people_roles: get_people_roles()
-    }
+    Cinegraph.Movies.Cache.get_filter_options(fn ->
+      %{
+        genres: list_genres(),
+        countries: list_production_countries(),
+        languages: list_spoken_languages(),
+        lists: list_canonical_lists(),
+        decades: generate_decades(),
+        festivals: list_festival_organizations(),
+        sort_options: get_sort_options(),
+        rating_presets: get_rating_presets(),
+        discovery_presets: get_discovery_presets(),
+        award_presets: get_award_presets(),
+        people_roles: get_people_roles()
+      }
+    end)
   end
 
   @doc """

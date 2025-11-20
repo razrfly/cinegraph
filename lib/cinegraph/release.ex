@@ -42,6 +42,11 @@ defmodule Cinegraph.Release do
   def seed do
     load_app()
 
+    # Start the Repo before running seeds
+    for repo <- repos() do
+      {:ok, _} = repo.start_link(pool_size: 2)
+    end
+
     seed_script = Path.join([priv_dir(@app), "repo", "seeds.exs"])
 
     if File.exists?(seed_script) do
