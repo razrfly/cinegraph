@@ -70,7 +70,7 @@ config :cinegraph, Oban,
   queues: [
     # Movie discovery from TMDb
     tmdb_discovery: 10,
-    # Movie details fetching  
+    # Movie details fetching
     tmdb_details: 20,
     # OMDb data enrichment
     omdb_enrichment: 5,
@@ -93,15 +93,23 @@ config :cinegraph, Oban,
     # Person Quality Score calculations
     metrics: 15,
     # Predictions calculation jobs
-    predictions: 3
+    predictions: 3,
+    # Cache warming for movies page (Phase 2 optimization)
+    cache_warming: 1
   ],
   plugins: [
     # Keep jobs for 7 days
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
-    {Oban.Plugins.Reindexer, schedule: "@daily"}
+    {Oban.Plugins.Reindexer, schedule: "@daily"},
+    # Cache warming cron job (Phase 2 optimization)
+    {Oban.Plugins.Cron,
+     crontab: [
+       # Warm movies page cache every 10 minutes
+       {"*/10 * * * *", Cinegraph.Workers.MoviesCacheWarmer}
+     ]}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format
-    # {Oban.Plugins.Cron, 
+    # {Oban.Plugins.Cron,
     #   crontab: [
     #     # Daily incremental PQS update at 3 AM
     #     {"0 3 * * *", Cinegraph.Workers.PersonQualityScoreWorker, batch: "daily_incremental", trigger: "daily_scheduled", min_credits: 1},
