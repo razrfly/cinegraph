@@ -13,7 +13,7 @@ kill_signal = 'SIGTERM'
   release_command = '/app/bin/migrate'
 
 [env]
-  PHX_HOST = 'cinegraph.fly.dev'
+  PHX_HOST = 'cinegraph.org'
   PORT = '8080'
   DATABASE_HOST = 'eu-central-1.pg.psdb.cloud'
 
