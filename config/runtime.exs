@@ -16,17 +16,15 @@ end
 # Use System.get_env since Dotenvy loads .env into system env in dev,
 # and Fly.io sets env vars directly in production
 # API key is optional at config time - the service will handle missing keys at runtime
-config :cinegraph, Cinegraph.Services.TMDb.Client,
-  api_key: System.get_env("TMDB_API_KEY")
+config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: System.get_env("TMDB_API_KEY")
 
 # Configure OMDb (optional)
-config :cinegraph, Cinegraph.Services.OMDb.Client,
-  api_key: System.get_env("OMDB_API_KEY") || ""
+config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: System.get_env("OMDB_API_KEY") || ""
 
 # Configure Zyte API (optional, for Oscar scraping)
 config :cinegraph,
-  :zyte_api_key,
-  System.get_env("ZYTE_API_KEY") || ""
+       :zyte_api_key,
+       System.get_env("ZYTE_API_KEY") || ""
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -58,12 +56,18 @@ end
 
 if config_env() == :prod do
   # Get database credentials from environment variables
-  username = System.get_env("DATABASE_USERNAME") ||
-    raise "environment variable DATABASE_USERNAME is missing"
-  password = System.get_env("DATABASE_PASSWORD") ||
-    raise "environment variable DATABASE_PASSWORD is missing"
-  hostname = System.get_env("DATABASE_HOST") ||
-    raise "environment variable DATABASE_HOST is missing"
+  username =
+    System.get_env("DATABASE_USERNAME") ||
+      raise "environment variable DATABASE_USERNAME is missing"
+
+  password =
+    System.get_env("DATABASE_PASSWORD") ||
+      raise "environment variable DATABASE_PASSWORD is missing"
+
+  hostname =
+    System.get_env("DATABASE_HOST") ||
+      raise "environment variable DATABASE_HOST is missing"
+
   port_num = String.to_integer(System.get_env("DATABASE_PORT") || "5432")
   database = System.get_env("DATABASE") || "postgres"
 
@@ -104,7 +108,10 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  host =
+    System.get_env("PHX_HOST") ||
+      raise "environment variable PHX_HOST is missing"
+
   port = String.to_integer(System.get_env("PORT") || "4000")
 
   config :cinegraph, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
@@ -124,8 +131,7 @@ if config_env() == :prod do
       "https://cinegraph.org",
       "https://www.cinegraph.org",
       # Also allow Fly.io internal domain for health checks
-      "https://cinegraph.fly.dev",
-      "https://#{host}"
+      "https://cinegraph.fly.dev"
     ],
     secret_key_base: secret_key_base
 
