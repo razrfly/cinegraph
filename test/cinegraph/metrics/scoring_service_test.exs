@@ -53,8 +53,9 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # Should use defaults from fallback (0.20 for each category)
-      assert result.popular_opinion == 0.40  # Falls back to "ratings" default
+      # Should use fallback defaults: popular_opinion falls back to ratings (0.40),
+      # financial defaults to 0.00, others default to 0.20
+      assert result.popular_opinion == 0.40
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
@@ -69,7 +70,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # Should use defaults
+      # Should use same fallback defaults as empty category_weights
       assert result.popular_opinion == 0.40
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20

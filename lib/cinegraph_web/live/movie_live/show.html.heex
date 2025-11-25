@@ -125,8 +125,24 @@
       
 <!-- Cinegraph Score Card -->
       <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 min-w-[300px]">
-        <h3 class="text-white text-lg font-semibold mb-4 text-center">Cinegraph Score</h3>
-        
+        <div class="flex items-center justify-center mb-4">
+          <h3 class="text-white text-lg font-semibold text-center">Cinegraph Score</h3>
+          <button
+            phx-click="show_score_modal"
+            class="ml-2 text-white/60 hover:text-white transition-colors"
+            title="About This Score"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </button>
+        </div>
+
 <!-- Main Score -->
         <div class="text-center mb-6">
           <div class="text-5xl font-bold text-white mb-2">
@@ -144,8 +160,30 @@
         <% score_data = Map.get(@movie, :score_data) %>
         <%= if score_data do %>
           <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="text-white/80 text-sm">Popular Opinion</span>
+            <!-- Popular Opinion -->
+            <div class="flex items-center justify-between group">
+              <div class="flex items-center">
+                <span class="text-white/80 text-sm">Popular Opinion</span>
+                <div class="relative ml-1">
+                  <svg
+                    class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    title="IMDb, TMDb, Metacritic & Rotten Tomatoes ratings"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
+                    <strong>Popular Opinion:</strong> Aggregate of IMDb, TMDb, Metacritic, and Rotten Tomatoes ratings
+                  </div>
+                </div>
+              </div>
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
@@ -160,8 +198,30 @@
               </div>
             </div>
 
-            <div class="flex items-center justify-between">
-              <span class="text-white/80 text-sm">Industry Recognition</span>
+            <!-- Industry Recognition -->
+            <div class="flex items-center justify-between group">
+              <div class="flex items-center">
+                <span class="text-white/80 text-sm">Industry Recognition</span>
+                <div class="relative ml-1">
+                  <svg
+                    class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    title="Festival awards and nominations"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
+                    <strong>Industry Recognition:</strong> Awards and nominations from major film festivals (Cannes, Venice, Berlin, etc.)
+                  </div>
+                </div>
+              </div>
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
@@ -176,8 +236,30 @@
               </div>
             </div>
 
-            <div class="flex items-center justify-between">
-              <span class="text-white/80 text-sm">Cultural Impact</span>
+            <!-- Cultural Impact -->
+            <div class="flex items-center justify-between group">
+              <div class="flex items-center">
+                <span class="text-white/80 text-sm">Cultural Impact</span>
+                <div class="relative ml-1">
+                  <svg
+                    class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    title="Canonical lists and popularity metrics"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
+                    <strong>Cultural Impact:</strong> Presence in canonical film lists (Criterion, AFI, BFI) and long-term popularity
+                  </div>
+                </div>
+              </div>
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
@@ -192,8 +274,30 @@
               </div>
             </div>
 
-            <div class="flex items-center justify-between">
-              <span class="text-white/80 text-sm">People Quality</span>
+            <!-- People Quality -->
+            <div class="flex items-center justify-between group">
+              <div class="flex items-center">
+                <span class="text-white/80 text-sm">People Quality</span>
+                <div class="relative ml-1">
+                  <svg
+                    class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    title="Quality of directors, actors, and crew"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
+                    <strong>People Quality:</strong> Caliber of director, actors, and key crew based on their overall career achievements
+                  </div>
+                </div>
+              </div>
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
@@ -206,8 +310,30 @@
               </div>
             </div>
 
-            <div class="flex items-center justify-between">
-              <span class="text-white/80 text-sm">Financial Performance</span>
+            <!-- Financial Performance -->
+            <div class="flex items-center justify-between group">
+              <div class="flex items-center">
+                <span class="text-white/80 text-sm">Financial Performance</span>
+                <div class="relative ml-1">
+                  <svg
+                    class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    title="Box office revenue and budget performance"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
+                    <strong>Financial Performance:</strong> Box office revenue and return on investment (60% revenue scale, 40% ROI ratio)
+                  </div>
+                </div>
+              </div>
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
@@ -1232,3 +1358,137 @@
     <% end %>
   </div>
 </div>
+
+<!-- About This Score Modal -->
+<%= if @show_score_modal do %>
+  <div
+    class="fixed inset-0 z-50 overflow-y-auto"
+    phx-click="hide_score_modal"
+    phx-window-keydown="hide_score_modal"
+    phx-key="escape"
+  >
+    <div class="flex min-h-screen items-center justify-center p-4">
+      <!-- Backdrop -->
+      <div class="fixed inset-0 bg-black/70 transition-opacity"></div>
+
+      <!-- Modal Content -->
+      <div
+        class="relative bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full p-8 text-white"
+        phx-click="stop_propagation"
+      >
+        <!-- Header -->
+        <div class="flex items-start justify-between mb-6">
+          <h2 class="text-3xl font-bold">About the Cinegraph Score</h2>
+          <button
+            phx-click="hide_score_modal"
+            class="text-white/60 hover:text-white transition-colors"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Intro -->
+        <p class="text-white/80 mb-6 leading-relaxed">
+          The Cinegraph Score is a comprehensive quality metric that evaluates films across five key dimensions, each contributing to the overall score based on configurable weights.
+        </p>
+
+        <!-- Categories -->
+        <div class="space-y-6">
+          <!-- Popular Opinion -->
+          <div class="bg-white/5 rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <div class="w-3 h-3 bg-blue-400 rounded-full mr-2"></div>
+              <h3 class="text-lg font-semibold">Popular Opinion (Default: 20%)</h3>
+            </div>
+            <p class="text-white/70 text-sm leading-relaxed">
+              Aggregates ratings from major review platforms: IMDb user ratings, TMDb community scores, Metacritic metascores, and Rotten Tomatoes critic/audience ratings. Normalized to a 0-10 scale.
+            </p>
+          </div>
+
+          <!-- Industry Recognition -->
+          <div class="bg-white/5 rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <div class="w-3 h-3 bg-yellow-400 rounded-full mr-2"></div>
+              <h3 class="text-lg font-semibold">Industry Recognition (Default: 20%)</h3>
+            </div>
+            <p class="text-white/70 text-sm leading-relaxed">
+              Measures festival awards and nominations from prestigious events including Cannes, Venice, Berlin, Sundance, and other major film festivals. Wins are weighted higher than nominations.
+            </p>
+          </div>
+
+          <!-- Cultural Impact -->
+          <div class="bg-white/5 rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <div class="w-3 h-3 bg-purple-400 rounded-full mr-2"></div>
+              <h3 class="text-lg font-semibold">Cultural Impact (Default: 20%)</h3>
+            </div>
+            <p class="text-white/70 text-sm leading-relaxed">
+              Evaluates presence in canonical film lists (Criterion Collection, National Film Registry, BFI Sight & Sound, AFI Top 100) and long-term popularity metrics. Films that stand the test of time score higher.
+            </p>
+          </div>
+
+          <!-- People Quality -->
+          <div class="bg-white/5 rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <div class="w-3 h-3 bg-red-400 rounded-full mr-2"></div>
+              <h3 class="text-lg font-semibold">People Quality (Default: 20%)</h3>
+            </div>
+            <p class="text-white/70 text-sm leading-relaxed">
+              Assesses the caliber of the director, lead actors, and key crew members based on their overall career achievements, awards, and body of work. Calculated from individual person quality scores.
+            </p>
+          </div>
+
+          <!-- Financial Performance -->
+          <div class="bg-white/5 rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <div class="w-3 h-3 bg-green-400 rounded-full mr-2"></div>
+              <h3 class="text-lg font-semibold">Financial Performance (Default: 20%)</h3>
+            </div>
+            <p class="text-white/70 text-sm leading-relaxed">
+              Combines box office revenue magnitude (60% weight, logarithmic scale normalized to $1B) and return on investment (40% weight, revenue/budget ratio). Captures both commercial success and profitability.
+            </p>
+          </div>
+        </div>
+
+        <!-- Calculation Method -->
+        <div class="mt-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <h3 class="text-lg font-semibold mb-2 flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+              />
+            </svg>
+            Calculation Method
+          </h3>
+          <p class="text-white/70 text-sm leading-relaxed">
+            The overall score is calculated as a weighted average: <code class="bg-white/10 px-1.5 py-0.5 rounded">Score = (Category₁ × Weight₁) + (Category₂ × Weight₂) + ... </code>
+            <br /><br />
+            Default weights use a balanced 20% for each category, but you can customize weights in the
+            <a href="/movies/discover" class="text-blue-400 hover:text-blue-300 underline">Discovery page</a>
+            to match your preferences. All calculations use live data from our database.
+          </p>
+        </div>
+
+        <!-- Close Button -->
+        <div class="mt-6 text-center">
+          <button
+            phx-click="hide_score_modal"
+            class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+          >
+            Got it!
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>

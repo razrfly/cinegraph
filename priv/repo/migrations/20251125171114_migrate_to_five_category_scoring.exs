@@ -175,6 +175,7 @@ defmodule Cinegraph.Repo.Migrations.MigrateToFiveCategoryScoring do
           'people', 0.1,
           'financial', 0.0
         ),
+        description = 'Prioritizes industry recognition (45%), with balanced popular opinion (25%), cultural impact (20%), people quality (10%)',
         updated_at = NOW()
       WHERE name = 'Award Winner'
     """
