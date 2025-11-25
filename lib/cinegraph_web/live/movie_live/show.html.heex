@@ -139,8 +139,8 @@
           </div>
           <div class="text-white/60 text-sm">Overall Quality</div>
         </div>
-        
-<!-- 6-Category Breakdown -->
+
+<!-- 5-Category Breakdown -->
         <% score_data = Map.get(@movie, :score_data) %>
         <%= if score_data do %>
           <div class="space-y-3">
@@ -207,17 +207,17 @@
             </div>
 
             <div class="flex items-center justify-between">
-              <span class="text-white/80 text-sm">Collaboration Intelligence</span>
+              <span class="text-white/80 text-sm">Financial Performance</span>
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
-                    class="h-2 bg-indigo-400 rounded-full"
-                    style={"width: #{score_data.components.collaboration_intelligence * 10}%"}
+                    class="h-2 bg-green-400 rounded-full"
+                    style={"width: #{score_data.components.financial_performance * 10}%"}
                   >
                   </div>
                 </div>
                 <span class="text-white text-sm w-8">
-                  {score_data.components.collaboration_intelligence}
+                  {score_data.components.financial_performance}
                 </span>
               </div>
             </div>

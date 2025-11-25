@@ -21,13 +21,19 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
     # Example: {"imdb_rating" => 1.0, "oscar_wins" => 2.0, "revenue_worldwide" => 0.8}
 
     # Category multipliers (applied after individual weights)
+    # Using the standard 5-category scoring system:
+    # - popular_opinion: Ratings from IMDb, TMDb, Metacritic, Rotten Tomatoes
+    # - awards: Industry recognition through festival wins and nominations
+    # - financial: Revenue and budget performance
+    # - cultural: Canonical sources and cultural impact
+    # - people: Quality scores of cast and crew
     field :category_weights, :map,
       default: %{
-        "ratings" => 1.0,
-        "awards" => 1.0,
-        "financial" => 1.0,
-        "cultural" => 1.0,
-        "people" => 1.0
+        "popular_opinion" => 0.20,
+        "awards" => 0.20,
+        "financial" => 0.20,
+        "cultural" => 0.20,
+        "people" => 0.20
       }
 
     # Usage tracking
@@ -69,7 +75,15 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
         changeset
 
       weights ->
-        valid_categories = ["ratings", "awards", "financial", "cultural", "people"]
+        # Accept both old and new category names for backward compatibility
+        valid_categories = [
+          "popular_opinion",
+          "ratings",
+          "awards",
+          "financial",
+          "cultural",
+          "people"
+        ]
 
         cond do
           not Enum.all?(Map.keys(weights), &(&1 in valid_categories)) ->

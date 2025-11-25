@@ -15,12 +15,19 @@ defmodule Cinegraph.Movies.MovieScoring do
 
   @doc """
   Calculate comprehensive scores for a movie using external metrics,
-  festival data, person quality, and collaboration intelligence.
+  festival data, person quality, and financial performance.
+
+  Uses the standard 5-category scoring system:
+  - Popular Opinion (ratings from IMDb, TMDb, Metacritic, RT)
+  - Industry Recognition (festival wins and nominations)
+  - Cultural Impact (canonical sources and popularity)
+  - People Quality (quality scores of cast and crew)
+  - Financial Performance (revenue and budget data)
   """
   def calculate_movie_scores(movie) do
     # Get external metrics for this movie
     query = """
-    SELECT 
+    SELECT
       MAX(CASE WHEN source = 'imdb' AND metric_type = 'rating_average' THEN value END) as imdb_rating,
       MAX(CASE WHEN source = 'imdb' AND metric_type = 'rating_votes' THEN value END) as imdb_votes,
       MAX(CASE WHEN source = 'tmdb' AND metric_type = 'rating_average' THEN value END) as tmdb_rating,
@@ -28,7 +35,9 @@ defmodule Cinegraph.Movies.MovieScoring do
       MAX(CASE WHEN source = 'metacritic' AND metric_type = 'metascore' THEN value END) as metacritic,
       MAX(CASE WHEN source = 'rotten_tomatoes' AND metric_type = 'tomatometer' THEN value END) as rt_tomatometer,
       MAX(CASE WHEN source = 'rotten_tomatoes' AND metric_type = 'audience_score' THEN value END) as rt_audience,
-      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'popularity_score' THEN value END) as popularity
+      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'popularity_score' THEN value END) as popularity,
+      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'budget' THEN value END) as budget,
+      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'revenue_worldwide' THEN value END) as revenue
     FROM external_metrics
     WHERE movie_id = $1
     """
@@ -45,7 +54,9 @@ defmodule Cinegraph.Movies.MovieScoring do
               :metacritic,
               :rt_tomatometer,
               :rt_audience,
-              :popularity
+              :popularity,
+              :budget,
+              :revenue
             ],
             row
           )
@@ -57,7 +68,7 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     # Get festival data
     festival_query = """
-    SELECT 
+    SELECT
       COUNT(CASE WHEN won = true THEN 1 END) as wins,
       COUNT(*) as nominations
     FROM festival_nominations
@@ -87,46 +98,22 @@ defmodule Cinegraph.Movies.MovieScoring do
         _ -> 50.0
       end
 
-    # Get collaboration score (based on repeat collaborations)
-    collab_query = """
-    SELECT AVG(collaboration_count) as avg_collab
-    FROM (
-      SELECT c.collaboration_count
-      FROM collaborations c
-      JOIN movie_credits mc1 ON mc1.person_id = c.person_a_id
-      JOIN movie_credits mc2 ON mc2.person_id = c.person_b_id
-      WHERE mc1.movie_id = $1 AND mc2.movie_id = $1
-      LIMIT 20
-    ) sub
-    """
-
-    collab_score =
-      case Repo.query(collab_query, [movie.id]) do
-        {:ok, %{rows: [[avg]]}} ->
-          # Convert average collaboration count to a score (more collabs = higher score)
-          avg_val = normalize_number(avg) || 0.0
-          min(100.0, avg_val * 15.0)
-
-        _ ->
-          50.0
-      end
-
     # Calculate component scores (0-10 scale)
     popular_opinion = calculate_popular_opinion(metrics)
     industry_recognition = calculate_industry_recognition(festival_data)
     cultural_impact = calculate_cultural_impact(movie, metrics)
     # Convert from 0-100 to 0-10
     people_quality_score = person_quality / 10.0
-    # Convert from 0-100 to 0-10
-    collaboration_intelligence = collab_score / 10.0
+    # Calculate financial performance score
+    financial_performance = calculate_financial_performance(metrics)
 
-    # Calculate overall score (weighted average)
+    # Calculate overall score (weighted average with equal weights for all 5 categories)
     overall =
-      popular_opinion * 0.45 +
-        industry_recognition * 0.15 +
-        cultural_impact * 0.15 +
-        people_quality_score * 0.15 +
-        collaboration_intelligence * 0.10
+      popular_opinion * 0.20 +
+        industry_recognition * 0.20 +
+        cultural_impact * 0.20 +
+        people_quality_score * 0.20 +
+        financial_performance * 0.20
 
     %{
       overall_score: Float.round(overall, 1),
@@ -135,7 +122,7 @@ defmodule Cinegraph.Movies.MovieScoring do
         industry_recognition: Float.round(industry_recognition, 1),
         cultural_impact: Float.round(cultural_impact, 1),
         people_quality: Float.round(people_quality_score, 1),
-        collaboration_intelligence: Float.round(collaboration_intelligence, 1)
+        financial_performance: Float.round(financial_performance, 1)
       },
       raw_metrics: metrics
     }
@@ -204,6 +191,38 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     # Combine canonical presence and popularity
     min(10.0, canonical_count * 2.0 + popularity_score * 5.0)
+  end
+
+  @doc """
+  Calculate financial performance based on revenue and budget.
+  Returns a score from 0-10 based on:
+  - Revenue magnitude (logarithmic scale to 1B)
+  - ROI when both budget and revenue are available
+  """
+  def calculate_financial_performance(metrics) do
+    budget = Map.get(metrics, :budget, 0) || 0
+    revenue = Map.get(metrics, :revenue, 0) || 0
+
+    cond do
+      # If we have both budget and revenue, calculate ROI-based score
+      budget > 0 and revenue > 0 ->
+        # Revenue component (60% weight): log scale normalized to 1B
+        revenue_score = min(1.0, :math.log(revenue + 1) / :math.log(1_000_000_000))
+
+        # ROI component (40% weight): revenue/budget ratio
+        roi_score = min(1.0, revenue / budget)
+
+        # Combined score on 0-10 scale
+        (revenue_score * 0.6 + roi_score * 0.4) * 10.0
+
+      # If only revenue, use revenue magnitude
+      revenue > 0 ->
+        min(10.0, :math.log(revenue + 1) / :math.log(1_000_000_000) * 10.0)
+
+      # No financial data
+      true ->
+        0.0
+    end
   end
 
   @doc """
