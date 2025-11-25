@@ -23,9 +23,38 @@ defmodule CinegraphWeb.Router do
 
     get "/", PageController, :home
 
-    # Movie routes
+    # ========================================================================
+    # MOVIE VIEWING ROUTES
+    # ========================================================================
+    #
+    # Multiple entry points for viewing movies:
+    #
+    # 1. /movies/:slug (PRIMARY - SEO-friendly canonical URLs)
+    #    Example: /movies/fight-club-1999
+    #    Purpose: Direct display, optimized for search engines
+    #
+    # 2. /movies/tmdb/:tmdb_id (SECONDARY - Programmatic access)
+    #    Example: /movies/tmdb/550
+    #    Purpose: External project integration (eventasaurus, APIs)
+    #    Behavior: Lookup by TMDb ID → Auto-fetch if missing → Redirect to slug
+    #
+    # 3. /movies/imdb/:imdb_id (SECONDARY - Cross-platform compatibility)
+    #    Example: /movies/imdb/tt0137523
+    #    Purpose: Industry-standard IMDb ID linking
+    #    Behavior: Lookup by IMDb ID → TMDb Find → Auto-fetch → Redirect to slug
+    #
+    # All secondary routes redirect to the canonical slug URL to maintain SEO.
+    # ========================================================================
+
     live "/movies", MovieLive.Index, :index
     live "/movies/discover", MovieLive.DiscoveryTuner, :index
+
+    # TMDb ID lookup route - for external project linking
+    live "/movies/tmdb/:tmdb_id", MovieLive.Show, :show_by_tmdb
+
+    # IMDb ID lookup route - for cross-platform compatibility
+    live "/movies/imdb/:imdb_id", MovieLive.Show, :show_by_imdb
+
     # Support both ID and slug for backward compatibility
     live "/movies/:id_or_slug", MovieLive.Show, :show
     live "/movies/:id_or_slug/legacy", MovieLive.ShowLegacy, :show
@@ -70,10 +99,14 @@ defmodule CinegraphWeb.Router do
 
   # Basic auth for admin routes
   defp admin_auth(conn, _opts) do
-    username = System.get_env("ADMIN_USERNAME") || "admin"
-    password = System.get_env("ADMIN_PASSWORD") || raise "ADMIN_PASSWORD must be set"
+    if Mix.env() == :dev do
+      conn
+    else
+      username = System.get_env("ADMIN_USERNAME") || "admin"
+      password = System.get_env("ADMIN_PASSWORD") || raise "ADMIN_PASSWORD must be set"
 
-    Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+      Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+    end
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
