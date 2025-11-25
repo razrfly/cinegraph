@@ -203,7 +203,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   def handle_event("select_movie", %{"movie_id" => movie_id}, socket) do
     {:noreply,
      socket
-     |> push_patch(to: ~p"/predictions?movie_id=#{movie_id}")}
+     |> push_patch(to: ~p"/admin/predictions?movie_id=#{movie_id}")}
   end
 
   @impl true
@@ -211,7 +211,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
     {:noreply,
      socket
      |> assign(:selected_movie, nil)
-     |> push_patch(to: ~p"/predictions")}
+     |> push_patch(to: ~p"/admin/predictions")}
   end
 
   @impl true

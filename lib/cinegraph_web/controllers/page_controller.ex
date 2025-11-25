@@ -6,4 +6,9 @@ defmodule CinegraphWeb.PageController do
     # so skip the default app layout.
     render(conn, :home, layout: false)
   end
+
+  def coming_soon(conn, _params) do
+    # Temporary landing page while app is in development
+    render(conn, :coming_soon, layout: false)
+  end
 end

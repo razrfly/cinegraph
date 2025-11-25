@@ -21,7 +21,7 @@ defmodule CinegraphWeb.Router do
   scope "/", CinegraphWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    get "/", PageController, :coming_soon
 
     # ========================================================================
     # MOVIE VIEWING ROUTES
@@ -68,19 +68,6 @@ defmodule CinegraphWeb.Router do
     live "/collaborations", CollaborationLive.Index, :index
     live "/six-degrees", SixDegreesLive.Index, :index
     live "/directors/:id", DirectorLive.Show, :show
-
-    # Import dashboard
-    live "/imports", ImportDashboardLive, :index
-
-    # Metrics dashboard
-    live "/metrics", MetricsLive.Index, :index
-    live "/metrics/profile/:name", MetricsLive.Index, :profile
-
-    # Festival Events management
-    live "/festival-events", FestivalEventLive.Index, :index
-
-    # Movie Predictions for 1001 Movies list
-    live "/predictions", PredictionsLive.Index, :index
   end
 
   # Other scopes may use custom stacks.
@@ -91,17 +78,29 @@ defmodule CinegraphWeb.Router do
   # Admin dashboard - protected with basic auth
   import Oban.Web.Router
 
-  scope "/admin" do
+  scope "/admin", CinegraphWeb do
     pipe_through [:browser, :admin]
 
+    # Import dashboard
+    live "/imports", ImportDashboardLive, :index
+
+    # Metrics dashboard
+    live "/metrics", MetricsLive.Index, :index
+    live "/metrics/profile/:name", MetricsLive.Index, :profile
+
+    # Movie Predictions for 1001 Movies list
+    live "/predictions", PredictionsLive.Index, :index
+
+    # Festival Events management
+    live "/festival-events", FestivalEventLive.Index, :index
+
+    # Oban job dashboard
     oban_dashboard("/oban")
   end
 
   # Basic auth for admin routes
-  @admin_auth_disabled Application.compile_env(:cinegraph, :admin_auth_disabled, false)
-
   defp admin_auth(conn, _opts) do
-    if @admin_auth_disabled do
+    if Application.get_env(:cinegraph, :admin_auth_disabled, false) do
       conn
     else
       username = System.get_env("ADMIN_USERNAME") || "admin"
