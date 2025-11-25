@@ -6,12 +6,78 @@ defmodule CinegraphWeb.MovieLive.Show do
   alias Cinegraph.Cultural
   alias Cinegraph.ExternalSources
   alias Cinegraph.Metrics
+  alias Cinegraph.Metrics.ApiLookupMetric
   alias Cinegraph.Movies.MovieScoring
   alias Cinegraph.Movies.MovieCollaborations
+  alias Cinegraph.Repo
+
+  require Logger
 
   @impl true
   def mount(_params, _session, socket) do
     {:ok, assign(socket, :active_tab, "overview")}
+  end
+
+  # Handle TMDb ID route - for external project linking
+  @impl true
+  def handle_params(%{"tmdb_id" => tmdb_id}, _url, socket) do
+    case parse_tmdb_id(tmdb_id) do
+      {:ok, parsed_id} ->
+        case fetch_or_create_movie_by_tmdb_id(parsed_id) do
+          {:ok, movie} ->
+            {:noreply, redirect_to_canonical_url(socket, movie)}
+
+          {:error, :not_found} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Movie not found in TMDb database")
+             |> push_navigate(to: ~p"/movies")}
+
+          {:error, reason} ->
+            Logger.error("Failed to fetch movie by TMDb ID #{parsed_id}: #{inspect(reason)}")
+
+            {:noreply,
+             socket
+             |> put_flash(:error, "Error loading movie: #{format_error(reason)}")
+             |> push_navigate(to: ~p"/movies")}
+        end
+
+      :error ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Invalid TMDb ID. Expected a numeric ID.")
+         |> push_navigate(to: ~p"/movies")}
+    end
+  end
+
+  # Handle IMDb ID route - for cross-platform compatibility
+  @impl true
+  def handle_params(%{"imdb_id" => imdb_id}, _url, socket) do
+    unless valid_imdb_id?(imdb_id) do
+      {:noreply,
+       socket
+       |> put_flash(:error, "Invalid IMDb ID format. Expected: tt0000000")
+       |> push_navigate(to: ~p"/movies")}
+    else
+      case fetch_or_create_movie_by_imdb_id(imdb_id) do
+        {:ok, movie} ->
+          {:noreply, redirect_to_canonical_url(socket, movie)}
+
+        {:error, :not_found} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Movie not found with IMDb ID: #{imdb_id}")
+           |> push_navigate(to: ~p"/movies")}
+
+        {:error, reason} ->
+          Logger.error("Failed to fetch movie by IMDb ID #{imdb_id}: #{inspect(reason)}")
+
+          {:noreply,
+           socket
+           |> put_flash(:error, "Error loading movie: #{format_error(reason)}")
+           |> push_navigate(to: ~p"/movies")}
+      end
+    end
   end
 
   @impl true
@@ -133,4 +199,209 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:related_movies, related_movies)
     |> Map.put(:collaboration_timelines, collaboration_timelines)
   end
+
+  # Helper functions for TMDb ID lookup route
+
+  defp parse_tmdb_id(tmdb_id) when is_binary(tmdb_id) do
+    case Integer.parse(tmdb_id) do
+      {parsed_id, ""} when parsed_id > 0 -> {:ok, parsed_id}
+      _ -> :error
+    end
+  end
+
+  defp parse_tmdb_id(_), do: :error
+
+  defp fetch_or_create_movie_by_tmdb_id(tmdb_id) do
+    case Movies.get_movie_by_tmdb_id(tmdb_id) do
+      nil ->
+        # Movie doesn't exist, fetch from TMDb
+        Logger.info("Auto-fetching movie from TMDb: #{tmdb_id}")
+        fetch_and_create_from_tmdb(tmdb_id)
+
+      movie ->
+        # Movie already exists
+        log_auto_fetch_attempt(tmdb_id, :found_existing, movie.id)
+        {:ok, movie}
+    end
+  end
+
+  defp fetch_and_create_from_tmdb(tmdb_id) do
+    # Use existing comprehensive fetch logic
+    case Movies.fetch_and_store_movie_comprehensive(tmdb_id) do
+      {:ok, movie} ->
+        # Log successful auto-fetch
+        log_auto_fetch_attempt(tmdb_id, :created, movie.id)
+        Logger.info("Successfully auto-fetched movie: #{movie.title} (TMDb ID: #{tmdb_id})")
+        {:ok, movie}
+
+      {:error, reason} ->
+        # Log failed auto-fetch
+        log_auto_fetch_attempt(tmdb_id, :failed, nil, reason)
+        Logger.warning("Failed to auto-fetch movie with TMDb ID #{tmdb_id}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp redirect_to_canonical_url(socket, movie) do
+    socket
+    |> put_flash(:info, "Viewing: #{movie.title}")
+    |> push_navigate(to: ~p"/movies/#{movie.slug}")
+  end
+
+  # IMDb-specific helper functions
+
+  defp valid_imdb_id?(imdb_id) when is_binary(imdb_id) do
+    # IMDb IDs: tt followed by 7-8 digits
+    Regex.match?(~r/^tt\d{7,8}$/, imdb_id)
+  end
+
+  defp valid_imdb_id?(_), do: false
+
+  defp fetch_or_create_movie_by_imdb_id(imdb_id) do
+    case Movies.get_movie_by_imdb_id(imdb_id) do
+      nil ->
+        # Movie doesn't exist, use TMDb Find API then fetch
+        Logger.info("Auto-fetching movie from TMDb using IMDb ID: #{imdb_id}")
+        fetch_via_tmdb_find(imdb_id)
+
+      movie ->
+        # Movie already exists
+        log_imdb_auto_fetch_attempt(imdb_id, :found_existing, movie.id)
+        {:ok, movie}
+    end
+  end
+
+  defp fetch_via_tmdb_find(imdb_id) do
+    alias Cinegraph.Services.TMDb
+
+    # Use TMDb Find API to get TMDb ID from IMDb ID
+    case TMDb.find_by_imdb_id(imdb_id) do
+      {:ok, %{"movie_results" => [%{"id" => tmdb_id} | _]}} ->
+        Logger.info("Found TMDb ID #{tmdb_id} for IMDb ID #{imdb_id}")
+        fetch_and_create_from_tmdb_via_imdb(imdb_id, tmdb_id)
+
+      {:ok, %{"movie_results" => []}} ->
+        log_imdb_auto_fetch_attempt(imdb_id, :not_found_in_tmdb, nil)
+        Logger.warning("IMDb ID #{imdb_id} not found in TMDb")
+        {:error, :not_found}
+
+      {:error, reason} ->
+        log_imdb_auto_fetch_attempt(imdb_id, :tmdb_api_failed, nil, reason)
+        Logger.error("TMDb Find API failed for IMDb ID #{imdb_id}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp fetch_and_create_from_tmdb_via_imdb(imdb_id, tmdb_id) do
+    case Movies.fetch_and_store_movie_comprehensive(tmdb_id) do
+      {:ok, movie} ->
+        # Log successful auto-fetch via IMDb
+        log_imdb_auto_fetch_attempt(imdb_id, :created, movie.id, nil, tmdb_id)
+
+        Logger.info(
+          "Successfully auto-fetched movie: #{movie.title} (IMDb ID: #{imdb_id}, TMDb ID: #{tmdb_id})"
+        )
+
+        {:ok, movie}
+
+      {:error, reason} ->
+        # Log failed auto-fetch
+        log_imdb_auto_fetch_attempt(imdb_id, :failed, nil, reason, tmdb_id)
+
+        Logger.warning(
+          "Failed to auto-fetch movie with IMDb ID #{imdb_id} (TMDb ID: #{tmdb_id}): #{inspect(reason)}"
+        )
+
+        {:error, reason}
+    end
+  end
+
+  defp log_imdb_auto_fetch_attempt(imdb_id, status, movie_id, error \\ nil, tmdb_id \\ nil) do
+    # Fire and forget logging
+    Task.start(fn ->
+      attrs = %{
+        source: "tmdb",
+        operation: "auto_fetch_via_imdb_link",
+        target_identifier: imdb_id,
+        success: status not in [:failed, :not_found_in_tmdb, :tmdb_api_failed],
+        response_time_ms: 0,
+        metadata: %{
+          status: to_string(status),
+          movie_id: movie_id,
+          tmdb_id: tmdb_id,
+          imdb_id: imdb_id,
+          lookup_method: "tmdb_find_api",
+          triggered_by: "external_link",
+          route: "/movies/imdb/:imdb_id"
+        }
+      }
+
+      attrs =
+        if error do
+          Map.merge(attrs, %{
+            error_type: "auto_fetch_failed",
+            error_message: format_error(error)
+          })
+        else
+          attrs
+        end
+
+      %ApiLookupMetric{}
+      |> ApiLookupMetric.changeset(attrs)
+      |> Repo.insert()
+      |> case do
+        {:ok, _metric} ->
+          Logger.debug("Logged IMDb auto-fetch attempt for #{imdb_id}")
+
+        {:error, changeset} ->
+          Logger.warning("Failed to log IMDb auto-fetch attempt: #{inspect(changeset.errors)}")
+      end
+    end)
+  end
+
+  defp log_auto_fetch_attempt(tmdb_id, status, movie_id, error \\ nil) do
+    # Fire and forget logging
+    Task.start(fn ->
+      attrs = %{
+        source: "tmdb",
+        operation: "auto_fetch_via_external_link",
+        target_identifier: to_string(tmdb_id),
+        success: status != :failed,
+        response_time_ms: 0,
+        metadata: %{
+          status: to_string(status),
+          movie_id: movie_id,
+          triggered_by: "external_link",
+          route: "/movies/tmdb/:tmdb_id"
+        }
+      }
+
+      attrs =
+        if error do
+          Map.merge(attrs, %{
+            error_type: "auto_fetch_failed",
+            error_message: format_error(error)
+          })
+        else
+          attrs
+        end
+
+      %ApiLookupMetric{}
+      |> ApiLookupMetric.changeset(attrs)
+      |> Repo.insert()
+      |> case do
+        {:ok, _metric} ->
+          Logger.debug("Logged auto-fetch attempt for TMDb ID #{tmdb_id}")
+
+        {:error, changeset} ->
+          Logger.warning("Failed to log auto-fetch attempt: #{inspect(changeset.errors)}")
+      end
+    end)
+  end
+
+  defp format_error(:not_found), do: "Movie not found in TMDb"
+  defp format_error({:error, reason}), do: format_error(reason)
+  defp format_error(reason) when is_binary(reason), do: reason
+  defp format_error(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp format_error(_), do: "Unknown error"
 end
