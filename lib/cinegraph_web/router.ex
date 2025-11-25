@@ -98,8 +98,10 @@ defmodule CinegraphWeb.Router do
   end
 
   # Basic auth for admin routes
+  @admin_auth_disabled Application.compile_env(:cinegraph, :admin_auth_disabled, false)
+
   defp admin_auth(conn, _opts) do
-    if Mix.env() == :dev do
+    if @admin_auth_disabled do
       conn
     else
       username = System.get_env("ADMIN_USERNAME") || "admin"

@@ -69,6 +69,9 @@ config :cinegraph, dev_routes: true
 # Enable debug logging in development
 config :cinegraph, dev_logging?: true
 
+# Disable admin authentication in development
+config :cinegraph, admin_auth_disabled: true
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"
 
