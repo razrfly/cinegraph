@@ -209,8 +209,10 @@ defmodule Cinegraph.Movies.MovieScoring do
         # Revenue component (60% weight): log scale normalized to 1B
         revenue_score = min(1.0, :math.log(revenue + 1) / :math.log(1_000_000_000))
 
-        # ROI component (40% weight): revenue/budget ratio
-        roi_score = min(1.0, revenue / budget)
+        # ROI component (40% weight): revenue/budget ratio on log scale
+        # Normalizes to 10x ROI = 1.0 to properly differentiate between profitability levels
+        roi_ratio = revenue / budget
+        roi_score = min(1.0, :math.log(roi_ratio + 1) / :math.log(11))
 
         # Combined score on 0-10 scale
         (revenue_score * 0.6 + roi_score * 0.4) * 10.0

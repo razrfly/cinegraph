@@ -15,7 +15,10 @@ defmodule CinegraphWeb.MovieLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :active_tab, "overview")}
+    {:ok,
+     socket
+     |> assign(:active_tab, "overview")
+     |> assign(:show_score_modal, false)}
   end
 
   # Handle TMDb ID route - for external project linking
@@ -101,6 +104,21 @@ defmodule CinegraphWeb.MovieLive.Show do
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :active_tab, tab)}
+  end
+
+  @impl true
+  def handle_event("show_score_modal", _params, socket) do
+    {:noreply, assign(socket, :show_score_modal, true)}
+  end
+
+  @impl true
+  def handle_event("hide_score_modal", _params, socket) do
+    {:noreply, assign(socket, :show_score_modal, false)}
+  end
+
+  @impl true
+  def handle_event("stop_propagation", _params, socket) do
+    {:noreply, socket}
   end
 
   defp load_movie_by_id_or_slug(id_or_slug) do

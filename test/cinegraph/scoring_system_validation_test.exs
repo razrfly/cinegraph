@@ -297,17 +297,16 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       assert length(movies) > 0, "Should return at least some movies"
     end
 
-    test "fallback profile loads instantly when database unavailable" do
+    test "default profile loads quickly" do
       {time_microseconds, profile} =
         :timer.tc(fn ->
-          # Simulate database unavailable by using fallback directly
           ScoringService.get_default_profile()
         end)
 
       time_milliseconds = time_microseconds / 1000
 
       assert profile
-      assert time_milliseconds < 50, "Fallback profile should load in <50ms"
+      assert time_milliseconds < 50, "Default profile should load in <50ms"
     end
   end
 
