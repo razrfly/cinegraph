@@ -34,7 +34,9 @@ defmodule Cinegraph.Movies.Cache do
         options = fetch_fn.()
 
         case Cachex.put(@cache_name, @filter_options_key, options, ttl: @filter_options_ttl) do
-          {:ok, true} -> :ok
+          {:ok, true} ->
+            :ok
+
           {:error, reason} ->
             Logger.warning("[Movies.Cache] Failed to cache filter options: #{inspect(reason)}")
         end
@@ -48,7 +50,10 @@ defmodule Cinegraph.Movies.Cache do
 
       {:error, reason} ->
         # Cache error - fall back to direct fetch
-        Logger.warning("[Movies.Cache] Error reading from cache: #{inspect(reason)}, falling back to database")
+        Logger.warning(
+          "[Movies.Cache] Error reading from cache: #{inspect(reason)}, falling back to database"
+        )
+
         fetch_fn.()
     end
   end
@@ -115,9 +120,13 @@ defmodule Cinegraph.Movies.Cache do
         case fetch_fn.() do
           {:ok, {movies, meta}} = result ->
             case Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @query_results_ttl) do
-              {:ok, true} -> :ok
+              {:ok, true} ->
+                :ok
+
               {:error, reason} ->
-                Logger.warning("[Movies.Cache] Failed to cache search results: #{inspect(reason)}")
+                Logger.warning(
+                  "[Movies.Cache] Failed to cache search results: #{inspect(reason)}"
+                )
             end
 
             result
@@ -133,7 +142,10 @@ defmodule Cinegraph.Movies.Cache do
 
       {:error, reason} ->
         # Cache error - fall back to direct fetch
-        Logger.warning("[Movies.Cache] Error reading search cache: #{inspect(reason)}, falling back")
+        Logger.warning(
+          "[Movies.Cache] Error reading search cache: #{inspect(reason)}, falling back"
+        )
+
         fetch_fn.()
     end
   end
@@ -144,9 +156,10 @@ defmodule Cinegraph.Movies.Cache do
   """
   def build_search_cache_key(params) do
     # Sort keys for consistent hashing
-    sorted_params = params
-    |> Enum.sort()
-    |> Enum.into(%{})
+    sorted_params =
+      params
+      |> Enum.sort()
+      |> Enum.into(%{})
 
     # Create hash of parameters
     params_hash = :erlang.phash2(sorted_params)
@@ -200,9 +213,13 @@ defmodule Cinegraph.Movies.Cache do
 
         if scores do
           case Cachex.put(@cache_name, cache_key, scores, ttl: @discovery_scores_ttl) do
-            {:ok, true} -> :ok
+            {:ok, true} ->
+              :ok
+
             {:error, reason} ->
-              Logger.warning("[Movies.Cache] Failed to cache discovery scores: #{inspect(reason)}")
+              Logger.warning(
+                "[Movies.Cache] Failed to cache discovery scores: #{inspect(reason)}"
+              )
           end
         end
 
@@ -293,23 +310,27 @@ defmodule Cinegraph.Movies.Cache do
       # Common filters
       %{"decade" => "2020"},
       %{"decade" => "2010"},
-      %{"rating_preset" => "highly_rated"},
+      %{"rating_preset" => "highly_rated"}
     ]
 
-    warmed_keys = Enum.map(popular_queries, fn params ->
-      cache_key = build_search_cache_key(params)
+    warmed_keys =
+      Enum.map(popular_queries, fn params ->
+        cache_key = build_search_cache_key(params)
 
-      case search_fn.(params) do
-        {:ok, {movies, meta}} ->
-          Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @query_results_ttl)
-          cache_key
+        case search_fn.(params) do
+          {:ok, {movies, meta}} ->
+            Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @query_results_ttl)
+            cache_key
 
-        {:error, reason} ->
-          Logger.warning("[Movies.Cache] Failed to warm cache for #{cache_key}: #{inspect(reason)}")
-          nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
+          {:error, reason} ->
+            Logger.warning(
+              "[Movies.Cache] Failed to warm cache for #{cache_key}: #{inspect(reason)}"
+            )
+
+            nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
 
     Logger.info("[Movies.Cache] Cache warming complete: #{length(warmed_keys)} queries warmed")
     warmed_keys

@@ -46,8 +46,9 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
     params = %{"page" => page}
 
     # Add any additional filters from args
+    # Drop our internal tracking fields, keep TMDb API params like primary_release_year
     args
-    |> Map.drop(["page", "import_type", "import_progress_id"])
+    |> Map.drop(["page", "import_type", "import_progress_id", "year"])
     |> Enum.into(params)
   end
 end

@@ -68,6 +68,8 @@ config :phoenix, :json_library, Jason
 config :cinegraph, Oban,
   repo: Cinegraph.Repo,
   queues: [
+    # Daily import orchestration (low concurrency - just coordinates)
+    tmdb_orchestration: 2,
     # Movie discovery from TMDb
     tmdb_discovery: 10,
     # Movie details fetching
@@ -101,11 +103,14 @@ config :cinegraph, Oban,
     # Keep jobs for 7 days
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Reindexer, schedule: "@daily"},
-    # Cache warming cron job (Phase 2 optimization)
+    # Cache warming and daily imports cron jobs
     {Oban.Plugins.Cron,
      crontab: [
        # Warm movies page cache every 10 minutes
-       {"*/10 * * * *", Cinegraph.Workers.MoviesCacheWarmer}
+       {"*/10 * * * *", Cinegraph.Workers.MoviesCacheWarmer},
+       # Daily year-by-year TMDb import at 4 AM UTC
+       # Imports one year at a time, working backwards from current year
+       {"0 4 * * *", Cinegraph.Workers.DailyYearImportWorker}
      ]}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format

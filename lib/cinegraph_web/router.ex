@@ -83,6 +83,8 @@ defmodule CinegraphWeb.Router do
 
     # Import dashboard
     live "/imports", ImportDashboardLive, :index
+    # Year-by-year TMDb import management
+    live "/year-imports", YearImportsLive, :index
 
     # Metrics dashboard
     live "/metrics", MetricsLive.Index, :index

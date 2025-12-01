@@ -90,10 +90,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
     test "category names are consistent between systems" do
       # Get categories from both systems
       movie = %Movie{id: 1, canonical_sources: %{}}
-      movie_scoring_categories = MovieScoring.calculate_movie_scores(movie).components |> Map.keys()
+
+      movie_scoring_categories =
+        MovieScoring.calculate_movie_scores(movie).components |> Map.keys()
 
       profile = ScoringService.get_default_profile()
-      scoring_service_categories = ScoringService.profile_to_discovery_weights(profile) |> Map.keys()
+
+      scoring_service_categories =
+        ScoringService.profile_to_discovery_weights(profile) |> Map.keys()
 
       # Convert to strings for easier comparison
       movie_scoring_names = Enum.map(movie_scoring_categories, &to_string/1) |> Enum.sort()
@@ -150,9 +154,13 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
       for profile <- profiles do
         assert profile.description, "Profile #{profile.name} missing description"
-        assert String.length(profile.description) > 20, "Profile #{profile.name} description too short"
+
+        assert String.length(profile.description) > 20,
+               "Profile #{profile.name} description too short"
+
         # Description should mention percentages
-        assert profile.description =~ ~r/\d+%/, "Profile #{profile.name} description should include percentages"
+        assert profile.description =~ ~r/\d+%/,
+               "Profile #{profile.name} description should include percentages"
       end
     end
   end

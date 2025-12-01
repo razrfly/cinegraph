@@ -35,9 +35,10 @@ defmodule Cinegraph.Workers.MoviesCacheWarmer do
     start_time = System.monotonic_time(:millisecond)
 
     # Warm the cache with popular queries
-    warmed_keys = Cache.warm_popular_queries(fn params ->
-      Search.search_movies_uncached(params)
-    end)
+    warmed_keys =
+      Cache.warm_popular_queries(fn params ->
+        Search.search_movies_uncached(params)
+      end)
 
     elapsed = System.monotonic_time(:millisecond) - start_time
 

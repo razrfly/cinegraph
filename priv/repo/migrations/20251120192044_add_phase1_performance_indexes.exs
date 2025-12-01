@@ -66,7 +66,9 @@ defmodule Cinegraph.Repo.Migrations.AddPhase1PerformanceIndexes do
   end
 
   def down do
-    drop_if_exists index(:external_metrics, [:movie_id, :source, :metric_type, :value, :fetched_at],
+    drop_if_exists index(
+                     :external_metrics,
+                     [:movie_id, :source, :metric_type, :value, :fetched_at],
                      name: :idx_external_metrics_covering,
                      concurrently: true
                    )

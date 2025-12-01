@@ -142,7 +142,7 @@
             </svg>
           </button>
         </div>
-
+        
 <!-- Main Score -->
         <div class="text-center mb-6">
           <div class="text-5xl font-bold text-white mb-2">
@@ -155,7 +155,7 @@
           </div>
           <div class="text-white/60 text-sm">Overall Quality</div>
         </div>
-
+        
 <!-- 5-Category Breakdown -->
         <% score_data = Map.get(@movie, :score_data) %>
         <%= if score_data do %>
@@ -180,7 +180,8 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>Popular Opinion:</strong> Aggregate of IMDb, TMDb, Metacritic, and Rotten Tomatoes ratings
+                    <strong>Popular Opinion:</strong>
+                    Aggregate of IMDb, TMDb, Metacritic, and Rotten Tomatoes ratings
                   </div>
                 </div>
               </div>
@@ -197,8 +198,8 @@
                 </span>
               </div>
             </div>
-
-            <!-- Industry Recognition -->
+            
+<!-- Industry Recognition -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
                 <span class="text-white/80 text-sm">Industry Recognition</span>
@@ -218,7 +219,8 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>Industry Recognition:</strong> Awards and nominations from major film festivals (Cannes, Venice, Berlin, etc.)
+                    <strong>Industry Recognition:</strong>
+                    Awards and nominations from major film festivals (Cannes, Venice, Berlin, etc.)
                   </div>
                 </div>
               </div>
@@ -235,8 +237,8 @@
                 </span>
               </div>
             </div>
-
-            <!-- Cultural Impact -->
+            
+<!-- Cultural Impact -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
                 <span class="text-white/80 text-sm">Cultural Impact</span>
@@ -256,7 +258,8 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>Cultural Impact:</strong> Presence in canonical film lists (Criterion, AFI, BFI) and long-term popularity
+                    <strong>Cultural Impact:</strong>
+                    Presence in canonical film lists (Criterion, AFI, BFI) and long-term popularity
                   </div>
                 </div>
               </div>
@@ -273,8 +276,8 @@
                 </span>
               </div>
             </div>
-
-            <!-- People Quality -->
+            
+<!-- People Quality -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
                 <span class="text-white/80 text-sm">People Quality</span>
@@ -294,7 +297,8 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>People Quality:</strong> Caliber of director, actors, and key crew based on their overall career achievements
+                    <strong>People Quality:</strong>
+                    Caliber of director, actors, and key crew based on their overall career achievements
                   </div>
                 </div>
               </div>
@@ -309,8 +313,8 @@
                 <span class="text-white text-sm w-8">{score_data.components.people_quality}</span>
               </div>
             </div>
-
-            <!-- Financial Performance -->
+            
+<!-- Financial Performance -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
                 <span class="text-white/80 text-sm">Financial Performance</span>
@@ -330,7 +334,8 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>Financial Performance:</strong> Box office revenue and return on investment (60% revenue scale, 40% ROI ratio)
+                    <strong>Financial Performance:</strong>
+                    Box office revenue and return on investment (60% revenue scale, 40% ROI ratio)
                   </div>
                 </div>
               </div>
@@ -1370,8 +1375,8 @@
     <div class="flex min-h-screen items-center justify-center p-4">
       <!-- Backdrop -->
       <div class="fixed inset-0 bg-black/70 transition-opacity"></div>
-
-      <!-- Modal Content -->
+      
+<!-- Modal Content -->
       <div
         class="relative bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full p-8 text-white"
         phx-click="stop_propagation"
@@ -1393,13 +1398,13 @@
             </svg>
           </button>
         </div>
-
-        <!-- Intro -->
+        
+<!-- Intro -->
         <p class="text-white/80 mb-6 leading-relaxed">
           The Cinegraph Score is a comprehensive quality metric that evaluates films across five key dimensions, each contributing to the overall score based on configurable weights.
         </p>
-
-        <!-- Categories -->
+        
+<!-- Categories -->
         <div class="space-y-6">
           <!-- Popular Opinion -->
           <div class="bg-white/5 rounded-lg p-4">
@@ -1411,8 +1416,8 @@
               Aggregates ratings from major review platforms: IMDb user ratings, TMDb community scores, Metacritic metascores, and Rotten Tomatoes critic/audience ratings. Normalized to a 0-10 scale.
             </p>
           </div>
-
-          <!-- Industry Recognition -->
+          
+<!-- Industry Recognition -->
           <div class="bg-white/5 rounded-lg p-4">
             <div class="flex items-center mb-2">
               <div class="w-3 h-3 bg-yellow-400 rounded-full mr-2"></div>
@@ -1422,8 +1427,8 @@
               Measures festival awards and nominations from prestigious events including Cannes, Venice, Berlin, Sundance, and other major film festivals. Wins are weighted higher than nominations.
             </p>
           </div>
-
-          <!-- Cultural Impact -->
+          
+<!-- Cultural Impact -->
           <div class="bg-white/5 rounded-lg p-4">
             <div class="flex items-center mb-2">
               <div class="w-3 h-3 bg-purple-400 rounded-full mr-2"></div>
@@ -1433,8 +1438,8 @@
               Evaluates presence in canonical film lists (Criterion Collection, National Film Registry, BFI Sight & Sound, AFI Top 100) and long-term popularity metrics. Films that stand the test of time score higher.
             </p>
           </div>
-
-          <!-- People Quality -->
+          
+<!-- People Quality -->
           <div class="bg-white/5 rounded-lg p-4">
             <div class="flex items-center mb-2">
               <div class="w-3 h-3 bg-red-400 rounded-full mr-2"></div>
@@ -1444,8 +1449,8 @@
               Assesses the caliber of the director, lead actors, and key crew members based on their overall career achievements, awards, and body of work. Calculated from individual person quality scores.
             </p>
           </div>
-
-          <!-- Financial Performance -->
+          
+<!-- Financial Performance -->
           <div class="bg-white/5 rounded-lg p-4">
             <div class="flex items-center mb-2">
               <div class="w-3 h-3 bg-green-400 rounded-full mr-2"></div>
@@ -1456,8 +1461,8 @@
             </p>
           </div>
         </div>
-
-        <!-- Calculation Method -->
+        
+<!-- Calculation Method -->
         <div class="mt-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
           <h3 class="text-lg font-semibold mb-2 flex items-center">
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1471,15 +1476,20 @@
             Calculation Method
           </h3>
           <p class="text-white/70 text-sm leading-relaxed">
-            The overall score is calculated as a weighted average: <code class="bg-white/10 px-1.5 py-0.5 rounded">Score = (Category₁ × Weight₁) + (Category₂ × Weight₂) + ... </code>
+            The overall score is calculated as a weighted average:
+            <code class="bg-white/10 px-1.5 py-0.5 rounded">
+              Score = (Category₁ × Weight₁) + (Category₂ × Weight₂) + ... 
+            </code>
             <br /><br />
             Default weights use a balanced 20% for each category, but you can customize weights in the
-            <a href="/movies/discover" class="text-blue-400 hover:text-blue-300 underline">Discovery page</a>
+            <a href="/movies/discover" class="text-blue-400 hover:text-blue-300 underline">
+              Discovery page
+            </a>
             to match your preferences. All calculations use live data from our database.
           </p>
         </div>
-
-        <!-- Close Button -->
+        
+<!-- Close Button -->
         <div class="mt-6 text-center">
           <button
             phx-click="hide_score_modal"
