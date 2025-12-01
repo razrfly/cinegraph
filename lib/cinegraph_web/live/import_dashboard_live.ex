@@ -6,12 +6,13 @@ defmodule CinegraphWeb.ImportDashboardLive do
   use CinegraphWeb, :live_view
 
   alias Cinegraph.Imports.TMDbImporter
+  alias Cinegraph.Imports.ImportStateV2
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, MovieLists}
   alias Cinegraph.Events
   alias Cinegraph.Metrics.ApiTracker
   require Logger
-  alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker}
+  alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker, DailyYearImportWorker}
   alias Cinegraph.Cultural
   import Ecto.Query
 
@@ -49,6 +50,10 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:fallback_stats, %{})
       |> assign(:strategy_breakdown, [])
       |> assign(:import_metrics, [])
+      |> assign(:year_progress, [])
+      |> assign(:year_sync_health, nil)
+      |> assign(:current_import_year, nil)
+      |> assign(:year_import_running, false)
       |> load_data()
       |> schedule_refresh()
 
@@ -143,6 +148,20 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   @impl true
+  def handle_info({:year_import_complete, progress}, socket) do
+    message =
+      "Year #{progress.year} import complete! #{progress.completed} jobs completed, #{progress.movie_count} movies for that year."
+
+    socket =
+      socket
+      |> put_flash(:info, message)
+      |> assign(:year_import_running, false)
+      |> load_data()
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:festival_progress, progress}, socket) do
     socket =
       case progress.status do
@@ -180,6 +199,61 @@ defmodule CinegraphWeb.ImportDashboardLive do
       end
 
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("start_year_import", %{"year" => year_str}, socket) do
+    current_year = Date.utc_today().year
+
+    case Integer.parse(year_str) do
+      {year, _} when year >= 1888 ->
+        if year <= current_year + 1 do
+          case DailyYearImportWorker.import_year(year) do
+            {:ok, _job} ->
+              socket =
+                socket
+                |> put_flash(:info, "Started year import for #{year}")
+                |> assign(:year_import_running, true)
+                |> load_data()
+
+              {:noreply, socket}
+
+            {:error, reason} ->
+              socket =
+                put_flash(socket, :error, "Failed to start year import: #{inspect(reason)}")
+
+              {:noreply, socket}
+          end
+        else
+          socket = put_flash(socket, :error, "Invalid year - cannot be in the future")
+          {:noreply, socket}
+        end
+
+      _ ->
+        socket = put_flash(socket, :error, "Invalid year")
+        {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("start_year_import", _params, socket) do
+    # Start import for next year to import
+    year = DailyYearImportWorker.get_next_year_to_import()
+
+    case DailyYearImportWorker.import_year(year) do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Started year import for #{year}")
+          |> assign(:year_import_running, true)
+          |> load_data()
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket = put_flash(socket, :error, "Failed to start year import: #{inspect(reason)}")
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -826,6 +900,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
     strategy_breakdown = get_strategy_breakdown()
     import_metrics = get_import_metrics()
 
+    # Get year import progress
+    year_progress_data = load_year_progress()
+
     socket
     |> assign(:progress, progress)
     |> assign(:stats, stats)
@@ -840,6 +917,10 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:fallback_stats, fallback_stats)
     |> assign(:strategy_breakdown, strategy_breakdown)
     |> assign(:import_metrics, import_metrics)
+    |> assign(:year_progress, year_progress_data.years)
+    |> assign(:year_sync_health, year_progress_data.sync_health)
+    |> assign(:current_import_year, year_progress_data.current_year)
+    |> assign(:year_import_running, year_progress_data.is_running)
   end
 
   defp get_canonical_movies_count do
@@ -1049,6 +1130,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
   defp get_oban_stats do
     queues = [
+      :tmdb_orchestration,
       :tmdb_discovery,
       :tmdb_details,
       :omdb_enrichment,
@@ -1218,6 +1300,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   @doc """
   Formats queue names for display.
   """
+  def format_queue_name(:tmdb_orchestration), do: "TMDb Orchestration"
   def format_queue_name(:tmdb_discovery), do: "TMDb Discovery"
   def format_queue_name(:tmdb_details), do: "TMDb Details"
   def format_queue_name(:omdb_enrichment), do: "OMDb Enrichment"
@@ -1522,5 +1605,122 @@ defmodule CinegraphWeb.ImportDashboardLive do
   # Keep the old function for backward compatibility with the template
   defp generate_venice_years do
     generate_festival_years()
+  end
+
+  # Loads year-by-year import progress from ImportStateV2.
+  # Returns a map with :years, :sync_health, :current_year, and :is_running.
+  defp load_year_progress do
+    current_year = Date.utc_today().year
+    last_completed_year = ImportStateV2.get_integer("last_completed_year", current_year + 1)
+    current_import_year = ImportStateV2.get("current_import_year")
+    bulk_complete = ImportStateV2.get("bulk_import_complete")
+
+    # Check if there are any year import jobs running
+    is_running = check_year_import_running()
+
+    # Build year progress list (show last 10 years or from current to last completed)
+    years =
+      if bulk_complete do
+        # All years done - show summary
+        []
+      else
+        start_year = current_year
+        # Show down to last completed year, up to 10 years
+        end_year = max(last_completed_year - 1, current_year - 10)
+
+        start_year..end_year
+        |> Enum.map(fn year ->
+          our_count = DailyYearImportWorker.count_movies_for_year(year)
+          tmdb_count = ImportStateV2.get_integer("year_#{year}_total_movies", 0)
+          progress_pct = ImportStateV2.get("year_#{year}_progress")
+
+          status =
+            cond do
+              year > last_completed_year -> :pending
+              year == last_completed_year -> :pending
+              year == current_import_year -> :in_progress
+              year < last_completed_year -> :completed
+              true -> :pending
+            end
+
+          %{
+            year: year,
+            our_count: our_count,
+            tmdb_count: tmdb_count,
+            progress: progress_pct,
+            status: status,
+            started_at: ImportStateV2.get("year_#{year}_started_at"),
+            completed_at: ImportStateV2.get("year_#{year}_completed_at")
+          }
+        end)
+      end
+
+    # Calculate sync health
+    sync_health = calculate_sync_health(last_completed_year, current_year, bulk_complete)
+
+    %{
+      years: years,
+      sync_health: sync_health,
+      current_year: current_import_year,
+      is_running: is_running
+    }
+  end
+
+  defp check_year_import_running do
+    # Check for any running year import jobs
+    count =
+      Repo.one(
+        from(j in Oban.Job,
+          where:
+            j.worker == "Cinegraph.Workers.DailyYearImportWorker" and
+              j.state in ["available", "executing", "scheduled"],
+          select: count(j.id)
+        )
+      ) || 0
+
+    count > 0
+  end
+
+  defp calculate_sync_health(last_completed_year, current_year, bulk_complete) do
+    cond do
+      bulk_complete ->
+        %{
+          status: :complete,
+          message: "Full catalog imported! Ready for daily delta sync.",
+          color: "green"
+        }
+
+      last_completed_year > current_year ->
+        %{
+          status: :not_started,
+          message: "Year-by-year import not yet started.",
+          color: "gray"
+        }
+
+      last_completed_year == current_year ->
+        %{
+          status: :starting,
+          message: "Starting year-by-year import from #{current_year}.",
+          color: "blue"
+        }
+
+      last_completed_year >= current_year - 5 ->
+        years_done = current_year - last_completed_year + 1
+
+        %{
+          status: :in_progress,
+          message: "#{years_done} years imported (#{last_completed_year + 1}-#{current_year}).",
+          color: "blue"
+        }
+
+      true ->
+        years_done = current_year - last_completed_year + 1
+
+        %{
+          status: :in_progress,
+          message: "#{years_done} years imported. Working on #{last_completed_year}.",
+          color: "yellow"
+        }
+    end
   end
 end

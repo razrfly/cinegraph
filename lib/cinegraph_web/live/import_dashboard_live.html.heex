@@ -72,6 +72,200 @@
     </div>
   </div>
   
+<!-- Year-by-Year Import Progress -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <div class="flex justify-between items-center mb-4">
+      <div>
+        <h2 class="text-xl font-semibold">Year-by-Year TMDb Import</h2>
+        <p class="text-sm text-gray-500 mt-1">
+          Importing full TMDb catalog by year (current → historical)
+        </p>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <%= if @year_sync_health do %>
+          <div class={"px-3 py-1 rounded-full text-sm font-medium #{
+            case @year_sync_health.color do
+              "green" -> "bg-green-100 text-green-800"
+              "blue" -> "bg-blue-100 text-blue-800"
+              "yellow" -> "bg-yellow-100 text-yellow-800"
+              "gray" -> "bg-gray-100 text-gray-800"
+              _ -> "bg-gray-100 text-gray-800"
+            end
+          }"}>
+            {@year_sync_health.message}
+          </div>
+        <% end %>
+        <.link
+          navigate={~p"/admin/year-imports"}
+          class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
+        >
+          <span>Full Dashboard</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </.link>
+      </div>
+    </div>
+    
+<!-- Import Controls -->
+    <div class="flex gap-4 mb-6">
+      <button
+        phx-click="start_year_import"
+        class="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+        disabled={@year_import_running}
+      >
+        <%= if @year_import_running do %>
+          <span class="flex items-center">
+            <svg
+              class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              >
+              </circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              >
+              </path>
+            </svg>
+            Importing...
+          </span>
+        <% else %>
+          Start Next Year Import
+        <% end %>
+      </button>
+
+      <form phx-submit="start_year_import" class="flex gap-2 items-center">
+        <input
+          type="number"
+          name="year"
+          min="1888"
+          max={Date.utc_today().year + 1}
+          placeholder="Year"
+          class="w-24 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+        <button
+          type="submit"
+          class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
+          disabled={@year_import_running}
+        >
+          Import Specific Year
+        </button>
+      </form>
+    </div>
+    
+<!-- Year Progress Table -->
+    <%= if length(@year_progress) > 0 do %>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Year
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Our Count
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                TMDb Count
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Progress
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= for year_data <- @year_progress do %>
+              <tr class={if year_data.status == :in_progress, do: "bg-blue-50", else: ""}>
+                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {year_data.year}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  {format_number(year_data.our_count)}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  <%= if year_data.tmdb_count > 0 do %>
+                    {format_number(year_data.tmdb_count)}
+                  <% else %>
+                    <span class="text-gray-400">—</span>
+                  <% end %>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <%= if year_data.tmdb_count > 0 do %>
+                    <% pct = Float.round(year_data.our_count / year_data.tmdb_count * 100, 1) %>
+                    <div class="flex items-center">
+                      <div class="w-24 bg-gray-200 rounded-full h-2 mr-2">
+                        <div
+                          class={"h-2 rounded-full #{if pct >= 95, do: "bg-green-500", else: if(pct >= 50, do: "bg-blue-500", else: "bg-yellow-500")}"}
+                          style={"width: #{min(pct, 100)}%"}
+                        >
+                        </div>
+                      </div>
+                      <span class="text-xs text-gray-600">{pct}%</span>
+                    </div>
+                  <% else %>
+                    <%= if year_data.progress do %>
+                      <span class="text-xs text-blue-600">{year_data.progress}%</span>
+                    <% else %>
+                      <span class="text-gray-400">—</span>
+                    <% end %>
+                  <% end %>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <%= case year_data.status do %>
+                    <% :completed -> %>
+                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        Complete
+                      </span>
+                    <% :in_progress -> %>
+                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        In Progress
+                      </span>
+                    <% :pending -> %>
+                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        Pending
+                      </span>
+                    <% _ -> %>
+                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                        —
+                      </span>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="text-center py-8 text-gray-500">
+        <%= if @year_sync_health && @year_sync_health.status == :complete do %>
+          <div class="text-green-600 font-medium">
+            ✅ Full TMDb catalog has been imported!
+          </div>
+          <p class="mt-2 text-sm">
+            Ready to switch to daily delta sync using the TMDb Changes API.
+          </p>
+        <% else %>
+          <p>No year imports started yet. Click "Start Next Year Import" to begin.</p>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+  
 <!-- Actions -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <h2 class="text-xl font-semibold mb-4">TMDb Import Actions</h2>
