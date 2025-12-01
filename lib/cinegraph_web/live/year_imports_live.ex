@@ -441,20 +441,21 @@ defmodule CinegraphWeb.YearImportsLive do
   end
 
   defp cancel_jobs_for_year(year) do
-    # Cancel all pending discovery jobs for this year
-    {count, _} =
-      Repo.update_all(
+    # Find job IDs first, then cancel via Oban's API to properly trigger lifecycle callbacks
+    job_ids =
+      Repo.all(
         from(j in Oban.Job,
           where:
             j.worker == "Cinegraph.Workers.TMDbDiscoveryWorker" and
               j.state in ["available", "scheduled"] and
               fragment("?->>'import_type' = 'year_import'", j.args) and
-              fragment("(?->>'year')::int = ?", j.args, ^year)
-        ),
-        set: [state: "cancelled", cancelled_at: DateTime.utc_now()]
+              fragment("(?->>'year')::int = ?", j.args, ^year),
+          select: j.id
+        )
       )
 
-    count
+    Enum.each(job_ids, &Oban.cancel_job/1)
+    length(job_ids)
   end
 
   # Helper functions

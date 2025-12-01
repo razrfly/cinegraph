@@ -111,6 +111,9 @@ defmodule Cinegraph.Workers.YearImportCompletionWorker do
     scheduled =
       Repo.one(from(j in base_query, where: j.state == "scheduled", select: count(j.id))) || 0
 
+    retryable =
+      Repo.one(from(j in base_query, where: j.state == "retryable", select: count(j.id))) || 0
+
     executing =
       Repo.one(from(j in base_query, where: j.state == "executing", select: count(j.id))) || 0
 
@@ -122,6 +125,6 @@ defmodule Cinegraph.Workers.YearImportCompletionWorker do
         from(j in base_query, where: j.state in ["discarded", "cancelled"], select: count(j.id))
       ) || 0
 
-    {pending + scheduled, executing, completed, failed}
+    {pending + scheduled + retryable, executing, completed, failed}
   end
 end
