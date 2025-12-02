@@ -8,7 +8,7 @@ Cinegraph is an Elixir/Phoenix LiveView application for movie discovery, trackin
 
 ## Tech Stack
 - **Backend**: Elixir 1.18, Phoenix 1.7.17, LiveView
-- **Database**: PostgreSQL (via Supabase)
+- **Database**: PostgreSQL (local development via Postgres.app)
 - **External APIs**: TMDb, OMDb, IMDb scraping
 - **Background Jobs**: Oban
 - **Styling**: Tailwind CSS
@@ -60,8 +60,8 @@ mix import_movies --pages 5 # Import movies from TMDb
 
 ## Environment Variables
 - `TMDB_API_KEY` - TMDb API access
-- `OMDB_API_KEY` - OMDb API access  
-- `SUPABASE_DATABASE_URL` - Database connection
+- `OMDB_API_KEY` - OMDb API access
+- `DATABASE_URL` - Database connection (production)
 - `ZYTE_API_KEY` - Web scraping service
 
 ## Project Structure
