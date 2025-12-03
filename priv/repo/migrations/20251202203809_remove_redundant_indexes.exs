@@ -6,7 +6,7 @@ defmodule Cinegraph.Repo.Migrations.RemoveRedundantIndexes do
   See GitHub Issue #401 for full documentation.
 
   Summary of removals:
-  - movie_credits: 6 redundant indexes (duplicates and covered indexes)
+  - movie_credits: 5 redundant indexes (duplicates and covered indexes)
   - external_metrics: 2 redundant indexes
   - movie_videos: 1 duplicate index
   - movie_recommendations: 1 covered index
@@ -15,12 +15,12 @@ defmodule Cinegraph.Repo.Migrations.RemoveRedundantIndexes do
   - metric_definitions: 1 covered index
   - movies: 1 covered index
 
-  Total: 17 indexes removed
+  Total: 16 indexes removed
   """
 
   def up do
     # ============================================
-    # movie_credits table (6 redundant indexes)
+    # movie_credits table (5 redundant indexes)
     # ============================================
 
     # Duplicate of movie_credits_movie_id_person_id_index
@@ -57,7 +57,7 @@ defmodule Cinegraph.Repo.Migrations.RemoveRedundantIndexes do
     # ============================================
 
     # Duplicate of movie_videos_tmdb_id_index (both are unique indexes on tmdb_id)
-    drop_if_exists index(:movie_videos, [:tmdb_id], name: :movie_videos_tmdb_id_constraint)
+    drop_if_exists unique_index(:movie_videos, [:tmdb_id], name: :movie_videos_tmdb_id_constraint)
 
     # ============================================
     # movie_recommendations table (1 redundant index)
