@@ -91,6 +91,18 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Counts movies that belong to a specific canonical list.
+  Uses JSONB containment to check if the list key exists in canonical_sources.
+  """
+  def count_movies_in_list(list_key) when is_binary(list_key) do
+    from(m in Movie,
+      where: m.import_status == "full",
+      where: fragment("? \\? ?", m.canonical_sources, ^list_key)
+    )
+    |> Repo.aggregate(:count, :id)
+  end
+
+  @doc """
   Returns the list of soft imported movies.
   These are movies that didn't meet quality criteria but are tracked.
   """

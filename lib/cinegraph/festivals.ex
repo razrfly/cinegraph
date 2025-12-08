@@ -59,6 +59,52 @@ defmodule Cinegraph.Festivals do
   end
 
   @doc """
+  Gets an organization by slug.
+  """
+  def get_organization_by_slug(slug) do
+    Repo.get_by(FestivalOrganization, slug: slug)
+  end
+
+  @doc """
+  Lists all festival organizations.
+  """
+  def list_organizations do
+    from(o in FestivalOrganization,
+      order_by: [asc: o.name]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Counts movies with nominations/wins for an organization.
+  """
+  def count_movies_for_organization(organization_id) do
+    from(n in FestivalNomination,
+      join: c in FestivalCeremony,
+      on: n.ceremony_id == c.id,
+      where: c.organization_id == ^organization_id,
+      where: not is_nil(n.movie_id),
+      select: count(n.movie_id, :distinct)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Counts winners for an organization.
+  """
+  def count_winners_for_organization(organization_id) do
+    from(n in FestivalNomination,
+      join: c in FestivalCeremony,
+      on: n.ceremony_id == c.id,
+      where: c.organization_id == ^organization_id,
+      where: n.won == true,
+      where: not is_nil(n.movie_id),
+      select: count(n.movie_id, :distinct)
+    )
+    |> Repo.one()
+  end
+
+  @doc """
   Creates a festival organization.
   """
   def create_organization(attrs \\ %{}) do

@@ -1,0 +1,347 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Navigation -->
+  <div class="mb-6">
+    <.link
+      navigate={~p"/awards"}
+      class="inline-flex items-center text-blue-600 hover:text-blue-800"
+    >
+      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to Awards
+    </.link>
+  </div>
+
+  <%= if @organization do %>
+    <!-- Header -->
+    <div class="mb-6">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h1 class="text-4xl font-bold text-gray-900 flex items-center gap-3">
+            <span>🏆</span>
+            {@organization.name}
+          </h1>
+          <%= if @organization.abbreviation || @organization.country do %>
+            <p class="text-gray-500 mt-1">
+              {@organization.abbreviation}{if @organization.country,
+                do: " • #{@organization.country}"}{if @organization.founded_year,
+                do: " • Est. #{@organization.founded_year}"}
+            </p>
+          <% end %>
+          <p class="text-gray-600 mt-2">
+            <%= if @total_movies > 0 do %>
+              Showing {(@page - 1) * @per_page + 1} - {min(@page * @per_page, @total_movies)} of {@total_movies} films
+            <% else %>
+              No films found
+            <% end %>
+          </p>
+        </div>
+        
+<!-- Search Bar -->
+        <div class="w-full lg:w-96">
+          <form phx-change="search" class="relative">
+            <input
+              type="text"
+              name="search"
+              value={@search_term}
+              placeholder="Search films..."
+              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              phx-debounce="300"
+            />
+            <svg
+              class="absolute left-3 top-2.5 w-5 h-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </form>
+        </div>
+      </div>
+    </div>
+    
+<!-- Filter Tabs -->
+    <div class="mb-6 border-b border-gray-200">
+      <nav class="-mb-px flex space-x-8">
+        <button
+          phx-click="change_filter"
+          phx-value-filter="all"
+          class={[
+            "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+            if(@filter_mode == :all,
+              do: "border-blue-500 text-blue-600",
+              else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            )
+          ]}
+        >
+          All Films
+        </button>
+        <button
+          phx-click="change_filter"
+          phx-value-filter="winners"
+          class={[
+            "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+            if(@filter_mode == :winners,
+              do: "border-amber-500 text-amber-600",
+              else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            )
+          ]}
+        >
+          🏆 Winners
+        </button>
+        <button
+          phx-click="change_filter"
+          phx-value-filter="nominees"
+          class={[
+            "whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm",
+            if(@filter_mode == :nominees,
+              do: "border-purple-500 text-purple-600",
+              else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            )
+          ]}
+        >
+          Nominees Only
+        </button>
+      </nav>
+    </div>
+    
+<!-- Sort Options -->
+    <div class="mb-6 flex items-center gap-4">
+      <label class="text-sm font-medium text-gray-700">Sort by:</label>
+      <select
+        phx-change="change_sort"
+        name="sort"
+        class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+      >
+        <option
+          value="release_date_desc"
+          selected={@sort_criteria == "release_date" && @sort_direction == :desc}
+        >
+          Release Date (Newest)
+        </option>
+        <option
+          value="release_date_asc"
+          selected={@sort_criteria == "release_date" && @sort_direction == :asc}
+        >
+          Release Date (Oldest)
+        </option>
+        <option value="title_asc" selected={@sort_criteria == "title" && @sort_direction == :asc}>
+          Title (A-Z)
+        </option>
+        <option
+          value="title_desc"
+          selected={@sort_criteria == "title" && @sort_direction == :desc}
+        >
+          Title (Z-A)
+        </option>
+        <option
+          value="rating_desc"
+          selected={@sort_criteria == "rating" && @sort_direction == :desc}
+        >
+          Rating (Highest)
+        </option>
+      </select>
+    </div>
+    
+<!-- Movies Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <%= for movie <- @movies do %>
+        <.link navigate={~p"/movies/#{movie.slug || movie.id}"} class="group block">
+          <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden">
+            <!-- Movie Poster -->
+            <div class="aspect-[2/3] bg-gray-200 relative">
+              <%= if movie.poster_path do %>
+                <img
+                  src={Cinegraph.Movies.Movie.poster_url(movie, "w500")}
+                  alt={movie.title}
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              <% else %>
+                <div class="w-full h-full flex items-center justify-center">
+                  <span class="text-gray-400 text-lg">No Image</span>
+                </div>
+              <% end %>
+            </div>
+            
+<!-- Movie Info -->
+            <div class="p-4">
+              <h3 class="font-semibold text-lg text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                {movie.title}
+              </h3>
+
+              <%= if movie.release_date do %>
+                <p class="text-gray-500 text-sm mt-1">
+                  {Calendar.strftime(movie.release_date, "%Y")}
+                </p>
+              <% end %>
+            </div>
+          </div>
+        </.link>
+      <% end %>
+    </div>
+    
+<!-- Empty State -->
+    <%= if Enum.empty?(@movies) do %>
+      <div class="text-center py-12">
+        <div class="mx-auto h-12 w-12 text-gray-400">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+            />
+          </svg>
+        </div>
+        <h3 class="mt-2 text-sm font-medium text-gray-900">No films found</h3>
+        <p class="mt-1 text-sm text-gray-500">Try adjusting your search or filter criteria.</p>
+      </div>
+    <% end %>
+    
+<!-- Pagination -->
+    <%= if @total_pages > 1 do %>
+      <div class="mt-8 flex items-center justify-between">
+        <!-- Mobile pagination -->
+        <div class="flex flex-1 justify-between sm:hidden">
+          <%= if @page > 1 do %>
+            <.link
+              patch={build_pagination_path(assigns, @page - 1)}
+              class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Previous
+            </.link>
+          <% else %>
+            <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed">
+              Previous
+            </span>
+          <% end %>
+
+          <%= if @page < @total_pages do %>
+            <.link
+              patch={build_pagination_path(assigns, @page + 1)}
+              class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Next
+            </.link>
+          <% else %>
+            <span class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed">
+              Next
+            </span>
+          <% end %>
+        </div>
+        
+<!-- Desktop pagination -->
+        <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+          <div>
+            <p class="text-sm text-gray-700">
+              Page <span class="font-medium">{@page}</span>
+              of <span class="font-medium">{@total_pages}</span>
+            </p>
+          </div>
+
+          <div>
+            <nav
+              class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+              aria-label="Pagination"
+            >
+              <!-- Previous button -->
+              <%= if @page > 1 do %>
+                <.link
+                  patch={build_pagination_path(assigns, @page - 1)}
+                  class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                >
+                  <span class="sr-only">Previous</span>
+                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </.link>
+              <% else %>
+                <span class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-gray-100 text-sm font-medium text-gray-400 cursor-not-allowed">
+                  <span class="sr-only">Previous</span>
+                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </span>
+              <% end %>
+              
+<!-- Page numbers -->
+              <%= for page_num <- pagination_range(@page, @total_pages) do %>
+                <%= if page_num == "..." do %>
+                  <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                    ...
+                  </span>
+                <% else %>
+                  <.link
+                    patch={build_pagination_path(assigns, page_num)}
+                    class={[
+                      "relative inline-flex items-center px-4 py-2 border text-sm font-medium",
+                      if(page_num == @page,
+                        do: "z-10 bg-blue-50 border-blue-500 text-blue-600",
+                        else: "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
+                      )
+                    ]}
+                  >
+                    {page_num}
+                  </.link>
+                <% end %>
+              <% end %>
+              
+<!-- Next button -->
+              <%= if @page < @total_pages do %>
+                <.link
+                  patch={build_pagination_path(assigns, @page + 1)}
+                  class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                >
+                  <span class="sr-only">Next</span>
+                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </.link>
+              <% else %>
+                <span class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-gray-100 text-sm font-medium text-gray-400 cursor-not-allowed">
+                  <span class="sr-only">Next</span>
+                  <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path
+                      fill-rule="evenodd"
+                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </span>
+              <% end %>
+            </nav>
+          </div>
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Link to full search -->
+    <div class="mt-8 text-center">
+      <.link
+        navigate={~p"/movies?festivals=#{@organization.id}&award_status=any_nomination"}
+        class="text-blue-600 hover:text-blue-800 text-sm"
+      >
+        View with full filtering options →
+      </.link>
+    </div>
+  <% end %>
+</div>

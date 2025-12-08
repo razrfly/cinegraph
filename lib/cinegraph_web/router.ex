@@ -68,6 +68,35 @@ defmodule CinegraphWeb.Router do
     live "/collaborations", CollaborationLive.Index, :index
     live "/six-degrees", SixDegreesLive.Index, :index
     live "/directors/:id", DirectorLive.Show, :show
+
+    # ========================================================================
+    # CLEAN URL ROUTES - Curated Lists & Awards
+    # ========================================================================
+    #
+    # These routes provide clean, shareable URLs that map to MovieLive.Index
+    # with pre-configured filters. Query params still work for additional filtering.
+    #
+    # Lists:
+    #   /lists                    - Browse all curated lists
+    #   /lists/:slug              - View movies from a specific list
+    #
+    # Awards:
+    #   /awards                   - Browse all festivals/awards
+    #   /awards/:slug             - View movies from a specific festival
+    #   /awards/:slug/winners     - Winners only
+    #   /awards/:slug/nominees    - Nominees only
+    #   /awards/:year             - All awards from a specific year
+    # ========================================================================
+
+    # Curated Lists routes
+    live "/lists", ListLive.Index, :index
+    live "/lists/:slug", ListLive.Show, :show
+
+    # Awards/Festivals routes
+    live "/awards", AwardsLive.Index, :index
+    live "/awards/:slug", AwardsLive.Show, :show
+    live "/awards/:slug/winners", AwardsLive.Show, :winners
+    live "/awards/:slug/nominees", AwardsLive.Show, :nominees
   end
 
   # Other scopes may use custom stacks.
