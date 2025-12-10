@@ -57,6 +57,44 @@ defmodule Cinegraph.People do
   end
 
   @doc """
+  Gets a person by slug.
+  Returns nil if not found.
+  """
+  def get_person_by_slug(slug) do
+    Repo.get_by(Person, slug: slug)
+  end
+
+  @doc """
+  Gets a person by TMDb ID.
+  Returns nil if not found.
+  """
+  def get_person_by_tmdb_id(tmdb_id) do
+    Repo.get_by(Person, tmdb_id: tmdb_id)
+  end
+
+  @doc """
+  Gets a person by ID or slug.
+  First tries to parse as integer ID, then falls back to slug lookup.
+  Returns nil if not found.
+  """
+  def get_person_by_id_or_slug(id_or_slug) do
+    case Integer.parse(id_or_slug) do
+      {id, ""} -> get_person(id)
+      _ -> get_person_by_slug(id_or_slug)
+    end
+  end
+
+  @doc """
+  Gets a person with credits by ID or slug.
+  First tries to parse as integer ID, then falls back to slug lookup.
+  Returns nil if not found.
+  """
+  def get_person_with_credits_by_id_or_slug(id_or_slug) do
+    person = get_person_by_id_or_slug(id_or_slug)
+    if person, do: enrich_person_with_credits(person), else: nil
+  end
+
+  @doc """
   Gets a person with all their movies and credits preloaded.
   Raises if the person does not exist.
   """

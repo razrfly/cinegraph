@@ -60,9 +60,31 @@ defmodule CinegraphWeb.Router do
     live "/movies/:id_or_slug/legacy", MovieLive.ShowLegacy, :show
     live "/movies/:id_or_slug/metrics", MovieMetricsLive.Show, :show
 
-    # People routes
+    # ========================================================================
+    # PEOPLE VIEWING ROUTES
+    # ========================================================================
+    #
+    # Multiple entry points for viewing people (actors, directors, crew):
+    #
+    # 1. /people/:slug (PRIMARY - SEO-friendly canonical URLs)
+    #    Example: /people/tom-hanks
+    #    Purpose: Direct display, optimized for search engines
+    #
+    # 2. /people/tmdb/:tmdb_id (SECONDARY - Programmatic access)
+    #    Example: /people/tmdb/31
+    #    Purpose: External project integration
+    #    Behavior: Lookup by TMDb ID → Redirect to slug
+    #
+    # All secondary routes redirect to the canonical slug URL to maintain SEO.
+    # ========================================================================
+
     live "/people", PersonLive.Index, :index
-    live "/people/:id", PersonLive.Show, :show
+
+    # TMDb ID lookup route - for external project linking
+    live "/people/tmdb/:tmdb_id", PersonLive.Show, :show_by_tmdb
+
+    # Support both ID and slug for backward compatibility
+    live "/people/:id_or_slug", PersonLive.Show, :show
 
     # Collaboration routes
     live "/collaborations", CollaborationLive.Index, :index

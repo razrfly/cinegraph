@@ -2,11 +2,14 @@ defmodule Cinegraph.Movies.Person do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Cinegraph.Movies.PersonSlug
+
   @primary_key {:id, :id, autogenerate: true}
   schema "people" do
     field :tmdb_id, :integer
     field :imdb_id, :string
     field :name, :string
+    field :slug, PersonSlug.Type
     field :gender, :integer
     field :birthday, :date
     field :deathday, :date
@@ -45,6 +48,8 @@ defmodule Cinegraph.Movies.Person do
     ])
     |> validate_required([:tmdb_id, :name])
     |> unique_constraint(:tmdb_id)
+    |> PersonSlug.maybe_generate_slug()
+    |> unique_constraint(:slug)
   end
 
   @doc """
@@ -56,6 +61,8 @@ defmodule Cinegraph.Movies.Person do
     |> cast(attrs, [:imdb_id, :name])
     |> validate_required([:imdb_id, :name])
     |> unique_constraint(:imdb_id)
+    |> PersonSlug.maybe_generate_slug()
+    |> unique_constraint(:slug)
   end
 
   @doc """
