@@ -22,6 +22,11 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
   @batch_size 100
 
   @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"operation" => "backfill_movie_slugs", "last_id" => last_id}}) do
+    Logger.info("Continuing movie slug backfill job after ID #{last_id}")
+    backfill_movie_slugs_batch(last_id)
+  end
+
   def perform(%Oban.Job{args: %{"operation" => "backfill_movie_slugs"}}) do
     Logger.info("Starting movie slug backfill job")
     backfill_movie_slugs()
@@ -155,6 +160,7 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
   end
 
   # Backfill movie slugs (regenerate all using new SlugUtils)
+  # Uses cursor-based batching to ensure partial progress is persisted across job retries
   defp backfill_movie_slugs do
     total =
       from(m in Movie, select: count(m.id))
@@ -162,26 +168,44 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
 
     Logger.info("Starting full movie slug backfill for #{total} movies")
 
-    # Repo.stream must be wrapped in a transaction
-    Repo.transaction(
-      fn ->
-        from(m in Movie, select: m.id, order_by: m.id)
-        |> Repo.stream()
-        |> Stream.with_index(1)
-        |> Stream.each(fn {movie_id, index} ->
-          fix_movie_slug(movie_id)
+    # Start with ID 0 to get all records with ID > 0
+    backfill_movie_slugs_batch(0)
+  end
 
-          if rem(index, 1000) == 0 do
-            Logger.info("Backfilled #{index}/#{total} movie slugs")
-          end
-        end)
-        |> Stream.run()
-      end,
-      timeout: :infinity
-    )
+  defp backfill_movie_slugs_batch(last_id) do
+    # Get a batch of movies using ID cursor for reliable pagination
+    movies =
+      from(m in Movie,
+        where: m.id > ^last_id,
+        order_by: m.id,
+        limit: ^@batch_size,
+        select: m.id
+      )
+      |> Repo.all()
 
-    Logger.info("Completed movie slug backfill")
-    :ok
+    batch_count = length(movies)
+
+    if batch_count > 0 do
+      # Get the last ID from this batch for cursor-based pagination
+      max_id = List.last(movies)
+      Logger.info("Processing batch of #{batch_count} movies (IDs #{last_id + 1} to #{max_id})")
+
+      Enum.each(movies, fn movie_id ->
+        fix_movie_slug(movie_id)
+      end)
+
+      # Schedule next batch if there might be more
+      if batch_count == @batch_size do
+        schedule_next_movie_batch(max_id)
+      else
+        Logger.info("Completed movie slug backfill (last batch)")
+      end
+
+      :ok
+    else
+      Logger.info("Completed movie slug backfill (no more records)")
+      :ok
+    end
   end
 
   # Backfill people slugs
@@ -336,6 +360,12 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
         where: p.slug == ^slug and p.id != ^person_id
 
     Repo.exists?(query)
+  end
+
+  defp schedule_next_movie_batch(last_id) do
+    %{operation: "backfill_movie_slugs", last_id: last_id}
+    |> new(schedule_in: 1)
+    |> Oban.insert()
   end
 
   defp schedule_next_people_batch(last_id) do
