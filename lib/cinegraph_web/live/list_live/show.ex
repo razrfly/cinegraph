@@ -56,6 +56,7 @@ defmodule CinegraphWeb.ListLive.Show do
              |> assign(:list_info, list_info)
              |> assign(:movies, [])
              |> assign(:meta, %{})
+             |> assign(:params, params)
              |> put_flash(:error, "Unable to load movies")}
         end
 

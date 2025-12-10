@@ -95,7 +95,7 @@ defmodule Cinegraph.Lists.ListSlugs do
       metadata = Map.get(@list_metadata, key, %{})
       Map.merge(metadata, %{key: key, slug: slug})
     end)
-    |> Enum.sort_by(& &1.name)
+    |> Enum.sort_by(&Map.get(&1, :name, ""))
   end
 
   @doc """

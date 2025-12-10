@@ -64,6 +64,7 @@ defmodule CinegraphWeb.AwardsLive.Show do
            |> assign(:organization, organization)
            |> assign(:movies, [])
            |> assign(:meta, %{})
+           |> assign(:params, params)
            |> put_flash(:error, "Unable to load movies")}
       end
     else
