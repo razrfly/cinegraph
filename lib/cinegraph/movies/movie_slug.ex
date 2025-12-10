@@ -2,6 +2,11 @@ defmodule Cinegraph.Movies.MovieSlug do
   @moduledoc """
   Slug generation module for movies with intelligent conflict resolution.
 
+  Uses Cinegraph.Slugs.SlugUtils for proper Unicode transliteration:
+  - Chinese titles: "七人の侍" → "qi-ren-no-shi"
+  - Cyrillic titles: "Москва слезам не верит" → "moskva-slezam-ne-verit"
+  - Japanese titles: "東京物語" → "dong-jing-wu-yu"
+
   Primary pattern: title-year (e.g., "the-matrix-1999")
   Conflict resolution order:
     1. Try adding country code from origin_country field (e.g., "the-office-2005-us")
@@ -14,6 +19,7 @@ defmodule Cinegraph.Movies.MovieSlug do
   import Ecto.Query
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, Credit}
+  alias Cinegraph.Slugs.SlugUtils
 
   @doc """
   Dynamically determine slug sources based on the movie data.
@@ -39,8 +45,7 @@ defmodule Cinegraph.Movies.MovieSlug do
   end
 
   defp create_base_slug(title, year) when is_binary(title) do
-    year_str = if year, do: "#{year}", else: "unknown"
-    "#{slugify_string(title)}-#{year_str}"
+    SlugUtils.create_slug_with_year(title, year)
   end
 
   defp resolve_conflict(base_slug, changeset) do
@@ -92,8 +97,7 @@ defmodule Cinegraph.Movies.MovieSlug do
     # Get the country from origin_country field (it's already an array of country codes)
     case Ecto.Changeset.get_field(changeset, :origin_country) do
       [country | _] when is_binary(country) ->
-        # Just use the country code as-is, lowercased
-        country_code = String.downcase(country)
+        country_code = SlugUtils.normalize_country(country)
         proposed_slug = "#{base_slug}-#{country_code}"
 
         if !slug_exists?(proposed_slug, movie_id) do
@@ -112,12 +116,8 @@ defmodule Cinegraph.Movies.MovieSlug do
     director_name = get_director_name(changeset, movie_id)
 
     if director_name do
-      # Just take the last name of the director for the slug
-      director_slug =
-        director_name
-        |> String.split(" ")
-        |> List.last()
-        |> slugify_string()
+      # Use SlugUtils for proper transliteration of director names
+      director_slug = SlugUtils.slugify_last_name(director_name)
 
       proposed_slug = "#{base_slug}-#{director_slug}"
 
@@ -198,23 +198,9 @@ defmodule Cinegraph.Movies.MovieSlug do
   defp find_gap_or_next([h | t], next) when h == next, do: find_gap_or_next(t, next + 1)
   defp find_gap_or_next([_h | t], next), do: find_gap_or_next(t, next)
 
-  defp slugify_string(nil), do: "untitled"
-  defp slugify_string(""), do: "untitled"
-
-  defp slugify_string(string) when is_binary(string) do
-    string
-    |> String.downcase()
-    |> String.normalize(:nfd)
-    |> String.replace(~r/[^a-z0-9\s-]/u, "")
-    |> String.replace(~r/\s+/, "-")
-    |> String.replace(~r/-+/, "-")
-    |> String.trim("-")
-  end
-
   defp extract_year(changeset) do
-    case Ecto.Changeset.get_field(changeset, :release_date) do
-      %Date{year: year} -> year
-      _ -> nil
-    end
+    changeset
+    |> Ecto.Changeset.get_field(:release_date)
+    |> SlugUtils.extract_year()
   end
 end

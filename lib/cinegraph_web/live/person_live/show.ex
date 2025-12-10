@@ -11,8 +11,9 @@ defmodule CinegraphWeb.PersonLive.Show do
   end
 
   @impl true
-  def handle_params(%{"id" => id}, _url, socket) do
-    case People.get_person_with_credits(id) do
+  # Handle TMDb ID lookup - redirect to canonical slug URL
+  def handle_params(%{"tmdb_id" => tmdb_id}, _url, socket) do
+    case People.get_person_by_tmdb_id(String.to_integer(tmdb_id)) do
       nil ->
         socket =
           socket
@@ -22,24 +23,61 @@ defmodule CinegraphWeb.PersonLive.Show do
         {:noreply, socket}
 
       person ->
-        career_stats = People.get_career_stats(person.id)
-        collaboration_stats = get_collaboration_stats(person.id)
-        frequent_collaborators = get_frequent_collaborators(person)
+        # Redirect to canonical slug URL if slug exists
+        redirect_path =
+          if person.slug do
+            ~p"/people/#{person.slug}"
+          else
+            ~p"/people/#{person.id}"
+          end
 
+        {:noreply, push_navigate(socket, to: redirect_path)}
+    end
+  end
+
+  # Handle ID or slug lookup
+  def handle_params(%{"id_or_slug" => id_or_slug}, _url, socket) do
+    case People.get_person_with_credits_by_id_or_slug(id_or_slug) do
+      nil ->
         socket =
           socket
-          |> assign(:person, person)
-          |> assign(:career_stats, career_stats)
-          |> assign(:collaboration_stats, collaboration_stats)
-          |> assign(:frequent_collaborators, frequent_collaborators)
-          |> assign(:page_title, person.name)
-          |> assign(:show_six_degrees, false)
-          |> assign(:six_degrees_target, nil)
-          |> assign(:six_degrees_path, nil)
-          |> assign(:six_degrees_loading, false)
+          |> put_flash(:error, "Person not found")
+          |> push_navigate(to: ~p"/people")
 
         {:noreply, socket}
+
+      person ->
+        # If accessed by ID and slug exists, redirect to canonical slug URL
+        if is_numeric?(id_or_slug) && person.slug do
+          {:noreply, push_navigate(socket, to: ~p"/people/#{person.slug}")}
+        else
+          {:noreply, load_person_data(socket, person)}
+        end
     end
+  end
+
+  defp is_numeric?(string) do
+    case Integer.parse(string) do
+      {_, ""} -> true
+      _ -> false
+    end
+  end
+
+  defp load_person_data(socket, person) do
+    career_stats = People.get_career_stats(person.id)
+    collaboration_stats = get_collaboration_stats(person.id)
+    frequent_collaborators = get_frequent_collaborators(person)
+
+    socket
+    |> assign(:person, person)
+    |> assign(:career_stats, career_stats)
+    |> assign(:collaboration_stats, collaboration_stats)
+    |> assign(:frequent_collaborators, frequent_collaborators)
+    |> assign(:page_title, person.name)
+    |> assign(:show_six_degrees, false)
+    |> assign(:six_degrees_target, nil)
+    |> assign(:six_degrees_path, nil)
+    |> assign(:six_degrees_loading, false)
   end
 
   @impl true

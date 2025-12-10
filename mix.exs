@@ -65,6 +65,7 @@ defmodule Cinegraph.MixProject do
       {:dotenvy, "~> 0.8.0"},
       {:number, "~> 1.0"},
       {:ecto_autoslug_field, "~> 3.1"},
+      {:slugify, "~> 1.3"},
       {:flop, "~> 0.26"},
       {:flop_phoenix, "~> 0.25.3"},
       {:cachex, "~> 3.6"},
