@@ -27,9 +27,9 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
     backfill_movie_slugs()
   end
 
-  def perform(%Oban.Job{args: %{"operation" => "backfill_people_slugs", "offset" => offset}}) do
-    Logger.info("Continuing people slug backfill job at offset #{offset}")
-    backfill_people_slugs_batch(offset)
+  def perform(%Oban.Job{args: %{"operation" => "backfill_people_slugs", "last_id" => last_id}}) do
+    Logger.info("Continuing people slug backfill job after ID #{last_id}")
+    backfill_people_slugs_batch(last_id)
   end
 
   def perform(%Oban.Job{args: %{"operation" => "backfill_people_slugs"}}) do
@@ -162,17 +162,23 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
 
     Logger.info("Starting full movie slug backfill for #{total} movies")
 
-    from(m in Movie, select: m.id, order_by: m.id)
-    |> Repo.stream()
-    |> Stream.with_index(1)
-    |> Stream.each(fn {movie_id, index} ->
-      fix_movie_slug(movie_id)
+    # Repo.stream must be wrapped in a transaction
+    Repo.transaction(
+      fn ->
+        from(m in Movie, select: m.id, order_by: m.id)
+        |> Repo.stream()
+        |> Stream.with_index(1)
+        |> Stream.each(fn {movie_id, index} ->
+          fix_movie_slug(movie_id)
 
-      if rem(index, 1000) == 0 do
-        Logger.info("Backfilled #{index}/#{total} movie slugs")
-      end
-    end)
-    |> Stream.run()
+          if rem(index, 1000) == 0 do
+            Logger.info("Backfilled #{index}/#{total} movie slugs")
+          end
+        end)
+        |> Stream.run()
+      end,
+      timeout: :infinity
+    )
 
     Logger.info("Completed movie slug backfill")
     :ok
@@ -187,6 +193,7 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
     Logger.info("Found #{total} people without slugs to backfill")
 
     if total > 0 do
+      # Start with ID 0 to get all records with ID > 0
       backfill_people_slugs_batch(0)
     else
       Logger.info("No people need slug backfill")
@@ -194,21 +201,23 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
     end
   end
 
-  defp backfill_people_slugs_batch(offset) do
-    # Get a batch of people without slugs
+  defp backfill_people_slugs_batch(last_id) do
+    # Get a batch of people without slugs using ID cursor instead of offset.
+    # This avoids skipping records when the result set shrinks as records get slugs.
     people =
       from(p in Person,
-        where: is_nil(p.slug),
+        where: is_nil(p.slug) and p.id > ^last_id,
         order_by: p.id,
-        limit: ^@batch_size,
-        offset: ^offset
+        limit: ^@batch_size
       )
       |> Repo.all()
 
     batch_count = length(people)
 
     if batch_count > 0 do
-      Logger.info("Processing batch of #{batch_count} people at offset #{offset}")
+      # Get the last ID from this batch for cursor-based pagination
+      max_id = List.last(people).id
+      Logger.info("Processing batch of #{batch_count} people (IDs #{last_id + 1} to #{max_id})")
 
       Enum.each(people, fn person ->
         generate_person_slug(person)
@@ -216,7 +225,7 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
 
       # Schedule next batch if there might be more
       if batch_count == @batch_size do
-        schedule_next_people_batch(offset + @batch_size)
+        schedule_next_people_batch(max_id)
       else
         Logger.info("Completed people slug backfill (last batch)")
       end
@@ -329,8 +338,8 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
     Repo.exists?(query)
   end
 
-  defp schedule_next_people_batch(offset) do
-    %{operation: "backfill_people_slugs", offset: offset}
+  defp schedule_next_people_batch(last_id) do
+    %{operation: "backfill_people_slugs", last_id: last_id}
     |> new(schedule_in: 1)
     |> Oban.insert()
   end

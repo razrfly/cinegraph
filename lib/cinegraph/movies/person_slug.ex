@@ -202,8 +202,13 @@ defmodule Cinegraph.Movies.PersonSlug do
       nil ->
         # If no tmdb_id, use the database id
         case Ecto.Changeset.get_field(changeset, :id) do
-          nil -> "person-#{:rand.uniform(999_999)}"
-          id -> "person-#{id}"
+          nil ->
+            # Generate a URL-safe random suffix to avoid collisions
+            random_suffix = :crypto.strong_rand_bytes(8) |> Base.url_encode64(padding: false)
+            "person-#{random_suffix}"
+
+          id ->
+            "person-#{id}"
         end
 
       tmdb_id ->

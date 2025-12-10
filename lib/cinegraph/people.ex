@@ -77,7 +77,9 @@ defmodule Cinegraph.People do
   First tries to parse as integer ID, then falls back to slug lookup.
   Returns nil if not found.
   """
-  def get_person_by_id_or_slug(id_or_slug) do
+  def get_person_by_id_or_slug(id) when is_integer(id), do: get_person(id)
+
+  def get_person_by_id_or_slug(id_or_slug) when is_binary(id_or_slug) do
     case Integer.parse(id_or_slug) do
       {id, ""} -> get_person(id)
       _ -> get_person_by_slug(id_or_slug)

@@ -148,27 +148,39 @@ defmodule Cinegraph.Slugs.SlugUtils do
       iex> SlugUtils.create_person_slug_with_year("成龍", 1954)
       "cheng-long-1954"
 
+      iex> SlugUtils.create_person_slug_with_year("Unknown", nil)
+      "unknown-unknown"
+
   """
   @spec create_person_slug_with_year(String.t() | nil, integer() | nil) :: String.t()
   def create_person_slug_with_year(name, year) do
     base = slugify(name)
-    "#{base}-#{year}"
+    year_str = if year, do: "#{year}", else: "unknown"
+    "#{base}-#{year_str}"
   end
 
   @doc """
   Creates a person slug with country for disambiguation.
+
+  Returns just the base slug if country is nil or not recognized.
 
   ## Examples
 
       iex> SlugUtils.create_person_slug_with_country("Michael Jackson", "US")
       "michael-jackson-us"
 
+      iex> SlugUtils.create_person_slug_with_country("Unknown Person", nil)
+      "unknown-person"
+
   """
   @spec create_person_slug_with_country(String.t() | nil, String.t() | nil) :: String.t()
   def create_person_slug_with_country(name, country) do
     base = slugify(name)
-    country_code = normalize_country(country)
-    "#{base}-#{country_code}"
+
+    case normalize_country(country) do
+      nil -> base
+      country_code -> "#{base}-#{country_code}"
+    end
   end
 
   @doc """
