@@ -30,7 +30,8 @@ defmodule Cinegraph.Repo.Migrations.RemoveAdditionalRedundantIndexes do
     # Covered by idx_movie_credits_movie_person_type (movie_id, person_id, credit_type, job)
     # PlanetScale issues #21 and #29
     drop_if_exists index(:movie_credits, [:movie_id, :person_id],
-      name: :movie_credits_movie_id_person_id_index)
+                     name: :movie_credits_movie_id_person_id_index
+                   )
 
     # ============================================
     # collaboration_details table (1 redundant index)
@@ -39,7 +40,8 @@ defmodule Cinegraph.Repo.Migrations.RemoveAdditionalRedundantIndexes do
     # Covered by unique composite index on (collaboration_id, movie_id, collaboration_type)
     # PlanetScale issue #7
     drop_if_exists index(:collaboration_details, [:collaboration_id],
-      name: :collaboration_details_collaboration_id_index)
+                     name: :collaboration_details_collaboration_id_index
+                   )
 
     # ============================================
     # movie_spoken_languages table (1 redundant index)
@@ -48,7 +50,8 @@ defmodule Cinegraph.Repo.Migrations.RemoveAdditionalRedundantIndexes do
     # Covered by movie_spoken_languages_movie_id_spoken_language_id_index
     # PlanetScale issue #6
     drop_if_exists index(:movie_spoken_languages, [:movie_id],
-      name: :movie_spoken_languages_movie_id_index)
+                     name: :movie_spoken_languages_movie_id_index
+                   )
 
     # ============================================
     # movie_release_dates table (1 redundant index)
@@ -57,7 +60,8 @@ defmodule Cinegraph.Repo.Migrations.RemoveAdditionalRedundantIndexes do
     # Covered by movie_release_dates_movie_id_country_code_release_type_index
     # PlanetScale issue #5
     drop_if_exists index(:movie_release_dates, [:movie_id],
-      name: :movie_release_dates_movie_id_index)
+                     name: :movie_release_dates_movie_id_index
+                   )
 
     # ============================================
     # movie_production_countries table (1 redundant index)
@@ -66,7 +70,8 @@ defmodule Cinegraph.Repo.Migrations.RemoveAdditionalRedundantIndexes do
     # Covered by movie_production_countries_movie_id_production_country_id_index
     # PlanetScale issue #4
     drop_if_exists index(:movie_production_countries, [:movie_id],
-      name: :movie_production_countries_movie_id_index)
+                     name: :movie_production_countries_movie_id_index
+                   )
 
     # ============================================
     # movie_genres table (1 redundant index)
@@ -74,8 +79,7 @@ defmodule Cinegraph.Repo.Migrations.RemoveAdditionalRedundantIndexes do
 
     # Covered by movie_genres_movie_id_genre_id_index
     # PlanetScale issue #3
-    drop_if_exists index(:movie_genres, [:movie_id],
-      name: :movie_genres_movie_id_index)
+    drop_if_exists index(:movie_genres, [:movie_id], name: :movie_genres_movie_id_index)
   end
 
   def down do
@@ -83,26 +87,30 @@ defmodule Cinegraph.Repo.Migrations.RemoveAdditionalRedundantIndexes do
 
     # movie_credits
     create_if_not_exists index(:movie_credits, [:movie_id, :person_id],
-      name: :movie_credits_movie_id_person_id_index)
+                           name: :movie_credits_movie_id_person_id_index
+                         )
 
     # collaboration_details
     create_if_not_exists index(:collaboration_details, [:collaboration_id],
-      name: :collaboration_details_collaboration_id_index)
+                           name: :collaboration_details_collaboration_id_index
+                         )
 
     # movie_spoken_languages
     create_if_not_exists index(:movie_spoken_languages, [:movie_id],
-      name: :movie_spoken_languages_movie_id_index)
+                           name: :movie_spoken_languages_movie_id_index
+                         )
 
     # movie_release_dates
     create_if_not_exists index(:movie_release_dates, [:movie_id],
-      name: :movie_release_dates_movie_id_index)
+                           name: :movie_release_dates_movie_id_index
+                         )
 
     # movie_production_countries
     create_if_not_exists index(:movie_production_countries, [:movie_id],
-      name: :movie_production_countries_movie_id_index)
+                           name: :movie_production_countries_movie_id_index
+                         )
 
     # movie_genres
-    create_if_not_exists index(:movie_genres, [:movie_id],
-      name: :movie_genres_movie_id_index)
+    create_if_not_exists index(:movie_genres, [:movie_id], name: :movie_genres_movie_id_index)
   end
 end

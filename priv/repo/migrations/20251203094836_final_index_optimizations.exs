@@ -27,7 +27,8 @@ defmodule Cinegraph.Repo.Migrations.FinalIndexOptimizations do
     # Redundant: covered by festival_nominations_unique_nomination_idx
     # which has the same columns (ceremony_id, category_id, movie_id) but is unique
     drop_if_exists index(:festival_nominations, [:ceremony_id, :category_id, :movie_id],
-      name: :festival_nominations_ceremony_id_category_id_movie_id_index)
+                     name: :festival_nominations_ceremony_id_category_id_movie_id_index
+                   )
 
     # ============================================
     # movies table - Add year extraction index (#32)
@@ -36,17 +37,18 @@ defmodule Cinegraph.Repo.Migrations.FinalIndexOptimizations do
     # Supports queries like: WHERE EXTRACT(YEAR FROM release_date) = ?
     # Used in filters.ex, custom_filters.ex, year_imports_live.ex,
     # daily_year_import_worker.ex, movie_predictor.ex, collaborations.ex
-    create index(:movies, ["EXTRACT(YEAR FROM release_date)"],
-      name: :idx_movies_release_year)
+    create index(:movies, ["EXTRACT(YEAR FROM release_date)"], name: :idx_movies_release_year)
   end
 
   def down do
     # Remove the year extraction index
     drop_if_exists index(:movies, ["EXTRACT(YEAR FROM release_date)"],
-      name: :idx_movies_release_year)
+                     name: :idx_movies_release_year
+                   )
 
     # Recreate the redundant festival_nominations index
     create_if_not_exists index(:festival_nominations, [:ceremony_id, :category_id, :movie_id],
-      name: :festival_nominations_ceremony_id_category_id_movie_id_index)
+                           name: :festival_nominations_ceremony_id_category_id_movie_id_index
+                         )
   end
 end

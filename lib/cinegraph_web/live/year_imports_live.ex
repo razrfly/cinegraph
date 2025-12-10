@@ -242,13 +242,14 @@ defmodule CinegraphWeb.YearImportsLive do
       progress_pct = ImportStateV2.get("year_#{year}_progress")
 
       # Get job counts for this year
-      {pending, executing, completed, failed} = YearImportCompletionWorker.count_jobs_for_year(year)
+      {pending, executing, completed, failed} =
+        YearImportCompletionWorker.count_jobs_for_year(year)
 
       status =
         cond do
           bulk_complete -> :bulk_complete
           year > last_completed_year -> :pending
-          year == last_completed_year and (pending + executing) > 0 -> :in_progress
+          year == last_completed_year and pending + executing > 0 -> :in_progress
           year < last_completed_year -> :completed
           our_count > 0 and tmdb_count > 0 and our_count >= tmdb_count * 0.95 -> :completed
           true -> :pending
@@ -507,7 +508,7 @@ defmodule CinegraphWeb.YearImportsLive do
           </.link>
         </div>
       </div>
-
+      
     <!-- Overall Stats -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div class="bg-white rounded-lg shadow p-6">
@@ -550,7 +551,7 @@ defmodule CinegraphWeb.YearImportsLive do
           </div>
         </div>
       </div>
-
+      
     <!-- Controls -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h2 class="text-lg font-semibold mb-4">Import Controls</h2>
@@ -587,7 +588,7 @@ defmodule CinegraphWeb.YearImportsLive do
               Start Next Year Import
             <% end %>
           </button>
-
+          
     <!-- Import Specific Year -->
           <form phx-submit="import_year" class="flex items-center gap-2">
             <input
@@ -607,7 +608,7 @@ defmodule CinegraphWeb.YearImportsLive do
               Import Year
             </button>
           </form>
-
+          
     <!-- Pause/Resume Toggle -->
           <button
             phx-click="toggle_pause"
@@ -640,7 +641,7 @@ defmodule CinegraphWeb.YearImportsLive do
               </span>
             <% end %>
           </button>
-
+          
     <!-- Status Indicator -->
           <div class="ml-auto flex items-center gap-2">
             <%= if @import_paused do %>
@@ -650,8 +651,7 @@ defmodule CinegraphWeb.YearImportsLive do
             <% else %>
               <%= if @is_running do %>
                 <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
-                  <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                  Running
+                  <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Running
                 </span>
               <% else %>
                 <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">
@@ -662,7 +662,7 @@ defmodule CinegraphWeb.YearImportsLive do
           </div>
         </div>
       </div>
-
+      
     <!-- Queue Status -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h2 class="text-lg font-semibold mb-4">Queue Status</h2>
@@ -688,7 +688,7 @@ defmodule CinegraphWeb.YearImportsLive do
           <% end %>
         </div>
       </div>
-
+      
     <!-- Year-by-Year Grid -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h2 class="text-lg font-semibold mb-4">Year Progress</h2>
@@ -752,10 +752,8 @@ defmodule CinegraphWeb.YearImportsLive do
                   <td class="px-4 py-3 whitespace-nowrap text-sm">
                     <%= if year_data.pending_jobs + year_data.executing_jobs + year_data.completed_jobs > 0 do %>
                       <span class="text-yellow-600">{year_data.pending_jobs}</span>
-                      /
-                      <span class="text-blue-600">{year_data.executing_jobs}</span>
-                      /
-                      <span class="text-green-600">{year_data.completed_jobs}</span>
+                      / <span class="text-blue-600">{year_data.executing_jobs}</span>
+                      / <span class="text-green-600">{year_data.completed_jobs}</span>
                       <%= if year_data.failed_jobs > 0 do %>
                         / <span class="text-red-600">{year_data.failed_jobs}</span>
                       <% end %>
@@ -805,7 +803,7 @@ defmodule CinegraphWeb.YearImportsLive do
           </table>
         </div>
       </div>
-
+      
     <!-- Recent Activity -->
       <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-lg font-semibold mb-4">Recent Activity (Last 24 Hours)</h2>
@@ -825,7 +823,7 @@ defmodule CinegraphWeb.YearImportsLive do
           </div>
         <% end %>
       </div>
-
+      
     <!-- Year Details Modal -->
       <%= if @show_year_details && @year_details do %>
         <div
@@ -839,10 +837,7 @@ defmodule CinegraphWeb.YearImportsLive do
             <div class="p-6">
               <div class="flex items-center justify-between mb-4">
                 <h3 class="text-xl font-bold">Year {@year_details.year} Details</h3>
-                <button
-                  phx-click="close_year_details"
-                  class="text-gray-400 hover:text-gray-600"
-                >
+                <button phx-click="close_year_details" class="text-gray-400 hover:text-gray-600">
                   <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
@@ -853,7 +848,7 @@ defmodule CinegraphWeb.YearImportsLive do
                   </svg>
                 </button>
               </div>
-
+              
     <!-- Year Stats -->
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div class="bg-gray-50 rounded p-3">
@@ -879,7 +874,7 @@ defmodule CinegraphWeb.YearImportsLive do
                   <div class="text-xl font-bold">{@year_details.total_jobs}</div>
                 </div>
               </div>
-
+              
     <!-- Job Breakdown -->
               <div class="mb-6">
                 <h4 class="font-medium mb-2">Job Status</h4>
@@ -896,7 +891,7 @@ defmodule CinegraphWeb.YearImportsLive do
                   <span class="text-red-600">Failed: {@year_details.failed_jobs}</span>
                 </div>
               </div>
-
+              
     <!-- Timestamps -->
               <div class="mb-6">
                 <h4 class="font-medium mb-2">Timeline</h4>
@@ -909,7 +904,7 @@ defmodule CinegraphWeb.YearImportsLive do
                   </div>
                 </div>
               </div>
-
+              
     <!-- Recent Movies -->
               <%= if @year_details.recent_movies != [] do %>
                 <div>
@@ -929,7 +924,7 @@ defmodule CinegraphWeb.YearImportsLive do
                   </div>
                 </div>
               <% end %>
-
+              
     <!-- Actions -->
               <div class="mt-6 pt-4 border-t flex justify-end gap-2">
                 <button

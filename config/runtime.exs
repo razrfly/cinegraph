@@ -2,6 +2,7 @@ import Config
 import Dotenvy
 
 # Load .env files only in development
+# After source!, use env/2 to access variables (System.get_env won't see .env values)
 if config_env() == :dev do
   source!([
     ".env",
@@ -12,19 +13,22 @@ if config_env() == :dev do
   ])
 end
 
+# In dev, env!/3 reads from source!; in prod, use System.get_env
+# Note: env!/3 is only available after source! is called (dev only)
+# Syntax: env!(key, type, default) - type can be :string, :integer, :boolean, etc.
+tmdb_api_key = if config_env() == :dev, do: env!("TMDB_API_KEY", :string, nil), else: System.get_env("TMDB_API_KEY")
+omdb_api_key = if config_env() == :dev, do: env!("OMDB_API_KEY", :string, ""), else: System.get_env("OMDB_API_KEY") || ""
+zyte_api_key = if config_env() == :dev, do: env!("ZYTE_API_KEY", :string, ""), else: System.get_env("ZYTE_API_KEY") || ""
+
 # Configure TMDb
-# Use System.get_env since Dotenvy loads .env into system env in dev,
-# and Fly.io sets env vars directly in production
 # API key is optional at config time - the service will handle missing keys at runtime
-config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: System.get_env("TMDB_API_KEY")
+config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: tmdb_api_key
 
 # Configure OMDb (optional)
-config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: System.get_env("OMDB_API_KEY") || ""
+config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 
 # Configure Zyte API (optional, for Oscar scraping)
-config :cinegraph,
-       :zyte_api_key,
-       System.get_env("ZYTE_API_KEY") || ""
+config :cinegraph, :zyte_api_key, zyte_api_key
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
