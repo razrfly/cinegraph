@@ -390,7 +390,7 @@ defmodule CinegraphWeb.SEO do
 
   defp get_rating(%{tmdb_data: %{"vote_average" => avg, "vote_count" => count}})
        when is_number(avg) and is_number(count) do
-    {Float.round(avg / 1, 1), count}
+    {Float.round(avg, 1), count}
   end
 
   defp get_rating(_), do: {0, 0}

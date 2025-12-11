@@ -8,6 +8,8 @@ defmodule CinegraphWeb.Router do
     plug :put_root_layout, html: {CinegraphWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    # SEO: 301 redirects from numeric IDs to canonical slugs
+    plug CinegraphWeb.Plugs.SEORedirectPlug
   end
 
   pipeline :api do
@@ -22,6 +24,10 @@ defmodule CinegraphWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :coming_soon
+
+    # Sitemap routes (no authentication required)
+    get "/sitemap.xml", SitemapController, :index
+    get "/sitemaps/:filename", SitemapController, :show
 
     # ========================================================================
     # MOVIE VIEWING ROUTES

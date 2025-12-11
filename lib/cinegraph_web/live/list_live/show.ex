@@ -8,6 +8,8 @@ defmodule CinegraphWeb.ListLive.Show do
   alias Cinegraph.Lists.ListSlugs
   alias Cinegraph.Movies.Search
 
+  @site_url "https://cinegraph.io"
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -48,7 +50,7 @@ defmodule CinegraphWeb.ListLive.Show do
                extract_sort_direction(params["sort"] || "release_date_desc")
              )
              |> assign_pagination(meta)
-             |> assign(:page_title, list_info.name)}
+             |> assign_list_page_seo(list_info, movies)}
 
           {:error, _} ->
             {:noreply,
@@ -137,5 +139,37 @@ defmodule CinegraphWeb.ListLive.Show do
     |> Map.delete("slug")
     |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
     |> Map.new()
+  end
+
+  # SEO helper for list pages
+  defp assign_list_page_seo(socket, list_info, movies) do
+    description = list_info.description || "Browse #{list_info.name} on Cinegraph"
+
+    socket
+    |> assign(:page_title, list_info.name)
+    |> assign(:meta_description, truncate_text(description, 160))
+    |> assign(:canonical_url, "#{@site_url}/lists/#{list_info.slug}")
+    |> assign(:og_title, list_info.name)
+    |> assign(:og_description, truncate_text(description, 200))
+    |> assign(:og_type, "website")
+    |> assign(:og_url, "#{@site_url}/lists/#{list_info.slug}")
+    |> maybe_assign_og_image(movies)
+    |> assign(:json_ld, CinegraphWeb.SEO.item_list_schema(movies, list_info.name))
+  end
+
+  defp maybe_assign_og_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
+    assign(socket, :og_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")
+  end
+
+  defp maybe_assign_og_image(socket, _movies), do: socket
+
+  defp truncate_text(nil, _length), do: nil
+
+  defp truncate_text(text, length) when is_binary(text) do
+    if String.length(text) > length do
+      text |> String.slice(0, length - 3) |> String.trim_trailing() |> Kernel.<>("...")
+    else
+      text
+    end
   end
 end
