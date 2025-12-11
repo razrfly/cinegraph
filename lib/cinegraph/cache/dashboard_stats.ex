@@ -60,6 +60,23 @@ defmodule Cinegraph.Cache.DashboardStats do
   end
 
   @doc """
+  Get cached year imports stats. Returns immediately with defaults if not cached.
+  Triggers async computation if cache is stale/missing.
+  """
+  def get_year_imports_stats do
+    case get_cached(:year_imports_stats) do
+      {:ok, stats} ->
+        stats
+
+      :miss ->
+        # Trigger async computation
+        GenServer.cast(__MODULE__, :compute_year_imports_async)
+        # Return defaults immediately so page loads
+        default_year_imports_stats()
+    end
+  end
+
+  @doc """
   Check if stats are currently being computed.
   """
   def computing? do
@@ -147,6 +164,33 @@ defmodule Cinegraph.Cache.DashboardStats do
   end
 
   @impl true
+  def handle_cast(:compute_year_imports_async, state) do
+    # Check cache before starting computation
+    case get_cached(:year_imports_stats) do
+      {:ok, _stats} ->
+        {:noreply, state}
+
+      :miss ->
+        # Start async computation (independent of main stats)
+        Logger.info("DashboardStats: Starting year imports async computation")
+        parent = self()
+
+        Task.start(fn ->
+          try do
+            stats = compute_year_imports_stats()
+            send(parent, {:year_imports_stats_computed, stats})
+          rescue
+            e ->
+              Logger.error("DashboardStats: Year imports computation failed: #{inspect(e)}")
+              send(parent, :year_imports_computation_failed)
+          end
+        end)
+
+        {:noreply, state}
+    end
+  end
+
+  @impl true
   def handle_info(:initial_compute, state) do
     Logger.info("DashboardStats: Initial computation triggered")
     GenServer.cast(self(), :compute_async)
@@ -172,6 +216,21 @@ defmodule Cinegraph.Cache.DashboardStats do
   def handle_info(:stats_computation_failed, state) do
     Logger.warning("DashboardStats: Computation failed, will retry on next request")
     {:noreply, %{state | computing: false}}
+  end
+
+  @impl true
+  def handle_info({:year_imports_stats_computed, stats}, state) do
+    Logger.info("DashboardStats: Year imports computation complete, caching results")
+    cache_put(:year_imports_stats, stats)
+    # Broadcast to all connected clients that year import stats are ready
+    Phoenix.PubSub.broadcast(Cinegraph.PubSub, "year_imports_stats", :stats_updated)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(:year_imports_computation_failed, state) do
+    Logger.warning("DashboardStats: Year imports computation failed, will retry on next request")
+    {:noreply, state}
   end
 
   # Private Functions
@@ -869,4 +928,283 @@ defmodule Cinegraph.Cache.DashboardStats do
   end
 
   defp format_number(num), do: to_string(num)
+
+  # Year Imports Stats Functions
+
+  defp default_year_imports_stats do
+    %{
+      years: [],
+      stats: %{
+        total_our_movies: 0,
+        total_tmdb_movies: 0,
+        overall_pct: 0.0,
+        completed_years: 0,
+        in_progress_years: 0,
+        pending_years: 0,
+        remaining_movies: 0,
+        import_rate: 0.0,
+        eta: "Unknown"
+      },
+      queue_stats: [
+        %{
+          queue: :tmdb_orchestration,
+          name: "Orchestration",
+          available: 0,
+          executing: 0,
+          completed: 0
+        },
+        %{queue: :tmdb_discovery, name: "Discovery", available: 0, executing: 0, completed: 0},
+        %{queue: :tmdb_details, name: "Details", available: 0, executing: 0, completed: 0}
+      ],
+      is_running: false,
+      recent_activity: [],
+      loading: true
+    }
+  end
+
+  defp compute_year_imports_stats do
+    Logger.info("DashboardStats: Computing year imports stats...")
+
+    current_year = Date.utc_today().year
+    years = compute_all_years_batched(current_year)
+    stats = calculate_year_stats(years)
+    queue_stats = compute_year_queue_stats()
+    is_running = check_year_import_running()
+    recent_activity = compute_recent_year_activity()
+
+    Logger.info("DashboardStats: Year imports stats computed successfully")
+
+    %{
+      years: years,
+      stats: stats,
+      queue_stats: queue_stats,
+      is_running: is_running,
+      recent_activity: recent_activity,
+      loading: false
+    }
+  end
+
+  defp compute_all_years_batched(current_year) do
+    last_completed_year = ImportStateV2.get_integer("last_completed_year", current_year + 1)
+    bulk_complete = ImportStateV2.get("bulk_import_complete") == "true"
+
+    # Determine range to show
+    end_year = max(1900, last_completed_year - 20)
+
+    # Batch query: Get movie counts by release year in ONE query
+    year_movie_counts =
+      Repo.all(
+        from m in Movie,
+          where:
+            not is_nil(m.release_date) and
+              fragment("EXTRACT(YEAR FROM ?)::integer", m.release_date) >= ^end_year and
+              fragment("EXTRACT(YEAR FROM ?)::integer", m.release_date) <= ^current_year,
+          group_by: fragment("EXTRACT(YEAR FROM ?)::integer", m.release_date),
+          select: {fragment("EXTRACT(YEAR FROM ?)::integer", m.release_date), count(m.id)}
+      )
+      |> Enum.into(%{})
+
+    # Batch query: Get job counts by year - all at once
+    year_job_counts = compute_year_job_counts_batched(end_year, current_year)
+
+    # Build year data with batched counts
+    current_year..end_year
+    |> Enum.map(fn year ->
+      our_count = Map.get(year_movie_counts, year, 0)
+      tmdb_count = ImportStateV2.get_integer("year_#{year}_total_movies", 0)
+      progress_pct = ImportStateV2.get("year_#{year}_progress")
+
+      {pending, executing, completed, failed} =
+        Map.get(year_job_counts, year, {0, 0, 0, 0})
+
+      status =
+        cond do
+          bulk_complete -> :bulk_complete
+          year > last_completed_year -> :pending
+          year == last_completed_year and pending + executing > 0 -> :in_progress
+          year < last_completed_year -> :completed
+          our_count > 0 and tmdb_count > 0 and our_count >= tmdb_count * 0.95 -> :completed
+          true -> :pending
+        end
+
+      completion_pct =
+        if tmdb_count > 0 do
+          Float.round(our_count / tmdb_count * 100, 1)
+        else
+          0.0
+        end
+
+      %{
+        year: year,
+        our_count: our_count,
+        tmdb_count: tmdb_count,
+        progress: progress_pct,
+        completion_pct: completion_pct,
+        status: status,
+        pending_jobs: pending,
+        executing_jobs: executing,
+        completed_jobs: completed,
+        failed_jobs: failed,
+        started_at: ImportStateV2.get("year_#{year}_started_at"),
+        completed_at: ImportStateV2.get("year_#{year}_completed_at")
+      }
+    end)
+  end
+
+  defp compute_year_job_counts_batched(end_year, current_year) do
+    # Query all job counts for year imports in one query
+    results =
+      Repo.all(
+        from j in Oban.Job,
+          where:
+            j.worker == "Cinegraph.Workers.TMDbDiscoveryWorker" and
+              fragment("?->>'import_type' = 'year_import'", j.args) and
+              fragment(
+                "(?->>'year')::int >= ? AND (?->>'year')::int <= ?",
+                j.args,
+                ^end_year,
+                j.args,
+                ^current_year
+              ),
+          group_by: [fragment("(?->>'year')::int", j.args), j.state],
+          select: {fragment("(?->>'year')::int", j.args), j.state, count(j.id)}
+      )
+
+    # Build map of {year => {pending, executing, completed, failed}}
+    results
+    |> Enum.reduce(%{}, fn {year, state, count}, acc ->
+      year_data = Map.get(acc, year, {0, 0, 0, 0})
+
+      new_data =
+        case state do
+          "available" -> put_elem(year_data, 0, elem(year_data, 0) + count)
+          "scheduled" -> put_elem(year_data, 0, elem(year_data, 0) + count)
+          "executing" -> put_elem(year_data, 1, count)
+          "completed" -> put_elem(year_data, 2, count)
+          "discarded" -> put_elem(year_data, 3, elem(year_data, 3) + count)
+          "cancelled" -> put_elem(year_data, 3, elem(year_data, 3) + count)
+          _ -> year_data
+        end
+
+      Map.put(acc, year, new_data)
+    end)
+  end
+
+  defp calculate_year_stats(years) do
+    total_our_movies = Enum.sum(Enum.map(years, & &1.our_count))
+    total_tmdb_movies = Enum.sum(Enum.map(years, & &1.tmdb_count))
+    completed_years = Enum.count(years, &(&1.status == :completed))
+    in_progress_years = Enum.count(years, &(&1.status == :in_progress))
+    pending_years = Enum.count(years, &(&1.status == :pending))
+
+    overall_pct =
+      if total_tmdb_movies > 0 do
+        Float.round(total_our_movies / total_tmdb_movies * 100, 2)
+      else
+        0.0
+      end
+
+    import_rate_str = ImportStateV2.get("import_rate") || "0"
+
+    rate =
+      case Float.parse(import_rate_str) do
+        {val, _} -> val
+        :error -> 0.0
+      end
+
+    remaining = max(0, total_tmdb_movies - total_our_movies)
+
+    eta =
+      if rate > 0 do
+        minutes = remaining / rate
+
+        cond do
+          minutes < 60 -> "#{round(minutes)} min"
+          minutes < 1440 -> "#{Float.round(minutes / 60, 1)} hours"
+          true -> "#{Float.round(minutes / 1440, 1)} days"
+        end
+      else
+        "Unknown"
+      end
+
+    %{
+      total_our_movies: total_our_movies,
+      total_tmdb_movies: total_tmdb_movies,
+      overall_pct: overall_pct,
+      completed_years: completed_years,
+      in_progress_years: in_progress_years,
+      pending_years: pending_years,
+      remaining_movies: remaining,
+      import_rate: rate,
+      eta: eta
+    }
+  end
+
+  defp compute_year_queue_stats do
+    queues = [:tmdb_orchestration, :tmdb_discovery, :tmdb_details]
+
+    # Batch query - get all queue/state combinations in one query
+    results =
+      Repo.all(
+        from j in Oban.Job,
+          where:
+            j.queue in ^Enum.map(queues, &Atom.to_string/1) and
+              j.state in ["available", "executing", "completed"],
+          group_by: [j.queue, j.state],
+          select: {j.queue, j.state, count(j.id)}
+      )
+
+    # Build map of results
+    results_map =
+      results
+      |> Enum.reduce(%{}, fn {queue, state, count}, acc ->
+        queue_atom = String.to_existing_atom(queue)
+        Map.update(acc, queue_atom, %{state => count}, &Map.put(&1, state, count))
+      end)
+
+    # Format for each queue
+    Enum.map(queues, fn queue ->
+      queue_data = Map.get(results_map, queue, %{})
+
+      queue_name =
+        case queue do
+          :tmdb_orchestration -> "Orchestration"
+          :tmdb_discovery -> "Discovery"
+          :tmdb_details -> "Details"
+          _ -> queue |> Atom.to_string() |> String.replace("_", " ")
+        end
+
+      %{
+        queue: queue,
+        name: queue_name,
+        available: Map.get(queue_data, "available", 0),
+        executing: Map.get(queue_data, "executing", 0),
+        completed: Map.get(queue_data, "completed", 0)
+      }
+    end)
+  end
+
+  defp compute_recent_year_activity do
+    Repo.all(
+      from a in ApiLookupMetric,
+        where:
+          a.source == "tmdb" and
+            a.operation == "import_state" and
+            a.inserted_at > ago(24, "hour"),
+        order_by: [desc: a.inserted_at],
+        limit: 20,
+        select: %{
+          key: a.target_identifier,
+          metadata: a.metadata,
+          timestamp: a.inserted_at
+        }
+    )
+    |> Enum.map(fn row ->
+      %{
+        key: row.key,
+        value: get_in(row.metadata, ["value"]) || "—",
+        timestamp: row.timestamp
+      }
+    end)
+  end
 end
