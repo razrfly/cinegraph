@@ -2,6 +2,8 @@ defmodule CinegraphWeb.YearImportsLive do
   @moduledoc """
   Dedicated LiveView for managing year-by-year TMDb imports.
   Provides detailed controls, analytics, and monitoring for the incremental import system.
+
+  Uses cached stats from DashboardStats to prevent timeout issues with large datasets.
   """
 
   use CinegraphWeb, :live_view
@@ -9,6 +11,7 @@ defmodule CinegraphWeb.YearImportsLive do
   alias Cinegraph.Imports.ImportStateV2
   alias Cinegraph.Workers.DailyYearImportWorker
   alias Cinegraph.Workers.YearImportCompletionWorker
+  alias Cinegraph.Cache.DashboardStats
   alias Cinegraph.Repo
   import Ecto.Query
   require Logger
@@ -18,8 +21,10 @@ defmodule CinegraphWeb.YearImportsLive do
     if connected?(socket) do
       # Subscribe to import progress updates
       Phoenix.PubSub.subscribe(Cinegraph.PubSub, "import_progress")
-      # Refresh data every 5 seconds
-      :timer.send_interval(5000, self(), :refresh_data)
+      # Subscribe to cached stats updates
+      Phoenix.PubSub.subscribe(Cinegraph.PubSub, "year_imports_stats")
+      # Refresh data every 30 seconds (increased from 5s since we use cache)
+      :timer.send_interval(30_000, self(), :refresh_data)
     end
 
     socket =
@@ -28,6 +33,7 @@ defmodule CinegraphWeb.YearImportsLive do
       |> assign(:import_paused, ImportStateV2.get("year_import_paused") == "true")
       |> assign(:selected_year, nil)
       |> assign(:show_year_details, false)
+      |> assign(:loading, true)
       |> load_data()
 
     {:ok, socket}
@@ -190,9 +196,18 @@ defmodule CinegraphWeb.YearImportsLive do
   end
 
   @impl true
+  def handle_info(:stats_updated, socket) do
+    # Cache has been updated, reload data
+    {:noreply, load_data(socket)}
+  end
+
+  @impl true
   def handle_info({:year_import_complete, progress}, socket) do
     message =
       "Year #{progress.year} import complete! #{progress.completed} jobs, #{progress.movie_count} movies."
+
+    # Invalidate cache when import completes
+    DashboardStats.invalidate()
 
     socket =
       socket
@@ -211,195 +226,36 @@ defmodule CinegraphWeb.YearImportsLive do
 
   defp load_data(socket) do
     current_year = Date.utc_today().year
-    years = load_all_years(current_year)
-    stats = calculate_overall_stats(years)
-    queue_stats = load_queue_stats()
-    is_running = check_import_running()
-    recent_activity = load_recent_activity()
+
+    # Use cached stats to prevent timeout issues
+    cached = DashboardStats.get_year_imports_stats()
+
+    # Provide defaults for all required fields to prevent template errors
+    default_stats = %{
+      total_our_movies: 0,
+      total_tmdb_movies: 0,
+      overall_pct: 0.0,
+      completed_years: 0,
+      in_progress_years: 0,
+      pending_years: 0,
+      remaining_movies: 0,
+      import_rate: 0.0,
+      eta: "Unknown"
+    }
 
     socket
-    |> assign(:years, years)
-    |> assign(:stats, stats)
-    |> assign(:queue_stats, queue_stats)
-    |> assign(:is_running, is_running)
-    |> assign(:recent_activity, recent_activity)
+    |> assign(:years, Map.get(cached, :years, []))
+    |> assign(:stats, Map.merge(default_stats, Map.get(cached, :stats, %{})))
+    |> assign(:queue_stats, Map.get(cached, :queue_stats, []))
+    |> assign(:is_running, Map.get(cached, :is_running, false))
+    |> assign(:recent_activity, Map.get(cached, :recent_activity, []))
     |> assign(:current_year, current_year)
+    |> assign(:loading, Map.get(cached, :loading, false))
   end
 
-  defp load_all_years(current_year) do
-    # Show years from current year back to 1900 (or earliest with data)
-    last_completed_year = ImportStateV2.get_integer("last_completed_year", current_year + 1)
-    bulk_complete = ImportStateV2.get("bulk_import_complete") == "true"
-
-    # Determine range to show
-    # Show 10 years ahead of where we're importing, plus all completed years
-    end_year = max(1900, last_completed_year - 20)
-
-    current_year..end_year
-    |> Enum.map(fn year ->
-      our_count = DailyYearImportWorker.count_movies_for_year(year)
-      tmdb_count = ImportStateV2.get_integer("year_#{year}_total_movies", 0)
-      progress_pct = ImportStateV2.get("year_#{year}_progress")
-
-      # Get job counts for this year
-      {pending, executing, completed, failed} =
-        YearImportCompletionWorker.count_jobs_for_year(year)
-
-      status =
-        cond do
-          bulk_complete -> :bulk_complete
-          year > last_completed_year -> :pending
-          year == last_completed_year and pending + executing > 0 -> :in_progress
-          year < last_completed_year -> :completed
-          our_count > 0 and tmdb_count > 0 and our_count >= tmdb_count * 0.95 -> :completed
-          true -> :pending
-        end
-
-      completion_pct =
-        if tmdb_count > 0 do
-          Float.round(our_count / tmdb_count * 100, 1)
-        else
-          0.0
-        end
-
-      %{
-        year: year,
-        our_count: our_count,
-        tmdb_count: tmdb_count,
-        progress: progress_pct,
-        completion_pct: completion_pct,
-        status: status,
-        pending_jobs: pending,
-        executing_jobs: executing,
-        completed_jobs: completed,
-        failed_jobs: failed,
-        started_at: ImportStateV2.get("year_#{year}_started_at"),
-        completed_at: ImportStateV2.get("year_#{year}_completed_at")
-      }
-    end)
-  end
-
-  defp calculate_overall_stats(years) do
-    total_our_movies = Enum.sum(Enum.map(years, & &1.our_count))
-    total_tmdb_movies = Enum.sum(Enum.map(years, & &1.tmdb_count))
-    completed_years = Enum.count(years, &(&1.status == :completed))
-    in_progress_years = Enum.count(years, &(&1.status == :in_progress))
-    pending_years = Enum.count(years, &(&1.status == :pending))
-
-    overall_pct =
-      if total_tmdb_movies > 0 do
-        Float.round(total_our_movies / total_tmdb_movies * 100, 2)
-      else
-        0.0
-      end
-
-    # Estimate time to complete based on recent import rate
-    import_rate = ImportStateV2.get("import_rate") || "0"
-    rate = parse_float(import_rate)
-
-    remaining = max(0, total_tmdb_movies - total_our_movies)
-
-    eta =
-      if rate > 0 do
-        minutes = remaining / rate
-        format_duration(minutes)
-      else
-        "Unknown"
-      end
-
-    %{
-      total_our_movies: total_our_movies,
-      total_tmdb_movies: total_tmdb_movies,
-      overall_pct: overall_pct,
-      completed_years: completed_years,
-      in_progress_years: in_progress_years,
-      pending_years: pending_years,
-      remaining_movies: remaining,
-      import_rate: rate,
-      eta: eta
-    }
-  end
-
-  defp load_queue_stats do
-    queues = [:tmdb_orchestration, :tmdb_discovery, :tmdb_details]
-
-    Enum.map(queues, fn queue ->
-      queue_name = Atom.to_string(queue)
-
-      available =
-        Repo.one(
-          from(j in Oban.Job,
-            where: j.queue == ^queue_name and j.state == "available",
-            select: count(j.id)
-          )
-        ) || 0
-
-      executing =
-        Repo.one(
-          from(j in Oban.Job,
-            where: j.queue == ^queue_name and j.state == "executing",
-            select: count(j.id)
-          )
-        ) || 0
-
-      completed =
-        Repo.one(
-          from(j in Oban.Job,
-            where: j.queue == ^queue_name and j.state == "completed",
-            select: count(j.id)
-          )
-        ) || 0
-
-      %{
-        queue: queue,
-        name: format_queue_name(queue),
-        available: available,
-        executing: executing,
-        completed: completed
-      }
-    end)
-  end
-
-  defp check_import_running do
-    count =
-      Repo.one(
-        from(j in Oban.Job,
-          where:
-            j.worker == "Cinegraph.Workers.DailyYearImportWorker" and
-              j.state in ["available", "executing", "scheduled"],
-          select: count(j.id)
-        )
-      ) || 0
-
-    count > 0
-  end
-
-  defp load_recent_activity do
-    # Get recent import state changes
-    query =
-      from(a in Cinegraph.Metrics.ApiLookupMetric,
-        where:
-          a.source == "tmdb" and
-            a.operation == "import_state" and
-            a.inserted_at > ago(24, "hour"),
-        order_by: [desc: a.inserted_at],
-        limit: 20,
-        select: %{
-          key: a.target_identifier,
-          metadata: a.metadata,
-          timestamp: a.inserted_at
-        }
-      )
-
-    Repo.all(query)
-    |> Enum.map(fn row ->
-      %{
-        key: row.key,
-        value: get_in(row.metadata, ["value"]) || "—",
-        timestamp: row.timestamp
-      }
-    end)
-  end
+  # Note: load_all_years, calculate_overall_stats, load_queue_stats,
+  # check_import_running, and load_recent_activity have been moved to
+  # Cinegraph.Cache.DashboardStats for efficient batched querying and caching.
 
   defp load_year_details(year) do
     # Get detailed stats for a specific year
@@ -459,25 +315,7 @@ defmodule CinegraphWeb.YearImportsLive do
     length(job_ids)
   end
 
-  # Helper functions
-
-  defp format_queue_name(:tmdb_orchestration), do: "Orchestration"
-  defp format_queue_name(:tmdb_discovery), do: "Discovery"
-  defp format_queue_name(:tmdb_details), do: "Details"
-  defp format_queue_name(queue), do: queue |> Atom.to_string() |> String.replace("_", " ")
-
-  defp parse_float(str) when is_binary(str) do
-    case Float.parse(str) do
-      {val, _} -> val
-      :error -> 0.0
-    end
-  end
-
-  defp parse_float(_), do: 0.0
-
-  defp format_duration(minutes) when minutes < 60, do: "#{round(minutes)} min"
-  defp format_duration(minutes) when minutes < 1440, do: "#{Float.round(minutes / 60, 1)} hours"
-  defp format_duration(minutes), do: "#{Float.round(minutes / 1440, 1)} days"
+  # Helper functions moved to DashboardStats module
 
   @impl true
   def render(assigns) do
@@ -492,20 +330,44 @@ defmodule CinegraphWeb.YearImportsLive do
               Incrementally importing the full TMDb catalog, one year at a time
             </p>
           </div>
-          <.link
-            navigate="/admin/imports"
-            class="text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M10 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
-            Back to Import Dashboard
-          </.link>
+          <div class="flex items-center gap-4">
+            <%= if @loading do %>
+              <span class="text-sm text-gray-500 flex items-center gap-2">
+                <svg class="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  >
+                  </circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  >
+                  </path>
+                </svg>
+                Loading stats...
+              </span>
+            <% end %>
+            <.link
+              navigate="/admin/imports"
+              class="text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                />
+              </svg>
+              Back to Import Dashboard
+            </.link>
+          </div>
         </div>
       </div>
       
