@@ -4,9 +4,49 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
-    <.live_title default="Cinegraph" suffix=" · Phoenix Framework">
+    <.live_title default="Cinegraph" suffix=" · Cinegraph">
       {assigns[:page_title]}
     </.live_title>
+    <%= if assigns[:meta_description] do %>
+      <meta name="description" content={assigns[:meta_description]} />
+    <% end %>
+    <%= if assigns[:canonical_url] do %>
+      <link rel="canonical" href={assigns[:canonical_url]} />
+    <% end %>
+    <!-- Open Graph Meta Tags -->
+    <%= if assigns[:og_title] do %>
+      <meta property="og:title" content={assigns[:og_title]} />
+    <% end %>
+    <%= if assigns[:og_description] do %>
+      <meta property="og:description" content={assigns[:og_description]} />
+    <% end %>
+    <%= if assigns[:og_image] do %>
+      <meta property="og:image" content={assigns[:og_image]} />
+    <% end %>
+    <%= if assigns[:og_type] do %>
+      <meta property="og:type" content={assigns[:og_type]} />
+    <% end %>
+    <%= if assigns[:og_url] do %>
+      <meta property="og:url" content={assigns[:og_url]} />
+    <% end %>
+    <meta property="og:site_name" content="Cinegraph" />
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <%= if assigns[:og_title] do %>
+      <meta name="twitter:title" content={assigns[:og_title]} />
+    <% end %>
+    <%= if assigns[:og_description] do %>
+      <meta name="twitter:description" content={assigns[:og_description]} />
+    <% end %>
+    <%= if assigns[:og_image] do %>
+      <meta name="twitter:image" content={assigns[:og_image]} />
+    <% end %>
+    <!-- JSON-LD Structured Data -->
+    <%= if assigns[:json_ld] do %>
+      <script type="application/ld+json">
+        <%= Phoenix.HTML.raw(Jason.encode!(assigns[:json_ld])) %>
+      </script>
+    <% end %>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script
       defer
