@@ -106,7 +106,7 @@ defmodule Cinegraph.Cache.DashboardStats do
     Logger.info("DashboardStats cache initialized")
     # Start initial computation after a brief delay
     Process.send_after(self(), :initial_compute, 10_000)
-    {:ok, %{table: table, computing: false}}
+    {:ok, %{table: table, computing: false, computing_year_imports: false}}
   end
 
   @impl true
@@ -164,6 +164,12 @@ defmodule Cinegraph.Cache.DashboardStats do
   end
 
   @impl true
+  def handle_cast(:compute_year_imports_async, %{computing_year_imports: true} = state) do
+    # Already computing, skip
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_cast(:compute_year_imports_async, state) do
     # Check cache before starting computation
     case get_cached(:year_imports_stats) do
@@ -186,7 +192,7 @@ defmodule Cinegraph.Cache.DashboardStats do
           end
         end)
 
-        {:noreply, state}
+        {:noreply, %{state | computing_year_imports: true}}
     end
   end
 
@@ -224,13 +230,13 @@ defmodule Cinegraph.Cache.DashboardStats do
     cache_put(:year_imports_stats, stats)
     # Broadcast to all connected clients that year import stats are ready
     Phoenix.PubSub.broadcast(Cinegraph.PubSub, "year_imports_stats", :stats_updated)
-    {:noreply, state}
+    {:noreply, %{state | computing_year_imports: false}}
   end
 
   @impl true
   def handle_info(:year_imports_computation_failed, state) do
     Logger.warning("DashboardStats: Year imports computation failed, will retry on next request")
-    {:noreply, state}
+    {:noreply, %{state | computing_year_imports: false}}
   end
 
   # Private Functions
@@ -418,10 +424,12 @@ defmodule Cinegraph.Cache.DashboardStats do
       )
 
     # Build map of results
+    # Note: String.to_atom/1 is safe here because queue strings come from Oban's
+    # database and are constrained by the queues list filter in the query
     results_map =
       results
       |> Enum.reduce(%{}, fn {queue, state, count}, acc ->
-        queue_atom = String.to_existing_atom(queue)
+        queue_atom = String.to_atom(queue)
         Map.update(acc, queue_atom, %{state => count}, &Map.put(&1, state, count))
       end)
 
@@ -1155,10 +1163,12 @@ defmodule Cinegraph.Cache.DashboardStats do
       )
 
     # Build map of results
+    # Note: String.to_atom/1 is safe here because queue strings come from Oban's
+    # database and are constrained by the queues list filter in the query
     results_map =
       results
       |> Enum.reduce(%{}, fn {queue, state, count}, acc ->
-        queue_atom = String.to_existing_atom(queue)
+        queue_atom = String.to_atom(queue)
         Map.update(acc, queue_atom, %{state => count}, &Map.put(&1, state, count))
       end)
 
