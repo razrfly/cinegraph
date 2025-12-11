@@ -4,6 +4,7 @@ defmodule CinegraphWeb.PersonLive.Show do
   alias Cinegraph.People
   alias Cinegraph.Collaborations
   import CinegraphWeb.CollaborationComponents
+  import CinegraphWeb.SEOHelpers
 
   @impl true
   def mount(_params, _session, socket) do
@@ -73,11 +74,11 @@ defmodule CinegraphWeb.PersonLive.Show do
     |> assign(:career_stats, career_stats)
     |> assign(:collaboration_stats, collaboration_stats)
     |> assign(:frequent_collaborators, frequent_collaborators)
-    |> assign(:page_title, person.name)
     |> assign(:show_six_degrees, false)
     |> assign(:six_degrees_target, nil)
     |> assign(:six_degrees_path, nil)
     |> assign(:six_degrees_loading, false)
+    |> assign_person_seo(person)
   end
 
   @impl true

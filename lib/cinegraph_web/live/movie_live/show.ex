@@ -1,6 +1,7 @@
 defmodule CinegraphWeb.MovieLive.Show do
   use CinegraphWeb, :live_view
   import CinegraphWeb.CollaborationComponents, only: [format_ordinal: 1]
+  import CinegraphWeb.SEOHelpers
 
   alias Cinegraph.Movies
   alias Cinegraph.Cultural
@@ -93,9 +94,11 @@ defmodule CinegraphWeb.MovieLive.Show do
         socket
         |> push_navigate(to: ~p"/movies/#{movie.slug}")
       else
+        loaded_movie = load_movie_with_all_data(movie.id)
+
         socket
-        |> assign(:movie, load_movie_with_all_data(movie.id))
-        |> assign(:page_title, movie.title)
+        |> assign(:movie, loaded_movie)
+        |> assign_movie_seo(loaded_movie)
       end
 
     {:noreply, socket}
