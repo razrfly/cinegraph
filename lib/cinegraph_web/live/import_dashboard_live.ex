@@ -6,15 +6,14 @@ defmodule CinegraphWeb.ImportDashboardLive do
   use CinegraphWeb, :live_view
 
   alias Cinegraph.Imports.TMDbImporter
-  alias Cinegraph.Imports.ImportStateV2
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{Movie, MovieLists}
+  alias Cinegraph.Movies.MovieLists
   alias Cinegraph.Events
   alias Cinegraph.Metrics.ApiTracker
+  alias Cinegraph.Cache.DashboardStats
   require Logger
   alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker, DailyYearImportWorker}
   alias Cinegraph.Cultural
-  import Ecto.Query
 
   # 5 seconds
   @refresh_interval 5000
@@ -24,6 +23,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
     # Subscribe to import progress updates
     if connected?(socket) do
       Phoenix.PubSub.subscribe(Cinegraph.PubSub, "import_progress")
+      # Subscribe to dashboard stats updates (async cache)
+      Phoenix.PubSub.subscribe(Cinegraph.PubSub, "dashboard_stats")
     end
 
     socket =
@@ -71,6 +72,12 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   @impl true
+  def handle_info(:stats_updated, socket) do
+    # Stats cache has been updated, reload data
+    {:noreply, load_data(socket)}
+  end
+
+  @impl true
   def handle_info({:canonical_progress, progress}, socket) do
     socket =
       case progress.status do
@@ -78,6 +85,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
           assign(socket, :canonical_import_progress, progress.status)
 
         :completed ->
+          # Invalidate cache on import completion
+          DashboardStats.invalidate()
+
           # Build a more accurate completion message
           message =
             cond do
@@ -115,6 +125,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
           assign(socket, :oscar_import_progress, progress.status)
 
         :completed ->
+          # Invalidate cache on import completion
+          DashboardStats.invalidate()
+
           message =
             case progress.type do
               :single ->
@@ -149,6 +162,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
   @impl true
   def handle_info({:year_import_complete, progress}, socket) do
+    # Invalidate cache on import completion
+    DashboardStats.invalidate()
+
     message =
       "Year #{progress.year} import complete! #{progress.completed} jobs completed, #{progress.movie_count} movies for that year."
 
@@ -169,6 +185,9 @@ defmodule CinegraphWeb.ImportDashboardLive do
           assign(socket, :festival_import_progress, progress.status)
 
         :completed ->
+          # Invalidate cache on import completion
+          DashboardStats.invalidate()
+
           message =
             case progress.type do
               :single ->
@@ -852,320 +871,57 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp load_data(socket) do
-    # Get progress
-    progress = TMDbImporter.get_progress()
+    # Use cached stats to prevent timeout (Issue #421)
+    # Cache has 60-second TTL, shared across all admin sessions
+    # Returns defaults immediately if cache not ready (async computation)
+    cached = DashboardStats.get_stats()
 
-    # Get database stats
-    stats = %{
-      total_movies: Repo.aggregate(Movie, :count, :id),
-      movies_with_tmdb:
-        Repo.aggregate(from(m in Movie, where: not is_nil(m.tmdb_data)), :count, :id),
-      movies_with_omdb:
-        Repo.aggregate(from(m in Movie, where: not is_nil(m.omdb_data)), :count, :id),
-      canonical_movies: get_canonical_movies_count(),
-      festival_nominations: get_festival_nominations_count(),
-      festival_wins: get_festival_wins_count(),
-      total_people: Repo.aggregate(Cinegraph.Movies.Person, :count, :id),
-      directors_with_pqs: get_directors_with_pqs_count(),
-      actors_with_pqs: get_actors_with_pqs_count(),
-      total_credits: Repo.aggregate(Cinegraph.Movies.Credit, :count, :id),
-      total_genres: Repo.aggregate(Cinegraph.Movies.Genre, :count, :id),
-      total_keywords: Repo.aggregate(Cinegraph.Movies.Keyword, :count, :id),
-      unique_collaborations: Repo.aggregate(Cinegraph.Collaborations.Collaboration, :count, :id),
-      multi_collaborations:
-        Repo.aggregate(
-          from(c in Cinegraph.Collaborations.Collaboration, where: c.collaboration_count > 1),
-          :count
-        )
+    # Handle nil/empty runtime_stats gracefully
+    import_rate = get_in(cached, [:runtime_stats, :movies_per_minute]) || 0
+
+    # Handle nil/empty year_progress gracefully
+    year_progress =
+      cached.year_progress || %{years: [], sync_health: %{}, current_year: nil, is_running: false}
+
+    # Provide default db_stats with all required keys to prevent template errors
+    default_db_stats = %{
+      total_movies: 0,
+      movies_with_tmdb: 0,
+      movies_with_omdb: 0,
+      canonical_movies: 0,
+      festival_nominations: 0,
+      festival_wins: 0,
+      total_people: 0,
+      directors_with_pqs: 0,
+      actors_with_pqs: 0,
+      total_credits: 0,
+      total_genres: 0,
+      total_keywords: 0,
+      unique_collaborations: 0,
+      multi_collaborations: 0
     }
 
-    # Get canonical list stats
-    canonical_stats = get_canonical_list_stats()
-
-    # Get Oscar statistics
-    oscar_stats = get_oscar_stats()
-
-    # Get Festival statistics  
-    festival_stats = get_festival_stats()
-
-    # Get Oban queue stats
-    queue_stats = get_oban_stats()
-
-    # Get runtime stats from ImportStats
-    runtime_stats = Cinegraph.Imports.ImportStats.get_stats()
-
-    # Get API metrics
-    api_metrics = get_api_metrics()
-    fallback_stats = get_fallback_stats()
-    strategy_breakdown = get_strategy_breakdown()
-    import_metrics = get_import_metrics()
-
-    # Get year import progress
-    year_progress_data = load_year_progress()
+    db_stats = Map.merge(default_db_stats, cached.db_stats || %{})
 
     socket
-    |> assign(:progress, progress)
-    |> assign(:stats, stats)
-    |> assign(:canonical_stats, canonical_stats)
-    |> assign(:oscar_stats, oscar_stats)
-    |> assign(:festival_stats, festival_stats)
-    |> assign(:queue_stats, queue_stats)
-    |> assign(:import_rate, runtime_stats.movies_per_minute)
-    |> assign(:all_movie_lists, get_movie_list_with_real_counts())
-    |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
-    |> assign(:api_metrics, api_metrics)
-    |> assign(:fallback_stats, fallback_stats)
-    |> assign(:strategy_breakdown, strategy_breakdown)
-    |> assign(:import_metrics, import_metrics)
-    |> assign(:year_progress, year_progress_data.years)
-    |> assign(:year_sync_health, year_progress_data.sync_health)
-    |> assign(:current_import_year, year_progress_data.current_year)
-    |> assign(:year_import_running, year_progress_data.is_running)
-  end
-
-  defp get_canonical_movies_count do
-    # Get all active canonical source keys dynamically from database
-    active_source_keys = MovieLists.get_active_source_keys()
-
-    if length(active_source_keys) > 0 do
-      Repo.aggregate(
-        from(m in Movie, where: fragment("? \\?| ?", m.canonical_sources, ^active_source_keys)),
-        :count
-      )
-    else
-      0
-    end
-  end
-
-  defp get_festival_nominations_count do
-    # Count total distinct movies with any festival nominations
-    Repo.one(
-      from n in Cinegraph.Festivals.FestivalNomination,
-        where: not is_nil(n.movie_id),
-        select: count(n.movie_id, :distinct)
-    ) || 0
-  end
-
-  defp get_festival_wins_count do
-    # Count total distinct movies with any festival wins
-    Repo.one(
-      from n in Cinegraph.Festivals.FestivalNomination,
-        where: not is_nil(n.movie_id) and n.won == true,
-        select: count(n.movie_id, :distinct)
-    ) || 0
-  end
-
-  defp get_directors_with_pqs_count do
-    # Count directors with PQS scores
-    Repo.one(
-      from pm in Cinegraph.Metrics.PersonMetric,
-        join: p in Cinegraph.Movies.Person,
-        on: pm.person_id == p.id,
-        join: c in Cinegraph.Movies.Credit,
-        on: c.person_id == p.id,
-        where:
-          pm.metric_type == "quality_score" and c.credit_type == "crew" and c.job == "Director",
-        select: count(pm.person_id, :distinct)
-    ) || 0
-  end
-
-  defp get_actors_with_pqs_count do
-    # Count actors with PQS scores
-    Repo.one(
-      from pm in Cinegraph.Metrics.PersonMetric,
-        join: p in Cinegraph.Movies.Person,
-        on: pm.person_id == p.id,
-        join: c in Cinegraph.Movies.Credit,
-        on: c.person_id == p.id,
-        where: pm.metric_type == "quality_score" and c.credit_type == "cast",
-        select: count(pm.person_id, :distinct)
-    ) || 0
-  end
-
-  defp get_canonical_list_stats do
-    # Get all canonical lists from database and their counts
-    MovieLists.all_as_config()
-    |> Enum.map(fn {list_key, config} ->
-      # Use raw SQL to avoid Ecto escaping issues with the ? operator
-      {:ok, %{rows: [[count]]}} =
-        Repo.query(
-          "SELECT COUNT(*) FROM movies WHERE canonical_sources ? $1",
-          [list_key]
-        )
-
-      # Get expected count from database metadata if available
-      expected_count =
-        case MovieLists.get_active_by_source_key(list_key) do
-          nil -> nil
-          list -> list.metadata["expected_movie_count"]
-        end
-
-      %{
-        key: list_key,
-        name: config.name,
-        count: count,
-        expected_count: expected_count
-      }
-    end)
-    # Sort by count descending
-    |> Enum.sort_by(& &1.count, :desc)
-  end
-
-  defp get_movie_list_with_real_counts do
-    # Get all movie lists with real database counts instead of last_movie_count
-    MovieLists.list_all_movie_lists()
-    |> Enum.map(fn list ->
-      # Get real count from database
-      real_count =
-        case Repo.query("SELECT COUNT(*) FROM movies WHERE canonical_sources ? $1", [
-               list.source_key
-             ]) do
-          {:ok, %{rows: [[count]]}} -> count
-          _ -> 0
-        end
-
-      # Add real count to the list struct
-      Map.put(list, :real_movie_count, real_count)
-    end)
-  end
-
-  defp get_oscar_stats do
-    # Get the Oscar organization first
-    oscar_org = Cinegraph.Festivals.get_or_create_oscar_organization()
-
-    if oscar_org && oscar_org.id do
-      # Get ceremony years and their nomination/win counts from festival tables
-      ceremony_stats =
-        Repo.all(
-          from fc in Cinegraph.Festivals.FestivalCeremony,
-            left_join: nom in Cinegraph.Festivals.FestivalNomination,
-            on: nom.ceremony_id == fc.id,
-            where: fc.organization_id == ^oscar_org.id,
-            group_by: [fc.year, fc.id],
-            select:
-              {fc.year, count(nom.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", nom.won))},
-            order_by: [desc: fc.year]
-        )
-
-      # Calculate totals (ceremony_stats now returns tuples: {year, nominations, wins})
-      total_nominations =
-        Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
-
-      total_wins =
-        Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
-
-      total_ceremonies = length(ceremony_stats)
-      # Count Oscar categories from festival_categories table
-      total_categories =
-        Repo.aggregate(
-          from(c in Cinegraph.Festivals.FestivalCategory,
-            where: c.organization_id == ^oscar_org.id
-          ),
-          :count
-        )
-
-      # Calculate People Nominations (nominations in categories that track people)
-      people_nominations_query =
-        from nom in Cinegraph.Festivals.FestivalNomination,
-          join: fc in Cinegraph.Festivals.FestivalCategory,
-          on: nom.category_id == fc.id,
-          join: cer in Cinegraph.Festivals.FestivalCeremony,
-          on: nom.ceremony_id == cer.id,
-          where: fc.tracks_person == true and cer.organization_id == ^oscar_org.id,
-          select: count(nom.id)
-
-      people_nominations = Repo.one(people_nominations_query) || 0
-
-      # Calculate People Nominations with names in details
-      people_nominations_with_names =
-        Repo.one(
-          from nom in Cinegraph.Festivals.FestivalNomination,
-            join: fc in Cinegraph.Festivals.FestivalCategory,
-            on: nom.category_id == fc.id,
-            join: cer in Cinegraph.Festivals.FestivalCeremony,
-            on: nom.ceremony_id == cer.id,
-            where:
-              fc.tracks_person == true and
-                cer.organization_id == ^oscar_org.id and
-                not is_nil(fragment("? ->> 'nominee_names'", nom.details)) and
-                fragment("? ->> 'nominee_names'", nom.details) != "",
-            select: count(nom.id)
-        ) || 0
-
-      # Format People Nominations display
-      people_nominations_display =
-        if people_nominations == people_nominations_with_names do
-          "#{format_number(people_nominations)} ✅"
-        else
-          "#{format_number(people_nominations_with_names)}/#{format_number(people_nominations)} ⚠️"
-        end
-
-      # Build stats list
-      base_stats = [
-        %{label: "Ceremonies Imported", value: "#{total_ceremonies} (2016-2024)"},
-        %{label: "Total Nominations", value: format_number(total_nominations)},
-        %{label: "Total Wins", value: format_number(total_wins)},
-        %{label: "Categories", value: format_number(total_categories)},
-        %{label: "People Nominations", value: people_nominations_display}
-      ]
-
-      # Add year-by-year breakdown
-      year_stats =
-        ceremony_stats
-        # Only show years with data
-        |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)
-        |> Enum.map(fn {year, nominations, wins} ->
-          %{
-            label: "#{year} Wins",
-            value: "#{wins || 0}/#{nominations}"
-          }
-        end)
-
-      base_stats ++ year_stats
-    else
-      Logger.error("Failed to get or create Oscar organization for dashboard stats")
-      []
-    end
-  end
-
-  defp get_oban_stats do
-    queues = [
-      :tmdb_orchestration,
-      :tmdb_discovery,
-      :tmdb_details,
-      :omdb_enrichment,
-      :collaboration,
-      :imdb_scraping,
-      :oscar_imports,
-      :festival_import
-    ]
-
-    Enum.map(queues, fn queue ->
-      available =
-        Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "available"),
-          :count
-        )
-
-      executing =
-        Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "executing"),
-          :count
-        )
-
-      completed =
-        Repo.aggregate(
-          from(j in Oban.Job, where: j.queue == ^to_string(queue) and j.state == "completed"),
-          :count
-        )
-
-      %{
-        name: queue,
-        available: available,
-        executing: executing,
-        completed: completed
-      }
-    end)
+    |> assign(:progress, cached.progress || %{our_total: 0, tmdb_total: 0, remaining: 0})
+    |> assign(:stats, db_stats)
+    |> assign(:canonical_stats, cached.canonical_stats || [])
+    |> assign(:oscar_stats, cached.oscar_stats || [])
+    |> assign(:festival_stats, cached.festival_stats || [])
+    |> assign(:queue_stats, cached.oban_stats || [])
+    |> assign(:import_rate, import_rate)
+    |> assign(:all_movie_lists, cached.movie_lists || [])
+    |> assign(:canonical_lists, cached.canonical_lists || [])
+    |> assign(:api_metrics, cached.api_metrics || %{})
+    |> assign(:fallback_stats, cached.fallback_stats || %{})
+    |> assign(:strategy_breakdown, cached.strategy_breakdown || [])
+    |> assign(:import_metrics, cached.import_metrics || [])
+    |> assign(:year_progress, year_progress.years || [])
+    |> assign(:year_sync_health, year_progress.sync_health || %{})
+    |> assign(:current_import_year, year_progress.current_year)
+    |> assign(:year_import_running, year_progress.is_running || false)
+    |> assign(:stats_loading, Map.get(cached, :loading, false))
   end
 
   defp schedule_refresh(socket) do
@@ -1211,90 +967,22 @@ defmodule CinegraphWeb.ImportDashboardLive do
 
   def estimate_completion_time(_, _), do: "Unknown"
 
-  defp get_api_metrics do
-    # Get metrics for last 24 hours
-    ApiTracker.get_all_stats(24)
-    |> Enum.group_by(& &1.source)
-    |> Enum.map(fn {source, operations} ->
-      total_calls = Enum.sum(Enum.map(operations, & &1.total))
-      total_successful = Enum.sum(Enum.map(operations, &(&1.successful || 0)))
-
-      avg_response_time =
-        if total_calls > 0 do
-          total_response_time =
-            Enum.sum(
-              Enum.map(operations, fn op ->
-                avg_time =
-                  case op.avg_response_time do
-                    %Decimal{} = decimal -> Decimal.to_float(decimal)
-                    nil -> 0
-                    value -> value
-                  end
-
-                avg_time * op.total
-              end)
-            )
-
-          Float.round(total_response_time / total_calls, 0)
-        else
-          0
+  defp get_movie_list_with_real_counts do
+    # Get all movie lists with real database counts instead of last_movie_count
+    MovieLists.list_all_movie_lists()
+    |> Enum.map(fn list ->
+      # Get real count from database
+      real_count =
+        case Repo.query("SELECT COUNT(*) FROM movies WHERE canonical_sources ? $1", [
+               list.source_key
+             ]) do
+          {:ok, %{rows: [[count]]}} -> count
+          _ -> 0
         end
 
-      success_rate =
-        if total_calls > 0, do: Float.round(total_successful / total_calls * 100, 1), else: 0.0
-
-      {source,
-       %{
-         total_calls: total_calls,
-         success_rate: success_rate,
-         avg_response_time: avg_response_time,
-         operations: operations
-       }}
+      # Add real count to the list struct
+      Map.put(list, :real_movie_count, real_count)
     end)
-    |> Enum.into(%{})
-  end
-
-  defp get_fallback_stats do
-    ApiTracker.get_tmdb_fallback_stats(24)
-    |> Enum.map(fn stat ->
-      avg_conf =
-        case stat.avg_confidence do
-          %Decimal{} = d -> Decimal.to_float(d)
-          nil -> 0.0
-          v when is_number(v) -> v
-        end
-
-      {stat.level,
-       %{
-         total: stat.total,
-         successful: stat.successful || 0,
-         success_rate: stat.success_rate || 0.0,
-         avg_confidence: Float.round(avg_conf, 2)
-       }}
-    end)
-    |> Enum.into(%{})
-  end
-
-  defp get_strategy_breakdown do
-    ApiTracker.get_tmdb_strategy_breakdown(24)
-  end
-
-  defp get_import_metrics do
-    # Get recent import state operations to show activity
-    since = DateTime.utc_now() |> DateTime.add(-24 * 3600, :second)
-
-    Repo.all(
-      from m in Cinegraph.Metrics.ApiLookupMetric,
-        where: m.operation == "import_state" and m.inserted_at >= ^since,
-        order_by: [desc: m.inserted_at],
-        limit: 10,
-        select: %{
-          source: m.source,
-          key: m.target_identifier,
-          metadata: m.metadata,
-          inserted_at: m.inserted_at
-        }
-    )
   end
 
   @doc """
@@ -1353,138 +1041,6 @@ defmodule CinegraphWeb.ImportDashboardLive do
       %{year: year, festival: festival} -> "Importing #{festival} data for #{year}..."
       %{festival: festival} -> "Processing #{festival} import..."
       _ -> "Processing festival import..."
-    end
-  end
-
-  defp get_festival_stats do
-    # Get all festival organizations except AMPAS (shown in Academy Awards section)
-    festival_orgs =
-      Repo.all(
-        from fo in Cinegraph.Festivals.FestivalOrganization,
-          where: fo.abbreviation != "AMPAS",
-          select: fo
-      )
-
-    # Collect stats for all festivals
-    all_stats =
-      festival_orgs
-      |> Enum.flat_map(fn org ->
-        # Get ceremony years and their nomination/win counts from festival tables
-        ceremony_stats =
-          Repo.all(
-            from fc in Cinegraph.Festivals.FestivalCeremony,
-              left_join: nom in Cinegraph.Festivals.FestivalNomination,
-              on: nom.ceremony_id == fc.id,
-              where: fc.organization_id == ^org.id,
-              group_by: [fc.year, fc.id],
-              select:
-                {fc.year, count(nom.id), sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", nom.won))},
-              order_by: [desc: fc.year]
-          )
-
-        if length(ceremony_stats) > 0 do
-          # Calculate totals
-          total_nominations =
-            Enum.sum(Enum.map(ceremony_stats, fn {_year, nominations, _wins} -> nominations end))
-
-          total_wins =
-            Enum.sum(Enum.map(ceremony_stats, fn {_year, _nominations, wins} -> wins || 0 end))
-
-          total_ceremonies = length(ceremony_stats)
-
-          # Count categories
-          total_categories =
-            Repo.aggregate(
-              from(c in Cinegraph.Festivals.FestivalCategory,
-                where: c.organization_id == ^org.id
-              ),
-              :count
-            )
-
-          # Calculate People Nominations (nominations in categories that track people)
-          people_nominations =
-            Repo.one(
-              from nom in Cinegraph.Festivals.FestivalNomination,
-                join: fc in Cinegraph.Festivals.FestivalCategory,
-                on: nom.category_id == fc.id,
-                join: cer in Cinegraph.Festivals.FestivalCeremony,
-                on: nom.ceremony_id == cer.id,
-                where: fc.tracks_person == true and cer.organization_id == ^org.id,
-                select: count(nom.id)
-            ) || 0
-
-          # People Nominations with person_id linked
-          people_nominations_linked =
-            Repo.one(
-              from nom in Cinegraph.Festivals.FestivalNomination,
-                join: fc in Cinegraph.Festivals.FestivalCategory,
-                on: nom.category_id == fc.id,
-                join: cer in Cinegraph.Festivals.FestivalCeremony,
-                on: nom.ceremony_id == cer.id,
-                where:
-                  fc.tracks_person == true and cer.organization_id == ^org.id and
-                    not is_nil(nom.person_id),
-                select: count(nom.id)
-            ) || 0
-
-          # Format People Nominations display
-          people_nominations_display =
-            if people_nominations == 0 do
-              "0"
-            else
-              if people_nominations_linked == people_nominations do
-                "#{format_number(people_nominations)} ✅"
-              else
-                linking_rate =
-                  if people_nominations > 0,
-                    do: Float.round(people_nominations_linked / people_nominations * 100, 1),
-                    else: 0.0
-
-                "#{format_number(people_nominations_linked)}/#{format_number(people_nominations)} (#{linking_rate}%)"
-              end
-            end
-
-          # Get festival display name
-          festival_name =
-            case org.abbreviation do
-              "VIFF" -> "Venice"
-              "CFF" -> "Cannes"
-              "BIFF" -> "Berlin"
-              _ -> org.name
-            end
-
-          # Build stats list for this festival
-          base_stats = [
-            %{label: "#{festival_name} Ceremonies", value: "#{total_ceremonies}"},
-            %{label: "#{festival_name} Nominations", value: format_number(total_nominations)},
-            %{label: "#{festival_name} Wins", value: format_number(total_wins)},
-            %{label: "#{festival_name} Categories", value: format_number(total_categories)},
-            %{label: "#{festival_name} People Nominations", value: people_nominations_display}
-          ]
-
-          # Add year-by-year breakdown if we have data
-          year_stats =
-            ceremony_stats
-            |> Enum.filter(fn {_year, nominations, _wins} -> nominations > 0 end)
-            # Show last 3 years only per festival
-            |> Enum.take(3)
-            |> Enum.map(fn {year, nominations, wins} ->
-              %{
-                label: "#{festival_name} #{year}",
-                value: "#{wins || 0}/#{nominations}"
-              }
-            end)
-
-          base_stats ++ year_stats
-        else
-          []
-        end
-      end)
-
-    if length(all_stats) > 0 do
-      all_stats
-    else
-      []
     end
   end
 
@@ -1605,122 +1161,5 @@ defmodule CinegraphWeb.ImportDashboardLive do
   # Keep the old function for backward compatibility with the template
   defp generate_venice_years do
     generate_festival_years()
-  end
-
-  # Loads year-by-year import progress from ImportStateV2.
-  # Returns a map with :years, :sync_health, :current_year, and :is_running.
-  defp load_year_progress do
-    current_year = Date.utc_today().year
-    last_completed_year = ImportStateV2.get_integer("last_completed_year", current_year + 1)
-    current_import_year = ImportStateV2.get("current_import_year")
-    bulk_complete = ImportStateV2.get("bulk_import_complete")
-
-    # Check if there are any year import jobs running
-    is_running = check_year_import_running()
-
-    # Build year progress list (show last 10 years or from current to last completed)
-    years =
-      if bulk_complete do
-        # All years done - show summary
-        []
-      else
-        start_year = current_year
-        # Show down to last completed year, up to 10 years
-        end_year = max(last_completed_year - 1, current_year - 10)
-
-        start_year..end_year
-        |> Enum.map(fn year ->
-          our_count = DailyYearImportWorker.count_movies_for_year(year)
-          tmdb_count = ImportStateV2.get_integer("year_#{year}_total_movies", 0)
-          progress_pct = ImportStateV2.get("year_#{year}_progress")
-
-          status =
-            cond do
-              year > last_completed_year -> :pending
-              year == last_completed_year -> :pending
-              year == current_import_year -> :in_progress
-              year < last_completed_year -> :completed
-              true -> :pending
-            end
-
-          %{
-            year: year,
-            our_count: our_count,
-            tmdb_count: tmdb_count,
-            progress: progress_pct,
-            status: status,
-            started_at: ImportStateV2.get("year_#{year}_started_at"),
-            completed_at: ImportStateV2.get("year_#{year}_completed_at")
-          }
-        end)
-      end
-
-    # Calculate sync health
-    sync_health = calculate_sync_health(last_completed_year, current_year, bulk_complete)
-
-    %{
-      years: years,
-      sync_health: sync_health,
-      current_year: current_import_year,
-      is_running: is_running
-    }
-  end
-
-  defp check_year_import_running do
-    # Check for any running year import jobs
-    count =
-      Repo.one(
-        from(j in Oban.Job,
-          where:
-            j.worker == "Cinegraph.Workers.DailyYearImportWorker" and
-              j.state in ["available", "executing", "scheduled"],
-          select: count(j.id)
-        )
-      ) || 0
-
-    count > 0
-  end
-
-  defp calculate_sync_health(last_completed_year, current_year, bulk_complete) do
-    cond do
-      bulk_complete ->
-        %{
-          status: :complete,
-          message: "Full catalog imported! Ready for daily delta sync.",
-          color: "green"
-        }
-
-      last_completed_year > current_year ->
-        %{
-          status: :not_started,
-          message: "Year-by-year import not yet started.",
-          color: "gray"
-        }
-
-      last_completed_year == current_year ->
-        %{
-          status: :starting,
-          message: "Starting year-by-year import from #{current_year}.",
-          color: "blue"
-        }
-
-      last_completed_year >= current_year - 5 ->
-        years_done = current_year - last_completed_year + 1
-
-        %{
-          status: :in_progress,
-          message: "#{years_done} years imported (#{last_completed_year + 1}-#{current_year}).",
-          color: "blue"
-        }
-
-      true ->
-        years_done = current_year - last_completed_year + 1
-
-        %{
-          status: :in_progress,
-          message: "#{years_done} years imported. Working on #{last_completed_year}.",
-          color: "yellow"
-        }
-    end
   end
 end

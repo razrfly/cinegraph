@@ -16,9 +16,20 @@ end
 # In dev, env!/3 reads from source!; in prod, use System.get_env
 # Note: env!/3 is only available after source! is called (dev only)
 # Syntax: env!(key, type, default) - type can be :string, :integer, :boolean, etc.
-tmdb_api_key = if config_env() == :dev, do: env!("TMDB_API_KEY", :string, nil), else: System.get_env("TMDB_API_KEY")
-omdb_api_key = if config_env() == :dev, do: env!("OMDB_API_KEY", :string, ""), else: System.get_env("OMDB_API_KEY") || ""
-zyte_api_key = if config_env() == :dev, do: env!("ZYTE_API_KEY", :string, ""), else: System.get_env("ZYTE_API_KEY") || ""
+tmdb_api_key =
+  if config_env() == :dev,
+    do: env!("TMDB_API_KEY", :string, nil),
+    else: System.get_env("TMDB_API_KEY")
+
+omdb_api_key =
+  if config_env() == :dev,
+    do: env!("OMDB_API_KEY", :string, ""),
+    else: System.get_env("OMDB_API_KEY") || ""
+
+zyte_api_key =
+  if config_env() == :dev,
+    do: env!("ZYTE_API_KEY", :string, ""),
+    else: System.get_env("ZYTE_API_KEY") || ""
 
 # Configure TMDb
 # API key is optional at config time - the service will handle missing keys at runtime

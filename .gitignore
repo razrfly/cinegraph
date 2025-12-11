@@ -70,3 +70,6 @@ Thumbs.db
 /scripts/analysis/
 /scripts/testing/
 /scripts/data_import/
+
+# Generated sitemap files (regenerated on demand)
+/priv/static/sitemaps/

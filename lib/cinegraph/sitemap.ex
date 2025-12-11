@@ -93,7 +93,9 @@ defmodule Cinegraph.Sitemap do
     movies = Repo.one(from m in Movie, where: not is_nil(m.slug), select: count(m.id))
     people = Repo.one(from p in Person, where: not is_nil(p.slug), select: count(p.id))
     lists = length(ListSlugs.all_slugs())
-    awards = Repo.one(from f in FestivalOrganization, where: not is_nil(f.slug), select: count(f.id))
+
+    awards =
+      Repo.one(from f in FestivalOrganization, where: not is_nil(f.slug), select: count(f.id))
 
     # 7 static pages + dynamic content
     static = 7
@@ -256,6 +258,7 @@ defmodule Cinegraph.Sitemap do
   defp calculate_movie_priority(release_date) do
     if release_date do
       days_since_release = Date.diff(Date.utc_today(), release_date)
+
       cond do
         # Recent releases get highest priority
         days_since_release <= 90 -> 0.9
@@ -273,6 +276,7 @@ defmodule Cinegraph.Sitemap do
   defp calculate_movie_changefreq(release_date) do
     if release_date do
       days_since_release = Date.diff(Date.utc_today(), release_date)
+
       cond do
         # New releases - might get more data
         days_since_release <= 30 -> :daily
