@@ -97,7 +97,9 @@ config :cinegraph, Oban,
     # Predictions calculation jobs
     predictions: 3,
     # Cache warming for movies page (Phase 2 optimization)
-    cache_warming: 1
+    cache_warming: 1,
+    # Sitemap generation (runs once daily, long-running)
+    sitemap: 1
   ],
   plugins: [
     # Keep jobs for 7 days
@@ -110,7 +112,10 @@ config :cinegraph, Oban,
        {"*/10 * * * *", Cinegraph.Workers.MoviesCacheWarmer},
        # Daily year-by-year TMDb import at 4 AM UTC
        # Imports one year at a time, working backwards from current year
-       {"0 4 * * *", Cinegraph.Workers.DailyYearImportWorker}
+       {"0 4 * * *", Cinegraph.Workers.DailyYearImportWorker},
+       # Generate sitemap daily at 2 AM UTC
+       # Runs after most daily imports have completed
+       {"0 2 * * *", Cinegraph.Workers.SitemapWorker}
      ]}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format

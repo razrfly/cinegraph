@@ -13,6 +13,8 @@ defmodule CinegraphWeb.AwardsLive.Show do
   alias Cinegraph.Festivals
   alias Cinegraph.Movies.Search
 
+  @site_url "https://cinegraph.io"
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -56,7 +58,7 @@ defmodule CinegraphWeb.AwardsLive.Show do
              extract_sort_direction(params["sort"] || "release_date_desc")
            )
            |> assign_pagination(meta)
-           |> assign(:page_title, page_title(organization, filter_mode))}
+           |> assign_awards_page_seo(organization, filter_mode, movies)}
 
         {:error, _} ->
           {:noreply,
@@ -196,4 +198,44 @@ defmodule CinegraphWeb.AwardsLive.Show do
       _ -> ~p"/awards/#{org.slug}?#{params}"
     end
   end
+
+  # SEO helper for awards pages
+  defp assign_awards_page_seo(socket, organization, filter_mode, movies) do
+    title = page_title(organization, filter_mode)
+    description = awards_description(organization, filter_mode)
+    path = awards_canonical_path(organization, filter_mode)
+
+    socket
+    |> assign(:page_title, title)
+    |> assign(:meta_description, description)
+    |> assign(:canonical_url, "#{@site_url}#{path}")
+    |> assign(:og_title, title)
+    |> assign(:og_description, description)
+    |> assign(:og_type, "website")
+    |> assign(:og_url, "#{@site_url}#{path}")
+    |> maybe_assign_og_image(movies)
+    |> assign(:json_ld, CinegraphWeb.SEO.item_list_schema(movies, title))
+  end
+
+  defp awards_description(org, :winners) do
+    "Browse all #{org.name} award winners. Discover acclaimed films honored by #{org.name}."
+  end
+
+  defp awards_description(org, :nominees) do
+    "Browse #{org.name} nominees. Explore films nominated for #{org.name} awards."
+  end
+
+  defp awards_description(org, _) do
+    "Explore #{org.name} films, winners, and nominees. Discover award-winning cinema on Cinegraph."
+  end
+
+  defp awards_canonical_path(org, :winners), do: "/awards/#{org.slug}/winners"
+  defp awards_canonical_path(org, :nominees), do: "/awards/#{org.slug}/nominees"
+  defp awards_canonical_path(org, _), do: "/awards/#{org.slug}"
+
+  defp maybe_assign_og_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
+    assign(socket, :og_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")
+  end
+
+  defp maybe_assign_og_image(socket, _movies), do: socket
 end
