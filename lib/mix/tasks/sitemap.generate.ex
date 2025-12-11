@@ -32,9 +32,10 @@ defmodule Mix.Tasks.Sitemap.Generate do
     # Start the application
     Mix.Task.run("app.start")
 
-    {opts, _, _} = OptionParser.parse(args,
-      strict: [host: :string, stats: :boolean]
-    )
+    {opts, _, _} =
+      OptionParser.parse(args,
+        strict: [host: :string, stats: :boolean]
+      )
 
     if opts[:stats] do
       show_stats()
@@ -90,11 +91,13 @@ defmodule Mix.Tasks.Sitemap.Generate do
     sitemap_dir = Path.join([:code.priv_dir(:cinegraph), "static", "sitemaps"])
 
     if File.exists?(sitemap_dir) do
-      files = File.ls!(sitemap_dir)
+      files =
+        File.ls!(sitemap_dir)
         |> Enum.filter(&String.ends_with?(&1, ".xml"))
         |> Enum.sort()
 
       Mix.shell().info("Generated files in #{sitemap_dir}:")
+
       for file <- files do
         path = Path.join(sitemap_dir, file)
         stat = File.stat!(path)
