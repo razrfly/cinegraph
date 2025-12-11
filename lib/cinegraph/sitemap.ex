@@ -286,6 +286,8 @@ defmodule Cinegraph.Sitemap do
   end
 
   # Calculate priority for people based on popularity
+  defp calculate_person_priority(nil), do: 0.5
+
   defp calculate_person_priority(popularity) do
     cond do
       popularity >= 50 -> 0.9

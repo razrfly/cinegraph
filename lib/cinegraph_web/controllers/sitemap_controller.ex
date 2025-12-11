@@ -41,23 +41,22 @@ defmodule CinegraphWeb.SitemapController do
     safe_filename = Path.basename(filename)
 
     # Only allow .xml files
-    unless String.ends_with?(safe_filename, ".xml") do
+    if not String.ends_with?(safe_filename, ".xml") do
       conn
       |> put_status(:bad_request)
       |> text("Invalid file type")
-      |> halt()
-    end
-
-    sitemap_path = Path.join(@sitemap_dir, safe_filename)
-
-    if File.exists?(sitemap_path) do
-      conn
-      |> put_resp_content_type("application/xml")
-      |> send_file(200, sitemap_path)
     else
-      conn
-      |> put_status(:not_found)
-      |> text("Sitemap file not found")
+      sitemap_path = Path.join(@sitemap_dir, safe_filename)
+
+      if File.exists?(sitemap_path) do
+        conn
+        |> put_resp_content_type("application/xml")
+        |> send_file(200, sitemap_path)
+      else
+        conn
+        |> put_status(:not_found)
+        |> text("Sitemap file not found")
+      end
     end
   end
 end
