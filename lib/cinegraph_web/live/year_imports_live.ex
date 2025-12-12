@@ -231,13 +231,17 @@ defmodule CinegraphWeb.YearImportsLive do
     cached = DashboardStats.get_year_imports_stats()
 
     # Provide defaults for all required fields to prevent template errors
+    # Data-driven status counts (Issue #425)
     default_stats = %{
       total_our_movies: 0,
       total_tmdb_movies: 0,
       overall_pct: 0.0,
       completed_years: 0,
+      partial_years: 0,
       in_progress_years: 0,
+      started_years: 0,
       pending_years: 0,
+      unknown_years: 0,
       remaining_movies: 0,
       import_rate: 0.0,
       eta: "Unknown"
@@ -394,15 +398,42 @@ defmodule CinegraphWeb.YearImportsLive do
           </div>
         </div>
         <div class="bg-white rounded-lg shadow p-6">
-          <div class="text-sm text-gray-500">Years Status</div>
+          <div class="text-sm text-gray-500 mb-2">Years Status</div>
           <div class="flex items-baseline gap-2">
             <span class="text-2xl font-bold text-green-600">{@stats.completed_years}</span>
-            <span class="text-gray-400">complete</span>
+            <span class="text-gray-400">complete (95%+)</span>
           </div>
-          <div class="text-sm">
-            <span class="text-yellow-600">{@stats.in_progress_years}</span>
-            in progress, <span class="text-gray-400">{@stats.pending_years}</span>
-            pending
+          <div class="text-sm space-y-1">
+            <%= if @stats.partial_years > 0 do %>
+              <div>
+                <span class="text-yellow-600 font-medium">{@stats.partial_years}</span>
+                <span class="text-gray-500">partial (50-95%)</span>
+              </div>
+            <% end %>
+            <%= if @stats.in_progress_years > 0 do %>
+              <div>
+                <span class="text-blue-600 font-medium">{@stats.in_progress_years}</span>
+                <span class="text-gray-500">in progress</span>
+              </div>
+            <% end %>
+            <%= if @stats.started_years > 0 do %>
+              <div>
+                <span class="text-cyan-600 font-medium">{@stats.started_years}</span>
+                <span class="text-gray-500">started</span>
+              </div>
+            <% end %>
+            <%= if @stats.pending_years > 0 do %>
+              <div>
+                <span class="text-gray-400">{@stats.pending_years}</span>
+                <span class="text-gray-500">pending</span>
+              </div>
+            <% end %>
+            <%= if @stats.unknown_years > 0 do %>
+              <div>
+                <span class="text-orange-600 font-medium">{@stats.unknown_years}</span>
+                <span class="text-gray-500">no baseline</span>
+              </div>
+            <% end %>
           </div>
         </div>
         <div class="bg-white rounded-lg shadow p-6">
@@ -812,15 +843,25 @@ defmodule CinegraphWeb.YearImportsLive do
   end
 
   # Helper functions for rendering
+  # Data-driven status badges (Issue #425)
 
   defp status_badge_class(:completed),
     do: "px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800"
 
+  defp status_badge_class(:partial),
+    do: "px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800"
+
   defp status_badge_class(:in_progress),
     do: "px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800"
 
+  defp status_badge_class(:started),
+    do: "px-2 py-1 text-xs font-medium rounded-full bg-cyan-100 text-cyan-800"
+
   defp status_badge_class(:pending),
     do: "px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600"
+
+  defp status_badge_class(:unknown),
+    do: "px-2 py-1 text-xs font-medium rounded-full bg-orange-100 text-orange-800"
 
   defp status_badge_class(:bulk_complete),
     do: "px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800"
@@ -828,9 +869,12 @@ defmodule CinegraphWeb.YearImportsLive do
   defp status_badge_class(_),
     do: "px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-600"
 
-  defp status_label(:completed), do: "Complete"
+  defp status_label(:completed), do: "Complete (95%+)"
+  defp status_label(:partial), do: "Partial (50-95%)"
   defp status_label(:in_progress), do: "In Progress"
+  defp status_label(:started), do: "Started"
   defp status_label(:pending), do: "Pending"
+  defp status_label(:unknown), do: "No Baseline"
   defp status_label(:bulk_complete), do: "Bulk Complete"
   defp status_label(_), do: "Unknown"
 

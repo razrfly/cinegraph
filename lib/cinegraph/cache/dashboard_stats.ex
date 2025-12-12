@@ -946,9 +946,13 @@ defmodule Cinegraph.Cache.DashboardStats do
         total_our_movies: 0,
         total_tmdb_movies: 0,
         overall_pct: 0.0,
+        # Data-driven status counts (Issue #425)
         completed_years: 0,
+        partial_years: 0,
         in_progress_years: 0,
+        started_years: 0,
         pending_years: 0,
+        unknown_years: 0,
         remaining_movies: 0,
         import_rate: 0.0,
         eta: "Unknown"
@@ -1025,13 +1029,23 @@ defmodule Cinegraph.Cache.DashboardStats do
       {pending, executing, completed, failed} =
         Map.get(year_job_counts, year, {0, 0, 0, 0})
 
+      # Data-driven status (Issue #425)
+      # Base status on actual data completeness, not worker position
       status =
         cond do
           bulk_complete -> :bulk_complete
-          year > last_completed_year -> :pending
-          year == last_completed_year and pending + executing > 0 -> :in_progress
-          year < last_completed_year -> :completed
-          our_count > 0 and tmdb_count > 0 and our_count >= tmdb_count * 0.95 -> :completed
+          # No TMDb baseline data - can't determine completeness
+          tmdb_count == 0 and our_count == 0 -> :unknown
+          tmdb_count == 0 and our_count > 0 -> :unknown
+          # 95%+ of TMDb total = complete
+          our_count >= tmdb_count * 0.95 -> :completed
+          # 50-95% = partial coverage
+          our_count >= tmdb_count * 0.50 -> :partial
+          # Active jobs running = in progress
+          pending + executing > 0 -> :in_progress
+          # Some data but no active jobs = started but stalled
+          our_count > 0 -> :started
+          # No data yet
           true -> :pending
         end
 
@@ -1101,9 +1115,14 @@ defmodule Cinegraph.Cache.DashboardStats do
   defp calculate_year_stats(years) do
     total_our_movies = Enum.sum(Enum.map(years, & &1.our_count))
     total_tmdb_movies = Enum.sum(Enum.map(years, & &1.tmdb_count))
+
+    # Data-driven status counts (Issue #425)
     completed_years = Enum.count(years, &(&1.status == :completed))
+    partial_years = Enum.count(years, &(&1.status == :partial))
     in_progress_years = Enum.count(years, &(&1.status == :in_progress))
+    started_years = Enum.count(years, &(&1.status == :started))
     pending_years = Enum.count(years, &(&1.status == :pending))
+    unknown_years = Enum.count(years, &(&1.status == :unknown))
 
     overall_pct =
       if total_tmdb_movies > 0 do
@@ -1139,9 +1158,13 @@ defmodule Cinegraph.Cache.DashboardStats do
       total_our_movies: total_our_movies,
       total_tmdb_movies: total_tmdb_movies,
       overall_pct: overall_pct,
+      # Data-driven status counts (Issue #425)
       completed_years: completed_years,
+      partial_years: partial_years,
       in_progress_years: in_progress_years,
+      started_years: started_years,
       pending_years: pending_years,
+      unknown_years: unknown_years,
       remaining_movies: remaining,
       import_rate: rate,
       eta: eta
