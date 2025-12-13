@@ -8,6 +8,8 @@ defmodule CinegraphWeb.Router do
     plug :put_root_layout, html: {CinegraphWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    # Prevent CDN caching of LiveView pages (CSRF token staleness causes infinite loops)
+    plug CinegraphWeb.Plugs.CacheControlPlug
     # SEO: 301 redirects from numeric IDs to canonical slugs
     plug CinegraphWeb.Plugs.SEORedirectPlug
   end
