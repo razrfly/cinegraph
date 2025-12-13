@@ -262,7 +262,16 @@ defmodule Cinegraph.Cache.DashboardStats do
 
   defp default_stats do
     %{
-      progress: %{our_total: 0, tmdb_total: 0, remaining: 0},
+      # Progress keys must match ImportStateV2.get_progress_with_metrics/0 structure
+      # which the template expects (tmdb_total_movies, our_total_movies, etc.)
+      progress: %{
+        tmdb_total_movies: 0,
+        our_total_movies: 0,
+        movies_remaining: 0,
+        completion_percentage: 0.0,
+        last_page_processed: 0,
+        last_full_sync: nil
+      },
       db_stats: default_db_stats(),
       canonical_stats: [],
       oscar_stats: [],
@@ -273,7 +282,7 @@ defmodule Cinegraph.Cache.DashboardStats do
       fallback_stats: %{},
       strategy_breakdown: [],
       import_metrics: [],
-      year_progress: %{years: [], sync_health: %{}, current_year: nil, is_running: false},
+      year_progress: %{years: [], sync_health: %{status: :loading, message: "Loading...", color: "gray"}, current_year: nil, is_running: false},
       movie_lists: [],
       canonical_lists: [],
       loading: true
@@ -849,11 +858,14 @@ defmodule Cinegraph.Cache.DashboardStats do
           _ -> 0
         end
 
+      # expected_count is stored in metadata as "expected_movie_count", not as a schema field
+      expected_count = get_in(list.metadata, ["expected_movie_count"])
+
       %{
         name: list.name,
         source_key: list.source_key,
-        our_count: count,
-        expected_count: list.expected_count,
+        count: count,
+        expected_count: expected_count,
         category: list.category
       }
     end)
