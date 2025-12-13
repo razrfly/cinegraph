@@ -877,6 +877,100 @@ defmodule CinegraphWeb.CoreComponents do
   end
 
   @doc """
+  Renders sort controls with a criteria dropdown and direction toggle.
+
+  The component expects:
+  - `sort_criteria`: The current sort field (e.g., "release_date", "title")
+  - `sort_direction`: The current direction as atom (:asc or :desc)
+  - `options`: A list of sort option maps with :value, :label, and optional :group keys
+  - `criteria_event`: The phx-change event name for criteria changes (default: "sort_criteria_changed")
+  - `direction_event`: The phx-click event name for direction toggle (default: "toggle_sort_direction")
+
+  ## Examples
+
+      <.sort_controls
+        sort_criteria={@sort_criteria}
+        sort_direction={@sort_direction}
+        options={[
+          %{value: "release_date", label: "📅 Release Date", group: "Basic"},
+          %{value: "title", label: "🔤 Title", group: "Basic"},
+          %{value: "rating", label: "⭐ Rating", group: "Ratings"}
+        ]}
+      />
+  """
+  attr :sort_criteria, :string, required: true
+  attr :sort_direction, :atom, required: true
+  attr :options, :list, required: true
+  attr :criteria_event, :string, default: "sort_criteria_changed"
+  attr :direction_event, :string, default: "toggle_sort_direction"
+
+  def sort_controls(assigns) do
+    # Group options by their :group key
+    grouped_options =
+      assigns.options
+      |> Enum.group_by(fn opt -> Map.get(opt, :group) end)
+
+    assigns = assign(assigns, :grouped_options, grouped_options)
+
+    ~H"""
+    <div class="flex items-center gap-3">
+      <label class="text-sm font-medium text-gray-700">Sort by:</label>
+
+      <div class="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
+        <!-- Sort Criteria Dropdown -->
+        <form phx-change={@criteria_event} class="flex-1">
+          <select
+            name="criteria"
+            value={@sort_criteria}
+            class="appearance-none bg-transparent px-3 py-2 text-sm focus:outline-none border-r border-gray-300 min-w-48"
+          >
+            <%= if Map.has_key?(@grouped_options, nil) do %>
+              <%= for opt <- @grouped_options[nil] do %>
+                <option value={opt.value} selected={@sort_criteria == opt.value}>
+                  {opt.label}
+                </option>
+              <% end %>
+            <% end %>
+            <%= for {group, opts} <- @grouped_options, group != nil do %>
+              <optgroup label={group}>
+                <%= for opt <- opts do %>
+                  <option value={opt.value} selected={@sort_criteria == opt.value}>
+                    {opt.label}
+                  </option>
+                <% end %>
+              </optgroup>
+            <% end %>
+          </select>
+        </form>
+
+        <!-- Direction Toggle Button -->
+        <button
+          type="button"
+          phx-click={@direction_event}
+          class="px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition-colors min-w-20 flex items-center justify-center gap-1"
+          title={
+            if @sort_direction == :desc,
+              do: "Currently: High to Low. Click to sort Low to High.",
+              else: "Currently: Low to High. Click to sort High to Low."
+          }
+        >
+          <span class="font-medium">
+            {if @sort_direction == :desc, do: "High→Low", else: "Low→High"}
+          </span>
+          <svg
+            class={"w-3 h-3 transition-transform #{if @sort_direction == :asc, do: "", else: "rotate-180"}"}
+            viewBox="0 0 12 12"
+            fill="currentColor"
+          >
+            <path d="M6 1l5 5H7v5H5V6H1l5-5z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   Translates an error message using gettext.
   """
   def translate_error({msg, opts}) do
