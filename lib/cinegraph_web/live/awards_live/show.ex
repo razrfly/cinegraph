@@ -17,6 +17,9 @@ defmodule CinegraphWeb.AwardsLive.Show do
 
   @impl true
   def mount(_params, _session, socket) do
+    # Load filter options (same as MovieLive.Index)
+    filter_options = Search.get_filter_options()
+
     {:ok,
      socket
      |> assign(:movies, [])
@@ -25,7 +28,14 @@ defmodule CinegraphWeb.AwardsLive.Show do
      |> assign(:search_term, "")
      |> assign(:filter_mode, :all)
      |> assign(:sort_criteria, "release_date")
-     |> assign(:sort_direction, :desc)}
+     |> assign(:sort_direction, :desc)
+     |> assign(:show_filters, false)
+     |> assign(:filters, %{})
+     # Filter options for dropdowns
+     |> assign(:available_genres, filter_options.genres)
+     |> assign(:available_decades, filter_options.decades)
+     # Person search options
+     |> assign(:person_options, [])}
   end
 
   @impl true
@@ -57,6 +67,7 @@ defmodule CinegraphWeb.AwardsLive.Show do
              :sort_direction,
              extract_sort_direction(params["sort"] || "release_date_desc")
            )
+           |> assign(:filters, normalize_filters(params))
            |> assign_pagination(meta)
            |> assign_awards_page_seo(organization, filter_mode, movies)}
 
@@ -67,6 +78,7 @@ defmodule CinegraphWeb.AwardsLive.Show do
            |> assign(:movies, [])
            |> assign(:meta, %{})
            |> assign(:params, params)
+           |> assign(:filters, %{})
            |> put_flash(:error, "Unable to load movies")}
       end
     else
@@ -120,6 +132,94 @@ defmodule CinegraphWeb.AwardsLive.Show do
   @impl true
   def handle_event("page", %{"page" => page}, socket) do
     params = build_params(socket, %{"page" => page})
+    path = build_path(socket, params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  @impl true
+  def handle_event("toggle_filters", _params, socket) do
+    {:noreply, assign(socket, :show_filters, !socket.assigns.show_filters)}
+  end
+
+  @impl true
+  def handle_event("apply_filters", %{"filters" => filters}, socket) do
+    # Clean up filters to handle empty arrays from hidden fields
+    cleaned_filters =
+      filters
+      |> Enum.map(fn
+        {key, [""]} -> {key, []}
+        {key, value} when is_list(value) -> {key, Enum.reject(value, &(&1 == "" || &1 == nil))}
+        other -> other
+      end)
+      |> Map.new()
+
+    params =
+      socket.assigns.params
+      |> Map.merge(cleaned_filters)
+      |> Map.put("page", "1")
+      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
+      |> Map.new()
+
+    path = build_path(socket, params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  @impl true
+  def handle_event("clear_filters", _params, socket) do
+    # Keep only search and sort, reset filters
+    params =
+      socket.assigns.params
+      |> Map.take(["search", "sort"])
+      |> Map.put("page", "1")
+      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
+      |> Map.new()
+
+    path = build_path(socket, params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  @impl true
+  def handle_event("remove_filter", %{"filter" => filter_key}, socket) do
+    params =
+      socket.assigns.params
+      |> Map.delete(filter_key)
+      |> Map.put("page", "1")
+
+    path = build_path(socket, params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  # Handle autocomplete search for people
+  @impl true
+  def handle_info({:search_people_autocomplete, component_id, query}, socket) do
+    results = Search.search_people(query, 10)
+
+    # Update component with results and cache them
+    send_update(CinegraphWeb.Components.PersonAutocomplete,
+      id: component_id,
+      search_results: results,
+      searching: false,
+      cache_query: query,
+      cache_timestamp: DateTime.utc_now()
+    )
+
+    {:noreply, socket}
+  end
+
+  # Handle people selection updates from autocomplete component
+  @impl true
+  def handle_info({:people_selected, _component_id, selected_people}, socket) do
+    # Update the filters with the new people selection
+    people_ids = Enum.map_join(selected_people, ",", & &1.id)
+
+    params =
+      if people_ids == "" do
+        Map.delete(socket.assigns.params, "people_ids")
+      else
+        Map.put(socket.assigns.params, "people_ids", people_ids)
+      end
+      |> Map.put("page", "1")
+
     path = build_path(socket, params)
     {:noreply, push_patch(socket, to: path)}
   end
@@ -238,4 +338,69 @@ defmodule CinegraphWeb.AwardsLive.Show do
   end
 
   defp maybe_assign_og_image(socket, _movies), do: socket
+
+  # Filter helpers
+  defp normalize_filters(params) do
+    %{
+      genres: parse_array_param(params["genres"]),
+      decade: params["decade"],
+      people_ids: parse_array_param(params["people_ids"])
+    }
+  end
+
+  defp parse_array_param(nil), do: []
+  defp parse_array_param([]), do: []
+  defp parse_array_param(value) when is_list(value), do: value
+  defp parse_array_param(value) when is_binary(value), do: String.split(value, ",", trim: true)
+
+  # Check if any filters are active
+  def has_active_filters(filters) do
+    (filters.genres != [] and filters.genres != nil) or
+      (filters.decade != nil and filters.decade != "") or
+      (filters.people_ids != [] and filters.people_ids != nil)
+  end
+
+  # Get list of active filters for display
+  def get_active_filters(filters, assigns) do
+    []
+    |> maybe_add_genre_filter(filters, assigns)
+    |> maybe_add_decade_filter(filters)
+    |> maybe_add_people_filter(filters)
+  end
+
+  defp maybe_add_genre_filter(acc, %{genres: genres}, assigns)
+       when genres != [] and genres != nil do
+    genre_names =
+      genres
+      |> Enum.map(fn id ->
+        id_int = if is_binary(id), do: String.to_integer(id), else: id
+        genre = Enum.find(assigns.available_genres, &(&1.id == id_int))
+        if genre, do: genre.name, else: to_string(id)
+      end)
+      |> Enum.join(", ")
+
+    display =
+      if String.length(genre_names) > 25,
+        do: String.slice(genre_names, 0..22) <> "...",
+        else: genre_names
+
+    acc ++ [%{key: "genres", label: "Genres", display_value: display}]
+  end
+
+  defp maybe_add_genre_filter(acc, _, _), do: acc
+
+  defp maybe_add_decade_filter(acc, %{decade: decade}) when decade != nil and decade != "" do
+    acc ++ [%{key: "decade", label: "Decade", display_value: "#{decade}s"}]
+  end
+
+  defp maybe_add_decade_filter(acc, _), do: acc
+
+  defp maybe_add_people_filter(acc, %{people_ids: people_ids})
+       when people_ids != [] and people_ids != nil do
+    count = length(people_ids)
+    display = if count == 1, do: "1 person", else: "#{count} people"
+    acc ++ [%{key: "people_ids", label: "People", display_value: display}]
+  end
+
+  defp maybe_add_people_filter(acc, _), do: acc
 end
