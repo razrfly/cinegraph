@@ -145,82 +145,21 @@
       </div>
       
 <!-- Modern Sort Controls -->
-      <div class="flex items-center gap-3">
-        <label class="text-sm font-medium text-gray-700">Sort by:</label>
-
-        <div class="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden shadow-sm">
-          <!-- Sort Criteria Dropdown -->
-          <form phx-change="sort_criteria_changed" class="flex-1">
-            <select
-              name="criteria"
-              value={@sort_criteria}
-              class="appearance-none bg-transparent px-3 py-2 text-sm focus:outline-none border-r border-gray-300 min-w-48"
-            >
-              <optgroup label="Basic">
-                <option value="release_date" selected={@sort_criteria == "release_date"}>
-                  📅 Release Date
-                </option>
-                <option value="title" selected={@sort_criteria == "title"}>
-                  🔤 Title
-                </option>
-                <option value="runtime" selected={@sort_criteria == "runtime"}>
-                  ⏱️ Runtime
-                </option>
-              </optgroup>
-
-              <optgroup label="Ratings">
-                <option value="rating" selected={@sort_criteria == "rating"}>
-                  ⭐ Rating
-                </option>
-                <option value="popularity" selected={@sort_criteria == "popularity"}>
-                  🔥 Popularity
-                </option>
-              </optgroup>
-
-              <optgroup label="Discovery Metrics">
-                <option value="popular_opinion" selected={@sort_criteria == "popular_opinion"}>
-                  🎬 Popular Opinion
-                </option>
-                <option
-                  value="industry_recognition"
-                  selected={@sort_criteria == "industry_recognition"}
-                >
-                  🌟 Industry Recognition
-                </option>
-                <option value="cultural_impact" selected={@sort_criteria == "cultural_impact"}>
-                  📚 Cultural Impact
-                </option>
-                <option value="people_quality" selected={@sort_criteria == "people_quality"}>
-                  👥 People Quality
-                </option>
-              </optgroup>
-            </select>
-          </form>
-          
-<!-- Direction Toggle Button -->
-          <button
-            type="button"
-            phx-click="toggle_sort_direction"
-            class="px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 focus:outline-none focus:bg-gray-50 transition-colors min-w-20 flex items-center justify-center gap-1"
-            title={
-              if @sort_direction == :desc,
-                do: "Currently: High to Low. Click to sort Low to High.",
-                else: "Currently: Low to High. Click to sort High to Low."
-            }
-          >
-            <span class="font-medium">
-              {if @sort_direction == :desc, do: "High→Low", else: "Low→High"}
-            </span>
-            <svg
-              class={"w-3 h-3 transition-transform #{if @sort_direction == :asc, do: "", else: "rotate-180"}"}
-              viewBox="0 0 12 12"
-              fill="currentColor"
-            >
-              <path d="M6 1l5 5H7v5H5V6H1l5-5z" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      <.sort_controls
+        sort_criteria={@sort_criteria}
+        sort_direction={@sort_direction}
+        options={[
+          %{value: "release_date", label: "📅 Release Date", group: "Basic"},
+          %{value: "title", label: "🔤 Title", group: "Basic"},
+          %{value: "runtime", label: "⏱️ Runtime", group: "Basic"},
+          %{value: "rating", label: "⭐ Rating", group: "Ratings"},
+          %{value: "popularity", label: "🔥 Popularity", group: "Ratings"},
+          %{value: "popular_opinion", label: "🎬 Popular Opinion", group: "Discovery Metrics"},
+          %{value: "industry_recognition", label: "🌟 Industry Recognition", group: "Discovery Metrics"},
+          %{value: "cultural_impact", label: "📚 Cultural Impact", group: "Discovery Metrics"},
+          %{value: "people_quality", label: "👥 People Quality", group: "Discovery Metrics"}
+        ]}
+      />
     </div>
     
 <!-- Filter Panel -->

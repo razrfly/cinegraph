@@ -114,40 +114,15 @@
     
 <!-- Sort Options and Filter Toggle -->
     <div class="mb-6 flex flex-wrap items-center gap-4">
-      <label class="text-sm font-medium text-gray-700">Sort by:</label>
-      <select
-        phx-change="change_sort"
-        name="sort"
-        class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-      >
-        <option
-          value="release_date_desc"
-          selected={@sort_criteria == "release_date" && @sort_direction == :desc}
-        >
-          Release Date (Newest)
-        </option>
-        <option
-          value="release_date_asc"
-          selected={@sort_criteria == "release_date" && @sort_direction == :asc}
-        >
-          Release Date (Oldest)
-        </option>
-        <option value="title_asc" selected={@sort_criteria == "title" && @sort_direction == :asc}>
-          Title (A-Z)
-        </option>
-        <option
-          value="title_desc"
-          selected={@sort_criteria == "title" && @sort_direction == :desc}
-        >
-          Title (Z-A)
-        </option>
-        <option
-          value="rating_desc"
-          selected={@sort_criteria == "rating" && @sort_direction == :desc}
-        >
-          Rating (Highest)
-        </option>
-      </select>
+      <.sort_controls
+        sort_criteria={@sort_criteria}
+        sort_direction={@sort_direction}
+        options={[
+          %{value: "release_date", label: "📅 Release Date", group: "Basic"},
+          %{value: "title", label: "🔤 Title", group: "Basic"},
+          %{value: "rating", label: "⭐ Rating", group: "Ratings"}
+        ]}
+      />
 
       <button
         type="button"
@@ -186,22 +161,15 @@
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Genre</label>
               <input type="hidden" name="filters[genres][]" value="" />
-              <select
+              <.multi_select_dropdown
+                id="awards-genres-select"
                 name="filters[genres][]"
-                multiple
-                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                size="4"
-              >
-                <%= for genre <- @available_genres do %>
-                  <option
-                    value={genre.id}
-                    selected={to_string(genre.id) in (@filters[:genres] || [])}
-                  >
-                    {genre.name}
-                  </option>
-                <% end %>
-              </select>
-              <p class="mt-1 text-xs text-gray-500">Hold Ctrl/Cmd to select multiple</p>
+                options={@available_genres}
+                selected={@filters.genres || []}
+                placeholder="Select genres..."
+                label_field={:name}
+                value_field={:id}
+              />
             </div>
             
 <!-- Decade Filter -->
@@ -232,6 +200,21 @@
                 field_name="filters[people_search]"
                 selected_people={@filters.people_ids || []}
                 search_term=""
+              />
+            </div>
+
+            <!-- Lists Filter -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Lists</label>
+              <input type="hidden" name="filters[lists][]" value="" />
+              <.multi_select_dropdown
+                id="awards-lists-select"
+                name="filters[lists][]"
+                options={@available_lists}
+                selected={@filters.lists || []}
+                placeholder="Select lists..."
+                label_field={:name}
+                value_field={:key}
               />
             </div>
           </div>

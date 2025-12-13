@@ -34,6 +34,7 @@ defmodule CinegraphWeb.AwardsLive.Show do
      # Filter options for dropdowns
      |> assign(:available_genres, filter_options.genres)
      |> assign(:available_decades, filter_options.decades)
+     |> assign(:available_lists, filter_options.lists)
      # Person search options
      |> assign(:person_options, [])}
   end
@@ -116,6 +117,23 @@ defmodule CinegraphWeb.AwardsLive.Show do
   end
 
   @impl true
+  def handle_event("sort_criteria_changed", %{"criteria" => criteria}, socket) do
+    sort = "#{criteria}_#{socket.assigns.sort_direction}"
+    params = build_params(socket, %{"sort" => sort, "page" => "1"})
+    path = build_path(socket, params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  @impl true
+  def handle_event("toggle_sort_direction", _params, socket) do
+    new_direction = if socket.assigns.sort_direction == :desc, do: :asc, else: :desc
+    sort = "#{socket.assigns.sort_criteria}_#{new_direction}"
+    params = build_params(socket, %{"sort" => sort, "page" => "1"})
+    path = build_path(socket, params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  @impl true
   def handle_event("change_filter", %{"filter" => filter}, socket) do
     org = socket.assigns.organization
 
@@ -192,7 +210,13 @@ defmodule CinegraphWeb.AwardsLive.Show do
   # Handle autocomplete search for people
   @impl true
   def handle_info({:search_people_autocomplete, component_id, query}, socket) do
-    results = Search.search_people(query, 10)
+    # Skip search for empty/whitespace queries
+    results =
+      if String.trim(query) == "" do
+        []
+      else
+        Search.search_people(query, 10)
+      end
 
     # Update component with results and cache them
     send_update(CinegraphWeb.Components.PersonAutocomplete,
@@ -344,7 +368,8 @@ defmodule CinegraphWeb.AwardsLive.Show do
     %{
       genres: parse_array_param(params["genres"]),
       decade: params["decade"],
-      people_ids: parse_array_param(params["people_ids"])
+      people_ids: parse_array_param(params["people_ids"]),
+      lists: parse_array_param(params["lists"])
     }
   end
 
@@ -353,19 +378,21 @@ defmodule CinegraphWeb.AwardsLive.Show do
   defp parse_array_param(value) when is_list(value), do: value
   defp parse_array_param(value) when is_binary(value), do: String.split(value, ",", trim: true)
 
-  # Check if any filters are active
-  def has_active_filters(filters) do
+  # Check if any filters are active (called from template)
+  defp has_active_filters(filters) do
     (filters.genres != [] and filters.genres != nil) or
       (filters.decade != nil and filters.decade != "") or
-      (filters.people_ids != [] and filters.people_ids != nil)
+      (filters.people_ids != [] and filters.people_ids != nil) or
+      (filters.lists != [] and filters.lists != nil)
   end
 
-  # Get list of active filters for display
-  def get_active_filters(filters, assigns) do
+  # Get list of active filters for display (called from template)
+  defp get_active_filters(filters, assigns) do
     []
     |> maybe_add_genre_filter(filters, assigns)
     |> maybe_add_decade_filter(filters)
     |> maybe_add_people_filter(filters)
+    |> maybe_add_lists_filter(filters, assigns)
   end
 
   defp maybe_add_genre_filter(acc, %{genres: genres}, assigns)
@@ -373,8 +400,8 @@ defmodule CinegraphWeb.AwardsLive.Show do
     genre_names =
       genres
       |> Enum.map(fn id ->
-        id_int = if is_binary(id), do: String.to_integer(id), else: id
-        genre = Enum.find(assigns.available_genres, &(&1.id == id_int))
+        id_int = safe_to_integer(id)
+        genre = if id_int, do: Enum.find(assigns.available_genres, &(&1.id == id_int))
         if genre, do: genre.name, else: to_string(id)
       end)
       |> Enum.join(", ")
@@ -403,4 +430,36 @@ defmodule CinegraphWeb.AwardsLive.Show do
   end
 
   defp maybe_add_people_filter(acc, _), do: acc
+
+  defp maybe_add_lists_filter(acc, %{lists: lists}, assigns)
+       when lists != [] and lists != nil do
+    list_names =
+      lists
+      |> Enum.map(fn key ->
+        list = Enum.find(assigns.available_lists, &(&1.key == key))
+        if list, do: list.name, else: key
+      end)
+      |> Enum.join(", ")
+
+    display =
+      if String.length(list_names) > 25,
+        do: String.slice(list_names, 0..22) <> "...",
+        else: list_names
+
+    acc ++ [%{key: "lists", label: "Lists", display_value: display}]
+  end
+
+  defp maybe_add_lists_filter(acc, _, _), do: acc
+
+  # Safely convert string to integer, returning nil on invalid input
+  defp safe_to_integer(value) when is_integer(value), do: value
+
+  defp safe_to_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, _} -> int
+      :error -> nil
+    end
+  end
+
+  defp safe_to_integer(_), do: nil
 end
