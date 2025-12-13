@@ -229,7 +229,8 @@ defmodule CinegraphWeb.SearchEventHandlers do
       # Shared Helper - Build Params
       # ========================================================================
 
-      defp build_params(socket, updates) do
+      @doc false
+      def build_params(socket, updates) do
         socket.assigns.params
         |> Map.merge(updates)
         |> Map.delete("slug")
