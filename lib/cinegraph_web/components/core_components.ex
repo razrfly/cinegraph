@@ -942,8 +942,8 @@ defmodule CinegraphWeb.CoreComponents do
             <% end %>
           </select>
         </form>
-
-        <!-- Direction Toggle Button -->
+        
+    <!-- Direction Toggle Button -->
         <button
           type="button"
           phx-click={@direction_event}

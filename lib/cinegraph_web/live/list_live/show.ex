@@ -99,7 +99,11 @@ defmodule CinegraphWeb.ListLive.Show do
   def handle_event("sort_criteria_changed", %{"criteria" => criteria}, socket) do
     sort = "#{criteria}_#{socket.assigns.sort_direction}"
     params = build_params(socket, %{"sort" => sort, "page" => "1"})
-    {:noreply, push_patch(socket, to: ~p"/lists/#{socket.assigns.list_info.slug}?#{params}")}
+
+    {:noreply,
+     socket
+     |> assign(:sort_criteria, criteria)
+     |> push_patch(to: ~p"/lists/#{socket.assigns.list_info.slug}?#{params}")}
   end
 
   @impl true
@@ -107,7 +111,11 @@ defmodule CinegraphWeb.ListLive.Show do
     new_direction = if socket.assigns.sort_direction == :desc, do: :asc, else: :desc
     sort = "#{socket.assigns.sort_criteria}_#{new_direction}"
     params = build_params(socket, %{"sort" => sort, "page" => "1"})
-    {:noreply, push_patch(socket, to: ~p"/lists/#{socket.assigns.list_info.slug}?#{params}")}
+
+    {:noreply,
+     socket
+     |> assign(:sort_direction, new_direction)
+     |> push_patch(to: ~p"/lists/#{socket.assigns.list_info.slug}?#{params}")}
   end
 
   @impl true
@@ -384,9 +392,11 @@ defmodule CinegraphWeb.ListLive.Show do
   defp safe_to_integer(value) when is_integer(value), do: value
 
   defp safe_to_integer(value) when is_binary(value) do
+    value = String.trim(value)
+
     case Integer.parse(value) do
-      {int, _} -> int
-      :error -> nil
+      {int, ""} -> int
+      _ -> nil
     end
   end
 
