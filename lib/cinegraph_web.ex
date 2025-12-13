@@ -90,6 +90,7 @@ defmodule CinegraphWeb do
       # Core UI components
       import CinegraphWeb.CoreComponents
       import CinegraphWeb.CollaborationComponents
+      import CinegraphWeb.SearchComponents
 
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS
