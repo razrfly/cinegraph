@@ -192,8 +192,12 @@ defmodule CinegraphWeb.FilterHelpers do
   defp format_people_count(_), do: "Selected"
 
   # Truncates a string for display if it exceeds max length
-  defp truncate_display(text, max_length) when byte_size(text) > max_length do
-    String.slice(text, 0..(max_length - 4)) <> "..."
+  defp truncate_display(text, max_length) when is_binary(text) do
+    if String.length(text) > max_length do
+      String.slice(text, 0..(max_length - 4)) <> "..."
+    else
+      text
+    end
   end
 
   defp truncate_display(text, _max_length), do: text

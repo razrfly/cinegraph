@@ -376,25 +376,6 @@ defmodule CinegraphWeb.MovieLive.Index do
     end
   end
 
-  # Pagination helper
-  def pagination_range(current_page, total_pages, opts \\ []) do
-    max_links = Keyword.get(opts, :max_links, 7)
-
-    cond do
-      total_pages <= max_links ->
-        1..total_pages |> Enum.to_list()
-
-      current_page <= 3 ->
-        [1, 2, 3, 4, "...", total_pages]
-
-      current_page >= total_pages - 2 ->
-        [1, "...", total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
-
-      true ->
-        [1, "...", current_page - 1, current_page, current_page + 1, "...", total_pages]
-    end
-  end
-
   # Helper functions for display
   defp to_percentage(nil), do: 0
   defp to_percentage(%Decimal{} = decimal), do: Float.round(Decimal.to_float(decimal) * 100, 0)

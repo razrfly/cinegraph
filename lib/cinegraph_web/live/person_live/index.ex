@@ -3,6 +3,8 @@ defmodule CinegraphWeb.PersonLive.Index do
 
   alias Cinegraph.People
 
+  import CinegraphWeb.LiveViewHelpers, only: [pagination_range: 2]
+
   @impl true
   def mount(_params, _session, socket) do
     # Get filter options
@@ -213,24 +215,6 @@ defmodule CinegraphWeb.PersonLive.Index do
       "People - " <> Enum.join(filters, ", ")
     else
       "People"
-    end
-  end
-
-  # Helper function for pagination range
-  def pagination_range(_current_page, total_pages) when total_pages <= 7 do
-    1..total_pages |> Enum.to_list()
-  end
-
-  def pagination_range(current_page, total_pages) do
-    cond do
-      current_page <= 3 ->
-        [1, 2, 3, 4, "...", total_pages]
-
-      current_page >= total_pages - 2 ->
-        [1, "...", total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
-
-      true ->
-        [1, "...", current_page - 1, current_page, current_page + 1, "...", total_pages]
     end
   end
 

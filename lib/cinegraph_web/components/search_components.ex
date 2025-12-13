@@ -73,6 +73,7 @@ defmodule CinegraphWeb.SearchComponents do
             phx-click="search"
             phx-value-search=""
             class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+            aria-label="Clear search"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -185,6 +186,7 @@ defmodule CinegraphWeb.SearchComponents do
               phx-value-filter={filter.key}
               class="ml-2 inline-flex items-center justify-center w-4 h-4 text-blue-600 hover:text-blue-800"
               title="Remove this filter"
+              aria-label={"Remove #{filter.label} filter"}
             >
               ×
             </button>
