@@ -121,7 +121,11 @@ defmodule CinegraphWeb.AwardsLive.Show do
     sort = "#{criteria}_#{socket.assigns.sort_direction}"
     params = build_params(socket, %{"sort" => sort, "page" => "1"})
     path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
+
+    {:noreply,
+     socket
+     |> assign(:sort_criteria, criteria)
+     |> push_patch(to: path)}
   end
 
   @impl true
@@ -130,7 +134,11 @@ defmodule CinegraphWeb.AwardsLive.Show do
     sort = "#{socket.assigns.sort_criteria}_#{new_direction}"
     params = build_params(socket, %{"sort" => sort, "page" => "1"})
     path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
+
+    {:noreply,
+     socket
+     |> assign(:sort_direction, new_direction)
+     |> push_patch(to: path)}
   end
 
   @impl true
@@ -455,9 +463,11 @@ defmodule CinegraphWeb.AwardsLive.Show do
   defp safe_to_integer(value) when is_integer(value), do: value
 
   defp safe_to_integer(value) when is_binary(value) do
+    value = String.trim(value)
+
     case Integer.parse(value) do
-      {int, _} -> int
-      :error -> nil
+      {int, ""} -> int
+      _ -> nil
     end
   end
 
