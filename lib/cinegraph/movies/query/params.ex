@@ -383,10 +383,11 @@ defmodule Cinegraph.Movies.Query.Params do
     filters = []
 
     # Add search filter
+    # Note: Flop's :ilike operator automatically adds % wildcards,
+    # so we pass the raw search term without wrapping it in %
     filters =
       if params.search && params.search != "" do
-        pattern = "%#{params.search}%"
-        filters ++ [%{field: :title, op: :ilike, value: pattern}]
+        filters ++ [%{field: :title, op: :ilike, value: params.search}]
       else
         filters
       end
