@@ -9,11 +9,48 @@ defmodule CinegraphWeb.AwardsLive.Show do
   - /awards/:slug/nominees - Only nominees (non-winners)
   """
   use CinegraphWeb, :live_view
+  use CinegraphWeb.SearchEventHandlers
 
   alias Cinegraph.Festivals
   alias Cinegraph.Movies.Search
 
+  import CinegraphWeb.LiveViewHelpers,
+    only: [
+      extract_sort_criteria: 1,
+      extract_sort_direction: 1,
+      assign_pagination: 2,
+      build_pagination_params: 2,
+      parse_array_param: 1
+    ]
+
+  import CinegraphWeb.FilterHelpers,
+    only: [
+      has_active_filters?: 2,
+      build_active_filters_list: 3,
+      awards_view_filter_configs: 0,
+      awards_view_filter_fields: 0
+    ]
+
   @site_url "https://cinegraph.io"
+
+  # ============================================================================
+  # SearchEventHandlers Callback
+  # ============================================================================
+
+  @impl CinegraphWeb.SearchEventHandlers
+  def build_path(socket, params) do
+    org = socket.assigns.organization
+
+    case socket.assigns.filter_mode do
+      :winners -> ~p"/awards/#{org.slug}/winners?#{params}"
+      :nominees -> ~p"/awards/#{org.slug}/nominees?#{params}"
+      _ -> ~p"/awards/#{org.slug}?#{params}"
+    end
+  end
+
+  # ============================================================================
+  # LiveView Callbacks
+  # ============================================================================
 
   @impl true
   def mount(_params, _session, socket) do
@@ -90,58 +127,13 @@ defmodule CinegraphWeb.AwardsLive.Show do
     end
   end
 
-  defp determine_filter_mode(:winners), do: :winners
-  defp determine_filter_mode(:nominees), do: :nominees
-  defp determine_filter_mode(_), do: :all
+  # ============================================================================
+  # Awards-Specific Event Handlers
+  # ============================================================================
 
-  defp award_status_for_mode(:winners), do: "won"
-  defp award_status_for_mode(:nominees), do: "nominated_only"
-  defp award_status_for_mode(:all), do: "any_nomination"
-
-  defp page_title(org, :winners), do: "#{org.name} - Winners"
-  defp page_title(org, :nominees), do: "#{org.name} - Nominees"
-  defp page_title(org, _), do: org.name
-
-  @impl true
-  def handle_event("search", %{"search" => search}, socket) do
-    params = build_params(socket, %{"search" => search, "page" => "1"})
-    path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("change_sort", %{"sort" => sort}, socket) do
-    params = build_params(socket, %{"sort" => sort, "page" => "1"})
-    path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("sort_criteria_changed", %{"criteria" => criteria}, socket) do
-    sort = "#{criteria}_#{socket.assigns.sort_direction}"
-    params = build_params(socket, %{"sort" => sort, "page" => "1"})
-    path = build_path(socket, params)
-
-    {:noreply,
-     socket
-     |> assign(:sort_criteria, criteria)
-     |> push_patch(to: path)}
-  end
-
-  @impl true
-  def handle_event("toggle_sort_direction", _params, socket) do
-    new_direction = if socket.assigns.sort_direction == :desc, do: :asc, else: :desc
-    sort = "#{socket.assigns.sort_criteria}_#{new_direction}"
-    params = build_params(socket, %{"sort" => sort, "page" => "1"})
-    path = build_path(socket, params)
-
-    {:noreply,
-     socket
-     |> assign(:sort_direction, new_direction)
-     |> push_patch(to: path)}
-  end
-
-  @impl true
+  # This handler is specific to AwardsLive for switching between all/winners/nominees views
+  # We override the macro's handle_event and delegate non-matching events to super
+  @impl Phoenix.LiveView
   def handle_event("change_filter", %{"filter" => filter}, socket) do
     org = socket.assigns.organization
 
@@ -155,169 +147,25 @@ defmodule CinegraphWeb.AwardsLive.Show do
     {:noreply, push_navigate(socket, to: base_path)}
   end
 
-  @impl true
-  def handle_event("page", %{"page" => page}, socket) do
-    params = build_params(socket, %{"page" => page})
-    path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
-  end
+  # Delegate all other events to the SearchEventHandlers macro
+  @impl Phoenix.LiveView
+  def handle_event(event, params, socket), do: super(event, params, socket)
 
-  @impl true
-  def handle_event("toggle_filters", _params, socket) do
-    {:noreply, assign(socket, :show_filters, !socket.assigns.show_filters)}
-  end
+  # ============================================================================
+  # Helper Functions
+  # ============================================================================
 
-  @impl true
-  def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    # Clean up filters to handle empty arrays from hidden fields
-    cleaned_filters =
-      filters
-      |> Enum.map(fn
-        {key, [""]} -> {key, []}
-        {key, value} when is_list(value) -> {key, Enum.reject(value, &(&1 == "" || &1 == nil))}
-        other -> other
-      end)
-      |> Map.new()
+  defp determine_filter_mode(:winners), do: :winners
+  defp determine_filter_mode(:nominees), do: :nominees
+  defp determine_filter_mode(_), do: :all
 
-    params =
-      socket.assigns.params
-      |> Map.merge(cleaned_filters)
-      |> Map.put("page", "1")
-      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
-      |> Map.new()
+  defp award_status_for_mode(:winners), do: "won"
+  defp award_status_for_mode(:nominees), do: "nominated_only"
+  defp award_status_for_mode(:all), do: "any_nomination"
 
-    path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("clear_filters", _params, socket) do
-    # Keep only search and sort, reset filters
-    params =
-      socket.assigns.params
-      |> Map.take(["search", "sort"])
-      |> Map.put("page", "1")
-      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
-      |> Map.new()
-
-    path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("remove_filter", %{"filter" => filter_key}, socket) do
-    params =
-      socket.assigns.params
-      |> Map.delete(filter_key)
-      |> Map.put("page", "1")
-
-    path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  # Handle autocomplete search for people
-  @impl true
-  def handle_info({:search_people_autocomplete, component_id, query}, socket) do
-    # Skip search for empty/whitespace queries
-    results =
-      if String.trim(query) == "" do
-        []
-      else
-        Search.search_people(query, 10)
-      end
-
-    # Update component with results and cache them
-    send_update(CinegraphWeb.Components.PersonAutocomplete,
-      id: component_id,
-      search_results: results,
-      searching: false,
-      cache_query: query,
-      cache_timestamp: DateTime.utc_now()
-    )
-
-    {:noreply, socket}
-  end
-
-  # Handle people selection updates from autocomplete component
-  @impl true
-  def handle_info({:people_selected, _component_id, selected_people}, socket) do
-    # Update the filters with the new people selection
-    people_ids = Enum.map_join(selected_people, ",", & &1.id)
-
-    params =
-      if people_ids == "" do
-        Map.delete(socket.assigns.params, "people_ids")
-      else
-        Map.put(socket.assigns.params, "people_ids", people_ids)
-      end
-      |> Map.put("page", "1")
-
-    path = build_path(socket, params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  defp build_params(socket, updates) do
-    socket.assigns.params
-    |> Map.merge(updates)
-    |> Map.delete("slug")
-    |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
-    |> Map.new()
-  end
-
-  defp build_path(socket, params) do
-    org = socket.assigns.organization
-
-    case socket.assigns.filter_mode do
-      :winners -> ~p"/awards/#{org.slug}/winners?#{params}"
-      :nominees -> ~p"/awards/#{org.slug}/nominees?#{params}"
-      _ -> ~p"/awards/#{org.slug}?#{params}"
-    end
-  end
-
-  defp assign_pagination(socket, meta) do
-    socket
-    |> assign(:total_movies, meta.total_count || 0)
-    |> assign(:total_pages, meta.total_pages || 1)
-    |> assign(:current_page, meta.current_page || 1)
-    |> assign(:page, meta.current_page || 1)
-    |> assign(:per_page, meta.page_size || 50)
-  end
-
-  defp extract_sort_criteria(sort_string) do
-    sort_string
-    |> String.replace(~r/_(asc|desc)$/, "")
-  end
-
-  defp extract_sort_direction(sort_string) do
-    if String.ends_with?(sort_string, "_asc"), do: :asc, else: :desc
-  end
-
-  # Helper for pagination range (used in template)
-  def pagination_range(_current_page, total_pages) when total_pages <= 7 do
-    1..max(total_pages, 1) |> Enum.to_list()
-  end
-
-  def pagination_range(current_page, total_pages) do
-    cond do
-      current_page <= 3 ->
-        [1, 2, 3, 4, "...", total_pages]
-
-      current_page >= total_pages - 2 ->
-        [1, "...", total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
-
-      true ->
-        [1, "...", current_page - 1, current_page, current_page + 1, "...", total_pages]
-    end
-  end
-
-  # Helper for building pagination params (used in template)
-  def build_pagination_params(assigns, page) do
-    assigns.params
-    |> Map.put("page", to_string(page))
-    |> Map.delete("slug")
-    |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" end)
-    |> Map.new()
-  end
+  defp page_title(org, :winners), do: "#{org.name} - Winners"
+  defp page_title(org, :nominees), do: "#{org.name} - Nominees"
+  defp page_title(org, _), do: org.name
 
   # Helper for building pagination path (used in template)
   def build_pagination_path(assigns, page) do
@@ -331,7 +179,10 @@ defmodule CinegraphWeb.AwardsLive.Show do
     end
   end
 
-  # SEO helper for awards pages
+  # ============================================================================
+  # SEO Helpers
+  # ============================================================================
+
   defp assign_awards_page_seo(socket, organization, filter_mode, movies) do
     title = page_title(organization, filter_mode)
     description = awards_description(organization, filter_mode)
@@ -371,7 +222,10 @@ defmodule CinegraphWeb.AwardsLive.Show do
 
   defp maybe_assign_og_image(socket, _movies), do: socket
 
-  # Filter helpers
+  # ============================================================================
+  # Filter Helpers
+  # ============================================================================
+
   defp normalize_filters(params) do
     %{
       genres: parse_array_param(params["genres"]),
@@ -381,95 +235,13 @@ defmodule CinegraphWeb.AwardsLive.Show do
     }
   end
 
-  defp parse_array_param(nil), do: []
-  defp parse_array_param([]), do: []
-  defp parse_array_param(value) when is_list(value), do: value
-  defp parse_array_param(value) when is_binary(value), do: String.split(value, ",", trim: true)
-
   # Check if any filters are active (called from template)
   defp has_active_filters(filters) do
-    (filters.genres != [] and filters.genres != nil) or
-      (filters.decade != nil and filters.decade != "") or
-      (filters.people_ids != [] and filters.people_ids != nil) or
-      (filters.lists != [] and filters.lists != nil)
+    has_active_filters?(filters, awards_view_filter_fields())
   end
 
   # Get list of active filters for display (called from template)
   defp get_active_filters(filters, assigns) do
-    []
-    |> maybe_add_genre_filter(filters, assigns)
-    |> maybe_add_decade_filter(filters)
-    |> maybe_add_people_filter(filters)
-    |> maybe_add_lists_filter(filters, assigns)
+    build_active_filters_list(filters, assigns, awards_view_filter_configs())
   end
-
-  defp maybe_add_genre_filter(acc, %{genres: genres}, assigns)
-       when genres != [] and genres != nil do
-    genre_names =
-      genres
-      |> Enum.map(fn id ->
-        id_int = safe_to_integer(id)
-        genre = if id_int, do: Enum.find(assigns.available_genres, &(&1.id == id_int))
-        if genre, do: genre.name, else: to_string(id)
-      end)
-      |> Enum.join(", ")
-
-    display =
-      if String.length(genre_names) > 25,
-        do: String.slice(genre_names, 0..22) <> "...",
-        else: genre_names
-
-    acc ++ [%{key: "genres", label: "Genres", display_value: display}]
-  end
-
-  defp maybe_add_genre_filter(acc, _, _), do: acc
-
-  defp maybe_add_decade_filter(acc, %{decade: decade}) when decade != nil and decade != "" do
-    acc ++ [%{key: "decade", label: "Decade", display_value: "#{decade}s"}]
-  end
-
-  defp maybe_add_decade_filter(acc, _), do: acc
-
-  defp maybe_add_people_filter(acc, %{people_ids: people_ids})
-       when people_ids != [] and people_ids != nil do
-    count = length(people_ids)
-    display = if count == 1, do: "1 person", else: "#{count} people"
-    acc ++ [%{key: "people_ids", label: "People", display_value: display}]
-  end
-
-  defp maybe_add_people_filter(acc, _), do: acc
-
-  defp maybe_add_lists_filter(acc, %{lists: lists}, assigns)
-       when lists != [] and lists != nil do
-    list_names =
-      lists
-      |> Enum.map(fn key ->
-        list = Enum.find(assigns.available_lists, &(&1.key == key))
-        if list, do: list.name, else: key
-      end)
-      |> Enum.join(", ")
-
-    display =
-      if String.length(list_names) > 25,
-        do: String.slice(list_names, 0..22) <> "...",
-        else: list_names
-
-    acc ++ [%{key: "lists", label: "Lists", display_value: display}]
-  end
-
-  defp maybe_add_lists_filter(acc, _, _), do: acc
-
-  # Safely convert string to integer, returning nil on invalid input
-  defp safe_to_integer(value) when is_integer(value), do: value
-
-  defp safe_to_integer(value) when is_binary(value) do
-    value = String.trim(value)
-
-    case Integer.parse(value) do
-      {int, ""} -> int
-      _ -> nil
-    end
-  end
-
-  defp safe_to_integer(_), do: nil
 end

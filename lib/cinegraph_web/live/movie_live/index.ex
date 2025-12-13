@@ -6,6 +6,21 @@ defmodule CinegraphWeb.MovieLive.Index do
   alias Cinegraph.Movies.Search
   alias CinegraphWeb.MovieLive.AdvancedFilters
 
+  import CinegraphWeb.LiveViewHelpers,
+    only: [
+      extract_sort_criteria: 1,
+      extract_sort_direction: 1,
+      build_sort_param: 2,
+      assign_pagination: 2,
+      parse_array_param: 1,
+      clean_filter_params: 1
+    ]
+
+  import CinegraphWeb.FilterHelpers,
+    only: [
+      filter_value_present?: 1
+    ]
+
   @impl true
   def mount(_params, _session, socket) do
     # Get filter options from the Search module
@@ -50,7 +65,7 @@ defmodule CinegraphWeb.MovieLive.Index do
          |> assign(:search_term, params["search"] || "")
          |> assign(:sort_criteria, extract_sort_criteria(params["sort"] || "release_date_desc"))
          |> assign(:sort_direction, extract_sort_direction(params["sort"] || "release_date_desc"))
-         |> assign_pagination_from_meta(meta)
+         |> assign_pagination(meta)
          |> apply_action(socket.assigns.live_action, params)}
 
       {:error, _changeset} ->
@@ -66,7 +81,7 @@ defmodule CinegraphWeb.MovieLive.Index do
              |> assign(:search_term, "")
              |> assign(:sort_criteria, "release_date")
              |> assign(:sort_direction, :desc)
-             |> assign_pagination_from_meta(meta)
+             |> assign_pagination(meta)
              |> put_flash(:error, "Invalid search parameters, showing all movies")
              |> apply_action(socket.assigns.live_action, params)}
 
@@ -114,13 +129,7 @@ defmodule CinegraphWeb.MovieLive.Index do
         socket.assigns.sort_direction
       end
 
-    # Convert the criteria to the format expected (always add explicit direction suffix)
-    sort =
-      if direction == :asc do
-        "#{criteria}_asc"
-      else
-        "#{criteria}_desc"
-      end
+    sort = build_sort_param(criteria, direction)
 
     params =
       socket.assigns.params
@@ -133,19 +142,8 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("toggle_sort_direction", _params, socket) do
-    current_sort = socket.assigns.sort_criteria
-    current_direction = socket.assigns.sort_direction
-
-    # Toggle the direction
-    new_direction = if current_direction == :desc, do: :asc, else: :desc
-
-    # Build the new sort parameter with explicit direction suffix
-    sort =
-      if new_direction == :asc do
-        "#{current_sort}_asc"
-      else
-        "#{current_sort}_desc"
-      end
+    new_direction = if socket.assigns.sort_direction == :desc, do: :asc, else: :desc
+    sort = build_sort_param(socket.assigns.sort_criteria, new_direction)
 
     params =
       socket.assigns.params
@@ -179,29 +177,13 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   @impl true
   def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    # Clean up filters to handle empty arrays from hidden fields
-    cleaned_filters =
-      filters
-      |> Enum.map(fn
-        # Convert single empty string to empty array
-        {key, [""]} ->
-          {key, []}
-
-        {key, value} when is_list(value) ->
-          # Filter out empty strings from arrays
-          {key, Enum.reject(value, &(&1 == "" || &1 == nil))}
-
-        other ->
-          other
-      end)
-      |> Map.new()
+    cleaned_filters = clean_filter_params(filters)
 
     params =
       socket.assigns.params
       |> Map.merge(cleaned_filters)
       |> Map.put("page", "1")
-      |> Enum.reject(fn {_k, v} -> is_nil(v) or v == "" or v == [] end)
-      |> Map.new()
+      |> clean_filter_params()
 
     path = ~p"/movies?#{params}"
     {:noreply, push_patch(socket, to: path)}
@@ -294,16 +276,6 @@ defmodule CinegraphWeb.MovieLive.Index do
     |> assign(:page_title, "Movies Database")
   end
 
-  # Extract pagination info from Flop meta and assign to expected template variables
-  defp assign_pagination_from_meta(socket, meta) do
-    socket
-    |> assign(:total_movies, meta.total_count || 0)
-    |> assign(:total_pages, meta.total_pages || 1)
-    |> assign(:current_page, meta.current_page || 1)
-    |> assign(:page, meta.current_page || 1)
-    |> assign(:per_page, meta.page_size || 50)
-  end
-
   # Convert URL params to the format the template expects
   defp normalize_filters_for_template(params) do
     %{
@@ -331,14 +303,6 @@ defmodule CinegraphWeb.MovieLive.Index do
       # People search handled specially
       people_search: parse_people_search(params)
     }
-  end
-
-  defp parse_array_param(nil), do: []
-  defp parse_array_param([]), do: []
-  defp parse_array_param(value) when is_list(value), do: value
-
-  defp parse_array_param(value) when is_binary(value) do
-    String.split(value, ",", trim: true)
   end
 
   defp parse_people_search(params) do
@@ -461,7 +425,7 @@ defmodule CinegraphWeb.MovieLive.Index do
 
     Enum.any?(basic_filter_keys, fn key ->
       value = Map.get(params, key)
-      value not in [nil, "", []]
+      filter_value_present?(value)
     end)
   end
 
@@ -479,7 +443,7 @@ defmodule CinegraphWeb.MovieLive.Index do
 
     params
     |> Map.take(basic_filter_keys)
-    |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
+    |> Enum.reject(fn {_k, v} -> not filter_value_present?(v) end)
   end
 
   def format_basic_filter_label(key) when is_binary(key) do
@@ -643,14 +607,7 @@ defmodule CinegraphWeb.MovieLive.Index do
         [:genres, :languages, :lists, :festivals, :decade, :show_unreleased, :rating_preset],
         fn key ->
           value = Map.get(filters, key)
-          # Handle both nil/empty and also arrays that might contain strings
-          case value do
-            nil -> false
-            "" -> false
-            [] -> false
-            list when is_list(list) -> length(list) > 0
-            _ -> true
-          end
+          filter_value_present?(value)
         end
       )
 
@@ -673,14 +630,14 @@ defmodule CinegraphWeb.MovieLive.Index do
         ],
         fn key ->
           value = Map.get(filters, key)
-          value not in [nil, "", []]
+          filter_value_present?(value)
         end
       )
 
     # Check people search
     people_active =
       case Map.get(filters, :people_search) do
-        %{"people_ids" => ids} when ids not in [nil, ""] -> true
+        %{"people_ids" => ids} -> filter_value_present?(ids)
         _ -> false
       end
 
@@ -804,28 +761,6 @@ defmodule CinegraphWeb.MovieLive.Index do
 
       _ ->
         to_string(value)
-    end
-  end
-
-  defp extract_sort_direction(sort_param) do
-    cond do
-      String.ends_with?(sort_param, "_desc") -> :desc
-      String.ends_with?(sort_param, "_asc") -> :asc
-      # default to descending when no suffix (most intuitive for ratings)
-      true -> :desc
-    end
-  end
-
-  defp extract_sort_criteria(sort_param) do
-    cond do
-      String.ends_with?(sort_param, "_desc") ->
-        String.replace_suffix(sort_param, "_desc", "")
-
-      String.ends_with?(sort_param, "_asc") ->
-        String.replace_suffix(sort_param, "_asc", "")
-
-      true ->
-        sort_param
     end
   end
 
