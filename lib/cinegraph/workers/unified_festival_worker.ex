@@ -27,6 +27,21 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
       Logger.info("Successfully imported #{festival} #{year} ceremony and queued discovery job")
       :ok
     else
+      # HTTP 404 means the page doesn't exist on IMDb - don't retry, just cancel
+      {:error, "HTTP 404"} ->
+        Logger.warning(
+          "#{festival} #{year}: Page not found on IMDb (404) - year may not have data. Cancelling job."
+        )
+
+        # Update import status to reflect no data available
+        update_import_status_no_data(festival, year)
+        {:cancel, "HTTP 404 - page does not exist on IMDb"}
+
+      # HTTP 403 is also permanent - IMDb blocked access
+      {:error, "HTTP 403"} ->
+        Logger.warning("#{festival} #{year}: Access forbidden (403) - cancelling job.")
+        {:cancel, "HTTP 403 - access forbidden"}
+
       {:error, reason} ->
         Logger.error("Failed to import #{festival} #{year}: #{inspect(reason)}")
         {:error, reason}
@@ -198,6 +213,47 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
         )
 
         {:error, reason}
+    end
+  end
+
+  # Create an empty ceremony to track the 404 status for this year
+  defp update_import_status_no_data(festival_key, year) do
+    with {:ok, festival_config} <- get_festival_config(festival_key),
+         {:ok, organization} <- get_or_create_organization(festival_config) do
+      # Create a ceremony entry with "no_data" status so it shows up in the dashboard
+      attrs = %{
+        organization_id: organization.id,
+        year: year,
+        name: "#{year} #{organization.name}",
+        data: %{awards: [], nominations: []},
+        data_source: "imdb",
+        source_url: nil,
+        scraped_at: DateTime.utc_now(),
+        source_metadata: %{
+          "scraper" => "UnifiedFestivalScraper",
+          "version" => "1.0",
+          "parser" => "none",
+          "import_status" => "no_data",
+          "error" => "HTTP 404 - page not found on IMDb",
+          "note" => "Year exists in IMDb history but has no actual data page",
+          "scraped_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+        }
+      }
+
+      case Festivals.upsert_ceremony(attrs) do
+        {:ok, _ceremony} ->
+          Logger.info(
+            "Created no_data ceremony entry for #{organization.abbreviation} #{year}"
+          )
+
+        {:error, reason} ->
+          Logger.warning(
+            "Failed to create no_data ceremony for #{organization.abbreviation} #{year}: #{inspect(reason)}"
+          )
+      end
+    else
+      {:error, reason} ->
+        Logger.warning("Cannot update import status for #{festival_key} #{year}: #{inspect(reason)}")
     end
   end
 end

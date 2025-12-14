@@ -83,6 +83,17 @@ defmodule CinegraphWeb.AwardImportsLive do
   end
 
   @impl true
+  def handle_info({:resync_all, data}, socket) do
+    socket =
+      socket
+      |> put_flash(:info, "Queued resync for #{data.years_queued} years")
+      |> assign(:import_running, true)
+      |> load_data()
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:sync_all_started, data}, socket) do
     socket =
       socket
@@ -196,6 +207,29 @@ defmodule CinegraphWeb.AwardImportsLive do
   end
 
   @impl true
+  def handle_event("resync_all", %{"org-id" => org_id_str}, socket) do
+    case Integer.parse(org_id_str) do
+      {org_id, ""} ->
+        case AwardImportWorker.queue_resync_all(org_id) do
+          {:ok, _job} ->
+            socket =
+              socket
+              |> put_flash(:info, "Queued resync for ALL years")
+              |> assign(:import_running, true)
+
+            {:noreply, socket}
+
+          {:error, reason} ->
+            socket = put_flash(socket, :error, "Failed to queue resync: #{inspect(reason)}")
+            {:noreply, socket}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid organization ID")}
+    end
+  end
+
+  @impl true
   def handle_event("sync_all_organizations", _params, socket) do
     case AwardImportOrchestratorWorker.queue_sync_all_missing() do
       {:ok, _job} ->
@@ -283,6 +317,9 @@ defmodule CinegraphWeb.AwardImportsLive do
   def status_color("no_matches"), do: "bg-orange-100 text-orange-800"
   def status_color("low_match"), do: "bg-orange-100 text-orange-800"
   def status_color("empty"), do: "bg-gray-100 text-gray-500"
+
+  # no_data = IMDb returned 404, page doesn't exist (different from empty which has a page but no nominations)
+  def status_color("no_data"), do: "bg-purple-100 text-purple-700"
   def status_color(_), do: "bg-gray-100 text-gray-800"
 
   def status_icon("completed"), do: "check-circle"
@@ -293,6 +330,8 @@ defmodule CinegraphWeb.AwardImportsLive do
   def status_icon("no_matches"), do: "question-mark-circle"
   def status_icon("low_match"), do: "exclamation-triangle"
   def status_icon("empty"), do: "document"
+  # no_data = IMDb returned 404, page doesn't exist
+  def status_icon("no_data"), do: "ban"
   def status_icon(_), do: "question-mark-circle"
 
   def format_datetime(nil), do: "Never"
@@ -304,6 +343,7 @@ defmodule CinegraphWeb.AwardImportsLive do
   def format_datetime(_), do: "Unknown"
 
   def format_rate(nil), do: "0%"
+  def format_rate(%Decimal{} = rate), do: "#{Decimal.round(rate, 1)}%"
   def format_rate(rate) when is_float(rate), do: "#{Float.round(rate, 1)}%"
   def format_rate(rate) when is_number(rate), do: "#{rate}%"
   def format_rate(_), do: "0%"

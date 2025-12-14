@@ -296,10 +296,18 @@
                   <button
                     phx-click="sync_organization"
                     phx-value-org-id={org.organization_id}
-                    class={"mr-3 " <> if org.pending_count > 0, do: "text-indigo-600 hover:text-indigo-900 font-medium", else: "text-gray-400 hover:text-gray-600"}
+                    class={"mr-2 " <> if org.pending_count > 0, do: "text-indigo-600 hover:text-indigo-900 font-medium", else: "text-gray-400 hover:text-gray-600"}
                     title={"Queue imports for #{org.pending_count + org.failed_count} missing/failed years"}
                   >
                     Sync {org.pending_count + org.failed_count}
+                  </button>
+                  <button
+                    phx-click="resync_all"
+                    phx-value-org-id={org.organization_id}
+                    class="mr-2 text-orange-600 hover:text-orange-900"
+                    title={"Re-import ALL #{org.total_years} years (ignores status)"}
+                  >
+                    Resync All
                   </button>
                   <button
                     phx-click="show_organization_detail"

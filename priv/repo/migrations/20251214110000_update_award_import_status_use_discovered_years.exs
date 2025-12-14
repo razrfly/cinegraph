@@ -84,6 +84,9 @@ defmodule Cinegraph.Repo.Migrations.UpdateAwardImportStatusUseDiscoveredYears do
         ELSE ROUND((ns.matched_movies::numeric / ns.total_nominations::numeric) * 100, 1)
       END as movie_match_rate,
       CASE
+        -- Check source_metadata for explicit status first (e.g., 'no_data' from 404)
+        WHEN fc.source_metadata->>'import_status' = 'no_data' THEN 'no_data'
+        WHEN fc.source_metadata->>'import_status' = 'failed' THEN 'failed'
         WHEN fc.id IS NULL THEN 'not_started'
         WHEN fc.scraped_at IS NULL THEN 'pending'
         WHEN ns.total_nominations = 0 OR ns.total_nominations IS NULL THEN 'empty'
