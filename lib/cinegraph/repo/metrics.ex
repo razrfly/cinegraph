@@ -137,12 +137,16 @@ defmodule Cinegraph.Repo.Metrics do
   Useful for monitoring read distribution between primary and replica.
   """
   def get_distribution_stats do
-    # This would typically pull from a metrics aggregator
-    # For now, return structure that can be populated
+    # Get counter reference from persistent_term
+    ref = :persistent_term.get(:repo_query_counter)
+    primary = :counters.get(ref, 1)
+    replica = :counters.get(ref, 2)
+    total = primary + replica
+
     %{
-      primary_queries: :counters.get(:repo_query_counter, 1),
-      replica_queries: :counters.get(:repo_query_counter, 2),
-      distribution_ratio: calculate_distribution_ratio()
+      primary_queries: primary,
+      replica_queries: replica,
+      distribution_ratio: calculate_distribution_ratio(primary, replica, total)
     }
   rescue
     _ ->
@@ -154,19 +158,11 @@ defmodule Cinegraph.Repo.Metrics do
       }
   end
 
-  defp calculate_distribution_ratio do
-    primary = :counters.get(:repo_query_counter, 1)
-    replica = :counters.get(:repo_query_counter, 2)
-    total = primary + replica
-
-    if total > 0 do
-      Float.round(replica / total * 100, 1)
-    else
-      0.0
-    end
-  rescue
-    _ -> 0.0
+  defp calculate_distribution_ratio(_primary, replica, total) when total > 0 do
+    Float.round(replica / total * 100, 1)
   end
+
+  defp calculate_distribution_ratio(_primary, _replica, _total), do: 0.0
 
   @doc """
   Initializes query counters for distribution tracking.
@@ -176,9 +172,12 @@ defmodule Cinegraph.Repo.Metrics do
     # Create a counter reference with 2 slots: [primary, replica]
     ref = :counters.new(2, [:write_concurrency])
     :persistent_term.put(:repo_query_counter, ref)
+    Logger.debug("[Repo.Metrics] Query counters initialized successfully")
     :ok
   rescue
-    _ -> :ok
+    e ->
+      Logger.error("[Repo.Metrics] Failed to initialize query counters: #{inspect(e)}")
+      :ok
   end
 
   @doc """
@@ -189,7 +188,11 @@ defmodule Cinegraph.Repo.Metrics do
     ref = :persistent_term.get(:repo_query_counter)
     :counters.add(ref, 1, 1)
   rescue
-    _ -> :ok
+    e ->
+      # Log at debug level to avoid flooding logs during normal operation
+      # This can happen if counters weren't initialized (e.g., in tests)
+      Logger.debug("[Repo.Metrics] Could not increment primary counter: #{inspect(e)}")
+      :ok
   end
 
   @doc """
@@ -200,7 +203,10 @@ defmodule Cinegraph.Repo.Metrics do
     ref = :persistent_term.get(:repo_query_counter)
     :counters.add(ref, 2, 1)
   rescue
-    _ -> :ok
+    e ->
+      # Log at debug level to avoid flooding logs during normal operation
+      Logger.debug("[Repo.Metrics] Could not increment replica counter: #{inspect(e)}")
+      :ok
   end
 
   @doc """

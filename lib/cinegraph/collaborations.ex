@@ -286,8 +286,8 @@ defmodule Cinegraph.Collaborations do
       "Editor"
     ]
 
-    # First, get all movies
-    movie_ids = Repo.all(from m in Movie, select: m.id)
+    # First, get all movies (read-only query, use replica)
+    movie_ids = Repo.replica().all(from m in Movie, select: m.id)
     total_movies = length(movie_ids)
 
     # Process movies in batches
