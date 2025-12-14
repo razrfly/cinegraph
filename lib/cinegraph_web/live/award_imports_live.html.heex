@@ -1,0 +1,546 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900">Awards Import Dashboard</h1>
+    <p class="mt-2 text-gray-600">
+      Manage festival and award ceremony imports from IMDb and oscars.org
+    </p>
+  </div>
+
+  <%= if @stats_loading do %>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <div class="flex items-center">
+        <svg
+          class="animate-spin h-5 w-5 text-blue-600 mr-3"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+          </circle>
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          >
+          </path>
+        </svg>
+        <span class="text-blue-700">Loading statistics...</span>
+      </div>
+    </div>
+  <% end %>
+  
+<!-- Overall Stats -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-semibold">Overall Import Status</h2>
+      <div class="flex gap-2">
+        <button
+          phx-click="refresh_cache"
+          class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+          title="Refresh cached statistics from database"
+        >
+          Refresh Stats
+        </button>
+        <button
+          phx-click="discover_gaps"
+          class="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+          title="Scan all organizations to find years that haven't been imported yet"
+        >
+          Discover Gaps
+        </button>
+        <button
+          phx-click="sync_all_organizations"
+          class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+          disabled={@import_running}
+          title="Queue import jobs for all missing years across all organizations"
+        >
+          Sync All Missing
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+      <div class="bg-purple-50 p-4 rounded">
+        <div class="text-sm text-purple-600">Organizations</div>
+        <div class="text-2xl font-bold text-purple-900">
+          {format_number(@overall_stats.total_organizations)}
+        </div>
+      </div>
+
+      <div class="bg-blue-50 p-4 rounded" title="Ceremonies with at least some data imported">
+        <div class="text-sm text-blue-600">Imported</div>
+        <div class="text-2xl font-bold text-blue-900">
+          {format_number(@overall_stats.total_ceremonies)}
+        </div>
+      </div>
+
+      <div class="bg-green-50 p-4 rounded" title="Years with 90%+ movie match rate">
+        <div class="text-sm text-green-600">Completed</div>
+        <div class="text-2xl font-bold text-green-900">
+          {format_number(@overall_stats.completed_count)}
+        </div>
+      </div>
+
+      <div class="bg-yellow-50 p-4 rounded" title="Years with 50-90% movie match rate">
+        <div class="text-sm text-yellow-600">Partial</div>
+        <div class="text-2xl font-bold text-yellow-900">
+          {format_number(@overall_stats.partial_count)}
+        </div>
+      </div>
+
+      <div class="bg-gray-100 p-4 rounded" title="Years that haven't been imported yet">
+        <div class="text-sm text-gray-600">Not Started</div>
+        <div class="text-2xl font-bold text-gray-900">
+          {format_number(@overall_stats.pending_count)}
+        </div>
+      </div>
+
+      <div class="bg-red-50 p-4 rounded" title="Years with import errors or low/no matches">
+        <div class="text-sm text-red-600">Failed/Issues</div>
+        <div class="text-2xl font-bold text-red-900">
+          {format_number(@overall_stats.failed_count)}
+        </div>
+      </div>
+    </div>
+    
+<!-- Progress Bar -->
+    <div class="mb-4">
+      <div class="flex justify-between text-sm text-gray-600 mb-1">
+        <span>Completion Progress</span>
+        <span>{@overall_stats.completion_percentage}%</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-3">
+        <div
+          class="bg-green-600 h-3 rounded-full transition-all duration-500"
+          style={"width: #{@overall_stats.completion_percentage}%"}
+        >
+        </div>
+      </div>
+    </div>
+    
+<!-- Additional Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div>
+        <span class="text-gray-500">Total Nominations:</span>
+        <span class="font-medium ml-1">{format_number(@overall_stats.total_nominations)}</span>
+      </div>
+      <div>
+        <span class="text-gray-500">Movies Matched:</span>
+        <span class="font-medium ml-1">{format_number(@overall_stats.total_matched)}</span>
+      </div>
+      <div>
+        <span class="text-gray-500">Avg Match Rate:</span>
+        <span class="font-medium ml-1">{format_rate(@overall_stats.avg_match_rate)}</span>
+      </div>
+      <div>
+        <span class="text-gray-500">Queue Status:</span>
+        <span class="font-medium ml-1">
+          {Map.get(@queue_status, :executing, 0)} running, {Map.get(@queue_status, :available, 0)} queued
+        </span>
+      </div>
+    </div>
+  </div>
+  
+<!-- Import Progress Indicator -->
+  <%= if @import_running && @import_progress do %>
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+      <div class="flex items-center">
+        <svg
+          class="animate-spin h-5 w-5 text-blue-600 mr-3"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+          </circle>
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          >
+          </path>
+        </svg>
+        <span class="text-blue-700">{@import_progress}</span>
+      </div>
+    </div>
+  <% end %>
+  
+<!-- Organizations Table -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">Organizations</h2>
+
+    <%= if length(@organizations) > 0 do %>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Organization
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Year Range
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Imported / Total
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nominations
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Match Rate
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Source
+              </th>
+              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= for org <- @organizations do %>
+              <tr
+                class="hover:bg-gray-50 cursor-pointer"
+                phx-click="show_organization_detail"
+                phx-value-org-id={org.organization_id}
+              >
+                <td class="px-4 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div>
+                      <div class="text-sm font-medium text-gray-900">
+                        {org.organization_name}
+                      </div>
+                      <div class="text-sm text-gray-500">
+                        {org.abbreviation}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {org.year_range}
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm">
+                  <span class={
+                    if org.imported_years == 0,
+                      do: "text-red-600 font-medium",
+                      else: "text-gray-900"
+                  }>
+                    {org.imported_years}
+                  </span>
+                  <span class="text-gray-400"> / </span>
+                  <span class="text-gray-600">{org.total_years}</span>
+                  <%= if org.total_years - org.imported_years > 0 do %>
+                    <span class="ml-2 text-xs text-orange-600">
+                      ({org.total_years - org.imported_years} missing)
+                    </span>
+                  <% end %>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap">
+                  <div class="flex items-center gap-1 flex-wrap">
+                    <%= if org.completed_count > 0 do %>
+                      <span
+                        class={"px-2 py-1 text-xs rounded-full #{status_color("completed")}"}
+                        title="Completed (90%+ match rate)"
+                      >
+                        {org.completed_count} done
+                      </span>
+                    <% end %>
+                    <%= if org.partial_count > 0 do %>
+                      <span
+                        class={"px-2 py-1 text-xs rounded-full #{status_color("partial")}"}
+                        title="Partial (50-90% match rate)"
+                      >
+                        {org.partial_count} partial
+                      </span>
+                    <% end %>
+                    <%= if org.pending_count > 0 do %>
+                      <span
+                        class={"px-2 py-1 text-xs rounded-full #{status_color("not_started")}"}
+                        title="Not yet imported"
+                      >
+                        {org.pending_count} not started
+                      </span>
+                    <% end %>
+                    <%= if org.failed_count > 0 do %>
+                      <span
+                        class={"px-2 py-1 text-xs rounded-full #{status_color("failed")}"}
+                        title="Failed or low match rate"
+                      >
+                        {org.failed_count} issues
+                      </span>
+                    <% end %>
+                  </div>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {format_number(org.total_nominations)}
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                      <div
+                        class="bg-green-600 h-2 rounded-full"
+                        style={"width: #{min(org.avg_match_rate, 100)}%"}
+                      >
+                      </div>
+                    </div>
+                    <span class="text-sm text-gray-900">{format_rate(org.avg_match_rate)}</span>
+                  </div>
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {org.data_source || "unknown"}
+                </td>
+                <td class="px-4 py-4 whitespace-nowrap text-right text-sm">
+                  <button
+                    phx-click="sync_organization"
+                    phx-value-org-id={org.organization_id}
+                    class={"mr-3 " <> if org.pending_count > 0, do: "text-indigo-600 hover:text-indigo-900 font-medium", else: "text-gray-400 hover:text-gray-600"}
+                    title={"Queue imports for #{org.pending_count + org.failed_count} missing/failed years"}
+                  >
+                    Sync {org.pending_count + org.failed_count}
+                  </button>
+                  <button
+                    phx-click="show_organization_detail"
+                    phx-value-org-id={org.organization_id}
+                    class="text-gray-600 hover:text-gray-900"
+                    title="View year-by-year details and import status"
+                  >
+                    Details
+                  </button>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <div class="text-center py-8 text-gray-500">
+        No organizations found. Import data may be loading...
+      </div>
+    <% end %>
+  </div>
+  
+<!-- Recent Activity -->
+  <%= if length(@recent_activity) > 0 do %>
+    <div class="bg-white shadow rounded-lg p-6">
+      <h2 class="text-xl font-semibold mb-4">Recent Activity (Last 24 Hours)</h2>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Organization
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Year
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nominations
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Match Rate
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Imported At
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= for activity <- @recent_activity do %>
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class="text-sm font-medium text-gray-900">
+                    {activity.abbreviation}
+                  </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  {activity.year}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  <span class={"px-2 py-1 text-xs rounded-full #{status_color(activity.status)}"}>
+                    {activity.status}
+                  </span>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  {activity.total_nominations || 0}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  {format_rate(activity.movie_match_rate)}
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                  {format_datetime(activity.scraped_at)}
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<!-- Organization Detail Modal -->
+<%= if @show_detail_modal && @selected_organization do %>
+  <div
+    class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+    phx-click="close_modal"
+  >
+    <div
+      class="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white"
+      phx-click-away="close_modal"
+    >
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-gray-900">
+          {@selected_organization.organization_name} Import Details
+        </h3>
+        <button phx-click="close_modal" class="text-gray-400 hover:text-gray-600">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
+      
+<!-- Organization Summary -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-gray-50 p-3 rounded">
+          <div class="text-xs text-gray-500">Year Range</div>
+          <div class="text-lg font-semibold">{@selected_organization.year_range}</div>
+        </div>
+        <div class="bg-gray-50 p-3 rounded">
+          <div class="text-xs text-gray-500">Total Nominations</div>
+          <div class="text-lg font-semibold">
+            {format_number(@selected_organization.total_nominations)}
+          </div>
+        </div>
+        <div class="bg-gray-50 p-3 rounded">
+          <div class="text-xs text-gray-500">Matched Movies</div>
+          <div class="text-lg font-semibold">
+            {format_number(@selected_organization.total_matched)}
+          </div>
+        </div>
+        <div class="bg-gray-50 p-3 rounded">
+          <div class="text-xs text-gray-500">Match Rate</div>
+          <div class="text-lg font-semibold">
+            {format_rate(@selected_organization.avg_match_rate)}
+          </div>
+        </div>
+      </div>
+      
+<!-- Years Table -->
+      <div class="mb-4">
+        <div class="flex justify-between items-center mb-2">
+          <h4 class="text-lg font-medium">Years</h4>
+          <button
+            phx-click="sync_organization"
+            phx-value-org-id={@selected_organization.organization_id}
+            class="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          >
+            Sync Missing Years
+          </button>
+        </div>
+        <%= if length(assigns[:organization_years] || []) > 0 do %>
+          <div class="max-h-96 overflow-y-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50 sticky top-0">
+                <tr>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Year
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Status
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Nominations
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Matched
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Winners
+                  </th>
+                  <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Source
+                  </th>
+                  <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <%= for year_data <- assigns[:organization_years] || [] do %>
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {year_data.year}
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap">
+                      <span class={"px-2 py-1 text-xs rounded-full #{status_color(year_data.status)}"}>
+                        {year_data.status}
+                      </span>
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {year_data.total_nominations}
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {year_data.matched_movies}
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                      {year_data.winners}
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
+                      {year_data.data_source || "-"}
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap text-right text-sm">
+                      <%= if year_data.status in ["not_started", "failed", "no_matches", "low_match"] do %>
+                        <button
+                          phx-click="import_year"
+                          phx-value-org-id={@selected_organization.organization_id}
+                          phx-value-year={year_data.year}
+                          class="text-indigo-600 hover:text-indigo-900"
+                        >
+                          Import
+                        </button>
+                      <% else %>
+                        <button
+                          phx-click="import_year"
+                          phx-value-org-id={@selected_organization.organization_id}
+                          phx-value-year={year_data.year}
+                          class="text-gray-400 hover:text-gray-600"
+                          title="Re-import this year"
+                        >
+                          Re-import
+                        </button>
+                      <% end %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        <% else %>
+          <div class="text-center py-4 text-gray-500">
+            Loading year data...
+          </div>
+        <% end %>
+      </div>
+
+      <div class="flex justify-end">
+        <button
+          phx-click="close_modal"
+          class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+<% end %>

@@ -66,6 +66,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         {:error, :ceremony_not_found}
 
       ceremony ->
+        # Mark import as started for status tracking
+        Festivals.mark_import_started(ceremony, job.id)
+
         # Store organization info before any modifications
         organization_abbr = ceremony.organization && ceremony.organization.abbreviation
         organization_id = ceremony.organization && ceremony.organization.id
@@ -74,154 +77,177 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           "Processing #{organization_abbr} ceremony #{ceremony.year} (ID: #{ceremony.id})"
         )
 
-        # First ensure ceremony is enhanced with IMDb data
-        ceremony = ensure_imdb_enhancement(ceremony)
+        try do
+          # First ensure ceremony is enhanced with IMDb data
+          ceremony = ensure_imdb_enhancement(ceremony)
 
-        # Process each category - handle both Oscar format (categories) and Venice format (awards)
-        {categories, category_format} = extract_categories(ceremony.data)
+          # Process each category - handle both Oscar format (categories) and Venice format (awards)
+          {categories, category_format} = extract_categories(ceremony.data)
 
-        Logger.info(
-          "Processing #{length(categories)} categories for ceremony #{ceremony.year} (format: #{category_format})"
-        )
+          Logger.info(
+            "Processing #{length(categories)} categories for ceremony #{ceremony.year} (format: #{category_format})"
+          )
 
-        results =
-          categories
-          |> Enum.with_index()
-          |> Enum.flat_map(fn {category_data, index} ->
-            category_name = extract_category_name(category_data, category_format)
+          results =
+            categories
+            |> Enum.with_index()
+            |> Enum.flat_map(fn {category_data, index} ->
+              category_name = extract_category_name(category_data, category_format)
 
-            Logger.info(
-              "Processing category #{index + 1}/#{length(categories)}: #{category_name || "Unknown"}"
-            )
+              Logger.info(
+                "Processing category #{index + 1}/#{length(categories)}: #{category_name || "Unknown"}"
+              )
 
-            # Get or create the festival category (use stored organization_id)
-            festival_category = ensure_category_exists(category_name, organization_id)
+              # Get or create the festival category (use stored organization_id)
+              festival_category = ensure_category_exists(category_name, organization_id)
 
-            # Process nominees if category was created successfully
-            category_results =
-              if festival_category do
-                process_category(category_data, festival_category, ceremony, category_format)
-              else
-                Logger.error("Skipping category #{category_name} - failed to create category")
-                []
+              # Process nominees if category was created successfully
+              category_results =
+                if festival_category do
+                  process_category(category_data, festival_category, ceremony, category_format)
+                else
+                  Logger.error("Skipping category #{category_name} - failed to create category")
+                  []
+                end
+
+              Logger.info(
+                "Category #{index + 1} processed with #{length(category_results)} results"
+              )
+
+              category_results
+            end)
+
+          Logger.info("Total results from all categories: #{length(results)}")
+          summary = summarize_results(results)
+          Logger.info("Festival discovery complete for #{ceremony.year}: #{inspect(summary)}")
+
+          # Calculate enhanced business metadata
+          movies_found =
+            Enum.count(results, fn r ->
+              r[:action] in [:queued_movie, :created_nomination, :existing, :updated]
+            end)
+
+          tmdb_jobs_queued = Enum.count(results, &(&1[:action] == :queued_movie))
+
+          imdb_ids_without_tmdb =
+            Enum.count(results, fn r ->
+              r[:action] == :skipped and r[:reason] == :fuzzy_search_failed
+            end)
+
+          # Count person vs film nominations by checking category types
+          person_nominations =
+            Enum.count(categories, fn category_data ->
+              category_name = extract_category_name(category_data, category_format)
+
+              category_name &&
+                String.contains?(category_name, [
+                  "Actor",
+                  "Actress",
+                  "Directing",
+                  "Writing",
+                  "Cinematography"
+                ])
+            end)
+
+          film_nominations = length(categories) - person_nominations
+
+          fuzzy_matches_attempted = Enum.count(results, &(&1[:action] == :fuzzy_matched))
+
+          fuzzy_matches_successful =
+            Enum.count(results, fn r ->
+              r[:action] == :fuzzy_matched or (r[:action] == :updated and r[:fuzzy_matched_local])
+            end)
+
+          # Issue #236: Track comprehensive person linking metrics
+          person_linking_summary =
+            track_ceremony_person_linking_metrics(ceremony, categories, results, category_format)
+
+          # Save comprehensive job metadata
+          job_meta =
+            Map.merge(summary, %{
+              ceremony_year: ceremony.year,
+              categories_processed: length(categories),
+              total_nominations: length(results),
+              movies_found: movies_found,
+              tmdb_jobs_queued: tmdb_jobs_queued,
+              imdb_ids_without_tmdb: imdb_ids_without_tmdb,
+              people_nominations: person_nominations,
+              film_nominations: film_nominations,
+              fuzzy_matches_attempted: fuzzy_matches_attempted,
+              fuzzy_matches_successful: fuzzy_matches_successful
+            })
+            |> Map.merge(person_linking_summary)
+
+          # Mark import as completed with comprehensive stats
+          Festivals.mark_import_completed(ceremony, %{
+            nominations_found: length(results),
+            nominations_matched: movies_found,
+            winners_count:
+              Enum.count(results, fn r ->
+                r[:winner] == true or r[:won] == true
+              end)
+          })
+
+          # Broadcast completion
+          broadcast_discovery_complete(ceremony, summary)
+
+          # Run person inference DIRECTLY for non-Oscar festivals (Issue #250 & #286)
+          # Simple solution: just run it here instead of queuing another job
+          if is_binary(organization_abbr) and organization_abbr != "AMPAS" do
+            Logger.info("Running person inference for #{organization_abbr} #{ceremony.year}")
+
+            # Track timing for comprehensive metrics
+            start_time = System.monotonic_time(:millisecond)
+
+            {result, duration_ms} =
+              try do
+                res = FestivalPersonInferrer.infer_all_director_nominations()
+                end_time = System.monotonic_time(:millisecond)
+                {res, end_time - start_time}
+              rescue
+                e ->
+                  end_time = System.monotonic_time(:millisecond)
+                  duration = end_time - start_time
+
+                  Logger.error(
+                    "Person inference crashed for #{organization_abbr} #{ceremony.year}: " <>
+                      Exception.format(:error, e, __STACKTRACE__)
+                  )
+
+                  {%{success: 0, skipped: 0, failed: 0, error: Exception.message(e)}, duration}
               end
 
             Logger.info(
-              "Category #{index + 1} processed with #{length(category_results)} results"
+              "Person inference completed for #{organization_abbr} #{ceremony.year}: " <>
+                "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed (#{duration_ms}ms)"
             )
 
-            category_results
-          end)
+            # Mark job metadata to indicate inference was invoked inline (always persist)
+            updated_meta =
+              Map.merge(job_meta, %{
+                person_inference_invoked: true,
+                person_inference_duration_ms: duration_ms,
+                person_inference_result: result
+              })
 
-        Logger.info("Total results from all categories: #{length(results)}")
-        summary = summarize_results(results)
-        Logger.info("Festival discovery complete for #{ceremony.year}: #{inspect(summary)}")
+            update_job_meta(job, updated_meta)
+          else
+            update_job_meta(job, job_meta)
+          end
 
-        # Calculate enhanced business metadata
-        movies_found =
-          Enum.count(results, fn r ->
-            r[:action] in [:queued_movie, :created_nomination, :existing, :updated]
-          end)
+          :ok
+        rescue
+          e ->
+            Logger.error(
+              "Festival discovery failed for ceremony #{ceremony_id}: " <>
+                Exception.format(:error, e, __STACKTRACE__)
+            )
 
-        tmdb_jobs_queued = Enum.count(results, &(&1[:action] == :queued_movie))
+            # Mark import as failed
+            Festivals.mark_import_failed(ceremony, Exception.message(e))
 
-        imdb_ids_without_tmdb =
-          Enum.count(results, fn r ->
-            r[:action] == :skipped and r[:reason] == :fuzzy_search_failed
-          end)
-
-        # Count person vs film nominations by checking category types
-        person_nominations =
-          Enum.count(categories, fn category_data ->
-            category_name = extract_category_name(category_data, category_format)
-
-            category_name &&
-              String.contains?(category_name, [
-                "Actor",
-                "Actress",
-                "Directing",
-                "Writing",
-                "Cinematography"
-              ])
-          end)
-
-        film_nominations = length(categories) - person_nominations
-
-        fuzzy_matches_attempted = Enum.count(results, &(&1[:action] == :fuzzy_matched))
-
-        fuzzy_matches_successful =
-          Enum.count(results, fn r ->
-            r[:action] == :fuzzy_matched or (r[:action] == :updated and r[:fuzzy_matched_local])
-          end)
-
-        # Issue #236: Track comprehensive person linking metrics
-        person_linking_summary =
-          track_ceremony_person_linking_metrics(ceremony, categories, results, category_format)
-
-        # Save comprehensive job metadata
-        job_meta =
-          Map.merge(summary, %{
-            ceremony_year: ceremony.year,
-            categories_processed: length(categories),
-            total_nominations: length(results),
-            movies_found: movies_found,
-            tmdb_jobs_queued: tmdb_jobs_queued,
-            imdb_ids_without_tmdb: imdb_ids_without_tmdb,
-            people_nominations: person_nominations,
-            film_nominations: film_nominations,
-            fuzzy_matches_attempted: fuzzy_matches_attempted,
-            fuzzy_matches_successful: fuzzy_matches_successful
-          })
-          |> Map.merge(person_linking_summary)
-
-        # Broadcast completion
-        broadcast_discovery_complete(ceremony, summary)
-
-        # Run person inference DIRECTLY for non-Oscar festivals (Issue #250 & #286)
-        # Simple solution: just run it here instead of queuing another job
-        if is_binary(organization_abbr) and organization_abbr != "AMPAS" do
-          Logger.info("Running person inference for #{organization_abbr} #{ceremony.year}")
-
-          # Track timing for comprehensive metrics
-          start_time = System.monotonic_time(:millisecond)
-
-          {result, duration_ms} =
-            try do
-              res = FestivalPersonInferrer.infer_all_director_nominations()
-              end_time = System.monotonic_time(:millisecond)
-              {res, end_time - start_time}
-            rescue
-              e ->
-                end_time = System.monotonic_time(:millisecond)
-                duration = end_time - start_time
-
-                Logger.error(
-                  "Person inference crashed for #{organization_abbr} #{ceremony.year}: " <>
-                    Exception.format(:error, e, __STACKTRACE__)
-                )
-
-                {%{success: 0, skipped: 0, failed: 0, error: Exception.message(e)}, duration}
-            end
-
-          Logger.info(
-            "Person inference completed for #{organization_abbr} #{ceremony.year}: " <>
-              "#{result.success} linked, #{result.skipped} skipped, #{result.failed} failed (#{duration_ms}ms)"
-          )
-
-          # Mark job metadata to indicate inference was invoked inline (always persist)
-          updated_meta =
-            Map.merge(job_meta, %{
-              person_inference_invoked: true,
-              person_inference_duration_ms: duration_ms,
-              person_inference_result: result
-            })
-
-          update_job_meta(job, updated_meta)
-        else
-          update_job_meta(job, job_meta)
+            {:error, Exception.message(e)}
         end
-
-        :ok
     end
   end
 

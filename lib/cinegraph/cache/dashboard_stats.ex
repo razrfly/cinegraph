@@ -282,7 +282,12 @@ defmodule Cinegraph.Cache.DashboardStats do
       fallback_stats: %{},
       strategy_breakdown: [],
       import_metrics: [],
-      year_progress: %{years: [], sync_health: %{status: :loading, message: "Loading...", color: "gray"}, current_year: nil, is_running: false},
+      year_progress: %{
+        years: [],
+        sync_health: %{status: :loading, message: "Loading...", color: "gray"},
+        current_year: nil,
+        is_running: false
+      },
       movie_lists: [],
       canonical_lists: [],
       loading: true

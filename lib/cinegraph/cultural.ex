@@ -633,7 +633,9 @@ defmodule Cinegraph.Cultural do
               scraped_at: DateTime.utc_now(),
               source_metadata: %{
                 "scraper" => "OscarScraper",
-                "version" => "1.0"
+                "version" => "1.0",
+                "import_status" => "pending",
+                "scraped_at" => DateTime.utc_now() |> DateTime.to_iso8601()
               }
             }
 
