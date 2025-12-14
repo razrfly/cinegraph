@@ -547,177 +547,60 @@
     </div>
   </div>
   
-<!-- Oscar Import -->
-  <div class="bg-white shadow rounded-lg p-6 mb-8">
-    <h2 class="text-xl font-semibold mb-4">Academy Awards Import</h2>
-
-    <form phx-submit="import_oscars" class="flex gap-4 items-end mb-4">
-      <div class="flex-1">
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Select decades to import
-        </label>
-        <select
-          name="year_range"
-          required
-          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Select decades...</option>
-          <%= for decade <- @oscar_decades do %>
-            <option value={decade.value}>{decade.label}</option>
-          <% end %>
-          <option value="all">All Available Years</option>
-        </select>
-      </div>
-      <button
-        type="submit"
-        class="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-        disabled={@oscar_import_running}
-      >
-        {if @oscar_import_running, do: "Importing...", else: "Import Oscar Data"}
-      </button>
-    </form>
-
-    <%= if @oscar_import_running do %>
-      <div class="mt-4 p-4 bg-yellow-50 rounded">
-        <div class="flex items-center">
-          <svg
-            class="animate-spin h-5 w-5 mr-3 text-yellow-600"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            >
-            </circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            >
-            </path>
-          </svg>
-          <span class="text-yellow-800">{@oscar_import_progress || "Processing..."}</span>
-        </div>
-      </div>
-    <% end %>
-    
-<!-- Academy Awards Statistics -->
-    <div class="mt-6 p-4 bg-gray-50 rounded">
-      <h3 class="text-lg font-medium text-gray-900 mb-3">Academy Awards Statistics</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <%= for oscar_stat <- @oscar_stats do %>
-          <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-600">{oscar_stat.label}</span>
-            <span class="text-sm font-semibold text-gray-900">{oscar_stat.value}</span>
-          </div>
-        <% end %>
-      </div>
-    </div>
-  </div>
-  
-<!-- Festival Awards Import -->
+<!-- Awards & Festivals Summary -->
   <div class="bg-white shadow rounded-lg p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-xl font-semibold">Festival Awards Import</h2>
-      <a
-        href="/festival-events"
-        class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
+      <div>
+        <h2 class="text-xl font-semibold">Awards & Festivals</h2>
+        <p class="text-sm text-gray-500 mt-1">
+          Manage award imports via the dedicated dashboard
+        </p>
+      </div>
+      <.link
+        navigate={~p"/admin/award-imports"}
+        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
       >
-        Manage Festival Events
-      </a>
+        <span>Award Imports Dashboard</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 7l5 5m0 0l-5 5m5-5H6"
+          />
+        </svg>
+      </.link>
     </div>
-
-    <form
-      phx-submit="import_festival"
-      phx-change="festival_selected"
-      class="flex gap-4 items-end mb-4"
-    >
-      <div class="flex-1">
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Select festival to import
-        </label>
-        <select
-          name="festival"
-          required
-          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Select festival...</option>
-          <%= for festival <- @festival_list do %>
-            <option value={festival.value}>{festival.label}</option>
-          <% end %>
-        </select>
-      </div>
-      <div class="flex-1">
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Select year or range
-        </label>
-        <select
-          name="year_range"
-          required
-          value={@selected_year_range || ""}
-          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Select year...</option>
-          <%= for year_option <- @festival_years do %>
-            <option value={year_option.value}>{year_option.label}</option>
-          <% end %>
-        </select>
-      </div>
-      <button
-        type="submit"
-        class="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-        disabled={@festival_import_running}
-      >
-        {if @festival_import_running, do: "Importing...", else: "Import Festival"}
-      </button>
-    </form>
-
-    <%= if @festival_import_running do %>
-      <div class="mt-4 p-4 bg-purple-50 rounded">
-        <div class="flex items-center">
-          <svg
-            class="animate-spin h-5 w-5 mr-3 text-purple-600"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            >
-            </circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            >
-            </path>
-          </svg>
-          <span class="text-purple-800">{@festival_import_progress || "Processing..."}</span>
+    
+<!-- Combined Awards Statistics -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-yellow-50 p-4 rounded">
+        <div class="text-sm text-yellow-600">Festival Nominations</div>
+        <div class="text-2xl font-bold text-yellow-900">
+          {format_number(@stats.festival_nominations)}
         </div>
       </div>
-    <% end %>
-    
-<!-- Festival Awards Statistics -->
-    <div class="mt-6 p-4 bg-gray-50 rounded">
-      <h3 class="text-lg font-medium text-gray-900 mb-3">Festival Awards Statistics</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <%= for festival_stat <- @festival_stats do %>
-          <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-600">{festival_stat.label}</span>
-            <span class="text-sm font-semibold text-gray-900">{festival_stat.value}</span>
-          </div>
-        <% end %>
+      <div class="bg-yellow-50 p-4 rounded">
+        <div class="text-sm text-yellow-600">Festival Wins</div>
+        <div class="text-2xl font-bold text-yellow-900">
+          {format_number(@stats.festival_wins)}
+        </div>
+      </div>
+      <div class="bg-purple-50 p-4 rounded">
+        <div class="text-sm text-purple-600">Organizations</div>
+        <div class="text-2xl font-bold text-purple-900">{length(@festival_list)}</div>
+      </div>
+      <div class="bg-green-50 p-4 rounded">
+        <div class="text-sm text-green-600">Ceremonies Imported</div>
+        <div class="text-2xl font-bold text-green-900">
+          {Enum.find(@oscar_stats, fn s -> s.label == "Oscar Ceremonies" end)[:value] || 0}
+        </div>
       </div>
     </div>
   </div>
