@@ -51,7 +51,7 @@ defmodule CinegraphWeb.Telemetry do
         unit: {:native, :millisecond}
       ),
 
-      # Database Metrics
+      # Primary Database Metrics
       summary("cinegraph.repo.query.total_time",
         unit: {:native, :millisecond},
         description: "The sum of the other measurements"
@@ -74,19 +74,62 @@ defmodule CinegraphWeb.Telemetry do
           "The time the connection spent waiting before being checked out for the query"
       ),
 
+      # Replica Database Metrics
+      summary("cinegraph.repo.replica.query.total_time",
+        unit: {:native, :millisecond},
+        description: "Total time for replica queries"
+      ),
+      summary("cinegraph.repo.replica.query.decode_time",
+        unit: {:native, :millisecond},
+        description: "Time spent decoding replica data"
+      ),
+      summary("cinegraph.repo.replica.query.query_time",
+        unit: {:native, :millisecond},
+        description: "Time spent executing replica queries"
+      ),
+      summary("cinegraph.repo.replica.query.queue_time",
+        unit: {:native, :millisecond},
+        description: "Time spent waiting for replica connection"
+      ),
+      summary("cinegraph.repo.replica.query.idle_time",
+        unit: {:native, :millisecond},
+        description: "Replica connection idle time before checkout"
+      ),
+
+      # Database Distribution Metrics (counters for read distribution tracking)
+      counter("cinegraph.repo.query.count",
+        description: "Number of primary database queries"
+      ),
+      counter("cinegraph.repo.replica.query.count",
+        description: "Number of replica database queries"
+      ),
+
       # VM Metrics
       summary("vm.memory.total", unit: {:byte, :kilobyte}),
       summary("vm.total_run_queue_lengths.total"),
       summary("vm.total_run_queue_lengths.cpu"),
-      summary("vm.total_run_queue_lengths.io")
+      summary("vm.total_run_queue_lengths.io"),
+
+      # Database Pool Metrics (periodic)
+      last_value("cinegraph.repo.pool.size",
+        description: "Primary pool size"
+      ),
+      last_value("cinegraph.repo.pool.available",
+        description: "Primary pool available connections"
+      ),
+      last_value("cinegraph.repo.replica.pool.size",
+        description: "Replica pool size"
+      ),
+      last_value("cinegraph.repo.replica.pool.available",
+        description: "Replica pool available connections"
+      )
     ]
   end
 
   defp periodic_measurements do
     [
-      # A module, function and arguments to be invoked periodically.
-      # This function must call :telemetry.execute/3 and a metric must be added above.
-      # {CinegraphWeb, :count_users, []}
+      # Database pool stats
+      {Cinegraph.Repo.Metrics, :measure_pool_stats, []}
     ]
   end
 end

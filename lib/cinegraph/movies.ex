@@ -83,10 +83,10 @@ defmodule Cinegraph.Movies do
     if params["genres"] && params["genres"] != [] do
       # Wrap the grouped query in a subquery and count the results
       from(m in subquery(query), select: count())
-      |> Repo.one()
+      |> Repo.replica().one()
     else
       # For all other filters, use normal aggregate
-      Repo.aggregate(query, :count, :id)
+      Repo.replica().aggregate(query, :count, :id)
     end
   end
 
@@ -99,7 +99,7 @@ defmodule Cinegraph.Movies do
       where: m.import_status == "full",
       where: fragment("? \\? ?", m.canonical_sources, ^list_key)
     )
-    |> Repo.aggregate(:count, :id)
+    |> Repo.replica().aggregate(:count, :id)
   end
 
   @doc """
@@ -118,7 +118,7 @@ defmodule Cinegraph.Movies do
   """
   def count_soft_imports do
     from(m in Movie, where: m.import_status == "soft")
-    |> Repo.aggregate(:count, :id)
+    |> Repo.replica().aggregate(:count, :id)
   end
 
   # Sorting helper
@@ -180,7 +180,7 @@ defmodule Cinegraph.Movies do
     query
     |> limit(^per_page)
     |> offset(^offset_val)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp parse_page(page_param) do
@@ -199,30 +199,34 @@ defmodule Cinegraph.Movies do
 
   @doc """
   Gets a single movie.
+  Uses read replica for better load distribution.
   """
-  def get_movie!(id), do: Repo.get!(Movie, id)
+  def get_movie!(id), do: Repo.replica().get!(Movie, id)
 
   @doc """
   Gets a movie by slug.
+  Uses read replica for better load distribution.
   """
   def get_movie_by_slug!(slug) do
-    Repo.get_by!(Movie, slug: slug)
+    Repo.replica().get_by!(Movie, slug: slug)
   end
 
   @doc """
   Gets a movie by TMDB ID.
+  Uses read replica for display lookups.
   """
   def get_movie_by_tmdb_id(tmdb_id) do
-    Repo.get_by(Movie, tmdb_id: tmdb_id)
+    Repo.replica().get_by(Movie, tmdb_id: tmdb_id)
   end
 
   @doc """
   Checks if a movie exists by TMDB ID.
   Used for deduplication during imports.
+  Uses read replica since this is a read-only check.
   """
   def movie_exists?(tmdb_id) do
     from(m in Movie, where: m.tmdb_id == ^tmdb_id, select: true)
-    |> Repo.exists?()
+    |> Repo.replica().exists?()
   end
 
   @doc """
@@ -382,9 +386,10 @@ defmodule Cinegraph.Movies do
 
   @doc """
   Gets a person by TMDB ID.
+  Uses read replica for display lookups.
   """
   def get_person_by_tmdb_id(tmdb_id) do
-    Repo.get_by(Person, tmdb_id: tmdb_id)
+    Repo.replica().get_by(Person, tmdb_id: tmdb_id)
   end
 
   @doc """
@@ -456,9 +461,10 @@ defmodule Cinegraph.Movies do
 
   @doc """
   Lists all genres.
+  Uses read replica for better load distribution.
   """
   def list_genres do
-    Repo.all(Genre)
+    Repo.replica().all(Genre)
   end
 
   # Credit functions
@@ -488,33 +494,36 @@ defmodule Cinegraph.Movies do
 
   @doc """
   Gets credits for a movie.
+  Uses read replica for better load distribution.
   """
   def get_movie_credits(movie_id) do
     Credit
     |> where([c], c.movie_id == ^movie_id)
     |> preload(:person)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
   Gets movies for a person.
+  Uses read replica for better load distribution.
   """
   def get_person_movies(person_id) do
     Credit
     |> where([c], c.person_id == ^person_id)
     |> preload(:movie)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
   Gets movie keywords.
+  Uses read replica for better load distribution.
   """
   def get_movie_keywords(movie_id) do
-    movie = Repo.get(Movie, movie_id)
+    movie = Repo.replica().get(Movie, movie_id)
 
     if movie do
       movie
-      |> Repo.preload(:keywords)
+      |> Repo.replica().preload(:keywords)
       |> Map.get(:keywords, [])
     else
       []
@@ -523,31 +532,34 @@ defmodule Cinegraph.Movies do
 
   @doc """
   Gets movie videos.
+  Uses read replica for better load distribution.
   """
   def get_movie_videos(movie_id) do
     MovieVideo
     |> where([v], v.movie_id == ^movie_id)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
   Gets movie release dates.
+  Uses read replica for better load distribution.
   """
   def get_movie_release_dates(movie_id) do
     MovieReleaseDate
     |> where([rd], rd.movie_id == ^movie_id)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
   Gets movie production companies.
+  Uses read replica for better load distribution.
   """
   def get_movie_production_companies(movie_id) do
-    movie = Repo.get(Movie, movie_id)
+    movie = Repo.replica().get(Movie, movie_id)
 
     if movie do
       movie
-      |> Repo.preload(:production_companies)
+      |> Repo.replica().preload(:production_companies)
       |> Map.get(:production_companies, [])
     else
       []
@@ -556,25 +568,28 @@ defmodule Cinegraph.Movies do
 
   @doc """
   Gets a movie by IMDb ID.
+  Uses read replica for display lookups.
   """
   def get_movie_by_imdb_id(imdb_id) do
-    Repo.get_by(Movie, imdb_id: imdb_id)
+    Repo.replica().get_by(Movie, imdb_id: imdb_id)
   end
 
   @doc """
   Counts movies that are canonical in a specific source.
+  Uses read replica for better load distribution.
   """
   def count_canonical_movies(source_key) do
     from(m in Movie, where: fragment("? \\? ?", m.canonical_sources, ^source_key))
-    |> Repo.aggregate(:count, :id)
+    |> Repo.replica().aggregate(:count, :id)
   end
 
   @doc """
   Counts movies that are canonical in any source.
+  Uses read replica for better load distribution.
   """
   def count_any_canonical_movies do
     from(m in Movie, where: m.canonical_sources != ^%{})
-    |> Repo.aggregate(:count, :id)
+    |> Repo.replica().aggregate(:count, :id)
   end
 
   @doc """

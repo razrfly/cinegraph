@@ -516,7 +516,7 @@ defmodule Cinegraph.Collaborations do
         order_by: [desc: m.release_date],
         preload: [movie: m]
 
-    Repo.all(query) |> Enum.map(& &1.movie)
+    Repo.replica().all(query) |> Enum.map(& &1.movie)
   end
 
   @doc """
@@ -527,7 +527,8 @@ defmodule Cinegraph.Collaborations do
     {person_a_id, person_b_id} = order_person_ids(actor_id, director_id)
 
     # Get the original collaboration's metrics
-    original = Repo.get_by(Collaboration, person_a_id: person_a_id, person_b_id: person_b_id)
+    original =
+      Repo.replica().get_by(Collaboration, person_a_id: person_a_id, person_b_id: person_b_id)
 
     if original do
       query =
@@ -545,7 +546,7 @@ defmodule Cinegraph.Collaborations do
           limit: ^limit,
           preload: [:person_a, :person_b]
 
-      Repo.all(query)
+      Repo.replica().all(query)
     else
       []
     end
@@ -562,7 +563,7 @@ defmodule Cinegraph.Collaborations do
     query = """
     WITH RECURSIVE path_search AS (
       -- Base case: direct connections through movies
-      SELECT 
+      SELECT
         p1.id as from_person,
         p2.id as to_person,
         ARRAY[p1.id, p2.id] as path,
@@ -573,11 +574,11 @@ defmodule Cinegraph.Collaborations do
       JOIN movie_credits mc2 ON mc1.movie_id = mc2.movie_id
       JOIN people p2 ON mc2.person_id = p2.id
       WHERE p1.id = $1 AND p2.id != $1
-      
+
       UNION ALL
-      
+
       -- Recursive case
-      SELECT 
+      SELECT
         ps.from_person,
         p2.id as to_person,
         ps.path || p2.id as path,
@@ -591,16 +592,16 @@ defmodule Cinegraph.Collaborations do
         AND ps.depth < $3
         AND ps.to_person != $2  -- Stop if we already found target
     )
-    SELECT DISTINCT ON (path) 
-      path, 
-      depth 
+    SELECT DISTINCT ON (path)
+      path,
+      depth
     FROM path_search
     WHERE to_person = $2
     ORDER BY path, depth
     LIMIT 1
     """
 
-    case Repo.query(query, [from_id, to_id, max_depth]) do
+    case Repo.replica().query(query, [from_id, to_id, max_depth]) do
       {:ok, %{rows: [[path, depth]]}} ->
         # Return a simple map with the path information
         {:ok,
@@ -621,6 +622,7 @@ defmodule Cinegraph.Collaborations do
 
   @doc """
   Gets collaboration trends for a person by year.
+  Uses read replica for better load distribution.
   """
   def get_person_collaboration_trends(person_id) do
     query = """
@@ -629,7 +631,7 @@ defmodule Cinegraph.Collaborations do
     ORDER BY year DESC
     """
 
-    case Repo.query(query, [person_id]) do
+    case Repo.replica().query(query, [person_id]) do
       {:ok, result} ->
         Enum.map(result.rows, fn row ->
           [
@@ -688,7 +690,7 @@ defmodule Cinegraph.Collaborations do
           years_active: c.years_active
         }
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
@@ -709,7 +711,7 @@ defmodule Cinegraph.Collaborations do
         limit: ^limit,
         preload: [:person_a, :person_b]
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   # Helper to ensure consistent person ordering

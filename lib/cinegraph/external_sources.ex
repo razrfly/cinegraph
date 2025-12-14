@@ -10,6 +10,7 @@ defmodule Cinegraph.ExternalSources do
 
   @doc """
   Lists all external sources from external_metrics table.
+  Uses read replica for better load distribution.
   """
   def list_sources do
     import Ecto.Query
@@ -26,7 +27,7 @@ defmodule Cinegraph.ExternalSources do
           active: true
         }
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
@@ -114,6 +115,7 @@ defmodule Cinegraph.ExternalSources do
 
   @doc """
   Gets all ratings for a movie from external_metrics table.
+  Uses read replica for better load distribution.
   """
   def get_movie_ratings(movie_id, source_names \\ nil) do
     import Ecto.Query
@@ -133,7 +135,7 @@ defmodule Cinegraph.ExternalSources do
         query
       end
 
-    metrics = Repo.all(query)
+    metrics = Repo.replica().all(query)
 
     # Convert metrics to a format compatible with the old ratings structure
     Enum.map(metrics, fn metric ->

@@ -22,6 +22,16 @@ defmodule CinegraphWeb.Router do
     plug :admin_auth
   end
 
+  # Health check routes (no authentication required)
+  scope "/health", CinegraphWeb do
+    pipe_through :api
+
+    get "/", HealthController, :index
+    get "/db", HealthController, :database
+    get "/metrics", HealthController, :metrics
+    post "/metrics/reset", HealthController, :reset
+  end
+
   scope "/", CinegraphWeb do
     pipe_through :browser
 

@@ -11,6 +11,17 @@ config :cinegraph, Cinegraph.Repo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 
+# Read replica configuration for development
+# Points to same database as primary for simplicity
+config :cinegraph, Cinegraph.Repo.Replica,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "cinegraph_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 5
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

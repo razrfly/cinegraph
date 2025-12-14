@@ -37,6 +37,11 @@ defmodule Cinegraph.DataCase do
   """
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Cinegraph.Repo, shared: not tags[:async])
+
+    # Allow replica repo to use the same sandbox connection
+    # This ensures replica reads see the same test data as primary writes
+    Ecto.Adapters.SQL.Sandbox.allow(Cinegraph.Repo.Replica, self(), pid)
+
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
   end
 

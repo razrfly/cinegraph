@@ -56,14 +56,14 @@ defmodule Cinegraph.Festivals do
   Gets an organization by abbreviation.
   """
   def get_organization_by_abbreviation(abbrev) do
-    Repo.get_by(FestivalOrganization, abbreviation: abbrev)
+    Repo.replica().get_by(FestivalOrganization, abbreviation: abbrev)
   end
 
   @doc """
   Gets an organization by slug.
   """
   def get_organization_by_slug(slug) do
-    Repo.get_by(FestivalOrganization, slug: slug)
+    Repo.replica().get_by(FestivalOrganization, slug: slug)
   end
 
   @doc """
@@ -73,7 +73,7 @@ defmodule Cinegraph.Festivals do
     from(o in FestivalOrganization,
       order_by: [asc: o.name]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -87,7 +87,7 @@ defmodule Cinegraph.Festivals do
       where: not is_nil(n.movie_id),
       select: count(n.movie_id, :distinct)
     )
-    |> Repo.one()
+    |> Repo.replica().one()
   end
 
   @doc """
@@ -102,7 +102,7 @@ defmodule Cinegraph.Festivals do
       where: not is_nil(n.movie_id),
       select: count(n.movie_id, :distinct)
     )
-    |> Repo.one()
+    |> Repo.replica().one()
   end
 
   @doc """
@@ -118,7 +118,7 @@ defmodule Cinegraph.Festivals do
   Gets a category by name for a specific organization.
   """
   def get_category_by_name(organization_id, name) do
-    Repo.get_by(FestivalCategory, organization_id: organization_id, name: name)
+    Repo.replica().get_by(FestivalCategory, organization_id: organization_id, name: name)
   end
 
   # ========================================
@@ -134,14 +134,14 @@ defmodule Cinegraph.Festivals do
       order_by: [desc: c.year],
       preload: [:organization]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
   Gets a single festival ceremony by organization and year.
   """
   def get_ceremony_by_year(organization_id, year) do
-    Repo.get_by(FestivalCeremony, organization_id: organization_id, year: year)
+    Repo.replica().get_by(FestivalCeremony, organization_id: organization_id, year: year)
   end
 
   @doc """
@@ -164,7 +164,7 @@ defmodule Cinegraph.Festivals do
   Gets a festival category by organization and name.
   """
   def get_category(organization_id, name) do
-    Repo.get_by(FestivalCategory, organization_id: organization_id, name: name)
+    Repo.replica().get_by(FestivalCategory, organization_id: organization_id, name: name)
   end
 
   @doc """
@@ -210,7 +210,7 @@ defmodule Cinegraph.Festivals do
       where: n.ceremony_id == ^ceremony_id,
       preload: [:category, :movie, :person]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -218,7 +218,7 @@ defmodule Cinegraph.Festivals do
   """
   def count_nominations(ceremony_id) do
     from(n in FestivalNomination, where: n.ceremony_id == ^ceremony_id)
-    |> Repo.aggregate(:count, :id)
+    |> Repo.replica().aggregate(:count, :id)
   end
 
   @doc """
@@ -228,7 +228,7 @@ defmodule Cinegraph.Festivals do
     from(n in FestivalNomination,
       where: n.ceremony_id == ^ceremony_id and n.won == true
     )
-    |> Repo.aggregate(:count, :id)
+    |> Repo.replica().aggregate(:count, :id)
   end
 
   # ========================================
@@ -293,7 +293,7 @@ defmodule Cinegraph.Festivals do
       end
 
     from(s in query, order_by: [asc: s.abbreviation, desc: s.year])
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -317,7 +317,7 @@ defmodule Cinegraph.Festivals do
   Returns the first status record for the organization, or nil if not found.
   """
   def get_award_import_status_by_org_id(organization_id) do
-    Repo.one(
+    Repo.replica().one(
       from(s in AwardImportStatus,
         where: s.organization_id == ^organization_id,
         order_by: [desc: s.year],
@@ -388,7 +388,7 @@ defmodule Cinegraph.Festivals do
     from(s in AwardImportStatus,
       where: s.organization_id == ^organization_id and s.year == ^year
     )
-    |> Repo.one()
+    |> Repo.replica().one()
   end
 
   @doc """
@@ -401,7 +401,7 @@ defmodule Cinegraph.Festivals do
       where: s.organization_id == ^organization_id and not is_nil(s.ceremony_id),
       select: {min(s.year), max(s.year)}
     )
-    |> Repo.one()
+    |> Repo.replica().one()
     |> case do
       {nil, nil} -> nil
       range -> range

@@ -10,6 +10,9 @@ defmodule Cinegraph.Application do
     children = [
       CinegraphWeb.Telemetry,
       Cinegraph.Repo,
+      # Read replica for PlanetScale - offloads read queries from primary
+      # Only started if configured (production with DATABASE_REPLICA_ENABLED=true)
+      replica_child_spec(),
       {DNSCluster, query: Application.get_env(:cinegraph, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Cinegraph.PubSub},
       # Start the Finch HTTP client for sending emails
@@ -43,6 +46,10 @@ defmodule Cinegraph.Application do
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Cinegraph.Supervisor]
 
+    # Initialize replica metrics tracking before starting supervisor
+    Cinegraph.Repo.Metrics.init_counters()
+    Cinegraph.Repo.Metrics.attach_handlers()
+
     case Supervisor.start_link(children, opts) do
       {:ok, pid} ->
         # Schedule cache warmup after application starts
@@ -69,5 +76,15 @@ defmodule Cinegraph.Application do
   def config_change(changed, _new, removed) do
     CinegraphWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  # Returns child spec for replica repo if configured, otherwise a no-op
+  defp replica_child_spec do
+    if Application.get_env(:cinegraph, Cinegraph.Repo.Replica) do
+      Cinegraph.Repo.Replica
+    else
+      # Return a task that does nothing when replica is not configured
+      %{id: :replica_placeholder, start: {Task, :start_link, [fn -> :ok end]}}
+    end
   end
 end
