@@ -696,7 +696,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   # ========================================
 
   defp attempt_fuzzy_search_fallback(nominee, category, ceremony) do
-    film_title = nominee["film"] || nominee[:film]
+    # Extract film title using the same logic as extract_film_info
+    # to handle both Oscar format (nominee["film"]) and Venice format (nominee["films"][0]["title"])
+    {_imdb_id, film_title, _year} = extract_film_info(nominee)
     category_name = category.name
 
     # Handle country names in International Feature Film category
@@ -958,7 +960,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   end
 
   defp queue_movie_creation_by_tmdb(tmdb_id, nominee, category, ceremony) do
-    film_title = nominee["film"] || nominee[:film]
+    # Extract film title using the same logic as extract_film_info
+    # to handle both Oscar format (nominee["film"]) and Venice format (nominee["films"][0]["title"])
+    {_imdb_id, film_title, _year} = extract_film_info(nominee)
     Logger.info("Creating job args for #{film_title} (TMDb ID: #{tmdb_id}) via fuzzy match")
 
     # Queue TMDbDetailsWorker with TMDb ID directly

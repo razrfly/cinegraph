@@ -266,6 +266,7 @@ defmodule Cinegraph.Cache.AwardImportStats do
         partial_count: 0,
         pending_count: 0,
         failed_count: 0,
+        no_data_count: 0,
         completion_percentage: 0.0,
         total_nominations: 0,
         total_matched: 0,
@@ -329,8 +330,12 @@ defmodule Cinegraph.Cache.AwardImportStats do
     partial_count = Enum.count(statuses, fn s -> s.status == "partial" end)
     pending_count = Enum.count(statuses, fn s -> s.status in ["not_started", "pending"] end)
 
+    # Separate no_data (IMDb 404) from actual failures
+    no_data_count = Enum.count(statuses, fn s -> s.status in ["no_data", "empty"] end)
+
+    # Failed count excludes no_data - these are actual import failures that need attention
     failed_count =
-      Enum.count(statuses, fn s -> s.status in ["failed", "no_matches", "low_match", "empty"] end)
+      Enum.count(statuses, fn s -> s.status in ["failed", "no_matches", "low_match"] end)
 
     # Calculate totals (using actual schema field names)
     total_nominations = Enum.sum(Enum.map(statuses, fn s -> s.total_nominations || 0 end))
@@ -343,11 +348,11 @@ defmodule Cinegraph.Cache.AwardImportStats do
         0.0
       end
 
-    # Completion percentage should be based on ALL years, not just imported ceremonies
-    # This gives an accurate picture of how much work is done vs. total work needed
+    # Completion percentage includes completed + no_data (these are "done" in the sense that
+    # there's nothing more we can do with them)
     completion_percentage =
       if total_years > 0 do
-        Float.round(completed_count / total_years * 100, 1)
+        Float.round((completed_count + no_data_count) / total_years * 100, 1)
       else
         0.0
       end
@@ -359,6 +364,7 @@ defmodule Cinegraph.Cache.AwardImportStats do
       partial_count: partial_count,
       pending_count: pending_count,
       failed_count: failed_count,
+      no_data_count: no_data_count,
       completion_percentage: completion_percentage,
       total_nominations: total_nominations,
       total_matched: total_matched,
@@ -382,9 +388,12 @@ defmodule Cinegraph.Cache.AwardImportStats do
       partial_count = Enum.count(org_statuses, fn s -> s.status == "partial" end)
       pending_count = Enum.count(org_statuses, fn s -> s.status in ["not_started", "pending"] end)
 
+      # Separate no_data (IMDb 404) from actual failures
+      no_data_count = Enum.count(org_statuses, fn s -> s.status in ["no_data", "empty"] end)
+
       failed_count =
         Enum.count(org_statuses, fn s ->
-          s.status in ["failed", "no_matches", "low_match", "empty"]
+          s.status in ["failed", "no_matches", "low_match"]
         end)
 
       # Calculate totals
@@ -421,6 +430,7 @@ defmodule Cinegraph.Cache.AwardImportStats do
         partial_count: partial_count,
         pending_count: pending_count,
         failed_count: failed_count,
+        no_data_count: no_data_count,
         total_nominations: total_nominations,
         total_matched: total_matched,
         avg_match_rate: avg_match_rate,
