@@ -144,6 +144,8 @@ defmodule CinegraphWeb.Router do
     live "/imports", ImportDashboardLive, :index
     # Year-by-year TMDb import management
     live "/year-imports", YearImportsLive, :index
+    # Awards Import Dashboard (Issue #446)
+    live "/award-imports", AwardImportsLive, :index
 
     # Metrics dashboard
     live "/metrics", MetricsLive.Index, :index
@@ -154,9 +156,6 @@ defmodule CinegraphWeb.Router do
 
     # Festival Events management
     live "/festival-events", FestivalEventLive.Index, :index
-
-    # Awards Import Dashboard (Issue #446)
-    live "/awards-imports", AwardImportsLive, :index
 
     # Oban job dashboard
     oban_dashboard("/oban")

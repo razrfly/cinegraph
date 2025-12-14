@@ -43,6 +43,16 @@ defmodule Cinegraph.Workers.AwardImportWorker do
     |> Oban.insert()
   end
 
+  @doc """
+  Queue a resync operation to re-import ALL years for an organization, regardless of status.
+  Useful for re-running discovery after movies have been created.
+  """
+  def queue_resync_all(organization_id) do
+    %{"organization_id" => organization_id, "action" => "resync_all"}
+    |> new()
+    |> Oban.insert()
+  end
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"organization_id" => org_id, "year" => year}} = job) do
     Logger.info("AwardImportWorker: Starting import for organization #{org_id}, year #{year}")
@@ -94,6 +104,46 @@ defmodule Cinegraph.Workers.AwardImportWorker do
         organization_id: org_id,
         years_queued: queued_count,
         years: Enum.map(missing_statuses, & &1.year)
+      })
+
+      {:ok, %{queued: queued_count}}
+    end
+  end
+
+  # Batch import: resync ALL years for an organization (ignores status)
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"organization_id" => org_id, "action" => "resync_all"}}) do
+    Logger.info("AwardImportWorker: Starting resync_all for organization #{org_id}")
+
+    # Get ALL years for this organization, regardless of status
+    all_statuses = Festivals.list_award_import_statuses(organization_id: org_id)
+
+    if length(all_statuses) == 0 do
+      Logger.info("AwardImportWorker: No years found for organization #{org_id}")
+      {:ok, %{queued: 0, message: "No years found"}}
+    else
+      Logger.info(
+        "AwardImportWorker: Found #{length(all_statuses)} years to resync for organization #{org_id}"
+      )
+
+      # Queue individual import jobs for ALL years
+      jobs =
+        Enum.map(all_statuses, fn status ->
+          new(%{"organization_id" => org_id, "year" => status.year})
+        end)
+
+      results = Oban.insert_all(jobs)
+      queued_count = if is_list(results), do: length(results), else: 0
+
+      Logger.info(
+        "AwardImportWorker: Queued #{queued_count} resync jobs for organization #{org_id}"
+      )
+
+      # Broadcast progress
+      broadcast_progress(:resync_all, %{
+        organization_id: org_id,
+        years_queued: queued_count,
+        years: Enum.map(all_statuses, & &1.year)
       })
 
       {:ok, %{queued: queued_count}}
