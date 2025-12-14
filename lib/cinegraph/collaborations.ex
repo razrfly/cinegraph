@@ -14,12 +14,15 @@ defmodule Cinegraph.Collaborations do
   This should be run after importing movies.
   """
   def populate_collaborations do
+    # Read movie IDs from replica BEFORE transaction (replica reads can't participate in transactions)
+    movie_ids = Repo.replica().all(from m in Movie, select: m.id)
+
     Repo.transaction(fn ->
       # Clear existing data
       Repo.delete_all(CollaborationDetail)
       Repo.delete_all(Collaboration)
 
-      case populate_key_collaborations_only() do
+      case populate_key_collaborations_only(movie_ids) do
         {:ok, count} -> count
         other -> Repo.rollback(other)
       end
@@ -270,8 +273,10 @@ defmodule Cinegraph.Collaborations do
   @doc """
   Populates only key collaborations: top 20 cast + directors + key crew.
   This prevents exponential explosion from movies with 1000+ credits.
+
+  Accepts optional movie_ids list. If not provided, fetches all movie IDs from replica.
   """
-  def populate_key_collaborations_only do
+  def populate_key_collaborations_only(movie_ids \\ nil) do
     IO.puts("Populating key collaborations (top 20 cast + directors + key crew)...")
 
     # Define key crew roles we care about
@@ -286,8 +291,8 @@ defmodule Cinegraph.Collaborations do
       "Editor"
     ]
 
-    # First, get all movies (read-only query, use replica)
-    movie_ids = Repo.replica().all(from m in Movie, select: m.id)
+    # Use provided movie_ids or fetch from replica (when called directly, not from transaction)
+    movie_ids = movie_ids || Repo.replica().all(from m in Movie, select: m.id)
     total_movies = length(movie_ids)
 
     # Process movies in batches

@@ -84,7 +84,12 @@ defmodule Cinegraph.Application do
       Cinegraph.Repo.Replica
     else
       # Return a task that does nothing when replica is not configured
-      %{id: :replica_placeholder, start: {Task, :start_link, [fn -> :ok end]}}
+      # Using restart: :temporary prevents supervisor from trying to restart this no-op task
+      %{
+        id: :replica_placeholder,
+        start: {Task, :start_link, [fn -> :ok end]},
+        restart: :temporary
+      }
     end
   end
 end
