@@ -242,9 +242,7 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
 
       case Festivals.upsert_ceremony(attrs) do
         {:ok, _ceremony} ->
-          Logger.info(
-            "Created no_data ceremony entry for #{organization.abbreviation} #{year}"
-          )
+          Logger.info("Created no_data ceremony entry for #{organization.abbreviation} #{year}")
 
         {:error, reason} ->
           Logger.warning(
@@ -253,7 +251,9 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
       end
     else
       {:error, reason} ->
-        Logger.warning("Cannot update import status for #{festival_key} #{year}: #{inspect(reason)}")
+        Logger.warning(
+          "Cannot update import status for #{festival_key} #{year}: #{inspect(reason)}"
+        )
     end
   end
 end

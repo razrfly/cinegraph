@@ -53,6 +53,20 @@ defmodule Cinegraph.Workers.AwardImportWorker do
     |> Oban.insert()
   end
 
+  @doc """
+  Queue a resync operation to re-import the most recent N years for an organization.
+  Useful for testing with a smaller subset of years.
+  """
+  def queue_resync_recent(organization_id, year_count) do
+    %{
+      "organization_id" => organization_id,
+      "action" => "resync_recent",
+      "year_count" => year_count
+    }
+    |> new()
+    |> Oban.insert()
+  end
+
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"organization_id" => org_id, "year" => year}} = job) do
     Logger.info("AwardImportWorker: Starting import for organization #{org_id}, year #{year}")
@@ -137,6 +151,57 @@ defmodule Cinegraph.Workers.AwardImportWorker do
 
       Logger.info(
         "AwardImportWorker: Queued #{queued_count} resync jobs for organization #{org_id}"
+      )
+
+      # Broadcast progress
+      broadcast_progress(:resync_all, %{
+        organization_id: org_id,
+        years_queued: queued_count,
+        years: Enum.map(all_statuses, & &1.year)
+      })
+
+      {:ok, %{queued: queued_count}}
+    end
+  end
+
+  # Batch import: resync most recent N years for an organization
+  @impl Oban.Worker
+  def perform(%Oban.Job{
+        args: %{
+          "organization_id" => org_id,
+          "action" => "resync_recent",
+          "year_count" => year_count
+        }
+      }) do
+    Logger.info(
+      "AwardImportWorker: Starting resync_recent for organization #{org_id}, last #{year_count} years"
+    )
+
+    # Get ALL years for this organization, sorted by year descending
+    all_statuses =
+      Festivals.list_award_import_statuses(organization_id: org_id)
+      |> Enum.sort_by(& &1.year, :desc)
+      |> Enum.take(year_count)
+
+    if length(all_statuses) == 0 do
+      Logger.info("AwardImportWorker: No years found for organization #{org_id}")
+      {:ok, %{queued: 0, message: "No years found"}}
+    else
+      Logger.info(
+        "AwardImportWorker: Found #{length(all_statuses)} recent years to resync for organization #{org_id}"
+      )
+
+      # Queue individual import jobs for the selected years
+      jobs =
+        Enum.map(all_statuses, fn status ->
+          new(%{"organization_id" => org_id, "year" => status.year})
+        end)
+
+      results = Oban.insert_all(jobs)
+      queued_count = if is_list(results), do: length(results), else: 0
+
+      Logger.info(
+        "AwardImportWorker: Queued #{queued_count} resync jobs for organization #{org_id} (recent years)"
       )
 
       # Broadcast progress

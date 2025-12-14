@@ -59,7 +59,7 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
       <div class="bg-purple-50 p-4 rounded">
         <div class="text-sm text-purple-600">Organizations</div>
         <div class="text-2xl font-bold text-purple-900">
@@ -95,8 +95,18 @@
         </div>
       </div>
 
+      <div
+        class="bg-purple-50 p-4 rounded"
+        title="Years with no data on IMDb (404) or empty pages - these are expected gaps"
+      >
+        <div class="text-sm text-purple-600">No Data</div>
+        <div class="text-2xl font-bold text-purple-900">
+          {format_number(@overall_stats.no_data_count)}
+        </div>
+      </div>
+
       <div class="bg-red-50 p-4 rounded" title="Years with import errors or low/no matches">
-        <div class="text-sm text-red-600">Failed/Issues</div>
+        <div class="text-sm text-red-600">Issues</div>
         <div class="text-2xl font-bold text-red-900">
           {format_number(@overall_stats.failed_count)}
         </div>
@@ -264,6 +274,14 @@
                         {org.pending_count} not started
                       </span>
                     <% end %>
+                    <%= if org.no_data_count > 0 do %>
+                      <span
+                        class={"px-2 py-1 text-xs rounded-full #{status_color("no_data")}"}
+                        title="No data available on IMDb (404 or empty)"
+                      >
+                        {org.no_data_count} no data
+                      </span>
+                    <% end %>
                     <%= if org.failed_count > 0 do %>
                       <span
                         class={"px-2 py-1 text-xs rounded-full #{status_color("failed")}"}
@@ -302,12 +320,12 @@
                     Sync {org.pending_count + org.failed_count}
                   </button>
                   <button
-                    phx-click="resync_all"
+                    phx-click="show_resync_modal"
                     phx-value-org-id={org.organization_id}
                     class="mr-2 text-orange-600 hover:text-orange-900"
-                    title={"Re-import ALL #{org.total_years} years (ignores status)"}
+                    title={"Re-import years for #{org.organization_name} (choose count)"}
                   >
-                    Resync All
+                    Resync...
                   </button>
                   <button
                     phx-click="show_organization_detail"
@@ -544,6 +562,85 @@
           class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
         >
           Close
+        </button>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<!-- Resync Year Selection Modal -->
+<%= if @show_resync_modal && @resync_org do %>
+  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div
+      class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white"
+      phx-click-away="close_resync_modal"
+    >
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-gray-900">
+          Resync {@resync_org.abbreviation}
+        </h3>
+        <button phx-click="close_resync_modal" class="text-gray-400 hover:text-gray-600">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <p class="text-sm text-gray-600 mb-4">
+        Select how many years to re-import for <strong>{@resync_org.organization_name}</strong>.
+        This will queue import jobs regardless of current status.
+      </p>
+
+      <div class="space-y-2">
+        <button
+          phx-click="resync_years"
+          phx-value-org-id={@resync_org.organization_id}
+          phx-value-count="10"
+          class="w-full px-4 py-2 text-left bg-gray-50 hover:bg-orange-50 rounded border border-gray-200 hover:border-orange-300"
+        >
+          <span class="font-medium">Last 10 years</span>
+          <span class="text-sm text-gray-500 ml-2">(Quick test)</span>
+        </button>
+        <button
+          phx-click="resync_years"
+          phx-value-org-id={@resync_org.organization_id}
+          phx-value-count="25"
+          class="w-full px-4 py-2 text-left bg-gray-50 hover:bg-orange-50 rounded border border-gray-200 hover:border-orange-300"
+        >
+          <span class="font-medium">Last 25 years</span>
+          <span class="text-sm text-gray-500 ml-2">(Recent history)</span>
+        </button>
+        <button
+          phx-click="resync_years"
+          phx-value-org-id={@resync_org.organization_id}
+          phx-value-count="50"
+          class="w-full px-4 py-2 text-left bg-gray-50 hover:bg-orange-50 rounded border border-gray-200 hover:border-orange-300"
+        >
+          <span class="font-medium">Last 50 years</span>
+          <span class="text-sm text-gray-500 ml-2">(Extended history)</span>
+        </button>
+        <button
+          phx-click="resync_years"
+          phx-value-org-id={@resync_org.organization_id}
+          phx-value-count="all"
+          class="w-full px-4 py-2 text-left bg-orange-50 hover:bg-orange-100 rounded border border-orange-300 hover:border-orange-400"
+        >
+          <span class="font-medium text-orange-800">All {@resync_org.total_years} years</span>
+          <span class="text-sm text-orange-600 ml-2">(Complete resync)</span>
+        </button>
+      </div>
+
+      <div class="mt-4 flex justify-end">
+        <button
+          phx-click="close_resync_modal"
+          class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+        >
+          Cancel
         </button>
       </div>
     </div>

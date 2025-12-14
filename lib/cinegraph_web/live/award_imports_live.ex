@@ -22,6 +22,11 @@ defmodule CinegraphWeb.AwardImportsLive do
       |> assign(:page_title, "Awards Import Dashboard")
       |> assign(:selected_organization, nil)
       |> assign(:show_detail_modal, false)
+      |> assign(:show_resync_modal, false)
+      |> assign(:resync_org, nil)
+      |> assign(:show_confirm_modal, false)
+      |> assign(:confirm_action, nil)
+      |> assign(:confirm_message, nil)
       |> assign(:import_running, false)
       |> assign(:import_progress, nil)
       |> load_data()
@@ -265,6 +270,77 @@ defmodule CinegraphWeb.AwardImportsLive do
     socket = put_flash(socket, :info, "Cache refresh triggered")
     {:noreply, socket}
   end
+
+  # Resync Modal Handlers
+
+  @impl true
+  def handle_event("show_resync_modal", %{"org-id" => org_id_str}, socket) do
+    case Integer.parse(org_id_str) do
+      {org_id, ""} ->
+        stats = AwardImportStats.get_stats()
+
+        org =
+          Enum.find(stats.organizations, fn o ->
+            o.organization_id == org_id
+          end)
+
+        socket =
+          socket
+          |> assign(:resync_org, org)
+          |> assign(:show_resync_modal, true)
+
+        {:noreply, socket}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid organization ID")}
+    end
+  end
+
+  @impl true
+  def handle_event("close_resync_modal", _params, socket) do
+    socket =
+      socket
+      |> assign(:show_resync_modal, false)
+      |> assign(:resync_org, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("resync_years", %{"org-id" => org_id_str, "count" => count_str}, socket) do
+    with {org_id, ""} <- Integer.parse(org_id_str),
+         count <- parse_count(count_str) do
+      result =
+        if count == :all do
+          AwardImportWorker.queue_resync_all(org_id)
+        else
+          AwardImportWorker.queue_resync_recent(org_id, count)
+        end
+
+      case result do
+        {:ok, _job} ->
+          count_text = if count == :all, do: "ALL", else: "#{count}"
+
+          socket =
+            socket
+            |> put_flash(:info, "Queued resync for #{count_text} years")
+            |> assign(:import_running, true)
+            |> assign(:show_resync_modal, false)
+            |> assign(:resync_org, nil)
+
+          {:noreply, socket}
+
+        {:error, reason} ->
+          socket = put_flash(socket, :error, "Failed to queue resync: #{inspect(reason)}")
+          {:noreply, socket}
+      end
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Invalid organization ID or count")}
+    end
+  end
+
+  defp parse_count("all"), do: :all
+  defp parse_count(str) when is_binary(str), do: String.to_integer(str)
 
   # Private Functions
 
