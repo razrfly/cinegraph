@@ -2,6 +2,9 @@ defmodule Cinegraph.Movies.Search do
   @moduledoc """
   Clean search interface that combines Flop with custom filters.
   This is the new unified interface for movie searching.
+
+  All read operations use `Repo.replica()` to offload queries to
+  PlanetScale read replicas, reducing load on the primary database.
   """
 
   import Ecto.Query
@@ -63,7 +66,8 @@ defmodule Cinegraph.Movies.Search do
         end
 
       # Use Flop for remaining filters, sorting (if not custom), and pagination
-      case Flop.validate_and_run(sorted_query, flop_params, for: Movie, repo: Repo) do
+      # Route to read replica for better load distribution
+      case Flop.validate_and_run(sorted_query, flop_params, for: Movie, repo: Repo.replica()) do
         {:ok, {movies, meta}} ->
           # Add discovery scores for display if not using discovery sorting
           movies = maybe_add_discovery_scores(movies, validated_params.sort)
@@ -85,13 +89,14 @@ defmodule Cinegraph.Movies.Search do
       filtered_query = CustomFilters.apply_all(base_query, validated_params)
 
       # Handle special case for genre filtering with GROUP BY
+      # Route to read replica for better load distribution
       count =
         if validated_params.genres && validated_params.genres != [] do
           # Wrap the grouped query in a subquery and count the results
           from(m in subquery(filtered_query), select: count())
-          |> Repo.one()
+          |> Repo.replica().one()
         else
-          Repo.aggregate(filtered_query, :count, :id)
+          Repo.replica().aggregate(filtered_query, :count, :id)
         end
 
       {:ok, count}
@@ -166,17 +171,17 @@ defmodule Cinegraph.Movies.Search do
 
   defp list_genres do
     from(g in Cinegraph.Movies.Genre, order_by: g.name)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp list_production_countries do
     from(c in Cinegraph.Movies.ProductionCountry, order_by: c.name)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp list_spoken_languages do
     from(l in Cinegraph.Movies.SpokenLanguage, order_by: l.english_name)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp list_canonical_lists do
@@ -205,7 +210,7 @@ defmodule Cinegraph.Movies.Search do
       select: %{id: fo.id, name: fo.name, abbreviation: fo.abbreviation},
       order_by: fo.name
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   defp get_sort_options do

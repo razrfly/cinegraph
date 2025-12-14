@@ -170,19 +170,19 @@ defmodule Cinegraph.Cultural do
   Returns the list of cultural authorities.
   """
   def list_authorities do
-    Repo.all(Authority)
+    Repo.replica().all(Authority)
   end
 
   @doc """
   Gets a single authority.
   """
-  def get_authority!(id), do: Repo.get!(Authority, id)
+  def get_authority!(id), do: Repo.replica().get!(Authority, id)
 
   @doc """
   Gets an authority by name.
   """
   def get_authority_by_name(name) do
-    Repo.get_by(Authority, name: name)
+    Repo.replica().get_by(Authority, name: name)
   end
 
   @doc """
@@ -227,14 +227,15 @@ defmodule Cinegraph.Cultural do
         query
       end
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
   Gets a single curated list.
   """
   def get_curated_list!(id) do
-    Repo.get!(CuratedList, id) |> Repo.preload([:authority, :movie_list_items])
+    Repo.replica().get!(CuratedList, id)
+    |> Repo.replica().preload([:authority, :movie_list_items])
   end
 
   @doc """
@@ -279,7 +280,7 @@ defmodule Cinegraph.Cultural do
       limit: ^limit,
       preload: [movie: movie]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -326,6 +327,7 @@ defmodule Cinegraph.Cultural do
 
   @doc """
   Gets the latest CRI score for a movie.
+  Uses read replica for better load distribution.
   """
   def get_latest_cri_score(movie_id) do
     from(score in CRIScore,
@@ -333,7 +335,7 @@ defmodule Cinegraph.Cultural do
       order_by: [desc: score.calculated_at],
       limit: 1
     )
-    |> Repo.one()
+    |> Repo.replica().one()
   end
 
   @doc """
@@ -411,7 +413,7 @@ defmodule Cinegraph.Cultural do
       where: change.movie_id == ^movie_id and change.period_end >= ^since,
       order_by: [desc: change.period_end]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -441,7 +443,7 @@ defmodule Cinegraph.Cultural do
           person: person
         }
       )
-      |> Repo.all()
+      |> Repo.replica().all()
     else
       []
     end
@@ -450,6 +452,7 @@ defmodule Cinegraph.Cultural do
   @doc """
   Gets ALL festival nominations for a movie from all organizations.
   Returns nominations grouped by organization with win/nomination counts.
+  Uses read replica for better load distribution.
   """
   def get_movie_all_festival_nominations(movie_id) do
     from(nomination in Cinegraph.Festivals.FestivalNomination,
@@ -478,7 +481,7 @@ defmodule Cinegraph.Cultural do
         person: person
       }
     )
-    |> Repo.all()
+    |> Repo.replica().all()
     |> group_nominations_by_organization()
   end
 
@@ -923,7 +926,7 @@ defmodule Cinegraph.Cultural do
           person: person
         }
       )
-      |> Repo.all()
+      |> Repo.replica().all()
     else
       []
     end
@@ -1189,7 +1192,7 @@ defmodule Cinegraph.Cultural do
       where: movie.id == ^movie_id,
       preload: [movie_list_items: {list_items, list: {lists, authority: authorities}}]
     )
-    |> Repo.one()
+    |> Repo.replica().one()
   end
 
   defp calculate_authority_presence(movie_data) do

@@ -118,6 +118,7 @@ defmodule Cinegraph.Metrics do
 
   @doc """
   Gets all metrics for a movie, optionally filtered by source or type.
+  Uses read replica for better load distribution.
   """
   def get_movie_metrics(movie_id, opts \\ []) do
     query = from m in ExternalMetric, where: m.movie_id == ^movie_id
@@ -134,11 +135,12 @@ defmodule Cinegraph.Metrics do
         type -> from m in query, where: m.metric_type == ^type
       end
 
-    Repo.all(query)
+    Repo.replica().all(query)
   end
 
   @doc """
   Gets the latest value for a specific metric.
+  Uses read replica for better load distribution.
   """
   def get_metric_value(movie_id, source, metric_type) do
     from(m in ExternalMetric,
@@ -150,7 +152,7 @@ defmodule Cinegraph.Metrics do
       limit: 1,
       select: m.value
     )
-    |> Repo.one()
+    |> Repo.replica().one()
   end
 
   @doc """

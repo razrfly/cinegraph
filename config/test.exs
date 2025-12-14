@@ -16,6 +16,16 @@ config :cinegraph, Cinegraph.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
+# Read replica configuration for tests
+# Points to same database as primary - uses sandbox for isolation
+config :cinegraph, Cinegraph.Repo.Replica,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "cinegraph_test#{System.get_env("MIX_TEST_PARTITION")}",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: System.schedulers_online() * 2
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :cinegraph, CinegraphWeb.Endpoint,

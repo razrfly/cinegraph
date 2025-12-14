@@ -90,6 +90,17 @@ if config_env() == :prod do
   # PlanetScale requires IPv4 for reliable connectivity from Fly.io
   socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
 
+  # Shared SSL options for both primary and replica
+  ssl_opts = [
+    verify: :verify_peer,
+    cacertfile: CAStore.file_path(),
+    server_name_indication: String.to_charlist(hostname),
+    customize_hostname_check: [
+      match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+    ]
+  ]
+
+  # Primary database configuration
   config :cinegraph, Cinegraph.Repo,
     username: username,
     password: password,
@@ -102,14 +113,31 @@ if config_env() == :prod do
     timeout: 15_000,
     handshake_timeout: 15_000,
     ssl: true,
-    ssl_opts: [
-      verify: :verify_peer,
-      cacertfile: CAStore.file_path(),
-      server_name_indication: String.to_charlist(hostname),
-      customize_hostname_check: [
-        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-      ]
-    ]
+    ssl_opts: ssl_opts
+
+  # Read replica configuration
+  # PlanetScale uses username suffix for replica routing: username|replica
+  # IMPORTANT: Must use port 5432 - PgBouncer (6432) does NOT support replica routing
+  replica_enabled = System.get_env("DATABASE_REPLICA_ENABLED", "true") == "true"
+
+  if replica_enabled do
+    replica_username = "#{username}|replica"
+    replica_pool_size = String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "10")
+
+    config :cinegraph, Cinegraph.Repo.Replica,
+      username: replica_username,
+      password: password,
+      hostname: hostname,
+      port: 5432,
+      database: database,
+      pool_size: replica_pool_size,
+      socket_options: socket_opts,
+      connect_timeout: 30_000,
+      timeout: 15_000,
+      handshake_timeout: 15_000,
+      ssl: true,
+      ssl_opts: ssl_opts
+  end
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

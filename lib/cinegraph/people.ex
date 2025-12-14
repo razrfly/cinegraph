@@ -27,6 +27,7 @@ defmodule Cinegraph.People do
 
   @doc """
   Returns the count of all people with optional filtering.
+  Uses read replica for better load distribution.
   """
   def count_people(params \\ %{}) do
     Person
@@ -37,39 +38,43 @@ defmodule Cinegraph.People do
     |> filter_by_decade(params["birth_decade"])
     |> filter_by_status(params["status"])
     |> filter_by_nationality(params["nationality"])
-    |> Repo.aggregate(:count, :id)
+    |> Repo.replica().aggregate(:count, :id)
   end
 
   @doc """
   Gets a single person.
   Raises if the person does not exist.
+  Uses read replica for better load distribution.
   """
   def get_person!(id) do
-    Repo.get!(Person, id)
+    Repo.replica().get!(Person, id)
   end
 
   @doc """
   Gets a single person.
   Returns nil if the person does not exist.
+  Uses read replica for better load distribution.
   """
   def get_person(id) do
-    Repo.get(Person, id)
+    Repo.replica().get(Person, id)
   end
 
   @doc """
   Gets a person by slug.
   Returns nil if not found.
+  Uses read replica for better load distribution.
   """
   def get_person_by_slug(slug) do
-    Repo.get_by(Person, slug: slug)
+    Repo.replica().get_by(Person, slug: slug)
   end
 
   @doc """
   Gets a person by TMDb ID.
   Returns nil if not found.
+  Uses read replica for better load distribution.
   """
   def get_person_by_tmdb_id(tmdb_id) do
-    Repo.get_by(Person, tmdb_id: tmdb_id)
+    Repo.replica().get_by(Person, tmdb_id: tmdb_id)
   end
 
   @doc """
@@ -99,18 +104,20 @@ defmodule Cinegraph.People do
   @doc """
   Gets a person with all their movies and credits preloaded.
   Raises if the person does not exist.
+  Uses read replica for better load distribution.
   """
   def get_person_with_credits!(id) do
-    Repo.get!(Person, id)
+    Repo.replica().get!(Person, id)
     |> enrich_person_with_credits()
   end
 
   @doc """
   Gets a person with all their movies and credits preloaded.
   Returns nil if the person does not exist.
+  Uses read replica for better load distribution.
   """
   def get_person_with_credits(id) do
-    case Repo.get(Person, id) do
+    case Repo.replica().get(Person, id) do
       nil -> nil
       person -> enrich_person_with_credits(person)
     end
@@ -118,13 +125,14 @@ defmodule Cinegraph.People do
 
   defp enrich_person_with_credits(person) do
     # Get all credits for this person with movie details
+    # Uses read replica for better load distribution
     credits =
       Credit
       |> where([c], c.person_id == ^person.id)
       |> join(:inner, [c], m in Movie, on: c.movie_id == m.id)
       |> preload([c, m], movie: m)
       |> order_by([c, m], desc: m.release_date)
-      |> Repo.all()
+      |> Repo.replica().all()
 
     # Separate cast and crew credits
     cast_credits = Enum.filter(credits, &(&1.credit_type == "cast"))
@@ -154,12 +162,13 @@ defmodule Cinegraph.People do
     movie_ids = Enum.map(credits, & &1.movie_id) |> Enum.uniq()
 
     # Find all other people who worked on the same movies
+    # Uses read replica for better load distribution
     collaborator_credits =
       Credit
       |> where([c], c.movie_id in ^movie_ids and c.person_id != ^person_id)
       |> join(:inner, [c], p in Person, on: c.person_id == p.id)
       |> preload([c, p], person: p)
-      |> Repo.all()
+      |> Repo.replica().all()
 
     # Group by person and count collaborations
     collaborator_credits
@@ -184,12 +193,13 @@ defmodule Cinegraph.People do
 
   @doc """
   Gets all credits for a person.
+  Uses read replica for better load distribution.
   """
   def get_person_credits(person_id) do
     Credit
     |> where([c], c.person_id == ^person_id)
     |> preload(:movie)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -217,7 +227,7 @@ defmodule Cinegraph.People do
         known_for_department: p.known_for_department,
         popularity: p.popularity
       })
-      |> Repo.all()
+      |> Repo.replica().all()
 
     # If we don't have enough results, do a contains search
     if length(prefix_results) < div(limit, 2) do
@@ -233,7 +243,7 @@ defmodule Cinegraph.People do
         known_for_department: p.known_for_department,
         popularity: p.popularity
       })
-      |> Repo.all()
+      |> Repo.replica().all()
       |> then(&(prefix_results ++ &1))
     else
       prefix_results
@@ -247,7 +257,7 @@ defmodule Cinegraph.People do
     Person
     |> where([p], p.id in ^ids)
     |> order_by([p], desc: p.popularity)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   def get_people_by_ids(_), do: []
@@ -261,7 +271,7 @@ defmodule Cinegraph.People do
     |> select([p], p.known_for_department)
     |> distinct(true)
     |> order_by([p], p.known_for_department)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc """
@@ -273,7 +283,7 @@ defmodule Cinegraph.People do
     |> select([p], fragment("EXTRACT(decade FROM ?) * 10", p.birthday))
     |> distinct(true)
     |> order_by([p], fragment("EXTRACT(decade FROM ?) * 10", p.birthday))
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(&trunc/1)
   end
 
@@ -287,7 +297,7 @@ defmodule Cinegraph.People do
     |> distinct(true)
     |> order_by([p], p.place_of_birth)
     |> limit(100)
-    |> Repo.all()
+    |> Repo.replica().all()
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
   end
@@ -567,7 +577,7 @@ defmodule Cinegraph.People do
       query
       |> limit(^per_page_num)
       |> offset(^((page_num - 1) * per_page_num))
-      |> Repo.all()
+      |> Repo.replica().all()
     else
       _ -> paginate(query, %{})
     end
@@ -576,6 +586,6 @@ defmodule Cinegraph.People do
   defp paginate(query, _params) do
     query
     |> limit(50)
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 end
