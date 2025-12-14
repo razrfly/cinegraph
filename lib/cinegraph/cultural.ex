@@ -447,6 +447,70 @@ defmodule Cinegraph.Cultural do
     end
   end
 
+  @doc """
+  Gets ALL festival nominations for a movie from all organizations.
+  Returns nominations grouped by organization with win/nomination counts.
+  """
+  def get_movie_all_festival_nominations(movie_id) do
+    from(nomination in Cinegraph.Festivals.FestivalNomination,
+      join: ceremony in Cinegraph.Festivals.FestivalCeremony,
+      on: nomination.ceremony_id == ceremony.id,
+      join: org in Cinegraph.Festivals.FestivalOrganization,
+      on: ceremony.organization_id == org.id,
+      join: category in Cinegraph.Festivals.FestivalCategory,
+      on: nomination.category_id == category.id,
+      left_join: person in Cinegraph.Movies.Person,
+      on: nomination.person_id == person.id,
+      where: nomination.movie_id == ^movie_id,
+      order_by: [asc: org.name, desc: ceremony.year, asc: category.name],
+      select: %{
+        organization_id: org.id,
+        organization_name: org.name,
+        organization_abbreviation: org.abbreviation,
+        data_source: ceremony.data_source,
+        ceremony_year: ceremony.year,
+        ceremony_number: ceremony.ceremony_number,
+        ceremony_name: ceremony.name,
+        category_name: category.name,
+        tracks_person: category.tracks_person,
+        won: nomination.won,
+        details: nomination.details,
+        person: person
+      }
+    )
+    |> Repo.all()
+    |> group_nominations_by_organization()
+  end
+
+  defp group_nominations_by_organization(nominations) do
+    nominations
+    |> Enum.group_by(& &1.organization_id)
+    |> Enum.map(fn {_org_id, noms} ->
+      first = hd(noms)
+
+      %{
+        organization_id: first.organization_id,
+        organization_name: first.organization_name,
+        organization_abbreviation: first.organization_abbreviation,
+        data_source: first.data_source,
+        total_wins: Enum.count(noms, & &1.won),
+        total_nominations: Enum.count(noms, &(not &1.won)),
+        nominations: noms
+      }
+    end)
+    |> Enum.sort_by(&organization_sort_key/1)
+  end
+
+  # Sort organizations by prestige (Academy Awards first, then alphabetically)
+  defp organization_sort_key(%{organization_name: name}) do
+    case name do
+      "Academy of Motion Picture Arts and Sciences" -> {0, name}
+      "British Academy of Film and Television Arts" -> {1, name}
+      "Hollywood Foreign Press Association" -> {2, name}
+      _ -> {3, name}
+    end
+  end
+
   # ========================================
   # OSCAR CEREMONIES (Now using Festival tables)
   # ========================================

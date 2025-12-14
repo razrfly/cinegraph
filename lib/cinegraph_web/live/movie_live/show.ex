@@ -160,7 +160,8 @@ defmodule CinegraphWeb.MovieLive.Show do
 
     # Load cultural data
     cultural_lists = Cultural.get_list_movies_for_movie(id)
-    oscar_nominations = Cultural.get_movie_oscar_nominations(id)
+    # Get ALL festival nominations (Oscar, SXSW, NHIFF, etc.) grouped by organization
+    all_festival_nominations = Cultural.get_movie_all_festival_nominations(id)
 
     # Load external sources data
     external_ratings = ExternalSources.get_movie_ratings(id)
@@ -207,7 +208,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:crew, crew)
     |> Map.put(:directors, directors)
     |> Map.put(:cultural_lists, cultural_lists)
-    |> Map.put(:oscar_nominations, oscar_nominations)
+    |> Map.put(:all_festival_nominations, all_festival_nominations)
     |> Map.put(:external_ratings, external_ratings)
     |> Map.put(:keywords, keywords)
     |> Map.put(:videos, videos)
@@ -418,6 +419,94 @@ defmodule CinegraphWeb.MovieLive.Show do
           Logger.warning("Failed to log auto-fetch attempt: #{inspect(changeset.errors)}")
       end
     end)
+  end
+
+  # Helper functions for organization styling in Awards tab
+  defp get_organization_style(org_name) do
+    case org_name do
+      "Academy of Motion Picture Arts and Sciences" ->
+        %{
+          icon: "🏆",
+          border_color: "border-amber-500",
+          header_bg: "bg-gradient-to-r from-amber-100 to-yellow-100",
+          header_text: "text-amber-900"
+        }
+
+      "SXSW Film Festival" ->
+        %{
+          icon: "🎬",
+          border_color: "border-orange-500",
+          header_bg: "bg-gradient-to-r from-orange-100 to-red-100",
+          header_text: "text-orange-900"
+        }
+
+      "Nashville Film Festival" ->
+        %{
+          icon: "🎸",
+          border_color: "border-teal-500",
+          header_bg: "bg-gradient-to-r from-teal-100 to-cyan-100",
+          header_text: "text-teal-900"
+        }
+
+      "British Academy of Film and Television Arts" ->
+        %{
+          icon: "🎭",
+          border_color: "border-blue-800",
+          header_bg: "bg-gradient-to-r from-blue-100 to-indigo-100",
+          header_text: "text-blue-900"
+        }
+
+      "Cannes Film Festival" ->
+        %{
+          icon: "🌴",
+          border_color: "border-red-600",
+          header_bg: "bg-gradient-to-r from-red-100 to-rose-100",
+          header_text: "text-red-900"
+        }
+
+      "Venice Film Festival" ->
+        %{
+          icon: "🦁",
+          border_color: "border-blue-600",
+          header_bg: "bg-gradient-to-r from-blue-100 to-sky-100",
+          header_text: "text-blue-900"
+        }
+
+      "Sundance Film Festival" ->
+        %{
+          icon: "⛷️",
+          border_color: "border-sky-500",
+          header_bg: "bg-gradient-to-r from-sky-100 to-cyan-100",
+          header_text: "text-sky-900"
+        }
+
+      "Toronto International Film Festival" ->
+        %{
+          icon: "🍁",
+          border_color: "border-red-500",
+          header_bg: "bg-gradient-to-r from-red-100 to-orange-100",
+          header_text: "text-red-900"
+        }
+
+      _ ->
+        %{
+          icon: "🎪",
+          border_color: "border-gray-400",
+          header_bg: "bg-gradient-to-r from-gray-100 to-slate-100",
+          header_text: "text-gray-900"
+        }
+    end
+  end
+
+  defp get_organization_display_name(org_name) do
+    case org_name do
+      "Academy of Motion Picture Arts and Sciences" -> "Academy Awards (Oscars)"
+      "British Academy of Film and Television Arts" -> "BAFTA Awards"
+      "SXSW Film Festival" -> "SXSW Film Festival"
+      "Nashville Film Festival" -> "Nashville Film Festival"
+      "Toronto International Film Festival" -> "TIFF"
+      name -> name
+    end
   end
 
   defp format_error(:not_found), do: "Movie not found in TMDb"

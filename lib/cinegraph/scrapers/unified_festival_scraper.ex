@@ -328,7 +328,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
             |> Enum.map(&parse_nomination_edge/1)
             |> Enum.reject(&is_nil/1)
 
-          {normalize_category_name(category_name, festival_config), parsed_nominations}
+          {category_name, parsed_nominations}
         else
           nil
         end
@@ -388,36 +388,6 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     }
   end
 
-  defp normalize_category_name(name, festival_config) do
-    # Normalize category names based on festival
-    normalized =
-      name
-      |> String.downcase()
-      |> String.replace(~r/[^a-z0-9\s]/, "")
-      |> String.trim()
-      |> String.replace(~r/\s+/, "_")
-
-    # Apply festival-specific mappings if needed
-    apply_festival_mappings(normalized, festival_config)
-  end
-
-  defp apply_festival_mappings(name, festival_config) do
-    # Try to get category mappings from database metadata
-    case get_festival_event_by_config(festival_config) do
-      %{metadata: %{"category_mappings" => mappings}} when is_map(mappings) ->
-        Map.get(mappings, name, name)
-
-      _ ->
-        # No mapping found, return name as-is
-        name
-    end
-  end
-
-  defp get_festival_event_by_config(festival_config) do
-    Events.list_active_events()
-    |> Enum.find(fn event -> event.abbreviation == festival_config.abbreviation end)
-  end
-
   defp extract_imdb_id(nil), do: nil
 
   defp extract_imdb_id(href) do
@@ -425,6 +395,11 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
       [_, id] -> id
       _ -> nil
     end
+  end
+
+  defp get_festival_event_by_config(festival_config) do
+    Events.list_active_events()
+    |> Enum.find(fn event -> event.abbreviation == festival_config.abbreviation end)
   end
 
   defp get_festival_key(festival_config) do

@@ -516,11 +516,27 @@
           <div class="text-sm text-gray-500">Cast & Crew</div>
         </div>
 
+        <% all_noms_overview = @movie.all_festival_nominations %>
+        <% total_award_count =
+          Enum.sum(
+            Enum.map(all_noms_overview, fn org -> org.total_wins + org.total_nominations end)
+          ) %>
         <div class="bg-white rounded-lg shadow p-6 text-center">
           <div class="text-2xl font-bold text-orange-600 mb-1">
-            {length(@movie.oscar_nominations)}
+            {total_award_count}
           </div>
-          <div class="text-sm text-gray-500">Oscar Nominations</div>
+          <div class="text-sm text-gray-500">Award Nominations</div>
+          <%= if total_award_count > 0 do %>
+            <div class="mt-2 text-xs text-gray-400">
+              <%= for org <- all_noms_overview do %>
+                <span class="inline-block mr-2">
+                  {get_organization_display_name(org.organization_name)
+                  |> String.split(" ")
+                  |> hd()}: {org.total_wins + org.total_nominations}
+                </span>
+              <% end %>
+            </div>
+          <% end %>
         </div>
       </div>
       
@@ -804,81 +820,134 @@
 <!-- Awards & Recognition Tab -->
     <%= if @active_tab == "awards" do %>
       
-<!-- OMDb Awards Summary -->
-      <%= if @movie.omdb_data && @movie.omdb_data["Awards"] && @movie.omdb_data["Awards"] != "N/A" do %>
-        <div class="bg-white rounded-lg shadow p-6 mb-8">
+<!-- Awards Summary -->
+      <% all_noms = @movie.all_festival_nominations %>
+      <% total_wins = Enum.sum(Enum.map(all_noms, & &1.total_wins)) %>
+      <% total_nominations = Enum.sum(Enum.map(all_noms, & &1.total_nominations)) %>
+
+      <%= if length(all_noms) > 0 || (@movie.omdb_data && @movie.omdb_data["Awards"] && @movie.omdb_data["Awards"] != "N/A") do %>
+        <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg shadow p-6 mb-8">
           <div class="flex items-start gap-4">
             <div class="text-4xl">🏆</div>
             <div>
               <h3 class="text-xl font-bold text-amber-900 mb-2">Awards Summary</h3>
-              <p class="text-amber-800 font-medium text-lg">{@movie.omdb_data["Awards"]}</p>
-              <p class="text-sm text-amber-700 mt-2">Source: OMDb / IMDb</p>
+              <div class="flex flex-wrap gap-4 text-amber-800 font-medium">
+                <%= if total_wins > 0 do %>
+                  <span class="inline-flex items-center px-3 py-1 bg-yellow-200 rounded-full text-sm">
+                    {total_wins} {if total_wins == 1, do: "Win", else: "Wins"}
+                  </span>
+                <% end %>
+                <%= if total_nominations > 0 do %>
+                  <span class="inline-flex items-center px-3 py-1 bg-blue-100 rounded-full text-sm">
+                    {total_nominations} {if total_nominations == 1,
+                      do: "Nomination",
+                      else: "Nominations"}
+                  </span>
+                <% end %>
+              </div>
+              <%= if @movie.omdb_data && @movie.omdb_data["Awards"] && @movie.omdb_data["Awards"] != "N/A" do %>
+                <p class="text-amber-700 mt-3 text-sm">{@movie.omdb_data["Awards"]}</p>
+                <p class="text-xs text-amber-600 mt-1">Additional data from OMDb / IMDb</p>
+              <% end %>
             </div>
           </div>
         </div>
       <% end %>
       
-<!-- Oscar Nominations -->
-      <%= if length(@movie.oscar_nominations) > 0 do %>
-        <div class="bg-white rounded-lg shadow p-6 mb-8">
-          <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center">
-            🏆 Academy Awards
-            <span class="ml-3 text-sm text-gray-500 font-normal">
-              ({length(@movie.oscar_nominations)} nominations)
-            </span>
-          </h3>
-          <div class="space-y-4">
-            <%= for nomination <- @movie.oscar_nominations do %>
-              <div class="border border-gray-200 rounded-lg p-4 bg-gradient-to-r from-yellow-50 to-amber-50">
-                <div class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-3 mb-2">
-                      <h4 class="font-semibold text-gray-900">
-                        {nomination.category_name}
-                      </h4>
-                      <%= if nomination.won do %>
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-200 text-yellow-900 border border-yellow-300">
-                          ✅ WINNER
-                        </span>
-                      <% else %>
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                          Nominee
-                        </span>
-                      <% end %>
-                    </div>
-
-                    <%= if nomination.person do %>
-                      <p class="text-sm text-gray-600 mb-1">
-                        Person: <span class="font-medium">{nomination.person.name}</span>
-                      </p>
+<!-- All Festival Nominations (grouped by organization) -->
+      <%= if length(all_noms) > 0 do %>
+        <div class="space-y-6">
+          <%= for org_data <- all_noms do %>
+            <% org_style = get_organization_style(org_data.organization_name) %>
+            <div class={"bg-white rounded-lg shadow overflow-hidden border-l-4 #{org_style.border_color}"}>
+              <!-- Organization Header -->
+              <div class={"px-6 py-4 #{org_style.header_bg}"}>
+                <div class="flex items-center justify-between">
+                  <h3 class={"text-lg font-bold flex items-center gap-2 #{org_style.header_text}"}>
+                    <span>{org_style.icon}</span>
+                    <span>{get_organization_display_name(org_data.organization_name)}</span>
+                  </h3>
+                  <div class="flex gap-2">
+                    <%= if org_data.total_wins > 0 do %>
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-200 text-yellow-900">
+                        {org_data.total_wins} {if org_data.total_wins == 1,
+                          do: "Win",
+                          else: "Wins"}
+                      </span>
                     <% end %>
-
-                    <%= if nomination.details["nominee_names"] && nomination.details["nominee_names"] != @movie.title do %>
-                      <p class="text-sm text-gray-600">
-                        Nominee:
-                        <span class="font-medium">{nomination.details["nominee_names"]}</span>
-                      </p>
+                    <%= if org_data.total_nominations > 0 do %>
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/80 text-gray-700">
+                        {org_data.total_nominations} {if org_data.total_nominations == 1,
+                          do: "Nomination",
+                          else: "Nominations"}
+                      </span>
                     <% end %>
-                  </div>
-
-                  <div class="text-right">
-                    <span class="text-lg font-bold text-gray-700">
-                      {nomination.ceremony_year}
-                    </span>
-                    <p class="text-sm text-gray-500">
-                      {format_ordinal(nomination.ceremony_number)} Ceremony
-                    </p>
                   </div>
                 </div>
               </div>
-            <% end %>
-          </div>
+              
+<!-- Nominations List -->
+              <div class="p-6">
+                <div class="space-y-4">
+                  <%= for nomination <- org_data.nominations do %>
+                    <div class={"border rounded-lg p-4 #{if nomination.won, do: "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-200", else: "bg-gray-50 border-gray-200"}"}>
+                      <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                          <div class="flex items-center gap-3 mb-2">
+                            <h4 class="font-semibold text-gray-900">
+                              {nomination.category_name}
+                            </h4>
+                            <%= if nomination.won do %>
+                              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-yellow-200 text-yellow-900 border border-yellow-300">
+                                ✅ WINNER
+                              </span>
+                            <% else %>
+                              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                Nominee
+                              </span>
+                            <% end %>
+                          </div>
+
+                          <%= if nomination.person do %>
+                            <p class="text-sm text-gray-600 mb-1">
+                              <span class="font-medium">{nomination.person.name}</span>
+                            </p>
+                          <% end %>
+
+                          <%= if nomination.details["nominee_names"] && nomination.details["nominee_names"] != @movie.title do %>
+                            <p class="text-sm text-gray-600">
+                              {nomination.details["nominee_names"]}
+                            </p>
+                          <% end %>
+                        </div>
+
+                        <div class="text-right">
+                          <span class="text-lg font-bold text-gray-700">
+                            {nomination.ceremony_year}
+                          </span>
+                          <%= if nomination.ceremony_number do %>
+                            <p class="text-sm text-gray-500">
+                              {format_ordinal(nomination.ceremony_number)} Ceremony
+                            </p>
+                          <% else %>
+                            <p class="text-sm text-gray-500">
+                              {nomination.ceremony_name || ""}
+                            </p>
+                          <% end %>
+                        </div>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          <% end %>
         </div>
       <% end %>
       
 <!-- Cultural Lists -->
       <%= if length(@movie.cultural_lists) > 0 do %>
-        <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <div class="bg-white rounded-lg shadow p-6 mt-8">
           <h3 class="text-xl font-bold text-gray-900 mb-4">📚 Cultural Lists</h3>
           <div class="space-y-4">
             <%= for list_item <- @movie.cultural_lists do %>
@@ -930,7 +999,7 @@
         </div>
       <% end %>
 
-      <%= if length(@movie.oscar_nominations) == 0 && length(@movie.cultural_lists) == 0 && (!@movie.omdb_data || !@movie.omdb_data["Awards"] || @movie.omdb_data["Awards"] == "N/A") do %>
+      <%= if length(@movie.all_festival_nominations) == 0 && length(@movie.cultural_lists) == 0 && (!@movie.omdb_data || !@movie.omdb_data["Awards"] || @movie.omdb_data["Awards"] == "N/A") do %>
         <div class="bg-white rounded-lg shadow p-6">
           <p class="text-gray-600 text-center">
             No awards or cultural list appearances recorded.
