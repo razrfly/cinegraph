@@ -142,7 +142,9 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
       source_metadata: %{
         "scraper" => "UnifiedFestivalScraper",
         "version" => "1.0",
-        "parser" => festival_data[:parser] || "unknown"
+        "parser" => festival_data[:parser] || "unknown",
+        "import_status" => "pending",
+        "scraped_at" => DateTime.utc_now() |> DateTime.to_iso8601()
       }
     }
 

@@ -29,6 +29,8 @@ defmodule Cinegraph.Application do
       Cinegraph.Imports.ImportStats,
       # Start Dashboard Stats Cache (Issue #421)
       Cinegraph.Cache.DashboardStats,
+      # Start Award Import Stats Cache (Issue #446)
+      Cinegraph.Cache.AwardImportStats,
       # Start Festival Inference Monitor (Issue #286)
       Cinegraph.ObanPlugins.FestivalInferenceMonitor,
       # Start a worker by calling: Cinegraph.Worker.start_link(arg)

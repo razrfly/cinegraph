@@ -1,5 +1,6 @@
 defmodule CinegraphWeb.MovieLive.Index do
   use CinegraphWeb, :live_view
+  use CinegraphWeb.SearchEventHandlers
 
   require Logger
 
@@ -10,16 +11,23 @@ defmodule CinegraphWeb.MovieLive.Index do
     only: [
       extract_sort_criteria: 1,
       extract_sort_direction: 1,
-      build_sort_param: 2,
       assign_pagination: 2,
-      parse_array_param: 1,
-      clean_filter_params: 1
+      parse_array_param: 1
     ]
 
   import CinegraphWeb.FilterHelpers,
     only: [
       filter_value_present?: 1
     ]
+
+  # ============================================================================
+  # SearchEventHandlers Callback
+  # ============================================================================
+
+  @impl CinegraphWeb.SearchEventHandlers
+  def build_path(_socket, params) do
+    ~p"/movies?#{params}"
+  end
 
   @impl true
   def mount(_params, _session, socket) do
@@ -105,59 +113,9 @@ defmodule CinegraphWeb.MovieLive.Index do
     end
   end
 
-  @impl true
-  def handle_event("change_sort", %{"sort" => sort}, socket) do
-    params =
-      socket.assigns.params
-      |> Map.put("sort", sort)
-      |> Map.put("page", "1")
-
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("sort_criteria_changed", %{"criteria" => criteria}, socket) do
-    current_criteria = socket.assigns.sort_criteria
-
-    # When changing to a different criteria, default to descending
-    # This is more intuitive for most metrics (highest first)
-    direction =
-      if criteria != current_criteria do
-        :desc
-      else
-        socket.assigns.sort_direction
-      end
-
-    sort = build_sort_param(criteria, direction)
-
-    params =
-      socket.assigns.params
-      |> Map.put("sort", sort)
-      |> Map.put("page", "1")
-
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("toggle_sort_direction", _params, socket) do
-    new_direction = if socket.assigns.sort_direction == :desc, do: :asc, else: :desc
-    sort = build_sort_param(socket.assigns.sort_criteria, new_direction)
-
-    params =
-      socket.assigns.params
-      |> Map.put("sort", sort)
-      |> Map.put("page", "1")
-
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("toggle_filters", _params, socket) do
-    {:noreply, assign(socket, :show_filters, !socket.assigns.show_filters)}
-  end
+  # ============================================================================
+  # MovieLive-specific Event Handlers (overrides/additions)
+  # ============================================================================
 
   @impl true
   def handle_event("toggle_advanced_filters", _params, socket) do
@@ -165,53 +123,24 @@ defmodule CinegraphWeb.MovieLive.Index do
   end
 
   @impl true
-  def handle_event("search", %{"search" => search_term}, socket) do
-    params =
-      socket.assigns.params
-      |> Map.put("search", search_term)
-      |> Map.put("page", "1")
-
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    cleaned_filters = clean_filter_params(filters)
-
-    params =
-      socket.assigns.params
-      |> Map.merge(cleaned_filters)
-      |> Map.put("page", "1")
-      |> clean_filter_params()
-
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
   def handle_event("clear_all_filters", _params, socket) do
-    params = %{"page" => "1"}
-    path = ~p"/movies?#{params}"
+    # Alias for clear_filters - clears everything including search
+    path = build_path(socket, %{"page" => "1"})
     {:noreply, push_patch(socket, to: path)}
   end
 
+  # Override remove_filter to handle the extra filter-type param from legacy template
   @impl true
-  def handle_event("clear_filters", _params, socket) do
-    params = %{"page" => "1"}
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
-  end
+  def handle_event("remove_filter", %{"filter" => filter_key} = params, socket) do
+    # Remove the specific filter from params (ignore filter-type if present)
+    _ = params["filter-type"]
 
-  @impl true
-  def handle_event("remove_filter", %{"filter" => filter_key, "filter-type" => _type}, socket) do
-    # Remove the specific filter from params
-    params =
+    new_params =
       socket.assigns.params
       |> Map.delete(filter_key)
       |> Map.put("page", "1")
 
-    path = ~p"/movies?#{params}"
+    path = build_path(socket, new_params)
     {:noreply, push_patch(socket, to: path)}
   end
 
@@ -237,39 +166,13 @@ defmodule CinegraphWeb.MovieLive.Index do
     end
   end
 
-  # Handle autocomplete search for people
-  @impl true
-  def handle_info({:search_people_autocomplete, component_id, query}, socket) do
-    results = Search.search_people(query, 10)
+  # Note: People autocomplete handlers are provided by SearchEventHandlers macro
+  # - handle_info({:search_people_autocomplete, ...}, ...)
+  # - handle_info({:people_selected, ...}, ...)
 
-    # Update component with results and cache them
-    send_update(CinegraphWeb.Components.PersonAutocomplete,
-      id: component_id,
-      search_results: results,
-      searching: false,
-      cache_query: query,
-      cache_timestamp: DateTime.utc_now()
-    )
-
-    {:noreply, socket}
-  end
-
-  # Handle people selection updates from autocomplete component
-  @impl true
-  def handle_info({:people_selected, _component_id, selected_people}, socket) do
-    # Update the filters with the new people selection
-    people_ids = Enum.map_join(selected_people, ",", & &1.id)
-
-    params =
-      socket.assigns.params
-      |> Map.put("people_ids", people_ids)
-      |> Map.put("page", "1")
-
-    path = ~p"/movies?#{params}"
-    {:noreply, push_patch(socket, to: path)}
-  end
-
+  # ============================================================================
   # Private functions
+  # ============================================================================
 
   defp apply_action(socket, :index, _params) do
     socket

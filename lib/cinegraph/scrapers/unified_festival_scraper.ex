@@ -75,6 +75,82 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     end
   end
 
+  @doc """
+  Fetch available years for an IMDb event.
+
+  Extracts the `historyEventEditions` array from IMDb's `__NEXT_DATA__` JSON,
+  which contains all years that have data for this event.
+
+  ## Parameters
+    * event_id - IMDb event ID (e.g., "ev0000147" for Cannes, "ev0000003" for Oscars)
+
+  ## Returns
+    * {:ok, [years]} - List of years (integers) sorted descending
+    * {:error, reason} - Error details
+
+  ## Examples
+
+      iex> fetch_available_years("ev0000147")
+      {:ok, [2025, 2024, 2023, ...]}
+
+  """
+  def fetch_available_years(event_id) when is_binary(event_id) do
+    # Use current year to fetch the page - historyEventEditions is available on any year's page
+    current_year = Date.utc_today().year
+    url = "https://www.imdb.com/event/#{event_id}/#{current_year}/1/"
+
+    Logger.info("Fetching available years for event #{event_id} from: #{url}")
+
+    ApiTracker.track_lookup("festival_scraper", "fetch_years", event_id, fn ->
+      case fetch_html_direct(url) do
+        {:ok, html} ->
+          extract_available_years(html, event_id)
+
+        {:error, reason} ->
+          Logger.error("Failed to fetch years for event #{event_id}: #{inspect(reason)}")
+          {:error, reason}
+      end
+    end)
+  end
+
+  defp extract_available_years(html, event_id) do
+    case Regex.run(~r/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s, html) do
+      [_, json_content] ->
+        case Jason.decode(json_content) do
+          {:ok, data} ->
+            editions = get_in(data, ["props", "pageProps", "historyEventEditions"]) || []
+
+            years =
+              editions
+              |> Enum.map(fn edition -> edition["year"] end)
+              |> Enum.reject(&is_nil/1)
+              |> Enum.sort(:desc)
+
+            if length(years) > 0 do
+              Logger.info(
+                "Found #{length(years)} years for event #{event_id}: #{Enum.min(years)}-#{Enum.max(years)}"
+              )
+
+              {:ok, years}
+            else
+              Logger.warning("No years found in historyEventEditions for event #{event_id}")
+              {:error, "No years found in historyEventEditions"}
+            end
+
+          {:error, reason} ->
+            Logger.error(
+              "Failed to parse __NEXT_DATA__ JSON for year discovery: #{inspect(reason)}"
+            )
+
+            {:error, "JSON parsing failed"}
+        end
+
+      nil ->
+        Logger.warning("No __NEXT_DATA__ found for event #{event_id}")
+        {:error, "No __NEXT_DATA__ found"}
+    end
+  end
+
   defp build_festival_url(festival_config, year) do
     cond do
       # First check for url_template in config

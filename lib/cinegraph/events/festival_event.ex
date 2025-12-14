@@ -33,6 +33,11 @@ defmodule Cinegraph.Events.FestivalEvent do
     field :max_available_year, :integer
     field :current_year_status, :string
 
+    # IMDb Year Discovery
+    field :imdb_event_id, :string
+    field :discovered_years, {:array, :integer}
+    field :years_discovered_at, :utc_datetime
+
     # Import Configuration
     field :active, :boolean
     field :import_priority, :integer
@@ -78,6 +83,9 @@ defmodule Cinegraph.Events.FestivalEvent do
       :min_available_year,
       :max_available_year,
       :current_year_status,
+      :imdb_event_id,
+      :discovered_years,
+      :years_discovered_at,
       :active,
       :import_priority,
       :auto_detect_new_years,

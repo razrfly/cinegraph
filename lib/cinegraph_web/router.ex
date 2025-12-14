@@ -155,6 +155,9 @@ defmodule CinegraphWeb.Router do
     # Festival Events management
     live "/festival-events", FestivalEventLive.Index, :index
 
+    # Awards Import Dashboard (Issue #446)
+    live "/awards-imports", AwardImportsLive, :index
+
     # Oban job dashboard
     oban_dashboard("/oban")
   end
