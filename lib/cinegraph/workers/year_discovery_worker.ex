@@ -122,7 +122,18 @@ defmodule Cinegraph.Workers.YearDiscoveryWorker do
       get_in(festival_event.source_config || %{}, ["imdb_event_id"])
   end
 
+  defp update_discovered_years(%FestivalEvent{} = festival_event, [] = _years, _event_id) do
+    Logger.warning(
+      "YearDiscoveryWorker: No years found for #{festival_event.source_key}, skipping update"
+    )
+
+    {:ok, :no_years}
+  end
+
   defp update_discovered_years(%FestivalEvent{} = festival_event, years, event_id) do
+    min_year = Enum.min(years)
+    max_year = Enum.max(years)
+
     changeset =
       festival_event
       |> FestivalEvent.changeset(%{
@@ -130,21 +141,21 @@ defmodule Cinegraph.Workers.YearDiscoveryWorker do
         years_discovered_at: DateTime.utc_now(),
         imdb_event_id: event_id,
         # Also update min/max for backward compatibility
-        min_available_year: Enum.min(years),
-        max_available_year: Enum.max(years)
+        min_available_year: min_year,
+        max_available_year: max_year
       })
 
     case Repo.update(changeset) do
       {:ok, updated_event} ->
         Logger.info(
-          "YearDiscoveryWorker: Updated #{festival_event.source_key} with #{length(years)} years (#{Enum.min(years)}-#{Enum.max(years)})"
+          "YearDiscoveryWorker: Updated #{festival_event.source_key} with #{length(years)} years (#{min_year}-#{max_year})"
         )
 
         broadcast_progress(:years_discovered, %{
           source_key: festival_event.source_key,
           years_count: length(years),
-          min_year: Enum.min(years),
-          max_year: Enum.max(years)
+          min_year: min_year,
+          max_year: max_year
         })
 
         {:ok, updated_event}

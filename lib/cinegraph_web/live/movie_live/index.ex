@@ -144,6 +144,12 @@ defmodule CinegraphWeb.MovieLive.Index do
     {:noreply, push_patch(socket, to: path)}
   end
 
+  # Delegate all other events to the SearchEventHandlers macro
+  @impl true
+  def handle_event(event, params, socket) do
+    super(event, params, socket)
+  end
+
   # Ensure filter options are always present in socket assigns
   defp ensure_filter_options(socket) do
     # Check if filter options are already loaded

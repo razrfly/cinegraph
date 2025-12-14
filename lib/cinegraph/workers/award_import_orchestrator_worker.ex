@@ -165,9 +165,12 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
       "AwardImportOrchestratorWorker: Retrying failed imports for organization #{org_id}"
     )
 
-    # Find years with failed status
+    # Find years with any failure status (failed, no_matches, low_match, empty)
     failed_statuses =
-      Festivals.list_award_import_statuses(organization_id: org_id, status: "failed")
+      Festivals.list_award_import_statuses(organization_id: org_id)
+      |> Enum.filter(fn status ->
+        status.status in ["failed", "no_matches", "low_match", "empty"]
+      end)
 
     if length(failed_statuses) == 0 do
       Logger.info(
