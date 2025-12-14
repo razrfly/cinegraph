@@ -284,12 +284,18 @@ defmodule CinegraphWeb.AwardImportsLive do
             o.organization_id == org_id
           end)
 
-        socket =
-          socket
-          |> assign(:resync_org, org)
-          |> assign(:show_resync_modal, true)
+        case org do
+          nil ->
+            {:noreply, put_flash(socket, :error, "Organization not found")}
 
-        {:noreply, socket}
+          org ->
+            socket =
+              socket
+              |> assign(:resync_org, org)
+              |> assign(:show_resync_modal, true)
+
+            {:noreply, socket}
+        end
 
       _ ->
         {:noreply, put_flash(socket, :error, "Invalid organization ID")}
@@ -309,7 +315,7 @@ defmodule CinegraphWeb.AwardImportsLive do
   @impl true
   def handle_event("resync_years", %{"org-id" => org_id_str, "count" => count_str}, socket) do
     with {org_id, ""} <- Integer.parse(org_id_str),
-         count <- parse_count(count_str) do
+         {:ok, count} <- safe_parse_count(count_str) do
       result =
         if count == :all do
           AwardImportWorker.queue_resync_all(org_id)
@@ -339,8 +345,16 @@ defmodule CinegraphWeb.AwardImportsLive do
     end
   end
 
-  defp parse_count("all"), do: :all
-  defp parse_count(str) when is_binary(str), do: String.to_integer(str)
+  defp safe_parse_count("all"), do: {:ok, :all}
+
+  defp safe_parse_count(str) when is_binary(str) do
+    case Integer.parse(str) do
+      {count, ""} when count > 0 -> {:ok, count}
+      _ -> :error
+    end
+  end
+
+  defp safe_parse_count(_), do: :error
 
   # Private Functions
 
