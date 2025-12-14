@@ -530,9 +530,9 @@
             <div class="mt-2 text-xs text-gray-400">
               <%= for org <- all_noms_overview do %>
                 <span class="inline-block mr-2">
-                  {get_organization_display_name(org.organization_name)
+                  {(get_organization_display_name(org.organization_name) || "")
                   |> String.split(" ")
-                  |> hd()}: {org.total_wins + org.total_nominations}
+                  |> List.first("Unknown")}: {org.total_wins + org.total_nominations}
                 </span>
               <% end %>
             </div>
