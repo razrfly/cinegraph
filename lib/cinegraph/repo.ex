@@ -41,6 +41,14 @@ defmodule Cinegraph.Repo do
   In production, this routes to PlanetScale read replicas.
   In development/test, this returns the same database (for simplicity).
 
+  ## Kill Switch
+
+  Set `USE_REPLICA=false` environment variable to disable replica usage
+  and route all queries to the primary database. Useful for:
+  - Debugging replication issues
+  - Emergency failover if replicas are misbehaving
+  - Testing primary-only performance
+
   ## Examples
 
       # Use for read-heavy operations
@@ -52,6 +60,21 @@ defmodule Cinegraph.Repo do
   """
   @spec replica() :: module()
   def replica do
-    Cinegraph.Repo.Replica
+    if replica_enabled?() do
+      Cinegraph.Repo.Replica
+    else
+      # Kill switch active - use primary for all queries
+      __MODULE__
+    end
+  end
+
+  # Check if replica is enabled via environment variable
+  # Defaults to true (replica enabled) if not set
+  defp replica_enabled? do
+    case System.get_env("USE_REPLICA") do
+      "false" -> false
+      "0" -> false
+      _ -> true
+    end
   end
 end

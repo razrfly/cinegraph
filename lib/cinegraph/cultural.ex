@@ -745,7 +745,7 @@ defmodule Cinegraph.Cultural do
       |> where([j], j.worker == "Cinegraph.Workers.OscarImportWorker")
       |> group_by([j], j.state)
       |> select([j], {j.state, count(j.id)})
-      |> Repo.all()
+      |> Repo.replica().all()
       |> Enum.into(%{})
 
     %{
@@ -945,7 +945,7 @@ defmodule Cinegraph.Cultural do
       |> where([j], fragment("? ->> 'festival' = ?", j.args, "venice"))
       |> group_by([j], j.state)
       |> select([j], {j.state, count(j.id)})
-      |> Repo.all()
+      |> Repo.replica().all()
       |> Enum.into(%{})
 
     %{
@@ -1118,7 +1118,7 @@ defmodule Cinegraph.Cultural do
       query
       |> group_by([j], j.state)
       |> select([j], {j.state, count(j.id)})
-      |> Repo.all()
+      |> Repo.replica().all()
       |> Enum.into(%{})
 
     %{
