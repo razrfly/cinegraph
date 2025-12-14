@@ -320,6 +320,7 @@ defmodule Cinegraph.Festivals do
     Repo.one(
       from(s in AwardImportStatus,
         where: s.organization_id == ^organization_id,
+        order_by: [desc: s.year],
         limit: 1
       )
     )
@@ -505,6 +506,10 @@ defmodule Cinegraph.Festivals do
       {k, v} when is_atom(k) -> {Atom.to_string(k), stringify_keys(v)}
       {k, v} -> {k, stringify_keys(v)}
     end)
+  end
+
+  defp stringify_keys(list) when is_list(list) do
+    Enum.map(list, &stringify_keys/1)
   end
 
   defp stringify_keys(value), do: value

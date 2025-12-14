@@ -115,23 +115,28 @@ defmodule CinegraphWeb.AwardImportsLive do
 
   @impl true
   def handle_event("show_organization_detail", %{"org-id" => org_id_str}, socket) do
-    org_id = String.to_integer(org_id_str)
-    stats = AwardImportStats.get_stats()
+    case Integer.parse(org_id_str) do
+      {org_id, ""} ->
+        stats = AwardImportStats.get_stats()
 
-    org =
-      Enum.find(stats.organizations, fn o ->
-        o.organization_id == org_id
-      end)
+        org =
+          Enum.find(stats.organizations, fn o ->
+            o.organization_id == org_id
+          end)
 
-    years = AwardImportStats.get_organization_years(org_id)
+        years = AwardImportStats.get_organization_years(org_id)
 
-    socket =
-      socket
-      |> assign(:selected_organization, org)
-      |> assign(:organization_years, years)
-      |> assign(:show_detail_modal, true)
+        socket =
+          socket
+          |> assign(:selected_organization, org)
+          |> assign(:organization_years, years)
+          |> assign(:show_detail_modal, true)
 
-    {:noreply, socket}
+        {:noreply, socket}
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid organization ID")}
+    end
   end
 
   @impl true
@@ -147,40 +152,46 @@ defmodule CinegraphWeb.AwardImportsLive do
 
   @impl true
   def handle_event("import_year", %{"org-id" => org_id_str, "year" => year_str}, socket) do
-    org_id = String.to_integer(org_id_str)
-    year = String.to_integer(year_str)
+    with {org_id, ""} <- Integer.parse(org_id_str),
+         {year, ""} <- Integer.parse(year_str) do
+      case AwardImportWorker.queue_import(org_id, year) do
+        {:ok, _job} ->
+          socket =
+            socket
+            |> put_flash(:info, "Queued import for year #{year}")
+            |> assign(:import_running, true)
 
-    case AwardImportWorker.queue_import(org_id, year) do
-      {:ok, _job} ->
-        socket =
-          socket
-          |> put_flash(:info, "Queued import for year #{year}")
-          |> assign(:import_running, true)
+          {:noreply, socket}
 
-        {:noreply, socket}
-
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to queue import: #{inspect(reason)}")
-        {:noreply, socket}
+        {:error, reason} ->
+          socket = put_flash(socket, :error, "Failed to queue import: #{inspect(reason)}")
+          {:noreply, socket}
+      end
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Invalid organization ID or year")}
     end
   end
 
   @impl true
   def handle_event("sync_organization", %{"org-id" => org_id_str}, socket) do
-    org_id = String.to_integer(org_id_str)
+    case Integer.parse(org_id_str) do
+      {org_id, ""} ->
+        case AwardImportWorker.queue_sync_missing(org_id) do
+          {:ok, _job} ->
+            socket =
+              socket
+              |> put_flash(:info, "Queued sync for missing years")
+              |> assign(:import_running, true)
 
-    case AwardImportWorker.queue_sync_missing(org_id) do
-      {:ok, _job} ->
-        socket =
-          socket
-          |> put_flash(:info, "Queued sync for missing years")
-          |> assign(:import_running, true)
+            {:noreply, socket}
 
-        {:noreply, socket}
+          {:error, reason} ->
+            socket = put_flash(socket, :error, "Failed to queue sync: #{inspect(reason)}")
+            {:noreply, socket}
+        end
 
-      {:error, reason} ->
-        socket = put_flash(socket, :error, "Failed to queue sync: #{inspect(reason)}")
-        {:noreply, socket}
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid organization ID")}
     end
   end
 

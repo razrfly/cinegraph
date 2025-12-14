@@ -202,12 +202,12 @@
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
             <%= for org <- @organizations do %>
-              <tr
-                class="hover:bg-gray-50 cursor-pointer"
-                phx-click="show_organization_detail"
-                phx-value-org-id={org.organization_id}
-              >
-                <td class="px-4 py-4 whitespace-nowrap">
+              <tr class="hover:bg-gray-50">
+                <td
+                  class="px-4 py-4 whitespace-nowrap cursor-pointer"
+                  phx-click="show_organization_detail"
+                  phx-value-org-id={org.organization_id}
+                >
                   <div class="flex items-center">
                     <div>
                       <div class="text-sm font-medium text-gray-900">
@@ -386,10 +386,7 @@
 
 <!-- Organization Detail Modal -->
 <%= if @show_detail_modal && @selected_organization do %>
-  <div
-    class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
-    phx-click="close_modal"
-  >
+  <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
     <div
       class="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white"
       phx-click-away="close_modal"
