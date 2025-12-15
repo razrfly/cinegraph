@@ -174,12 +174,17 @@ defmodule CinegraphWeb.FestivalAuditLive do
   @impl true
   def handle_event("show_delete_modal", %{"nomination-id" => nomination_id}, socket) do
     nomination_id = String.to_integer(nomination_id)
-    nomination = Festivals.get_nomination(nomination_id)
 
-    {:noreply,
-     socket
-     |> assign(:show_delete_modal, true)
-     |> assign(:selected_nomination, nomination)}
+    case Festivals.get_nomination(nomination_id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Nomination no longer exists.")}
+
+      nomination ->
+        {:noreply,
+         socket
+         |> assign(:show_delete_modal, true)
+         |> assign(:selected_nomination, nomination)}
+    end
   end
 
   @impl true
@@ -228,22 +233,27 @@ defmodule CinegraphWeb.FestivalAuditLive do
   @impl true
   def handle_event("show_switch_modal", %{"nomination-id" => nomination_id}, socket) do
     nomination_id = String.to_integer(nomination_id)
-    nomination = Festivals.get_nomination(nomination_id)
 
-    # Pre-populate with candidates based on current movie title
-    candidates =
-      Festivals.find_candidate_movies(
-        nomination.movie.title,
-        socket.assigns.selected_ceremony.year,
-        limit: 10
-      )
+    case Festivals.get_nomination(nomination_id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Nomination no longer exists.")}
 
-    {:noreply,
-     socket
-     |> assign(:show_switch_modal, true)
-     |> assign(:selected_nomination, nomination)
-     |> assign(:movie_candidates, candidates)
-     |> assign(:search_query, nomination.movie.title)}
+      nomination ->
+        # Pre-populate with candidates based on current movie title
+        candidates =
+          Festivals.find_candidate_movies(
+            nomination.movie.title,
+            socket.assigns.selected_ceremony.year,
+            limit: 10
+          )
+
+        {:noreply,
+         socket
+         |> assign(:show_switch_modal, true)
+         |> assign(:selected_nomination, nomination)
+         |> assign(:movie_candidates, candidates)
+         |> assign(:search_query, nomination.movie.title)}
+    end
   end
 
   @impl true
@@ -257,7 +267,7 @@ defmodule CinegraphWeb.FestivalAuditLive do
   end
 
   @impl true
-  def handle_event("search_movies", %{"query" => query}, socket) do
+  def handle_event("search_movies", %{"value" => query}, socket) do
     candidates =
       if String.length(String.trim(query)) >= 2 do
         Movies.quick_search(query, limit: 15)
@@ -318,35 +328,45 @@ defmodule CinegraphWeb.FestivalAuditLive do
   end
 
   defp filter_by_year(ceremonies, "all"), do: ceremonies
+
   defp filter_by_year(ceremonies, "recent") do
     current_year = Date.utc_today().year
     Enum.filter(ceremonies, fn c -> c.ceremony.year >= current_year - 5 end)
   end
+
   defp filter_by_year(ceremonies, "2020s") do
     Enum.filter(ceremonies, fn c -> c.ceremony.year >= 2020 and c.ceremony.year < 2030 end)
   end
+
   defp filter_by_year(ceremonies, "2010s") do
     Enum.filter(ceremonies, fn c -> c.ceremony.year >= 2010 and c.ceremony.year < 2020 end)
   end
+
   defp filter_by_year(ceremonies, "2000s") do
     Enum.filter(ceremonies, fn c -> c.ceremony.year >= 2000 and c.ceremony.year < 2010 end)
   end
+
   defp filter_by_year(ceremonies, "older") do
     Enum.filter(ceremonies, fn c -> c.ceremony.year < 2000 end)
   end
+
   defp filter_by_year(ceremonies, _), do: ceremonies
 
   defp filter_by_status(ceremonies, "all"), do: ceremonies
+
   defp filter_by_status(ceremonies, "with_nominations") do
     Enum.filter(ceremonies, fn c -> c.nomination_count > 0 end)
   end
+
   defp filter_by_status(ceremonies, "empty") do
     Enum.filter(ceremonies, fn c -> c.nomination_count == 0 end)
   end
+
   defp filter_by_status(ceremonies, _), do: ceremonies
 
   # Category filtering for ceremony view
   defp filter_categories(nominations_by_category, "all"), do: nominations_by_category
+
   defp filter_categories(nominations_by_category, category_name) do
     case Map.get(nominations_by_category, category_name) do
       nil -> %{}
@@ -376,7 +396,11 @@ defmodule CinegraphWeb.FestivalAuditLive do
     flags =
       if movie_year && movie_year < eligible_year - 2 do
         years_diff = eligible_year - movie_year
-        [{:warning, "Release date (#{movie_year}) is #{years_diff} years before eligibility"} | flags]
+
+        [
+          {:warning, "Release date (#{movie_year}) is #{years_diff} years before eligibility"}
+          | flags
+        ]
       else
         flags
       end
@@ -413,6 +437,7 @@ defmodule CinegraphWeb.FestivalAuditLive do
 
   # Filter nominations to only show flagged ones when show_flagged_only is true
   defp filter_flagged(nominations_by_category, false, _ceremony), do: nominations_by_category
+
   defp filter_flagged(nominations_by_category, true, ceremony) do
     nominations_by_category
     |> Enum.map(fn {category, nominations} ->
