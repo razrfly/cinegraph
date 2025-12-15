@@ -9,7 +9,8 @@ defmodule Cinegraph.Workers.DataRepairWorker do
   use Oban.Worker,
     queue: :default,
     max_attempts: 3,
-    unique: [fields: [:args], keys: [:repair_type], period: 600]
+    # Compare full args for uniqueness - allows batched jobs with different last_id
+    unique: [period: 600]
 
   alias Cinegraph.{Repo, Movies, Repairs}
   alias Cinegraph.Services.TMDb
