@@ -76,6 +76,9 @@ config :cinegraph, Oban,
     collaboration: 5,
     # Web scraping (IMDb, festivals, Oscars) - low concurrency for rate limiting
     scraping: 5,
+    # Festival discovery processing - very low concurrency to prevent overwhelming the system
+    # Each ceremony queues many child jobs, so limit to 2 concurrent ceremonies
+    festival_discovery: 2,
     # All metrics/calculations (person quality scores, predictions, CRI)
     metrics: 10,
     # Background maintenance tasks (cache warming, sitemap, backfills)

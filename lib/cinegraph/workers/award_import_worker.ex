@@ -25,6 +25,10 @@ defmodule Cinegraph.Workers.AwardImportWorker do
   alias Cinegraph.Repo
   require Logger
 
+  # Spacing between year imports in seconds (5 minutes)
+  # This prevents overwhelming the system when batch-importing multiple years
+  @year_import_spacing_seconds 300
+
   @doc """
   Queue an import job for a specific organization and year.
   """
@@ -100,27 +104,37 @@ defmodule Cinegraph.Workers.AwardImportWorker do
         "AwardImportWorker: Found #{length(missing_statuses)} years to sync for organization #{org_id}"
       )
 
-      # Queue individual import jobs for each missing year
+      # Queue individual import jobs with spacing to prevent overwhelming the system
+      # Jobs are scheduled 5 minutes apart to allow each ceremony to complete processing
       jobs =
-        Enum.map(missing_statuses, fn status ->
-          new(%{"organization_id" => org_id, "year" => status.year})
+        missing_statuses
+        |> Enum.sort_by(& &1.year, :desc)
+        |> Enum.with_index()
+        |> Enum.map(fn {status, index} ->
+          schedule_delay = index * @year_import_spacing_seconds
+          new(%{"organization_id" => org_id, "year" => status.year}, schedule_in: schedule_delay)
         end)
 
       results = Oban.insert_all(jobs)
       queued_count = if is_list(results), do: length(results), else: 0
 
+      total_duration_minutes = div((queued_count - 1) * @year_import_spacing_seconds, 60)
+
       Logger.info(
-        "AwardImportWorker: Queued #{queued_count} import jobs for organization #{org_id}"
+        "AwardImportWorker: Queued #{queued_count} import jobs for organization #{org_id} " <>
+          "(spaced #{div(@year_import_spacing_seconds, 60)} min apart, ~#{total_duration_minutes} min total)"
       )
 
       # Broadcast progress
       broadcast_progress(:sync_missing, %{
         organization_id: org_id,
         years_queued: queued_count,
-        years: Enum.map(missing_statuses, & &1.year)
+        years: Enum.map(missing_statuses, & &1.year),
+        spacing_seconds: @year_import_spacing_seconds,
+        estimated_duration_minutes: total_duration_minutes
       })
 
-      {:ok, %{queued: queued_count}}
+      {:ok, %{queued: queued_count, spacing_seconds: @year_import_spacing_seconds}}
     end
   end
 
@@ -140,27 +154,37 @@ defmodule Cinegraph.Workers.AwardImportWorker do
         "AwardImportWorker: Found #{length(all_statuses)} years to resync for organization #{org_id}"
       )
 
-      # Queue individual import jobs for ALL years
+      # Queue individual import jobs with spacing to prevent overwhelming the system
+      # Jobs are scheduled 5 minutes apart to allow each ceremony to complete processing
       jobs =
-        Enum.map(all_statuses, fn status ->
-          new(%{"organization_id" => org_id, "year" => status.year})
+        all_statuses
+        |> Enum.sort_by(& &1.year, :desc)
+        |> Enum.with_index()
+        |> Enum.map(fn {status, index} ->
+          schedule_delay = index * @year_import_spacing_seconds
+          new(%{"organization_id" => org_id, "year" => status.year}, schedule_in: schedule_delay)
         end)
 
       results = Oban.insert_all(jobs)
       queued_count = if is_list(results), do: length(results), else: 0
 
+      total_duration_minutes = div((queued_count - 1) * @year_import_spacing_seconds, 60)
+
       Logger.info(
-        "AwardImportWorker: Queued #{queued_count} resync jobs for organization #{org_id}"
+        "AwardImportWorker: Queued #{queued_count} resync jobs for organization #{org_id} " <>
+          "(spaced #{div(@year_import_spacing_seconds, 60)} min apart, ~#{total_duration_minutes} min total)"
       )
 
       # Broadcast progress
       broadcast_progress(:resync_all, %{
         organization_id: org_id,
         years_queued: queued_count,
-        years: Enum.map(all_statuses, & &1.year)
+        years: Enum.map(all_statuses, & &1.year),
+        spacing_seconds: @year_import_spacing_seconds,
+        estimated_duration_minutes: total_duration_minutes
       })
 
-      {:ok, %{queued: queued_count}}
+      {:ok, %{queued: queued_count, spacing_seconds: @year_import_spacing_seconds}}
     end
   end
 
@@ -191,27 +215,36 @@ defmodule Cinegraph.Workers.AwardImportWorker do
         "AwardImportWorker: Found #{length(all_statuses)} recent years to resync for organization #{org_id}"
       )
 
-      # Queue individual import jobs for the selected years
+      # Queue individual import jobs with spacing to prevent overwhelming the system
+      # Jobs are already sorted by year desc from the query above
       jobs =
-        Enum.map(all_statuses, fn status ->
-          new(%{"organization_id" => org_id, "year" => status.year})
+        all_statuses
+        |> Enum.with_index()
+        |> Enum.map(fn {status, index} ->
+          schedule_delay = index * @year_import_spacing_seconds
+          new(%{"organization_id" => org_id, "year" => status.year}, schedule_in: schedule_delay)
         end)
 
       results = Oban.insert_all(jobs)
       queued_count = if is_list(results), do: length(results), else: 0
 
+      total_duration_minutes = div((queued_count - 1) * @year_import_spacing_seconds, 60)
+
       Logger.info(
-        "AwardImportWorker: Queued #{queued_count} resync jobs for organization #{org_id} (recent years)"
+        "AwardImportWorker: Queued #{queued_count} resync jobs for organization #{org_id} (recent years) " <>
+          "(spaced #{div(@year_import_spacing_seconds, 60)} min apart, ~#{total_duration_minutes} min total)"
       )
 
       # Broadcast progress
       broadcast_progress(:resync_all, %{
         organization_id: org_id,
         years_queued: queued_count,
-        years: Enum.map(all_statuses, & &1.year)
+        years: Enum.map(all_statuses, & &1.year),
+        spacing_seconds: @year_import_spacing_seconds,
+        estimated_duration_minutes: total_duration_minutes
       })
 
-      {:ok, %{queued: queued_count}}
+      {:ok, %{queued: queued_count, spacing_seconds: @year_import_spacing_seconds}}
     end
   end
 

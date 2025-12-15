@@ -19,6 +19,10 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
   alias Cinegraph.Workers.AwardImportWorker
   require Logger
 
+  # Spacing between organization sync jobs in seconds (10 minutes)
+  # This prevents multiple organizations from processing simultaneously
+  @org_sync_spacing_seconds 600
+
   @doc """
   Queue a sync operation for all organizations.
   """
@@ -50,29 +54,42 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
     else
       Logger.info("AwardImportOrchestratorWorker: Found #{length(orgs)} organizations to sync")
 
-      # Queue sync_missing for each organization
+      # Queue sync_missing for each organization with spacing
+      # Each org's sync job is scheduled 10 minutes apart to prevent overwhelming the system
       jobs =
-        Enum.map(orgs, fn org ->
-          AwardImportWorker.new(%{
-            "organization_id" => org.id,
-            "action" => "sync_missing"
-          })
+        orgs
+        |> Enum.with_index()
+        |> Enum.map(fn {org, index} ->
+          schedule_delay = index * @org_sync_spacing_seconds
+
+          AwardImportWorker.new(
+            %{
+              "organization_id" => org.id,
+              "action" => "sync_missing"
+            },
+            schedule_in: schedule_delay
+          )
         end)
 
       results = Oban.insert_all(jobs)
       queued_count = if is_list(results), do: length(results), else: 0
 
+      total_duration_minutes = div((queued_count - 1) * @org_sync_spacing_seconds, 60)
+
       Logger.info(
-        "AwardImportOrchestratorWorker: Queued sync_missing for #{queued_count} organizations"
+        "AwardImportOrchestratorWorker: Queued sync_missing for #{queued_count} organizations " <>
+          "(spaced #{div(@org_sync_spacing_seconds, 60)} min apart, ~#{total_duration_minutes} min total)"
       )
 
       # Broadcast progress
       broadcast_progress(:sync_all_started, %{
         organizations_queued: queued_count,
-        organizations: Enum.map(orgs, fn org -> %{id: org.id, name: org.name} end)
+        organizations: Enum.map(orgs, fn org -> %{id: org.id, name: org.name} end),
+        spacing_seconds: @org_sync_spacing_seconds,
+        estimated_duration_minutes: total_duration_minutes
       })
 
-      {:ok, %{organizations_queued: queued_count}}
+      {:ok, %{organizations_queued: queued_count, spacing_seconds: @org_sync_spacing_seconds}}
     end
   end
 
@@ -172,6 +189,9 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
         status.status in ["failed", "no_matches", "low_match", "empty"]
       end)
 
+    # Use same spacing as AwardImportWorker (5 minutes)
+    year_spacing_seconds = 300
+
     if length(failed_statuses) == 0 do
       Logger.info(
         "AwardImportOrchestratorWorker: No failed imports found for organization #{org_id}"
@@ -179,26 +199,39 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
 
       {:ok, %{retried: 0}}
     else
-      # Queue import jobs for each failed year
+      # Queue import jobs for each failed year with spacing
       jobs =
-        Enum.map(failed_statuses, fn status ->
-          AwardImportWorker.new(%{"organization_id" => org_id, "year" => status.year})
+        failed_statuses
+        |> Enum.sort_by(& &1.year, :desc)
+        |> Enum.with_index()
+        |> Enum.map(fn {status, index} ->
+          schedule_delay = index * year_spacing_seconds
+
+          AwardImportWorker.new(
+            %{"organization_id" => org_id, "year" => status.year},
+            schedule_in: schedule_delay
+          )
         end)
 
       results = Oban.insert_all(jobs)
       queued_count = if is_list(results), do: length(results), else: 0
 
+      total_duration_minutes = div((queued_count - 1) * year_spacing_seconds, 60)
+
       Logger.info(
-        "AwardImportOrchestratorWorker: Queued #{queued_count} retry jobs for organization #{org_id}"
+        "AwardImportOrchestratorWorker: Queued #{queued_count} retry jobs for organization #{org_id} " <>
+          "(spaced #{div(year_spacing_seconds, 60)} min apart, ~#{total_duration_minutes} min total)"
       )
 
       broadcast_progress(:retry_queued, %{
         organization_id: org_id,
         years_retried: queued_count,
-        years: Enum.map(failed_statuses, & &1.year)
+        years: Enum.map(failed_statuses, & &1.year),
+        spacing_seconds: year_spacing_seconds,
+        estimated_duration_minutes: total_duration_minutes
       })
 
-      {:ok, %{retried: queued_count}}
+      {:ok, %{retried: queued_count, spacing_seconds: year_spacing_seconds}}
     end
   end
 
