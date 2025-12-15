@@ -14,7 +14,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   """
 
   use Oban.Worker,
-    queue: :scraping,
+    queue: :festival_discovery,
     max_attempts: 3,
     priority: 2
 
@@ -57,6 +57,12 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   # Performance and quality settings
   # 5 second timeout for person linking operations
   @person_linking_timeout 5_000
+
+  # Throttling settings to prevent overwhelming the system
+  # Delay between processing categories (in milliseconds)
+  @category_processing_delay_ms 1_000
+  # Delay between individual job insertions (in milliseconds)
+  @job_insertion_delay_ms 100
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"ceremony_id" => ceremony_id}} = job) do
@@ -113,6 +119,12 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
               Logger.info(
                 "Category #{index + 1} processed with #{length(category_results)} results"
               )
+
+              # Add delay between categories to prevent overwhelming the system
+              # Skip delay after the last category
+              if index < length(categories) - 1 do
+                Process.sleep(@category_processing_delay_ms)
+              end
 
               category_results
             end)
@@ -527,6 +539,8 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         case TMDbDetailsWorker.new(job_args) |> Oban.insert() do
           {:ok, job} ->
             Logger.info("Queued TMDbDetailsWorker job #{job.id} for #{film_title}")
+            # Add small delay between job insertions to prevent overwhelming the system
+            Process.sleep(@job_insertion_delay_ms)
             {:queued, job.id}
 
           {:error, reason} ->
@@ -997,6 +1011,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         Logger.info(
           "Successfully queued fuzzy matched movie creation for #{film_title} (TMDb ID: #{tmdb_id}) - Job ID: #{job.id}"
         )
+
+        # Add small delay between job insertions to prevent overwhelming the system
+        Process.sleep(@job_insertion_delay_ms)
 
         %{action: :fuzzy_matched, tmdb_id: tmdb_id, title: film_title, job_id: job.id}
 
