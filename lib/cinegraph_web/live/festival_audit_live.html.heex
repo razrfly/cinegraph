@@ -1,0 +1,692 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <%= case @live_action do %>
+    <% :index -> %>
+      <!-- Organization List View -->
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">Festival Nomination Audit</h1>
+        <p class="mt-2 text-gray-600">
+          Review and correct film associations for festival nominations
+        </p>
+      </div>
+
+      <div class="mb-6">
+        <.link
+          navigate={~p"/admin/award-imports"}
+          class="text-blue-600 hover:text-blue-800 flex items-center gap-1"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Award Imports
+        </.link>
+      </div>
+
+      <%= if Enum.empty?(@organizations) do %>
+        <div class="bg-gray-50 rounded-lg p-8 text-center">
+          <p class="text-gray-500">No festival organizations found.</p>
+          <p class="text-gray-400 text-sm mt-2">Import some festival data first.</p>
+        </div>
+      <% else %>
+        <div class="bg-white shadow rounded-lg divide-y divide-gray-200">
+          <%= for org_data <- @organizations do %>
+            <.link
+              navigate={~p"/admin/festival/#{org_data.organization.slug}"}
+              class="block hover:bg-gray-50 transition-colors"
+            >
+              <div class="px-6 py-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                      <%= org_data.organization.name %>
+                      <%= if org_data.organization.abbreviation do %>
+                        <span class="text-gray-500 font-normal">
+                          (<%= org_data.organization.abbreviation %>)
+                        </span>
+                      <% end %>
+                    </h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                      <%= org_data.ceremony_count %> ceremonies
+                      · <%= org_data.nomination_count || 0 %> nominations
+                      <%= if org_data.organization.country do %>
+                        · <%= org_data.organization.country %>
+                      <% end %>
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <%= if org_data.most_recent_year do %>
+                      <span class="text-sm text-gray-400">
+                        Most recent: <%= org_data.most_recent_year %>
+                      </span>
+                    <% end %>
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </.link>
+          <% end %>
+        </div>
+      <% end %>
+
+    <% :organization -> %>
+      <!-- Year List View -->
+      <div class="mb-8">
+        <.link
+          navigate={~p"/admin/festival"}
+          class="text-blue-600 hover:text-blue-800 flex items-center gap-1 mb-4"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to Organizations
+        </.link>
+
+        <h1 class="text-3xl font-bold text-gray-900"><%= @selected_org.name %></h1>
+        <p class="mt-2 text-gray-600">
+          Review nominations by ceremony year
+        </p>
+      </div>
+
+      <!-- Filters -->
+      <div class="mb-6 flex gap-4">
+        <div>
+          <label for="year-filter" class="block text-sm font-medium text-gray-700 mb-1">
+            Year Range
+          </label>
+          <select
+            id="year-filter"
+            name="year"
+            phx-change="filter_year"
+            class="block w-40 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+          >
+            <option value="all" selected={@year_filter == "all"}>All Years</option>
+            <option value="recent" selected={@year_filter == "recent"}>Recent (5 years)</option>
+            <option value="2020s" selected={@year_filter == "2020s"}>2020s</option>
+            <option value="2010s" selected={@year_filter == "2010s"}>2010s</option>
+            <option value="2000s" selected={@year_filter == "2000s"}>2000s</option>
+            <option value="older" selected={@year_filter == "older"}>Before 2000</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="status-filter" class="block text-sm font-medium text-gray-700 mb-1">
+            Status
+          </label>
+          <select
+            id="status-filter"
+            name="status"
+            phx-change="filter_status"
+            class="block w-44 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+          >
+            <option value="all" selected={@status_filter == "all"}>All Statuses</option>
+            <option value="with_nominations" selected={@status_filter == "with_nominations"}>With Nominations</option>
+            <option value="empty" selected={@status_filter == "empty"}>Empty</option>
+          </select>
+        </div>
+
+        <div class="flex items-end">
+          <span class="text-sm text-gray-500">
+            Showing <%= length(@filtered_ceremonies) %> of <%= length(@ceremonies) %> ceremonies
+          </span>
+        </div>
+      </div>
+
+      <%= if Enum.empty?(@filtered_ceremonies) do %>
+        <div class="bg-gray-50 rounded-lg p-8 text-center">
+          <%= if Enum.empty?(@ceremonies) do %>
+            <p class="text-gray-500">No ceremonies found for this organization.</p>
+          <% else %>
+            <p class="text-gray-500">No ceremonies match the current filters.</p>
+            <button
+              phx-click="filter_year"
+              phx-value-year="all"
+              class="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+            >
+              Clear filters
+            </button>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="bg-white shadow rounded-lg divide-y divide-gray-200">
+          <%= for ceremony_data <- @filtered_ceremonies do %>
+            <.link
+              navigate={~p"/admin/festival/#{@selected_org.slug}/#{ceremony_data.ceremony.year}"}
+              class="block hover:bg-gray-50 transition-colors"
+            >
+              <div class="px-6 py-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                      <%= ceremony_data.ceremony.year %>
+                      <%= if ceremony_data.ceremony.name do %>
+                        <span class="text-gray-500 font-normal">
+                          (<%= ceremony_data.ceremony.name %>)
+                        </span>
+                      <% end %>
+                    </h3>
+                    <p class="text-sm text-gray-500 mt-1">
+                      <span class={if ceremony_data.nomination_count == 0, do: "text-gray-400", else: ""}>
+                        <%= ceremony_data.nomination_count %> nominations
+                      </span>
+                      · <%= ceremony_data.win_count %> winners
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-4">
+                    <%= if ceremony_data.nomination_count == 0 do %>
+                      <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-500">
+                        Empty
+                      </span>
+                    <% end %>
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </.link>
+          <% end %>
+        </div>
+      <% end %>
+
+    <% :ceremony -> %>
+      <!-- Ceremony Nominations View -->
+      <div class="mb-8">
+        <.link
+          navigate={~p"/admin/festival/#{@selected_org.slug}"}
+          class="text-blue-600 hover:text-blue-800 flex items-center gap-1 mb-4"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back to <%= @selected_org.name %>
+        </.link>
+
+        <h1 class="text-3xl font-bold text-gray-900">
+          <%= @selected_org.name %> <%= @selected_ceremony.year %>
+        </h1>
+        <%= if @selected_ceremony.name do %>
+          <p class="mt-2 text-gray-600"><%= @selected_ceremony.name %></p>
+        <% end %>
+      </div>
+
+      <!-- Category Filter and Flagged Toggle -->
+      <div class="mb-6 flex flex-wrap items-center gap-4">
+        <div>
+          <label for="category-filter" class="block text-sm font-medium text-gray-700 mb-1">
+            Category
+          </label>
+          <select
+            id="category-filter"
+            name="category"
+            phx-change="filter_category"
+            class="block w-64 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+          >
+            <option value="all" selected={@category_filter == "all"}>All Categories (<%= map_size(@nominations_by_category) %>)</option>
+            <%= for category <- @categories do %>
+              <option value={category} selected={@category_filter == category}>
+                <%= category %> (<%= length(Map.get(@nominations_by_category, category, [])) %>)
+              </option>
+            <% end %>
+          </select>
+        </div>
+
+        <div class="flex items-end gap-2">
+          <button
+            phx-click="expand_all"
+            class="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+          >
+            Expand All
+          </button>
+          <button
+            phx-click="collapse_all"
+            class="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+          >
+            Collapse All
+          </button>
+        </div>
+
+        <!-- Flagged Only Toggle -->
+        <div class="flex items-end">
+          <button
+            phx-click="toggle_flagged_only"
+            class={"px-3 py-2 text-sm rounded flex items-center gap-2 #{if @show_flagged_only, do: "bg-orange-100 text-orange-700 hover:bg-orange-200", else: "text-gray-600 hover:text-gray-800 hover:bg-gray-100"}"}
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Show Flagged Only
+            <span class={"px-1.5 py-0.5 text-xs rounded-full #{if @show_flagged_only, do: "bg-orange-200 text-orange-800", else: "bg-gray-200 text-gray-600"}"}>
+              <%= count_flagged(@nominations_by_category, @selected_ceremony) %>
+            </span>
+          </button>
+        </div>
+
+        <div class="flex-1 text-right text-sm text-gray-500">
+          <%= Enum.reduce(@nominations_by_category, 0, fn {_, noms}, acc -> acc + length(noms) end) %> total nominations
+        </div>
+      </div>
+
+      <% filtered_nominations = @nominations_by_category |> filter_categories(@category_filter) |> filter_flagged(@show_flagged_only, @selected_ceremony) %>
+      <%= if map_size(filtered_nominations) == 0 do %>
+        <div class="bg-gray-50 rounded-lg p-8 text-center">
+          <%= if @show_flagged_only do %>
+            <p class="text-gray-500">No flagged nominations found.</p>
+            <button
+              phx-click="toggle_flagged_only"
+              class="mt-2 text-blue-600 hover:text-blue-800 text-sm"
+            >
+              Show all nominations
+            </button>
+          <% else %>
+            <p class="text-gray-500">No nominations found for this ceremony.</p>
+          <% end %>
+        </div>
+      <% else %>
+        <div class="space-y-4">
+          <%= for {category_name, nominations} <- filtered_nominations do %>
+            <div class="bg-white shadow rounded-lg overflow-hidden">
+              <!-- Category Header (Collapsible) -->
+              <button
+                phx-click="toggle_category"
+                phx-value-category={category_name}
+                class="w-full px-6 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div class="flex items-center gap-3">
+                  <svg
+                    class={"w-5 h-5 text-gray-400 transition-transform #{if MapSet.member?(@collapsed_categories, category_name), do: "-rotate-90", else: ""}"}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <h3 class="text-lg font-semibold text-gray-900"><%= category_name %></h3>
+                  <span class="px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600">
+                    <%= length(nominations) %> nominations
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <%= if Enum.any?(nominations, & &1.won) do %>
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-yellow-100 text-yellow-700">
+                      Winner
+                    </span>
+                  <% end %>
+                </div>
+              </button>
+
+              <!-- Nominations List -->
+              <%= unless MapSet.member?(@collapsed_categories, category_name) do %>
+                <div class="divide-y divide-gray-100">
+                  <%= for nomination <- nominations do %>
+                    <% flags = flag_nomination(nomination, @selected_ceremony) %>
+                    <% has_error = Enum.any?(flags, fn {type, _} -> type == :error end) %>
+                    <% has_warning = Enum.any?(flags, fn {type, _} -> type == :warning end) %>
+                    <% row_bg = cond do
+                      has_error -> "bg-red-50 border-l-4 border-red-400"
+                      has_warning -> "bg-orange-50 border-l-4 border-orange-400"
+                      nomination.won -> "bg-yellow-50"
+                      true -> ""
+                    end %>
+                    <div class={"px-6 py-4 #{row_bg}"}>
+                      <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                          <!-- Movie Title with Flag Badges -->
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <%= if nomination.won do %>
+                              <span class="text-yellow-500" title="Winner">★</span>
+                            <% end %>
+                            <%= if has_error do %>
+                              <span class="px-1.5 py-0.5 text-xs rounded bg-red-100 text-red-700" title="Error">❌</span>
+                            <% end %>
+                            <%= if has_warning and not has_error do %>
+                              <span class="px-1.5 py-0.5 text-xs rounded bg-orange-100 text-orange-700" title="Warning">⚠️</span>
+                            <% end %>
+                            <a
+                              href={~p"/movies/#{nomination.movie.slug || nomination.movie.id}"}
+                              target="_blank"
+                              class="text-lg font-medium text-blue-600 hover:text-blue-800"
+                            >
+                              <%= nomination.movie.title %>
+                              <svg class="inline-block w-3 h-3 ml-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                            <%= if nomination.movie.release_date do %>
+                              <span class="text-gray-400">
+                                (<%= nomination.movie.release_date.year %>)
+                              </span>
+                            <% end %>
+                          </div>
+
+                          <!-- Person (if applicable) -->
+                          <%= if nomination.person do %>
+                            <div class="mt-1 text-sm text-gray-600">
+                              <a
+                                href={~p"/people/#{nomination.person.slug || nomination.person.id}"}
+                                target="_blank"
+                                class="hover:text-blue-600"
+                              >
+                                <%= nomination.person.name %>
+                                <svg class="inline-block w-2.5 h-2.5 ml-0.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              </a>
+                            </div>
+                          <% end %>
+
+                          <!-- Movie IDs -->
+                          <div class="mt-2 flex items-center gap-4 text-xs text-gray-500">
+                            <span title="TMDb ID">
+                              TMDb: <%= nomination.movie.tmdb_id || "—" %>
+                            </span>
+                            <span title="IMDb ID">
+                              IMDb: <%= nomination.movie.imdb_id || "—" %>
+                            </span>
+                            <span title="Database ID">
+                              DB: <%= nomination.movie.id %>
+                            </span>
+                          </div>
+
+                          <!-- Flag Reasons -->
+                          <%= if flags != [] do %>
+                            <div class="mt-2 space-y-1">
+                              <%= for {type, message} <- flags do %>
+                                <div class={"text-xs flex items-center gap-1 #{if type == :error, do: "text-red-600", else: "text-orange-600"}"}>
+                                  <%= if type == :error do %>
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  <% else %>
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                  <% end %>
+                                  <%= message %>
+                                </div>
+                              <% end %>
+                            </div>
+                          <% end %>
+
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="flex items-center gap-2 ml-4">
+                          <button
+                            phx-click="show_switch_modal"
+                            phx-value-nomination-id={nomination.id}
+                            class="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                            title="Switch to different movie"
+                          >
+                            Switch
+                          </button>
+                          <button
+                            phx-click="show_delete_modal"
+                            phx-value-nomination-id={nomination.id}
+                            class="px-3 py-1.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                            title="Delete this nomination"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+  <% end %>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<%= if @show_delete_modal && @selected_nomination do %>
+  <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div
+        class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        phx-click="close_delete_modal"
+        aria-hidden="true"
+      ></div>
+
+      <!-- Center modal -->
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+      <!-- Modal panel -->
+      <div class="relative inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+        <div class="sm:flex sm:items-start">
+          <!-- Warning icon -->
+          <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+            <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+          </div>
+
+          <!-- Content -->
+          <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+              Delete Nomination
+            </h3>
+            <div class="mt-2">
+              <p class="text-sm text-gray-500">
+                Are you sure you want to delete this nomination? This action cannot be undone.
+              </p>
+
+              <!-- Nomination details -->
+              <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+                <p class="font-medium text-gray-900">
+                  <%= @selected_nomination.movie.title %>
+                  <%= if @selected_nomination.movie.release_date do %>
+                    <span class="text-gray-500 font-normal">(<%= @selected_nomination.movie.release_date.year %>)</span>
+                  <% end %>
+                </p>
+                <%= if @selected_nomination.person do %>
+                  <p class="text-sm text-gray-600 mt-1"><%= @selected_nomination.person.name %></p>
+                <% end %>
+                <p class="text-sm text-gray-500 mt-1">
+                  Category: <%= @selected_nomination.category.name %>
+                </p>
+                <%= if @selected_nomination.won do %>
+                  <p class="text-sm text-yellow-600 mt-1 flex items-center gap-1">
+                    <span>★</span> Winner
+                  </p>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse gap-3">
+          <button
+            type="button"
+            phx-click="confirm_delete"
+            class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm"
+          >
+            Delete
+          </button>
+          <button
+            type="button"
+            phx-click="close_delete_modal"
+            class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<!-- Switch Movie Modal -->
+<%= if @show_switch_modal && @selected_nomination do %>
+  <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="switch-modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div
+        class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        phx-click="close_switch_modal"
+        aria-hidden="true"
+      ></div>
+
+      <!-- Center modal -->
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+      <!-- Modal panel -->
+      <div class="relative inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full sm:p-6">
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg leading-6 font-medium text-gray-900" id="switch-modal-title">
+              Switch Movie Association
+            </h3>
+            <button
+              phx-click="close_switch_modal"
+              class="text-gray-400 hover:text-gray-500"
+            >
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Current Movie Info -->
+          <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p class="text-sm font-medium text-red-800 mb-1">Current (incorrect) movie:</p>
+            <div class="flex items-center gap-3">
+              <%= if @selected_nomination.movie.poster_path do %>
+                <img
+                  src={"https://image.tmdb.org/t/p/w92#{@selected_nomination.movie.poster_path}"}
+                  alt=""
+                  class="w-12 h-18 object-cover rounded"
+                />
+              <% else %>
+                <div class="w-12 h-18 bg-gray-200 rounded flex items-center justify-center">
+                  <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                  </svg>
+                </div>
+              <% end %>
+              <div>
+                <p class="font-medium text-gray-900">
+                  <%= @selected_nomination.movie.title %>
+                  <%= if @selected_nomination.movie.release_date do %>
+                    <span class="text-gray-500 font-normal">(<%= @selected_nomination.movie.release_date.year %>)</span>
+                  <% end %>
+                </p>
+                <p class="text-xs text-gray-500">
+                  TMDb: <%= @selected_nomination.movie.tmdb_id || "—" %> · IMDb: <%= @selected_nomination.movie.imdb_id || "—" %>
+                </p>
+                <p class="text-xs text-gray-500">
+                  Category: <%= @selected_nomination.category.name %>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Search Input -->
+          <div class="mb-4">
+            <label for="movie-search" class="block text-sm font-medium text-gray-700 mb-1">
+              Search for correct movie:
+            </label>
+            <input
+              type="text"
+              id="movie-search"
+              name="query"
+              value={@search_query}
+              phx-keyup="search_movies"
+              phx-debounce="300"
+              placeholder="Search by title, TMDb ID, or IMDb ID..."
+              class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              autocomplete="off"
+            />
+            <p class="mt-1 text-xs text-gray-500">
+              Results sorted by eligibility proximity to <%= @selected_ceremony.year - 1 %>
+            </p>
+          </div>
+
+          <!-- Movie Candidates -->
+          <div class="border border-gray-200 rounded-lg max-h-80 overflow-y-auto">
+            <%= if Enum.empty?(@movie_candidates) do %>
+              <div class="p-8 text-center text-gray-500">
+                <%= if String.length(String.trim(@search_query)) < 2 do %>
+                  <p>Enter at least 2 characters to search</p>
+                <% else %>
+                  <p>No movies found matching your search</p>
+                <% end %>
+              </div>
+            <% else %>
+              <div class="divide-y divide-gray-100">
+                <%= for candidate <- @movie_candidates do %>
+                  <% is_same_movie = candidate.id == @selected_nomination.movie.id %>
+                  <div class={"p-3 flex items-center justify-between #{if is_same_movie, do: "bg-gray-100", else: "hover:bg-gray-50"}"}>
+                    <div class="flex items-center gap-3">
+                      <%= if candidate.poster_path do %>
+                        <img
+                          src={"https://image.tmdb.org/t/p/w92#{candidate.poster_path}"}
+                          alt=""
+                          class="w-10 h-15 object-cover rounded"
+                        />
+                      <% else %>
+                        <div class="w-10 h-15 bg-gray-200 rounded flex items-center justify-center">
+                          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                          </svg>
+                        </div>
+                      <% end %>
+                      <div>
+                        <p class="font-medium text-gray-900">
+                          <%= candidate.title %>
+                          <%= if candidate.release_date do %>
+                            <span class={"font-normal #{if candidate.release_date.year == @selected_ceremony.year - 1, do: "text-green-600", else: "text-gray-500"}"}>
+                              (<%= candidate.release_date.year %>)
+                            </span>
+                          <% end %>
+                        </p>
+                        <%= if candidate.original_title && candidate.original_title != candidate.title do %>
+                          <p class="text-xs text-gray-500 italic"><%= candidate.original_title %></p>
+                        <% end %>
+                        <p class="text-xs text-gray-500">
+                          TMDb: <%= candidate.tmdb_id || "—" %> · IMDb: <%= candidate.imdb_id || "—" %>
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <%= if is_same_movie do %>
+                        <span class="px-3 py-1.5 text-sm text-gray-500 bg-gray-200 rounded">
+                          Current
+                        </span>
+                      <% else %>
+                        <button
+                          phx-click="confirm_switch"
+                          phx-value-movie-id={candidate.id}
+                          class="px-3 py-1.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded"
+                        >
+                          Select
+                        </button>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Cancel Button -->
+        <div class="mt-5 sm:mt-4 flex justify-end">
+          <button
+            type="button"
+            phx-click="close_switch_modal"
+            class="inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>
