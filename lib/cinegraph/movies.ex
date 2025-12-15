@@ -535,6 +535,15 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Process credits data from TMDb and store in database.
+  Public wrapper for the internal process_movie_credits function.
+  Used by DataRepairWorker to backfill missing credits.
+  """
+  def process_movie_credits_public(movie, credits_data) do
+    process_movie_credits(movie, credits_data)
+  end
+
+  @doc """
   Gets credits for a movie.
   Uses read replica for better load distribution.
   """
@@ -694,8 +703,12 @@ defmodule Cinegraph.Movies do
 
     # Process crew
     Enum.each(crew, fn crew_member ->
-      # Check if person meets quality criteria
-      if QualityFilter.should_import_person?(crew_member) do
+      # Always import directors regardless of quality criteria (Issue #474: festival inference needs them)
+      # For other crew roles, apply quality filter
+      should_import =
+        crew_member["job"] == "Director" or QualityFilter.should_import_person?(crew_member)
+
+      if should_import do
         with {:ok, person} <- create_or_update_person_from_tmdb(crew_member),
              credit_attrs <- %{
                movie_id: movie.id,

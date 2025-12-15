@@ -243,7 +243,11 @@ defmodule CinegraphWeb.FestivalAuditLive do
 
       %{movie: %{title: nil}} ->
         {:noreply,
-         put_flash(socket, :error, "Nomination's movie has no title, so candidates can't be searched.")}
+         put_flash(
+           socket,
+           :error,
+           "Nomination's movie has no title, so candidates can't be searched."
+         )}
 
       nomination ->
         title = nomination.movie.title
