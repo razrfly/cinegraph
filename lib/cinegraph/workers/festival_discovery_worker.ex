@@ -754,7 +754,11 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
 
         {:error, :not_found} ->
           # Not in database, try TMDb search using FallbackSearch
-          case FallbackSearch.find_movie(nil, actual_title, ceremony.year) do
+          # Issue #476: Pass eligibility year (ceremony year - 1), not ceremony year
+          # For 2025 Oscars honoring 2024 films, search TMDb for 2024 films
+          eligible_year = ceremony.year - 1
+
+          case FallbackSearch.find_movie(nil, actual_title, eligible_year) do
             {:ok, result} ->
               tmdb_id = result.movie["id"]
               min_confidence = Application.get_env(:cinegraph, :fuzzy_match_min_confidence, 0.7)
@@ -793,16 +797,19 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     end
   end
 
-  defp find_existing_movie_by_title(title, year) do
+  defp find_existing_movie_by_title(title, ceremony_year) do
     # Clean the title for better matching
     clean_title = clean_title_for_search(title)
 
+    # Issue #476: Calculate the eligible year (ceremony year - 1)
+    # For example, the 2025 Oscars honor films released in 2024
+    eligible_year = ceremony_year - 1
+
     # Query for movies with similar titles
-    # Order by release_date descending to prefer newer movies when multiple matches
+    # Don't pre-sort - we'll score and sort based on eligibility year proximity
     query =
       from m in Movie,
-        where: fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{clean_title}%"),
-        order_by: [desc: m.release_date]
+        where: fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{clean_title}%")
 
     movies = Repo.all(query)
 
@@ -811,65 +818,112 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         {:error, :not_found}
 
       [movie] ->
-        # Single match - verify it's reasonable
-        if title_match_acceptable?(movie.title, title, year, movie.release_date) do
+        # Single match - verify it's reasonable for the eligibility period
+        if title_match_acceptable?(movie.title, title, eligible_year, movie.release_date) do
           {:ok, movie}
         else
           {:error, :not_found}
         end
 
       multiple ->
-        # Multiple matches - find best one
-        case find_best_local_match(multiple, title, year) do
+        # Multiple matches - find best one based on eligibility year
+        # Issue #476: Log warning for ambiguous matches
+        Logger.warning(
+          "Multiple movies found matching title '#{title}' for ceremony year #{ceremony_year}: " <>
+            "#{Enum.map(multiple, fn m -> "#{m.title} (#{m.release_date})" end) |> Enum.join(", ")}"
+        )
+
+        case find_best_local_match(multiple, title, eligible_year) do
           {:ok, movie} -> {:ok, movie}
           _ -> {:error, :not_found}
         end
     end
   end
 
-  defp title_match_acceptable?(movie_title, search_title, target_year, release_date) do
+  defp title_match_acceptable?(movie_title, search_title, eligible_year, release_date) do
     title_similarity = calculate_title_similarity(movie_title, search_title)
 
+    # Issue #476: Use tighter year tolerance based on eligibility year
+    # Allow only ±1 year from the eligibility year (not ceremony year)
+    # This prevents a 2025 film from matching for 2025 Oscars (which honor 2024 films)
     year_ok =
       case extract_year(release_date || "") do
-        {:ok, year} -> abs(year - target_year) <= 2
-        # No release date, can't verify
-        _ -> true
+        {:ok, movie_year} ->
+          year_diff = abs(movie_year - eligible_year)
+          # Allow ±1 year tolerance (to handle late-year releases getting awards the next year)
+          year_diff <= 1
+
+        # No release date, can't verify - be cautious and reject
+        _ -> false
       end
 
     title_similarity > 0.85 && year_ok
   end
 
-  defp find_best_local_match(movies, title, year) do
-    # Score movies and find best match
+  defp find_best_local_match(movies, title, eligible_year) do
+    # Issue #476: Score movies with strong preference for eligibility year
+    # The eligible_year is already ceremony_year - 1
     scored =
       movies
       |> Enum.map(fn movie ->
         title_score = calculate_title_similarity(movie.title, title)
 
+        # Issue #476: Strongly prefer movies from the eligibility year
+        # A film released AFTER the eligibility year should be heavily penalized
         year_score =
           case extract_year(movie.release_date || "") do
             {:ok, movie_year} ->
-              case abs(movie_year - year) do
-                0 -> 1.0
-                1 -> 0.8
-                2 -> 0.5
-                _ -> 0.0
+              year_diff = movie_year - eligible_year
+
+              cond do
+                # Exact eligibility year - perfect score
+                year_diff == 0 -> 1.0
+                # Released 1 year before eligibility year - good (late awards consideration)
+                year_diff == -1 -> 0.7
+                # Released 1 year AFTER eligibility year - very suspicious for awards
+                # (film released in 2025 shouldn't win 2025 Oscars which honor 2024 films)
+                year_diff == 1 -> 0.2
+                # Released 2 years before - possible but unlikely
+                year_diff == -2 -> 0.3
+                # Released 2+ years after - disqualify
+                year_diff >= 2 -> 0.0
+                # Anything else is too old
+                true -> 0.1
               end
 
             _ ->
-              0.5
+              # No release date - can't score on year, penalize
+              0.2
           end
 
-        total_score = title_score * 0.7 + year_score * 0.3
-        {movie, total_score}
+        # Issue #476: Increase year weight to 50% (was 30%) to strongly prefer correct year
+        total_score = title_score * 0.5 + year_score * 0.5
+        {movie, total_score, year_score}
       end)
-      |> Enum.filter(fn {_movie, score} -> score > 0.85 end)
-      |> Enum.sort_by(fn {_movie, score} -> score end, :desc)
+      # Only accept movies with reasonably high score
+      |> Enum.filter(fn {_movie, score, _year_score} -> score > 0.7 end)
+      |> Enum.sort_by(fn {_movie, score, _} -> score end, :desc)
 
     case scored do
-      [{movie, _score} | _] -> {:ok, movie}
-      [] -> {:error, :no_good_match}
+      [{movie, score, year_score} | rest] ->
+        # Log the decision for debugging
+        Logger.info(
+          "Best match for '#{title}' (eligible year: #{eligible_year}): " <>
+            "'#{movie.title}' (#{movie.release_date}) with score #{Float.round(score, 3)} " <>
+            "(year_score: #{Float.round(year_score, 3)})"
+        )
+
+        # If there are other candidates, log them too for comparison
+        if length(rest) > 0 do
+          Logger.debug(
+            "Other candidates: #{Enum.map(rest, fn {m, s, ys} -> "#{m.title}(#{m.release_date})=#{Float.round(s, 3)}/ys:#{Float.round(ys, 3)}" end) |> Enum.join(", ")}"
+          )
+        end
+
+        {:ok, movie}
+
+      [] ->
+        {:error, :no_good_match}
     end
   end
 
