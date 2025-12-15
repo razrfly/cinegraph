@@ -1,0 +1,1157 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Header -->
+  <div class="mb-8">
+    <div class="flex justify-between items-start">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Lists Manager</h1>
+        <p class="mt-2 text-gray-600">
+          Unified management of canonical movie lists and awards
+        </p>
+      </div>
+      <div class="flex gap-2">
+        <button
+          phx-click="show_add_modal"
+          class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+        >
+          + Add List
+        </button>
+        <.link
+          navigate={~p"/admin/imports"}
+          class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+        >
+          Back to Imports
+        </.link>
+      </div>
+    </div>
+  </div>
+  
+<!-- Aggregate Stats (Interactive - Phase 5) -->
+  <div class="bg-white shadow rounded-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4">Overview</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="bg-blue-50 p-4 rounded">
+        <div class="text-sm text-blue-600">Total Lists</div>
+        <div class="text-2xl font-bold text-blue-900">
+          {format_number(@aggregate_stats.total_lists)}
+        </div>
+      </div>
+
+      <button
+        phx-click="filter_quick"
+        phx-value-filter="active"
+        class="bg-green-50 p-4 rounded hover:bg-green-100 transition-colors text-left cursor-pointer"
+      >
+        <div class="text-sm text-green-600">Active Lists</div>
+        <div class="text-2xl font-bold text-green-900">
+          {format_number(@aggregate_stats.active_lists)}
+        </div>
+        <div class="text-xs text-green-500 mt-1">Click to filter</div>
+      </button>
+
+      <button
+        phx-click="filter_quick"
+        phx-value-filter="inactive"
+        class="bg-gray-50 p-4 rounded hover:bg-gray-100 transition-colors text-left cursor-pointer"
+      >
+        <div class="text-sm text-gray-600">Inactive Lists</div>
+        <div class="text-2xl font-bold text-gray-900">
+          {format_number(@aggregate_stats.inactive_lists)}
+        </div>
+        <div class="text-xs text-gray-500 mt-1">Click to filter</div>
+      </button>
+
+      <div class="bg-purple-50 p-4 rounded">
+        <div class="text-sm text-purple-600">Lists with Awards</div>
+        <div class="text-2xl font-bold text-purple-900">
+          {format_number(@aggregate_stats.with_awards)}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-amber-50 p-4 rounded">
+        <div class="text-sm text-amber-600">Total Movies Tagged</div>
+        <div class="text-2xl font-bold text-amber-900">
+          {format_number(@aggregate_stats.total_movies)}
+        </div>
+      </div>
+
+      <div class="bg-emerald-50 p-4 rounded">
+        <div class="text-sm text-emerald-600">Successful Imports</div>
+        <div class="text-2xl font-bold text-emerald-900">
+          {format_number(@aggregate_stats.successful_imports)}
+        </div>
+      </div>
+
+      <button
+        phx-click="filter_quick"
+        phx-value-filter="failed"
+        class={"p-4 rounded hover:bg-red-100 transition-colors text-left cursor-pointer #{if @aggregate_stats.failed_imports > 0, do: "bg-red-50", else: "bg-gray-50"}"}
+      >
+        <div class={"text-sm #{if @aggregate_stats.failed_imports > 0, do: "text-red-600", else: "text-gray-600"}"}>
+          Failed Imports
+        </div>
+        <div class={"text-2xl font-bold #{if @aggregate_stats.failed_imports > 0, do: "text-red-900", else: "text-gray-900"}"}>
+          {format_number(@aggregate_stats.failed_imports)}
+        </div>
+        <%= if @aggregate_stats.failed_imports > 0 do %>
+          <div class="text-xs text-red-500 mt-1">Click to view</div>
+        <% end %>
+      </button>
+
+      <button
+        phx-click="filter_quick"
+        phx-value-filter="never_imported"
+        class="bg-slate-50 p-4 rounded hover:bg-slate-100 transition-colors text-left cursor-pointer"
+      >
+        <div class="text-sm text-slate-600">Never Imported</div>
+        <div class="text-2xl font-bold text-slate-900">
+          {format_number(@aggregate_stats.never_imported)}
+        </div>
+        <div class="text-xs text-slate-500 mt-1">Click to filter</div>
+      </button>
+    </div>
+  </div>
+  
+<!-- Health Warnings (Phase 5) -->
+  <%= if length(@aggregate_stats.health_warnings) > 0 do %>
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-amber-600 text-lg">⚠️</span>
+        <h3 class="font-semibold text-amber-900">Health Warnings</h3>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <%= for warning <- @aggregate_stats.health_warnings do %>
+          <button
+            phx-click="filter_quick"
+            phx-value-filter={health_warning_action(warning)}
+            class={"flex items-center gap-2 p-3 rounded-lg border transition-colors cursor-pointer #{
+              case health_warning_color(warning) do
+                "red" -> "bg-red-50 border-red-200 hover:bg-red-100"
+                "amber" -> "bg-amber-50 border-amber-200 hover:bg-amber-100"
+                "orange" -> "bg-orange-50 border-orange-200 hover:bg-orange-100"
+                "slate" -> "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                _ -> "bg-gray-50 border-gray-200 hover:bg-gray-100"
+              end
+            }"}
+          >
+            <span class={"text-lg #{
+              case health_warning_color(warning) do
+                "red" -> "text-red-600"
+                "amber" -> "text-amber-600"
+                "orange" -> "text-orange-600"
+                "slate" -> "text-slate-600"
+                _ -> "text-gray-600"
+              end
+            }"}>
+              {health_warning_icon(warning)}
+            </span>
+            <span class={"text-sm #{
+              case health_warning_color(warning) do
+                "red" -> "text-red-800"
+                "amber" -> "text-amber-800"
+                "orange" -> "text-orange-800"
+                "slate" -> "text-slate-800"
+                _ -> "text-gray-800"
+              end
+            }"}>
+              {health_warning_message(warning)}
+            </span>
+          </button>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+  
+<!-- Category Breakdown & Recent Activity (Phase 5) -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Category Breakdown -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <button
+        phx-click="toggle_category_breakdown"
+        class="w-full px-6 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+      >
+        <h3 class="text-lg font-semibold text-gray-900">Category Breakdown</h3>
+        <span class="text-gray-500">
+          {if @show_category_breakdown, do: "▼", else: "▶"}
+        </span>
+      </button>
+      <%= if @show_category_breakdown do %>
+        <div class="p-4">
+          <%= if length(@aggregate_stats.category_counts) > 0 do %>
+            <% max_count = Enum.max_by(@aggregate_stats.category_counts, & &1.count).count %>
+            <div class="space-y-3">
+              <%= for cat <- @aggregate_stats.category_counts do %>
+                <button
+                  phx-click="filter_by_category"
+                  phx-value-category={cat.name}
+                  class={"w-full text-left p-2 rounded hover:bg-gray-50 transition-colors #{if @filter_category == cat.name, do: "bg-indigo-50 ring-1 ring-indigo-200", else: ""}"}
+                >
+                  <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center gap-2">
+                      <span class={"px-2 py-0.5 text-xs font-medium rounded-full #{category_badge_class(cat.name)}"}>
+                        {cat.name}
+                      </span>
+                      <span class="text-sm text-gray-600">
+                        {cat.count} list{if cat.count != 1, do: "s", else: ""}
+                      </span>
+                    </div>
+                    <span class="text-sm font-medium text-gray-900">
+                      {format_number(cat.movies)} movies
+                    </span>
+                  </div>
+                  <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      class={"h-2 rounded-full #{
+                        case cat.name do
+                          "awards" -> "bg-amber-500"
+                          "critics" -> "bg-purple-500"
+                          "curated" -> "bg-blue-500"
+                          "festivals" -> "bg-pink-500"
+                          "personal" -> "bg-cyan-500"
+                          "registry" -> "bg-emerald-500"
+                          _ -> "bg-gray-500"
+                        end
+                      }"}
+                      style={"width: #{category_bar_width(cat.count, max_count)}"}
+                    >
+                    </div>
+                  </div>
+                  <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>{cat.active} active</span>
+                    <span>{cat.count - cat.active} inactive</span>
+                  </div>
+                </button>
+              <% end %>
+            </div>
+          <% else %>
+            <p class="text-gray-500 text-sm text-center py-4">No categories found</p>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+    
+<!-- Recent Activity Feed -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+      <button
+        phx-click="toggle_activity_feed"
+        class="w-full px-6 py-4 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+      >
+        <h3 class="text-lg font-semibold text-gray-900">Recent Activity</h3>
+        <span class="text-gray-500">
+          {if @show_activity_feed, do: "▼", else: "▶"}
+        </span>
+      </button>
+      <%= if @show_activity_feed do %>
+        <div class="p-4">
+          <%= if length(@aggregate_stats.recent_activity) > 0 do %>
+            <div class="space-y-3">
+              <%= for activity <- @aggregate_stats.recent_activity do %>
+                <div class="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+                  <div class="flex items-center gap-3">
+                    <span class={"flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white text-sm #{
+                      case activity.status do
+                        "success" -> "bg-green-500"
+                        "failed" -> "bg-red-500"
+                        "partial" -> "bg-yellow-500"
+                        _ -> "bg-gray-400"
+                      end
+                    }"}>
+                      {status_icon(activity.status)}
+                    </span>
+                    <div>
+                      <p class="text-sm font-medium text-gray-900">{activity.name}</p>
+                      <div class="flex items-center gap-2 mt-0.5">
+                        <span class={"text-xs px-1.5 py-0.5 rounded-full #{category_badge_class(activity.category)}"}>
+                          {activity.category}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-xs text-gray-500">{format_datetime(activity.timestamp)}</p>
+                    <button
+                      phx-click="show_import_log"
+                      phx-value-id={activity.id}
+                      class="text-xs text-indigo-600 hover:text-indigo-800 mt-1"
+                    >
+                      View details
+                    </button>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          <% else %>
+            <p class="text-gray-500 text-sm text-center py-4">No recent import activity</p>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+  
+<!-- Search and Filters -->
+  <div class="bg-white shadow rounded-lg p-4 mb-6">
+    <div class="flex flex-wrap gap-4 items-center">
+      <!-- Search -->
+      <div class="flex-1 min-w-64">
+        <form phx-change="search" phx-submit="search">
+          <input
+            type="text"
+            name="query"
+            value={@search_query}
+            placeholder="Search lists by name, key, or description..."
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            phx-debounce="300"
+          />
+        </form>
+      </div>
+      
+<!-- Category Filter -->
+      <div>
+        <form phx-change="filter_category">
+          <select
+            name="category"
+            class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all" selected={@filter_category == "all"}>All Categories</option>
+            <%= for cat <- @categories do %>
+              <option value={cat} selected={@filter_category == cat}>
+                {String.capitalize(cat)}
+              </option>
+            <% end %>
+          </select>
+        </form>
+      </div>
+      
+<!-- Status Filter -->
+      <div>
+        <form phx-change="filter_status">
+          <select
+            name="status"
+            class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all" selected={@filter_status == "all"}>All Status</option>
+            <option value="active" selected={@filter_status == "active"}>Active</option>
+            <option value="inactive" selected={@filter_status == "inactive"}>Inactive</option>
+          </select>
+        </form>
+      </div>
+      
+<!-- View Toggle -->
+      <div class="flex border border-gray-300 rounded-lg overflow-hidden">
+        <button
+          phx-click="set_view_mode"
+          phx-value-mode="table"
+          class={"px-3 py-2 text-sm #{if @view_mode == "table", do: "bg-indigo-600 text-white", else: "bg-white text-gray-600 hover:bg-gray-50"}"}
+          title="Table view"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6h16M4 10h16M4 14h16M4 18h16"
+            />
+          </svg>
+        </button>
+        <button
+          phx-click="set_view_mode"
+          phx-value-mode="cards"
+          class={"px-3 py-2 text-sm #{if @view_mode == "cards", do: "bg-indigo-600 text-white", else: "bg-white text-gray-600 hover:bg-gray-50"}"}
+          title="Card view"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+            />
+          </svg>
+        </button>
+      </div>
+      
+<!-- Clear Filters -->
+      <%= if filters_active?(assigns) do %>
+        <button
+          phx-click="clear_filters"
+          class="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          Clear Filters
+        </button>
+      <% end %>
+    </div>
+  </div>
+  
+<!-- Bulk Actions Bar (shown when items selected) -->
+  <%= if selection_count(assigns) > 0 do %>
+    <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <span class="text-sm font-medium text-indigo-700">
+          {selection_count(assigns)} list(s) selected
+        </span>
+        <button
+          phx-click="clear_selection"
+          class="text-sm text-indigo-600 hover:text-indigo-800 underline"
+        >
+          Clear selection
+        </button>
+      </div>
+      <div class="flex gap-2">
+        <button
+          phx-click="bulk_import"
+          class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+        >
+          Import All
+        </button>
+        <button
+          phx-click="bulk_activate"
+          class="px-3 py-1.5 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+        >
+          Activate All
+        </button>
+        <button
+          phx-click="bulk_deactivate"
+          class="px-3 py-1.5 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+        >
+          Deactivate All
+        </button>
+        <button
+          phx-click="bulk_delete"
+          data-confirm={"Are you sure you want to delete #{selection_count(assigns)} list(s)? This cannot be undone."}
+          class="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+        >
+          Delete All
+        </button>
+      </div>
+    </div>
+  <% end %>
+  
+<!-- Lists Container -->
+  <div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+      <div>
+        <h2 class="text-xl font-semibold">All Lists</h2>
+        <p class="text-sm text-gray-500 mt-1">
+          Showing {length(@lists)} of {length(@all_lists)} lists
+        </p>
+      </div>
+    </div>
+    
+<!-- Table View -->
+    <%= if @view_mode == "table" do %>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-4 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={@select_all}
+                  phx-click="toggle_select_all"
+                  class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+              </th>
+              <th
+                phx-click="sort"
+                phx-value-field="name"
+                class={"px-6 py-3 text-left text-xs font-medium uppercase tracking-wider #{sort_header_class(assigns, "name")}"}
+              >
+                Name {sort_indicator(assigns, "name")}
+              </th>
+              <th
+                phx-click="sort"
+                phx-value-field="category"
+                class={"px-6 py-3 text-left text-xs font-medium uppercase tracking-wider #{sort_header_class(assigns, "category")}"}
+              >
+                Category {sort_indicator(assigns, "category")}
+              </th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Source
+              </th>
+              <th
+                phx-click="sort"
+                phx-value-field="movies"
+                class={"px-6 py-3 text-right text-xs font-medium uppercase tracking-wider #{sort_header_class(assigns, "movies")}"}
+              >
+                Movies {sort_indicator(assigns, "movies")}
+              </th>
+              <th
+                phx-click="sort"
+                phx-value-field="status"
+                class={"px-6 py-3 text-center text-xs font-medium uppercase tracking-wider #{sort_header_class(assigns, "status")}"}
+              >
+                Status {sort_indicator(assigns, "status")}
+              </th>
+              <th
+                phx-click="sort"
+                phx-value-field="last_import"
+                class={"px-6 py-3 text-center text-xs font-medium uppercase tracking-wider #{sort_header_class(assigns, "last_import")}"}
+              >
+                Last Import {sort_indicator(assigns, "last_import")}
+              </th>
+              <th
+                phx-click="sort"
+                phx-value-field="active"
+                class={"px-6 py-3 text-center text-xs font-medium uppercase tracking-wider #{sort_header_class(assigns, "active")}"}
+              >
+                Active {sort_indicator(assigns, "active")}
+              </th>
+              <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <%= for list <- @lists do %>
+              <tr class={"hover:bg-gray-50 #{if selected?(assigns, list.id), do: "bg-indigo-50", else: ""}"}>
+                <td class="px-4 py-4">
+                  <input
+                    type="checkbox"
+                    checked={selected?(assigns, list.id)}
+                    phx-click="toggle_select"
+                    phx-value-id={list.id}
+                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div class="flex items-center">
+                    <div>
+                      <div class="text-sm font-medium text-gray-900">
+                        {list.name}
+                      </div>
+                      <div class="text-xs text-gray-500 font-mono">
+                        {list.source_key}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class={"px-2 py-1 text-xs font-medium rounded-full #{category_badge_class(list.category)}"}>
+                    {list.category}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {list.source_type}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right font-medium">
+                  {format_number(list.movie_count)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                  <span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{status_badge_class(list.last_import_status)}"}>
+                    <span class="mr-1">{status_icon(list.last_import_status)}</span>
+                    {list.last_import_status || "Never"}
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                  {format_datetime(list.last_import_at)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-center">
+                  <button
+                    phx-click="toggle_active"
+                    phx-value-id={list.id}
+                    class="cursor-pointer"
+                    title={if list.active, do: "Click to deactivate", else: "Click to activate"}
+                  >
+                    <%= if list.active do %>
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200">
+                        Active
+                      </span>
+                    <% else %>
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
+                        Inactive
+                      </span>
+                    <% end %>
+                  </button>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <div class="flex justify-end gap-2">
+                    <%= if importing?(assigns, list.id) do %>
+                      <span class="text-blue-600 animate-pulse">Importing...</span>
+                    <% else %>
+                      <button
+                        phx-click="trigger_import"
+                        phx-value-id={list.id}
+                        class="text-blue-600 hover:text-blue-900"
+                        title="Run import"
+                      >
+                        Import
+                      </button>
+                    <% end %>
+                    <button
+                      phx-click="show_import_log"
+                      phx-value-id={list.id}
+                      class="text-gray-600 hover:text-gray-900"
+                      title="View import history"
+                    >
+                      Log
+                    </button>
+                    <button
+                      phx-click="show_duplicate_modal"
+                      phx-value-id={list.id}
+                      class="text-cyan-600 hover:text-cyan-900"
+                      title="Duplicate list"
+                    >
+                      Dup
+                    </button>
+                    <button
+                      phx-click="show_edit_modal"
+                      phx-value-id={list.id}
+                      class="text-indigo-600 hover:text-indigo-900"
+                      title="Edit list"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      phx-click="delete_list"
+                      phx-value-id={list.id}
+                      data-confirm={"Are you sure you want to delete '#{list.name}'? This cannot be undone."}
+                      class="text-red-600 hover:text-red-900"
+                      title="Delete list"
+                    >
+                      Del
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+    
+<!-- Card View -->
+    <%= if @view_mode == "cards" do %>
+      <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <%= for list <- @lists do %>
+            <div class={"bg-white border rounded-lg overflow-hidden hover:shadow-md transition-shadow #{if selected?(assigns, list.id), do: "ring-2 ring-indigo-500", else: "border-gray-200"}"}>
+              <div class="p-4">
+                <!-- Header with checkbox and badges -->
+                <div class="flex items-start justify-between mb-3">
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selected?(assigns, list.id)}
+                      phx-click="toggle_select"
+                      phx-value-id={list.id}
+                      class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span class={"px-2 py-1 text-xs font-medium rounded-full #{category_badge_class(list.category)}"}>
+                      {list.category}
+                    </span>
+                  </div>
+                  <button phx-click="toggle_active" phx-value-id={list.id} class="cursor-pointer">
+                    <%= if list.active do %>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200">
+                        Active
+                      </span>
+                    <% else %>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200">
+                        Inactive
+                      </span>
+                    <% end %>
+                  </button>
+                </div>
+                
+<!-- Title -->
+                <h3 class="text-lg font-semibold text-gray-900 mb-1">{list.name}</h3>
+                <p class="text-xs text-gray-500 font-mono mb-3">{list.source_key}</p>
+                
+<!-- Stats -->
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                  <div class="bg-gray-50 rounded p-2">
+                    <div class="text-xs text-gray-500">Movies</div>
+                    <div class="text-lg font-bold text-gray-900">
+                      {format_number(list.movie_count)}
+                    </div>
+                  </div>
+                  <div class="bg-gray-50 rounded p-2">
+                    <div class="text-xs text-gray-500">Source</div>
+                    <div class="text-sm font-medium text-gray-900">{list.source_type}</div>
+                  </div>
+                </div>
+                
+<!-- Import status -->
+                <div class="flex items-center justify-between text-sm mb-3">
+                  <span class={"inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium #{status_badge_class(list.last_import_status)}"}>
+                    <span class="mr-1">{status_icon(list.last_import_status)}</span>
+                    {list.last_import_status || "Never"}
+                  </span>
+                  <span class="text-gray-500 text-xs">
+                    {format_datetime(list.last_import_at)}
+                  </span>
+                </div>
+                
+<!-- Awards badge if applicable -->
+                <%= if list.tracks_awards do %>
+                  <div class="mb-3">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                      Tracks Awards
+                    </span>
+                  </div>
+                <% end %>
+                
+<!-- Actions -->
+                <div class="flex flex-wrap justify-end gap-1 pt-2 border-t border-gray-100">
+                  <%= if importing?(assigns, list.id) do %>
+                    <span class="px-3 py-1 text-sm text-blue-600 animate-pulse">
+                      Importing...
+                    </span>
+                  <% else %>
+                    <button
+                      phx-click="trigger_import"
+                      phx-value-id={list.id}
+                      class="px-2 py-1 text-xs text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
+                      title="Run import"
+                    >
+                      Import
+                    </button>
+                  <% end %>
+                  <button
+                    phx-click="show_import_log"
+                    phx-value-id={list.id}
+                    class="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded"
+                    title="View import history"
+                  >
+                    Log
+                  </button>
+                  <button
+                    phx-click="show_duplicate_modal"
+                    phx-value-id={list.id}
+                    class="px-2 py-1 text-xs text-cyan-600 hover:text-cyan-900 hover:bg-cyan-50 rounded"
+                    title="Duplicate list"
+                  >
+                    Dup
+                  </button>
+                  <button
+                    phx-click="show_edit_modal"
+                    phx-value-id={list.id}
+                    class="px-2 py-1 text-xs text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    phx-click="delete_list"
+                    phx-value-id={list.id}
+                    data-confirm={"Are you sure you want to delete '#{list.name}'? This cannot be undone."}
+                    class="px-2 py-1 text-xs text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
+                  >
+                    Del
+                  </button>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <%= if @lists == [] do %>
+      <div class="px-6 py-12 text-center">
+        <svg
+          class="mx-auto h-12 w-12 text-gray-400"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+          />
+        </svg>
+        <%= if filters_active?(assigns) do %>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">No matching lists</h3>
+          <p class="mt-1 text-sm text-gray-500">
+            Try adjusting your search or filters.
+          </p>
+          <button
+            phx-click="clear_filters"
+            class="mt-4 px-4 py-2 text-sm text-indigo-600 hover:text-indigo-900"
+          >
+            Clear all filters
+          </button>
+        <% else %>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">No lists configured</h3>
+          <p class="mt-1 text-sm text-gray-500">Get started by adding a new movie list.</p>
+          <button
+            phx-click="show_add_modal"
+            class="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+          >
+            + Add Your First List
+          </button>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<!-- Modal for Add/Edit Movie List -->
+<%= if @show_modal do %>
+  <div
+    class="fixed z-10 inset-0 overflow-y-auto"
+    aria-labelledby="modal-title"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div
+        class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        phx-click="hide_modal"
+        aria-hidden="true"
+      >
+      </div>
+      
+<!-- Modal panel -->
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
+        &#8203;
+      </span>
+
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <form phx-submit={if @editing_list, do: "update_list", else: "add_list"}>
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">
+              {if @editing_list, do: "Edit Movie List", else: "Add New Movie List"}
+            </h3>
+
+            <%= if @editing_list do %>
+              <input type="hidden" name="list_id" value={@editing_list.id} />
+            <% end %>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">List URL</label>
+                <input
+                  type="url"
+                  name="source_url"
+                  required
+                  value={if @editing_list, do: @editing_list.source_url, else: ""}
+                  placeholder="https://www.imdb.com/list/ls123456789/"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p class="text-xs text-gray-500 mt-1">IMDB, TMDb, or other movie list URL</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">List Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  value={if @editing_list, do: @editing_list.name, else: ""}
+                  placeholder="My Favorite Movies"
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Source Key</label>
+                <input
+                  type="text"
+                  name="source_key"
+                  required
+                  pattern="[a-z0-9_]+"
+                  value={if @editing_list, do: @editing_list.source_key, else: ""}
+                  placeholder="my_favorites"
+                  readonly={@editing_list != nil}
+                  class={"w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 #{if @editing_list, do: "bg-gray-100", else: ""}"}
+                />
+                <p class="text-xs text-gray-500 mt-1">
+                  <%= if @editing_list do %>
+                    Source key cannot be changed after creation
+                  <% else %>
+                    Lowercase letters, numbers, and underscores only
+                  <% end %>
+                </p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  name="category"
+                  required
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select category...</option>
+                  <%= for cat <- @categories do %>
+                    <option value={cat} selected={@editing_list && @editing_list.category == cat}>
+                      {String.capitalize(cat)}
+                    </option>
+                  <% end %>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Description (Optional)
+                </label>
+                <textarea
+                  name="description"
+                  rows="2"
+                  placeholder="Brief description of this list..."
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                ><%= if @editing_list, do: @editing_list.description, else: "" %></textarea>
+              </div>
+
+              <div class="flex items-center">
+                <input
+                  type="checkbox"
+                  name="tracks_awards"
+                  id="modal_tracks_awards"
+                  class="mr-2"
+                  checked={@editing_list && @editing_list.tracks_awards}
+                />
+                <label for="modal_tracks_awards" class="text-sm text-gray-700">
+                  This list tracks awards/winners
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-emerald-600 text-base font-medium text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              {if @editing_list, do: "Update", else: "Add List"}
+            </button>
+            <button
+              type="button"
+              phx-click="hide_modal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<!-- Duplicate List Modal -->
+<%= if @show_duplicate_modal && @duplicating_list do %>
+  <div
+    class="fixed z-10 inset-0 overflow-y-auto"
+    aria-labelledby="duplicate-modal-title"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <div
+        class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        phx-click="hide_duplicate_modal"
+        aria-hidden="true"
+      >
+      </div>
+
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
+        &#8203;
+      </span>
+
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <form phx-submit="duplicate_list">
+          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">
+              Duplicate List: {@duplicating_list.name}
+            </h3>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">New List Name</label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  value={"#{@duplicating_list.name} (Copy)"}
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">New Source Key</label>
+                <input
+                  type="text"
+                  name="source_key"
+                  required
+                  pattern="[a-z0-9_]+"
+                  value={"#{@duplicating_list.source_key}_copy"}
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p class="text-xs text-gray-500 mt-1">
+                  Lowercase letters, numbers, and underscores only
+                </p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  name="category"
+                  required
+                  class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <%= for cat <- @categories do %>
+                    <option value={cat} selected={@duplicating_list.category == cat}>
+                      {String.capitalize(cat)}
+                    </option>
+                  <% end %>
+                </select>
+              </div>
+
+              <div class="bg-gray-50 rounded p-3 text-sm text-gray-600">
+                <p class="font-medium">Copied from original:</p>
+                <ul class="mt-1 text-xs space-y-1">
+                  <li>Source URL: {@duplicating_list.source_url}</li>
+                  <li>Source Type: {@duplicating_list.source_type}</li>
+                  <li>
+                    Tracks Awards: {if @duplicating_list.tracks_awards, do: "Yes", else: "No"}
+                  </li>
+                </ul>
+                <p class="mt-2 text-xs text-amber-600">
+                  Note: The duplicate will be created as inactive.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+            <button
+              type="submit"
+              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-cyan-600 text-base font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Duplicate List
+            </button>
+            <button
+              type="button"
+              phx-click="hide_duplicate_modal"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+<% end %>
+
+<!-- Import Log Modal -->
+<%= if @show_import_log && @import_log_list do %>
+  <div
+    class="fixed z-10 inset-0 overflow-y-auto"
+    aria-labelledby="import-log-modal-title"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <div
+        class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+        phx-click="hide_import_log"
+        aria-hidden="true"
+      >
+      </div>
+
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
+        &#8203;
+      </span>
+
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <h3 class="text-lg font-medium text-gray-900 mb-4">
+            Import History: {@import_log_list.name}
+          </h3>
+
+          <div class="space-y-4">
+            <!-- Current Status -->
+            <div class="bg-gray-50 rounded-lg p-4">
+              <h4 class="text-sm font-semibold text-gray-700 mb-2">Current Status</h4>
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="text-gray-500">Status:</span>
+                  <span class={"ml-2 px-2 py-0.5 rounded-full text-xs font-medium #{status_badge_class(@import_log_list.last_import_status)}"}>
+                    {@import_log_list.last_import_status || "Never imported"}
+                  </span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Last Import:</span>
+                  <span class="ml-2 font-medium">
+                    {format_datetime(@import_log_list.last_import_at)}
+                  </span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Movies Tagged:</span>
+                  <span class="ml-2 font-medium">
+                    {format_number(@import_log_list.movie_count)}
+                  </span>
+                </div>
+                <div>
+                  <span class="text-gray-500">Source Key:</span>
+                  <span class="ml-2 font-mono text-xs">{@import_log_list.source_key}</span>
+                </div>
+              </div>
+            </div>
+            
+<!-- Metadata (if available) -->
+            <%= if @import_log_list.metadata && map_size(@import_log_list.metadata) > 0 do %>
+              <div class="bg-blue-50 rounded-lg p-4">
+                <h4 class="text-sm font-semibold text-blue-700 mb-2">Import Metadata</h4>
+                <div class="text-sm space-y-1">
+                  <%= for {key, value} <- @import_log_list.metadata do %>
+                    <div class="flex justify-between">
+                      <span class="text-gray-600">
+                        {key |> to_string() |> String.replace("_", " ") |> String.capitalize()}:
+                      </span>
+                      <span class="font-medium">{inspect(value)}</span>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+            
+<!-- Source URL -->
+            <div class="bg-gray-50 rounded-lg p-4">
+              <h4 class="text-sm font-semibold text-gray-700 mb-2">Source</h4>
+              <p class="text-sm text-gray-600 break-all">{@import_log_list.source_url}</p>
+            </div>
+            
+<!-- Quick Actions -->
+            <div class="flex gap-2">
+              <%= if importing?(assigns, @import_log_list.id) do %>
+                <span class="px-4 py-2 text-blue-600 animate-pulse">Import in progress...</span>
+              <% else %>
+                <button
+                  phx-click="trigger_import"
+                  phx-value-id={@import_log_list.id}
+                  class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Run Import Now
+                </button>
+              <% end %>
+              <.link
+                href={@import_log_list.source_url}
+                target="_blank"
+                class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                View Source ↗
+              </.link>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+          <button
+            type="button"
+            phx-click="hide_import_log"
+            class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:w-auto sm:text-sm"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>
