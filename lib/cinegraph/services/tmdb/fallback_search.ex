@@ -195,9 +195,35 @@ defmodule Cinegraph.Services.TMDb.FallbackSearch do
 
   defp find_year_tolerant_match([], _title, _year), do: {:error, :not_found}
 
-  defp find_year_tolerant_match([movie | _rest], _title, _year) do
-    # Take the first result within year tolerance
-    {:ok, movie}
+  defp find_year_tolerant_match(results, title, target_year) do
+    # Issue #476: Score results by title similarity AND year proximity
+    # Prefer exact year matches, then adjacent years
+    scored =
+      results
+      |> Enum.map(fn movie ->
+        movie_year = extract_year(movie)
+        title_sim = calculate_similarity(movie["title"] || "", title)
+
+        # Calculate year score - strongly prefer target year
+        year_score =
+          cond do
+            movie_year == target_year -> 1.0
+            movie_year == target_year - 1 -> 0.7
+            movie_year == target_year + 1 -> 0.3
+            true -> 0.0
+          end
+
+        # Weight: 50% title, 50% year (strong year preference)
+        total_score = title_sim * 0.5 + year_score * 0.5
+        {movie, total_score, movie_year}
+      end)
+      |> Enum.filter(fn {_movie, score, _year} -> score > 0.5 end)
+      |> Enum.sort_by(fn {_movie, score, _year} -> score end, :desc)
+
+    case scored do
+      [{movie, _score, _year} | _] -> {:ok, movie}
+      [] -> {:error, :not_found}
+    end
   end
 
   defp find_fuzzy_match([], _title), do: {:error, :not_found}
