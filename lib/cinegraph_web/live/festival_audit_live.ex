@@ -238,11 +238,20 @@ defmodule CinegraphWeb.FestivalAuditLive do
       nil ->
         {:noreply, put_flash(socket, :error, "Nomination no longer exists.")}
 
+      %{movie: nil} ->
+        {:noreply, put_flash(socket, :error, "Nomination has no linked movie to switch.")}
+
+      %{movie: %{title: nil}} ->
+        {:noreply,
+         put_flash(socket, :error, "Nomination's movie has no title, so candidates can't be searched.")}
+
       nomination ->
+        title = nomination.movie.title
+
         # Pre-populate with candidates based on current movie title
         candidates =
           Festivals.find_candidate_movies(
-            nomination.movie.title,
+            title,
             socket.assigns.selected_ceremony.year,
             limit: 10
           )
@@ -252,7 +261,7 @@ defmodule CinegraphWeb.FestivalAuditLive do
          |> assign(:show_switch_modal, true)
          |> assign(:selected_nomination, nomination)
          |> assign(:movie_candidates, candidates)
-         |> assign(:search_query, nomination.movie.title)}
+         |> assign(:search_query, title)}
     end
   end
 
