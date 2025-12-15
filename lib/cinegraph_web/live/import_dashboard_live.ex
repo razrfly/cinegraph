@@ -965,10 +965,13 @@ defmodule CinegraphWeb.ImportDashboardLive do
           nil
 
         job ->
+          # Ensure meta is always a map to avoid crashes when it's nil
+          meta = job.meta || %{}
+
           %{
             type: "missing_director_credits",
-            status: format_repair_status(job),
-            last_id: get_in(job.meta, ["last_id"])
+            status: format_repair_status(%{job | meta: meta}),
+            last_id: Map.get(meta, "last_id")
           }
       end
 
@@ -978,7 +981,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   defp format_repair_status(%{state: "executing", meta: meta}) do
-    batch_success = meta["batch_success"] || 0
+    batch_success = Map.get(meta || %{}, "batch_success", 0)
     "Processing... (#{batch_success} in current batch)"
   end
 
