@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
   """
 
   use Oban.Worker,
-    queue: :tmdb_discovery,
+    queue: :tmdb,
     max_attempts: 3,
     unique: [period: 60]
 

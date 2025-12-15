@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.PredictionsOrchestrator do
   This avoids timeout issues and allows partial progress to be saved.
   """
 
-  use Oban.Worker, queue: :predictions, max_attempts: 3
+  use Oban.Worker, queue: :metrics, max_attempts: 3
 
   require Logger
 

@@ -10,7 +10,7 @@ defmodule Cinegraph.Workers.SlugBackfillWorker do
   memory issues and allow for graceful interruption.
   """
 
-  use Oban.Worker, queue: :default, max_attempts: 3
+  use Oban.Worker, queue: :maintenance, max_attempts: 3
 
   require Logger
   import Ecto.Query

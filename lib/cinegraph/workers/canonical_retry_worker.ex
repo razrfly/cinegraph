@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.CanonicalRetryWorker do
   """
 
   use Oban.Worker,
-    queue: :canonical_retry,
+    queue: :scraping,
     max_attempts: 3,
     unique: [
       fields: [:args],

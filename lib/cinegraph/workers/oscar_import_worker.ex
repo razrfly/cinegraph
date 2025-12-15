@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
   """
 
   use Oban.Worker,
-    queue: :oscar_imports,
+    queue: :scraping,
     max_attempts: 3
 
   alias Cinegraph.Cultural

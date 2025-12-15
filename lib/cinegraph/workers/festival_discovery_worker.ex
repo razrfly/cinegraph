@@ -14,7 +14,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   """
 
   use Oban.Worker,
-    queue: :festival_import,
+    queue: :scraping,
     max_attempts: 3,
     priority: 2
 

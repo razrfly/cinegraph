@@ -13,7 +13,7 @@ defmodule Cinegraph.Workers.DailyYearImportWorker do
   """
 
   use Oban.Worker,
-    queue: :tmdb_orchestration,
+    queue: :tmdb,
     max_attempts: 3
 
   alias Cinegraph.Imports.ImportStateV2

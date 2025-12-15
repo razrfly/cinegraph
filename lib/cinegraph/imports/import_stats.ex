@@ -114,10 +114,12 @@ defmodule Cinegraph.Imports.ImportStats do
     import Ecto.Query
 
     %{
-      discovery: count_jobs_in_queue("tmdb_discovery"),
-      details: count_jobs_in_queue("tmdb_details"),
-      omdb: count_jobs_in_queue("omdb_enrichment"),
-      collaboration: count_jobs_in_queue("collaboration")
+      tmdb: count_jobs_in_queue("tmdb"),
+      omdb: count_jobs_in_queue("omdb"),
+      collaboration: count_jobs_in_queue("collaboration"),
+      scraping: count_jobs_in_queue("scraping"),
+      metrics: count_jobs_in_queue("metrics"),
+      maintenance: count_jobs_in_queue("maintenance")
     }
   end
 
@@ -136,7 +138,7 @@ defmodule Cinegraph.Imports.ImportStats do
   defp calculate_queue_stats do
     import Ecto.Query
 
-    queues = ["tmdb_discovery", "tmdb_details", "omdb_enrichment", "collaboration"]
+    queues = ["tmdb", "omdb", "collaboration", "scraping", "metrics", "maintenance"]
 
     Enum.map(queues, fn queue ->
       available =

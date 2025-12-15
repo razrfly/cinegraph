@@ -5,7 +5,7 @@ defmodule Cinegraph.Workers.CanonicalPageWorker do
   """
 
   use Oban.Worker,
-    queue: :imdb_scraping,
+    queue: :scraping,
     max_attempts: 3,
     unique: [
       keys: [:list_key, :page],

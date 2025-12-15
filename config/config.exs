@@ -68,38 +68,18 @@ config :phoenix, :json_library, Jason
 config :cinegraph, Oban,
   repo: Cinegraph.Repo,
   queues: [
-    # Daily import orchestration (low concurrency - just coordinates)
-    tmdb_orchestration: 2,
-    # Movie discovery from TMDb
-    tmdb_discovery: 10,
-    # Movie details fetching
-    tmdb_details: 20,
-    # OMDb data enrichment
-    omdb_enrichment: 5,
-    # Keywords, videos, etc.
-    media_processing: 10,
+    # All TMDb API work (orchestration, discovery, details) - single rate limit
+    tmdb: 15,
+    # OMDb data enrichment (separate API rate limit)
+    omdb: 5,
     # Collaboration processing
     collaboration: 5,
-    # Movie enrichment from Oscar imports
-    movie_enrichment: 10,
-    # Oscar ceremony imports
-    oscar_imports: 3,
-    # Festival imports (Venice, Cannes, Berlin, etc.)
-    festival_import: 5,
-    # IMDb website scraping (canonical lists, user lists, etc.)
-    imdb_scraping: 5,
-    # Retry failed canonical source updates
-    canonical_retry: 3,
-    # CRI calculation jobs
-    cri_calculation: 5,
-    # Person Quality Score calculations
-    metrics: 15,
-    # Predictions calculation jobs
-    predictions: 3,
-    # Cache warming for movies page (Phase 2 optimization)
-    cache_warming: 1,
-    # Sitemap generation (runs once daily, long-running)
-    sitemap: 1
+    # Web scraping (IMDb, festivals, Oscars) - low concurrency for rate limiting
+    scraping: 5,
+    # All metrics/calculations (person quality scores, predictions, CRI)
+    metrics: 10,
+    # Background maintenance tasks (cache warming, sitemap, backfills)
+    maintenance: 2
   ],
   # Give jobs more time to complete during deployments/restarts
   shutdown_grace_period: :timer.seconds(60),

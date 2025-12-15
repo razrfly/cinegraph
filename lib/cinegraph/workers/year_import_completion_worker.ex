@@ -8,7 +8,7 @@ defmodule Cinegraph.Workers.YearImportCompletionWorker do
   """
 
   use Oban.Worker,
-    queue: :tmdb_orchestration,
+    queue: :tmdb,
     max_attempts: 20
 
   alias Cinegraph.Imports.ImportStateV2

@@ -11,7 +11,7 @@ defmodule Cinegraph.Workers.FestivalPersonInferenceWorker do
   """
 
   use Oban.Worker,
-    queue: :festival_import,
+    queue: :scraping,
     max_attempts: 3,
     unique: [fields: [:args], keys: [:ceremony_id], period: 300]
 
