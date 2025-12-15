@@ -237,11 +237,12 @@ defmodule Cinegraph.Movies do
   def quick_search(query, opts \\ []) do
     limit = Elixir.Keyword.get(opts, :limit, 20)
     clean_query = String.trim(query)
+    escaped_query = escape_like_wildcards(clean_query)
 
     from(m in Movie,
       where:
-        fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{clean_query}%") or
-          fragment("LOWER(?) LIKE LOWER(?)", m.original_title, ^"%#{clean_query}%") or
+        fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{escaped_query}%") or
+          fragment("LOWER(?) LIKE LOWER(?)", m.original_title, ^"%#{escaped_query}%") or
           fragment("CAST(? AS TEXT) = ?", m.tmdb_id, ^clean_query) or
           fragment("LOWER(?) = LOWER(?)", m.imdb_id, ^clean_query),
       select: %{
@@ -1075,5 +1076,13 @@ defmodule Cinegraph.Movies do
     end)
 
     :ok
+  end
+
+  # Helper to escape SQL LIKE wildcards
+  defp escape_like_wildcards(str) do
+    str
+    |> String.replace("\\", "\\\\")
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
   end
 end

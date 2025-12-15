@@ -232,10 +232,13 @@ defmodule Cinegraph.Festivals do
 
   @doc """
   Gets a single nomination by ID with preloaded associations.
+  Returns nil if not found.
   """
   def get_nomination(nomination_id) do
-    Repo.get(FestivalNomination, nomination_id)
-    |> Repo.preload([:category, :movie, :person, :ceremony])
+    case Repo.get(FestivalNomination, nomination_id) do
+      nil -> nil
+      nomination -> Repo.preload(nomination, [:category, :movie, :person, :ceremony])
+    end
   end
 
   @doc """
@@ -292,12 +295,12 @@ defmodule Cinegraph.Festivals do
     # Most festivals honor films from the previous year
     eligible_year = ceremony_year - 1
 
-    clean_title = String.trim(title)
+    escaped_title = title |> String.trim() |> escape_like_wildcards()
 
     from(m in Movie,
       where:
-        fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{clean_title}%") or
-          fragment("LOWER(?) LIKE LOWER(?)", m.original_title, ^"%#{clean_title}%"),
+        fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{escaped_title}%") or
+          fragment("LOWER(?) LIKE LOWER(?)", m.original_title, ^"%#{escaped_title}%"),
       select: %{
         id: m.id,
         title: m.title,
@@ -675,4 +678,12 @@ defmodule Cinegraph.Festivals do
   defp format_error(error) when is_binary(error), do: error
   defp format_error(%{message: msg}), do: msg
   defp format_error(error), do: inspect(error, limit: 200)
+
+  # Helper to escape SQL LIKE wildcards
+  defp escape_like_wildcards(str) do
+    str
+    |> String.replace("\\", "\\\\")
+    |> String.replace("%", "\\%")
+    |> String.replace("_", "\\_")
+  end
 end
