@@ -203,12 +203,169 @@ defmodule Cinegraph.Festivals do
   end
 
   @doc """
+  Deletes a nomination by ID.
+  Returns {:ok, nomination} or {:error, reason}.
+
+  Used by the admin audit interface to remove incorrect nominations.
+  """
+  def delete_nomination(nomination_id) do
+    case Repo.get(FestivalNomination, nomination_id) do
+      nil ->
+        {:error, :not_found}
+
+      nomination ->
+        case Repo.delete(nomination) do
+          {:ok, deleted} ->
+            require Logger
+
+            Logger.info(
+              "Deleted nomination #{nomination_id} (movie_id: #{nomination.movie_id}, ceremony_id: #{nomination.ceremony_id})"
+            )
+
+            {:ok, deleted}
+
+          error ->
+            error
+        end
+    end
+  end
+
+  @doc """
+  Gets a single nomination by ID with preloaded associations.
+  """
+  def get_nomination(nomination_id) do
+    Repo.get(FestivalNomination, nomination_id)
+    |> Repo.preload([:category, :movie, :person, :ceremony])
+  end
+
+  @doc """
+  Switches a nomination to a different movie.
+  Returns {:ok, updated_nomination} or {:error, changeset}.
+
+  Used by the admin audit interface to correct incorrectly linked movies.
+  """
+  def switch_nomination_movie(nomination_id, new_movie_id) do
+    case Repo.get(FestivalNomination, nomination_id) do
+      nil ->
+        {:error, :not_found}
+
+      nomination ->
+        old_movie_id = nomination.movie_id
+
+        nomination
+        |> FestivalNomination.changeset(%{movie_id: new_movie_id})
+        |> Repo.update()
+        |> case do
+          {:ok, updated} ->
+            require Logger
+
+            Logger.info(
+              "Switched nomination #{nomination_id}: movie #{old_movie_id} → #{new_movie_id}"
+            )
+
+            {:ok, Repo.preload(updated, [:category, :movie, :person, :ceremony], force: true)}
+
+          error ->
+            error
+        end
+    end
+  end
+
+  @doc """
+  Finds candidate movies by title for switching.
+  Returns movies matching the title, ordered by release date proximity to ceremony year.
+
+  ## Options
+
+  - `:limit` - Maximum number of results (default: 10)
+
+  ## Examples
+
+      find_candidate_movies("Nosferatu", 2025)
+      find_candidate_movies("The Godfather", 1973, limit: 20)
+
+  """
+  def find_candidate_movies(title, ceremony_year, opts \\ []) do
+    alias Cinegraph.Movies.Movie
+
+    limit = Keyword.get(opts, :limit, 10)
+    # Most festivals honor films from the previous year
+    eligible_year = ceremony_year - 1
+
+    clean_title = String.trim(title)
+
+    from(m in Movie,
+      where:
+        fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{clean_title}%") or
+          fragment("LOWER(?) LIKE LOWER(?)", m.original_title, ^"%#{clean_title}%"),
+      select: %{
+        id: m.id,
+        title: m.title,
+        original_title: m.original_title,
+        tmdb_id: m.tmdb_id,
+        imdb_id: m.imdb_id,
+        release_date: m.release_date,
+        slug: m.slug,
+        poster_path: m.poster_path,
+        year_diff:
+          fragment(
+            "ABS(EXTRACT(YEAR FROM ?)::integer - ?)",
+            m.release_date,
+            ^eligible_year
+          )
+      },
+      order_by: [
+        asc: fragment("ABS(EXTRACT(YEAR FROM ?)::integer - ?)", m.release_date, ^eligible_year)
+      ],
+      limit: ^limit
+    )
+    |> Repo.replica().all()
+  end
+
+  @doc """
   Gets nominations for a ceremony.
   """
   def get_ceremony_nominations(ceremony_id) do
     from(n in FestivalNomination,
       where: n.ceremony_id == ^ceremony_id,
       preload: [:category, :movie, :person]
+    )
+    |> Repo.replica().all()
+  end
+
+  @doc """
+  Gets all nominations for a ceremony with full movie/person details,
+  grouped by category for the audit interface.
+
+  Returns a map where keys are category names and values are lists of nominations.
+  Nominations within each category are ordered by winner status (winners first), then by movie title.
+  """
+  def get_ceremony_nominations_for_audit(ceremony_id) do
+    from(n in FestivalNomination,
+      where: n.ceremony_id == ^ceremony_id,
+      join: c in assoc(n, :category),
+      join: m in assoc(n, :movie),
+      left_join: p in assoc(n, :person),
+      preload: [category: c, movie: m, person: p],
+      order_by: [asc: c.name, desc: n.won, asc: m.title]
+    )
+    |> Repo.replica().all()
+    |> Enum.group_by(& &1.category.name)
+    |> Enum.sort_by(fn {category_name, _} -> category_name end)
+    |> Enum.into(%{})
+  end
+
+  @doc """
+  Gets the list of unique category names for a ceremony.
+  Useful for populating filter dropdowns.
+  """
+  def get_ceremony_categories(ceremony_id) do
+    from(n in FestivalNomination,
+      where: n.ceremony_id == ^ceremony_id,
+      join: c in assoc(n, :category),
+      select: c.name,
+      distinct: true,
+      order_by: [asc: c.name]
     )
     |> Repo.replica().all()
   end

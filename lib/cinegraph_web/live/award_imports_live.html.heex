@@ -34,6 +34,13 @@
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-xl font-semibold">Overall Import Status</h2>
       <div class="flex gap-2">
+        <.link
+          navigate={~p"/admin/festival"}
+          class="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+          title="Review and correct film associations for festival nominations"
+        >
+          Audit Nominations
+        </.link>
         <button
           phx-click="refresh_cache"
           class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"

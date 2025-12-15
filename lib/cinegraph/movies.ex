@@ -220,6 +220,47 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Quick search for movies by title, TMDb ID, or IMDb ID.
+  Used by the audit interface for movie switching.
+
+  ## Options
+
+  - `:limit` - Maximum number of results (default: 20)
+
+  ## Examples
+
+      quick_search("Nosferatu")
+      quick_search("550")        # TMDb ID
+      quick_search("tt0137523")  # IMDb ID
+
+  """
+  def quick_search(query, opts \\ []) do
+    limit = Elixir.Keyword.get(opts, :limit, 20)
+    clean_query = String.trim(query)
+
+    from(m in Movie,
+      where:
+        fragment("LOWER(?) LIKE LOWER(?)", m.title, ^"%#{clean_query}%") or
+          fragment("LOWER(?) LIKE LOWER(?)", m.original_title, ^"%#{clean_query}%") or
+          fragment("CAST(? AS TEXT) = ?", m.tmdb_id, ^clean_query) or
+          fragment("LOWER(?) = LOWER(?)", m.imdb_id, ^clean_query),
+      select: %{
+        id: m.id,
+        title: m.title,
+        original_title: m.original_title,
+        tmdb_id: m.tmdb_id,
+        imdb_id: m.imdb_id,
+        release_date: m.release_date,
+        slug: m.slug,
+        poster_path: m.poster_path
+      },
+      order_by: [desc: m.release_date],
+      limit: ^limit
+    )
+    |> Repo.replica().all()
+  end
+
+  @doc """
   Checks if a movie exists by TMDB ID.
   Used for deduplication during imports.
   Uses read replica since this is a read-only check.
