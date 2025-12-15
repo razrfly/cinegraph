@@ -14,6 +14,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   require Logger
   alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker, DailyYearImportWorker}
   alias Cinegraph.Cultural
+  alias Cinegraph.Repairs
 
   # 5 seconds
   @refresh_interval 5000
@@ -55,6 +56,8 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:year_sync_health, nil)
       |> assign(:current_import_year, nil)
       |> assign(:year_import_running, false)
+      |> assign(:data_issues, [])
+      |> assign(:repair_progress, nil)
       |> load_data()
       |> schedule_refresh()
 
@@ -828,6 +831,32 @@ defmodule CinegraphWeb.ImportDashboardLive do
     end
   end
 
+  @impl true
+  def handle_event("start_repair", %{"type" => repair_type}, socket) do
+    case Repairs.start_repair(repair_type) do
+      {:ok, _job} ->
+        socket =
+          socket
+          |> put_flash(:info, "Started repair job for #{repair_type}")
+          |> assign(:repair_progress, %{type: repair_type, status: "Starting..."})
+          |> load_data()
+
+        {:noreply, socket}
+
+      {:error, :already_running} ->
+        socket = put_flash(socket, :info, "Repair job is already running")
+        {:noreply, socket}
+
+      {:error, :nothing_to_repair} ->
+        socket = put_flash(socket, :info, "No records need repair")
+        {:noreply, socket}
+
+      {:error, reason} ->
+        socket = put_flash(socket, :error, "Failed to start repair: #{inspect(reason)}")
+        {:noreply, socket}
+    end
+  end
+
   defp get_festival_display_name(festival_key) do
     case Events.get_active_by_source_key(festival_key) do
       nil -> String.capitalize(festival_key)
@@ -922,6 +951,47 @@ defmodule CinegraphWeb.ImportDashboardLive do
     |> assign(:current_import_year, year_progress.current_year)
     |> assign(:year_import_running, year_progress.is_running || false)
     |> assign(:stats_loading, Map.get(cached, :loading, false))
+    |> load_repair_data()
+  end
+
+  defp load_repair_data(socket) do
+    # Load data issues and repair progress
+    data_issues = Repairs.detect_all_issues()
+
+    # Check for repair progress
+    repair_progress =
+      case Repairs.get_repair_progress("missing_director_credits") do
+        nil ->
+          nil
+
+        job ->
+          %{
+            type: "missing_director_credits",
+            status: format_repair_status(job),
+            last_id: get_in(job.meta, ["last_id"])
+          }
+      end
+
+    socket
+    |> assign(:data_issues, data_issues)
+    |> assign(:repair_progress, repair_progress)
+  end
+
+  defp format_repair_status(%{state: "executing", meta: meta}) do
+    batch_success = meta["batch_success"] || 0
+    "Processing... (#{batch_success} in current batch)"
+  end
+
+  defp format_repair_status(%{state: "available"}) do
+    "Queued"
+  end
+
+  defp format_repair_status(%{state: "scheduled"}) do
+    "Scheduled"
+  end
+
+  defp format_repair_status(_) do
+    "Unknown"
   end
 
   defp schedule_refresh(socket) do

@@ -854,7 +854,8 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
           year_diff <= 1
 
         # No release date, can't verify - be cautious and reject
-        _ -> false
+        _ ->
+          false
       end
 
     title_similarity > 0.85 && year_ok
