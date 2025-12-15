@@ -988,14 +988,12 @@ defmodule CinegraphWeb.ImportDashboardLive do
   @doc """
   Formats queue names for display.
   """
-  def format_queue_name(:tmdb_orchestration), do: "TMDb Orchestration"
-  def format_queue_name(:tmdb_discovery), do: "TMDb Discovery"
-  def format_queue_name(:tmdb_details), do: "TMDb Details"
-  def format_queue_name(:omdb_enrichment), do: "OMDb Enrichment"
+  def format_queue_name(:tmdb), do: "TMDb"
+  def format_queue_name(:omdb), do: "OMDb"
   def format_queue_name(:collaboration), do: "Collaboration"
-  def format_queue_name(:imdb_scraping), do: "IMDb Scraping"
-  def format_queue_name(:oscar_imports), do: "Oscar Imports"
-  def format_queue_name(:festival_import), do: "Festival Imports"
+  def format_queue_name(:scraping), do: "Scraping"
+  def format_queue_name(:metrics), do: "Metrics"
+  def format_queue_name(:maintenance), do: "Maintenance"
 
   def format_queue_name(queue) when is_atom(queue),
     do: queue |> to_string() |> String.capitalize()

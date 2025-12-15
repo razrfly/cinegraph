@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.PredictionCalculator do
   Uses the existing MoviePredictor logic to ensure correct scoring.
   """
 
-  use Oban.Worker, queue: :predictions, max_attempts: 3
+  use Oban.Worker, queue: :metrics, max_attempts: 3
 
   require Logger
 

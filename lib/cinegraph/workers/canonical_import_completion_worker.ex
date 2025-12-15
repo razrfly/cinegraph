@@ -6,7 +6,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
   """
 
   use Oban.Worker,
-    queue: :imdb_scraping,
+    queue: :scraping,
     max_attempts: 5,
     unique: [
       keys: [:list_key],

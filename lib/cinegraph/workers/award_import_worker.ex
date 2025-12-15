@@ -10,7 +10,7 @@ defmodule Cinegraph.Workers.AwardImportWorker do
   """
 
   use Oban.Worker,
-    queue: :festival_import,
+    queue: :scraping,
     max_attempts: 3,
     unique: [
       period: 300,

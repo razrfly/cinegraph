@@ -315,14 +315,12 @@ defmodule Cinegraph.Cache.DashboardStats do
 
   defp default_oban_stats do
     queues = [
-      :tmdb_orchestration,
-      :tmdb_discovery,
-      :tmdb_details,
-      :omdb_enrichment,
+      :tmdb,
+      :omdb,
       :collaboration,
-      :imdb_scraping,
-      :oscar_imports,
-      :festival_import
+      :scraping,
+      :metrics,
+      :maintenance
     ]
 
     Enum.map(queues, fn queue ->
@@ -415,14 +413,12 @@ defmodule Cinegraph.Cache.DashboardStats do
 
   defp compute_oban_stats do
     queues = [
-      :tmdb_orchestration,
-      :tmdb_discovery,
-      :tmdb_details,
-      :omdb_enrichment,
+      :tmdb,
+      :omdb,
       :collaboration,
-      :imdb_scraping,
-      :oscar_imports,
-      :festival_import
+      :scraping,
+      :metrics,
+      :maintenance
     ]
 
     # Batch query - get all queue/state combinations in one query
@@ -975,15 +971,7 @@ defmodule Cinegraph.Cache.DashboardStats do
         eta: "Unknown"
       },
       queue_stats: [
-        %{
-          queue: :tmdb_orchestration,
-          name: "Orchestration",
-          available: 0,
-          executing: 0,
-          completed: 0
-        },
-        %{queue: :tmdb_discovery, name: "Discovery", available: 0, executing: 0, completed: 0},
-        %{queue: :tmdb_details, name: "Details", available: 0, executing: 0, completed: 0}
+        %{queue: :tmdb, name: "TMDb", available: 0, executing: 0, completed: 0}
       ],
       is_running: false,
       recent_activity: [],
@@ -1189,7 +1177,7 @@ defmodule Cinegraph.Cache.DashboardStats do
   end
 
   defp compute_year_queue_stats do
-    queues = [:tmdb_orchestration, :tmdb_discovery, :tmdb_details]
+    queues = [:tmdb]
 
     # Batch query - get all queue/state combinations in one query
     results =
@@ -1218,9 +1206,7 @@ defmodule Cinegraph.Cache.DashboardStats do
 
       queue_name =
         case queue do
-          :tmdb_orchestration -> "Orchestration"
-          :tmdb_discovery -> "Discovery"
-          :tmdb_details -> "Details"
+          :tmdb -> "TMDb"
           _ -> queue |> Atom.to_string() |> String.replace("_", " ")
         end
 

@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.CanonicalImportWorker do
   """
 
   use Oban.Worker,
-    queue: :imdb_scraping,
+    queue: :scraping,
     max_attempts: 3
 
   alias Cinegraph.Cultural.CanonicalImporter

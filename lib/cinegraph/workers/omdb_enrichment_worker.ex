@@ -7,7 +7,7 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
   """
 
   use Oban.Worker,
-    queue: :omdb_enrichment,
+    queue: :omdb,
     max_attempts: 3,
     # 1 hour uniqueness
     unique: [fields: [:args], keys: [:movie_id], period: 3600]

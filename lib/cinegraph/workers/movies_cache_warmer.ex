@@ -21,7 +21,7 @@ defmodule Cinegraph.Workers.MoviesCacheWarmer do
   """
 
   use Oban.Worker,
-    queue: :cache_warming,
+    queue: :maintenance,
     max_attempts: 3,
     priority: 2
 

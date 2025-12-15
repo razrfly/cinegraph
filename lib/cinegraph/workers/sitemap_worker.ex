@@ -12,7 +12,7 @@ defmodule Cinegraph.Workers.SitemapWorker do
   """
 
   use Oban.Worker,
-    queue: :sitemap,
+    queue: :maintenance,
     max_attempts: 3,
     priority: 3
 

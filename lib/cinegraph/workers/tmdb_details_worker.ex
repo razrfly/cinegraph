@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   """
 
   use Oban.Worker,
-    queue: :tmdb_details,
+    queue: :tmdb,
     max_attempts: 5,
     unique: [fields: [:args], keys: [:tmdb_id, :imdb_id, :source_key], period: 300]
 

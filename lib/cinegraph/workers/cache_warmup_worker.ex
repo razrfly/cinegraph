@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.CacheWarmupWorker do
   Runs periodically to ensure fast response times for common queries.
   """
 
-  use Oban.Worker, queue: :default, max_attempts: 3
+  use Oban.Worker, queue: :maintenance, max_attempts: 3
 
   require Logger
   alias Cinegraph.Cache.PredictionsCache

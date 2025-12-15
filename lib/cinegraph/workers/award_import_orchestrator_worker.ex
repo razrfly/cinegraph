@@ -11,7 +11,7 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
   """
 
   use Oban.Worker,
-    queue: :festival_import,
+    queue: :scraping,
     max_attempts: 1,
     priority: 0
 

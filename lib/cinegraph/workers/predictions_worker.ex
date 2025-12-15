@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.PredictionsWorker do
   Each task is small enough to complete without timeout.
   """
 
-  use Oban.Worker, queue: :predictions, max_attempts: 3
+  use Oban.Worker, queue: :metrics, max_attempts: 3
 
   require Logger
 

@@ -5,7 +5,7 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
   """
 
   use Oban.Worker,
-    queue: :festival_import,
+    queue: :scraping,
     max_attempts: 3,
     unique: [period: 60, fields: [:args], keys: [:festival, :year]]
 
