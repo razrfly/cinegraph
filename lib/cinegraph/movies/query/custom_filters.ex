@@ -131,89 +131,105 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     |> where([m, ..., em], em.value >= ^min_rating)
   end
 
-  # Award filtering
+  # Award filtering - uses subquery approach for better performance
+  # This avoids multiple joins to the same tables and reduces the need for DISTINCT
   defp filter_by_awards(query, params) do
+    festival_ids = params.festivals || params.festival_id
+    award_status = params.award_status
+    category_id = params.award_category_id
+    year_from = params.award_year_from
+    year_to = params.award_year_to
+
+    # If no award filters, return query unchanged
+    if is_nil(award_status) and is_nil(festival_ids) and is_nil(category_id) and
+         is_nil(year_from) and is_nil(year_to) do
+      query
+    else
+      # Build a subquery to get movie IDs matching award criteria
+      # This is much more efficient than multiple joins on the main query
+      movie_ids_subquery =
+        build_award_movie_ids_subquery(
+          award_status,
+          normalize_festival_ids(festival_ids),
+          category_id,
+          year_from,
+          year_to
+        )
+
+      where(query, [m], m.id in subquery(movie_ids_subquery))
+    end
+  end
+
+  defp normalize_festival_ids(nil), do: nil
+  defp normalize_festival_ids([]), do: nil
+  defp normalize_festival_ids(ids) when is_list(ids), do: ids
+  defp normalize_festival_ids(id), do: [id]
+
+  # Build a subquery that returns movie_ids matching all award criteria
+  defp build_award_movie_ids_subquery(award_status, festival_ids, category_id, year_from, year_to) do
+    # Start with festival_nominations to get movie_ids
+    base = from(nom in "festival_nominations", select: nom.movie_id)
+
+    # Apply award status filter
+    base = apply_award_status_to_subquery(base, award_status)
+
+    # Apply category filter
+    base = apply_category_to_subquery(base, category_id)
+
+    # Apply festival and year filters (these require ceremony join)
+    apply_festival_and_years_to_subquery(base, festival_ids, year_from, year_to)
+  end
+
+  defp apply_award_status_to_subquery(query, nil), do: query
+  defp apply_award_status_to_subquery(query, "any_nomination"), do: query
+
+  defp apply_award_status_to_subquery(query, "won") do
+    where(query, [nom], nom.won == true)
+  end
+
+  defp apply_award_status_to_subquery(query, "nominated_only") do
+    where(query, [nom], nom.won == false)
+  end
+
+  defp apply_award_status_to_subquery(query, "multiple_awards") do
     query
-    |> filter_by_award_status(params.award_status)
-    |> filter_by_festival(params.festivals || params.festival_id)
-    |> filter_by_award_category(params.award_category_id)
-    |> filter_by_award_years(params.award_year_from, params.award_year_to)
+    |> where([nom], nom.won == true)
+    |> group_by([nom], nom.movie_id)
+    |> having([nom], count(nom.id) > 1)
   end
 
-  defp filter_by_award_status(query, nil), do: query
+  defp apply_award_status_to_subquery(query, _), do: query
 
-  defp filter_by_award_status(query, "any_nomination") do
-    join(query, :inner, [m], nom in "festival_nominations", on: nom.movie_id == m.id)
+  defp apply_category_to_subquery(query, nil), do: query
+
+  defp apply_category_to_subquery(query, category_id) do
+    where(query, [nom], nom.category_id == ^category_id)
   end
 
-  defp filter_by_award_status(query, "won") do
-    join(query, :inner, [m], nom in "festival_nominations",
-      on: nom.movie_id == m.id and nom.won == true
-    )
-  end
+  defp apply_festival_and_years_to_subquery(query, nil, nil, nil), do: query
 
-  defp filter_by_award_status(query, "nominated_only") do
-    join(query, :inner, [m], nom in "festival_nominations",
-      on: nom.movie_id == m.id and nom.won == false
-    )
-  end
+  defp apply_festival_and_years_to_subquery(query, festival_ids, year_from, year_to) do
+    # Join to ceremonies only if we need festival or year filtering
+    query = join(query, :inner, [nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
 
-  defp filter_by_award_status(query, "multiple_awards") do
-    query
-    |> join(:inner, [m], nom in "festival_nominations",
-      on: nom.movie_id == m.id and nom.won == true
-    )
-    |> group_by([m], m.id)
-    |> having([m, nom], count(nom.id) > 1)
-  end
-
-  defp filter_by_award_status(query, _), do: query
-
-  defp filter_by_festival(query, nil), do: query
-  defp filter_by_festival(query, []), do: query
-
-  defp filter_by_festival(query, festival_ids) when is_list(festival_ids) do
-    query
-    |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-    |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-    |> where([..., fc], fc.organization_id in ^festival_ids)
-  end
-
-  defp filter_by_festival(query, festival_id) do
-    # Single festival ID for backwards compatibility
-    filter_by_festival(query, [festival_id])
-  end
-
-  defp filter_by_award_category(query, nil), do: query
-
-  defp filter_by_award_category(query, category_id) do
-    query
-    |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-    |> where([..., nom], nom.category_id == ^category_id)
-  end
-
-  defp filter_by_award_years(query, nil, nil), do: query
-
-  defp filter_by_award_years(query, from_year, to_year) do
-    # Add joins only once when either from_year or to_year is present
+    # Apply festival filter
     query =
-      if from_year || to_year do
-        query
-        |> join(:inner, [m, ...], nom in "festival_nominations", on: nom.movie_id == m.id)
-        |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
+      if festival_ids do
+        where(query, [..., fc], fc.organization_id in ^festival_ids)
       else
         query
       end
 
+    # Apply year filters
     query =
-      if from_year do
-        where(query, [..., fc], fc.year >= ^from_year)
+      if year_from do
+        where(query, [..., fc], fc.year >= ^year_from)
       else
         query
       end
 
-    if to_year do
-      where(query, [..., fc], fc.year <= ^to_year)
+    if year_to do
+      where(query, [..., fc], fc.year <= ^year_to)
     else
       query
     end
@@ -280,9 +296,14 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_discovery_preset(query, nil), do: query
 
   defp filter_by_discovery_preset(query, "award_winners") do
-    join(query, :inner, [m], nom in "festival_nominations",
-      on: nom.movie_id == m.id and nom.won == true
-    )
+    # Use subquery for better performance - avoids DISTINCT requirement
+    subq =
+      from(nom in "festival_nominations",
+        where: nom.won == true,
+        select: nom.movie_id
+      )
+
+    where(query, [m], m.id in subquery(subq))
   end
 
   defp filter_by_discovery_preset(query, "popular_favorites") do
@@ -333,35 +354,55 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
 
   defp filter_by_discovery_preset(query, _), do: query
 
-  # Award preset filters
+  # Award preset filters - use subquery approach for better performance
   defp filter_by_award_preset(query, nil), do: query
 
   defp filter_by_award_preset(query, "recent_awards") do
-    query
-    |> join(:inner, [m], nom in "festival_nominations", on: nom.movie_id == m.id)
-    |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-    |> where([..., fc], fc.year >= 2020)
+    subq =
+      from(nom in "festival_nominations",
+        join: fc in "festival_ceremonies",
+        on: fc.id == nom.ceremony_id,
+        where: fc.year >= 2020,
+        select: nom.movie_id
+      )
+
+    where(query, [m], m.id in subquery(subq))
   end
 
   defp filter_by_award_preset(query, "2010s") do
-    query
-    |> join(:inner, [m], nom in "festival_nominations", on: nom.movie_id == m.id)
-    |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-    |> where([..., fc], fc.year >= 2010 and fc.year <= 2019)
+    subq =
+      from(nom in "festival_nominations",
+        join: fc in "festival_ceremonies",
+        on: fc.id == nom.ceremony_id,
+        where: fc.year >= 2010 and fc.year <= 2019,
+        select: nom.movie_id
+      )
+
+    where(query, [m], m.id in subquery(subq))
   end
 
   defp filter_by_award_preset(query, "2000s") do
-    query
-    |> join(:inner, [m], nom in "festival_nominations", on: nom.movie_id == m.id)
-    |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-    |> where([..., fc], fc.year >= 2000 and fc.year <= 2009)
+    subq =
+      from(nom in "festival_nominations",
+        join: fc in "festival_ceremonies",
+        on: fc.id == nom.ceremony_id,
+        where: fc.year >= 2000 and fc.year <= 2009,
+        select: nom.movie_id
+      )
+
+    where(query, [m], m.id in subquery(subq))
   end
 
   defp filter_by_award_preset(query, "classic") do
-    query
-    |> join(:inner, [m], nom in "festival_nominations", on: nom.movie_id == m.id)
-    |> join(:inner, [..., nom], fc in "festival_ceremonies", on: fc.id == nom.ceremony_id)
-    |> where([..., fc], fc.year < 2000)
+    subq =
+      from(nom in "festival_nominations",
+        join: fc in "festival_ceremonies",
+        on: fc.id == nom.ceremony_id,
+        where: fc.year < 2000,
+        select: nom.movie_id
+      )
+
+    where(query, [m], m.id in subquery(subq))
   end
 
   defp filter_by_award_preset(query, _), do: query

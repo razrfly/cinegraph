@@ -29,7 +29,6 @@ defmodule CinegraphWeb.Router do
     get "/", HealthController, :index
     get "/db", HealthController, :database
     get "/metrics", HealthController, :metrics
-    post "/metrics/reset", HealthController, :reset
   end
 
   scope "/", CinegraphWeb do
@@ -149,6 +148,9 @@ defmodule CinegraphWeb.Router do
 
   scope "/admin", CinegraphWeb do
     pipe_through [:browser, :admin]
+
+    # Database metrics reset (protected by admin auth)
+    post "/metrics/reset", HealthController, :reset
 
     # Import dashboard
     live "/imports", ImportDashboardLive, :index

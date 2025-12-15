@@ -101,7 +101,12 @@ config :cinegraph, Oban,
     # Sitemap generation (runs once daily, long-running)
     sitemap: 1
   ],
+  # Give jobs more time to complete during deployments/restarts
+  shutdown_grace_period: :timer.seconds(60),
   plugins: [
+    # Rescue orphaned jobs left in executing state after node crashes/restarts
+    # Checks every 1 minute, rescues jobs stuck for more than 10 minutes
+    {Oban.Plugins.Lifeline, interval: :timer.minutes(1), rescue_after: :timer.minutes(10)},
     # Keep jobs for 7 days
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7},
     {Oban.Plugins.Reindexer, schedule: "@daily"},
