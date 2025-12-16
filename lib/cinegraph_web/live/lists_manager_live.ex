@@ -268,8 +268,10 @@ defmodule CinegraphWeb.ListsManagerLive do
     else
       results =
         Enum.map(selected_ids, fn id ->
-          list = MovieLists.get_movie_list!(id)
-          MovieLists.update_movie_list(list, %{active: true})
+          case MovieLists.get_movie_list(id) do
+            nil -> {:error, :not_found}
+            list -> MovieLists.update_movie_list(list, %{active: true})
+          end
         end)
 
       success_count = Enum.count(results, fn res -> match?({:ok, _}, res) end)
@@ -294,8 +296,10 @@ defmodule CinegraphWeb.ListsManagerLive do
     else
       results =
         Enum.map(selected_ids, fn id ->
-          list = MovieLists.get_movie_list!(id)
-          MovieLists.update_movie_list(list, %{active: false})
+          case MovieLists.get_movie_list(id) do
+            nil -> {:error, :not_found}
+            list -> MovieLists.update_movie_list(list, %{active: false})
+          end
         end)
 
       success_count = Enum.count(results, fn res -> match?({:ok, _}, res) end)
@@ -320,8 +324,10 @@ defmodule CinegraphWeb.ListsManagerLive do
     else
       results =
         Enum.map(selected_ids, fn id ->
-          list = MovieLists.get_movie_list!(id)
-          MovieLists.delete_movie_list(list)
+          case MovieLists.get_movie_list(id) do
+            nil -> {:error, :not_found}
+            list -> MovieLists.delete_movie_list(list)
+          end
         end)
 
       success_count = Enum.count(results, fn res -> match?({:ok, _}, res) end)
@@ -816,32 +822,36 @@ defmodule CinegraphWeb.ListsManagerLive do
   defp filter_by_status(lists, "inactive"), do: Enum.filter(lists, &(!&1.active))
 
   defp get_lists_with_movie_counts do
+    import Ecto.Query
+    alias Cinegraph.Movies.Movie
+
     MovieLists.list_all_movie_lists()
     |> Enum.map(fn list ->
       movie_count =
-        case Repo.query("SELECT COUNT(*) FROM movies WHERE canonical_sources ? $1", [
-               list.source_key
-             ]) do
-          {:ok, %{rows: [[count]]}} -> count
-          _ -> 0
-        end
+        from(m in Movie,
+          where: fragment("? \\? ?", m.canonical_sources, ^list.source_key),
+          select: count(m.id)
+        )
+        |> Repo.one()
 
-      Map.put(list, :movie_count, movie_count)
+      Map.put(list, :movie_count, movie_count || 0)
     end)
   end
 
   defp get_list_with_movie_count(id) do
+    import Ecto.Query
+    alias Cinegraph.Movies.Movie
+
     list = MovieLists.get_movie_list!(id)
 
     movie_count =
-      case Repo.query("SELECT COUNT(*) FROM movies WHERE canonical_sources ? $1", [
-             list.source_key
-           ]) do
-        {:ok, %{rows: [[count]]}} -> count
-        _ -> 0
-      end
+      from(m in Movie,
+        where: fragment("? \\? ?", m.canonical_sources, ^list.source_key),
+        select: count(m.id)
+      )
+      |> Repo.one()
 
-    Map.put(list, :movie_count, movie_count)
+    Map.put(list, :movie_count, movie_count || 0)
   end
 
   defp calculate_aggregate_stats(lists) do
