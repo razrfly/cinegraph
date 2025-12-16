@@ -7,12 +7,20 @@
           Simple progress tracking: TMDB Total - Our Total = Remaining
         </p>
       </div>
-      <.link
-        navigate={~p"/admin/award-imports"}
-        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-      >
-        Award Imports
-      </.link>
+      <div class="flex gap-2">
+        <.link
+          navigate={~p"/admin/lists-manager"}
+          class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+        >
+          Lists Manager
+        </.link>
+        <.link
+          navigate={~p"/admin/award-imports"}
+          class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          Award Imports
+        </.link>
+      </div>
     </div>
   </div>
   

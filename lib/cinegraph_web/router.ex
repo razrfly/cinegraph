@@ -169,6 +169,9 @@ defmodule CinegraphWeb.Router do
     # Festival Events management
     live "/festival-events", FestivalEventLive.Index, :index
 
+    # Lists Manager (Issue #487)
+    live "/lists-manager", ListsManagerLive, :index
+
     # Festival Nomination Audit (Issue #479)
     live "/festival", FestivalAuditLive, :index
     live "/festival/:org_slug", FestivalAuditLive, :organization
