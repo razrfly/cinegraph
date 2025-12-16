@@ -29,8 +29,15 @@ defmodule Cinegraph.Movies.MovieLists do
 
   @doc """
   Gets a single movie list by ID.
+  Raises if not found.
   """
   def get_movie_list!(id), do: Repo.get!(MovieList, id)
+
+  @doc """
+  Gets a single movie list by ID.
+  Returns nil if not found.
+  """
+  def get_movie_list(id), do: Repo.get(MovieList, id)
 
   @doc """
   Gets a movie list by source_key.

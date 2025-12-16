@@ -7,7 +7,7 @@ defmodule Cinegraph.Workers.DataRepairWorker do
   """
 
   use Oban.Worker,
-    queue: :default,
+    queue: :maintenance,
     max_attempts: 3,
     # Compare full args for uniqueness - allows batched jobs with different last_id
     unique: [period: 600]
