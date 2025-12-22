@@ -8,7 +8,9 @@ defmodule CinegraphWeb.Router do
     plug :put_root_layout, html: {CinegraphWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
-    # Prevent CDN caching of LiveView pages (CSRF token staleness causes infinite loops)
+    # ETag-based conditional requests for cacheable pages (returns 304 if unchanged)
+    plug CinegraphWeb.Plugs.ETagPlug
+    # Smart cache headers: CDN caching for detail pages, no-cache for dynamic pages
     plug CinegraphWeb.Plugs.CacheControlPlug
     # SEO: 301 redirects from numeric IDs to canonical slugs
     plug CinegraphWeb.Plugs.SEORedirectPlug
