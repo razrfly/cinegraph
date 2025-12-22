@@ -248,10 +248,11 @@ defmodule CinegraphWeb.Plugs.ETagPlug do
         {etag, updated_at}
 
       _ ->
-        # Fallback: use current day as cache key (refreshes daily)
+        # Fallback: use start of current day as cache key (refreshes daily)
         today = Date.utc_today()
+        midnight = DateTime.new!(today, ~T[00:00:00], "Etc/UTC")
         etag = ~s(W/"award-#{slug}-#{Date.to_iso8601(today)}")
-        {etag, DateTime.utc_now()}
+        {etag, midnight}
     end
   end
 
