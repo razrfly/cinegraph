@@ -66,19 +66,21 @@ defmodule CinegraphWeb.Plugs.CacheControlPlug do
     content_type = get_resp_header(conn, "content-type") |> List.first() || ""
 
     cond do
-      # Skip if cache-control is already set (e.g., redirects, static files)
-      get_resp_header(conn, "cache-control") != [] ->
-        conn
-
       # Cacheable HTML pages - allow long CDN caching
+      # NOTE: We MUST set these headers even if cache-control is already set,
+      # because Phoenix/Plug sets a default "max-age=0, private, must-revalidate"
+      # header on all responses. We need to override this for cacheable pages.
       String.contains?(content_type, "text/html") and cacheable_path?(conn.request_path) ->
         set_cacheable_headers(conn)
 
       # Non-cacheable HTML pages (LiveView with dynamic content, admin, etc.)
+      # For these, keep Phoenix's default no-cache behavior (or reinforce it)
       String.contains?(content_type, "text/html") ->
+        # Phoenix already sets private, no-cache headers by default
+        # We reinforce this to be explicit about our caching strategy
         set_no_cache_headers(conn)
 
-      # Default - don't modify headers for non-HTML content
+      # Default - don't modify headers for non-HTML content (static files, etc.)
       true ->
         conn
     end
@@ -93,6 +95,35 @@ defmodule CinegraphWeb.Plugs.CacheControlPlug do
     conn
     |> put_resp_header("cache-control", cache_control)
     |> put_resp_header("vary", "Accept-Encoding")
+    |> maybe_add_cache_tag()
+  end
+
+  # Add Cache-Tag header for Cloudflare cache purging
+  # This allows targeted cache invalidation when content changes
+  defp maybe_add_cache_tag(conn) do
+    case get_cache_tag(conn.request_path) do
+      nil -> conn
+      tag -> put_resp_header(conn, "cache-tag", tag)
+    end
+  end
+
+  defp get_cache_tag(path) do
+    case String.split(path, "/", trim: true) do
+      ["movies", slug] when slug not in ["discover", "tmdb", "imdb"] ->
+        "movie-#{slug}"
+
+      ["people", slug] when slug != "tmdb" ->
+        "person-#{slug}"
+
+      ["lists", slug] ->
+        "list-#{slug}"
+
+      ["awards", slug | _rest] ->
+        "award-#{slug}"
+
+      _ ->
+        nil
+    end
   end
 
   defp set_no_cache_headers(conn) do
