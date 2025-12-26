@@ -98,9 +98,27 @@
           <% end %>
         </div>
         
+<!-- External Ratings -->
+        <CinegraphWeb.RatingComponents.hero_ratings_row movie={@movie} class="mb-4" />
+        
 <!-- Overview -->
         <%= if @movie.overview && @movie.overview != "" do %>
-          <p class="text-white/90 text-lg leading-relaxed mb-6 max-w-3xl">{@movie.overview}</p>
+          <div class="mb-6 max-w-3xl">
+            <p class={[
+              "text-white/90 text-base leading-relaxed",
+              !@overview_expanded && String.length(@movie.overview) > 200 && "line-clamp-2"
+            ]}>
+              {@movie.overview}
+            </p>
+            <%= if String.length(@movie.overview) > 200 do %>
+              <button
+                phx-click="toggle_overview"
+                class="text-blue-400 hover:text-blue-300 text-sm mt-1 transition-colors"
+              >
+                {if @overview_expanded, do: "Show less", else: "Show more"}
+              </button>
+            <% end %>
+          </div>
         <% end %>
         
 <!-- Key People -->
@@ -112,7 +130,7 @@
             <div class="flex flex-wrap gap-2">
               <%= for director <- @movie.directors do %>
                 <.link
-                  navigate={~p"/people/#{director.person.id}"}
+                  navigate={~p"/people/#{director.person.slug}"}
                   class="text-white hover:text-blue-300 font-medium transition-colors"
                 >
                   {director.person.name}
@@ -356,26 +374,6 @@
         <% else %>
           <p class="text-white/60 text-sm text-center">Score data unavailable</p>
         <% end %>
-        
-<!-- External Ratings -->
-        <div class="mt-6 pt-4 border-t border-white/20">
-          <div class="flex flex-wrap justify-center gap-3">
-            <%= if get_in(@movie.omdb_data, ["imdbRating"]) && get_in(@movie.omdb_data, ["imdbRating"]) != "N/A" do %>
-              <.rating_badge
-                source="imdb"
-                value={get_in(@movie.omdb_data, ["imdbRating"])}
-                variant={:compact}
-              />
-            <% end %>
-            <%= if get_in(@movie.omdb_data, ["Metascore"]) && get_in(@movie.omdb_data, ["Metascore"]) != "N/A" do %>
-              <.rating_badge
-                source="metacritic"
-                value={get_in(@movie.omdb_data, ["Metascore"])}
-                variant={:compact}
-              />
-            <% end %>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -596,7 +594,7 @@
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h3 class="text-xl font-bold text-gray-900 mb-4">External Ratings</h3>
         <%= if length(@movie.external_ratings) > 0 do %>
-          <.external_ratings_grid ratings={@movie.external_ratings} limit={8} />
+          <.external_ratings_grid ratings={@movie.external_ratings} limit={8} movie={@movie} />
         <% else %>
           <p class="text-gray-600">No external ratings available.</p>
         <% end %>
@@ -617,7 +615,7 @@
           <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4">
             <%= for cast_member <- Enum.take(@movie.cast, 15) do %>
               <.link
-                navigate={~p"/people/#{cast_member.person.id}"}
+                navigate={~p"/people/#{cast_member.person.slug}"}
                 class="group text-center hover:transform hover:scale-105 transition-all duration-200"
               >
                 <div class="relative mb-2">
@@ -668,7 +666,7 @@
             <div class="grid grid-cols-2 gap-4">
               <%= for crew_member <- @movie.crew |> Enum.filter(& &1.job in ["Director", "Producer", "Executive Producer", "Screenplay", "Writer", "Director of Photography", "Music", "Editor"]) |> Enum.take(8) do %>
                 <.link
-                  navigate={~p"/people/#{crew_member.person.id}"}
+                  navigate={~p"/people/#{crew_member.person.slug}"}
                   class="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <%= if crew_member.person.profile_path do %>
@@ -711,7 +709,7 @@
                 <div class="flex items-start justify-between py-2 border-b border-gray-100 last:border-b-0">
                   <div class="flex-1">
                     <.link
-                      navigate={~p"/people/#{crew_member.person.id}"}
+                      navigate={~p"/people/#{crew_member.person.slug}"}
                       class="font-medium text-gray-900 hover:text-blue-600 transition-colors"
                     >
                       {crew_member.person.name}

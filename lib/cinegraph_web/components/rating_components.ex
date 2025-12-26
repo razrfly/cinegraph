@@ -8,23 +8,53 @@ defmodule CinegraphWeb.RatingComponents do
   use Phoenix.Component
 
   @icon_config %{
-    "imdb" => %{slug: "imdb", color: "F5C518", name: "IMDb", scale: "0-10"},
-    "tmdb" => %{slug: "themoviedatabase", color: "01D277", name: "TMDb", scale: "0-10"},
+    "imdb" => %{
+      slug: "imdb",
+      color: "F5C518",
+      name: "IMDb",
+      scale: "0-10",
+      description: "Internet Movie Database user rating based on votes from registered users."
+    },
+    "tmdb" => %{
+      slug: "themoviedatabase",
+      color: "01D277",
+      name: "TMDb",
+      scale: "0-10",
+      description: "The Movie Database community rating from user votes worldwide."
+    },
     "rotten_tomatoes" => %{
       slug: "rottentomatoes",
       color: "FA320A",
       name: "Tomatometer",
-      scale: "0-100"
+      scale: "0-100",
+      icon_type: :tomato,
+      description:
+        "Rotten Tomatoes Tomatometer - percentage of positive reviews from approved critics. This is the critic score, not the audience score (Popcornmeter)."
     },
     "rotten_tomatoes_audience" => %{
       slug: "rottentomatoes",
       color: "FA320A",
-      name: "Audience",
+      name: "Audience Score",
       scale: "0-100",
-      icon_type: :popcorn
+      icon_type: :popcorn,
+      description:
+        "Rotten Tomatoes audience score - percentage of users who rated this 3.5 stars or higher."
     },
-    "metacritic" => %{slug: "metacritic", color: "FFCC34", name: "Metacritic", scale: "0-100"},
-    "letterboxd" => %{slug: "letterboxd", color: "00D735", name: "Letterboxd", scale: "0-5"}
+    "metacritic" => %{
+      slug: "metacritic",
+      color: "FFCC34",
+      name: "Metacritic",
+      scale: "0-100",
+      description:
+        "Metacritic Metascore - weighted average of critic reviews from top publications."
+    },
+    "letterboxd" => %{
+      slug: "letterboxd",
+      color: "00D735",
+      name: "Letterboxd",
+      scale: "0-5",
+      description: "Letterboxd community rating from film enthusiasts and cinephiles."
+    }
   }
 
   # Map source display names to source keys
@@ -118,17 +148,22 @@ defmodule CinegraphWeb.RatingComponents do
 
   def rating_icon(assigns) do
     ~H"""
-    <%= if @config[:icon_type] == :popcorn do %>
-      <div class={icon_container_classes(@variant)}>
-        <span class={popcorn_icon_classes(@variant)}>🍿</span>
-      </div>
-    <% else %>
-      <img
-        src={"https://cdn.simpleicons.org/#{@config.slug}/#{@config.color}"}
-        alt={@config.name}
-        class={icon_classes(@variant)}
-        loading="lazy"
-      />
+    <%= case @config[:icon_type] do %>
+      <% :popcorn -> %>
+        <div class={icon_container_classes(@variant)}>
+          <span class={emoji_icon_classes(@variant)}>🍿</span>
+        </div>
+      <% :tomato -> %>
+        <div class={icon_container_classes(@variant)}>
+          <span class={emoji_icon_classes(@variant)}>🍅</span>
+        </div>
+      <% _ -> %>
+        <img
+          src={"https://cdn.simpleicons.org/#{@config.slug}/#{@config.color}"}
+          alt={@config.name}
+          class={icon_classes(@variant)}
+          loading="lazy"
+        />
     <% end %>
     """
   end
@@ -188,6 +223,7 @@ defmodule CinegraphWeb.RatingComponents do
   attr :vote_count, :integer, default: nil
   attr :scale, :string, default: nil
   attr :source_name, :string, default: nil, doc: "Optional display name override"
+  attr :url, :string, default: nil, doc: "Optional link to the rating source"
 
   def rating_card(assigns) do
     config =
@@ -203,22 +239,46 @@ defmodule CinegraphWeb.RatingComponents do
     assigns = assign(assigns, config: config, resolved_scale: scale, display_name: display_name)
 
     ~H"""
-    <div class="text-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-      <div class="flex justify-center mb-2">
-        <.rating_icon source={@source} config={@config} variant={:card} />
-      </div>
-      <div class="text-2xl font-bold text-gray-900 mb-1">
-        {format_value(@value, @resolved_scale)}
-      </div>
-      <div class="text-sm text-gray-500">
-        {@display_name}
-      </div>
-      <%= if @vote_count do %>
-        <div class="text-xs text-gray-400 mt-1">
-          {format_vote_count(@vote_count)} votes
+    <%= if @url do %>
+      <a
+        href={@url}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="block text-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
+      >
+        <div class="flex justify-center mb-2">
+          <.rating_icon source={@source} config={@config} variant={:card} />
         </div>
-      <% end %>
-    </div>
+        <div class="text-2xl font-bold text-gray-900 mb-1">
+          {format_value(@value, @resolved_scale)}
+        </div>
+        <div class="text-sm text-gray-500 group-hover:text-blue-600 transition-colors">
+          {@display_name} ↗
+        </div>
+        <%= if @vote_count do %>
+          <div class="text-xs text-gray-400 mt-1">
+            {format_vote_count(@vote_count)} votes
+          </div>
+        <% end %>
+      </a>
+    <% else %>
+      <div class="text-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+        <div class="flex justify-center mb-2">
+          <.rating_icon source={@source} config={@config} variant={:card} />
+        </div>
+        <div class="text-2xl font-bold text-gray-900 mb-1">
+          {format_value(@value, @resolved_scale)}
+        </div>
+        <div class="text-sm text-gray-500">
+          {@display_name}
+        </div>
+        <%= if @vote_count do %>
+          <div class="text-xs text-gray-400 mt-1">
+            {format_vote_count(@vote_count)} votes
+          </div>
+        <% end %>
+      </div>
+    <% end %>
     """
   end
 
@@ -232,6 +292,9 @@ defmodule CinegraphWeb.RatingComponents do
     required: true,
     doc: "An external_rating struct with source, value, and metadata"
 
+  attr :imdb_id, :string, default: nil, doc: "IMDb ID for building URL"
+  attr :tmdb_id, :integer, default: nil, doc: "TMDb ID for building URL"
+
   def external_rating_card(assigns) do
     rating = assigns.rating
 
@@ -241,19 +304,23 @@ defmodule CinegraphWeb.RatingComponents do
     source_key = normalize_source(source_name)
     scale = rating.metadata["scale"]
 
+    # Build URL based on source
+    url = build_rating_url(source_key, assigns.imdb_id, assigns.tmdb_id)
+
     assigns =
       assign(assigns,
         source_key: source_key,
-        source_name: source_name,
-        scale: scale
+        scale: scale,
+        url: url
       )
 
+    # Don't pass source_name - let rating_card use the human-readable name from @icon_config
     ~H"""
     <.rating_card
       source={@source_key}
       value={@rating.value}
       scale={@scale}
-      source_name={@source_name}
+      url={@url}
     />
     """
   end
@@ -267,16 +334,279 @@ defmodule CinegraphWeb.RatingComponents do
   attr :ratings, :list, required: true, doc: "List of external_rating structs"
   attr :limit, :integer, default: 8, doc: "Maximum number of ratings to display"
   attr :class, :string, default: ""
+  attr :movie, :map, default: nil, doc: "Movie struct for building URLs"
 
   def external_ratings_grid(assigns) do
+    imdb_id = if assigns.movie, do: Map.get(assigns.movie, :imdb_id), else: nil
+    tmdb_id = if assigns.movie, do: Map.get(assigns.movie, :tmdb_id), else: nil
+    assigns = assign(assigns, imdb_id: imdb_id, tmdb_id: tmdb_id)
+
     ~H"""
     <div class={["grid grid-cols-2 md:grid-cols-4 gap-4", @class]}>
       <%= for rating <- Enum.take(@ratings, @limit) do %>
-        <.external_rating_card rating={rating} />
+        <.external_rating_card rating={rating} imdb_id={@imdb_id} tmdb_id={@tmdb_id} />
       <% end %>
     </div>
     """
   end
+
+  # Build URL for rating source based on available IDs
+  defp build_rating_url("imdb", imdb_id, _tmdb_id) when is_binary(imdb_id) and imdb_id != "" do
+    "https://www.imdb.com/title/#{imdb_id}/"
+  end
+
+  defp build_rating_url("tmdb", _imdb_id, tmdb_id) when is_integer(tmdb_id) do
+    "https://www.themoviedb.org/movie/#{tmdb_id}"
+  end
+
+  defp build_rating_url(_source, _imdb_id, _tmdb_id), do: nil
+
+  @doc """
+  Renders a horizontal row of inline rating badges for the hero section.
+
+  Displays all available ratings in a compact, scannable row with icons
+  and scores. Designed to be placed prominently under movie details.
+
+  ## Examples
+
+      <.hero_ratings_row movie={@movie} />
+  """
+  attr :movie, :map, required: true, doc: "The movie struct with omdb_data and external_ratings"
+  attr :class, :string, default: ""
+
+  def hero_ratings_row(assigns) do
+    # Build list of available ratings from multiple sources (with URLs)
+    ratings = build_hero_ratings(assigns.movie)
+    assigns = assign(assigns, :ratings, ratings)
+
+    ~H"""
+    <%= if length(@ratings) > 0 do %>
+      <div class={["flex flex-wrap items-center gap-2", @class]}>
+        <%= for rating <- @ratings do %>
+          <.inline_rating_badge source={rating.source} value={rating.value} url={rating[:url]} />
+        <% end %>
+      </div>
+    <% end %>
+    """
+  end
+
+  @doc """
+  Renders a branded rating pill with solid background and brand colors.
+
+  Uses solid brand-colored backgrounds for high visibility and readability
+  on dark hero sections. Each rating source has distinct visual identity.
+  """
+  attr :source, :string, required: true
+  attr :value, :any, required: true
+  attr :url, :string, default: nil
+  attr :class, :string, default: ""
+
+  # Brand-specific pill styling
+  @pill_styles %{
+    "imdb" => "bg-[#F5C518] text-black",
+    "tmdb" => "bg-[#01D277] text-white",
+    "rotten_tomatoes" => "bg-[#FA320A] text-white",
+    "rotten_tomatoes_audience" => "bg-[#FA320A] text-white",
+    "metacritic" => "bg-[#FFCC34] text-black",
+    "letterboxd" => "bg-[#00D735] text-white"
+  }
+
+  def inline_rating_badge(assigns) do
+    config =
+      Map.get(@icon_config, assigns.source, %{
+        slug: "film",
+        color: "666666",
+        name: "Unknown",
+        scale: nil
+      })
+
+    pill_style = Map.get(@pill_styles, assigns.source, "bg-gray-700 text-white")
+    # Use black icons for light backgrounds, white for dark
+    icon_color = if assigns.source in ["imdb", "metacritic"], do: "000000", else: "ffffff"
+
+    assigns =
+      assign(assigns,
+        config: config,
+        pill_style: pill_style,
+        icon_color: icon_color
+      )
+
+    # Compact horizontal with dark glass background + colored icon + hover popover
+    ~H"""
+    <div class={["relative group", @class]}>
+      <%= if @url do %>
+        <a
+          href={@url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class={[
+            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full",
+            "bg-gray-900/80 backdrop-blur-sm",
+            "hover:bg-gray-900 transition-all duration-200"
+          ]}
+        >
+          <.rating_icon_inline config={@config} />
+          <span class="text-white font-semibold text-xs">
+            {format_value(@value, @config.scale)}
+          </span>
+        </a>
+      <% else %>
+        <div class={[
+          "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full cursor-help",
+          "bg-gray-900/80 backdrop-blur-sm",
+          "group-hover:bg-gray-900 transition-all duration-200"
+        ]}>
+          <.rating_icon_inline config={@config} />
+          <span class="text-white font-semibold text-xs">
+            {format_value(@value, @config.scale)}
+          </span>
+        </div>
+      <% end %>
+      <!-- Hover Popover -->
+      <div class="hidden group-hover:block absolute z-20 w-64 p-3 mt-2 bg-gray-900 text-white rounded-lg shadow-xl left-0 top-full">
+        <div class="flex items-center gap-2 mb-2">
+          <%= case @config[:icon_type] do %>
+            <% :popcorn -> %>
+              <span class="text-lg">🍿</span>
+            <% :tomato -> %>
+              <span class="text-lg">🍅</span>
+            <% _ -> %>
+              <img
+                src={"https://cdn.simpleicons.org/#{@config.slug}/#{@config.color}"}
+                alt={@config.name}
+                class="h-5 w-5"
+                loading="lazy"
+              />
+          <% end %>
+          <span class="font-bold text-sm">{@config.name}</span>
+        </div>
+        <div class="text-xl font-bold mb-2">{format_value(@value, @config.scale)}</div>
+        <p class="text-white/70 text-xs leading-relaxed">
+          {@config[:description] || "Rating from #{@config.name}"}
+        </p>
+        <%= if @url do %>
+          <p class="text-blue-400 text-xs mt-2">Click to view on {@config.name} →</p>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  # Helper for inline badge icon
+  defp rating_icon_inline(assigns) do
+    ~H"""
+    <%= case @config[:icon_type] do %>
+      <% :popcorn -> %>
+        <span class="text-xs">🍿</span>
+      <% :tomato -> %>
+        <span class="text-xs">🍅</span>
+      <% _ -> %>
+        <img
+          src={"https://cdn.simpleicons.org/#{@config.slug}/#{@config.color}"}
+          alt={@config.name}
+          class="h-3.5 w-3.5"
+          loading="lazy"
+        />
+    <% end %>
+    """
+  end
+
+  # Build hero ratings from movie data (with URLs where available)
+  defp build_hero_ratings(movie) do
+    ratings = []
+
+    # Get external IDs for building URLs
+    imdb_id = Map.get(movie, :imdb_id)
+    tmdb_id = Map.get(movie, :tmdb_id)
+
+    # IMDb from omdb_data
+    ratings =
+      case get_in(movie.omdb_data || %{}, ["imdbRating"]) do
+        nil -> ratings
+        "N/A" -> ratings
+        value ->
+          url = if imdb_id, do: "https://www.imdb.com/title/#{imdb_id}/", else: nil
+          ratings ++ [%{source: "imdb", value: value, url: url}]
+      end
+
+    # Metacritic from omdb_data (no reliable URL without their slug)
+    ratings =
+      case get_in(movie.omdb_data || %{}, ["Metascore"]) do
+        nil -> ratings
+        "N/A" -> ratings
+        value -> ratings ++ [%{source: "metacritic", value: value, url: nil}]
+      end
+
+    # Rotten Tomatoes from omdb_data Ratings array (no reliable URL without their slug)
+    ratings =
+      case find_omdb_rating(movie.omdb_data, "Rotten Tomatoes") do
+        nil -> ratings
+        value -> ratings ++ [%{source: "rotten_tomatoes", value: parse_rt_value(value), url: nil}]
+      end
+
+    # TMDb from tmdb_data
+    ratings =
+      case get_in(movie.tmdb_data || %{}, ["vote_average"]) do
+        nil -> ratings
+        0 -> ratings
+        value when value == 0.0 -> ratings
+        value ->
+          url = if tmdb_id, do: "https://www.themoviedb.org/movie/#{tmdb_id}", else: nil
+          ratings ++ [%{source: "tmdb", value: value, url: url}]
+      end
+
+    # Add from external_ratings if available (for Letterboxd, etc.)
+    ratings =
+      if Map.has_key?(movie, :external_ratings) && is_list(movie.external_ratings) do
+        Enum.reduce(movie.external_ratings, ratings, fn rating, acc ->
+          source_name =
+            rating.metadata["source_name"] ||
+              (rating.source && rating.source.name) ||
+              "Unknown"
+
+          source_key = normalize_source(source_name)
+
+          # Skip if we already have this source from omdb/tmdb
+          if Enum.any?(acc, fn r -> r.source == source_key end) do
+            acc
+          else
+            acc ++ [%{source: source_key, value: rating.value}]
+          end
+        end)
+      else
+        ratings
+      end
+
+    ratings
+  end
+
+  defp find_omdb_rating(nil, _source), do: nil
+
+  defp find_omdb_rating(omdb_data, source) do
+    case omdb_data["Ratings"] do
+      nil ->
+        nil
+
+      ratings when is_list(ratings) ->
+        Enum.find_value(ratings, fn
+          %{"Source" => ^source, "Value" => value} -> value
+          _ -> nil
+        end)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp parse_rt_value(value) when is_binary(value) do
+    # Handle "92%" format
+    case Integer.parse(String.replace(value, "%", "")) do
+      {num, _} -> num
+      :error -> value
+    end
+  end
+
+  defp parse_rt_value(value), do: value
 
   # Private helper functions
 
@@ -310,18 +640,21 @@ defmodule CinegraphWeb.RatingComponents do
 
   defp icon_classes(:hero), do: "h-8 w-8"
   defp icon_classes(:card), do: "h-8 w-8"
+  defp icon_classes(:inline), do: "h-6 w-6"
   defp icon_classes(:compact), do: "h-4 w-4"
   defp icon_classes(:default), do: "h-5 w-5"
 
   defp icon_container_classes(:hero), do: "flex items-center justify-center w-8 h-8"
   defp icon_container_classes(:card), do: "flex items-center justify-center w-8 h-8"
+  defp icon_container_classes(:inline), do: "flex items-center justify-center w-6 h-6"
   defp icon_container_classes(:compact), do: "flex items-center justify-center w-4 h-4"
   defp icon_container_classes(:default), do: "flex items-center justify-center w-5 h-5"
 
-  defp popcorn_icon_classes(:hero), do: "text-2xl"
-  defp popcorn_icon_classes(:card), do: "text-2xl"
-  defp popcorn_icon_classes(:compact), do: "text-sm"
-  defp popcorn_icon_classes(:default), do: "text-lg"
+  defp emoji_icon_classes(:hero), do: "text-2xl"
+  defp emoji_icon_classes(:card), do: "text-2xl"
+  defp emoji_icon_classes(:inline), do: "text-xl"
+  defp emoji_icon_classes(:compact), do: "text-sm"
+  defp emoji_icon_classes(:default), do: "text-lg"
 
   defp format_value(value, scale) when is_binary(value) do
     # Handle string values like "7.8" or "N/A"
