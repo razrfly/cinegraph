@@ -42,8 +42,9 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         limit: 300
 
     # Apply database-driven scoring to all movies
+    # Use extended timeout (120s) for this complex query with many JOINs
     scored_query = ScoringService.apply_scoring(all_movies_query, profile)
-    all_movies_with_scores = Repo.all(scored_query)
+    all_movies_with_scores = Repo.all(scored_query, timeout: :timer.seconds(120))
 
     # Format and sort all movies by score
     all_scored_movies =
@@ -123,7 +124,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     # Apply scoring to see how well we predict actual additions
     scored_query = ScoringService.apply_scoring(query, profile)
 
-    Repo.all(scored_query)
+    Repo.all(scored_query, timeout: :timer.seconds(120))
     |> Enum.map(&format_prediction_result_from_scored(&1, weights))
   end
 
@@ -152,7 +153,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     # Apply scoring with min score filter
     scored_query = ScoringService.apply_scoring(query, profile, %{min_score: normalized_min})
 
-    Repo.all(scored_query)
+    Repo.all(scored_query, timeout: :timer.seconds(120))
     |> Enum.map(&format_prediction_result_from_scored(&1, weights))
   end
 
