@@ -80,7 +80,8 @@ config :cinegraph, Oban,
     # Each ceremony queues many child jobs, so limit to 2 concurrent ceremonies
     festival_discovery: 2,
     # All metrics/calculations (person quality scores, predictions, CRI)
-    metrics: 10,
+    # Reduced from 10 to 5 to prevent resource contention during heavy scoring queries
+    metrics: 5,
     # Background maintenance tasks (cache warming, sitemap, backfills)
     maintenance: 2
   ],

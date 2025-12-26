@@ -32,14 +32,14 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     start_date = Date.new!(decade, 1, 1)
     end_date = Date.new!(decade + 9, 12, 31)
 
-    # Get ALL movies from the decade (both confirmed and unconfirmed) with scoring
+    # Get movies from the decade with scoring
+    # Reduced from 1000 to 300 to improve query performance in production
     all_movies_query =
       from m in Movie,
         where: m.release_date >= ^start_date,
         where: m.release_date <= ^end_date,
         where: m.import_status == "full",
-        # Get more candidates for better selection
-        limit: 1000
+        limit: 300
 
     # Apply database-driven scoring to all movies
     scored_query = ScoringService.apply_scoring(all_movies_query, profile)

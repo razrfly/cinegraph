@@ -271,10 +271,10 @@ defmodule Cinegraph.Workers.PredictionsWorker do
   end
 
   @impl Oban.Worker
-  # 2 minutes for comparison
-  def timeout(%Oban.Job{args: %{"action" => "calculate_comparison"}}), do: :timer.seconds(120)
-  # 1 minute timeout for other pieces
-  def timeout(_job), do: :timer.seconds(60)
+  # 3 minutes for comparison (aggregates across all profiles)
+  def timeout(%Oban.Job{args: %{"action" => "calculate_comparison"}}), do: :timer.seconds(180)
+  # 3 minutes for predictions/validation (complex scoring queries)
+  def timeout(_job), do: :timer.seconds(180)
 
   # Helper functions
 
