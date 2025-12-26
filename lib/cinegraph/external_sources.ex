@@ -102,10 +102,6 @@ defmodule Cinegraph.ExternalSources do
       {:ok, %ExternalMetric{}}
   """
   def upsert_external_metric(attrs) do
-    # Check if this is a new source before inserting
-    existing_sources = list_sources() |> Enum.map(& &1.name) |> MapSet.new()
-    new_source = attrs[:source] || attrs["source"]
-
     case %ExternalMetric{}
          |> ExternalMetric.changeset(attrs)
          |> Repo.insert(
@@ -113,12 +109,8 @@ defmodule Cinegraph.ExternalSources do
            conflict_target: [:movie_id, :source, :metric_type]
          ) do
       {:ok, metric} = result ->
-        # Invalidate sources cache if this is a new source
-        if new_source && not MapSet.member?(existing_sources, new_source) do
-          invalidate_sources_cache()
-        end
+        invalidate_sources_cache()
 
-        # Trigger PQS recalculation for external metrics updates
         if metric.movie_id do
           Cinegraph.Metrics.PQSTriggerStrategy.trigger_external_metrics_update(metric.movie_id)
         end
