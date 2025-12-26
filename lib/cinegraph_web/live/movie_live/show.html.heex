@@ -359,22 +359,20 @@
         
 <!-- External Ratings -->
         <div class="mt-6 pt-4 border-t border-white/20">
-          <div class="grid grid-cols-2 gap-4 text-center">
+          <div class="flex flex-wrap justify-center gap-3">
             <%= if get_in(@movie.omdb_data, ["imdbRating"]) && get_in(@movie.omdb_data, ["imdbRating"]) != "N/A" do %>
-              <div>
-                <div class="text-yellow-400 font-bold">
-                  {get_in(@movie.omdb_data, ["imdbRating"])}
-                </div>
-                <div class="text-white/60 text-xs">IMDb</div>
-              </div>
+              <.rating_badge
+                source="imdb"
+                value={get_in(@movie.omdb_data, ["imdbRating"])}
+                variant={:compact}
+              />
             <% end %>
             <%= if get_in(@movie.omdb_data, ["Metascore"]) && get_in(@movie.omdb_data, ["Metascore"]) != "N/A" do %>
-              <div>
-                <div class="text-green-400 font-bold">
-                  {get_in(@movie.omdb_data, ["Metascore"])}
-                </div>
-                <div class="text-white/60 text-xs">Metacritic</div>
-              </div>
+              <.rating_badge
+                source="metacritic"
+                value={get_in(@movie.omdb_data, ["Metascore"])}
+                variant={:compact}
+              />
             <% end %>
           </div>
         </div>
@@ -598,30 +596,7 @@
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h3 class="text-xl font-bold text-gray-900 mb-4">External Ratings</h3>
         <%= if length(@movie.external_ratings) > 0 do %>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <%= for rating <- Enum.take(@movie.external_ratings, 8) do %>
-              <div class="text-center p-4 bg-gray-50 rounded-lg">
-                <div class="text-2xl font-bold text-gray-900 mb-1">
-                  <%= cond do %>
-                    <% rating.metadata["scale"] == "0-100" -> %>
-                      {round(rating.value)}%
-                    <% rating.metadata["scale"] -> %>
-                      <%= case String.split(rating.metadata["scale"], "-") do %>
-                        <% [_min, max] -> %>
-                          {rating.value}/{max}
-                        <% _ -> %>
-                          {rating.value}
-                      <% end %>
-                    <% true -> %>
-                      {rating.value}
-                  <% end %>
-                </div>
-                <div class="text-sm text-gray-500">
-                  {rating.metadata["source_name"] || rating.source.name}
-                </div>
-              </div>
-            <% end %>
-          </div>
+          <.external_ratings_grid ratings={@movie.external_ratings} limit={8} />
         <% else %>
           <p class="text-gray-600">No external ratings available.</p>
         <% end %>
