@@ -101,6 +101,7 @@ if config_env() == :prod do
   ]
 
   # Primary database configuration
+  # May use PgBouncer (port 6432) for connection pooling on web requests
   config :cinegraph, Cinegraph.Repo,
     username: username,
     password: password,
@@ -112,6 +113,23 @@ if config_env() == :prod do
     connect_timeout: 30_000,
     timeout: 15_000,
     handshake_timeout: 15_000,
+    ssl: true,
+    ssl_opts: ssl_opts
+
+  # Oban repository - ALWAYS uses direct connection (port 5432)
+  # Required for long-running background jobs that exceed PgBouncer timeouts
+  # Uses smaller pool since Oban jobs are already concurrency-limited by queue config
+  config :cinegraph, Cinegraph.Repo.Oban,
+    username: username,
+    password: password,
+    hostname: hostname,
+    port: 5432,
+    database: database,
+    pool_size: String.to_integer(System.get_env("OBAN_POOL_SIZE") || "5"),
+    socket_options: socket_opts,
+    connect_timeout: 30_000,
+    timeout: 300_000,
+    handshake_timeout: 30_000,
     ssl: true,
     ssl_opts: ssl_opts
 

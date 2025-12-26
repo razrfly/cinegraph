@@ -10,6 +10,8 @@ defmodule Cinegraph.Application do
     children = [
       CinegraphWeb.Telemetry,
       Cinegraph.Repo,
+      # Oban repo - direct connection (bypasses PgBouncer) for long-running jobs
+      Cinegraph.Repo.Oban,
       # Read replica for PlanetScale - offloads read queries from primary
       # Only started if configured (production with DATABASE_REPLICA_ENABLED=true)
       replica_child_spec(),
