@@ -65,10 +65,8 @@ config :logger, :console,
 config :phoenix, :json_library, Jason
 
 # Configure Oban
-# Uses dedicated Oban repo with direct connection (bypasses PgBouncer)
-# for reliable long-running background job execution
 config :cinegraph, Oban,
-  repo: Cinegraph.Repo.Oban,
+  repo: Cinegraph.Repo,
   queues: [
     # All TMDb API work (orchestration, discovery, details) - single rate limit
     tmdb: 15,

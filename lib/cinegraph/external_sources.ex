@@ -4,19 +4,57 @@ defmodule Cinegraph.ExternalSources do
   like TMDB ratings, Rotten Tomatoes scores, recommendations, etc.
   """
 
+  require Logger
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, ExternalMetric, MovieRecommendation}
 
+  @cache_name :movies_cache
+  @sources_cache_key "external_sources:list"
+  @sources_cache_ttl :timer.hours(1)
+
   @doc """
   Lists all external sources from external_metrics table.
-  Uses read replica for better load distribution.
+  Uses caching to avoid expensive DISTINCT queries (was scanning 5.8B rows).
+  Cache TTL: 1 hour (sources rarely change).
   """
   def list_sources do
-    import Ecto.Query
-    alias Cinegraph.Movies.ExternalMetric
+    case Cachex.get(@cache_name, @sources_cache_key) do
+      {:ok, nil} ->
+        # Cache miss - fetch from database
+        Logger.debug("[ExternalSources] Sources cache miss, fetching from database")
+        sources = fetch_sources_from_db()
 
-    # Get unique sources from external_metrics
+        case Cachex.put(@cache_name, @sources_cache_key, sources, ttl: @sources_cache_ttl) do
+          {:ok, true} -> :ok
+          {:error, reason} ->
+            Logger.warning("[ExternalSources] Failed to cache sources: #{inspect(reason)}")
+        end
+
+        sources
+
+      {:ok, cached_sources} ->
+        # Cache hit
+        Logger.debug("[ExternalSources] Sources cache hit")
+        cached_sources
+
+      {:error, reason} ->
+        # Cache error - fall back to database
+        Logger.warning("[ExternalSources] Cache error: #{inspect(reason)}, falling back to database")
+        fetch_sources_from_db()
+    end
+  end
+
+  @doc """
+  Invalidate the sources cache.
+  Call this when a new source is added to external_metrics.
+  """
+  def invalidate_sources_cache do
+    Logger.info("[ExternalSources] Invalidating sources cache")
+    Cachex.del(@cache_name, @sources_cache_key)
+  end
+
+  defp fetch_sources_from_db do
     query =
       from em in ExternalMetric,
         distinct: em.source,
@@ -64,6 +102,10 @@ defmodule Cinegraph.ExternalSources do
       {:ok, %ExternalMetric{}}
   """
   def upsert_external_metric(attrs) do
+    # Check if this is a new source before inserting
+    existing_sources = list_sources() |> Enum.map(& &1.name) |> MapSet.new()
+    new_source = attrs[:source] || attrs["source"]
+
     case %ExternalMetric{}
          |> ExternalMetric.changeset(attrs)
          |> Repo.insert(
@@ -71,6 +113,11 @@ defmodule Cinegraph.ExternalSources do
            conflict_target: [:movie_id, :source, :metric_type]
          ) do
       {:ok, metric} = result ->
+        # Invalidate sources cache if this is a new source
+        if new_source && not MapSet.member?(existing_sources, new_source) do
+          invalidate_sources_cache()
+        end
+
         # Trigger PQS recalculation for external metrics updates
         if metric.movie_id do
           Cinegraph.Metrics.PQSTriggerStrategy.trigger_external_metrics_update(metric.movie_id)
