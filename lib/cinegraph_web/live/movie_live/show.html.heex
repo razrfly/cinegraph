@@ -2,17 +2,16 @@
 <div class="relative">
   <!-- Backdrop Image -->
   <%= if @movie.backdrop_path do %>
-    <div class="absolute inset-0 h-96 md:h-[500px]">
+    <div class="absolute inset-0">
       <img
         src={Cinegraph.Movies.Movie.backdrop_url(@movie, "w1280")}
         alt=""
         class="w-full h-full object-cover"
       />
-      <div class="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/30"></div>
     </div>
   <% else %>
-    <div class="absolute inset-0 h-96 md:h-[500px] bg-gradient-to-br from-gray-900 to-gray-700">
-    </div>
+    <div class="absolute inset-0 bg-gradient-to-br from-gray-900 to-gray-800"></div>
   <% end %>
   
 <!-- Hero Content -->
@@ -52,17 +51,17 @@
     </div>
     
 <!-- Movie Info -->
-    <div class="flex flex-col md:flex-row gap-8 items-start">
+    <div class="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
       <!-- Poster -->
-      <div class="flex-shrink-0">
+      <div class="flex-shrink-0 mx-auto lg:mx-0">
         <%= if @movie.poster_path do %>
           <img
             src={Cinegraph.Movies.Movie.poster_url(@movie, "w500")}
             alt={@movie.title}
-            class="w-64 md:w-80 rounded-lg shadow-2xl"
+            class="w-48 sm:w-64 md:w-72 lg:w-80 rounded-lg shadow-2xl"
           />
         <% else %>
-          <div class="w-64 md:w-80 h-96 md:h-[480px] bg-gray-800 rounded-lg shadow-2xl flex items-center justify-center">
+          <div class="w-48 sm:w-64 md:w-72 lg:w-80 h-72 sm:h-96 md:h-[432px] lg:h-[480px] bg-gray-800 rounded-lg shadow-2xl flex items-center justify-center">
             <span class="text-gray-400 text-lg">No Poster</span>
           </div>
         <% end %>
@@ -72,9 +71,13 @@
       <div class="flex-1 text-white min-h-0">
         <div class="flex items-start justify-between mb-4">
           <div class="min-w-0">
-            <h1 class="text-4xl md:text-5xl font-bold mb-2 leading-tight">{@movie.title}</h1>
+            <h1 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 leading-tight">
+              {@movie.title}
+            </h1>
             <%= if @movie.tagline && @movie.tagline != "" do %>
-              <p class="text-xl text-white/80 italic mb-4 leading-relaxed">"{@movie.tagline}"</p>
+              <p class="text-base sm:text-lg md:text-xl text-white/80 italic mb-4 leading-relaxed">
+                "{@movie.tagline}"
+              </p>
             <% end %>
           </div>
         </div>
@@ -142,7 +145,7 @@
       </div>
       
 <!-- Cinegraph Score Card -->
-      <div class="bg-white/10 backdrop-blur-lg rounded-xl p-6 min-w-[300px]">
+      <div class="bg-gray-900 rounded-xl p-4 sm:p-6 w-full lg:w-auto lg:min-w-[300px]">
         <div class="flex items-center justify-center mb-4">
           <h3 class="text-white text-lg font-semibold text-center">Cinegraph Score</h3>
           <button
@@ -383,13 +386,16 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
   
 <!-- Tab Navigation -->
-  <div class="border-b border-gray-200 mb-8">
-    <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+  <div class="border-b border-gray-200 mb-8 -mx-4 sm:mx-0">
+    <nav
+      class="-mb-px flex space-x-2 sm:space-x-4 lg:space-x-8 overflow-x-auto px-4 sm:px-0 scrollbar-hide"
+      aria-label="Tabs"
+    >
       <button
         phx-click="switch_tab"
         phx-value-tab="overview"
         class={[
-          "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
+          "whitespace-nowrap py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors flex-shrink-0",
           if(@active_tab == "overview",
             do: "border-blue-500 text-blue-600",
             else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -402,7 +408,7 @@
         phx-click="switch_tab"
         phx-value-tab="cast-crew"
         class={[
-          "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
+          "whitespace-nowrap py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors flex-shrink-0",
           if(@active_tab == "cast-crew",
             do: "border-blue-500 text-blue-600",
             else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -415,7 +421,7 @@
         phx-click="switch_tab"
         phx-value-tab="connections"
         class={[
-          "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
+          "whitespace-nowrap py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors flex-shrink-0",
           if(@active_tab == "connections",
             do: "border-blue-500 text-blue-600",
             else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -428,33 +434,33 @@
         phx-click="switch_tab"
         phx-value-tab="awards"
         class={[
-          "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
+          "whitespace-nowrap py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors flex-shrink-0",
           if(@active_tab == "awards",
             do: "border-blue-500 text-blue-600",
             else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
           )
         ]}
       >
-        Awards & Recognition
+        Awards
       </button>
       <button
         phx-click="switch_tab"
         phx-value-tab="collaborations"
         class={[
-          "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
+          "whitespace-nowrap py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors flex-shrink-0",
           if(@active_tab == "collaborations",
             do: "border-blue-500 text-blue-600",
             else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
           )
         ]}
       >
-        Collaborations
+        Collabs
       </button>
       <button
         phx-click="switch_tab"
         phx-value-tab="media"
         class={[
-          "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
+          "whitespace-nowrap py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors flex-shrink-0",
           if(@active_tab == "media",
             do: "border-blue-500 text-blue-600",
             else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -467,7 +473,7 @@
         phx-click="switch_tab"
         phx-value-tab="details"
         class={[
-          "whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors",
+          "whitespace-nowrap py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm transition-colors flex-shrink-0",
           if(@active_tab == "details",
             do: "border-blue-500 text-blue-600",
             else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -486,30 +492,30 @@
     <%= if @active_tab == "overview" do %>
       
 <!-- Movie Stats Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-8">
         <%= if (budget = Map.get(@movie, :budget)) && budget > 0 do %>
-          <div class="bg-white rounded-lg shadow p-6 text-center">
-            <div class="text-2xl font-bold text-green-600 mb-1">
+          <div class="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6 text-center">
+            <div class="text-lg sm:text-xl md:text-2xl font-bold text-green-600 mb-1">
               ${trunc(budget / 1_000_000)}M
             </div>
-            <div class="text-sm text-gray-500">Budget</div>
+            <div class="text-xs sm:text-sm text-gray-500">Budget</div>
           </div>
         <% end %>
 
         <%= if (revenue = Map.get(@movie, :revenue)) && revenue > 0 do %>
-          <div class="bg-white rounded-lg shadow p-6 text-center">
-            <div class="text-2xl font-bold text-blue-600 mb-1">
+          <div class="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6 text-center">
+            <div class="text-lg sm:text-xl md:text-2xl font-bold text-blue-600 mb-1">
               ${trunc(revenue / 1_000_000)}M
             </div>
-            <div class="text-sm text-gray-500">Box Office</div>
+            <div class="text-xs sm:text-sm text-gray-500">Box Office</div>
           </div>
         <% end %>
 
-        <div class="bg-white rounded-lg shadow p-6 text-center">
-          <div class="text-2xl font-bold text-purple-600 mb-1">
+        <div class="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6 text-center">
+          <div class="text-lg sm:text-xl md:text-2xl font-bold text-purple-600 mb-1">
             {length(@movie.cast) + length(@movie.crew)}
           </div>
-          <div class="text-sm text-gray-500">Cast & Crew</div>
+          <div class="text-xs sm:text-sm text-gray-500">Cast & Crew</div>
         </div>
 
         <% all_noms_overview = @movie.all_festival_nominations %>
@@ -517,15 +523,15 @@
           Enum.sum(
             Enum.map(all_noms_overview, fn org -> org.total_wins + org.total_nominations end)
           ) %>
-        <div class="bg-white rounded-lg shadow p-6 text-center">
-          <div class="text-2xl font-bold text-orange-600 mb-1">
+        <div class="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6 text-center">
+          <div class="text-lg sm:text-xl md:text-2xl font-bold text-orange-600 mb-1">
             {total_award_count}
           </div>
-          <div class="text-sm text-gray-500">Award Nominations</div>
+          <div class="text-xs sm:text-sm text-gray-500">Award Nominations</div>
           <%= if total_award_count > 0 do %>
-            <div class="mt-2 text-xs text-gray-400">
+            <div class="mt-1 sm:mt-2 text-xs text-gray-400 line-clamp-2">
               <%= for org <- all_noms_overview do %>
-                <span class="inline-block mr-2">
+                <span class="inline-block mr-1 sm:mr-2">
                   {(get_organization_display_name(org.organization_name) || "")
                   |> String.split(" ")
                   |> List.first("Unknown")}: {org.total_wins + org.total_nominations}

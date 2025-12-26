@@ -104,6 +104,7 @@ defmodule CinegraphWeb.Router do
 
     # Support both ID and slug for backward compatibility
     live "/people/:id_or_slug", PersonLive.Show, :show
+    live "/people/:id_or_slug/legacy", PersonLive.ShowLegacy, :show
 
     # Collaboration routes
     live "/collaborations", CollaborationLive.Index, :index

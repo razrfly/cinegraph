@@ -391,6 +391,45 @@ defmodule Cinegraph.Festivals do
     |> Repo.replica().aggregate(:count, :id)
   end
 
+  @doc """
+  Gets all nominations for a person, with ceremony, category, and movie details.
+  Returns nominations ordered by ceremony year (most recent first), then by category name.
+  """
+  def get_person_nominations(person_id) do
+    from(n in FestivalNomination,
+      where: n.person_id == ^person_id,
+      join: c in assoc(n, :ceremony),
+      join: cat in assoc(n, :category),
+      join: m in assoc(n, :movie),
+      join: org in assoc(c, :organization),
+      preload: [ceremony: {c, organization: org}, category: cat, movie: m],
+      order_by: [desc: c.year, asc: cat.name]
+    )
+    |> Repo.replica().all()
+  end
+
+  @doc """
+  Gets person nomination stats - total nominations and wins.
+  Returns a map with :total_nominations and :total_wins counts.
+  """
+  def get_person_nomination_stats(person_id) do
+    query =
+      from(n in FestivalNomination,
+        where: n.person_id == ^person_id,
+        select: %{
+          total_nominations: count(n.id),
+          total_wins: sum(fragment("CASE WHEN ? THEN 1 ELSE 0 END", n.won))
+        }
+      )
+
+    result = Repo.replica().one(query)
+
+    %{
+      total_nominations: result.total_nominations || 0,
+      total_wins: result.total_wins || 0
+    }
+  end
+
   # ========================================
   # AWARD IMPORT STATUS (VIEW-BACKED)
   # ========================================

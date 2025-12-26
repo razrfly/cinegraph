@@ -1,45 +1,17 @@
-defmodule CinegraphWeb.PersonLive.Show do
+defmodule CinegraphWeb.PersonLive.ShowLegacy do
   use CinegraphWeb, :live_view
 
   alias Cinegraph.People
   alias Cinegraph.Collaborations
-  alias Cinegraph.Festivals
   import CinegraphWeb.CollaborationComponents
   import CinegraphWeb.SEOHelpers
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok,
-     socket
-     |> assign(:active_tab, :acting)
-     |> assign(:bio_expanded, false)}
+    {:ok, assign(socket, :active_tab, :acting)}
   end
 
   @impl true
-  # Handle TMDb ID lookup - redirect to canonical slug URL
-  def handle_params(%{"tmdb_id" => tmdb_id}, _url, socket) do
-    case People.get_person_by_tmdb_id(String.to_integer(tmdb_id)) do
-      nil ->
-        socket =
-          socket
-          |> put_flash(:error, "Person not found")
-          |> push_navigate(to: ~p"/people")
-
-        {:noreply, socket}
-
-      person ->
-        # Redirect to canonical slug URL if slug exists
-        redirect_path =
-          if person.slug do
-            ~p"/people/#{person.slug}"
-          else
-            ~p"/people/#{person.id}"
-          end
-
-        {:noreply, push_navigate(socket, to: redirect_path)}
-    end
-  end
-
   # Handle ID or slug lookup
   def handle_params(%{"id_or_slug" => id_or_slug}, _url, socket) do
     case People.get_person_with_credits_by_id_or_slug(id_or_slug) do
@@ -54,7 +26,7 @@ defmodule CinegraphWeb.PersonLive.Show do
       person ->
         # If accessed by ID and slug exists, redirect to canonical slug URL
         if is_numeric?(id_or_slug) && person.slug do
-          {:noreply, push_navigate(socket, to: ~p"/people/#{person.slug}")}
+          {:noreply, push_navigate(socket, to: ~p"/people/#{person.slug}/legacy")}
         else
           {:noreply, load_person_data(socket, person)}
         end
@@ -72,29 +44,23 @@ defmodule CinegraphWeb.PersonLive.Show do
     career_stats = People.get_career_stats(person.id)
     collaboration_stats = get_collaboration_stats(person.id)
     frequent_collaborators = get_frequent_collaborators(person)
-    award_stats = Festivals.get_person_nomination_stats(person.id)
 
     socket
     |> assign(:person, person)
     |> assign(:career_stats, career_stats)
     |> assign(:collaboration_stats, collaboration_stats)
     |> assign(:frequent_collaborators, frequent_collaborators)
-    |> assign(:award_stats, award_stats)
     |> assign(:show_six_degrees, false)
     |> assign(:six_degrees_target, nil)
     |> assign(:six_degrees_path, nil)
     |> assign(:six_degrees_loading, false)
+    |> assign(:page_title, "#{person.name} (Legacy)")
     |> assign_person_seo(person)
   end
 
   @impl true
   def handle_event("change_tab", %{"tab" => tab}, socket) do
     {:noreply, assign(socket, :active_tab, String.to_atom(tab))}
-  end
-
-  @impl true
-  def handle_event("toggle_bio", _params, socket) do
-    {:noreply, assign(socket, :bio_expanded, !socket.assigns.bio_expanded)}
   end
 
   @impl true
@@ -146,15 +112,15 @@ defmodule CinegraphWeb.PersonLive.Show do
 
     # Get unique collaborators count
     query = """
-    SELECT COUNT(DISTINCT CASE 
-      WHEN person_a_id = $1 THEN person_b_id 
-      ELSE person_a_id 
+    SELECT COUNT(DISTINCT CASE
+      WHEN person_a_id = $1 THEN person_b_id
+      ELSE person_a_id
     END) as total_collaborators,
-    COUNT(DISTINCT CASE 
+    COUNT(DISTINCT CASE
       WHEN cd.collaboration_type = 'actor-director' AND c.person_a_id = $1 THEN c.person_b_id
       WHEN cd.collaboration_type = 'actor-director' AND c.person_b_id = $1 THEN c.person_a_id
     END) as unique_directors,
-    COUNT(DISTINCT CASE 
+    COUNT(DISTINCT CASE
       WHEN c.collaboration_count >= 3 AND c.person_a_id = $1 THEN c.person_b_id
       WHEN c.collaboration_count >= 3 AND c.person_b_id = $1 THEN c.person_a_id
     END) as recurring_partners
@@ -197,10 +163,10 @@ defmodule CinegraphWeb.PersonLive.Show do
 
     # Get top collaborators with enhanced data
     query = """
-    SELECT 
-      CASE 
-        WHEN c.person_a_id = $1 THEN c.person_b_id 
-        ELSE c.person_a_id 
+    SELECT
+      CASE
+        WHEN c.person_a_id = $1 THEN c.person_b_id
+        ELSE c.person_a_id
       END as collaborator_id,
       c.collaboration_count,
       c.first_collaboration_date,
@@ -212,7 +178,7 @@ defmodule CinegraphWeb.PersonLive.Show do
     JOIN collaboration_details cd ON cd.collaboration_id = c.id
     WHERE (c.person_a_id = $1 OR c.person_b_id = $1)
       AND c.collaboration_count >= 2
-    GROUP BY c.id, c.person_a_id, c.person_b_id, c.collaboration_count, 
+    GROUP BY c.id, c.person_a_id, c.person_b_id, c.collaboration_count,
              c.first_collaboration_date, c.latest_collaboration_date,
              c.avg_movie_rating, c.total_revenue
     ORDER BY c.collaboration_count DESC, c.latest_collaboration_date DESC

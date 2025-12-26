@@ -1,54 +1,77 @@
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <!-- Navigation -->
-  <div class="mb-6 flex items-center justify-between">
-    <.link
-      navigate={~p"/people"}
-      class="inline-flex items-center text-blue-600 hover:text-blue-800"
-    >
-      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-      </svg>
-      Back to People
-    </.link>
+<!-- Hero Section with Gradient Background -->
+<div class="relative">
+  <!-- Gradient Background (no backdrop image for people, but matching movie page style) -->
+  <div class="absolute inset-0 h-[700px] sm:h-[600px] md:h-[500px] lg:h-[500px] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700">
+  </div>
+  
+<!-- Hero Content -->
+  <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+    <!-- Navigation -->
+    <div class="mb-8 flex items-center justify-between">
+      <.link
+        navigate={~p"/people"}
+        class="inline-flex items-center text-white/80 hover:text-white transition-colors"
+      >
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+        Back to People
+      </.link>
 
-    <div class="flex items-center space-x-3">
-      <%= if @person.known_for_department == "Directing" || Enum.any?(@person.crew_credits || [], & &1.job == "Director") do %>
+      <div class="flex items-center space-x-3">
+        <%= if @person.known_for_department == "Directing" || Enum.any?(@person.crew_credits || [], & &1.job == "Director") do %>
+          <.link
+            navigate={~p"/directors/#{@person.id}"}
+            class="inline-flex items-center px-3 py-1.5 bg-blue-600/80 hover:bg-blue-600 text-white text-sm rounded-md transition-colors"
+          >
+            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+            Director Analysis
+          </.link>
+        <% end %>
+        
+<!-- Legacy Page Button -->
         <.link
-          navigate={~p"/directors/#{@person.id}"}
-          class="inline-flex items-center px-3 py-1 border border-blue-600 text-blue-600 rounded-full text-sm font-medium hover:bg-blue-50"
+          navigate={~p"/people/#{@person.slug || @person.id}/legacy"}
+          class="inline-flex items-center px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-white text-sm rounded-md transition-colors"
         >
-          <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
               stroke-width="2"
-              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          Director Analysis
+          View Legacy Page
         </.link>
-      <% end %>
-
-      <div class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-medium">
-        TMDB: {@person.tmdb_id}
       </div>
     </div>
-  </div>
-  
-<!-- Person Header -->
-  <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
-    <div class="md:flex">
+    
+<!-- Person Info -->
+    <div class="flex flex-col lg:flex-row gap-6 md:gap-8 items-start">
       <!-- Profile Photo -->
-      <div class="md:w-80 flex-shrink-0">
+      <div class="flex-shrink-0">
         <%= if @person.profile_path do %>
           <img
             src={Cinegraph.Movies.Person.profile_url(@person, "w500")}
             alt={@person.name}
-            class="w-full h-full object-cover"
+            class="w-64 md:w-80 rounded-lg shadow-2xl"
           />
         <% else %>
-          <div class="w-full h-96 md:h-full bg-gray-200 flex items-center justify-center">
-            <svg class="w-32 h-32 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+          <div class="w-64 md:w-80 h-96 md:h-[480px] bg-gray-800 rounded-lg shadow-2xl flex items-center justify-center">
+            <svg class="w-32 h-32 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
             </svg>
           </div>
@@ -56,401 +79,715 @@
       </div>
       
 <!-- Person Details -->
-      <div class="p-6 flex-1">
-        <h1 class="text-3xl font-bold text-gray-900 mb-4">{@person.name}</h1>
-        
-<!-- Info Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          <%= if @person.known_for_department do %>
-            <div>
-              <p class="text-sm text-gray-500">Known For</p>
-              <p class="font-medium">{@person.known_for_department}</p>
-            </div>
-          <% end %>
-
-          <%= if @person.birthday do %>
-            <div>
-              <p class="text-sm text-gray-500">Born</p>
-              <p class="font-medium">
-                {Calendar.strftime(@person.birthday, "%B %d, %Y")}
-                <%= if @person.place_of_birth do %>
-                  <span class="text-sm text-gray-600 block">{@person.place_of_birth}</span>
-                <% end %>
+      <div class="flex-1 text-white min-h-0">
+        <div class="flex items-start justify-between mb-4">
+          <div class="min-w-0">
+            <h1 class="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 leading-tight">
+              {@person.name}
+            </h1>
+            <%= if @person.known_for_department do %>
+              <p class="text-base sm:text-lg md:text-xl text-white/80 mb-4">
+                {@person.known_for_department}
               </p>
-            </div>
-          <% end %>
-
-          <%= if @person.deathday do %>
-            <div>
-              <p class="text-sm text-gray-500">Died</p>
-              <p class="font-medium">{Calendar.strftime(@person.deathday, "%B %d, %Y")}</p>
-            </div>
-          <% end %>
-
-          <div>
-            <p class="text-sm text-gray-500">Gender</p>
-            <p class="font-medium">{Cinegraph.Movies.Person.gender_string(@person)}</p>
+            <% end %>
           </div>
-
-          <%= if @person.popularity do %>
-            <div>
-              <p class="text-sm text-gray-500">Popularity</p>
-              <p class="font-medium">{Float.round(@person.popularity, 1)}</p>
-            </div>
+        </div>
+        
+<!-- Quick Info Pills -->
+        <div class="flex flex-wrap gap-3 mb-6 text-sm">
+          <%= if @person.birthday do %>
+            <span class="bg-white/20 backdrop-blur px-3 py-1.5 rounded-full">
+              Born: {Calendar.strftime(@person.birthday, "%B %d, %Y")}
+            </span>
           <% end %>
-
-          <%= if @person.imdb_id do %>
-            <div>
-              <p class="text-sm text-gray-500">IMDb</p>
-              <a
-                href={"https://www.imdb.com/name/#{@person.imdb_id}"}
-                target="_blank"
-                class="font-medium text-blue-600 hover:text-blue-800"
-              >
-                {@person.imdb_id}
-              </a>
-            </div>
+          <%= if @person.deathday do %>
+            <span class="bg-white/20 backdrop-blur px-3 py-1.5 rounded-full">
+              Died: {Calendar.strftime(@person.deathday, "%B %d, %Y")}
+            </span>
+          <% end %>
+          <span class="bg-white/20 backdrop-blur px-3 py-1.5 rounded-full">
+            {Cinegraph.Movies.Person.gender_string(@person)}
+          </span>
+          <%= if @person.popularity do %>
+            <span class="bg-white/20 backdrop-blur px-3 py-1.5 rounded-full">
+              Popularity: {Float.round(@person.popularity, 1)}
+            </span>
           <% end %>
         </div>
         
-<!-- Biography -->
-        <%= if @person.biography do %>
-          <div class="mt-6">
-            <h3 class="text-lg font-semibold text-gray-900 mb-2">Biography</h3>
-            <p class="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+<!-- External Links - Enhanced for Phase 4 -->
+        <div class="flex flex-wrap gap-2 mb-6">
+          <%= if @person.imdb_id do %>
+            <a
+              href={"https://www.imdb.com/name/#{@person.imdb_id}"}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="group inline-flex items-center px-4 py-2 bg-[#F5C518] hover:bg-[#E4B50F] text-black text-sm font-bold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105"
+            >
+              <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M14.31 9.588v.005c-.077-.048-.227-.07-.42-.07v4.972c.247 0 .384-.036.463-.086.146-.092.221-.354.221-.925V10.52c0-.399-.034-.671-.106-.801a.371.371 0 00-.158-.13zM22.416 0H1.62C.742 0 .036.744.036 1.668V22.332c0 .92.706 1.668 1.584 1.668h20.796c.878 0 1.548-.748 1.548-1.668V1.668C23.964.744 23.294 0 22.416 0zM4.792 14.98H3.032V9.115h1.76v5.865zm6.192.046H9.288v-3.62c0-.11.006-.238.017-.384l-.02.078-.39 1.252-.768 2.674H7.162l-.79-2.76-.38-1.166-.02-.078.007.115.01.27v3.619H4.385V9.115h1.928l.724 2.445.376 1.328.18.704h.025l.165-.647.367-1.285.72-2.545h1.916v5.91h.198zm5.039-2.027c0 .788-.063 1.272-.195 1.503-.128.225-.357.396-.685.488a4.176 4.176 0 01-1.039.107H12.14V9.115h2.037c.571 0 .988.039 1.25.118.356.107.59.283.727.527.131.238.198.627.198 1.17l-.004 2.07h-.325zm4.932.139c0 .575-.034.977-.1 1.22-.069.244-.21.428-.423.556-.168.096-.384.153-.627.174a9.27 9.27 0 01-.988.037h-1.74V9.115h1.536c.658 0 1.104.018 1.34.055.26.04.474.135.626.28.168.161.284.38.35.66.06.233.09.614.09 1.145l-.064 1.883z" />
+              </svg>
+              IMDb
+              <svg
+                class="w-3.5 h-3.5 ml-1.5 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </a>
+          <% end %>
+          <%= if @person.tmdb_id do %>
+            <a
+              href={"https://www.themoviedb.org/person/#{@person.tmdb_id}"}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="group inline-flex items-center px-4 py-2 bg-[#01d277] hover:bg-[#00b865] text-black text-sm font-bold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105"
+            >
+              <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 2.4a9.6 9.6 0 110 19.2 9.6 9.6 0 010-19.2zm-1.2 4.8v9.6h2.4V7.2h-2.4zm4.8 0v9.6h2.4V7.2h-2.4z" />
+              </svg>
+              TMDb
+              <svg
+                class="w-3.5 h-3.5 ml-1.5 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </a>
+          <% end %>
+          <!-- Wikipedia Search Link -->
+          <a
+            href={"https://en.wikipedia.org/wiki/#{URI.encode(@person.name)}"}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="group inline-flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white text-sm font-medium rounded-lg transition-all duration-200 backdrop-blur-sm"
+          >
+            <svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.09 13.119c-.936 1.932-2.217 4.548-2.853 5.728-.616 1.074-1.127.931-1.532.029-1.406-3.321-4.293-9.144-5.651-12.409-.251-.601-.441-.987-.619-1.139-.181-.15-.554-.24-1.122-.271C.103 5.033 0 4.982 0 4.898v-.455l.052-.045c.924-.005 5.401 0 5.401 0l.051.045v.434c0 .119-.075.176-.225.176l-.564.031c-.485.029-.727.164-.727.436 0 .135.053.33.166.601 1.082 2.646 4.818 10.521 4.818 10.521l.136.046 2.411-4.81-.482-1.067-1.658-3.264s-.318-.654-.428-.872c-.728-1.443-.712-1.518-1.447-1.617-.207-.023-.313-.05-.313-.149v-.468l.06-.045h4.292l.113.037v.451c0 .105-.076.15-.227.15l-.308.047c-.792.061-.661.381-.136 1.422l1.582 3.252 1.758-3.504c.293-.64.233-.801.111-.947-.07-.084-.305-.22-.812-.24l-.201-.021c-.052 0-.098-.015-.145-.051-.045-.031-.067-.076-.067-.129v-.427l.061-.045c1.247-.008 4.043 0 4.043 0l.059.045v.436c0 .121-.059.178-.193.178-.646.03-.782.095-1.023.439-.12.186-.375.589-.646 1.039l-2.301 4.273-.065.135 2.792 5.712.17.048 4.396-10.438c.154-.422.129-.722-.064-.895-.197-.172-.346-.273-.857-.295l-.42-.016c-.061 0-.105-.014-.152-.045-.043-.029-.072-.075-.072-.119v-.436l.059-.045h4.961l.041.045v.437c0 .119-.074.18-.209.18-.648.03-1.127.18-1.443.421-.314.255-.557.616-.736 1.067 0 0-4.043 9.258-5.426 12.339-.525 1.007-1.053.917-1.503-.031-.571-1.171-1.773-3.786-2.646-5.71l.053-.036z" />
+            </svg>
+            Wikipedia
+            <svg
+              class="w-3.5 h-3.5 ml-1.5 opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
+            </svg>
+          </a>
+          <!-- Google Search Link -->
+          <a
+            href={"https://www.google.com/search?q=#{URI.encode(@person.name <> " actor")}"}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="group inline-flex items-center px-4 py-2 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-sm font-medium rounded-lg transition-all duration-200 backdrop-blur-sm"
+          >
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            Search
+          </a>
+        </div>
+        
+<!-- Place of Birth -->
+        <%= if @person.place_of_birth do %>
+          <div class="mb-4">
+            <span class="text-white/60 text-sm">From:</span>
+            <span class="text-white/90 ml-2">{@person.place_of_birth}</span>
+          </div>
+        <% end %>
+        
+<!-- Biography (expandable) -->
+        <%= if @person.biography && @person.biography != "" do %>
+          <div class="max-w-3xl">
+            <p class={[
+              "text-white/90 text-base leading-relaxed",
+              !@bio_expanded && String.length(@person.biography) > 300 && "line-clamp-3"
+            ]}>
               {@person.biography}
             </p>
+            <%= if String.length(@person.biography) > 300 do %>
+              <button
+                phx-click="toggle_bio"
+                class="text-blue-400 hover:text-blue-300 text-sm mt-2 transition-colors"
+              >
+                {if @bio_expanded, do: "Show less", else: "Read more"}
+              </button>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+      
+<!-- Career Stats Card (Glass-morphism) - Enhanced for Phase 2 -->
+      <div class="bg-gray-900 lg:bg-white/10 lg:backdrop-blur-lg rounded-xl p-4 sm:p-6 w-full lg:min-w-[300px] lg:max-w-[320px]">
+        <h3 class="text-white text-lg font-semibold text-center mb-4">Career Overview</h3>
+        
+<!-- Main Stats - Hero Numbers -->
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="text-center">
+            <div class="text-3xl font-bold text-blue-400">{@career_stats.total_movies}</div>
+            <div class="text-white/60 text-xs uppercase tracking-wide">Movies</div>
+          </div>
+          <div class="text-center">
+            <div class="text-3xl font-bold text-green-400">{@career_stats.as_actor}</div>
+            <div class="text-white/60 text-xs uppercase tracking-wide">As Actor</div>
+          </div>
+          <div class="text-center">
+            <div class="text-3xl font-bold text-purple-400">{@career_stats.as_crew}</div>
+            <div class="text-white/60 text-xs uppercase tracking-wide">As Crew</div>
+          </div>
+          <div class="text-center">
+            <div class="text-3xl font-bold text-orange-400">
+              {if @career_stats.years_active && Map.get(@career_stats.years_active, :years),
+                do: Map.get(@career_stats.years_active, :years),
+                else: "-"}
+            </div>
+            <div class="text-white/60 text-xs uppercase tracking-wide">Years Active</div>
+          </div>
+        </div>
+        
+<!-- Awards Section (if any) -->
+        <%= if @award_stats.total_nominations > 0 do %>
+          <div class="border-t border-white/20 my-4"></div>
+          <div class="flex items-center justify-center gap-6">
+            <div class="text-center">
+              <div class="flex items-center justify-center">
+                <svg class="w-5 h-5 text-yellow-400 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span class="text-2xl font-bold text-yellow-400">{@award_stats.total_wins}</span>
+              </div>
+              <div class="text-white/60 text-xs uppercase tracking-wide">Wins</div>
+            </div>
+            <div class="text-center">
+              <div class="text-2xl font-bold text-white/90">{@award_stats.total_nominations}</div>
+              <div class="text-white/60 text-xs uppercase tracking-wide">Nominations</div>
+            </div>
+          </div>
+        <% end %>
+        
+<!-- Divider -->
+        <div class="border-t border-white/20 my-4"></div>
+        
+<!-- Collaboration Stats - Detailed List -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between group">
+            <span class="text-white/70 text-sm">Collaborators</span>
+            <span class="text-white font-semibold">
+              {@collaboration_stats.total_collaborators}
+            </span>
+          </div>
+          <div class="flex items-center justify-between group">
+            <span class="text-white/70 text-sm">Unique Directors</span>
+            <span class="text-white font-semibold">{@collaboration_stats.unique_directors}</span>
+          </div>
+          <div class="flex items-center justify-between group">
+            <span class="text-white/70 text-sm">Recurring Partners</span>
+            <span class="text-white font-semibold">
+              {@collaboration_stats.recurring_partners}
+            </span>
+          </div>
+        </div>
+        
+<!-- Box Office Revenue -->
+        <%= if @career_stats.total_revenue > 0 do %>
+          <div class="border-t border-white/20 my-4"></div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-green-400">
+              ${div(@career_stats.total_revenue, 1_000_000)}M
+            </div>
+            <div class="text-white/60 text-xs uppercase tracking-wide">Total Box Office</div>
           </div>
         <% end %>
       </div>
     </div>
   </div>
-  
-<!-- Career Statistics -->
-  <div class="bg-white rounded-lg shadow p-6 mb-8">
-    <h2 class="text-xl font-bold text-gray-900 mb-4">Career Statistics</h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="text-center">
-        <div class="text-3xl font-bold text-blue-600">{@career_stats.total_movies}</div>
-        <div class="text-sm text-gray-600">Total Movies</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-green-600">{@career_stats.as_actor}</div>
-        <div class="text-sm text-gray-600">As Actor</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-purple-600">{@career_stats.as_crew}</div>
-        <div class="text-sm text-gray-600">As Crew</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-orange-600">
-          {if @career_stats.years_active && Map.get(@career_stats.years_active, :years),
-            do: Map.get(@career_stats.years_active, :years),
-            else: "-"}
-        </div>
-        <div class="text-sm text-gray-600">Years Active</div>
-      </div>
-    </div>
+</div>
 
-    <%= if @career_stats.departments && length(@career_stats.departments) > 0 do %>
-      <div class="mt-4">
-        <p class="text-sm text-gray-600">
-          Departments:
-          <span class="font-medium">{Enum.join(@career_stats.departments, ", ")}</span>
-        </p>
-      </div>
-    <% end %>
-
-    <%= if @career_stats.total_revenue > 0 do %>
-      <div class="mt-2">
-        <p class="text-sm text-gray-600">
-          Total Box Office:
-          <span class="font-medium text-green-600">
-            ${div(@career_stats.total_revenue, 1_000_000)}M
-          </span>
-        </p>
-      </div>
-    <% end %>
-  </div>
-  
-<!-- Collaboration Network Statistics -->
-  <div class="bg-white rounded-lg shadow p-6 mb-8">
-    <h2 class="text-xl font-bold text-gray-900 mb-4">Collaboration Network</h2>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="text-center">
-        <div class="text-3xl font-bold text-indigo-600">
-          {@collaboration_stats.total_collaborators}
-        </div>
-        <div class="text-sm text-gray-600">Total Collaborators</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-pink-600">
-          {@collaboration_stats.unique_directors}
-        </div>
-        <div class="text-sm text-gray-600">Unique Directors</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-yellow-600">
-          {@collaboration_stats.recurring_partners}
-        </div>
-        <div class="text-sm text-gray-600">Recurring Partners</div>
-      </div>
-      <div class="text-center">
-        <div class="text-3xl font-bold text-teal-600">
-          {@collaboration_stats.peak_year || "-"}
-        </div>
-        <div class="text-sm text-gray-600">Peak Collaboration Year</div>
-      </div>
-    </div>
-  </div>
-  
-<!-- Six Degrees Challenge Widget -->
-  <div class="bg-white rounded-lg shadow p-6 mb-8">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold text-gray-900">Six Degrees Challenge</h2>
+<!-- Main Content Container -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Enhanced Tab Navigation (Glass-morphism style) -->
+  <div class="bg-gray-900 rounded-xl p-1.5 mb-8 -mx-4 sm:mx-0">
+    <nav class="flex space-x-1 overflow-x-auto px-1 scrollbar-hide" aria-label="Tabs">
       <button
-        phx-click="toggle_six_degrees"
-        class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+        phx-click="change_tab"
+        phx-value-tab="acting"
+        class={"px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap flex-shrink-0 #{if @active_tab == :acting, do: "bg-white text-gray-900 shadow-md", else: "text-gray-400 hover:text-white hover:bg-white/10"}"}
       >
-        <%= if @show_six_degrees do %>
-          Hide
-        <% else %>
-          Show
-        <% end %>
+        Acting ({length(@person.cast_credits)})
       </button>
-    </div>
-
-    <%= if @show_six_degrees do %>
-      <div class="space-y-4">
-        <div class="flex items-center space-x-4">
-          <label class="text-sm font-medium text-gray-700">Connect to:</label>
-          <form phx-submit="search_six_degrees" class="flex-1 flex space-x-2">
-            <input
-              type="text"
-              name="target_person_id"
-              placeholder="Enter person ID..."
-              class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              disabled={@six_degrees_loading}
-            />
-            <button
-              type="submit"
-              class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              disabled={@six_degrees_loading}
-            >
-              <%= if @six_degrees_loading do %>
-                <svg
-                  class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  >
-                  </circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  >
-                  </path>
-                </svg>
-                Finding...
-              <% else %>
-                Find Path
-              <% end %>
-            </button>
-          </form>
-        </div>
-
-        <%= if @six_degrees_path do %>
-          <%= if @six_degrees_path == :no_path do %>
-            <div class="mt-4 p-4 bg-yellow-50 rounded-lg">
-              <p class="text-sm text-yellow-800">No path found within 6 degrees.</p>
-            </div>
-          <% else %>
-            <div class="mt-4 p-4 bg-green-50 rounded-lg">
-              <p class="text-sm font-medium text-green-800 mb-2">
-                Path found! ({length(@six_degrees_path)} degrees)
-              </p>
-              <div class="space-y-2">
-                <%= for {person_a_id, movie, person_b_id} <- @six_degrees_path do %>
-                  <div class="flex items-center text-sm text-gray-700">
-                    <span class="font-medium">Person {person_a_id}</span>
-                    <span class="mx-2">→</span>
-                    <span class="text-blue-600">[{movie.title}]</span>
-                    <span class="mx-2">→</span>
-                    <span class="font-medium">Person {person_b_id}</span>
-                  </div>
-                <% end %>
-              </div>
-            </div>
-          <% end %>
-        <% end %>
-      </div>
-    <% end %>
+      <button
+        phx-click="change_tab"
+        phx-value-tab="crew"
+        class={"px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap flex-shrink-0 #{if @active_tab == :crew, do: "bg-white text-gray-900 shadow-md", else: "text-gray-400 hover:text-white hover:bg-white/10"}"}
+      >
+        Crew ({length(@person.crew_credits)})
+      </button>
+      <button
+        phx-click="change_tab"
+        phx-value-tab="collaborators"
+        class={"px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap flex-shrink-0 #{if @active_tab == :collaborators, do: "bg-white text-gray-900 shadow-md", else: "text-gray-400 hover:text-white hover:bg-white/10"}"}
+      >
+        Collabs ({length(@frequent_collaborators)})
+      </button>
+      <button
+        phx-click="change_tab"
+        phx-value-tab="six_degrees"
+        class={"px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm transition-all duration-200 whitespace-nowrap flex-shrink-0 #{if @active_tab == :six_degrees, do: "bg-white text-gray-900 shadow-md", else: "text-gray-400 hover:text-white hover:bg-white/10"}"}
+      >
+        6 Degrees
+      </button>
+    </nav>
   </div>
   
-<!-- Enhanced Frequent Collaborators -->
-  <%= if length(@frequent_collaborators) > 0 do %>
-    <div class="bg-white rounded-lg shadow p-6 mb-8">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xl font-bold text-gray-900">Frequent Collaborators</h2>
-        <.link
-          navigate={~p"/collaborations?person_id=#{@person.id}"}
-          class="text-blue-600 hover:text-blue-800 text-sm font-medium"
-        >
-          View Full Network →
-        </.link>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <%= for collab <- @frequent_collaborators do %>
-          <.link
-            navigate={~p"/people/#{collab.person.id}"}
-            class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
-          >
-            <%= if collab.person.profile_path do %>
-              <img
-                src={Cinegraph.Movies.Person.profile_url(collab.person, "w185")}
-                alt={collab.person.name}
-                class="w-12 h-12 rounded-full object-cover"
-              />
-            <% else %>
-              <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                <svg class="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                </svg>
-              </div>
-            <% end %>
-            <div class="flex-1 min-w-0">
-              <p class="font-medium text-gray-900 truncate">{collab.person.name}</p>
-              <p class="text-sm text-gray-600">
-                {collab.collaboration_count} films •
-                <span class={"inline-flex px-2 py-0.5 text-xs font-medium rounded-full #{strength_color(collab.strength)}"}>
-                  {humanize_strength(collab.strength)}
-                </span>
-              </p>
-              <p class="text-xs text-gray-500 mt-1">
-                {collab.first_date.year} - {collab.latest_date.year}
-              </p>
-            </div>
-          </.link>
-        <% end %>
-      </div>
-    </div>
-  <% end %>
-  
-<!-- Filmography Tabs -->
-  <div class="bg-white rounded-lg shadow">
-    <div class="border-b border-gray-200">
-      <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-        <button
-          phx-click="change_tab"
-          phx-value-tab="acting"
-          class={"py-4 px-1 text-sm font-medium border-b-2 #{if @active_tab == :acting, do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
-        >
-          Acting ({length(@person.cast_credits)})
-        </button>
-        <button
-          phx-click="change_tab"
-          phx-value-tab="crew"
-          class={"py-4 px-1 text-sm font-medium border-b-2 #{if @active_tab == :crew, do: "border-blue-500 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
-        >
-          Crew ({length(@person.crew_credits)})
-        </button>
-      </nav>
-    </div>
-    
 <!-- Tab Content -->
-    <div class="p-6">
-      <%= if @active_tab == :acting do %>
-        <!-- Acting Credits -->
-        <div class="space-y-4">
-          <%= for credit <- @person.cast_credits do %>
-            <.link
-              navigate={~p"/movies/#{credit.movie.slug || credit.movie.id}"}
-              class="flex items-start space-x-4 p-4 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <div class="flex-shrink-0">
-                <%= if credit.movie.poster_path do %>
-                  <img
-                    src={Cinegraph.Movies.Movie.poster_url(credit.movie, "w92")}
-                    alt={credit.movie.title}
-                    class="w-16 h-24 object-cover rounded"
-                  />
-                <% else %>
-                  <div class="w-16 h-24 bg-gray-200 rounded flex items-center justify-center">
-                    <span class="text-gray-400 text-xs">No Poster</span>
+  <div class="tab-content">
+    <!-- Acting Tab -->
+    <%= if @active_tab == :acting do %>
+      <!-- Known For Section - Horizontal Scroll (TMDb style) -->
+      <%= if length(@person.cast_credits) > 0 do %>
+        <div class="mb-8">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-xl font-bold text-gray-900">Known For</h3>
+            <span class="text-sm text-gray-500">Scroll to see more →</span>
+          </div>
+          <div class="relative">
+            <!-- Horizontal Scroll Container -->
+            <div class="flex overflow-x-auto gap-4 pb-4 -mx-4 px-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+              <%= for credit <- @person.cast_credits |> Enum.take(15) do %>
+                <.link
+                  navigate={~p"/movies/#{credit.movie.slug || credit.movie.id}"}
+                  class="group flex-none w-[140px] text-center"
+                >
+                  <div class="relative mb-2 overflow-hidden rounded-lg shadow-md group-hover:shadow-xl transition-shadow duration-200">
+                    <%= if credit.movie.poster_path do %>
+                      <img
+                        src={Cinegraph.Movies.Movie.poster_url(credit.movie, "w185")}
+                        alt={credit.movie.title}
+                        class="w-full aspect-[2/3] object-cover transform group-hover:scale-105 transition-transform duration-300"
+                      />
+                    <% else %>
+                      <div class="w-full aspect-[2/3] bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                        <svg
+                          class="w-12 h-12 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.5"
+                            d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
+                          />
+                        </svg>
+                      </div>
+                    <% end %>
+                    <!-- Rating Badge -->
+                    <% vote_avg = Cinegraph.Movies.Movie.vote_average(credit.movie) %>
+                    <%= if vote_avg do %>
+                      <div class="absolute top-2 right-2 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-1.5 py-0.5 rounded">
+                        ★ {Float.round(vote_avg, 1)}
+                      </div>
+                    <% end %>
                   </div>
-                <% end %>
-              </div>
-              <div class="flex-1 min-w-0">
-                <h3 class="font-medium text-gray-900 hover:text-blue-600">
-                  {credit.movie.title}
-                  <%= if credit.movie.release_date do %>
-                    <span class="text-gray-500 font-normal">
-                      ({credit.movie.release_date.year})
-                    </span>
-                  <% end %>
-                </h3>
-                <%= if credit.character do %>
-                  <p class="text-sm text-gray-600 mt-1">as {credit.character}</p>
-                <% end %>
-                <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
-                  <% vote_avg = Cinegraph.Movies.Movie.vote_average(credit.movie) %>
-                  <%= if vote_avg do %>
-                    <span>★ {Float.round(vote_avg, 1)}</span>
-                  <% end %>
-                  <% revenue =
-                    if Map.has_key?(credit.movie.tmdb_data || %{}, "revenue"),
-                      do: credit.movie.tmdb_data["revenue"],
-                      else: nil %>
-                  <%= if revenue && revenue > 0 do %>
-                    <span>${div(revenue, 1_000_000)}M</span>
-                  <% end %>
+                  <div class="px-1">
+                    <p class="font-medium text-sm text-gray-900 group-hover:text-blue-600 truncate transition-colors">
+                      {credit.movie.title}
+                    </p>
+                    <%= if credit.movie.release_date do %>
+                      <p class="text-xs text-gray-500">{credit.movie.release_date.year}</p>
+                    <% end %>
+                  </div>
+                </.link>
+              <% end %>
+            </div>
+            <!-- Gradient Fade on Right Edge -->
+            <div class="absolute top-0 right-0 w-12 h-full bg-gradient-to-l from-white to-transparent pointer-events-none">
+            </div>
+          </div>
+        </div>
+      <% end %>
+      
+<!-- Full Filmography - Grouped by Year -->
+      <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-4">
+          <h3 class="text-xl font-bold text-white">
+            Full Filmography
+            <span class="text-white/60 font-normal ml-2">
+              ({length(@person.cast_credits)} credits)
+            </span>
+          </h3>
+        </div>
+
+        <div class="divide-y divide-gray-100">
+          <% credits_by_year =
+            @person.cast_credits
+            |> Enum.group_by(fn c ->
+              if c.movie.release_date, do: c.movie.release_date.year, else: "Unknown"
+            end)
+            |> Enum.sort_by(fn {year, _} ->
+              case year do
+                "Unknown" -> 0
+                y -> -y
+              end
+            end) %>
+
+          <%= for {year, credits} <- credits_by_year do %>
+            <div class="group">
+              <!-- Year Header -->
+              <div class="bg-gray-50 px-6 py-3 sticky top-0 z-10 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                  <span class="font-bold text-gray-800 text-lg">{year}</span>
+                  <span class="text-sm text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                    {length(credits)} {if length(credits) == 1, do: "film", else: "films"}
+                  </span>
                 </div>
               </div>
-            </.link>
-          <% end %>
-        </div>
-      <% else %>
-        <!-- Crew Credits by Department -->
-        <%= if length(@person.crew_credits) > 0 do %>
-          <%= for {department, credits} <- @person.crew_by_department do %>
-            <div class="mb-6">
-              <h3 class="font-semibold text-gray-900 mb-3">
-                {department} ({length(credits)})
-              </h3>
-              <div class="space-y-2">
+              
+<!-- Credits for this Year -->
+              <div class="divide-y divide-gray-50">
                 <%= for credit <- credits do %>
                   <.link
                     navigate={~p"/movies/#{credit.movie.slug || credit.movie.id}"}
-                    class="flex items-center justify-between p-3 rounded hover:bg-gray-50 transition-colors"
+                    class="flex items-center gap-4 px-6 py-4 hover:bg-blue-50/50 transition-colors"
                   >
-                    <div>
-                      <span class="font-medium text-gray-900 hover:text-blue-600">
-                        {credit.movie.title}
-                      </span>
-                      <%= if credit.movie.release_date do %>
-                        <span class="text-gray-500 ml-2">
-                          ({credit.movie.release_date.year})
-                        </span>
+                    <!-- Poster -->
+                    <div class="flex-shrink-0 w-14">
+                      <%= if credit.movie.poster_path do %>
+                        <img
+                          src={Cinegraph.Movies.Movie.poster_url(credit.movie, "w92")}
+                          alt={credit.movie.title}
+                          class="w-14 h-20 object-cover rounded shadow-sm"
+                        />
+                      <% else %>
+                        <div class="w-14 h-20 bg-gradient-to-br from-gray-200 to-gray-300 rounded shadow-sm flex items-center justify-center">
+                          <svg
+                            class="w-6 h-6 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="1.5"
+                              d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z"
+                            />
+                          </svg>
+                        </div>
                       <% end %>
                     </div>
-                    <span class="text-sm text-gray-600">{credit.job}</span>
+                    
+<!-- Movie Info -->
+                    <div class="flex-1 min-w-0">
+                      <h4 class="font-semibold text-gray-900 group-hover:text-blue-600 truncate">
+                        {credit.movie.title}
+                      </h4>
+                      <%= if credit.character do %>
+                        <p class="text-sm text-gray-600 mt-0.5 truncate">as {credit.character}</p>
+                      <% end %>
+                    </div>
+                    
+<!-- Rating & Revenue Badges -->
+                    <div class="flex items-center gap-3 flex-shrink-0">
+                      <% vote_avg = Cinegraph.Movies.Movie.vote_average(credit.movie) %>
+                      <%= if vote_avg do %>
+                        <div class={"flex items-center gap-1 px-2 py-1 rounded-lg text-sm font-medium #{cond do
+                          vote_avg >= 7.5 -> "bg-green-100 text-green-800"
+                          vote_avg >= 6.0 -> "bg-yellow-100 text-yellow-800"
+                          true -> "bg-gray-100 text-gray-600"
+                        end}"}>
+                          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          {Float.round(vote_avg, 1)}
+                        </div>
+                      <% end %>
+                      <% revenue =
+                        if Map.has_key?(credit.movie.tmdb_data || %{}, "revenue"),
+                          do: credit.movie.tmdb_data["revenue"],
+                          else: nil %>
+                      <%= if revenue && revenue > 0 do %>
+                        <div class="text-sm font-medium text-green-700 bg-green-50 px-2 py-1 rounded-lg">
+                          ${div(revenue, 1_000_000)}M
+                        </div>
+                      <% end %>
+                    </div>
+                    
+<!-- Arrow Icon -->
+                    <svg
+                      class="w-5 h-5 text-gray-400 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </.link>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+    
+<!-- Crew Tab -->
+    <%= if @active_tab == :crew do %>
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-xl font-bold text-gray-900 mb-6">
+          Crew Credits ({length(@person.crew_credits)})
+        </h3>
+        <%= if length(@person.crew_credits) > 0 do %>
+          <%= for {department, credits} <- @person.crew_by_department do %>
+            <div class="mb-8 last:mb-0">
+              <h4 class="font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+                {department} ({length(credits)})
+              </h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <%= for credit <- credits do %>
+                  <.link
+                    navigate={~p"/movies/#{credit.movie.slug || credit.movie.id}"}
+                    class="flex items-center justify-between p-4 rounded-lg hover:bg-gray-50 transition-colors border border-gray-100"
+                  >
+                    <div class="flex items-center space-x-3">
+                      <%= if credit.movie.poster_path do %>
+                        <img
+                          src={Cinegraph.Movies.Movie.poster_url(credit.movie, "w92")}
+                          alt={credit.movie.title}
+                          class="w-12 h-18 object-cover rounded"
+                        />
+                      <% else %>
+                        <div class="w-12 h-18 bg-gray-200 rounded flex items-center justify-center">
+                          <span class="text-gray-400 text-xs">?</span>
+                        </div>
+                      <% end %>
+                      <div>
+                        <span class="font-medium text-gray-900 hover:text-blue-600">
+                          {credit.movie.title}
+                        </span>
+                        <%= if credit.movie.release_date do %>
+                          <span class="text-gray-500 ml-2">
+                            ({credit.movie.release_date.year})
+                          </span>
+                        <% end %>
+                      </div>
+                    </div>
+                    <span class="text-sm text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                      {credit.job}
+                    </span>
                   </.link>
                 <% end %>
               </div>
             </div>
           <% end %>
         <% else %>
-          <p class="text-gray-500">No crew credits found.</p>
+          <p class="text-gray-500 text-center py-8">No crew credits found.</p>
         <% end %>
+      </div>
+    <% end %>
+    
+<!-- Collaborators Tab -->
+    <%= if @active_tab == :collaborators do %>
+      <%= if length(@frequent_collaborators) > 0 do %>
+        <div class="bg-white rounded-lg shadow p-6">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-gray-900">Frequent Collaborators</h3>
+            <.link
+              navigate={~p"/collaborations?person_id=#{@person.id}"}
+              class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            >
+              View Full Network →
+            </.link>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <%= for collab <- @frequent_collaborators do %>
+              <.link
+                navigate={~p"/people/#{collab.person.id}"}
+                class="flex items-center space-x-4 p-4 rounded-xl hover:bg-gray-50 transition-colors border border-gray-200 hover:border-gray-300 hover:shadow-md"
+              >
+                <%= if collab.person.profile_path do %>
+                  <img
+                    src={Cinegraph.Movies.Person.profile_url(collab.person, "w185")}
+                    alt={collab.person.name}
+                    class="w-16 h-16 rounded-full object-cover shadow"
+                  />
+                <% else %>
+                  <div class="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center shadow">
+                    <svg class="w-8 h-8 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                    </svg>
+                  </div>
+                <% end %>
+                <div class="flex-1 min-w-0">
+                  <p class="font-semibold text-gray-900 truncate">{collab.person.name}</p>
+                  <p class="text-sm text-gray-600">
+                    {collab.collaboration_count} films together
+                  </p>
+                  <div class="flex items-center mt-1">
+                    <span class={"inline-flex px-2 py-0.5 text-xs font-medium rounded-full #{strength_color(collab.strength)}"}>
+                      {humanize_strength(collab.strength)}
+                    </span>
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">
+                    {collab.first_date.year} - {collab.latest_date.year}
+                  </p>
+                </div>
+              </.link>
+            <% end %>
+          </div>
+        </div>
+      <% else %>
+        <div class="bg-white rounded-lg shadow p-6 text-center">
+          <div class="text-4xl mb-4">🤝</div>
+          <p class="text-gray-600">No frequent collaborators found yet.</p>
+          <p class="text-sm text-gray-500 mt-2">
+            Collaborators appear when they've worked on 2+ films together.
+          </p>
+        </div>
       <% end %>
-    </div>
+    <% end %>
+    
+<!-- Six Degrees Tab -->
+    <%= if @active_tab == :six_degrees do %>
+      <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-xl font-bold text-gray-900 mb-4">Six Degrees Challenge</h3>
+        <p class="text-gray-600 mb-6">
+          Find the connection path between {@person.name} and any other person in the film industry.
+        </p>
+
+        <div class="space-y-4">
+          <div class="flex items-center space-x-4">
+            <label class="text-sm font-medium text-gray-700">Connect to:</label>
+            <form phx-submit="search_six_degrees" class="flex-1 flex space-x-2">
+              <input
+                type="text"
+                name="target_person_id"
+                placeholder="Enter person ID..."
+                class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                disabled={@six_degrees_loading}
+              />
+              <button
+                type="submit"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                disabled={@six_degrees_loading}
+              >
+                <%= if @six_degrees_loading do %>
+                  <svg
+                    class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    >
+                    </circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    >
+                    </path>
+                  </svg>
+                  Finding...
+                <% else %>
+                  Find Path
+                <% end %>
+              </button>
+            </form>
+          </div>
+
+          <%= if @six_degrees_path do %>
+            <%= if @six_degrees_path == :no_path do %>
+              <div class="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p class="text-sm text-yellow-800">No path found within 6 degrees.</p>
+              </div>
+            <% else %>
+              <div class="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                <p class="text-sm font-medium text-green-800 mb-2">
+                  Path found! ({length(@six_degrees_path)} degrees)
+                </p>
+                <div class="space-y-2">
+                  <%= for {person_a_id, movie, person_b_id} <- @six_degrees_path do %>
+                    <div class="flex items-center text-sm text-gray-700">
+                      <span class="font-medium">Person {person_a_id}</span>
+                      <span class="mx-2">→</span>
+                      <span class="text-blue-600">[{movie.title}]</span>
+                      <span class="mx-2">→</span>
+                      <span class="font-medium">Person {person_b_id}</span>
+                    </div>
+                  <% end %>
+                </div>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+        
+<!-- Six Degrees Link -->
+        <div class="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="text-lg font-semibold text-blue-900 mb-2">
+                Explore Six Degrees of Cinema
+              </h4>
+              <p class="text-blue-700">
+                Use our interactive tool to explore connections across the entire film industry.
+              </p>
+            </div>
+            <.link
+              navigate={~p"/six-degrees"}
+              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Launch Six Degrees
+            </.link>
+          </div>
+        </div>
+      </div>
+    <% end %>
   </div>
+  
+<!-- Biography Section (Full, below tabs) -->
+  <%= if @person.biography && String.length(@person.biography) > 200 do %>
+    <div class="mt-8 bg-white rounded-lg shadow p-6">
+      <h3 class="text-xl font-bold text-gray-900 mb-4">Biography</h3>
+      <p class="text-gray-700 leading-relaxed whitespace-pre-wrap">
+        {@person.biography}
+      </p>
+    </div>
+  <% end %>
 </div>
