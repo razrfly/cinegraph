@@ -401,16 +401,6 @@ defmodule CinegraphWeb.RatingComponents do
   attr :url, :string, default: nil
   attr :class, :string, default: ""
 
-  # Brand-specific pill styling
-  @pill_styles %{
-    "imdb" => "bg-[#F5C518] text-black",
-    "tmdb" => "bg-[#01D277] text-white",
-    "rotten_tomatoes" => "bg-[#FA320A] text-white",
-    "rotten_tomatoes_audience" => "bg-[#FA320A] text-white",
-    "metacritic" => "bg-[#FFCC34] text-black",
-    "letterboxd" => "bg-[#00D735] text-white"
-  }
-
   def inline_rating_badge(assigns) do
     config =
       Map.get(@icon_config, assigns.source, %{
@@ -420,16 +410,7 @@ defmodule CinegraphWeb.RatingComponents do
         scale: nil
       })
 
-    pill_style = Map.get(@pill_styles, assigns.source, "bg-gray-700 text-white")
-    # Use black icons for light backgrounds, white for dark
-    icon_color = if assigns.source in ["imdb", "metacritic"], do: "000000", else: "ffffff"
-
-    assigns =
-      assign(assigns,
-        config: config,
-        pill_style: pill_style,
-        icon_color: icon_color
-      )
+    assigns = assign(assigns, config: config)
 
     # Compact horizontal with dark glass background + colored icon + hover popover
     ~H"""
