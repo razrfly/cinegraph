@@ -316,12 +316,7 @@ defmodule CinegraphWeb.RatingComponents do
 
     # Don't pass source_name - let rating_card use the human-readable name from @icon_config
     ~H"""
-    <.rating_card
-      source={@source_key}
-      value={@rating.value}
-      scale={@scale}
-      url={@url}
-    />
+    <.rating_card source={@source_key} value={@rating.value} scale={@scale} url={@url} />
     """
   end
 
@@ -503,8 +498,12 @@ defmodule CinegraphWeb.RatingComponents do
     # IMDb from omdb_data
     ratings =
       case get_in(movie.omdb_data || %{}, ["imdbRating"]) do
-        nil -> ratings
-        "N/A" -> ratings
+        nil ->
+          ratings
+
+        "N/A" ->
+          ratings
+
         value ->
           url = if imdb_id, do: "https://www.imdb.com/title/#{imdb_id}/", else: nil
           ratings ++ [%{source: "imdb", value: value, url: url}]
@@ -528,9 +527,15 @@ defmodule CinegraphWeb.RatingComponents do
     # TMDb from tmdb_data
     ratings =
       case get_in(movie.tmdb_data || %{}, ["vote_average"]) do
-        nil -> ratings
-        0 -> ratings
-        value when value == 0.0 -> ratings
+        nil ->
+          ratings
+
+        0 ->
+          ratings
+
+        value when value == 0.0 ->
+          ratings
+
         value ->
           url = if tmdb_id, do: "https://www.themoviedb.org/movie/#{tmdb_id}", else: nil
           ratings ++ [%{source: "tmdb", value: value, url: url}]

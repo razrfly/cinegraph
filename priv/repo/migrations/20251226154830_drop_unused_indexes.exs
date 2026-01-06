@@ -16,12 +16,12 @@ defmodule Cinegraph.Repo.Migrations.DropUnusedIndexes do
 
   def up do
     # Phase 2: Redundant index (covered by idx_collaboration_details_year_collab_id)
-    drop_if_exists index(:collaboration_details, [:year],
-      name: :collaboration_details_year_index)
+    drop_if_exists index(:collaboration_details, [:year], name: :collaboration_details_year_index)
 
     # Phase 3: Unused indexes per PlanetScale recommendations
     drop_if_exists index(:metric_weight_profiles, [:is_default],
-      name: :metric_weight_profiles_is_default_index)
+                     name: :metric_weight_profiles_is_default_index
+                   )
 
     execute "DROP INDEX IF EXISTS idx_movies_any_canonical"
 
@@ -29,20 +29,22 @@ defmodule Cinegraph.Repo.Migrations.DropUnusedIndexes do
 
     execute "DROP INDEX IF EXISTS idx_movies_1001_by_decade"
 
-    drop_if_exists index(:api_lookup_metrics, [:success],
-      name: :api_lookup_metrics_success_index)
+    drop_if_exists index(:api_lookup_metrics, [:success], name: :api_lookup_metrics_success_index)
   end
 
   def down do
     # Recreate indexes if rollback needed
     create_if_not_exists index(:collaboration_details, [:year],
-      name: :collaboration_details_year_index)
+                           name: :collaboration_details_year_index
+                         )
 
     create_if_not_exists index(:metric_weight_profiles, [:is_default],
-      name: :metric_weight_profiles_is_default_index)
+                           name: :metric_weight_profiles_is_default_index
+                         )
 
     create_if_not_exists index(:api_lookup_metrics, [:success],
-      name: :api_lookup_metrics_success_index)
+                           name: :api_lookup_metrics_success_index
+                         )
 
     # These indexes had special definitions - recreate with original logic
     execute """

@@ -34,8 +34,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Legacy Version Notice -->
+  
+<!-- Legacy Version Notice -->
   <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
     <div class="flex items-center">
       <svg class="w-5 h-5 text-amber-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
@@ -59,8 +59,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Person Header -->
+  
+<!-- Person Header -->
   <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
     <div class="md:flex">
       <!-- Profile Photo -->
@@ -79,12 +79,12 @@
           </div>
         <% end %>
       </div>
-
-      <!-- Person Details -->
+      
+<!-- Person Details -->
       <div class="p-6 flex-1">
         <h1 class="text-3xl font-bold text-gray-900 mb-4">{@person.name}</h1>
-
-        <!-- Info Grid -->
+        
+<!-- Info Grid -->
         <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           <%= if @person.known_for_department do %>
             <div>
@@ -137,8 +137,8 @@
             </div>
           <% end %>
         </div>
-
-        <!-- Biography -->
+        
+<!-- Biography -->
         <%= if @person.biography do %>
           <div class="mt-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-2">Biography</h3>
@@ -150,8 +150,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Career Statistics -->
+  
+<!-- Career Statistics -->
   <div class="bg-white rounded-lg shadow p-6 mb-8">
     <h2 class="text-xl font-bold text-gray-900 mb-4">Career Statistics</h2>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -197,8 +197,8 @@
       </div>
     <% end %>
   </div>
-
-  <!-- Collaboration Network Statistics -->
+  
+<!-- Collaboration Network Statistics -->
   <div class="bg-white rounded-lg shadow p-6 mb-8">
     <h2 class="text-xl font-bold text-gray-900 mb-4">Collaboration Network</h2>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -228,8 +228,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Six Degrees Challenge Widget -->
+  
+<!-- Six Degrees Challenge Widget -->
   <div class="bg-white rounded-lg shadow p-6 mb-8">
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-xl font-bold text-gray-900">Six Degrees Challenge</h2>
@@ -319,8 +319,8 @@
       </div>
     <% end %>
   </div>
-
-  <!-- Enhanced Frequent Collaborators -->
+  
+<!-- Enhanced Frequent Collaborators -->
   <%= if length(@frequent_collaborators) > 0 do %>
     <div class="bg-white rounded-lg shadow p-6 mb-8">
       <div class="flex items-center justify-between mb-4">
@@ -368,8 +368,8 @@
       </div>
     </div>
   <% end %>
-
-  <!-- Filmography Tabs -->
+  
+<!-- Filmography Tabs -->
   <div class="bg-white rounded-lg shadow">
     <div class="border-b border-gray-200">
       <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
@@ -389,8 +389,8 @@
         </button>
       </nav>
     </div>
-
-    <!-- Tab Content -->
+    
+<!-- Tab Content -->
     <div class="p-6">
       <%= if @active_tab == :acting do %>
         <!-- Acting Credits -->
