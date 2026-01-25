@@ -180,6 +180,9 @@ defmodule CinegraphWeb.Router do
     live "/festival/:org_slug", FestivalAuditLive, :organization
     live "/festival/:org_slug/:year", FestivalAuditLive, :ceremony
 
+    # Score Calibration Admin (Issue #518)
+    live "/score-calibration", ScoreCalibrationLive, :index
+
     # Oban job dashboard
     oban_dashboard("/oban")
   end

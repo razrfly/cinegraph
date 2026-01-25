@@ -26,7 +26,9 @@ defmodule Cinegraph.ExternalSources do
         sources = fetch_sources_from_db()
 
         case Cachex.put(@cache_name, @sources_cache_key, sources, ttl: @sources_cache_ttl) do
-          {:ok, true} -> :ok
+          {:ok, true} ->
+            :ok
+
           {:error, reason} ->
             Logger.warning("[ExternalSources] Failed to cache sources: #{inspect(reason)}")
         end
@@ -40,7 +42,10 @@ defmodule Cinegraph.ExternalSources do
 
       {:error, reason} ->
         # Cache error - fall back to database
-        Logger.warning("[ExternalSources] Cache error: #{inspect(reason)}, falling back to database")
+        Logger.warning(
+          "[ExternalSources] Cache error: #{inspect(reason)}, falling back to database"
+        )
+
         fetch_sources_from_db()
     end
   end
