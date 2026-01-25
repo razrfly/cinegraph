@@ -27,16 +27,16 @@ defmodule Cinegraph.Calibration.ReferenceList do
     timestamps()
   end
 
-  @required_fields ~w(name slug)a
-  @optional_fields ~w(description source_url list_type total_items last_synced_at)a
+  @required_fields ~w(name)a
+  @optional_fields ~w(slug description source_url list_type total_items last_synced_at)a
 
   def changeset(reference_list, attrs) do
     reference_list
     |> cast(attrs, @required_fields ++ @optional_fields)
+    |> generate_slug()
     |> validate_required(@required_fields)
     |> validate_inclusion(:list_type, @list_types)
     |> unique_constraint(:slug)
-    |> generate_slug()
   end
 
   defp generate_slug(changeset) do

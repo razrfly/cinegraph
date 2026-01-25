@@ -64,7 +64,11 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
   @impl true
   def handle_event("update_weight", %{"category" => category, "value" => value}, socket) do
-    value = String.to_float(value) / 100.0
+    value =
+      case Float.parse(value) do
+        {float_val, _} -> float_val / 100.0
+        :error -> 0.0
+      end
 
     current_weights =
       socket.assigns.draft_weights ||
@@ -89,14 +93,15 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
   @impl true
   def handle_event("simulate_weights", _params, socket) do
-    weights = socket.assigns.draft_weights || socket.assigns.active_config.category_weights
+    active = socket.assigns.active_config || %ScoringConfiguration{}
+    weights = socket.assigns.draft_weights || Map.get(active, :category_weights, %{})
 
     # Create a temporary config for simulation
     temp_config = %ScoringConfiguration{
       category_weights: weights,
-      missing_data_strategies: socket.assigns.active_config.missing_data_strategies || %{},
-      normalization_method: socket.assigns.active_config.normalization_method || "none",
-      normalization_settings: socket.assigns.active_config.normalization_settings || %{}
+      missing_data_strategies: Map.get(active, :missing_data_strategies) || %{},
+      normalization_method: Map.get(active, :normalization_method) || "none",
+      normalization_settings: Map.get(active, :normalization_settings) || %{}
     }
 
     opts =
@@ -173,21 +178,25 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
   @impl true
   def handle_event("activate_config", %{"id" => id}, socket) do
-    config = Calibration.get_scoring_configuration(String.to_integer(id))
+    case Calibration.get_scoring_configuration(String.to_integer(id)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "Configuration not found")}
 
-    case Calibration.activate_configuration(config) do
-      {:ok, activated} ->
-        socket =
-          socket
-          |> assign(:active_config, activated)
-          |> assign(:all_configs, Calibration.list_scoring_configurations())
-          |> assign(:draft_weights, nil)
-          |> put_flash(:info, "Activated configuration v#{activated.version}")
+      config ->
+        case Calibration.activate_configuration(config) do
+          {:ok, activated} ->
+            socket =
+              socket
+              |> assign(:active_config, activated)
+              |> assign(:all_configs, Calibration.list_scoring_configurations())
+              |> assign(:draft_weights, nil)
+              |> put_flash(:info, "Activated configuration v#{activated.version}")
 
-        {:noreply, socket}
+            {:noreply, socket}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to activate configuration")}
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Failed to activate configuration")}
+        end
     end
   end
 

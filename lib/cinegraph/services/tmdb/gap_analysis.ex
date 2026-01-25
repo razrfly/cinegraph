@@ -25,15 +25,15 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
   require Logger
 
   @type analysis_report :: %{
-    date: Date.t(),
-    export_total: integer(),
-    export_non_video: integer(),
-    our_total: integer(),
-    missing_count: integer(),
-    coverage_percent: float(),
-    by_popularity: map(),
-    recommendations: list()
-  }
+          date: Date.t(),
+          export_total: integer(),
+          export_non_video: integer(),
+          our_total: integer(),
+          missing_count: integer(),
+          coverage_percent: float(),
+          by_popularity: map(),
+          recommendations: list()
+        }
 
   @doc """
   Performs a complete gap analysis.
@@ -54,7 +54,6 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
          {:ok, export_ids} <- load_export_ids(export_path, opts),
          {:ok, our_ids} <- load_our_ids(),
          {:ok, export_entries} <- load_export_entries(export_path, opts) do
-
       missing_ids = MapSet.difference(export_ids, our_ids)
       extra_ids = MapSet.difference(our_ids, export_ids)
 
@@ -95,7 +94,6 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
 
     with {:ok, export_path} <- ensure_export(opts),
          {:ok, our_ids} <- load_our_ids() do
-
       missing =
         DailyExport.stream_movies(export_path, skip_video: true, skip_adult: true)
         |> Stream.reject(fn entry -> MapSet.member?(our_ids, entry.id) end)
@@ -115,15 +113,16 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
   @spec find_missing_by_tier(keyword()) :: {:ok, map()} | {:error, term()}
   def find_missing_by_tier(opts \\ []) do
     with {:ok, missing} <- find_missing_ids(opts) do
-      grouped = Enum.group_by(missing, fn entry ->
-        cond do
-          entry.popularity >= 100 -> :tier_1_blockbuster
-          entry.popularity >= 10 -> :tier_2_popular
-          entry.popularity >= 1 -> :tier_3_notable
-          entry.popularity >= 0.1 -> :tier_4_obscure
-          true -> :tier_5_very_obscure
-        end
-      end)
+      grouped =
+        Enum.group_by(missing, fn entry ->
+          cond do
+            entry.popularity >= 100 -> :tier_1_blockbuster
+            entry.popularity >= 10 -> :tier_2_popular
+            entry.popularity >= 1 -> :tier_3_notable
+            entry.popularity >= 0.1 -> :tier_4_obscure
+            true -> :tier_5_very_obscure
+          end
+        end)
 
       {:ok, grouped}
     end
@@ -150,14 +149,19 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
     end
 
     IO.puts("\n📈 MISSING BY POPULARITY TIER")
+
     report.by_popularity
     |> Enum.sort_by(fn {tier, _} -> tier_order(tier) end)
     |> Enum.each(fn {tier, data} ->
       IO.puts("  #{tier_label(tier)}")
-      IO.puts("    Missing: #{format_number(data.missing)} / #{format_number(data.total)} (#{Float.round(data.coverage, 1)}% coverage)")
+
+      IO.puts(
+        "    Missing: #{format_number(data.missing)} / #{format_number(data.total)} (#{Float.round(data.coverage, 1)}% coverage)"
+      )
     end)
 
     IO.puts("\n💡 RECOMMENDATIONS")
+
     Enum.each(report.recommendations, fn rec ->
       IO.puts("  • #{rec}")
     end)
@@ -174,10 +178,11 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
     our_count = Repo.one(from m in Movie, select: count(m.id))
 
     # Try to get cached export stats or return basic info
-    {:ok, %{
-      our_movie_count: our_count,
-      note: "Run full analyze/0 for detailed gap analysis"
-    }}
+    {:ok,
+     %{
+       our_movie_count: our_count,
+       note: "Run full analyze/0 for detailed gap analysis"
+     }}
   end
 
   # Private functions
@@ -192,7 +197,9 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
         end
 
       opts[:skip_download] ->
-        default_path = Path.join(System.tmp_dir!(), "movie_ids_#{format_date(Date.utc_today())}.json")
+        default_path =
+          Path.join(System.tmp_dir!(), "movie_ids_#{format_date(Date.utc_today())}.json")
+
         if File.exists?(default_path) do
           {:ok, default_path}
         else
@@ -206,13 +213,23 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
 
   defp load_export_ids(path, opts) do
     Logger.info("Loading export IDs from #{path}...")
-    DailyExport.get_all_ids(path, skip_video: true, skip_adult: true, min_popularity: opts[:min_popularity])
+
+    DailyExport.get_all_ids(path,
+      skip_video: true,
+      skip_adult: true,
+      min_popularity: opts[:min_popularity]
+    )
   end
 
   defp load_export_entries(path, opts) do
     Logger.info("Loading export entries for analysis...")
+
     entries =
-      DailyExport.stream_movies(path, skip_video: true, skip_adult: true, min_popularity: opts[:min_popularity])
+      DailyExport.stream_movies(path,
+        skip_video: true,
+        skip_adult: true,
+        min_popularity: opts[:min_popularity]
+      )
       |> Enum.reduce(%{}, fn entry, acc ->
         Map.put(acc, entry.id, entry)
       end)
@@ -242,26 +259,29 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
     }
 
     Enum.map(tiers, fn {tier_name, %{min: min, max: max}} ->
-      tier_entries = Enum.filter(export_entries, fn {_id, entry} ->
-        entry.popularity >= min && (max == :infinity || entry.popularity < max)
-      end)
+      tier_entries =
+        Enum.filter(export_entries, fn {_id, entry} ->
+          entry.popularity >= min && (max == :infinity || entry.popularity < max)
+        end)
 
       tier_ids = Enum.map(tier_entries, fn {id, _} -> id end) |> MapSet.new()
       missing_in_tier = MapSet.intersection(tier_ids, missing_ids) |> MapSet.size()
       total_in_tier = MapSet.size(tier_ids)
 
-      coverage = if total_in_tier > 0 do
-        ((total_in_tier - missing_in_tier) / total_in_tier) * 100
-      else
-        100.0
-      end
+      coverage =
+        if total_in_tier > 0 do
+          (total_in_tier - missing_in_tier) / total_in_tier * 100
+        else
+          100.0
+        end
 
-      {tier_name, %{
-        total: total_in_tier,
-        missing: missing_in_tier,
-        have: total_in_tier - missing_in_tier,
-        coverage: coverage
-      }}
+      {tier_name,
+       %{
+         total: total_in_tier,
+         missing: missing_in_tier,
+         have: total_in_tier - missing_in_tier,
+         coverage: coverage
+       }}
     end)
     |> Enum.into(%{})
   end
@@ -271,7 +291,7 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
     export_size = MapSet.size(export_ids)
 
     if export_size > 0 do
-      (overlap / export_size) * 100
+      overlap / export_size * 100
     else
       0.0
     end
@@ -287,7 +307,10 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
 
     recommendations =
       if high_pop.missing > 0 do
-        ["PRIORITY: Import #{high_pop.missing} blockbuster movies (popularity 100+)" | recommendations]
+        [
+          "PRIORITY: Import #{high_pop.missing} blockbuster movies (popularity 100+)"
+          | recommendations
+        ]
       else
         recommendations
       end
@@ -308,6 +331,7 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
 
     # Calculate total high-priority
     total_priority = high_pop.missing + med_pop.missing + notable.missing
+
     recommendations =
       if total_priority > 0 do
         days = ceil(total_priority / 10_000)
@@ -320,6 +344,7 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
   end
 
   defp maybe_filter_popularity(stream, nil), do: stream
+
   defp maybe_filter_popularity(stream, min) do
     Stream.filter(stream, fn entry -> entry.popularity >= min end)
   end
@@ -327,6 +352,7 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
   defp sort_missing(list, :popularity) do
     Enum.sort_by(list, & &1.popularity, :desc)
   end
+
   defp sort_missing(list, :id) do
     Enum.sort_by(list, & &1.id)
   end
@@ -343,9 +369,11 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
   defp format_number(n) when n >= 1_000_000 do
     "#{Float.round(n / 1_000_000, 1)}M"
   end
+
   defp format_number(n) when n >= 1_000 do
     "#{Float.round(n / 1_000, 1)}K"
   end
+
   defp format_number(n), do: "#{n}"
 
   defp tier_order("100+"), do: 0

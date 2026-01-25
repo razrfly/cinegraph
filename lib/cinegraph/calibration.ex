@@ -141,6 +141,20 @@ defmodule Cinegraph.Calibration do
     |> Repo.update()
   end
 
+  # Whitelist of allowed keys for reference imports to prevent atom table exhaustion
+  @reference_allowed_keys %{
+    "reference_list_id" => :reference_list_id,
+    "movie_id" => :movie_id,
+    "rank" => :rank,
+    "external_score" => :external_score,
+    "external_id" => :external_id,
+    "external_title" => :external_title,
+    "external_year" => :external_year,
+    "match_confidence" => :match_confidence,
+    "inserted_at" => :inserted_at,
+    "updated_at" => :updated_at
+  }
+
   @doc """
   Bulk imports references for a reference list.
   """
@@ -154,14 +168,25 @@ defmodule Cinegraph.Calibration do
         |> Map.put(:reference_list_id, reference_list_id)
         |> Map.put(:inserted_at, now)
         |> Map.put(:updated_at, now)
-        |> Map.new(fn {k, v} -> {to_string(k), v} end)
-        |> Map.new(fn {k, v} -> {String.to_atom(k), v} end)
+        |> normalize_keys_to_atoms()
       end)
 
     Repo.insert_all(Reference, entries,
       on_conflict: {:replace, [:rank, :external_score, :updated_at]},
       conflict_target: [:reference_list_id, :movie_id]
     )
+  end
+
+  defp normalize_keys_to_atoms(map) do
+    map
+    |> Enum.reduce(%{}, fn {k, v}, acc ->
+      string_key = to_string(k)
+
+      case Map.get(@reference_allowed_keys, string_key) do
+        nil -> acc
+        atom_key -> Map.put(acc, atom_key, v)
+      end
+    end)
   end
 
   @doc """
@@ -187,10 +212,10 @@ defmodule Cinegraph.Calibration do
   end
 
   defp find_movie_match(%Reference{external_title: title, external_year: year}) do
-    # Try exact match first
+    # Try exact match first (case-insensitive but literal, no wildcard)
     query =
       Movie
-      |> where([m], ilike(m.title, ^title))
+      |> where([m], fragment("LOWER(?) = LOWER(?)", m.title, ^title))
 
     query =
       if year do
@@ -329,16 +354,9 @@ defmodule Cinegraph.Calibration do
   """
   def activate_configuration(%ScoringConfiguration{} = config) do
     Repo.transaction(fn ->
-      # Deactivate current active config
-      case get_active_configuration() do
-        nil ->
-          :ok
-
-        current ->
-          current
-          |> ScoringConfiguration.deactivate_changeset()
-          |> Repo.update!()
-      end
+      # Atomically deactivate all currently active configs
+      from(s in ScoringConfiguration, where: s.is_active == true)
+      |> Repo.update_all(set: [is_active: false])
 
       # Activate the new config
       config
@@ -389,45 +407,41 @@ defmodule Cinegraph.Calibration do
   end
 
   defp get_matched_data(reference_list_id, _config) do
-    # Get references with their Cinegraph scores
-    query = """
-    WITH movie_scores AS (
-      SELECT
-        m.id as movie_id,
-        COALESCE(
-          (SELECT AVG(value) FROM external_metrics em
-           WHERE em.movie_id = m.id
-           AND em.source IN ('imdb', 'tmdb')
-           AND em.metric_type = 'rating_average'),
-          5.0
-        ) as cinegraph_score
-      FROM movies m
-    )
-    SELECT
-      r.rank,
-      r.external_score,
-      ms.cinegraph_score
-    FROM calibration_references r
-    JOIN movie_scores ms ON ms.movie_id = r.movie_id
-    WHERE r.reference_list_id = $1
-      AND r.movie_id IS NOT NULL
-      AND r.rank IS NOT NULL
-    ORDER BY r.rank
-    """
+    # Subquery to calculate average rating per movie from imdb/tmdb sources
+    avg_ratings_subquery =
+      from(em in "external_metrics",
+        where: em.source in ["imdb", "tmdb"] and em.metric_type == "rating_average",
+        group_by: em.movie_id,
+        select: %{movie_id: em.movie_id, avg_rating: avg(em.value)}
+      )
 
-    case Repo.query(query, [reference_list_id]) do
-      {:ok, %{rows: rows}} ->
-        Enum.map(rows, fn [rank, external_score, cinegraph_score] ->
-          %{
-            rank: rank,
-            external_score: to_float(external_score),
-            cinegraph_score: to_float(cinegraph_score)
-          }
-        end)
+    # Main query joining references with movies and the avg ratings
+    query =
+      from(r in Reference,
+        join: m in Movie,
+        on: r.movie_id == m.id,
+        left_join: ar in subquery(avg_ratings_subquery),
+        on: ar.movie_id == m.id,
+        where: r.reference_list_id == ^reference_list_id,
+        where: not is_nil(r.movie_id),
+        where: not is_nil(r.rank),
+        order_by: [asc: r.rank],
+        select: %{
+          rank: r.rank,
+          external_score: r.external_score,
+          cinegraph_score: coalesce(ar.avg_rating, 5.0)
+        }
+      )
 
-      _ ->
-        []
-    end
+    query
+    |> Repo.all()
+    |> Enum.map(fn row ->
+      %{
+        rank: row.rank,
+        external_score: to_float(row.external_score),
+        cinegraph_score: to_float(row.cinegraph_score)
+      }
+    end)
   end
 
   defp to_float(nil), do: nil
@@ -479,7 +493,7 @@ defmodule Cinegraph.Calibration do
 
     denominator = :math.sqrt(sum_sq_x * sum_sq_y)
 
-    if denominator == 0, do: 0, else: Float.round(numerator / denominator, 4)
+    if denominator == 0, do: nil, else: Float.round(numerator / denominator, 4)
   end
 
   defp spearman_correlation(scores, _ranks) when length(scores) < 2, do: nil
@@ -644,9 +658,11 @@ defmodule Cinegraph.Calibration do
     end)
   end
 
+  defp calculate_score_for_movie(movie, nil), do: calculate_score_for_movie(movie, %{})
+
   defp calculate_score_for_movie(movie, config) do
     # Simplified score calculation for simulation
-    weights = config.category_weights
+    weights = Map.get(config, :category_weights, %{})
 
     # Get component scores
     popular = get_popular_opinion_score(movie.id)
@@ -664,7 +680,7 @@ defmodule Cinegraph.Calibration do
       {financial, Map.get(weights, "financial_performance", 0.2), "financial_performance"}
     ]
 
-    strategies = config.missing_data_strategies || %{}
+    strategies = Map.get(config, :missing_data_strategies) || %{}
 
     {total_score, total_weight} =
       Enum.reduce(components, {0, 0}, fn {score, weight, category}, {sum, w} ->
@@ -728,17 +744,18 @@ defmodule Cinegraph.Calibration do
   end
 
   defp get_cultural_score(movie_id) do
+    # Simplified - uses popularity score as a proxy for cultural impact
     query = """
-    SELECT
-      COALESCE(jsonb_object_keys(canonical_sources), 0) as canonical_count,
-      (SELECT value FROM external_metrics WHERE movie_id = $1 AND source = 'tmdb' AND metric_type = 'popularity_score' LIMIT 1) as popularity
-    FROM movies
-    WHERE id = $1
+    SELECT value
+    FROM external_metrics
+    WHERE movie_id = $1
+      AND source = 'tmdb'
+      AND metric_type = 'popularity_score'
+    LIMIT 1
     """
 
-    # Simplified - just return nil for now, full implementation would calculate properly
     case Repo.query(query, [movie_id]) do
-      {:ok, %{rows: [[_canonical, popularity]]}} ->
+      {:ok, %{rows: [[popularity]]}} ->
         p = to_float(popularity)
         if p && p > 0, do: min(10.0, :math.log(p + 1) / :math.log(1000) * 5), else: nil
 
