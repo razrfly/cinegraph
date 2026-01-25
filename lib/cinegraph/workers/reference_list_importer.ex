@@ -89,36 +89,48 @@ defmodule Cinegraph.Workers.ReferenceListImporter do
           |> Enum.take(250)
           |> Enum.with_index(1)
 
-        # Clear existing references for this list
-        Reference
-        |> where([r], r.reference_list_id == ^list.id)
-        |> Repo.delete_all()
+        # Wrap delete and import in a transaction for atomicity
+        result =
+          Repo.transaction(fn ->
+            Reference
+            |> where([r], r.reference_list_id == ^list.id)
+            |> Repo.delete_all()
 
-        # Insert new references
-        references =
-          Enum.map(ranked_movies, fn {[movie_id, title, year, imdb_id, rating, _votes], rank} ->
-            %{
-              reference_list_id: list.id,
-              movie_id: movie_id,
-              rank: rank,
-              external_score: to_float(rating),
-              external_id: imdb_id,
-              external_title: title,
-              external_year: year,
-              match_confidence: Decimal.new("1.0")
-            }
+            # Insert new references
+            references =
+              Enum.map(ranked_movies, fn {[movie_id, title, year, imdb_id, rating, _votes], rank} ->
+                %{
+                  reference_list_id: list.id,
+                  movie_id: movie_id,
+                  rank: rank,
+                  external_score: to_float(rating),
+                  external_id: imdb_id,
+                  external_title: title,
+                  external_year: year,
+                  match_confidence: Decimal.new("1.0")
+                }
+              end)
+
+            Calibration.import_references(list.id, references)
+
+            length(references)
           end)
 
-        Calibration.import_references(list.id, references)
+        case result do
+          {:ok, count} ->
+            # Update list metadata
+            Calibration.update_reference_list(list, %{
+              total_items: count,
+              last_synced_at: DateTime.utc_now()
+            })
 
-        # Update list metadata
-        Calibration.update_reference_list(list, %{
-          total_items: length(references),
-          last_synced_at: DateTime.utc_now()
-        })
+            Logger.info("Imported #{count} movies to IMDb Top 250 reference list")
+            {:ok, count}
 
-        Logger.info("Imported #{length(references)} movies to IMDb Top 250 reference list")
-        {:ok, length(references)}
+          {:error, reason} ->
+            Logger.error("Failed to import IMDb Top 250 (transaction failed): #{inspect(reason)}")
+            {:error, reason}
+        end
 
       {:error, reason} ->
         Logger.error("Failed to import IMDb Top 250: #{inspect(reason)}")
@@ -237,37 +249,47 @@ defmodule Cinegraph.Workers.ReferenceListImporter do
       {100, "Ben-Hur", 1959}
     ]
 
-    # Clear existing
-    Reference
-    |> where([r], r.reference_list_id == ^list.id)
-    |> Repo.delete_all()
+    # Wrap delete and import in a transaction for atomicity
+    result =
+      Repo.transaction(fn ->
+        Reference
+        |> where([r], r.reference_list_id == ^list.id)
+        |> Repo.delete_all()
 
-    # Match each movie to our database
-    references =
-      Enum.map(afi_movies, fn {rank, title, year} ->
-        movie = find_movie_by_title_year(title, year)
+        # Match each movie to our database
+        references =
+          Enum.map(afi_movies, fn {rank, title, year} ->
+            movie = find_movie_by_title_year(title, year)
 
-        %{
-          reference_list_id: list.id,
-          movie_id: movie && movie.id,
-          rank: rank,
-          external_title: title,
-          external_year: year,
-          match_confidence: if(movie, do: Decimal.new("1.0"), else: nil)
-        }
+            %{
+              reference_list_id: list.id,
+              movie_id: movie && movie.id,
+              rank: rank,
+              external_title: title,
+              external_year: year,
+              match_confidence: if(movie, do: Decimal.new("1.0"), else: nil)
+            }
+          end)
+
+        Calibration.import_references(list.id, references)
+
+        Enum.count(references, & &1.movie_id)
       end)
 
-    Calibration.import_references(list.id, references)
+    case result do
+      {:ok, matched_count} ->
+        Calibration.update_reference_list(list, %{
+          total_items: 100,
+          last_synced_at: DateTime.utc_now()
+        })
 
-    matched_count = Enum.count(references, & &1.movie_id)
+        Logger.info("Imported AFI 100: #{matched_count}/100 movies matched")
+        {:ok, matched_count}
 
-    Calibration.update_reference_list(list, %{
-      total_items: 100,
-      last_synced_at: DateTime.utc_now()
-    })
-
-    Logger.info("Imported AFI 100: #{matched_count}/100 movies matched")
-    {:ok, matched_count}
+      {:error, reason} ->
+        Logger.error("Failed to import AFI 100: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 
   @doc """
@@ -330,35 +352,46 @@ defmodule Cinegraph.Workers.ReferenceListImporter do
       {50, "Andrei Rublev", 1966}
     ]
 
-    Reference
-    |> where([r], r.reference_list_id == ^list.id)
-    |> Repo.delete_all()
+    # Wrap delete and import in a transaction for atomicity
+    result =
+      Repo.transaction(fn ->
+        Reference
+        |> where([r], r.reference_list_id == ^list.id)
+        |> Repo.delete_all()
 
-    references =
-      Enum.map(ss_movies, fn {rank, title, year} ->
-        movie = find_movie_by_title_year(title, year)
+        references =
+          Enum.map(ss_movies, fn {rank, title, year} ->
+            movie = find_movie_by_title_year(title, year)
 
-        %{
-          reference_list_id: list.id,
-          movie_id: movie && movie.id,
-          rank: rank,
-          external_title: title,
-          external_year: year,
-          match_confidence: if(movie, do: Decimal.new("1.0"), else: nil)
-        }
+            %{
+              reference_list_id: list.id,
+              movie_id: movie && movie.id,
+              rank: rank,
+              external_title: title,
+              external_year: year,
+              match_confidence: if(movie, do: Decimal.new("1.0"), else: nil)
+            }
+          end)
+
+        Calibration.import_references(list.id, references)
+
+        Enum.count(references, & &1.movie_id)
       end)
 
-    Calibration.import_references(list.id, references)
+    case result do
+      {:ok, matched_count} ->
+        Calibration.update_reference_list(list, %{
+          total_items: 50,
+          last_synced_at: DateTime.utc_now()
+        })
 
-    matched_count = Enum.count(references, & &1.movie_id)
+        Logger.info("Imported Sight & Sound 2022: #{matched_count}/50 movies matched")
+        {:ok, matched_count}
 
-    Calibration.update_reference_list(list, %{
-      total_items: 50,
-      last_synced_at: DateTime.utc_now()
-    })
-
-    Logger.info("Imported Sight & Sound 2022: #{matched_count}/50 movies matched")
-    {:ok, matched_count}
+      {:error, reason} ->
+        Logger.error("Failed to import Sight & Sound 2022: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 
   @doc """

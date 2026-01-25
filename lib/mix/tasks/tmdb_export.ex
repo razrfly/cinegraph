@@ -28,27 +28,38 @@ defmodule Mix.Tasks.Tmdb.Export do
   @shortdoc "TMDb daily export operations"
 
   def run(args) do
-    {opts, remaining, _} = OptionParser.parse(args,
-      switches: [
-        date: :string,
-        limit: :integer,
-        min_popularity: :float,
-        by_tier: :boolean,
-        verbose: :boolean
-      ],
-      aliases: [d: :date, l: :limit, v: :verbose]
-    )
+    {opts, remaining, _} =
+      OptionParser.parse(args,
+        switches: [
+          date: :string,
+          limit: :integer,
+          min_popularity: :float,
+          by_tier: :boolean,
+          verbose: :boolean
+        ],
+        aliases: [d: :date, l: :limit, v: :verbose]
+      )
 
     command = List.first(remaining) || "help"
 
     Mix.Task.run("app.start")
 
     case command do
-      "download" -> download(opts)
-      "analyze" -> analyze(opts)
-      "gap" -> gap_analysis(opts)
-      "missing" -> show_missing(opts)
-      "help" -> show_help()
+      "download" ->
+        download(opts)
+
+      "analyze" ->
+        analyze(opts)
+
+      "gap" ->
+        gap_analysis(opts)
+
+      "missing" ->
+        show_missing(opts)
+
+      "help" ->
+        show_help()
+
       _ ->
         Mix.shell().error("Unknown command: #{command}")
         show_help()
@@ -58,16 +69,19 @@ defmodule Mix.Tasks.Tmdb.Export do
   defp download(opts) do
     alias Cinegraph.Services.TMDb.DailyExport
 
-    date = if opts[:date] do
-      case Date.from_iso8601(opts[:date]) do
-        {:ok, d} -> d
-        {:error, _} ->
-          Mix.shell().error("Invalid date format. Use YYYY-MM-DD")
-          System.halt(1)
+    date =
+      if opts[:date] do
+        case Date.from_iso8601(opts[:date]) do
+          {:ok, d} ->
+            d
+
+          {:error, _} ->
+            Mix.shell().error("Invalid date format. Use YYYY-MM-DD")
+            System.halt(1)
+        end
+      else
+        Date.utc_today()
       end
-    else
-      Date.utc_today()
-    end
 
     Mix.shell().info("Downloading TMDb export for #{date}...")
     Mix.shell().info("URL: #{DailyExport.export_url(date)}")
@@ -127,12 +141,14 @@ defmodule Mix.Tasks.Tmdb.Export do
       Mix.shell().info("🎬 SAMPLE MOVIES")
       Mix.shell().info("")
       Mix.shell().info("High popularity (≥10):")
+
       Enum.each(samples.high, fn m ->
         Mix.shell().info("  #{Float.round(m.popularity, 1)} - #{m.original_title}")
       end)
 
       Mix.shell().info("")
       Mix.shell().info("Medium popularity (1-10):")
+
       Enum.each(samples.medium, fn m ->
         Mix.shell().info("  #{Float.round(m.popularity, 1)} - #{m.original_title}")
       end)
@@ -185,7 +201,10 @@ defmodule Mix.Tasks.Tmdb.Export do
         Enum.with_index(missing, 1)
         |> Enum.each(fn {m, idx} ->
           pop = Float.round(m.popularity, 2)
-          Mix.shell().info("#{String.pad_leading("#{idx}", 3)}. [#{pop}] #{m.original_title} (ID: #{m.id})")
+
+          Mix.shell().info(
+            "#{String.pad_leading("#{idx}", 3)}. [#{pop}] #{m.original_title} (ID: #{m.id})"
+          )
         end)
 
         Mix.shell().info("")
@@ -235,9 +254,11 @@ defmodule Mix.Tasks.Tmdb.Export do
 
         # Summary
         total_missing = grouped |> Map.values() |> Enum.map(&length/1) |> Enum.sum()
-        priority = (grouped[:tier_1_blockbuster] || []) ++
-                   (grouped[:tier_2_popular] || []) ++
-                   (grouped[:tier_3_notable] || [])
+
+        priority =
+          (grouped[:tier_1_blockbuster] || []) ++
+            (grouped[:tier_2_popular] || []) ++
+            (grouped[:tier_3_notable] || [])
 
         Mix.shell().info("")
         Mix.shell().info("📋 SUMMARY")
@@ -276,17 +297,19 @@ defmodule Mix.Tasks.Tmdb.Export do
   end
 
   defp find_export_file(opts) do
-    date = if opts[:date] do
-      case Date.from_iso8601(opts[:date]) do
-        {:ok, d} -> d
-        {:error, _} -> Date.utc_today()
+    date =
+      if opts[:date] do
+        case Date.from_iso8601(opts[:date]) do
+          {:ok, d} -> d
+          {:error, _} -> Date.utc_today()
+        end
+      else
+        Date.utc_today()
       end
-    else
-      Date.utc_today()
-    end
 
     # Check common locations
     formatted = format_date(date)
+
     possible_paths = [
       "/tmp/movie_ids_#{formatted}.json",
       Path.join(System.tmp_dir!(), "movie_ids_#{formatted}.json"),
@@ -296,8 +319,11 @@ defmodule Mix.Tasks.Tmdb.Export do
     case Enum.find(possible_paths, &File.exists?/1) do
       nil ->
         Mix.shell().info("Export file not found locally. Downloading...")
+
         case Cinegraph.Services.TMDb.DailyExport.download(date: date) do
-          {:ok, path} -> path
+          {:ok, path} ->
+            path
+
           {:error, _} ->
             Mix.shell().error("Failed to download export file")
             System.halt(1)

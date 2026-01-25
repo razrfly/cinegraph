@@ -25,15 +25,16 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
   require Logger
 
   @base_url "http://files.tmdb.org/p/exports"
-  @download_timeout 300_000  # 5 minutes for large files
+  # 5 minutes for large files
+  @download_timeout 300_000
 
   @type movie_entry :: %{
-    id: integer(),
-    original_title: String.t(),
-    popularity: float(),
-    adult: boolean(),
-    video: boolean()
-  }
+          id: integer(),
+          original_title: String.t(),
+          popularity: float(),
+          adult: boolean(),
+          video: boolean()
+        }
 
   @doc """
   Downloads the movie IDs export file for a given date.
@@ -106,8 +107,8 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
     |> Stream.reject(&is_nil/1)
     |> Stream.reject(fn entry ->
       (skip_video && entry.video) ||
-      (skip_adult && entry.adult) ||
-      (min_popularity && entry.popularity < min_popularity)
+        (skip_adult && entry.adult) ||
+        (min_popularity && entry.popularity < min_popularity)
     end)
   end
 
@@ -147,24 +148,27 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
     |> Stream.reject(&(&1 == ""))
     |> Stream.map(&parse_line/1)
     |> Stream.reject(&is_nil/1)
-    |> Enum.reduce(%{
-      total: 0,
-      video: 0,
-      non_video: 0,
-      adult: 0,
-      pop_100_plus: 0,
-      pop_50_100: 0,
-      pop_10_50: 0,
-      pop_1_10: 0,
-      pop_below_1: 0
-    }, fn entry, acc ->
-      acc
-      |> Map.update!(:total, &(&1 + 1))
-      |> Map.update!(:video, &(&1 + if(entry.video, do: 1, else: 0)))
-      |> Map.update!(:non_video, &(&1 + if(entry.video, do: 0, else: 1)))
-      |> Map.update!(:adult, &(&1 + if(entry.adult, do: 1, else: 0)))
-      |> update_popularity_bucket(entry.popularity)
-    end)
+    |> Enum.reduce(
+      %{
+        total: 0,
+        video: 0,
+        non_video: 0,
+        adult: 0,
+        pop_100_plus: 0,
+        pop_50_100: 0,
+        pop_10_50: 0,
+        pop_1_10: 0,
+        pop_below_1: 0
+      },
+      fn entry, acc ->
+        acc
+        |> Map.update!(:total, &(&1 + 1))
+        |> Map.update!(:video, &(&1 + if(entry.video, do: 1, else: 0)))
+        |> Map.update!(:non_video, &(&1 + if(entry.video, do: 0, else: 1)))
+        |> Map.update!(:adult, &(&1 + if(entry.adult, do: 1, else: 0)))
+        |> update_popularity_bucket(entry.popularity)
+      end
+    )
   end
 
   @doc """
@@ -187,11 +191,12 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
   def sample_by_popularity(path, samples_per_tier \\ 5) do
     stream_movies(path, skip_video: true, skip_adult: true)
     |> Enum.reduce(%{high: [], medium: [], low: []}, fn entry, acc ->
-      tier = cond do
-        entry.popularity >= 10 -> :high
-        entry.popularity >= 1 -> :medium
-        true -> :low
-      end
+      tier =
+        cond do
+          entry.popularity >= 10 -> :high
+          entry.popularity >= 1 -> :medium
+          true -> :low
+        end
 
       if length(acc[tier]) < samples_per_tier do
         Map.update!(acc, tier, &[entry | &1])

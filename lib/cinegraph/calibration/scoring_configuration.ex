@@ -158,8 +158,8 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       prior_mean != nil and (prior_mean < 0 or prior_mean > 10) ->
         add_error(changeset, :normalization_settings, "prior_mean must be between 0 and 10")
 
-      min_votes != nil and min_votes < 0 ->
-        add_error(changeset, :normalization_settings, "min_votes must be positive")
+      min_votes != nil and min_votes < 1 ->
+        add_error(changeset, :normalization_settings, "min_votes must be at least 1")
 
       true ->
         changeset
