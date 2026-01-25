@@ -94,7 +94,7 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   @impl true
   def handle_event("simulate_weights", _params, socket) do
     active = socket.assigns.active_config || %ScoringConfiguration{}
-    weights = socket.assigns.draft_weights || Map.get(active, :category_weights, %{})
+    weights = socket.assigns.draft_weights || Map.get(active, :category_weights) || %{}
 
     # Create a temporary config for simulation
     temp_config = %ScoringConfiguration{
