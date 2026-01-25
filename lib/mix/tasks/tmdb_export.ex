@@ -300,8 +300,15 @@ defmodule Mix.Tasks.Tmdb.Export do
     date =
       if opts[:date] do
         case Date.from_iso8601(opts[:date]) do
-          {:ok, d} -> d
-          {:error, _} -> Date.utc_today()
+          {:ok, d} ->
+            d
+
+          {:error, _} ->
+            Mix.shell().error(
+              "Invalid date format '#{opts[:date]}', falling back to today's date"
+            )
+
+            Date.utc_today()
         end
       else
         Date.utc_today()

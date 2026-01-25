@@ -26,10 +26,12 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
 
   @type analysis_report :: %{
           date: Date.t(),
+          export_path: String.t(),
           export_total: integer(),
           export_non_video: integer(),
           our_total: integer(),
           missing_count: integer(),
+          extra_in_our_db: integer(),
           coverage_percent: float(),
           by_popularity: map(),
           recommendations: list()
