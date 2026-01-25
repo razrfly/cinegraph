@@ -93,6 +93,11 @@ defmodule Mix.Tasks.SyncProduction do
     # Default to keeping dump files
     opts = Keyword.put_new(opts, :keep_dump, true)
 
+    # Wire verbose flag to application env so verbose_info/1 works
+    if opts[:verbose] do
+      Application.put_env(:cinegraph, :verbose_sync, true)
+    end
+
     # Execute based on options
     result =
       cond do
@@ -126,7 +131,8 @@ defmodule Mix.Tasks.SyncProduction do
          :ok <- prepare_local_database(opts),
          :ok <- import_database(dump_path, opts),
          :ok <- post_import_cleanup(opts),
-         :ok <- maybe_verify(opts) do
+         :ok <- maybe_verify(opts),
+         :ok <- maybe_cleanup_dump(dump_path, opts) do
       elapsed = System.monotonic_time(:second) - start_time
       info("\n✅ Sync completed successfully in #{elapsed}s")
       {:ok, dump_path}
@@ -143,12 +149,8 @@ defmodule Mix.Tasks.SyncProduction do
 
     info("\n🔄 Starting import from #{dump_path}...\n")
 
-    unless File.exists?(dump_path) do
-      error("Dump file not found: #{dump_path}")
-      {:error, "Dump file not found"}
-    end
-
-    with :ok <- prepare_local_database(opts),
+    with :ok <- ensure_dump_file(dump_path, "import_only"),
+         :ok <- prepare_local_database(opts),
          :ok <- import_database(dump_path, opts),
          :ok <- post_import_cleanup(opts),
          :ok <- maybe_verify(opts) do
@@ -223,38 +225,221 @@ defmodule Mix.Tasks.SyncProduction do
       |> String.replace("T", "_")
 
     dump_path = Path.join(@dump_dir, "planetscale_#{timestamp}.dump")
-    parallel_arg = if opts[:parallel], do: "-j #{opts[:parallel]}", else: ""
 
-    # Build connection string with SSL
-    # PlanetScale requires SSL with verify-full
+    # pg_dump's -j/--jobs only works with directory format (-Fd), not custom format (-Fc)
+    # Since we use custom format for compression, warn and ignore the parallel option
+    parallel_arg =
+      if opts[:parallel] do
+        info("  ⚠ --parallel ignored for pg_dump: -j/--jobs requires directory format (-Fd)")
+        info("    Using custom format (-Fc) for compression. Parallel is supported during restore.")
+        ""
+      else
+        ""
+      end
+
+    # Build connection string with SSL and connection timeout
+    # PlanetScale requires SSL
     conn_string =
-      "postgresql://#{creds.username}:#{URI.encode_www_form(creds.password)}@#{creds.host}:#{creds.port}/#{creds.database}?sslmode=require"
+      "postgresql://#{creds.username}:#{URI.encode_www_form(creds.password)}@#{creds.host}:#{creds.port}/#{creds.database}?sslmode=require&connect_timeout=30"
 
+    # Use --verbose to get table-by-table progress
     cmd = """
     pg_dump '#{conn_string}' \
       -Fc \
       --no-owner \
       --no-acl \
+      --verbose \
       #{parallel_arg} \
       -f '#{dump_path}' \
       2>&1
     """
 
-    verbose_info("  → Running pg_dump...")
+    info("  → Connecting to #{creds.host}...")
 
-    case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
-      {_output, 0} ->
+    # Start progress monitor that also tracks activity
+    parent = self()
+    monitor_pid = spawn_link(fn -> monitor_dump_progress(dump_path, parent) end)
+    start_time = System.monotonic_time(:second)
+
+    # Run pg_dump and capture output for verbose table progress
+    port = Port.open({:spawn, "sh -c \"#{cmd}\""}, [:binary, :exit_status, :stderr_to_stdout])
+
+    result = collect_dump_output(port, creds.password, [], monitor_pid)
+
+    # Stop the monitor
+    send(monitor_pid, :stop)
+
+    elapsed = System.monotonic_time(:second) - start_time
+
+    case result do
+      {:ok, _output} ->
+        # Clear the progress line and show final result
+        IO.write("\r\e[K")
         size = File.stat!(dump_path).size |> format_size()
-        info("  ✓ Exported to #{dump_path} (#{size})")
+        info("  ✓ Exported to #{dump_path} (#{size}) in #{elapsed}s")
         {:ok, dump_path}
 
-      {output, code} ->
+      {:error, output, code} ->
+        IO.write("\r\e[K")
         # Sanitize output to remove password
         sanitized = String.replace(output, creds.password, "***")
         error("  ✗ pg_dump failed (exit code #{code})")
         verbose_info("  Output: #{sanitized}")
         {:error, "pg_dump failed: #{sanitized}"}
     end
+  end
+
+  defp collect_dump_output(port, password, acc, monitor_pid) do
+    receive do
+      {^port, {:data, data}} ->
+        # Notify monitor of activity
+        send(monitor_pid, :activity)
+
+        # Sanitize password from output
+        sanitized = String.replace(data, password, "***")
+
+        # Show table progress from verbose output
+        sanitized
+        |> String.split("\n")
+        |> Enum.each(fn line ->
+          line = String.trim(line)
+          cond do
+            line == "" ->
+              :ok
+
+            String.contains?(line, "dumping contents of table") ->
+              table = extract_table_name(line)
+              IO.write("\r\e[K  → Dumping: #{table}...")
+
+            String.contains?(line, "saving") && String.contains?(line, "statistics") ->
+              IO.write("\r\e[K  → Saving statistics...")
+
+            # Show errors and important messages
+            String.contains?(String.downcase(line), "error") ||
+            String.contains?(String.downcase(line), "fatal") ||
+            String.contains?(String.downcase(line), "failed") ||
+            String.contains?(String.downcase(line), "denied") ||
+            String.contains?(String.downcase(line), "refused") ->
+              IO.write("\r\e[K")
+              IO.puts("  ⚠ #{line}")
+
+            # Show connection progress
+            String.contains?(line, "reading") ||
+            String.contains?(line, "identifying") ||
+            String.contains?(line, "started") ->
+              IO.write("\r\e[K  → #{line}")
+
+            true ->
+              :ok
+          end
+        end)
+
+        collect_dump_output(port, password, [sanitized | acc], monitor_pid)
+
+      {^port, {:exit_status, 0}} ->
+        {:ok, acc |> Enum.reverse() |> Enum.join()}
+
+      {^port, {:exit_status, code}} ->
+        output = acc |> Enum.reverse() |> Enum.join()
+        # Show the last part of output for debugging
+        if String.length(output) > 0 do
+          IO.write("\r\e[K")
+          IO.puts("  Debug output:")
+          output
+          |> String.split("\n")
+          |> Enum.take(-10)
+          |> Enum.each(&IO.puts("    #{&1}"))
+        end
+        {:error, output, code}
+
+      {:timeout_stalled} ->
+        Port.close(port)
+        output = acc |> Enum.reverse() |> Enum.join()
+        IO.puts("\n  Last output before stall timeout:")
+        output
+        |> String.split("\n")
+        |> Enum.take(-5)
+        |> Enum.each(&IO.puts("    #{&1}"))
+        {:error, "No progress for 15 minutes - connection may have stalled", 1}
+    end
+  end
+
+  defp extract_table_name(line) do
+    case Regex.run(~r/table "?([^"]+)"?\.?"?([^"]+)"?/, line) do
+      [_, schema, table] -> "#{schema}.#{table}"
+      _ ->
+        case Regex.run(~r/table (\S+)/, line) do
+          [_, table] -> table
+          _ -> "..."
+        end
+    end
+  end
+
+  defp monitor_dump_progress(dump_path, parent) do
+    monitor_dump_progress(dump_path, parent, System.monotonic_time(:second), 0, System.monotonic_time(:second))
+  end
+
+  # Monitor file size growth and detect stalls
+  # Only timeout if NO file growth AND NO output for 15 minutes
+  defp monitor_dump_progress(dump_path, parent, start_time, last_size, last_activity_time) do
+    receive do
+      :stop -> :ok
+      :activity ->
+        # Reset activity timer when we get output
+        monitor_dump_progress(dump_path, parent, start_time, last_size, System.monotonic_time(:second))
+    after
+      2000 ->
+        now = System.monotonic_time(:second)
+
+        case File.stat(dump_path) do
+          {:ok, %{size: size}} when size > 0 ->
+            elapsed = now - start_time
+            rate = if elapsed > 0, do: size / elapsed, else: 0
+
+            # Check if file is growing
+            file_growing = size > last_size
+            new_activity_time = if file_growing, do: now, else: last_activity_time
+
+            # Only update display if size changed
+            if size != last_size do
+              size_str = format_size(size)
+              rate_str = format_size(round(rate)) <> "/s"
+              elapsed_str = format_duration(elapsed)
+              IO.write("\r\e[K  → Exporting... #{size_str} (#{rate_str}) [#{elapsed_str}]")
+            end
+
+            # Check for stall - no activity for 15 minutes
+            stall_duration = now - new_activity_time
+            if stall_duration > 900 do
+              IO.puts("\n  ⚠ No progress for #{div(stall_duration, 60)} minutes")
+              send(parent, {:timeout_stalled})
+            else
+              monitor_dump_progress(dump_path, parent, start_time, size, new_activity_time)
+            end
+
+          _ ->
+            # File doesn't exist yet, check for initial connection stall
+            stall_duration = now - last_activity_time
+            if stall_duration > 300 do
+              IO.puts("\n  ⚠ No response for #{div(stall_duration, 60)} minutes")
+              send(parent, {:timeout_stalled})
+            else
+              monitor_dump_progress(dump_path, parent, start_time, last_size, last_activity_time)
+            end
+        end
+    end
+  end
+
+  defp format_duration(seconds) when seconds < 60, do: "#{seconds}s"
+  defp format_duration(seconds) when seconds < 3600 do
+    mins = div(seconds, 60)
+    secs = rem(seconds, 60)
+    "#{mins}m #{secs}s"
+  end
+  defp format_duration(seconds) do
+    hours = div(seconds, 3600)
+    mins = div(rem(seconds, 3600), 60)
+    "#{hours}h #{mins}m"
   end
 
   # ============================================================================
@@ -312,13 +497,18 @@ defmodule Mix.Tasks.SyncProduction do
   defp import_database(dump_path, opts) do
     info("📥 Importing to local database...")
 
-    unless File.exists?(dump_path) do
-      error("  ✗ Dump file not found: #{dump_path}")
-      {:error, "Dump file not found"}
+    with :ok <- ensure_dump_file(dump_path, "import_database") do
+      do_import_database(dump_path, opts)
     end
+  end
+
+  defp do_import_database(dump_path, opts) do
+    dump_size = File.stat!(dump_path).size
+    info("  → Restoring #{format_size(dump_size)} dump...")
 
     parallel_arg = if opts[:parallel], do: "-j #{opts[:parallel]}", else: ""
 
+    # Use --verbose to get table-by-table progress
     cmd = """
     PGPASSWORD='#{@local_password}' pg_restore \
       -h #{@local_host} \
@@ -327,28 +517,91 @@ defmodule Mix.Tasks.SyncProduction do
       -d #{@local_db} \
       --no-owner \
       --no-acl \
+      --verbose \
       #{parallel_arg} \
       '#{dump_path}' \
       2>&1
     """
 
-    verbose_info("  → Running pg_restore...")
+    start_time = System.monotonic_time(:second)
 
-    case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
-      {_output, 0} ->
-        info("  ✓ Import completed")
+    # Run pg_restore and capture output for progress
+    port = Port.open({:spawn, "sh -c \"#{cmd}\""}, [:binary, :exit_status, :stderr_to_stdout])
+
+    result = collect_restore_output(port, [])
+
+    elapsed = System.monotonic_time(:second) - start_time
+
+    case result do
+      {:ok, _output} ->
+        IO.write("\r\e[K")
+        info("  ✓ Import completed in #{elapsed}s")
         :ok
 
-      {output, _code} ->
+      {:error, output, _code} ->
+        IO.write("\r\e[K")
         # pg_restore often returns non-zero for warnings, check for actual errors
         if has_critical_errors?(output) do
           error("  ✗ pg_restore failed")
           verbose_info("  Output: #{String.slice(output, 0, 500)}")
           {:error, "pg_restore failed"}
         else
-          info("  ✓ Import completed (with warnings)")
-          verbose_info("  Warnings: #{String.slice(output, 0, 200)}")
+          info("  ✓ Import completed in #{elapsed}s (with warnings)")
           :ok
+        end
+    end
+  end
+
+  defp collect_restore_output(port, acc) do
+    receive do
+      {^port, {:data, data}} ->
+        # Show table progress from verbose output
+        data
+        |> String.split("\n")
+        |> Enum.each(fn line ->
+          cond do
+            String.contains?(line, "processing data for table") ->
+              table = extract_restore_table_name(line)
+              IO.write("\r\e[K  → Restoring: #{table}...")
+
+            String.contains?(line, "creating INDEX") ->
+              IO.write("\r\e[K  → Creating indexes...")
+
+            String.contains?(line, "creating CONSTRAINT") ->
+              IO.write("\r\e[K  → Creating constraints...")
+
+            String.contains?(line, "creating TRIGGER") ->
+              IO.write("\r\e[K  → Creating triggers...")
+
+            String.contains?(line, "creating FK CONSTRAINT") ->
+              IO.write("\r\e[K  → Creating foreign keys...")
+
+            true ->
+              :ok
+          end
+        end)
+
+        collect_restore_output(port, [data | acc])
+
+      {^port, {:exit_status, 0}} ->
+        {:ok, acc |> Enum.reverse() |> Enum.join()}
+
+      {^port, {:exit_status, code}} ->
+        {:error, acc |> Enum.reverse() |> Enum.join(), code}
+    after
+      1_800_000 ->
+        Port.close(port)
+        {:error, "Timeout after 30 minutes", 1}
+    end
+  end
+
+  defp extract_restore_table_name(line) do
+    case Regex.run(~r/table "?public"?\."?([^"]+)"?/, line) do
+      [_, table] -> table
+      _ ->
+        case Regex.run(~r/table (\S+)/, line) do
+          [_, table] -> table
+          _ -> "..."
         end
     end
   end
@@ -561,6 +814,33 @@ defmodule Mix.Tasks.SyncProduction do
   # ============================================================================
   # Helpers
   # ============================================================================
+
+  defp ensure_dump_file(path, prefix) do
+    if File.exists?(path) do
+      :ok
+    else
+      error("  ✗ [#{prefix}] Dump file not found: #{path}")
+      {:error, "Dump file not found: #{path}"}
+    end
+  end
+
+  defp maybe_cleanup_dump(dump_path, opts) do
+    if opts[:keep_dump] do
+      verbose_info("  → Keeping dump file: #{dump_path}")
+      :ok
+    else
+      case File.rm(dump_path) do
+        :ok ->
+          info("  🗑️  Removed dump file: #{dump_path}")
+          :ok
+
+        {:error, reason} ->
+          error("  ⚠ Failed to remove dump file: #{inspect(reason)}")
+          # Don't fail the whole sync just because cleanup failed
+          :ok
+      end
+    end
+  end
 
   defp load_env do
     # Load .env file if it exists
