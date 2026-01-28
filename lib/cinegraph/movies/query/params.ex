@@ -15,7 +15,7 @@ defmodule Cinegraph.Movies.Query.Params do
     # Flop will handle these basic filters
     field :page, :integer, default: 1
     field :per_page, :integer, default: 50
-    field :sort, :string, default: "release_date_desc"
+    field :sort, :string, default: "discovery_score_desc"
 
     # Complex filters that need custom handling
     field :genres, {:array, :integer}, default: []
@@ -69,6 +69,7 @@ defmodule Cinegraph.Movies.Query.Params do
     runtime runtime_asc runtime_desc
     rating rating_asc rating_desc
     popularity popularity_asc popularity_desc
+    discovery_score discovery_score_asc discovery_score_desc
     popular_opinion popular_opinion_asc popular_opinion_desc
     industry_recognition industry_recognition_asc industry_recognition_desc
     cultural_impact cultural_impact_asc cultural_impact_desc

@@ -54,7 +54,13 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
   def download(opts \\ []) do
     date = Keyword.get(opts, :date, Date.utc_today())
     dest_dir = Keyword.get(opts, :dest_dir, System.tmp_dir!())
+    # Allow fallback to previous days if today's file isn't available yet
+    fallback_days = Keyword.get(opts, :fallback_days, 3)
 
+    try_download_with_fallback(date, dest_dir, fallback_days)
+  end
+
+  defp try_download_with_fallback(date, dest_dir, days_remaining) when days_remaining > 0 do
     filename = format_filename(date)
     url = "#{@base_url}/#{filename}"
     gz_path = Path.join(dest_dir, filename)
@@ -62,13 +68,35 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
 
     Logger.info("Downloading TMDb export: #{url}")
 
-    with {:ok, _} <- download_file(url, gz_path),
-         {:ok, _} <- decompress_file(gz_path, json_path) do
-      # Clean up gzipped file
-      File.rm(gz_path)
-      Logger.info("Downloaded and decompressed to: #{json_path}")
-      {:ok, json_path}
+    case download_file(url, gz_path) do
+      {:ok, _} ->
+        with {:ok, _} <- decompress_file(gz_path, json_path) do
+          File.rm(gz_path)
+          Logger.info("Downloaded and decompressed to: #{json_path}")
+          {:ok, json_path}
+        end
+
+      {:error, {:http_error, 403}} ->
+        # 403 usually means file not yet published (TMDb publishes ~8 AM UTC)
+        # Try the previous day's file
+        yesterday = Date.add(date, -1)
+        Logger.info("Today's export not available yet (403), trying #{yesterday}...")
+        try_download_with_fallback(yesterday, dest_dir, days_remaining - 1)
+
+      {:error, :not_found} ->
+        # 404 - file doesn't exist, try previous day
+        yesterday = Date.add(date, -1)
+        Logger.info("Export not found (404), trying #{yesterday}...")
+        try_download_with_fallback(yesterday, dest_dir, days_remaining - 1)
+
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  defp try_download_with_fallback(date, _dest_dir, 0) do
+    Logger.error("TMDb export not available after fallback attempts. Last tried: #{date}")
+    {:error, :export_unavailable}
   end
 
   @doc """

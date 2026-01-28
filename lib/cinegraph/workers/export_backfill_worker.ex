@@ -89,6 +89,9 @@ defmodule Cinegraph.Workers.ExportBackfillWorker do
         dry_run \\ false,
         offset \\ 0
       ) do
+    # Validate batch_size is positive
+    batch_size = if is_integer(batch_size) and batch_size > 0, do: batch_size, else: @default_batch_size
+
     Logger.info("Starting backfill process...")
 
     with {:ok, missing} <- get_missing_movies(min_popularity, limit, offset) do

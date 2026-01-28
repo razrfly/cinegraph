@@ -1,15 +1,34 @@
 defmodule Cinegraph.Movies.Query.CustomSorting do
   @moduledoc """
   Custom sorting for complex metrics that Flop doesn't handle natively.
+
+  ## Discovery Score
+
+  The `discovery_score` sort combines recency (how new) with relevance (how popular/rated).
+  Configure weights in `Cinegraph.Movies.DiscoveryCommon`.
+
+  Formula:
+    discovery_score = (recency × recency_weight) + (popularity × pop_weight) +
+                      (votes × votes_weight) + (rating × rating_weight)
+
+  Where:
+    - recency = exp(-decay_rate × days_since_release)
+    - popularity = ln(popularity + 1) / ln(max_expected)
+    - votes = ln(votes + 1) / ln(max_expected)
+    - rating = avg_rating / 10 (only if votes >= min_threshold)
   """
 
   import Ecto.Query
+  alias Cinegraph.Movies.DiscoveryCommon
 
   def apply(query, sort) do
     # Parse sort parameter to extract field and direction
     {field, direction} = parse_sort(sort)
 
     cond do
+      field == "discovery_score" ->
+        apply_discovery_score_sort(query, direction)
+
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
@@ -33,6 +52,78 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
         # Default to descending for compatibility
         {sort, :desc}
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Discovery Score Sort
+  # Combines recency (how new) with relevance (popularity, votes, rating)
+  # ---------------------------------------------------------------------------
+
+  defp apply_discovery_score_sort(query, direction) do
+    weights = DiscoveryCommon.discovery_weights()
+    decay_rate = DiscoveryCommon.recency_decay_rate()
+    min_votes = DiscoveryCommon.min_votes_for_rating()
+
+    order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+    order_by(query, [m], [
+      {^order_func,
+       fragment(
+         """
+         (
+           ?::float * COALESCE(
+             EXP(-1.0 * ?::float * GREATEST(0.0, (CURRENT_DATE - COALESCE(?, CURRENT_DATE))::float)),
+             0.5
+           )
+           +
+           ?::float * COALESCE(
+             (SELECT LN(GREATEST(value::float, 1.0) + 1.0) / LN(1000.0)
+              FROM external_metrics
+              WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'popularity_score'
+              ORDER BY fetched_at DESC LIMIT 1),
+             0.0
+           )
+           +
+           ?::float * COALESCE(
+             (SELECT LN(GREATEST(value::float, 1.0) + 1.0) / LN(100000.0)
+              FROM external_metrics
+              WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_votes'
+              ORDER BY fetched_at DESC LIMIT 1),
+             0.0
+           )
+           +
+           ?::float * COALESCE(
+             (SELECT CASE
+                WHEN v.value >= ?::float THEN r.value::float / 10.0
+                ELSE 0.5
+              END
+              FROM (
+                SELECT COALESCE(value, 0) as value FROM external_metrics
+                WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+                ORDER BY fetched_at DESC LIMIT 1
+              ) r,
+              (
+                SELECT COALESCE(value, 0) as value FROM external_metrics
+                WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_votes'
+                ORDER BY fetched_at DESC LIMIT 1
+              ) v),
+             0.5
+           )
+         )
+         """,
+         ^weights.recency,
+         ^decay_rate,
+         m.release_date,
+         ^weights.popularity,
+         m.id,
+         ^weights.votes,
+         m.id,
+         ^weights.rating,
+         ^min_votes,
+         m.id,
+         m.id
+       )}
+    ])
   end
 
   defp apply_simple_metric_sort(query, "rating", direction) do

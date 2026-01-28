@@ -40,6 +40,7 @@ defmodule Cinegraph.Movies.Search do
       needs_custom_sort = validated_params.sort in ~w(
         rating rating_asc rating_desc
         popularity popularity_asc popularity_desc
+        discovery_score discovery_score_asc discovery_score_desc
         popular_opinion popular_opinion_asc popular_opinion_desc
         industry_recognition industry_recognition_asc industry_recognition_desc
         cultural_impact cultural_impact_asc cultural_impact_desc
@@ -166,7 +167,7 @@ defmodule Cinegraph.Movies.Search do
           sort
       end
 
-    base in ~w(popular_opinion industry_recognition cultural_impact people_quality)
+    base in ~w(discovery_score popular_opinion industry_recognition cultural_impact people_quality)
   end
 
   defp list_genres do
@@ -215,10 +216,11 @@ defmodule Cinegraph.Movies.Search do
 
   defp get_sort_options do
     [
+      %{id: "discovery_score_desc", value: "discovery_score_desc", label: "Discovery (Recent + Relevant)"},
+      %{id: "release_date_desc", value: "release_date_desc", label: "Release Date (Newest)"},
+      %{id: "release_date", value: "release_date", label: "Release Date (Oldest)"},
       %{id: "title", value: "title", label: "Title (A-Z)"},
       %{id: "title_desc", value: "title_desc", label: "Title (Z-A)"},
-      %{id: "release_date", value: "release_date", label: "Release Date (Oldest)"},
-      %{id: "release_date_desc", value: "release_date_desc", label: "Release Date (Newest)"},
       %{id: "runtime", value: "runtime", label: "Runtime (Shortest)"},
       %{id: "runtime_desc", value: "runtime_desc", label: "Runtime (Longest)"},
       %{id: "rating", value: "rating", label: "Rating (Highest)"},
