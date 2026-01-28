@@ -11,6 +11,7 @@ defmodule CinegraphWeb.YearImportsLive do
   alias Cinegraph.Imports.ImportStateV2
   alias Cinegraph.Workers.DailyYearImportWorker
   alias Cinegraph.Workers.YearImportCompletionWorker
+  alias Cinegraph.Workers.ScheduledBackfillWorker
   alias Cinegraph.Cache.DashboardStats
   alias Cinegraph.Repo
   import Ecto.Query
@@ -30,7 +31,6 @@ defmodule CinegraphWeb.YearImportsLive do
     socket =
       socket
       |> assign(:page_title, "Year-by-Year TMDb Import")
-      |> assign(:import_paused, ImportStateV2.get("year_import_paused") == "true")
       |> assign(:selected_year, nil)
       |> assign(:show_year_details, false)
       |> assign(:loading, true)
@@ -41,78 +41,6 @@ defmodule CinegraphWeb.YearImportsLive do
 
   @impl true
   def handle_params(_params, _uri, socket) do
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_event("start_next_year", _params, socket) do
-    if socket.assigns.import_paused do
-      {:noreply, put_flash(socket, :error, "Imports are paused. Resume imports first.")}
-    else
-      case DailyYearImportWorker.new(%{}) |> Oban.insert() do
-        {:ok, _job} ->
-          socket =
-            socket
-            |> put_flash(:info, "Started import for next pending year")
-            |> assign(:is_running, true)
-            |> load_data()
-
-          {:noreply, socket}
-
-        {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Failed to start import: #{inspect(reason)}")}
-      end
-    end
-  end
-
-  @impl true
-  def handle_event("import_year", %{"year" => year_str}, socket) do
-    if socket.assigns.import_paused do
-      {:noreply, put_flash(socket, :error, "Imports are paused. Resume imports first.")}
-    else
-      current_year = Date.utc_today().year
-
-      case Integer.parse(year_str) do
-        {year, _} when year >= 1888 ->
-          if year <= current_year + 1 do
-            case DailyYearImportWorker.import_year(year) do
-              {:ok, _job} ->
-                socket =
-                  socket
-                  |> put_flash(:info, "Started import for year #{year}")
-                  |> assign(:is_running, true)
-                  |> load_data()
-
-                {:noreply, socket}
-
-              {:error, reason} ->
-                {:noreply, put_flash(socket, :error, "Failed: #{inspect(reason)}")}
-            end
-          else
-            {:noreply, put_flash(socket, :error, "Year cannot be in the future")}
-          end
-
-        _ ->
-          {:noreply, put_flash(socket, :error, "Invalid year")}
-      end
-    end
-  end
-
-  @impl true
-  def handle_event("toggle_pause", _params, socket) do
-    new_paused = !socket.assigns.import_paused
-    ImportStateV2.set("year_import_paused", to_string(new_paused))
-
-    message =
-      if new_paused,
-        do: "Year imports paused. No new imports will start automatically.",
-        else: "Year imports resumed. Automatic imports will continue."
-
-    socket =
-      socket
-      |> put_flash(:info, message)
-      |> assign(:import_paused, new_paused)
-
     {:noreply, socket}
   end
 
@@ -247,12 +175,15 @@ defmodule CinegraphWeb.YearImportsLive do
       eta: "Unknown"
     }
 
+    # Get backfill queue health status
+    backfill_health = ScheduledBackfillWorker.health_check()
+
     socket
     |> assign(:years, Map.get(cached, :years, []))
     |> assign(:stats, Map.merge(default_stats, Map.get(cached, :stats, %{})))
     |> assign(:queue_stats, Map.get(cached, :queue_stats, []))
     |> assign(:is_running, Map.get(cached, :is_running, false))
-    |> assign(:recent_activity, Map.get(cached, :recent_activity, []))
+    |> assign(:backfill_health, backfill_health)
     |> assign(:current_year, current_year)
     |> assign(:loading, Map.get(cached, :loading, false))
   end
@@ -445,143 +376,51 @@ defmodule CinegraphWeb.YearImportsLive do
         </div>
       </div>
       
-    <!-- Controls -->
+    <!-- Backfill Queue Health -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 class="text-lg font-semibold mb-4">Import Controls</h2>
-        <div class="flex flex-wrap items-center gap-4">
-          <!-- Start Next Year Button -->
-          <button
-            phx-click="start_next_year"
-            disabled={@is_running || @import_paused}
-            class={"px-4 py-2 rounded-md text-white font-medium transition-colors " <>
-              if(@is_running || @import_paused, do: "bg-gray-400 cursor-not-allowed", else: "bg-indigo-600 hover:bg-indigo-700")}
-          >
-            <%= if @is_running do %>
-              <span class="flex items-center gap-2">
-                <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                  >
-                  </circle>
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  >
-                  </path>
-                </svg>
-                Import Running...
-              </span>
-            <% else %>
-              Start Next Year Import
-            <% end %>
-          </button>
-          
-    <!-- Import Specific Year -->
-          <form phx-submit="import_year" class="flex items-center gap-2">
-            <input
-              type="number"
-              name="year"
-              placeholder="Year"
-              min="1888"
-              max={@current_year + 1}
-              class="w-24 px-3 py-2 border border-gray-300 rounded-md"
-            />
-            <button
-              type="submit"
-              disabled={@is_running || @import_paused}
-              class={"px-4 py-2 rounded-md text-white font-medium transition-colors " <>
-                if(@is_running || @import_paused, do: "bg-gray-400 cursor-not-allowed", else: "bg-green-600 hover:bg-green-700")}
-            >
-              Import Year
-            </button>
-          </form>
-          
-    <!-- Pause/Resume Toggle -->
-          <button
-            phx-click="toggle_pause"
-            class={"px-4 py-2 rounded-md font-medium transition-colors " <>
-              if(@import_paused,
-                do: "bg-green-100 text-green-700 hover:bg-green-200",
-                else: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200")}
-          >
-            <%= if @import_paused do %>
-              <span class="flex items-center gap-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fill-rule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-                Resume Imports
-              </span>
-            <% else %>
-              <span class="flex items-center gap-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fill-rule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-                Pause Imports
-              </span>
-            <% end %>
-          </button>
-          
-    <!-- Status Indicator -->
-          <div class="ml-auto flex items-center gap-2">
-            <%= if @import_paused do %>
-              <span class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
-                Paused
-              </span>
-            <% else %>
-              <%= if @is_running do %>
-                <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center gap-1">
-                  <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Running
-                </span>
-              <% else %>
-                <span class="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">
-                  Idle
-                </span>
-              <% end %>
-            <% end %>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">Backfill Queue Health</h2>
+          <span class={backfill_status_class(@backfill_health.status)}>
+            {backfill_status_label(@backfill_health.status)}
+          </span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="border rounded-lg p-4">
+            <div class="text-sm text-gray-500">Pending Jobs</div>
+            <div class="text-2xl font-bold text-indigo-600">
+              {Number.Delimit.number_to_delimited(@backfill_health.pending_jobs, precision: 0)}
+            </div>
+            <div class="text-xs text-gray-400">
+              threshold: {Number.Delimit.number_to_delimited(@backfill_health.threshold, precision: 0)}
+            </div>
+          </div>
+          <div class="border rounded-lg p-4">
+            <div class="text-sm text-gray-500">Available</div>
+            <div class="text-2xl font-bold text-yellow-600">
+              {Number.Delimit.number_to_delimited(@backfill_health.breakdown.available, precision: 0)}
+            </div>
+            <div class="text-xs text-gray-400">ready to process</div>
+          </div>
+          <div class="border rounded-lg p-4">
+            <div class="text-sm text-gray-500">Executing</div>
+            <div class="text-2xl font-bold text-blue-600">
+              {Number.Delimit.number_to_delimited(@backfill_health.breakdown.executing, precision: 0)}
+            </div>
+            <div class="text-xs text-gray-400">currently running</div>
+          </div>
+          <div class="border rounded-lg p-4">
+            <div class="text-sm text-gray-500">Retryable</div>
+            <div class="text-2xl font-bold text-orange-600">
+              {Number.Delimit.number_to_delimited(@backfill_health.breakdown.retryable, precision: 0)}
+            </div>
+            <div class="text-xs text-gray-400">will retry</div>
           </div>
         </div>
-      </div>
-      
-    <!-- Queue Status -->
-      <div class="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 class="text-lg font-semibold mb-4">Queue Status</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <%= for queue <- @queue_stats do %>
-            <div class="border rounded-lg p-4">
-              <div class="font-medium text-gray-700">{queue.name}</div>
-              <div class="mt-2 grid grid-cols-3 gap-2 text-center text-sm">
-                <div>
-                  <div class="text-lg font-bold text-yellow-600">{queue.available}</div>
-                  <div class="text-gray-500">Pending</div>
-                </div>
-                <div>
-                  <div class="text-lg font-bold text-blue-600">{queue.executing}</div>
-                  <div class="text-gray-500">Running</div>
-                </div>
-                <div>
-                  <div class="text-lg font-bold text-green-600">{queue.completed}</div>
-                  <div class="text-gray-500">Done</div>
-                </div>
-              </div>
-            </div>
-          <% end %>
+        <div class="mt-4 text-sm text-gray-500">
+          Cron job runs every 15 minutes. Will queue more movies when pending drops below threshold.
         </div>
       </div>
-      
+
     <!-- Year-by-Year Grid -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h2 class="text-lg font-semibold mb-4">Year Progress</h2>
@@ -697,26 +536,6 @@ defmodule CinegraphWeb.YearImportsLive do
         </div>
       </div>
       
-    <!-- Recent Activity -->
-      <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-lg font-semibold mb-4">Recent Activity (Last 24 Hours)</h2>
-        <%= if Enum.empty?(@recent_activity) do %>
-          <p class="text-gray-500">No recent activity</p>
-        <% else %>
-          <div class="space-y-2 max-h-64 overflow-y-auto">
-            <%= for activity <- @recent_activity do %>
-              <div class="flex items-center justify-between text-sm py-1 border-b border-gray-100">
-                <span class="text-gray-600">{activity.key}</span>
-                <span class="font-mono text-gray-800">{activity.value}</span>
-                <span class="text-gray-400">
-                  {Calendar.strftime(activity.timestamp, "%H:%M:%S")}
-                </span>
-              </div>
-            <% end %>
-          </div>
-        <% end %>
-      </div>
-      
     <!-- Year Details Modal -->
       <%= if @show_year_details && @year_details do %>
         <div
@@ -819,14 +638,7 @@ defmodule CinegraphWeb.YearImportsLive do
               <% end %>
               
     <!-- Actions -->
-              <div class="mt-6 pt-4 border-t flex justify-end gap-2">
-                <button
-                  phx-click="import_year"
-                  phx-value-year={@year_details.year}
-                  class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-                >
-                  Import This Year
-                </button>
+              <div class="mt-6 pt-4 border-t flex justify-end">
                 <button
                   phx-click="close_year_details"
                   class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
@@ -882,4 +694,18 @@ defmodule CinegraphWeb.YearImportsLive do
   defp completion_color(pct) when pct >= 50, do: "bg-blue-500"
   defp completion_color(pct) when pct >= 10, do: "bg-yellow-500"
   defp completion_color(_), do: "bg-gray-400"
+
+  # Backfill queue health helpers
+  defp backfill_status_class(:healthy),
+    do: "px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+
+  defp backfill_status_class(:below_threshold),
+    do: "px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium"
+
+  defp backfill_status_class(_),
+    do: "px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium"
+
+  defp backfill_status_label(:healthy), do: "Queue Healthy"
+  defp backfill_status_label(:below_threshold), do: "Will Queue More"
+  defp backfill_status_label(_), do: "Unknown"
 end

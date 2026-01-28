@@ -26,6 +26,31 @@ defmodule Cinegraph.Imports.ImportStateV2 do
   end
 
   @doc """
+  Gets a value as a float.
+  """
+  def get_float(key, default \\ 0.0) do
+    case get(key) do
+      nil ->
+        default
+
+      value when is_float(value) ->
+        value
+
+      value when is_integer(value) ->
+        value * 1.0
+
+      value when is_binary(value) ->
+        case Float.parse(value) do
+          {float, _} -> float
+          :error -> default
+        end
+
+      _ ->
+        default
+    end
+  end
+
+  @doc """
   Gets a value as a date.
   """
   def get_date(key) do

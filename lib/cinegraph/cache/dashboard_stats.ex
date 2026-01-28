@@ -1136,13 +1136,8 @@ defmodule Cinegraph.Cache.DashboardStats do
         0.0
       end
 
-    import_rate_str = ImportStateV2.get("import_rate") || "0"
-
-    rate =
-      case Float.parse(import_rate_str) do
-        {val, _} -> val
-        :error -> 0.0
-      end
+    # Calculate actual import rate from completed TMDB jobs in last hour
+    rate = compute_actual_import_rate()
 
     remaining = max(0, total_tmdb_movies - total_our_movies)
 
@@ -1174,6 +1169,29 @@ defmodule Cinegraph.Cache.DashboardStats do
       import_rate: rate,
       eta: eta
     }
+  end
+
+  # Calculate actual throughput based on completed TMDB jobs
+  defp compute_actual_import_rate do
+    # Count jobs completed in the last hour
+    one_hour_ago = DateTime.utc_now() |> DateTime.add(-3600, :second)
+
+    completed_last_hour =
+      Repo.one(
+        from j in Oban.Job,
+          where:
+            j.queue == "tmdb" and
+              j.state == "completed" and
+              j.completed_at >= ^one_hour_ago,
+          select: count(j.id)
+      ) || 0
+
+    # Convert to movies per minute
+    if completed_last_hour > 0 do
+      Float.round(completed_last_hour / 60, 1)
+    else
+      0.0
+    end
   end
 
   defp compute_year_queue_stats do

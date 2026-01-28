@@ -104,7 +104,10 @@ config :cinegraph, Oban,
        {"0 4 * * *", Cinegraph.Workers.DailyYearImportWorker},
        # Generate sitemap daily at 2 AM UTC
        # Runs after most daily imports have completed
-       {"0 2 * * *", Cinegraph.Workers.SitemapWorker}
+       {"0 2 * * *", Cinegraph.Workers.SitemapWorker},
+       # Backfill queue regulation - runs every 15 minutes to check queue health
+       # Queues more movies if pending jobs fall below threshold (stateless approach)
+       {"*/15 * * * *", Cinegraph.Workers.ScheduledBackfillWorker}
      ]}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format

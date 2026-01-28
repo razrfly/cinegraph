@@ -71,21 +71,34 @@ defmodule Cinegraph.Movies.Person do
   def from_tmdb(attrs) do
     person_attrs = %{
       tmdb_id: attrs["id"],
-      imdb_id: attrs["imdb_id"],
-      name: attrs["name"],
+      imdb_id: truncate_string(attrs["imdb_id"], 255),
+      name: truncate_string(attrs["name"], 255),
       gender: attrs["gender"],
       birthday: parse_date(attrs["birthday"]),
       deathday: parse_date(attrs["deathday"]),
-      place_of_birth: attrs["place_of_birth"],
+      place_of_birth: truncate_string(attrs["place_of_birth"], 255),
       biography: attrs["biography"],
-      known_for_department: attrs["known_for_department"],
+      known_for_department: truncate_string(attrs["known_for_department"], 255),
       adult: attrs["adult"],
       popularity: attrs["popularity"],
-      profile_path: attrs["profile_path"]
+      profile_path: truncate_string(attrs["profile_path"], 255)
     }
 
     changeset(%__MODULE__{}, person_attrs)
   end
+
+  # Truncates a string to max_length, handling nil values
+  defp truncate_string(nil, _max_length), do: nil
+
+  defp truncate_string(str, max_length) when is_binary(str) do
+    if String.length(str) > max_length do
+      String.slice(str, 0, max_length)
+    else
+      str
+    end
+  end
+
+  defp truncate_string(value, _max_length), do: value
 
   defp parse_date(nil), do: nil
   defp parse_date(""), do: nil
