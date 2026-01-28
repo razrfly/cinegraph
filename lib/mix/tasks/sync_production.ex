@@ -231,7 +231,11 @@ defmodule Mix.Tasks.SyncProduction do
     parallel_arg =
       if opts[:parallel] do
         info("  ⚠ --parallel ignored for pg_dump: -j/--jobs requires directory format (-Fd)")
-        info("    Using custom format (-Fc) for compression. Parallel is supported during restore.")
+
+        info(
+          "    Using custom format (-Fc) for compression. Parallel is supported during restore."
+        )
+
         ""
       else
         ""
@@ -303,6 +307,7 @@ defmodule Mix.Tasks.SyncProduction do
         |> String.split("\n")
         |> Enum.each(fn line ->
           line = String.trim(line)
+
           cond do
             line == "" ->
               :ok
@@ -316,17 +321,17 @@ defmodule Mix.Tasks.SyncProduction do
 
             # Show errors and important messages
             String.contains?(String.downcase(line), "error") ||
-            String.contains?(String.downcase(line), "fatal") ||
-            String.contains?(String.downcase(line), "failed") ||
-            String.contains?(String.downcase(line), "denied") ||
-            String.contains?(String.downcase(line), "refused") ->
+              String.contains?(String.downcase(line), "fatal") ||
+              String.contains?(String.downcase(line), "failed") ||
+              String.contains?(String.downcase(line), "denied") ||
+                String.contains?(String.downcase(line), "refused") ->
               IO.write("\r\e[K")
               IO.puts("  ⚠ #{line}")
 
             # Show connection progress
             String.contains?(line, "reading") ||
-            String.contains?(line, "identifying") ||
-            String.contains?(line, "started") ->
+              String.contains?(line, "identifying") ||
+                String.contains?(line, "started") ->
               IO.write("\r\e[K  → #{line}")
 
             true ->
@@ -345,28 +350,34 @@ defmodule Mix.Tasks.SyncProduction do
         if String.length(output) > 0 do
           IO.write("\r\e[K")
           IO.puts("  Debug output:")
+
           output
           |> String.split("\n")
           |> Enum.take(-10)
           |> Enum.each(&IO.puts("    #{&1}"))
         end
+
         {:error, output, code}
 
       {:timeout_stalled} ->
         Port.close(port)
         output = acc |> Enum.reverse() |> Enum.join()
         IO.puts("\n  Last output before stall timeout:")
+
         output
         |> String.split("\n")
         |> Enum.take(-5)
         |> Enum.each(&IO.puts("    #{&1}"))
+
         {:error, "No progress for 15 minutes - connection may have stalled", 1}
     end
   end
 
   defp extract_table_name(line) do
     case Regex.run(~r/table "?([^"]+)"?\.?"?([^"]+)"?/, line) do
-      [_, schema, table] -> "#{schema}.#{table}"
+      [_, schema, table] ->
+        "#{schema}.#{table}"
+
       _ ->
         case Regex.run(~r/table (\S+)/, line) do
           [_, table] -> table
@@ -376,17 +387,31 @@ defmodule Mix.Tasks.SyncProduction do
   end
 
   defp monitor_dump_progress(dump_path, parent) do
-    monitor_dump_progress(dump_path, parent, System.monotonic_time(:second), 0, System.monotonic_time(:second))
+    monitor_dump_progress(
+      dump_path,
+      parent,
+      System.monotonic_time(:second),
+      0,
+      System.monotonic_time(:second)
+    )
   end
 
   # Monitor file size growth and detect stalls
   # Only timeout if NO file growth AND NO output for 15 minutes
   defp monitor_dump_progress(dump_path, parent, start_time, last_size, last_activity_time) do
     receive do
-      :stop -> :ok
+      :stop ->
+        :ok
+
       :activity ->
         # Reset activity timer when we get output
-        monitor_dump_progress(dump_path, parent, start_time, last_size, System.monotonic_time(:second))
+        monitor_dump_progress(
+          dump_path,
+          parent,
+          start_time,
+          last_size,
+          System.monotonic_time(:second)
+        )
     after
       2000 ->
         now = System.monotonic_time(:second)
@@ -410,6 +435,7 @@ defmodule Mix.Tasks.SyncProduction do
 
             # Check for stall - no activity for 15 minutes
             stall_duration = now - new_activity_time
+
             if stall_duration > 900 do
               IO.puts("\n  ⚠ No progress for #{div(stall_duration, 60)} minutes")
               send(parent, {:timeout_stalled})
@@ -420,6 +446,7 @@ defmodule Mix.Tasks.SyncProduction do
           _ ->
             # File doesn't exist yet, check for initial connection stall
             stall_duration = now - last_activity_time
+
             if stall_duration > 300 do
               IO.puts("\n  ⚠ No response for #{div(stall_duration, 60)} minutes")
               send(parent, {:timeout_stalled})
@@ -431,11 +458,13 @@ defmodule Mix.Tasks.SyncProduction do
   end
 
   defp format_duration(seconds) when seconds < 60, do: "#{seconds}s"
+
   defp format_duration(seconds) when seconds < 3600 do
     mins = div(seconds, 60)
     secs = rem(seconds, 60)
     "#{mins}m #{secs}s"
   end
+
   defp format_duration(seconds) do
     hours = div(seconds, 3600)
     mins = div(rem(seconds, 3600), 60)
@@ -597,7 +626,9 @@ defmodule Mix.Tasks.SyncProduction do
 
   defp extract_restore_table_name(line) do
     case Regex.run(~r/table "?public"?\."?([^"]+)"?/, line) do
-      [_, table] -> table
+      [_, table] ->
+        table
+
       _ ->
         case Regex.run(~r/table (\S+)/, line) do
           [_, table] -> table
@@ -871,7 +902,10 @@ defmodule Mix.Tasks.SyncProduction do
 
   defp format_size(bytes) when bytes < 1024, do: "#{bytes} B"
   defp format_size(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  defp format_size(bytes) when bytes < 1_073_741_824, do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+
+  defp format_size(bytes) when bytes < 1_073_741_824,
+    do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+
   defp format_size(bytes), do: "#{Float.round(bytes / 1_073_741_824, 2)} GB"
 
   defp format_number(num) when num < 1000, do: "#{num}"

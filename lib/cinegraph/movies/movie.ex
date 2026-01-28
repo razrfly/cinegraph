@@ -161,26 +161,39 @@ defmodule Cinegraph.Movies.Movie do
   def from_tmdb(attrs) do
     movie_attrs = %{
       tmdb_id: attrs["id"],
-      imdb_id: attrs["imdb_id"],
-      title: attrs["title"],
-      original_title: attrs["original_title"],
+      imdb_id: truncate_string(attrs["imdb_id"], 255),
+      title: truncate_string(attrs["title"], 255),
+      original_title: truncate_string(attrs["original_title"], 255),
       release_date: parse_date(attrs["release_date"]),
       runtime: attrs["runtime"],
       overview: attrs["overview"],
-      tagline: attrs["tagline"],
-      original_language: attrs["original_language"],
-      status: attrs["status"],
+      tagline: truncate_string(attrs["tagline"], 255),
+      original_language: truncate_string(attrs["original_language"], 255),
+      status: truncate_string(attrs["status"], 255),
       adult: attrs["adult"],
-      homepage: attrs["homepage"],
+      homepage: truncate_string(attrs["homepage"], 255),
       collection_id: extract_collection_id(attrs["belongs_to_collection"]),
-      poster_path: attrs["poster_path"],
-      backdrop_path: attrs["backdrop_path"],
+      poster_path: truncate_string(attrs["poster_path"], 255),
+      backdrop_path: truncate_string(attrs["backdrop_path"], 255),
       origin_country: attrs["origin_country"] || [],
       tmdb_data: attrs
     }
 
     movie_attrs
   end
+
+  # Truncates a string to max_length, handling nil values
+  defp truncate_string(nil, _max_length), do: nil
+
+  defp truncate_string(str, max_length) when is_binary(str) do
+    if String.length(str) > max_length do
+      String.slice(str, 0, max_length)
+    else
+      str
+    end
+  end
+
+  defp truncate_string(value, _max_length), do: value
 
   defp parse_date(nil), do: nil
   defp parse_date(""), do: nil

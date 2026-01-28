@@ -141,8 +141,9 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     year_to = params.award_year_to
 
     # If no award filters, return query unchanged
-    if is_nil(award_status) and is_nil(festival_ids) and is_nil(category_id) and
-         is_nil(year_from) and is_nil(year_to) do
+    # Note: festival_ids defaults to [] (empty list), so check for both nil and empty
+    if is_nil(award_status) and (is_nil(festival_ids) or festival_ids == []) and
+         is_nil(category_id) and is_nil(year_from) and is_nil(year_to) do
       query
     else
       # Build a subquery to get movie IDs matching award criteria
