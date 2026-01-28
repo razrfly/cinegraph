@@ -55,9 +55,10 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
     date = Keyword.get(opts, :date, Date.utc_today())
     dest_dir = Keyword.get(opts, :dest_dir, System.tmp_dir!())
     # Allow fallback to previous days if today's file isn't available yet
+    # fallback_days means "try N previous days" so we add 1 to include today's attempt
     fallback_days = Keyword.get(opts, :fallback_days, 3)
 
-    try_download_with_fallback(date, dest_dir, fallback_days)
+    try_download_with_fallback(date, dest_dir, fallback_days + 1)
   end
 
   defp try_download_with_fallback(date, dest_dir, days_remaining) when days_remaining > 0 do
