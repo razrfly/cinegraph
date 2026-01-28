@@ -3,7 +3,45 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   Shared logic for discovery scoring modules.
   Contains presets and normalization functions used by both
   DiscoveryScoring and DiscoveryScoringSimple modules.
+
+  ## Discovery Score Configuration
+
+  The discovery score combines recency (how new a film is) with relevance
+  (how much people care about it). All weights are configurable here.
+
+  ### Recency Settings
+  - `@recency_decay_rate` - Controls how fast old films fade (lower = slower decay)
+  - Half-life is approximately 0.693 / decay_rate days
+
+  ### Weight Distribution
+  Weights should sum to 1.0. Adjust to change what matters most:
+  - Higher `recency` = favor newer films
+  - Higher `popular_opinion` = favor well-rated films
+  - Higher `cultural_impact` = favor popular/canonical films
   """
+
+  # =============================================================================
+  # DISCOVERY SCORE SETTINGS (edit these to tune the algorithm)
+  # =============================================================================
+
+  # How fast recency score decays (lower = slower decay)
+  # At 0.01: 30 days = 0.74, 90 days = 0.41, 365 days = 0.03
+  @recency_decay_rate 0.01
+
+  # Weights for discovery score (must sum to 1.0)
+  @discovery_weights %{
+    recency: 0.35,
+    popularity: 0.35,
+    votes: 0.20,
+    rating: 0.10
+  }
+
+  # Minimum votes required to include rating in score (prevents low-sample bias)
+  @min_votes_for_rating 10
+
+  # =============================================================================
+  # LEGACY WEIGHTS (for existing discovery scoring system)
+  # =============================================================================
 
   @default_weights %{
     # Combined all rating sources
@@ -74,4 +112,31 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   Returns the default weights configuration.
   """
   def default_weights, do: @default_weights
+
+  # =============================================================================
+  # DISCOVERY SCORE ACCESSORS
+  # =============================================================================
+
+  @doc """
+  Returns the recency decay rate.
+  Lower values = slower decay (older films stay relevant longer).
+  """
+  def recency_decay_rate, do: @recency_decay_rate
+
+  @doc """
+  Returns the discovery score weights.
+  Keys: :recency, :popularity, :votes, :rating
+  """
+  def discovery_weights, do: @discovery_weights
+
+  @doc """
+  Returns the minimum votes required to include rating in discovery score.
+  """
+  def min_votes_for_rating, do: @min_votes_for_rating
+
+  @doc """
+  Returns the approximate half-life in days for the recency score.
+  After this many days, a film's recency score drops to ~0.5.
+  """
+  def recency_half_life_days, do: round(0.693 / @recency_decay_rate)
 end

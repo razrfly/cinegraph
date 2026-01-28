@@ -241,53 +241,81 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
 
   defp filter_by_rating_preset(query, "highly_rated") do
     # Movies with average TMDb/IMDb rating >= 7.5
-    query
-    |> join(:left, [m], tmdb in "external_metrics",
-      as: :tmdb_rating,
-      on: tmdb.movie_id == m.id and tmdb.source == "tmdb" and tmdb.metric_type == "rating_average"
-    )
-    |> join(:left, [m], imdb in "external_metrics",
-      as: :imdb_rating,
-      on: imdb.movie_id == m.id and imdb.source == "imdb" and imdb.metric_type == "rating_average"
-    )
-    |> where(
-      [tmdb_rating: tmdb, imdb_rating: imdb],
-      fragment("(COALESCE(?, 0) + COALESCE(?, 0)) / 2 >= 7.5", tmdb.value, imdb.value)
+    # Using subquery approach to avoid DISTINCT/ORDER BY conflicts
+    where(
+      query,
+      [m],
+      fragment(
+        """
+        (
+          COALESCE(
+            (SELECT value FROM external_metrics
+             WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+             ORDER BY fetched_at DESC LIMIT 1), 0
+          ) +
+          COALESCE(
+            (SELECT value FROM external_metrics
+             WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
+             ORDER BY fetched_at DESC LIMIT 1), 0
+          )
+        ) / 2 >= 7.5
+        """,
+        m.id,
+        m.id
+      )
     )
   end
 
   defp filter_by_rating_preset(query, "well_reviewed") do
     # Movies with average TMDb/IMDb rating >= 6.0
-    query
-    |> join(:left, [m], tmdb in "external_metrics",
-      as: :tmdb_rating,
-      on: tmdb.movie_id == m.id and tmdb.source == "tmdb" and tmdb.metric_type == "rating_average"
-    )
-    |> join(:left, [m], imdb in "external_metrics",
-      as: :imdb_rating,
-      on: imdb.movie_id == m.id and imdb.source == "imdb" and imdb.metric_type == "rating_average"
-    )
-    |> where(
-      [tmdb_rating: tmdb, imdb_rating: imdb],
-      fragment("(COALESCE(?, 0) + COALESCE(?, 0)) / 2 >= 6.0", tmdb.value, imdb.value)
+    # Using subquery approach to avoid DISTINCT/ORDER BY conflicts
+    where(
+      query,
+      [m],
+      fragment(
+        """
+        (
+          COALESCE(
+            (SELECT value FROM external_metrics
+             WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+             ORDER BY fetched_at DESC LIMIT 1), 0
+          ) +
+          COALESCE(
+            (SELECT value FROM external_metrics
+             WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
+             ORDER BY fetched_at DESC LIMIT 1), 0
+          )
+        ) / 2 >= 6.0
+        """,
+        m.id,
+        m.id
+      )
     )
   end
 
   defp filter_by_rating_preset(query, "critically_acclaimed") do
     # Movies with high Metacritic (>= 70) or high RT Critics (>= 80)
-    query
-    |> join(:left, [m], mc in "external_metrics",
-      as: :mc_rating,
-      on: mc.movie_id == m.id and mc.source == "metacritic" and mc.metric_type == "metascore"
-    )
-    |> join(:left, [m], rt in "external_metrics",
-      as: :rt_rating,
-      on:
-        rt.movie_id == m.id and rt.source == "rotten_tomatoes" and rt.metric_type == "tomatometer"
-    )
-    |> where(
-      [mc_rating: mc, rt_rating: rt],
-      fragment("COALESCE(?, 0) >= 70 OR COALESCE(?, 0) >= 80", mc.value, rt.value)
+    # Using subquery approach to avoid DISTINCT/ORDER BY conflicts
+    where(
+      query,
+      [m],
+      fragment(
+        """
+        COALESCE(
+          (SELECT value FROM external_metrics
+           WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
+           ORDER BY fetched_at DESC LIMIT 1), 0
+        ) >= 70
+        OR
+        COALESCE(
+          (SELECT value FROM external_metrics
+           WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer'
+           ORDER BY fetched_at DESC LIMIT 1), 0
+        ) >= 80
+        """,
+        m.id,
+        m.id
+      )
     )
   end
 
@@ -309,46 +337,54 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
 
   defp filter_by_discovery_preset(query, "popular_favorites") do
     # High popular opinion score (>= 0.7)
-    query
-    |> join(:left, [m], tmdb in "external_metrics",
-      as: :tmdb_pop,
-      on: tmdb.movie_id == m.id and tmdb.source == "tmdb" and tmdb.metric_type == "rating_average"
-    )
-    |> join(:left, [m], imdb in "external_metrics",
-      as: :imdb_pop,
-      on: imdb.movie_id == m.id and imdb.source == "imdb" and imdb.metric_type == "rating_average"
-    )
-    |> where(
-      [tmdb_pop: tmdb, imdb_pop: imdb],
+    # Using subquery approach to avoid DISTINCT/ORDER BY conflicts
+    where(
+      query,
+      [m],
       fragment(
-        "(COALESCE(?, 0) / 10.0 * 0.5 + COALESCE(?, 0) / 10.0 * 0.5) >= 0.7",
-        tmdb.value,
-        imdb.value
+        """
+        (
+          COALESCE(
+            (SELECT value FROM external_metrics
+             WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+             ORDER BY fetched_at DESC LIMIT 1), 0
+          ) / 10.0 * 0.5
+          +
+          COALESCE(
+            (SELECT value FROM external_metrics
+             WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
+             ORDER BY fetched_at DESC LIMIT 1), 0
+          ) / 10.0 * 0.5
+        ) >= 0.7
+        """,
+        m.id,
+        m.id
       )
     )
   end
 
   defp filter_by_discovery_preset(query, "hidden_gems") do
     # High rating but low votes
-    query
-    |> join(:left, [m], tmdb_rating in "external_metrics",
-      as: :tmdb_gem_rating,
-      on:
-        tmdb_rating.movie_id == m.id and tmdb_rating.source == "tmdb" and
-          tmdb_rating.metric_type == "rating_average"
-    )
-    |> join(:left, [m], tmdb_votes in "external_metrics",
-      as: :tmdb_gem_votes,
-      on:
-        tmdb_votes.movie_id == m.id and tmdb_votes.source == "tmdb" and
-          tmdb_votes.metric_type == "rating_votes"
-    )
-    |> where(
-      [tmdb_gem_rating: tmdb_rating, tmdb_gem_votes: tmdb_votes],
+    # Using subquery approach to avoid DISTINCT/ORDER BY conflicts
+    where(
+      query,
+      [m],
       fragment(
-        "COALESCE(?, 0) >= 7.0 AND COALESCE(?, 0) < 10000",
-        tmdb_rating.value,
-        tmdb_votes.value
+        """
+        COALESCE(
+          (SELECT value FROM external_metrics
+           WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+           ORDER BY fetched_at DESC LIMIT 1), 0
+        ) >= 7.0
+        AND
+        COALESCE(
+          (SELECT value FROM external_metrics
+           WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_votes'
+           ORDER BY fetched_at DESC LIMIT 1), 0
+        ) < 10000
+        """,
+        m.id,
+        m.id
       )
     )
   end

@@ -70,20 +70,28 @@ defmodule Cinegraph.Workers.ContinuousBackfillWorker do
         {:error, :already_running}
 
       _ ->
-        # Initialize state
-        ImportStateV2.set("continuous_backfill_status", "running")
-        ImportStateV2.set("continuous_backfill_batch", 1)
-        ImportStateV2.set("continuous_backfill_started", DateTime.to_iso8601(DateTime.utc_now()))
-        ImportStateV2.set("continuous_backfill_batch_size", batch_size)
-        ImportStateV2.set("continuous_backfill_min_popularity", min_popularity)
+        # Queue first batch - only update state on success
+        result =
+          __MODULE__.new(%{
+            "action" => "queue_batch",
+            "batch_size" => batch_size,
+            "min_popularity" => min_popularity
+          })
+          |> Oban.insert()
 
-        # Queue first batch
-        __MODULE__.new(%{
-          "action" => "queue_batch",
-          "batch_size" => batch_size,
-          "min_popularity" => min_popularity
-        })
-        |> Oban.insert()
+        case result do
+          {:ok, job} ->
+            # Initialize state only after successful insert
+            ImportStateV2.set("continuous_backfill_status", "running")
+            ImportStateV2.set("continuous_backfill_batch", 1)
+            ImportStateV2.set("continuous_backfill_started", DateTime.to_iso8601(DateTime.utc_now()))
+            ImportStateV2.set("continuous_backfill_batch_size", batch_size)
+            ImportStateV2.set("continuous_backfill_min_popularity", min_popularity)
+            {:ok, job}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
     end
   end
 
@@ -102,19 +110,28 @@ defmodule Cinegraph.Workers.ContinuousBackfillWorker do
   def resume do
     case get_status() do
       "paused" ->
-        ImportStateV2.set("continuous_backfill_status", "running")
-
         batch_size =
           ImportStateV2.get_integer("continuous_backfill_batch_size", @default_batch_size)
 
         min_pop = ImportStateV2.get_float("continuous_backfill_min_popularity", @min_popularity)
 
-        __MODULE__.new(%{
-          "action" => "queue_batch",
-          "batch_size" => batch_size,
-          "min_popularity" => min_pop
-        })
-        |> Oban.insert()
+        result =
+          __MODULE__.new(%{
+            "action" => "queue_batch",
+            "batch_size" => batch_size,
+            "min_popularity" => min_pop
+          })
+          |> Oban.insert()
+
+        case result do
+          {:ok, job} ->
+            # Only update state after successful insert
+            ImportStateV2.set("continuous_backfill_status", "running")
+            {:ok, job}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
 
       "completed" ->
         {:error, :already_completed}
@@ -201,7 +218,7 @@ defmodule Cinegraph.Workers.ContinuousBackfillWorker do
     # Check how many jobs are already pending
     pending = count_pending_tmdb_jobs()
 
-    if pending.pending + pending.executing > batch_size do
+    if pending.pending + pending.executing >= batch_size do
       # Already have enough jobs queued, just schedule a check
       Logger.info(
         "ContinuousBackfill: #{pending.pending + pending.executing} jobs already pending, scheduling check"

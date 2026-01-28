@@ -31,7 +31,9 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
 
   use Oban.Worker,
     queue: :maintenance,
-    max_attempts: 3
+    max_attempts: 3,
+    # Prevent duplicate jobs from cron/manual overlap
+    unique: [period: :timer.minutes(15)]
 
   import Ecto.Query
   alias Cinegraph.Repo
@@ -45,8 +47,8 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
   # Number of movies to queue per batch
   @batch_size 10_000
 
-  # Minimum popularity for imports (matches existing backfill settings)
-  @min_popularity 1.0
+  # Minimum popularity for imports - set to 0 to import ALL movies
+  @min_popularity 0.0
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
