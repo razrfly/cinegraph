@@ -104,6 +104,19 @@ if config_env() == :prod do
     timeout: 180_000,
     handshake_timeout: 30_000
 
+  # Read replica points to same database (no separate replica on local Postgres)
+  config :cinegraph, Cinegraph.Repo.Replica,
+    username: username,
+    password: password,
+    hostname: hostname,
+    port: port_num,
+    database: database,
+    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "5"),
+    socket_options: socket_opts,
+    connect_timeout: 30_000,
+    timeout: 180_000,
+    handshake_timeout: 30_000
+
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want
