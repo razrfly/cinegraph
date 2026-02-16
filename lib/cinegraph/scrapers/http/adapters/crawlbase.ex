@@ -116,19 +116,19 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
     duration = System.monotonic_time(:millisecond) - start_time
 
     case Jason.decode(response_body) do
-      {:ok, %{"body" => body}} ->
-        metadata = %{adapter: name(), duration_ms: duration, mode: mode}
-        {:ok, body, metadata}
+      {:ok, %{"pc_status" => pc_status} = response} when pc_status >= 400 ->
+        error_msg = Map.get(response, "error", "HTTP #{pc_status}")
+        Logger.warning("Crawlbase error status #{pc_status}: #{error_msg}")
+        {:error, {:crawlbase_error, pc_status, error_msg}}
 
       {:ok, %{"pc_status" => pc_status} = response} when pc_status >= 200 and pc_status < 300 ->
         body = Map.get(response, "body", response_body)
         metadata = %{adapter: name(), duration_ms: duration, mode: mode}
         {:ok, body, metadata}
 
-      {:ok, %{"pc_status" => pc_status} = response} when pc_status >= 400 ->
-        error_msg = Map.get(response, "error", "HTTP #{pc_status}")
-        Logger.warning("Crawlbase error status #{pc_status}: #{error_msg}")
-        {:error, {:crawlbase_error, pc_status, error_msg}}
+      {:ok, %{"body" => body}} ->
+        metadata = %{adapter: name(), duration_ms: duration, mode: mode}
+        {:ok, body, metadata}
 
       {:ok, response} when is_map(response) ->
         body = Map.get(response, "body", response_body)
