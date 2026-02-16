@@ -181,12 +181,23 @@ defmodule Cinegraph.Workers.DataRepairWorker do
   end
 
   defp schedule_next_batch(args, new_last_id) do
-    %{
+    base = %{
       "repair_type" => args["repair_type"],
       "last_id" => new_last_id,
       "batch_size" => args["batch_size"] || @batch_size,
       "total" => args["total"]
     }
+
+    # Propagate JSONB-specific keys when present
+    base =
+      Enum.reduce(~w(total_processed total_estimated), base, fn key, acc ->
+        case args[key] do
+          nil -> acc
+          val -> Map.put(acc, key, val)
+        end
+      end)
+
+    base
     |> __MODULE__.new(schedule_in: 5)
     |> Oban.insert()
 
