@@ -12,7 +12,13 @@ config :cinegraph,
   generators: [timestamp_type: :utc_datetime],
   # Minimum confidence threshold for fuzzy matching movies (0.0 - 1.0)
   # Movies found with confidence below this threshold will be skipped
-  fuzzy_match_min_confidence: 0.7
+  fuzzy_match_min_confidence: 0.7,
+  # Scraping adapter chains per source — tried in order until one succeeds
+  scraping_strategies: %{
+    oscars: [:crawlbase],
+    imdb: [:crawlbase, :direct],
+    default: [:direct]
+  }
 
 # Configures the endpoint
 config :cinegraph, CinegraphWeb.Endpoint,

@@ -62,7 +62,8 @@ mix import_movies --pages 5 # Import movies from TMDb
 - `TMDB_API_KEY` - TMDb API access
 - `OMDB_API_KEY` - OMDb API access
 - `DATABASE_URL` - Database connection (production)
-- `ZYTE_API_KEY` - Web scraping service
+- `CRAWLBASE_API_KEY` - Crawlbase static scraping
+- `CRAWLBASE_JS_API_KEY` - Crawlbase JS-rendered scraping
 
 ## Project Structure
 ```

@@ -16,8 +16,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   alias Cinegraph.{Repo, Movies}
   alias Cinegraph.Workers.TMDbDetailsWorker
   alias Cinegraph.Metrics.ApiTracker
-
-  @timeout 60_000
+  alias Cinegraph.Scrapers.Http.Client, as: HttpClient
 
   @doc """
   Scrape any IMDb user list and mark movies as canonical.
@@ -565,7 +564,6 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
             _ ->
               Logger.warning("Could not extract list ID from URL: #{url}")
-              # Use URL hash as fallback identifier
               :crypto.hash(:md5, url) |> Base.encode16(case: :lower) |> String.slice(0..7)
           end
 
@@ -574,96 +572,9 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
           "unknown"
       end
 
-    # Use Zyte API like the Oscar scraper
-    api_key = Application.get_env(:cinegraph, :zyte_api_key) || System.get_env("ZYTE_API_KEY")
-
-    if is_nil(api_key) || api_key == "" do
-      Logger.error("No ZYTE_API_KEY configured, falling back to direct HTTP")
-
-      ApiTracker.track_lookup("imdb_scraper", "fetch_list_direct", list_id, fn ->
-        fetch_html_direct(url)
-      end)
-    else
-      ApiTracker.track_lookup("imdb_scraper", "fetch_list_zyte", list_id, fn ->
-        fetch_html_with_zyte(url, api_key)
-      end)
-    end
-  end
-
-  defp fetch_html_with_zyte(url, api_key) do
-    zyte_api_url = "https://api.zyte.com/v1/extract"
-
-    headers = [
-      {"Authorization", "Basic #{Base.encode64(api_key <> ":")}"},
-      {"Content-Type", "application/json"}
-    ]
-
-    body =
-      Jason.encode!(%{
-        url: url,
-        browserHtml: true,
-        javascript: true,
-        viewport: %{
-          width: 1920,
-          height: 1080
-        }
-      })
-
-    options = [
-      timeout: @timeout,
-      recv_timeout: @timeout,
-      hackney: [pool: :default]
-    ]
-
-    case HTTPoison.post(zyte_api_url, body, headers, options) do
-      {:ok, %{status_code: 200, body: response}} ->
-        case Jason.decode(response) do
-          {:ok, %{"browserHtml" => html}} ->
-            Logger.info("Successfully fetched HTML via Zyte (#{byte_size(html)} bytes)")
-            {:ok, html}
-
-          error ->
-            Logger.error("Failed to parse Zyte response: #{inspect(error)}")
-            {:error, "Zyte JSON parsing failed"}
-        end
-
-      {:ok, %{status_code: status, body: body}} ->
-        Logger.error("Zyte API error (#{status}): #{body}")
-        {:error, "Zyte HTTP #{status}"}
-
-      {:error, reason} ->
-        Logger.error("Zyte network error: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
-  defp fetch_html_direct(url) do
-    # Fallback to direct HTTP if Zyte not configured
-    headers = [
-      {"User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
-      {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"},
-      {"Accept-Language", "en-US,en;q=0.5"},
-      {"Accept-Encoding", "gzip, deflate"},
-      {"Connection", "keep-alive"}
-    ]
-
-    case HTTPoison.get(url, headers, timeout: @timeout, recv_timeout: @timeout) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        Logger.info("Successfully fetched HTML directly (#{byte_size(body)} bytes)")
-        {:ok, body}
-
-      {:ok, %HTTPoison.Response{status_code: status_code}} ->
-        Logger.error("HTTP error #{status_code} when fetching #{url}")
-        {:error, "HTTP #{status_code}"}
-
-      {:error, reason} ->
-        Logger.error("Network error when fetching #{url}: #{inspect(reason)}")
-        {:error, reason}
-    end
-  rescue
-    exception ->
-      Logger.error("Exception when fetching #{url}: #{inspect(exception)}")
-      {:error, exception}
+    ApiTracker.track_lookup("imdb_scraper", "fetch_list", list_id, fn ->
+      HttpClient.fetch(url, :imdb, mode: :javascript)
+    end)
   end
 
   defp parse_imdb_list_html(html, list_config, page) do
