@@ -1,0 +1,8 @@
+#!/bin/bash -e
+
+# If running the Phoenix server, run migrations first
+if [ "${1}" == "/app/bin/server" ]; then
+  /app/bin/migrate
+fi
+
+exec "${@}"

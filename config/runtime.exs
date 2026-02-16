@@ -86,22 +86,10 @@ if config_env() == :prod do
   port_num = String.to_integer(System.get_env("DATABASE_PORT") || "5432")
   database = System.get_env("DATABASE") || "postgres"
 
-  # Force IPv4 unless IPv6 is explicitly enabled
-  # PlanetScale requires IPv4 for reliable connectivity from Fly.io
   socket_opts = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: [:inet]
 
-  # Shared SSL options for both primary and replica
-  ssl_opts = [
-    verify: :verify_peer,
-    cacertfile: CAStore.file_path(),
-    server_name_indication: String.to_charlist(hostname),
-    customize_hostname_check: [
-      match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-    ]
-  ]
-
   # Primary database configuration
-  # May use PgBouncer (port 6432) for connection pooling on web requests
+  # Connects to local Postgres on Mac Mini via host.docker.internal
   config :cinegraph, Cinegraph.Repo,
     username: username,
     password: password,
@@ -114,33 +102,7 @@ if config_env() == :prod do
     # Increased from 15s to 180s to allow complex scoring queries in Oban jobs
     # Per-query timeouts can override this for specific operations
     timeout: 180_000,
-    handshake_timeout: 30_000,
-    ssl: true,
-    ssl_opts: ssl_opts
-
-  # Read replica configuration
-  # PlanetScale uses username suffix for replica routing: username|replica
-  # IMPORTANT: Must use port 5432 - PgBouncer (6432) does NOT support replica routing
-  replica_enabled = System.get_env("DATABASE_REPLICA_ENABLED", "true") == "true"
-
-  if replica_enabled do
-    replica_username = "#{username}|replica"
-    replica_pool_size = String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "10")
-
-    config :cinegraph, Cinegraph.Repo.Replica,
-      username: replica_username,
-      password: password,
-      hostname: hostname,
-      port: 5432,
-      database: database,
-      pool_size: replica_pool_size,
-      socket_options: socket_opts,
-      connect_timeout: 30_000,
-      timeout: 180_000,
-      handshake_timeout: 30_000,
-      ssl: true,
-      ssl_opts: ssl_opts
-  end
+    handshake_timeout: 30_000
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
@@ -173,11 +135,8 @@ if config_env() == :prod do
       port: port
     ],
     check_origin: [
-      # Allow connections from actual production domain
       "https://cinegraph.org",
-      "https://www.cinegraph.org",
-      # Also allow Fly.io internal domain for health checks
-      "https://cinegraph.fly.dev"
+      "https://www.cinegraph.org"
     ],
     secret_key_base: secret_key_base
 

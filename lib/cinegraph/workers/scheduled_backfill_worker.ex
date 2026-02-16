@@ -32,8 +32,11 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
   use Oban.Worker,
     queue: :maintenance,
     max_attempts: 3,
-    # Prevent duplicate jobs from cron/manual overlap
-    unique: [period: :timer.minutes(15)]
+    # Prevent duplicate jobs from cron/manual overlap (only among non-completed jobs)
+    unique: [
+      period: :timer.minutes(15),
+      states: [:available, :scheduled, :executing, :retryable]
+    ]
 
   import Ecto.Query
   alias Cinegraph.Repo
@@ -54,6 +57,9 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
   def perform(%Oban.Job{}) do
     Logger.info("ScheduledBackfill: Starting hourly health check...")
 
+    # Update baseline from TMDb export if stale (daily)
+    maybe_update_baseline()
+
     pending = count_pending_tmdb_jobs()
     total_pending = pending.available + pending.scheduled + pending.executing + pending.retryable
 
@@ -73,6 +79,48 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
 
       true ->
         queue_batch(total_pending)
+    end
+  end
+
+  # Update baseline if it's stale (older than 24 hours)
+  defp maybe_update_baseline do
+    alias Cinegraph.Imports.ImportStateV2
+
+    case ImportStateV2.get("baseline_updated_at") do
+      nil ->
+        Logger.info("ScheduledBackfill: No baseline set, updating from TMDb export...")
+        do_update_baseline()
+
+      updated_at when is_binary(updated_at) ->
+        case DateTime.from_iso8601(updated_at) do
+          {:ok, dt, _} ->
+            hours_ago = DateTime.diff(DateTime.utc_now(), dt, :hour)
+
+            if hours_ago >= 24 do
+              Logger.info("ScheduledBackfill: Baseline is #{hours_ago}h old, updating...")
+              do_update_baseline()
+            else
+              Logger.debug("ScheduledBackfill: Baseline is fresh (#{hours_ago}h old)")
+            end
+
+          _ ->
+            do_update_baseline()
+        end
+
+      _ ->
+        do_update_baseline()
+    end
+  end
+
+  defp do_update_baseline do
+    case GapAnalysis.update_baseline() do
+      {:ok, stats} ->
+        Logger.info(
+          "ScheduledBackfill: Updated baseline - #{stats.export_total} total movies in TMDb"
+        )
+
+      {:error, reason} ->
+        Logger.warning("ScheduledBackfill: Failed to update baseline: #{inspect(reason)}")
     end
   end
 
