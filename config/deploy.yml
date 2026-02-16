@@ -5,9 +5,6 @@ servers:
   web:
     - 192.168.1.205
 
-# Give Oban 60s to finish in-flight jobs before container is killed
-stop_wait_time: 70
-
 proxy:
   ssl: false
   host: cinegraph.org

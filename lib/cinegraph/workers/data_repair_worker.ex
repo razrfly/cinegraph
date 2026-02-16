@@ -79,48 +79,52 @@ defmodule Cinegraph.Workers.DataRepairWorker do
     Logger.info("DataRepairWorker: Extracting JSONB credits, batch after id #{last_id}")
 
     # Get batch of movies with credits in tmdb_data but not in movie_credits
-    movies = get_movies_with_unextracted_credits(last_id, batch_size)
+    case get_movies_with_unextracted_credits(last_id, batch_size) do
+      {:error, reason} ->
+        Logger.error("DataRepairWorker: Query failed, will retry: #{inspect(reason)}")
+        {:error, reason}
 
-    if movies == [] do
-      # Done!
-      update_job_meta(job, %{
-        status: "completed",
-        total_processed: total_processed,
-        completed_at: DateTime.utc_now()
-      })
+      [] ->
+        # Done!
+        update_job_meta(job, %{
+          status: "completed",
+          total_processed: total_processed,
+          completed_at: DateTime.utc_now()
+        })
 
-      Logger.info(
-        "DataRepairWorker: Completed extract_jsonb_credits repair. Total: #{total_processed}"
-      )
+        Logger.info(
+          "DataRepairWorker: Completed extract_jsonb_credits repair. Total: #{total_processed}"
+        )
 
-      :ok
-    else
-      # Process this batch
-      {success_count, error_count, credits_created} = process_jsonb_batch(movies)
+        :ok
 
-      # Get the last ID processed
-      new_last_id = List.last(movies).id
-      new_total = total_processed + success_count
+      movies ->
+        # Process this batch
+        {success_count, error_count, credits_created} = process_jsonb_batch(movies)
 
-      # Update progress
-      update_job_meta(job, %{
-        status: "in_progress",
-        last_id: new_last_id,
-        batch_success: success_count,
-        batch_errors: error_count,
-        batch_credits_created: credits_created,
-        total_processed: new_total
-      })
+        # Get the last ID processed
+        new_last_id = List.last(movies).id
+        new_total = total_processed + success_count
 
-      Logger.info(
-        "DataRepairWorker: JSONB batch complete. Movies: #{success_count}, Credits: #{credits_created}, Errors: #{error_count}"
-      )
+        # Update progress
+        update_job_meta(job, %{
+          status: "in_progress",
+          last_id: new_last_id,
+          batch_success: success_count,
+          batch_errors: error_count,
+          batch_credits_created: credits_created,
+          total_processed: new_total
+        })
 
-      # Schedule next batch
-      schedule_next_batch(
-        %{args | "total_processed" => new_total},
-        new_last_id
-      )
+        Logger.info(
+          "DataRepairWorker: JSONB batch complete. Movies: #{success_count}, Credits: #{credits_created}, Errors: #{error_count}"
+        )
+
+        # Schedule next batch
+        schedule_next_batch(
+          %{args | "total_processed" => new_total},
+          new_last_id
+        )
     end
   end
 
@@ -245,8 +249,12 @@ defmodule Cinegraph.Workers.DataRepairWorker do
       {:ok, %{rows: []}} ->
         []
 
-      {:error, _} ->
-        []
+      {:error, reason} ->
+        Logger.error(
+          "DataRepairWorker: Failed to query unextracted credits: #{inspect(reason)}"
+        )
+
+        {:error, reason}
     end
   end
 
@@ -299,18 +307,27 @@ defmodule Cinegraph.Workers.DataRepairWorker do
       # Count credits before
       before_count = count_movie_credits(movie_id)
 
-      # Process credits using existing function
-      Movies.process_movie_credits_public(movie, credits_data)
+      try do
+        # Process credits using existing function
+        Movies.process_movie_credits_public(movie, credits_data)
 
-      # Count credits after
-      after_count = count_movie_credits(movie_id)
-      credits_created = after_count - before_count
+        # Count credits after
+        after_count = count_movie_credits(movie_id)
+        credits_created = after_count - before_count
 
-      Logger.debug(
-        "DataRepairWorker: Extracted #{credits_created} credits for #{title}"
-      )
+        Logger.debug(
+          "DataRepairWorker: Extracted #{credits_created} credits for #{title}"
+        )
 
-      {:ok, credits_created}
+        {:ok, credits_created}
+      rescue
+        e ->
+          Logger.error(
+            "DataRepairWorker: Crash extracting credits for movie #{movie_id} (#{title}): #{inspect(e)}"
+          )
+
+          {:error, {:extraction_crash, e}}
+      end
     else
       {:error, :no_credits_in_jsonb}
     end
