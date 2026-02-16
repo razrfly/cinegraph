@@ -216,7 +216,11 @@ defmodule Cinegraph.Movies.Search do
 
   defp get_sort_options do
     [
-      %{id: "discovery_score_desc", value: "discovery_score_desc", label: "Discovery (Recent + Relevant)"},
+      %{
+        id: "discovery_score_desc",
+        value: "discovery_score_desc",
+        label: "Discovery (Recent + Relevant)"
+      },
       %{id: "release_date_desc", value: "release_date_desc", label: "Release Date (Newest)"},
       %{id: "release_date", value: "release_date", label: "Release Date (Oldest)"},
       %{id: "title", value: "title", label: "Title (A-Z)"},

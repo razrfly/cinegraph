@@ -84,7 +84,12 @@ defmodule Cinegraph.Workers.ContinuousBackfillWorker do
             # Initialize state only after successful insert
             ImportStateV2.set("continuous_backfill_status", "running")
             ImportStateV2.set("continuous_backfill_batch", 1)
-            ImportStateV2.set("continuous_backfill_started", DateTime.to_iso8601(DateTime.utc_now()))
+
+            ImportStateV2.set(
+              "continuous_backfill_started",
+              DateTime.to_iso8601(DateTime.utc_now())
+            )
+
             ImportStateV2.set("continuous_backfill_batch_size", batch_size)
             ImportStateV2.set("continuous_backfill_min_popularity", min_popularity)
             {:ok, job}

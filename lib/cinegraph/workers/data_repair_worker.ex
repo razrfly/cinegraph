@@ -250,9 +250,7 @@ defmodule Cinegraph.Workers.DataRepairWorker do
         []
 
       {:error, reason} ->
-        Logger.error(
-          "DataRepairWorker: Failed to query unextracted credits: #{inspect(reason)}"
-        )
+        Logger.error("DataRepairWorker: Failed to query unextracted credits: #{inspect(reason)}")
 
         {:error, reason}
     end
@@ -315,9 +313,7 @@ defmodule Cinegraph.Workers.DataRepairWorker do
         after_count = count_movie_credits(movie_id)
         credits_created = after_count - before_count
 
-        Logger.debug(
-          "DataRepairWorker: Extracted #{credits_created} credits for #{title}"
-        )
+        Logger.debug("DataRepairWorker: Extracted #{credits_created} credits for #{title}")
 
         {:ok, credits_created}
       rescue
