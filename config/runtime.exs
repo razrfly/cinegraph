@@ -26,10 +26,15 @@ omdb_api_key =
     do: env!("OMDB_API_KEY", :string, ""),
     else: System.get_env("OMDB_API_KEY") || ""
 
-zyte_api_key =
+crawlbase_api_key =
   if config_env() == :dev,
-    do: env!("ZYTE_API_KEY", :string, ""),
-    else: System.get_env("ZYTE_API_KEY") || ""
+    do: env!("CRAWLBASE_API_KEY", :string, ""),
+    else: System.get_env("CRAWLBASE_API_KEY") || ""
+
+crawlbase_js_api_key =
+  if config_env() == :dev,
+    do: env!("CRAWLBASE_JS_API_KEY", :string, ""),
+    else: System.get_env("CRAWLBASE_JS_API_KEY") || ""
 
 # Configure TMDb
 # API key is optional at config time - the service will handle missing keys at runtime
@@ -38,8 +43,9 @@ config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: tmdb_api_key
 # Configure OMDb (optional)
 config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 
-# Configure Zyte API (optional, for Oscar scraping)
-config :cinegraph, :zyte_api_key, zyte_api_key
+# Configure Crawlbase API (for Oscar and IMDb scraping)
+config :cinegraph, :crawlbase_api_key, crawlbase_api_key
+config :cinegraph, :crawlbase_js_api_key, crawlbase_js_api_key
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the

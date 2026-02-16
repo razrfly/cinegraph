@@ -1,19 +1,16 @@
 defmodule Cinegraph.Scrapers.OscarScraper do
   @moduledoc """
-  Scraper for Academy Awards data from Oscars.org using Zyte API
+  Scraper for Academy Awards data from Oscars.org.
   Following the patterns from https://github.com/DLu/oscar_data
 
   This module can either:
   1. Parse manually downloaded HTML from Oscars.org
-  2. Fetch via Zyte API for better reliability
+  2. Fetch via configured scraping adapter (Crawlbase by default)
   """
 
   require Logger
   alias Cinegraph.Metrics.ApiTracker
-
-  @zyte_api_url "https://api.zyte.com/v1/extract"
-  @timeout 60_000
-  @max_retries 3
+  alias Cinegraph.Scrapers.Http.Client, as: HttpClient
 
   # CSS selectors - Updated for new Oscar website structure
   # Old selectors from oscar_data for reference:
@@ -47,95 +44,26 @@ defmodule Cinegraph.Scrapers.OscarScraper do
   end
 
   @doc """
-  Fetch Oscar ceremony data for a specific year using Zyte API.
+  Fetch Oscar ceremony data for a specific year.
   """
   def fetch_ceremony(year) do
     url = "https://www.oscars.org/oscars/ceremonies/#{year}"
 
     ApiTracker.track_lookup("oscar_scraper", "fetch_ceremony", "#{year}", fn ->
-      fetch_with_zyte(url, year)
+      case HttpClient.fetch(url, :oscars, mode: :javascript) do
+        {:ok, html} -> parse_ceremony_html(html, year)
+        {:error, _reason} = error -> error
+      end
     end)
   end
 
   @doc """
-  Fetch Oscar search results page using Zyte API.
+  Fetch Oscar search results page.
   This can be used to get a broader view of ceremonies.
   """
   def fetch_search_results do
     url = "https://aasearchprod.oscars.org/search/awardsdatabase"
-    fetch_with_zyte(url, nil)
-  end
-
-  defp fetch_with_zyte(url, year, retries \\ 0) do
-    api_key = Application.get_env(:cinegraph, :zyte_api_key)
-
-    if is_nil(api_key) || api_key == "" do
-      Logger.error("No ZYTE_API_KEY configured")
-      {:error, "Missing ZYTE_API_KEY"}
-    else
-      headers = [
-        {"Authorization", "Basic #{Base.encode64(api_key <> ":")}"},
-        {"Content-Type", "application/json"}
-      ]
-
-      body =
-        Jason.encode!(%{
-          url: url,
-          browserHtml: true,
-          javascript: true,
-          viewport: %{
-            width: 1920,
-            height: 1080
-          }
-        })
-
-      options = [
-        timeout: @timeout,
-        recv_timeout: @timeout,
-        hackney: [pool: :default]
-      ]
-
-      case HTTPoison.post(@zyte_api_url, body, headers, options) do
-        {:ok, %{status_code: 200, body: response}} ->
-          case Jason.decode(response) do
-            {:ok, %{"browserHtml" => html}} ->
-              if year do
-                parse_ceremony_html(html, year)
-              else
-                {:ok, html}
-              end
-
-            error ->
-              Logger.error("Failed to parse Zyte response: #{inspect(error)}")
-              retry_or_fail(url, year, retries, "JSON parsing failed")
-          end
-
-        {:ok, %{status_code: status, body: body}} ->
-          Logger.error("Zyte API error (#{status}): #{body}")
-          retry_or_fail(url, year, retries, "HTTP #{status}")
-
-        {:error, %HTTPoison.Error{reason: reason}} ->
-          Logger.error("Failed to fetch from Zyte: #{inspect(reason)}")
-          retry_or_fail(url, year, retries, "HTTP error: #{inspect(reason)}")
-      end
-    end
-  end
-
-  defp retry_or_fail(_url, _year, retries, error) when retries >= @max_retries do
-    Logger.error("Max retries (#{@max_retries}) reached. Last error: #{error}")
-    {:error, error}
-  end
-
-  defp retry_or_fail(url, year, retries, error) do
-    new_retries = retries + 1
-
-    Logger.info(
-      "Retrying request (attempt #{new_retries}/#{@max_retries}). Previous error: #{error}"
-    )
-
-    # Exponential backoff
-    Process.sleep(1000 * new_retries)
-    fetch_with_zyte(url, year, new_retries)
+    HttpClient.fetch(url, :oscars, mode: :javascript)
   end
 
   # Private functions
