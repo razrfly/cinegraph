@@ -420,7 +420,7 @@ defmodule CinegraphWeb.YearImportsLive do
           Cron job runs every 15 minutes. Will queue more movies when pending drops below threshold.
         </div>
       </div>
-
+      
     <!-- Year-by-Year Grid -->
       <div class="bg-white rounded-lg shadow p-6 mb-8">
         <h2 class="text-lg font-semibold mb-4">Year Progress</h2>

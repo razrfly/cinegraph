@@ -316,7 +316,11 @@ defmodule Mix.Tasks.Tmdb.Export do
     Mix.shell().info("")
     Mix.shell().info("Configuration:")
     Mix.shell().info("  Limit:          #{if limit, do: inspect(limit), else: "all"}")
-    Mix.shell().info("  Min popularity: #{if min_popularity, do: inspect(min_popularity), else: "none"}")
+
+    Mix.shell().info(
+      "  Min popularity: #{if min_popularity, do: inspect(min_popularity), else: "none"}"
+    )
+
     Mix.shell().info("  Batch size:     #{batch_size}")
     Mix.shell().info("  Offset:         #{offset}")
     Mix.shell().info("  Dry run:        #{dry_run}")

@@ -308,7 +308,10 @@ defmodule Cinegraph.Services.TMDb.PeopleGapAnalysis do
 
     recommendations =
       if high_pop.missing > 0 do
-        ["PRIORITY: Missing #{high_pop.missing} famous people (popularity 100+)" | recommendations]
+        [
+          "PRIORITY: Missing #{high_pop.missing} famous people (popularity 100+)"
+          | recommendations
+        ]
       else
         ["✅ Have all famous people (popularity 100+)" | recommendations]
       end
