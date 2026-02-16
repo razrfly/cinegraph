@@ -1,0 +1,58 @@
+service: cinegraph
+image: razrfly/cinegraph
+
+servers:
+  web:
+    - 192.168.1.205
+
+# Give Oban 60s to finish in-flight jobs before container is killed
+stop_wait_time: 70
+
+proxy:
+  ssl: false
+  host: cinegraph.org
+  app_port: 4000
+  healthcheck:
+    path: /health
+    interval: 3
+
+registry:
+  server: ghcr.io
+  username: razrfly
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: arm64
+
+env:
+  clear:
+    PHX_HOST: cinegraph.org
+    PHX_SERVER: "true"
+    PORT: "4000"
+  secret:
+    - SECRET_KEY_BASE
+    - DATABASE_USERNAME
+    - DATABASE_PASSWORD
+    - DATABASE_HOST
+    - DATABASE_PORT
+    - DATABASE
+    - TMDB_API_KEY
+    - OMDB_API_KEY
+    - ZYTE_API_KEY
+    - ADMIN_USERNAME
+    - ADMIN_PASSWORD
+
+ssh:
+  user: holden
+
+logging:
+  driver: json-file
+  options:
+    max-size: 50m
+    max-file: "3"
+
+aliases:
+  shell: app exec --interactive --reuse "bash"
+  logs: app logs
+  console: app exec --interactive --reuse "/app/bin/cinegraph remote"

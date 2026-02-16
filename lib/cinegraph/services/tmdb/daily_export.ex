@@ -2,19 +2,30 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
   @moduledoc """
   Downloads and parses TMDb daily ID export files.
 
-  TMDb publishes daily export files containing all valid movie IDs at:
-  http://files.tmdb.org/p/exports/movie_ids_MM_DD_YYYY.json.gz
+  TMDb publishes daily export files containing all valid IDs at:
+  - Movies: http://files.tmdb.org/p/exports/movie_ids_MM_DD_YYYY.json.gz
+  - People: http://files.tmdb.org/p/exports/person_ids_MM_DD_YYYY.json.gz
 
   The files are line-delimited JSON (not a single JSON array), gzipped.
-  Each line contains: {"adult":false,"id":123,"original_title":"...","popularity":1.23,"video":false}
+
+  Movie format: {"adult":false,"id":123,"original_title":"...","popularity":1.23,"video":false}
+  Person format: {"adult":false,"id":123,"name":"...","popularity":1.23}
 
   ## Usage
 
-      # Download today's export
+      # Download today's movie export
       {:ok, path} = DailyExport.download()
+
+      # Download today's person export
+      {:ok, path} = DailyExport.download_people()
 
       # Stream movie entries (memory efficient)
       DailyExport.stream_movies(path)
+      |> Stream.filter(& &1.popularity >= 1.0)
+      |> Enum.take(100)
+
+      # Stream person entries
+      DailyExport.stream_people(path)
       |> Stream.filter(& &1.popularity >= 1.0)
       |> Enum.take(100)
 
@@ -34,6 +45,13 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
           popularity: float(),
           adult: boolean(),
           video: boolean()
+        }
+
+  @type person_entry :: %{
+          id: integer(),
+          name: String.t(),
+          popularity: float(),
+          adult: boolean()
         }
 
   @doc """
@@ -101,11 +119,78 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
   end
 
   @doc """
-  Returns the URL for a given date's export file.
+  Downloads the person IDs export file for a given date.
+  Returns the path to the downloaded (decompressed) file.
+
+  ## Options
+    - `:date` - Date to download (default: today)
+    - `:dest_dir` - Directory to save file (default: System.tmp_dir())
+
+  ## Examples
+
+      {:ok, path} = DailyExport.download_people()
+      {:ok, path} = DailyExport.download_people(date: ~D[2026-01-05])
+  """
+  @spec download_people(keyword()) :: {:ok, String.t()} | {:error, term()}
+  def download_people(opts \\ []) do
+    date = Keyword.get(opts, :date, Date.utc_today())
+    dest_dir = Keyword.get(opts, :dest_dir, System.tmp_dir!())
+    fallback_days = Keyword.get(opts, :fallback_days, 3)
+
+    try_download_people_with_fallback(date, dest_dir, fallback_days + 1)
+  end
+
+  defp try_download_people_with_fallback(date, dest_dir, days_remaining)
+       when days_remaining > 0 do
+    filename = format_person_filename(date)
+    url = "#{@base_url}/#{filename}"
+    gz_path = Path.join(dest_dir, filename)
+    json_path = String.replace(gz_path, ".gz", "")
+
+    Logger.info("Downloading TMDb person export: #{url}")
+
+    case download_file(url, gz_path) do
+      {:ok, _} ->
+        with {:ok, _} <- decompress_file(gz_path, json_path) do
+          File.rm(gz_path)
+          Logger.info("Downloaded and decompressed to: #{json_path}")
+          {:ok, json_path}
+        end
+
+      {:error, {:http_error, 403}} ->
+        yesterday = Date.add(date, -1)
+        Logger.info("Today's person export not available yet (403), trying #{yesterday}...")
+        try_download_people_with_fallback(yesterday, dest_dir, days_remaining - 1)
+
+      {:error, :not_found} ->
+        yesterday = Date.add(date, -1)
+        Logger.info("Person export not found (404), trying #{yesterday}...")
+        try_download_people_with_fallback(yesterday, dest_dir, days_remaining - 1)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp try_download_people_with_fallback(date, _dest_dir, 0) do
+    Logger.error("TMDb person export not available after fallback attempts. Last tried: #{date}")
+    {:error, :export_unavailable}
+  end
+
+  @doc """
+  Returns the URL for a given date's movie export file.
   """
   @spec export_url(Date.t()) :: String.t()
   def export_url(date \\ Date.utc_today()) do
     "#{@base_url}/#{format_filename(date)}"
+  end
+
+  @doc """
+  Returns the URL for a given date's person export file.
+  """
+  @spec person_export_url(Date.t()) :: String.t()
+  def person_export_url(date \\ Date.utc_today()) do
+    "#{@base_url}/#{format_person_filename(date)}"
   end
 
   @doc """
@@ -164,6 +249,101 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
       {:ok, ids}
     rescue
       e -> {:error, e}
+    end
+  end
+
+  @doc """
+  Streams person entries from an export file.
+  Memory efficient - processes one line at a time.
+
+  ## Options
+    - `:skip_adult` - Skip entries where adult=true (default: true)
+    - `:min_popularity` - Minimum popularity threshold (default: nil)
+
+  ## Examples
+
+      DailyExport.stream_people(path)
+      |> Stream.filter(& &1.popularity >= 10)
+      |> Enum.each(&process/1)
+  """
+  @spec stream_people(String.t(), keyword()) :: Enumerable.t()
+  def stream_people(path, opts \\ []) do
+    skip_adult = Keyword.get(opts, :skip_adult, true)
+    min_popularity = Keyword.get(opts, :min_popularity, nil)
+
+    File.stream!(path)
+    |> Stream.map(&String.trim/1)
+    |> Stream.reject(&(&1 == ""))
+    |> Stream.map(&parse_person_line/1)
+    |> Stream.reject(&is_nil/1)
+    |> Stream.reject(fn entry ->
+      (skip_adult && entry.adult) ||
+        (min_popularity && entry.popularity < min_popularity)
+    end)
+  end
+
+  @doc """
+  Streams just the person IDs from an export file.
+  """
+  @spec stream_person_ids(String.t(), keyword()) :: Enumerable.t()
+  def stream_person_ids(path, opts \\ []) do
+    stream_people(path, opts)
+    |> Stream.map(& &1.id)
+  end
+
+  @doc """
+  Gets all person IDs from an export file as a MapSet.
+  Note: This loads all IDs into memory.
+  """
+  @spec get_all_person_ids(String.t(), keyword()) :: {:ok, MapSet.t()} | {:error, term()}
+  def get_all_person_ids(path, opts \\ []) do
+    try do
+      ids =
+        stream_person_ids(path, opts)
+        |> Enum.into(MapSet.new())
+
+      {:ok, ids}
+    rescue
+      e -> {:error, e}
+    end
+  end
+
+  @doc """
+  Counts person entries in an export file.
+  """
+  @spec count_person_entries(String.t()) :: map()
+  def count_person_entries(path) do
+    File.stream!(path)
+    |> Stream.map(&String.trim/1)
+    |> Stream.reject(&(&1 == ""))
+    |> Stream.map(&parse_person_line/1)
+    |> Stream.reject(&is_nil/1)
+    |> Enum.reduce(
+      %{
+        total: 0,
+        adult: 0,
+        non_adult: 0,
+        pop_100_plus: 0,
+        pop_10_100: 0,
+        pop_1_10: 0,
+        pop_below_1: 0
+      },
+      fn entry, acc ->
+        acc
+        |> Map.update!(:total, &(&1 + 1))
+        |> Map.update!(:adult, &(&1 + if(entry.adult, do: 1, else: 0)))
+        |> Map.update!(:non_adult, &(&1 + if(entry.adult, do: 0, else: 1)))
+        |> update_person_popularity_bucket(entry.popularity)
+      end
+    )
+  end
+
+  defp update_person_popularity_bucket(acc, popularity) do
+    cond do
+      popularity >= 100 -> Map.update!(acc, :pop_100_plus, &(&1 + 1))
+      popularity >= 10 -> Map.update!(acc, :pop_10_100, &(&1 + 1))
+      popularity >= 1 -> Map.update!(acc, :pop_1_10, &(&1 + 1))
+      true -> Map.update!(acc, :pop_below_1, &(&1 + 1))
     end
   end
 
@@ -244,6 +424,13 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
     "movie_ids_#{month}_#{day}_#{year}.json.gz"
   end
 
+  defp format_person_filename(date) do
+    month = date.month |> Integer.to_string() |> String.pad_leading(2, "0")
+    day = date.day |> Integer.to_string() |> String.pad_leading(2, "0")
+    year = date.year
+    "person_ids_#{month}_#{day}_#{year}.json.gz"
+  end
+
   defp download_file(url, dest_path) do
     Logger.info("Downloading from #{url}...")
 
@@ -295,7 +482,23 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
         }
 
       {:error, _} ->
-        Logger.warning("Failed to parse line: #{String.slice(line, 0, 100)}")
+        Logger.warning("Failed to parse movie line: #{String.slice(line, 0, 100)}")
+        nil
+    end
+  end
+
+  defp parse_person_line(line) do
+    case Jason.decode(line) do
+      {:ok, data} ->
+        %{
+          id: data["id"],
+          name: data["name"],
+          popularity: data["popularity"] || 0.0,
+          adult: data["adult"] || false
+        }
+
+      {:error, _} ->
+        Logger.warning("Failed to parse person line: #{String.slice(line, 0, 100)}")
         nil
     end
   end

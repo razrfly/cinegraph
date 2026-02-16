@@ -187,6 +187,101 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
      }}
   end
 
+  @doc """
+  Gets export statistics efficiently for progress tracking.
+
+  Downloads (or uses cached) TMDb export and counts eligible movies.
+  This is optimized for frequent calls - much faster than full analyze().
+
+  Returns:
+    - export_total: Total non-video, non-adult movies in TMDb
+    - our_total: Movies in our database
+    - missing_count: Movies we don't have
+    - coverage_percent: Our coverage percentage
+    - export_date: Date of the export file used
+
+  ## Options
+    - `:skip_download` - Use existing cached file if available
+    - `:min_popularity` - Only count movies above this threshold
+  """
+  @spec get_export_stats(keyword()) :: {:ok, map()} | {:error, term()}
+  def get_export_stats(opts \\ []) do
+    with {:ok, export_path} <- ensure_export(Keyword.put_new(opts, :skip_download, true)),
+         {:ok, export_ids} <- load_export_ids(export_path, opts),
+         {:ok, our_ids} <- load_our_ids() do
+      export_total = MapSet.size(export_ids)
+      our_total = MapSet.size(our_ids)
+      overlap = MapSet.intersection(our_ids, export_ids) |> MapSet.size()
+      missing_count = export_total - overlap
+
+      coverage_percent =
+        if export_total > 0 do
+          Float.round(overlap / export_total * 100, 2)
+        else
+          0.0
+        end
+
+      # Extract date from export path
+      export_date = extract_date_from_path(export_path)
+
+      {:ok,
+       %{
+         export_total: export_total,
+         our_total: our_total,
+         missing_count: missing_count,
+         coverage_percent: coverage_percent,
+         export_date: export_date,
+         export_path: export_path
+       }}
+    else
+      {:error, :file_not_found} ->
+        # No cached file, try downloading
+        get_export_stats(Keyword.put(opts, :skip_download, false))
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Updates the stored baseline from TMDb export.
+
+  Call this periodically (e.g., daily) to keep progress tracking accurate.
+  """
+  @spec update_baseline() :: {:ok, map()} | {:error, term()}
+  def update_baseline do
+    Logger.info("Updating TMDb baseline from daily export...")
+
+    # Force download fresh export
+    with {:ok, stats} <- get_export_stats(skip_download: false) do
+      # Update ImportStateV2 with fresh baseline
+      alias Cinegraph.Imports.ImportStateV2
+      ImportStateV2.set("total_movies", stats.export_total)
+      ImportStateV2.set("baseline_updated_at", DateTime.utc_now() |> DateTime.to_iso8601())
+      ImportStateV2.set("baseline_export_date", stats.export_date |> Date.to_iso8601())
+
+      Logger.info(
+        "Baseline updated: #{stats.export_total} total movies in TMDb export (#{stats.export_date})"
+      )
+
+      {:ok, stats}
+    end
+  end
+
+  # Extract date from export path like "/tmp/movie_ids_01_15_2026.json"
+  defp extract_date_from_path(path) do
+    case Regex.run(~r/movie_ids_(\d{2})_(\d{2})_(\d{4})\.json/, path) do
+      [_, month, day, year] ->
+        case Date.new(String.to_integer(year), String.to_integer(month), String.to_integer(day)) do
+          {:ok, date} -> date
+          _ -> Date.utc_today()
+        end
+
+      _ ->
+        Date.utc_today()
+    end
+  end
+
   # Private functions
 
   defp ensure_export(opts) do

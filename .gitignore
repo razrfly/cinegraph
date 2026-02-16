@@ -43,6 +43,10 @@ npm-debug.log
 .env.*
 !.env.example
 
+# Kamal secrets and keys
+/.kamal/secrets
+.secret_key_base
+
 # Test output
 /test_results.txt
 

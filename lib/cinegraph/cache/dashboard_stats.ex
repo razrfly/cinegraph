@@ -1118,8 +1118,23 @@ defmodule Cinegraph.Cache.DashboardStats do
   end
 
   defp calculate_year_stats(years) do
-    total_our_movies = Enum.sum(Enum.map(years, & &1.our_count))
-    total_tmdb_movies = Enum.sum(Enum.map(years, & &1.tmdb_count))
+    # Use actual total from database, not just sum of displayed years
+    # This correctly includes movies before the displayed year range and movies without dates
+    total_our_movies = Repo.aggregate(Movie, :count, :id) || 0
+    year_baselines_sum = Enum.sum(Enum.map(years, & &1.tmdb_count))
+
+    # Get the actual TMDb total from stored baseline (updated from export file)
+    # This is more accurate than summing year baselines (which may be incomplete)
+    stored_total = ImportStateV2.get_integer("total_movies", 0)
+
+    # Use the larger of: stored total from export, or sum of year baselines
+    # This ensures we don't undercount when year baselines are incomplete
+    total_tmdb_movies =
+      cond do
+        stored_total > year_baselines_sum -> stored_total
+        year_baselines_sum > 0 -> year_baselines_sum
+        true -> 0
+      end
 
     # Data-driven status counts (Issue #425)
     completed_years = Enum.count(years, &(&1.status == :completed))

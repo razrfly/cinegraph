@@ -118,14 +118,36 @@ defmodule Cinegraph.Imports.ImportStateV2 do
 
   @doc """
   Gets import progress with enhanced metrics.
+
+  Options:
+    - `:refresh_baseline` - Force refresh baseline from TMDb export (default: false)
   """
-  def get_progress_with_metrics do
+  def get_progress_with_metrics(opts \\ []) do
     # Get individual values using the correct key names
     our_total = count_our_movies()
-    tmdb_total = get_integer("total_movies", 0)
     last_page = get_integer("last_page_processed", 0)
     last_sync = get_date("last_full_sync")
     last_check = get_date("last_update_check")
+
+    # Get baseline info
+    baseline_updated_at = get("baseline_updated_at")
+    baseline_export_date = get("baseline_export_date")
+
+    # Determine if we should use fresh export stats
+    {tmdb_total, baseline_fresh} =
+      if opts[:refresh_baseline] || baseline_stale?(baseline_updated_at) do
+        # Try to get fresh stats from export (with caching)
+        case get_fresh_baseline() do
+          {:ok, stats} ->
+            {stats.export_total, true}
+
+          {:error, _} ->
+            # Fall back to stored value
+            {get_integer("total_movies", 0), false}
+        end
+      else
+        {get_integer("total_movies", 0), baseline_fresh?(baseline_updated_at)}
+      end
 
     %{
       tmdb_total_movies: tmdb_total,
@@ -135,8 +157,53 @@ defmodule Cinegraph.Imports.ImportStateV2 do
         if(tmdb_total > 0, do: Float.round(our_total / tmdb_total * 100, 2), else: 0.0),
       last_page_processed: last_page,
       last_full_sync: last_sync,
-      last_update_check: last_check
+      last_update_check: last_check,
+      baseline_fresh: baseline_fresh,
+      baseline_updated_at: baseline_updated_at,
+      baseline_export_date: baseline_export_date
     }
+  end
+
+  # Check if baseline is stale (older than 24 hours or not set)
+  defp baseline_stale?(nil), do: true
+
+  defp baseline_stale?(updated_at) when is_binary(updated_at) do
+    case DateTime.from_iso8601(updated_at) do
+      {:ok, dt, _} ->
+        hours_ago = DateTime.diff(DateTime.utc_now(), dt, :hour)
+        hours_ago > 24
+
+      _ ->
+        true
+    end
+  end
+
+  defp baseline_stale?(_), do: true
+
+  # Check if baseline is fresh (updated within last 24 hours)
+  defp baseline_fresh?(nil), do: false
+
+  defp baseline_fresh?(updated_at) when is_binary(updated_at) do
+    !baseline_stale?(updated_at)
+  end
+
+  defp baseline_fresh?(_), do: false
+
+  # Get fresh baseline from TMDb export (uses cached file if available)
+  defp get_fresh_baseline do
+    alias Cinegraph.Services.TMDb.GapAnalysis
+
+    case GapAnalysis.get_export_stats(skip_download: true) do
+      {:ok, stats} ->
+        # Update stored baseline
+        set("total_movies", stats.export_total)
+        set("baseline_updated_at", DateTime.utc_now() |> DateTime.to_iso8601())
+        set("baseline_export_date", stats.export_date |> Date.to_iso8601())
+        {:ok, stats}
+
+      error ->
+        error
+    end
   end
 
   # Helper function to count our movies (copied from TMDbImporter)
