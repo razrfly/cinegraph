@@ -314,8 +314,10 @@ defmodule Cinegraph.Movies.MovieLists do
               |> Map.new(fn field -> {field, attrs[field]} end)
 
             if map_size(updates) > 0 do
-              {:ok, updated} = update_movie_list(existing, updates)
-              {:exists, updated}
+              case update_movie_list(existing, updates) do
+                {:ok, updated} -> {:exists, updated}
+                {:error, _changeset} -> {:exists, existing}
+              end
             else
               {:exists, existing}
             end
