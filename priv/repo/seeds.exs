@@ -14,9 +14,9 @@ require Logger
 
 Logger.info("Running seeds...")
 
-# Seed movie lists from hardcoded canonical lists
-Logger.info("Seeding movie lists from canonical lists...")
-result = Cinegraph.Movies.MovieLists.migrate_hardcoded_lists()
+# Seed movie lists (DB is the single source of truth)
+Logger.info("Seeding default movie lists...")
+result = Cinegraph.Movies.MovieLists.seed_default_lists()
 
 Logger.info("""
 Movie Lists Seeding Results:
