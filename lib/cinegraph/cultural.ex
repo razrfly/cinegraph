@@ -1045,6 +1045,15 @@ defmodule Cinegraph.Cultural do
       Events.list_active_events()
       |> Enum.map(& &1.source_key)
 
+    if festivals == [] do
+      Logger.warning("No active festival events found in database — nothing to import")
+      {:ok, %{year: year, festivals: [], jobs: 0}}
+    else
+      import_festivals_for_year(year, festivals, options)
+    end
+  end
+
+  defp import_festivals_for_year(year, festivals, options) do
     jobs =
       Enum.map(festivals, fn festival ->
         job_args = %{

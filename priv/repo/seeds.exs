@@ -756,6 +756,7 @@ case Events.get_by_source_key("nyff") do
           "location" => "New York City, New York",
           "organization" => "Film at Lincoln Center",
           "specialization" => "curated selection, no competitive awards",
+          "category_mappings" => %{},
           "default_category" => "nyff_selection",
           "parser_hints" => %{
             "expected_format" => "key_value_awards",
