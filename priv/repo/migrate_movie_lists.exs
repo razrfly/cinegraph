@@ -1,11 +1,11 @@
-# Script to migrate hardcoded canonical lists to the database
+# Script to seed default movie lists into the database
 # Run with: mix run priv/repo/migrate_movie_lists.exs
 
 require Logger
 
-Logger.info("Starting migration of hardcoded lists to movie_lists table...")
+Logger.info("Seeding default movie lists...")
 
-result = Cinegraph.Movies.MovieLists.migrate_hardcoded_lists()
+result = Cinegraph.Movies.MovieLists.seed_default_lists()
 
 Logger.info("Migration complete!")
 Logger.info("Created: #{result.created} lists")

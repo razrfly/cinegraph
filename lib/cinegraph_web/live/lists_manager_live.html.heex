@@ -524,6 +524,11 @@
                       <div class="text-xs text-gray-500 font-mono">
                         {list.source_key}
                       </div>
+                      <%= if list.slug do %>
+                        <div class="text-xs text-indigo-500 font-mono">
+                          /{list.slug}
+                        </div>
+                      <% end %>
                     </div>
                   </div>
                 </td>
@@ -895,6 +900,64 @@
                   placeholder="Brief description of this list..."
                   class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 ><%= if @editing_list, do: @editing_list.description, else: "" %></textarea>
+              </div>
+              
+<!-- Display Fields -->
+              <div class="border-t border-gray-200 pt-4 mt-4">
+                <p class="text-sm font-medium text-gray-700 mb-3">
+                  Display Settings (for public pages)
+                </p>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">URL Slug</label>
+                    <input
+                      type="text"
+                      name="slug"
+                      value={if @editing_list, do: @editing_list.slug, else: ""}
+                      placeholder="my-list-name"
+                      pattern="[a-z0-9\-]+"
+                      class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Auto-generated from name if blank</p>
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Short Name</label>
+                    <input
+                      type="text"
+                      name="short_name"
+                      value={if @editing_list, do: @editing_list.short_name, else: ""}
+                      placeholder="Short display name"
+                      class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Icon</label>
+                    <input
+                      type="text"
+                      name="icon"
+                      value={if @editing_list, do: @editing_list.icon, else: ""}
+                      placeholder="e.g. film, sparkles, eye"
+                      class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Heroicon name</p>
+                  </div>
+
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                      Display Order
+                    </label>
+                    <input
+                      type="number"
+                      name="display_order"
+                      value={if @editing_list, do: @editing_list.display_order || 0, else: 0}
+                      min="0"
+                      class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div class="flex items-center">

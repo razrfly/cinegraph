@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.SeedMovieLists do
   @moduledoc """
-  Seeds the database with default movie lists from canonical_lists.ex
+  Seeds the database with default movie lists.
 
   Usage:
       mix seed_movie_lists
@@ -9,14 +9,14 @@ defmodule Mix.Tasks.SeedMovieLists do
 
   require Logger
 
-  @shortdoc "Seeds movie lists from hardcoded canonical lists"
+  @shortdoc "Seeds default movie lists into the database"
 
   def run(_args) do
     Mix.Task.run("app.start")
 
-    Logger.info("Seeding movie lists from canonical lists...")
+    Logger.info("Seeding default movie lists...")
 
-    result = Cinegraph.Movies.MovieLists.migrate_hardcoded_lists()
+    result = Cinegraph.Movies.MovieLists.seed_default_lists()
 
     IO.puts("""
 

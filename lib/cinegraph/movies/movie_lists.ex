@@ -105,6 +105,39 @@ defmodule Cinegraph.Movies.MovieLists do
   end
 
   @doc """
+  Gets a movie list by its URL slug.
+  Returns nil if not found.
+  """
+  def get_by_slug(slug) do
+    MovieList
+    |> where([ml], ml.slug == ^slug and ml.active == true)
+    |> Repo.one()
+  end
+
+  @doc """
+  Returns all active lists that have slugs, ordered by display_order.
+  Used for the public-facing list index page.
+  """
+  def all_displayable do
+    MovieList
+    |> where([ml], ml.active == true and not is_nil(ml.slug))
+    |> order_by([ml], asc: ml.display_order, asc: ml.name)
+    |> Repo.all()
+  end
+
+  @doc """
+  Returns all slug strings for active lists.
+  Used by the sitemap generator.
+  """
+  def all_slugs do
+    MovieList
+    |> where([ml], ml.active == true and not is_nil(ml.slug))
+    |> select([ml], ml.slug)
+    |> order_by([ml], asc: ml.display_order)
+    |> Repo.all()
+  end
+
+  @doc """
   Get all movie lists in the format expected by the import system.
   This provides backward compatibility with canonical_lists.ex
   """
@@ -178,41 +211,104 @@ defmodule Cinegraph.Movies.MovieLists do
   end
 
   @doc """
-  Migrate existing hardcoded lists to the database.
+  Seed default canonical lists into the database.
   This is idempotent - it won't create duplicates.
+  Data is inlined here to avoid circular dependencies with CanonicalLists.
   """
-  def migrate_hardcoded_lists do
-    hardcoded_lists = Cinegraph.CanonicalLists.all()
+  def seed_default_lists do
+    default_lists = [
+      %{
+        source_key: "1001_movies",
+        name: "1001 Movies You Must See Before You Die",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls024863935/",
+        source_id: "ls024863935",
+        category: "curated",
+        active: true,
+        tracks_awards: false,
+        metadata: %{"edition" => "2024"},
+        slug: "1001-movies",
+        short_name: "1001 Movies",
+        icon: "film",
+        display_order: 1
+      },
+      %{
+        source_key: "criterion",
+        name: "The Criterion Collection",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls087831830/",
+        source_id: "ls087831830",
+        category: "curated",
+        active: true,
+        tracks_awards: false,
+        metadata: %{"source" => "criterion.com"},
+        slug: "criterion",
+        short_name: "Criterion",
+        icon: "sparkles",
+        display_order: 2
+      },
+      %{
+        source_key: "sight_sound_critics_2022",
+        name: "BFI's Sight & Sound | Critics' Top 100 Movies (2022 Edition)",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls566134733/",
+        source_id: "ls566134733",
+        category: "critics",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "edition" => "2022",
+          "poll_type" => "critics",
+          "source" => "BFI Sight & Sound"
+        },
+        slug: "sight-sound-2022",
+        short_name: "Sight & Sound 2022",
+        icon: "eye",
+        display_order: 3
+      },
+      %{
+        source_key: "national_film_registry",
+        name: "National Film Registry - The Full List of Films",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls595303232/",
+        source_id: "ls595303232",
+        category: "registry",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "source" => "Library of Congress",
+          "reliability" => "95%",
+          "note" => "Updated annually after official announcements"
+        },
+        slug: "national-film-registry",
+        short_name: "Film Registry",
+        icon: "building-library",
+        display_order: 4
+      }
+    ]
 
     results =
-      Enum.map(hardcoded_lists, fn {source_key, config} ->
-        # Check if already exists
-        case get_by_source_key(source_key) do
+      Enum.map(default_lists, fn attrs ->
+        case get_by_source_key(attrs.source_key) do
           nil ->
-            # Create new list from hardcoded config
-            attrs = %{
-              source_key: source_key,
-              name: config.name,
-              source_type: "imdb",
-              source_url: "https://www.imdb.com/list/#{config.list_id}/",
-              source_id: config.list_id,
-              category: determine_category(source_key, config),
-              active: true,
-              tracks_awards: tracks_awards?(source_key, config),
-              metadata: config.metadata || %{}
-            }
-
             case create_movie_list(attrs) do
               {:ok, list} -> {:ok, list}
-              {:error, changeset} -> {:error, source_key, changeset}
+              {:error, changeset} -> {:error, attrs.source_key, changeset}
             end
 
           existing ->
+            # Update existing lists with display fields if missing
+            if is_nil(existing.slug) and not is_nil(attrs[:slug]) do
+              update_movie_list(
+                existing,
+                Map.take(attrs, [:slug, :short_name, :icon, :display_order])
+              )
+            end
+
             {:exists, existing}
         end
       end)
 
-    # Summary
     created = Enum.count(results, fn r -> match?({:ok, _}, r) end)
     existed = Enum.count(results, fn r -> match?({:exists, _}, r) end)
     errors = Enum.filter(results, fn r -> match?({:error, _, _}, r) end)
@@ -225,58 +321,7 @@ defmodule Cinegraph.Movies.MovieLists do
     }
   end
 
-  # Private helper functions
-
-  defp determine_category(_source_key, config) do
-    # Try to determine category from metadata first
-    case get_in(config, [:metadata, "category"]) do
-      category when is_binary(category) ->
-        category
-
-      _ ->
-        # Intelligent fallback based on content analysis
-        cond do
-          String.contains?(config.name, ["Award", "Winners", "Festival"]) -> "awards"
-          String.contains?(config.name, ["Critics", "Poll", "Sight"]) -> "critics"
-          String.contains?(config.name, ["Registry", "Archive", "Library"]) -> "registry"
-          String.contains?(config.name, ["Collection", "Must See"]) -> "curated"
-          true -> "curated"
-        end
-    end
-  end
-
-  defp tracks_awards?(_source_key, config) do
-    # Check if explicitly set in metadata
-    case get_in(config, [:metadata, "tracks_awards"]) do
-      true ->
-        true
-
-      false ->
-        false
-
-      _ ->
-        # Intelligent fallback - detect award-related lists by name/content
-        has_award_keywords =
-          String.contains?(config.name, [
-            "Award",
-            "Winners",
-            "Festival",
-            "Golden",
-            "Bear",
-            "Lion",
-            "Palme",
-            "Academy",
-            "Oscar",
-            "Cannes",
-            "Berlin",
-            "Venice"
-          ])
-
-        has_award_metadata =
-          get_in(config, [:metadata, "awards_included"]) != nil ||
-            get_in(config, [:metadata, "festival"]) != nil
-
-        has_award_keywords || has_award_metadata
-    end
-  end
+  @doc false
+  @deprecated "Use seed_default_lists/0 instead"
+  def migrate_hardcoded_lists, do: seed_default_lists()
 end

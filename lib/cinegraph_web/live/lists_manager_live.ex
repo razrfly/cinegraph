@@ -584,6 +584,13 @@ defmodule CinegraphWeb.ListsManagerLive do
   def handle_event("add_list", params, socket) do
     source_type = detect_source_type(params["source_url"])
 
+    slug =
+      case params["slug"] do
+        nil -> nil
+        "" -> slugify(params["name"])
+        s -> s
+      end
+
     attrs = %{
       source_url: params["source_url"],
       name: params["name"],
@@ -592,6 +599,10 @@ defmodule CinegraphWeb.ListsManagerLive do
       description: params["description"],
       source_type: source_type,
       tracks_awards: params["tracks_awards"] == "on",
+      slug: slug,
+      short_name: params["short_name"],
+      icon: params["icon"],
+      display_order: parse_int(params["display_order"], 0),
       active: true
     }
 
@@ -622,7 +633,11 @@ defmodule CinegraphWeb.ListsManagerLive do
       category: params["category"],
       description: params["description"],
       source_type: source_type,
-      tracks_awards: params["tracks_awards"] == "on"
+      tracks_awards: params["tracks_awards"] == "on",
+      slug: params["slug"],
+      short_name: params["short_name"],
+      icon: params["icon"],
+      display_order: parse_int(params["display_order"], list.display_order)
     }
 
     case MovieLists.update_movie_list(list, attrs) do
@@ -1029,6 +1044,28 @@ defmodule CinegraphWeb.ListsManagerLive do
   end
 
   defp detect_source_type(_), do: "custom"
+
+  defp slugify(nil), do: nil
+
+  defp slugify(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9\s-]/, "")
+    |> String.replace(~r/\s+/, "-")
+    |> String.trim("-")
+  end
+
+  defp parse_int(nil, default), do: default
+  defp parse_int("", default), do: default
+
+  defp parse_int(val, default) when is_binary(val) do
+    case Integer.parse(val) do
+      {n, _} -> n
+      :error -> default
+    end
+  end
+
+  defp parse_int(val, _default) when is_integer(val), do: val
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

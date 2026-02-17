@@ -36,6 +36,12 @@ defmodule Cinegraph.Movies.MovieList do
     # Metadata
     field :metadata, :map, default: %{}
 
+    # Display fields (for public-facing pages)
+    field :slug, :string
+    field :short_name, :string
+    field :icon, :string
+    field :display_order, :integer, default: 0
+
     timestamps()
   end
 
@@ -55,7 +61,11 @@ defmodule Cinegraph.Movies.MovieList do
       :last_import_at,
       :last_import_status,
       :total_imports,
-      :metadata
+      :metadata,
+      :slug,
+      :short_name,
+      :icon,
+      :display_order
     ])
     |> validate_required([:source_key, :name, :source_type, :source_url])
     |> validate_inclusion(:source_type, @source_types)
@@ -68,6 +78,7 @@ defmodule Cinegraph.Movies.MovieList do
     |> validate_url(:source_url)
     |> extract_source_id()
     |> unique_constraint(:source_key)
+    |> unique_constraint(:slug)
   end
 
   @doc """

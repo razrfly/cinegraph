@@ -1,65 +1,38 @@
 defmodule Cinegraph.CanonicalLists do
   @moduledoc """
-  Single source of truth for all canonical list configurations.
-  This module defines all available canonical lists in one place.
+  Thin compatibility wrapper over the movie_lists database table.
+
+  Previously held hardcoded list configurations. Now delegates to
+  `Cinegraph.Movies.MovieLists` so the database is the single source of truth.
+  Existing callers (CanonicalImportWorker, CanonicalImporter, import_canonical mix task)
+  continue working with zero changes.
   """
 
-  @lists %{
-    "1001_movies" => %{
-      list_id: "ls024863935",
-      source_key: "1001_movies",
-      name: "1001 Movies You Must See Before You Die",
-      metadata: %{"edition" => "2024"}
-    },
-    "criterion" => %{
-      list_id: "ls087831830",
-      source_key: "criterion",
-      name: "The Criterion Collection",
-      metadata: %{"source" => "criterion.com"}
-    },
-    "sight_sound_critics_2022" => %{
-      list_id: "ls566134733",
-      source_key: "sight_sound_critics_2022",
-      name: "BFI's Sight & Sound | Critics' Top 100 Movies (2022 Edition)",
-      metadata: %{
-        "edition" => "2022",
-        "poll_type" => "critics",
-        "source" => "BFI Sight & Sound"
-      }
-    },
-    "national_film_registry" => %{
-      list_id: "ls595303232",
-      source_key: "national_film_registry",
-      name: "National Film Registry - The Full List of Films",
-      metadata: %{
-        "source" => "Library of Congress",
-        "reliability" => "95%",
-        "note" => "Updated annually after official announcements"
-      }
-    }
-  }
+  alias Cinegraph.Movies.MovieLists
 
   @doc """
   Get all available canonical lists.
+  Returns a map of %{source_key => config}.
   """
-  def all, do: @lists
-
-  @doc """
-  Get a specific list configuration by key.
-  """
-  def get(list_key) when is_binary(list_key) do
-    case Map.get(@lists, list_key) do
-      nil -> {:error, "Unknown list: #{list_key}"}
-      config -> {:ok, config}
-    end
+  def all do
+    MovieLists.all_as_config()
   end
 
   @doc """
-  Get just the list IDs for all lists.
+  Get a specific list configuration by key.
+  Returns {:ok, config} or {:error, message}.
+  """
+  def get(list_key) when is_binary(list_key) do
+    MovieLists.get_config(list_key)
+  end
+
+  @doc """
+  Get just the list IDs (source_ids) for all active lists.
   """
   def list_ids do
-    @lists
-    |> Enum.map(fn {_key, config} -> config.list_id end)
+    MovieLists.list_active_movie_lists()
+    |> Enum.map(& &1.source_id)
+    |> Enum.reject(&is_nil/1)
   end
 
   @doc """
