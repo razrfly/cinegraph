@@ -34,16 +34,20 @@ defmodule Cinegraph.Movies.MovieReleaseDate do
     |> Enum.map(fn release ->
       release_attrs = %{
         movie_id: movie_id,
-        country_code: country_code,
+        country_code: truncate(country_code, 255),
         release_date: parse_datetime(release["release_date"]),
-        certification: release["certification"],
+        certification: truncate(release["certification"], 255),
         release_type: release["type"],
-        note: release["note"]
+        note: truncate(release["note"], 255)
       }
 
       changeset(%__MODULE__{}, release_attrs)
     end)
   end
+
+  defp truncate(nil, _max), do: nil
+  defp truncate(str, max) when is_binary(str) and byte_size(str) > max, do: String.slice(str, 0, max)
+  defp truncate(str, _max), do: str
 
   defp parse_datetime(nil), do: nil
 

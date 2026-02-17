@@ -32,8 +32,20 @@ defmodule Cinegraph.Movies.Credit do
     ])
     |> validate_required([:movie_id, :person_id, :credit_type])
     |> validate_inclusion(:credit_type, ["cast", "crew"])
+    |> truncate_field(:character, 255)
+    |> truncate_field(:department, 255)
+    |> truncate_field(:job, 255)
     |> foreign_key_constraint(:movie_id)
     |> foreign_key_constraint(:person_id)
+  end
+
+  defp truncate_field(changeset, field, max_length) do
+    case get_change(changeset, field) do
+      nil -> changeset
+      value when is_binary(value) and byte_size(value) > max_length ->
+        put_change(changeset, field, String.slice(value, 0, max_length))
+      _ -> changeset
+    end
   end
 
   @doc """

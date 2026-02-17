@@ -27,12 +27,16 @@ defmodule Cinegraph.Movies.Collection do
   def from_tmdb(attrs) do
     collection_attrs = %{
       tmdb_id: attrs["id"],
-      name: attrs["name"],
+      name: truncate(attrs["name"], 255),
       overview: attrs["overview"],
-      poster_path: attrs["poster_path"],
-      backdrop_path: attrs["backdrop_path"]
+      poster_path: truncate(attrs["poster_path"], 255),
+      backdrop_path: truncate(attrs["backdrop_path"], 255)
     }
 
     changeset(%__MODULE__{}, collection_attrs)
   end
+
+  defp truncate(nil, _max), do: nil
+  defp truncate(str, max) when is_binary(str) and byte_size(str) > max, do: String.slice(str, 0, max)
+  defp truncate(str, _max), do: str
 end

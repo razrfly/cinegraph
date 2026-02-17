@@ -1257,7 +1257,7 @@ festival_orgs = [
 ]
 
 Enum.each(festival_orgs, fn attrs ->
-  case Festivals.get_organization_by_slug(attrs.slug) do
+  case Cinegraph.Repo.get_by(Cinegraph.Festivals.FestivalOrganization, slug: attrs.slug) do
     nil ->
       case Festivals.create_organization(attrs) do
         {:ok, _org} ->
