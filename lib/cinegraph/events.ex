@@ -42,6 +42,13 @@ defmodule Cinegraph.Events do
   end
 
   @doc """
+  Gets a festival event by abbreviation.
+  """
+  def get_by_abbreviation(abbreviation) do
+    Repo.get_by(FestivalEvent, abbreviation: abbreviation)
+  end
+
+  @doc """
   Gets an active festival event by source key.
   """
   def get_active_by_source_key(source_key) do

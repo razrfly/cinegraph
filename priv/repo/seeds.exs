@@ -1182,6 +1182,97 @@ end
 create_festival_dates.()
 Logger.info("  ✅ Created festival dates for 2024/2025")
 
+# Seed festival organizations (for the /awards display page)
+# These correspond to festival_events but are the public-facing display entities
+Logger.info("Seeding festival organizations...")
+
+alias Cinegraph.Festivals
+
+festival_orgs = [
+  %{
+    name: "Golden Globe Awards",
+    abbreviation: "HFPA",
+    slug: "golden-globes",
+    country: "USA",
+    founded_year: 1944,
+    website: "https://www.goldenglobes.com"
+  },
+  %{
+    name: "BAFTA Film Awards",
+    abbreviation: "BAFTA",
+    slug: "bafta",
+    country: "UK",
+    founded_year: 1949,
+    website: "https://www.bafta.org"
+  },
+  %{
+    name: "Screen Actors Guild Awards",
+    abbreviation: "SAG",
+    slug: "sag-awards",
+    country: "USA",
+    founded_year: 1995,
+    website: "https://www.sagawards.org"
+  },
+  %{
+    name: "Critics Choice Awards",
+    abbreviation: "CCA",
+    slug: "critics-choice",
+    country: "USA",
+    founded_year: 1996,
+    website: "https://www.criticschoice.com"
+  },
+  %{
+    name: "Toronto International Film Festival",
+    abbreviation: "TIFF",
+    slug: "tiff",
+    country: "Canada",
+    founded_year: 1976,
+    website: "https://www.tiff.net"
+  },
+  %{
+    name: "Telluride Film Festival",
+    abbreviation: "TFF",
+    slug: "telluride",
+    country: "USA",
+    founded_year: 1974,
+    website: "https://www.telluridefilmfestival.org"
+  },
+  %{
+    name: "New York Film Festival",
+    abbreviation: "NYFF",
+    slug: "nyff",
+    country: "USA",
+    founded_year: 1963,
+    website: "https://www.filmlinc.org/nyff"
+  },
+  %{
+    name: "Locarno Film Festival",
+    abbreviation: "LFF",
+    slug: "locarno",
+    country: "Switzerland",
+    founded_year: 1946,
+    website: "https://www.locarnofestival.ch"
+  }
+]
+
+Enum.each(festival_orgs, fn attrs ->
+  case Festivals.get_organization_by_slug(attrs.slug) do
+    nil ->
+      case Festivals.create_organization(attrs) do
+        {:ok, _org} ->
+          Logger.info("  ✅ Created organization: #{attrs.name}")
+
+        {:error, changeset} ->
+          Logger.warning(
+            "  ⚠️  Failed to create organization #{attrs.name}: #{inspect(changeset.errors)}"
+          )
+      end
+
+    _existing ->
+      Logger.info("  ⏭️  Organization already exists: #{attrs.name}")
+  end
+end)
+
 # Seed metric definitions and weight profiles for discovery system
 Logger.info("Seeding metric definitions...")
 
