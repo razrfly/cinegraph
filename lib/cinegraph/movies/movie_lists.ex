@@ -7,6 +7,7 @@ defmodule Cinegraph.Movies.MovieLists do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Movies.MovieList
+  require Logger
 
   @doc """
   Returns all active movie lists.
@@ -315,8 +316,15 @@ defmodule Cinegraph.Movies.MovieLists do
 
             if map_size(updates) > 0 do
               case update_movie_list(existing, updates) do
-                {:ok, updated} -> {:exists, updated}
-                {:error, _changeset} -> {:exists, existing}
+                {:ok, updated} ->
+                  {:exists, updated}
+
+                {:error, changeset} ->
+                  Logger.warning(
+                    "Failed to backfill display fields for #{existing.source_key}: #{inspect(changeset.errors)}"
+                  )
+
+                  {:exists, existing}
               end
             else
               {:exists, existing}
