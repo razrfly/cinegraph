@@ -220,6 +220,8 @@ defmodule Cinegraph.Movies.MovieLists do
       %{
         source_key: "1001_movies",
         name: "1001 Movies You Must See Before You Die",
+        description:
+          "The essential guide to cinema's greatest films, updated annually with new selections.",
         source_type: "imdb",
         source_url: "https://www.imdb.com/list/ls024863935/",
         source_id: "ls024863935",
@@ -235,6 +237,8 @@ defmodule Cinegraph.Movies.MovieLists do
       %{
         source_key: "criterion",
         name: "The Criterion Collection",
+        description:
+          "A continuing series of important classic and contemporary films from around the world.",
         source_type: "imdb",
         source_url: "https://www.imdb.com/list/ls087831830/",
         source_id: "ls087831830",
@@ -250,6 +254,8 @@ defmodule Cinegraph.Movies.MovieLists do
       %{
         source_key: "sight_sound_critics_2022",
         name: "BFI's Sight & Sound | Critics' Top 100 Movies (2022 Edition)",
+        description:
+          "BFI's once-a-decade poll of the world's greatest films as voted by critics (2022 edition).",
         source_type: "imdb",
         source_url: "https://www.imdb.com/list/ls566134733/",
         source_id: "ls566134733",
@@ -269,6 +275,8 @@ defmodule Cinegraph.Movies.MovieLists do
       %{
         source_key: "national_film_registry",
         name: "National Film Registry - The Full List of Films",
+        description:
+          "Films preserved by the Library of Congress for their cultural, historical, or aesthetic significance.",
         source_type: "imdb",
         source_url: "https://www.imdb.com/list/ls595303232/",
         source_id: "ls595303232",
@@ -301,7 +309,7 @@ defmodule Cinegraph.Movies.MovieLists do
             if is_nil(existing.slug) and not is_nil(attrs[:slug]) do
               update_movie_list(
                 existing,
-                Map.take(attrs, [:slug, :short_name, :icon, :display_order])
+                Map.take(attrs, [:slug, :short_name, :icon, :display_order, :description])
               )
             end
 
