@@ -213,7 +213,7 @@ defmodule CinegraphWeb.Plugs.ETagPlug do
 
   defp get_list_freshness(slug) do
     query =
-      from l in "canonical_lists",
+      from l in "movie_lists",
         where: l.slug == ^slug,
         select: {l.id, l.updated_at},
         limit: 1
