@@ -43,9 +43,11 @@ defmodule Cinegraph.Events do
 
   @doc """
   Gets a festival event by abbreviation.
+  Uses a query with limit 1 since abbreviation has no unique constraint.
   """
   def get_by_abbreviation(abbreviation) do
-    Repo.get_by(FestivalEvent, abbreviation: abbreviation)
+    from(e in FestivalEvent, where: e.abbreviation == ^abbreviation, limit: 1)
+    |> Repo.one()
   end
 
   @doc """

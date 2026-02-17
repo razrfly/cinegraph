@@ -19,6 +19,7 @@ defmodule Cinegraph.Workers.AwardImportWorker do
       states: [:available, :scheduled, :executing, :retryable]
     ]
 
+  alias Cinegraph.Events
   alias Cinegraph.Festivals
   alias Cinegraph.Festivals.FestivalOrganization
   alias Cinegraph.Cultural
@@ -305,9 +306,9 @@ defmodule Cinegraph.Workers.AwardImportWorker do
 
                 {:error, "Unknown organization: #{abbrev}"}
 
-              _festival_key ->
+              festival_key ->
                 # Other festivals use IMDb scraping via UnifiedFestivalWorker
-                import_festival(organization, year, job)
+                import_festival_by_key(festival_key, abbrev, year, job)
             end
         end
     end
@@ -335,22 +336,6 @@ defmodule Cinegraph.Workers.AwardImportWorker do
       {:error, reason} ->
         Logger.error("AwardImportWorker: Failed to import Oscar year #{year}: #{inspect(reason)}")
         {:error, reason}
-    end
-  end
-
-  # Import festival via UnifiedFestivalWorker
-  defp import_festival(organization, year, _job) do
-    Logger.info("AwardImportWorker: Importing #{organization.abbreviation} year #{year}")
-
-    # Map abbreviation to festival key used by UnifiedFestivalWorker
-    festival_key = abbreviation_to_festival_key(organization.abbreviation)
-
-    if festival_key do
-      import_festival_by_key(festival_key, organization.abbreviation, year, nil)
-    else
-      Logger.error("AwardImportWorker: No festival key mapping for #{organization.abbreviation}")
-
-      {:error, "Unknown festival key for: #{organization.abbreviation}"}
     end
   end
 
