@@ -78,6 +78,23 @@ priv/
 │   └── seeds.exs     # Seed data
 ```
 
+## Adding Festivals & Awards Ceremonies
+The `festival_events` table is the single source of truth. Add new festivals/ceremonies via:
+1. **Seeds** (`priv/repo/seeds.exs`) or **Admin UI** (`/admin/festival-events`)
+2. Discover available years: `YearDiscoveryWorker.queue_discovery("source_key")`
+3. Import a year: `Cultural.import_festival_year("source_key", 2024)`
+4. Bulk import: `AwardImportWorker.queue_sync_missing(org_id)`
+
+No code changes needed — `Events.list_active_events()` drives all festival discovery dynamically.
+
+## Adding Canonical Movie Lists
+The `movie_lists` table is the single source of truth. Add new lists via:
+1. **Seeds** (`MovieLists.seed_default_lists/0`) or **Admin UI** (`/admin/lists-manager`)
+2. Fill: name, source_url (IMDb list URL), source_id, category, slug
+3. Trigger import: `CanonicalImporter.import_list_by_key("source_key")`
+
+Legacy modules (`canonical_lists.ex`, `list_slugs.ex`) are thin wrappers that delegate to the DB.
+
 ## Development Notes
 - Always run `mix format` before committing
 - Use Oban for background jobs, not manual async tasks

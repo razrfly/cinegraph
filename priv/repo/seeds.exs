@@ -402,6 +402,428 @@ case Events.get_by_source_key("sxsw") do
     Logger.info("  ⏭️  SXSW events already exists")
 end
 
+# Golden Globe Awards - IMDb source
+case Events.get_by_source_key("golden_globes") do
+  nil ->
+    {:ok, _golden_globes_event} =
+      Events.create_festival_event(%{
+        source_key: "golden_globes",
+        name: "Golden Globe Awards",
+        abbreviation: "HFPA",
+        country: "USA",
+        founded_year: 1944,
+        website: "https://www.goldenglobes.com",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000292",
+          "imdb_event_id" => "ev0000292",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.goldenglobes.com"}
+        ],
+        typical_start_month: 1,
+        typical_start_day: 5,
+        typical_duration_days: 1,
+        ceremony_vs_festival: "ceremony",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1944,
+        max_available_year: 2025,
+        import_priority: 95,
+        reliability_score: 0.90,
+        metadata: %{
+          "organization" => "Hollywood Foreign Press Association",
+          "category_mappings" => %{
+            "best_motion_picture_drama" => "best_picture_drama",
+            "best_motion_picture_musical_or_comedy" => "best_picture_comedy",
+            "best_director" => "best_director",
+            "best_actor_drama" => "best_actor_drama",
+            "best_actress_drama" => "best_actress_drama"
+          },
+          "default_category" => "golden_globe_award",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created Golden Globes events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  Golden Globes events already exists")
+end
+
+# BAFTA Film Awards - IMDb source
+case Events.get_by_source_key("bafta") do
+  nil ->
+    {:ok, _bafta_event} =
+      Events.create_festival_event(%{
+        source_key: "bafta",
+        name: "BAFTA Film Awards",
+        abbreviation: "BAFTA",
+        country: "UK",
+        founded_year: 1949,
+        website: "https://www.bafta.org",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000123",
+          "imdb_event_id" => "ev0000123",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.bafta.org/film/awards"}
+        ],
+        typical_start_month: 2,
+        typical_start_day: 16,
+        typical_duration_days: 1,
+        ceremony_vs_festival: "ceremony",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1949,
+        max_available_year: 2025,
+        import_priority: 95,
+        reliability_score: 0.90,
+        metadata: %{
+          "organization" => "British Academy of Film and Television Arts",
+          "category_mappings" => %{
+            "best_film" => "best_film",
+            "best_director" => "best_director",
+            "best_leading_actor" => "best_actor",
+            "best_leading_actress" => "best_actress"
+          },
+          "default_category" => "bafta_award",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created BAFTA events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  BAFTA events already exists")
+end
+
+# SAG Awards - IMDb source
+case Events.get_by_source_key("sag") do
+  nil ->
+    {:ok, _sag_event} =
+      Events.create_festival_event(%{
+        source_key: "sag",
+        name: "Screen Actors Guild Awards",
+        abbreviation: "SAG",
+        country: "USA",
+        founded_year: 1995,
+        website: "https://www.sagawards.org",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000598",
+          "imdb_event_id" => "ev0000598",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.sagawards.org"}
+        ],
+        typical_start_month: 2,
+        typical_start_day: 23,
+        typical_duration_days: 1,
+        ceremony_vs_festival: "ceremony",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1995,
+        max_available_year: 2025,
+        import_priority: 90,
+        reliability_score: 0.90,
+        metadata: %{
+          "organization" =>
+            "Screen Actors Guild - American Federation of Television and Radio Artists",
+          "category_mappings" => %{
+            "outstanding_cast" => "outstanding_cast",
+            "outstanding_male_actor_leading" => "best_actor",
+            "outstanding_female_actor_leading" => "best_actress"
+          },
+          "default_category" => "sag_award",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created SAG Awards events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  SAG Awards events already exists")
+end
+
+# Critics Choice Awards - IMDb source
+case Events.get_by_source_key("critics_choice") do
+  nil ->
+    {:ok, _critics_choice_event} =
+      Events.create_festival_event(%{
+        source_key: "critics_choice",
+        name: "Critics Choice Awards",
+        abbreviation: "CCA",
+        country: "USA",
+        founded_year: 1996,
+        website: "https://www.criticschoice.com",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000133",
+          "imdb_event_id" => "ev0000133",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.criticschoice.com"}
+        ],
+        typical_start_month: 1,
+        typical_start_day: 12,
+        typical_duration_days: 1,
+        ceremony_vs_festival: "ceremony",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1996,
+        max_available_year: 2025,
+        import_priority: 85,
+        reliability_score: 0.85,
+        metadata: %{
+          "organization" => "Critics Choice Association",
+          "category_mappings" => %{
+            "best_picture" => "best_picture",
+            "best_director" => "best_director",
+            "best_actor" => "best_actor",
+            "best_actress" => "best_actress"
+          },
+          "default_category" => "critics_choice_award",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created Critics Choice Awards events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  Critics Choice Awards events already exists")
+end
+
+# Toronto International Film Festival (TIFF) - IMDb source
+case Events.get_by_source_key("toronto") do
+  nil ->
+    {:ok, _toronto_event} =
+      Events.create_festival_event(%{
+        source_key: "toronto",
+        name: "Toronto International Film Festival",
+        abbreviation: "TIFF",
+        country: "Canada",
+        founded_year: 1976,
+        website: "https://www.tiff.net",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000659",
+          "imdb_event_id" => "ev0000659",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.tiff.net"}
+        ],
+        typical_start_month: 9,
+        typical_start_day: 5,
+        typical_duration_days: 11,
+        ceremony_vs_festival: "festival",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1976,
+        max_available_year: 2025,
+        import_priority: 90,
+        reliability_score: 0.90,
+        metadata: %{
+          "festival" => "Toronto International Film Festival",
+          "location" => "Toronto, Ontario, Canada",
+          "specialization" => "premiere platform, Oscar bellwether",
+          "category_mappings" => %{
+            "peoples_choice_award" => "peoples_choice",
+            "platform_prize" => "platform_prize"
+          },
+          "default_category" => "tiff_award",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created TIFF events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  TIFF events already exists")
+end
+
+# Telluride Film Festival - IMDb source
+case Events.get_by_source_key("telluride") do
+  nil ->
+    {:ok, _telluride_event} =
+      Events.create_festival_event(%{
+        source_key: "telluride",
+        name: "Telluride Film Festival",
+        abbreviation: "TFF",
+        country: "USA",
+        founded_year: 1974,
+        website: "https://www.telluridefilmfestival.org",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000645",
+          "imdb_event_id" => "ev0000645",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.telluridefilmfestival.org"}
+        ],
+        typical_start_month: 8,
+        typical_start_day: 30,
+        typical_duration_days: 4,
+        ceremony_vs_festival: "festival",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1974,
+        max_available_year: 2025,
+        import_priority: 80,
+        reliability_score: 0.85,
+        metadata: %{
+          "festival" => "Telluride Film Festival",
+          "location" => "Telluride, Colorado",
+          "specialization" => "curated premieres, no advance program announcement",
+          "category_mappings" => %{
+            "silver_medallion" => "silver_medallion"
+          },
+          "default_category" => "telluride_award",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created Telluride events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  Telluride events already exists")
+end
+
+# New York Film Festival - IMDb source
+case Events.get_by_source_key("nyff") do
+  nil ->
+    {:ok, _nyff_event} =
+      Events.create_festival_event(%{
+        source_key: "nyff",
+        name: "New York Film Festival",
+        abbreviation: "NYFF",
+        country: "USA",
+        founded_year: 1963,
+        website: "https://www.filmlinc.org/nyff",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000484",
+          "imdb_event_id" => "ev0000484",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.filmlinc.org/nyff"}
+        ],
+        typical_start_month: 9,
+        typical_start_day: 27,
+        typical_duration_days: 17,
+        ceremony_vs_festival: "festival",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1963,
+        max_available_year: 2025,
+        import_priority: 80,
+        reliability_score: 0.85,
+        metadata: %{
+          "festival" => "New York Film Festival",
+          "location" => "New York City, New York",
+          "organization" => "Film at Lincoln Center",
+          "specialization" => "curated selection, no competitive awards",
+          "default_category" => "nyff_selection",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created NYFF events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  NYFF events already exists")
+end
+
+# Locarno Film Festival - IMDb source
+case Events.get_by_source_key("locarno") do
+  nil ->
+    {:ok, _locarno_event} =
+      Events.create_festival_event(%{
+        source_key: "locarno",
+        name: "Locarno Film Festival",
+        abbreviation: "LFF",
+        country: "Switzerland",
+        founded_year: 1946,
+        website: "https://www.locarnofestival.ch",
+        primary_source: "imdb",
+        source_config: %{
+          "event_id" => "ev0000400",
+          "imdb_event_id" => "ev0000400",
+          "url_template" => "https://www.imdb.com/event/{event_id}/{year}/1/",
+          "parser_type" => "next_data_json"
+        },
+        fallback_sources: [
+          %{"source" => "official", "url" => "https://www.locarnofestival.ch"}
+        ],
+        typical_start_month: 8,
+        typical_start_day: 7,
+        typical_duration_days: 10,
+        ceremony_vs_festival: "festival",
+        tracks_nominations: true,
+        tracks_winners_only: false,
+        min_available_year: 1946,
+        max_available_year: 2025,
+        import_priority: 75,
+        reliability_score: 0.85,
+        metadata: %{
+          "festival" => "Locarno Film Festival",
+          "location" => "Locarno, Switzerland",
+          "specialization" => "arthouse and independent cinema",
+          "category_mappings" => %{
+            "golden_leopard" => "golden_leopard",
+            "special_jury_prize" => "special_jury_prize",
+            "best_director" => "best_director"
+          },
+          "default_category" => "locarno_award",
+          "parser_hints" => %{
+            "expected_format" => "key_value_awards",
+            "category_path" => "awards"
+          }
+        }
+      })
+
+    Logger.info("  ✅ Created Locarno events configuration")
+
+  _ ->
+    Logger.info("  ⏭️  Locarno events already exists")
+end
+
 # Add some festival dates for 2024 (completed) and 2025 (upcoming where known)
 Logger.info("Seeding festival dates for 2024/2025...")
 
@@ -415,6 +837,14 @@ create_festival_dates = fn ->
   new_horizons_event = Events.get_by_source_key("new_horizons")
   sundance_event = Events.get_by_source_key("sundance")
   sxsw_event = Events.get_by_source_key("sxsw")
+  golden_globes_event = Events.get_by_source_key("golden_globes")
+  bafta_event = Events.get_by_source_key("bafta")
+  sag_event = Events.get_by_source_key("sag")
+  critics_choice_event = Events.get_by_source_key("critics_choice")
+  toronto_event = Events.get_by_source_key("toronto")
+  telluride_event = Events.get_by_source_key("telluride")
+  nyff_event = Events.get_by_source_key("nyff")
+  locarno_event = Events.get_by_source_key("locarno")
 
   # 2024 dates (completed)
   if oscar_event do
@@ -489,6 +919,94 @@ create_festival_dates = fn ->
       year: 2024,
       start_date: ~D[2024-03-08],
       end_date: ~D[2024-03-16],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if golden_globes_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: golden_globes_event.id,
+      year: 2024,
+      start_date: ~D[2024-01-07],
+      end_date: ~D[2024-01-07],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if bafta_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: bafta_event.id,
+      year: 2024,
+      start_date: ~D[2024-02-18],
+      end_date: ~D[2024-02-18],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if sag_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: sag_event.id,
+      year: 2024,
+      start_date: ~D[2024-02-24],
+      end_date: ~D[2024-02-24],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if critics_choice_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: critics_choice_event.id,
+      year: 2024,
+      start_date: ~D[2024-01-14],
+      end_date: ~D[2024-01-14],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if toronto_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: toronto_event.id,
+      year: 2024,
+      start_date: ~D[2024-09-05],
+      end_date: ~D[2024-09-15],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if telluride_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: telluride_event.id,
+      year: 2024,
+      start_date: ~D[2024-08-30],
+      end_date: ~D[2024-09-02],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if nyff_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: nyff_event.id,
+      year: 2024,
+      start_date: ~D[2024-09-27],
+      end_date: ~D[2024-10-13],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if locarno_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: locarno_event.id,
+      year: 2024,
+      start_date: ~D[2024-08-07],
+      end_date: ~D[2024-08-17],
       status: "completed",
       source: "official"
     })
@@ -569,6 +1087,94 @@ create_festival_dates = fn ->
       end_date: ~D[2025-03-15],
       status: "upcoming",
       source: "official"
+    })
+  end
+
+  if golden_globes_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: golden_globes_event.id,
+      year: 2025,
+      start_date: ~D[2025-01-05],
+      end_date: ~D[2025-01-05],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if bafta_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: bafta_event.id,
+      year: 2025,
+      start_date: ~D[2025-02-16],
+      end_date: ~D[2025-02-16],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if sag_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: sag_event.id,
+      year: 2025,
+      start_date: ~D[2025-02-23],
+      end_date: ~D[2025-02-23],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if critics_choice_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: critics_choice_event.id,
+      year: 2025,
+      start_date: ~D[2025-01-12],
+      end_date: ~D[2025-01-12],
+      status: "completed",
+      source: "official"
+    })
+  end
+
+  if toronto_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: toronto_event.id,
+      year: 2025,
+      start_date: ~D[2025-09-04],
+      end_date: ~D[2025-09-14],
+      status: "upcoming",
+      source: "estimated"
+    })
+  end
+
+  if telluride_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: telluride_event.id,
+      year: 2025,
+      start_date: ~D[2025-08-29],
+      end_date: ~D[2025-09-01],
+      status: "upcoming",
+      source: "estimated"
+    })
+  end
+
+  if nyff_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: nyff_event.id,
+      year: 2025,
+      start_date: ~D[2025-09-26],
+      end_date: ~D[2025-10-12],
+      status: "upcoming",
+      source: "estimated"
+    })
+  end
+
+  if locarno_event do
+    Events.upsert_festival_date(%{
+      festival_event_id: locarno_event.id,
+      year: 2025,
+      start_date: ~D[2025-08-06],
+      end_date: ~D[2025-08-16],
+      status: "upcoming",
+      source: "estimated"
     })
   end
 end

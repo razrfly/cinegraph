@@ -1031,16 +1031,19 @@ defmodule Cinegraph.Cultural do
   end
 
   @doc """
-  Import all supported festivals for a specific year.
+  Import all active festivals/ceremonies for a specific year.
+  Queries the database for all active festival events rather than using a hardcoded list.
 
   ## Examples
 
       iex> Cinegraph.Cultural.import_all_festivals_for_year(2024)
-      {:ok, %{year: 2024, festivals: ["cannes", "bafta", "berlin", "venice"], jobs: 4}}
-      
+      {:ok, %{year: 2024, festivals: [...], jobs: 11}}
+
   """
   def import_all_festivals_for_year(year, options \\ []) do
-    festivals = ["cannes", "bafta", "berlin", "venice"]
+    festivals =
+      Events.list_active_events()
+      |> Enum.map(& &1.source_key)
 
     jobs =
       Enum.map(festivals, fn festival ->
