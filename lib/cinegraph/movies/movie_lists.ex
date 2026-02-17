@@ -293,6 +293,107 @@ defmodule Cinegraph.Movies.MovieLists do
         short_name: "Film Registry",
         icon: "building-library",
         display_order: 4
+      },
+      %{
+        source_key: "sight_sound_directors_2022",
+        name: "BFI's Sight & Sound | Directors' Top 100 Movies (2022 Edition)",
+        description:
+          "BFI's once-a-decade poll of the greatest films as voted by 480 directors worldwide (2022 edition).",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls562044484/",
+        source_id: "ls562044484",
+        category: "critics",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "edition" => "2022",
+          "poll_type" => "directors",
+          "source" => "BFI Sight & Sound"
+        },
+        slug: "sight-sound-directors-2022",
+        short_name: "S&S Directors 2022",
+        icon: "eye",
+        display_order: 5
+      },
+      %{
+        source_key: "ebert_great_movies",
+        name: "Roger Ebert's Great Movies",
+        description:
+          "Roger Ebert's personal selection of the greatest films ever made, spanning his career from 1997 to 2013.",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls064094320/",
+        source_id: "ls064094320",
+        category: "critics",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "critic" => "Roger Ebert",
+          "source" => "rogerebert.com"
+        },
+        slug: "ebert-great-movies",
+        short_name: "Ebert's Great",
+        icon: "star",
+        display_order: 6
+      },
+      %{
+        source_key: "tspdt_1000",
+        name: "They Shoot Pictures, Don't They? - 1000 Greatest Films",
+        description:
+          "Aggregated meta-list of the 1,000 greatest films, compiled from thousands of critics' and filmmakers' polls.",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls597166073/",
+        source_id: "ls597166073",
+        category: "critics",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "edition" => "2025",
+          "source" => "theyshootpictures.com"
+        },
+        slug: "tspdt-1000",
+        short_name: "TSPDT 1000",
+        icon: "chart-bar",
+        display_order: 7
+      },
+      %{
+        source_key: "letterboxd_top_250",
+        name: "Letterboxd Top 250 Narrative Feature Films",
+        description:
+          "Community-driven ranking based on the average weighted rating of all Letterboxd users.",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls567401607/",
+        source_id: "ls567401607",
+        category: "curated",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "source" => "letterboxd.com",
+          "note" => "Excludes documentaries, shorts, and stand-up specials"
+        },
+        slug: "letterboxd-top-250",
+        short_name: "Letterboxd 250",
+        icon: "heart",
+        display_order: 8
+      },
+      %{
+        source_key: "afi_100",
+        name: "AFI's 100 Years...100 Movies",
+        description:
+          "The American Film Institute's definitive list of the 100 greatest American films of all time.",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls076768590/",
+        source_id: "ls076768590",
+        category: "critics",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "organization" => "American Film Institute",
+          "edition" => "1998"
+        },
+        slug: "afi-100",
+        short_name: "AFI 100",
+        icon: "trophy",
+        display_order: 9
       }
     ]
 
