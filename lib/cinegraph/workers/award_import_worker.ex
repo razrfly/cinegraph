@@ -388,14 +388,15 @@ defmodule Cinegraph.Workers.AwardImportWorker do
   end
 
   # Map organization abbreviation to festival key (source_key in festival_events)
-  # These mappings come from the festival_events table
-  defp abbreviation_to_festival_key("CFF"), do: "cannes"
-  defp abbreviation_to_festival_key("VIFF"), do: "venice"
-  defp abbreviation_to_festival_key("BIFF"), do: "berlin"
-  defp abbreviation_to_festival_key("SFF"), do: "sundance"
-  defp abbreviation_to_festival_key("SXSW"), do: "sxsw"
-  defp abbreviation_to_festival_key("NHIFF"), do: "new_horizons"
-  defp abbreviation_to_festival_key(_), do: nil
+  # Queries the festival_events table dynamically so new events are automatically supported
+  defp abbreviation_to_festival_key(abbreviation) do
+    alias Cinegraph.Events
+
+    case Events.get_by_abbreviation(abbreviation) do
+      %{source_key: source_key} -> source_key
+      nil -> nil
+    end
+  end
 
   defp broadcast_progress(action, data) do
     Phoenix.PubSub.broadcast(
