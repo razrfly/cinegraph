@@ -305,12 +305,14 @@ defmodule Cinegraph.Movies.MovieLists do
             end
 
           existing ->
-            # Update existing lists with display fields if missing
-            if is_nil(existing.slug) and not is_nil(attrs[:slug]) do
-              update_movie_list(
-                existing,
-                Map.take(attrs, [:slug, :short_name, :icon, :display_order, :description])
-              )
+            # Backfill any missing display fields on existing lists
+            updates =
+              [:slug, :short_name, :icon, :display_order, :description]
+              |> Enum.filter(fn field -> is_nil(Map.get(existing, field)) and not is_nil(attrs[field]) end)
+              |> Map.new(fn field -> {field, attrs[field]} end)
+
+            if map_size(updates) > 0 do
+              update_movie_list(existing, updates)
             end
 
             {:exists, existing}
