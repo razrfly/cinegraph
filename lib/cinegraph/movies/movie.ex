@@ -159,10 +159,12 @@ defmodule Cinegraph.Movies.Movie do
   Note: Volatile metrics (vote_average, popularity, budget, etc.) are now stored in external_metrics table
   """
   def from_tmdb(attrs) do
+    title = sanitize_title(attrs["title"], attrs["original_title"])
+
     movie_attrs = %{
       tmdb_id: attrs["id"],
       imdb_id: truncate_string(attrs["imdb_id"], 255),
-      title: truncate_string(attrs["title"], 255),
+      title: truncate_string(title, 255),
       original_title: truncate_string(attrs["original_title"], 255),
       release_date: parse_date(attrs["release_date"]),
       runtime: attrs["runtime"],
@@ -181,6 +183,17 @@ defmodule Cinegraph.Movies.Movie do
 
     movie_attrs
   end
+
+  # Falls back to original_title when title is blank/whitespace-only
+  defp sanitize_title(title, original_title) when is_binary(title) do
+    case String.trim(title) do
+      "" -> original_title
+      trimmed -> trimmed
+    end
+  end
+
+  defp sanitize_title(nil, original_title), do: original_title
+  defp sanitize_title(_title, original_title), do: original_title
 
   # Truncates a string to max_length, handling nil values
   defp truncate_string(nil, _max_length), do: nil

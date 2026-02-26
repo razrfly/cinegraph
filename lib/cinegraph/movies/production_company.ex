@@ -33,11 +33,15 @@ defmodule Cinegraph.Movies.ProductionCompany do
   def from_tmdb(attrs) do
     company_attrs = %{
       tmdb_id: attrs["id"],
-      name: attrs["name"],
-      logo_path: attrs["logo_path"],
-      origin_country: attrs["origin_country"]
+      name: truncate(attrs["name"], 255),
+      logo_path: truncate(attrs["logo_path"], 255),
+      origin_country: truncate(attrs["origin_country"], 255)
     }
 
     changeset(%__MODULE__{}, company_attrs)
   end
+
+  defp truncate(nil, _max), do: nil
+  defp truncate(str, max) when is_binary(str) and byte_size(str) > max, do: String.slice(str, 0, max)
+  defp truncate(str, _max), do: str
 end

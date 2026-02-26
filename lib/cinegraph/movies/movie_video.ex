@@ -42,11 +42,11 @@ defmodule Cinegraph.Movies.MovieVideo do
   def from_tmdb(attrs, movie_id) do
     video_attrs = %{
       movie_id: movie_id,
-      tmdb_id: attrs["id"],
-      name: attrs["name"],
-      key: attrs["key"],
-      site: attrs["site"],
-      type: attrs["type"],
+      tmdb_id: truncate(attrs["id"], 255),
+      name: truncate(attrs["name"], 255),
+      key: truncate(attrs["key"], 255),
+      site: truncate(attrs["site"], 255),
+      type: truncate(attrs["type"], 255),
       size: attrs["size"],
       official: attrs["official"],
       published_at: parse_datetime(attrs["published_at"])
@@ -54,6 +54,10 @@ defmodule Cinegraph.Movies.MovieVideo do
 
     changeset(%__MODULE__{}, video_attrs)
   end
+
+  defp truncate(nil, _max), do: nil
+  defp truncate(str, max) when is_binary(str) and byte_size(str) > max, do: String.slice(str, 0, max)
+  defp truncate(str, _max), do: str
 
   defp parse_datetime(nil), do: nil
 
