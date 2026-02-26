@@ -45,7 +45,10 @@ defmodule Cinegraph.Movies.MovieSlug do
   end
 
   defp create_base_slug(title, year) when is_binary(title) do
-    SlugUtils.create_slug_with_year(title, year)
+    year_str = if year, do: "#{year}", else: "unknown"
+    # Cap title slug at 200 chars so the full slug (with year + disambiguators) stays under 255
+    title_slug = title |> SlugUtils.slugify() |> String.slice(0, 200)
+    "#{title_slug}-#{year_str}"
   end
 
   defp resolve_conflict(base_slug, changeset) do
