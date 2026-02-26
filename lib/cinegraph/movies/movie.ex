@@ -195,12 +195,18 @@ defmodule Cinegraph.Movies.Movie do
   defp sanitize_title(nil, original_title), do: original_title
   defp sanitize_title(_title, original_title), do: original_title
 
-  # Truncates a string to max_length, handling nil values
+  # Truncates a string to max_length Unicode codepoints, handling nil values.
+  # IMPORTANT: Uses codepoints, not grapheme clusters, because PostgreSQL's varchar(n)
+  # counts codepoints. String.length/1 counts graphemes, which can be fewer than
+  # codepoints for combining characters (e.g., Korean NFD, Arabic diacritics, Thai).
+  # A 255-grapheme Korean NFD string can have 765 codepoints, causing varchar(255) errors.
   defp truncate_string(nil, _max_length), do: nil
 
   defp truncate_string(str, max_length) when is_binary(str) do
-    if String.length(str) > max_length do
-      String.slice(str, 0, max_length)
+    codepoints = String.codepoints(str)
+
+    if length(codepoints) > max_length do
+      codepoints |> Enum.take(max_length) |> Enum.join()
     else
       str
     end
