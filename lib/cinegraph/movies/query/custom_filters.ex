@@ -42,9 +42,13 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_countries(query, nil), do: query
 
   defp filter_by_countries(query, country_ids) do
-    query
-    |> join(:inner, [m, ...], mpc in "movie_production_countries", on: mpc.movie_id == m.id)
-    |> where([m, ..., mpc], mpc.production_country_id in ^country_ids)
+    subq =
+      from(mpc in "movie_production_countries",
+        select: mpc.movie_id,
+        where: mpc.production_country_id in ^country_ids
+      )
+
+    where(query, [m], m.id in subquery(subq))
   end
 
   # Language filtering
@@ -124,11 +128,15 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_rating(query, nil), do: query
 
   defp filter_by_rating(query, min_rating) do
-    query
-    |> join(:inner, [m, ...], em in "external_metrics",
-      on: em.movie_id == m.id and em.source == "tmdb" and em.metric_type == "rating_average"
+    where(
+      query,
+      [m],
+      fragment(
+        "(SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) >= ?",
+        m.id,
+        ^min_rating
+      )
     )
-    |> where([m, ..., em], em.value >= ^min_rating)
   end
 
   # Award filtering - uses subquery approach for better performance
@@ -449,71 +457,51 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_people(query, %{people_ids: nil, people_role: _}), do: query
 
   defp filter_by_people(query, %{people_ids: people_ids, people_role: role}) do
-    query = join(query, :inner, [m], mc in "movie_credits", on: mc.movie_id == m.id, as: :credits)
+    subq = build_people_subquery(people_ids, role)
+    where(query, [m], m.id in subquery(subq))
+  end
+
+  defp build_people_subquery(people_ids, role) do
+    base = from(mc in "movie_credits", select: mc.movie_id, where: mc.person_id in ^people_ids)
 
     case role do
       "director" ->
-        where(query, [credits: mc], mc.person_id in ^people_ids and mc.job == "Director")
+        where(base, [mc], mc.job == "Director")
 
       "cast" ->
-        where(query, [credits: mc], mc.person_id in ^people_ids and mc.credit_type == "cast")
+        where(base, [mc], mc.credit_type == "cast")
 
       "writer" ->
         where(
-          query,
-          [credits: mc],
-          mc.person_id in ^people_ids and
-            mc.job in [
-              "Writer",
-              "Screenplay",
-              "Story",
-              "Novel",
-              "Characters",
-              "Teleplay",
-              "Adaptation"
-            ]
+          base,
+          [mc],
+          mc.job in ["Writer", "Screenplay", "Story", "Novel", "Characters", "Teleplay", "Adaptation"]
         )
 
       "producer" ->
         where(
-          query,
-          [credits: mc],
-          mc.person_id in ^people_ids and
-            mc.job in [
-              "Producer",
-              "Executive Producer",
-              "Associate Producer",
-              "Co-Producer",
-              "Line Producer"
-            ]
+          base,
+          [mc],
+          mc.job in [
+            "Producer",
+            "Executive Producer",
+            "Associate Producer",
+            "Co-Producer",
+            "Line Producer"
+          ]
         )
 
       "cinematographer" ->
-        where(
-          query,
-          [credits: mc],
-          mc.person_id in ^people_ids and
-            mc.job in ["Director of Photography", "Cinematography", "Cinematographer"]
-        )
+        where(base, [mc], mc.job in ["Director of Photography", "Cinematography", "Cinematographer"])
 
       "composer" ->
-        where(
-          query,
-          [credits: mc],
-          mc.person_id in ^people_ids and
-            mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"]
-        )
+        where(base, [mc], mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"])
 
       "editor" ->
-        where(
-          query,
-          [credits: mc],
-          mc.person_id in ^people_ids and
-            mc.job in ["Editor", "Film Editor", "Editorial", "Editing"]
-        )
+        where(base, [mc], mc.job in ["Editor", "Film Editor", "Editorial", "Editing"])
 
       _ ->
-        where(query, [credits: mc], mc.person_id in ^people_ids)
+        base
     end
   end
 
