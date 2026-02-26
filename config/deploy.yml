@@ -40,6 +40,7 @@ env:
     - CRAWLBASE_JS_API_KEY
     - ADMIN_USERNAME
     - ADMIN_PASSWORD
+    - CINEGRAPH_API_KEY
 
 ssh:
   user: holden
