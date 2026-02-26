@@ -3,17 +3,20 @@ defmodule CinegraphWeb.Plugs.ApiAuthPlug do
   Plug that extracts the Bearer token from the Authorization header and
   injects it into the Absinthe context for use by ApiAuth middleware.
 
-  Used as the `context:` function on Absinthe.Plug forward routes.
+  Add to the :api pipeline in the router so it runs before Absinthe.Plug.
   """
 
-  @doc """
-  Build the Absinthe context map from a Plug.Conn.
-  Extracts `Authorization: Bearer <token>` and exposes it as `auth_token`.
-  """
-  def build_context(conn) do
-    case Plug.Conn.get_req_header(conn, "authorization") do
-      ["Bearer " <> token | _] -> %{auth_token: String.trim(token)}
-      _ -> %{}
-    end
+  @behaviour Plug
+
+  def init(opts), do: opts
+
+  def call(conn, _opts) do
+    token =
+      case Plug.Conn.get_req_header(conn, "authorization") do
+        ["Bearer " <> token | _] -> String.trim(token)
+        _ -> nil
+      end
+
+    Plug.Conn.put_private(conn, :absinthe, %{context: %{auth_token: token}})
   end
 end

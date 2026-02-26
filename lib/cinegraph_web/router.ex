@@ -18,6 +18,7 @@ defmodule CinegraphWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug CinegraphWeb.Plugs.ApiAuthPlug
   end
 
   pipeline :admin do
@@ -145,9 +146,7 @@ defmodule CinegraphWeb.Router do
   scope "/api" do
     pipe_through :api
 
-    forward "/graphql", Absinthe.Plug,
-      schema: CinegraphWeb.Schema,
-      context: &CinegraphWeb.Plugs.ApiAuthPlug.build_context/1
+    forward "/graphql", Absinthe.Plug, schema: CinegraphWeb.Schema
   end
 
   if Mix.env() == :dev do
@@ -156,8 +155,7 @@ defmodule CinegraphWeb.Router do
 
       forward "/graphiql", Absinthe.Plug.GraphiQL,
         schema: CinegraphWeb.Schema,
-        interface: :playground,
-        context: &CinegraphWeb.Plugs.ApiAuthPlug.build_context/1
+        interface: :playground
     end
   end
 
