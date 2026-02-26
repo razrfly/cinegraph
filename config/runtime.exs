@@ -47,6 +47,15 @@ config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 config :cinegraph, :crawlbase_api_key, crawlbase_api_key
 config :cinegraph, :crawlbase_js_api_key, crawlbase_js_api_key
 
+# GraphQL API key — used by CinegraphWeb.Middleware.ApiAuth
+# If not set, auth is bypassed in dev for convenience
+api_key =
+  if config_env() == :dev,
+    do: env!("CINEGRAPH_API_KEY", :string, nil),
+    else: System.get_env("CINEGRAPH_API_KEY")
+
+config :cinegraph, :api_key, api_key
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

@@ -141,10 +141,25 @@ defmodule CinegraphWeb.Router do
     live "/awards/:slug/nominees", AwardsLive.Show, :nominees
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", CinegraphWeb do
-  #   pipe_through :api
-  # end
+  # GraphQL API — read-only, authenticated via Bearer token
+  scope "/api" do
+    pipe_through :api
+
+    forward "/graphql", Absinthe.Plug,
+      schema: CinegraphWeb.Schema,
+      context: &CinegraphWeb.Plugs.ApiAuthPlug.build_context/1
+  end
+
+  if Mix.env() == :dev do
+    scope "/api" do
+      pipe_through :api
+
+      forward "/graphiql", Absinthe.Plug.GraphiQL,
+        schema: CinegraphWeb.Schema,
+        interface: :playground,
+        context: &CinegraphWeb.Plugs.ApiAuthPlug.build_context/1
+    end
+  end
 
   # Admin dashboard - protected with basic auth
   import Oban.Web.Router

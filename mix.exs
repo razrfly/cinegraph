@@ -70,7 +70,10 @@ defmodule Cinegraph.MixProject do
       {:flop_phoenix, "~> 0.25.3"},
       {:cachex, "~> 3.6"},
       {:castore, "~> 1.0"},
-      {:sitemapper, "~> 0.10"}
+      {:sitemapper, "~> 0.10"},
+      {:absinthe, "~> 1.7"},
+      {:absinthe_plug, "~> 1.5"},
+      {:dataloader, "~> 2.0"}
     ]
   end
 
