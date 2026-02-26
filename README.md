@@ -801,7 +801,9 @@ cast/crew, and Cultural Relevance Index (CRI) scores.
 
 Include a Bearer token in the `Authorization` header:
 
-    Authorization: Bearer <your_api_key>
+```
+Authorization: Bearer <your_api_key>
+```
 
 Set the key via environment variable: `CINEGRAPH_API_KEY=your_secret_key`
 

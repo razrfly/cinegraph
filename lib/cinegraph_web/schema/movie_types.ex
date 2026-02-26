@@ -1,6 +1,8 @@
 defmodule CinegraphWeb.Schema.MovieTypes do
   use Absinthe.Schema.Notation
 
+  import Absinthe.Resolution.Helpers, only: [dataloader: 1]
+
   alias CinegraphWeb.Resolvers.MovieResolver
 
   @desc "Aggregated ratings from external sources"
@@ -31,18 +33,6 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :public_reception_score, :float
   end
 
-  @desc "A person (actor, director, crew member)"
-  object :person do
-    field :tmdb_id, :integer
-    field :name, :string
-    field :slug, :string
-    field :profile_path, :string
-    field :biography, :string
-    field :known_for_department, :string
-    field :birthday, :string
-    field :deathday, :string
-  end
-
   @desc "A credit linking a person to a movie"
   object :credit do
     field :credit_type, :string
@@ -52,7 +42,7 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :job, :string
 
     field :person, :person do
-      resolve(&MovieResolver.credit_person/3)
+      resolve(dataloader(:db))
     end
   end
 

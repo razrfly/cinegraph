@@ -4,10 +4,10 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   """
 
   import Ecto.Query
+  import Absinthe.Resolution.Helpers, only: [on_load: 2]
 
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, Credit, ExternalMetric, MovieVideo}
-  alias Cinegraph.Cultural.CRIScore
 
   # ---------------------------------------------------------------------------
   # Top-level query resolvers
@@ -60,22 +60,26 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   end
 
   # ---------------------------------------------------------------------------
-  # Child field resolvers on Movie
+  # Child field resolvers on Movie — batched via Dataloader
   # ---------------------------------------------------------------------------
 
-  def ratings(movie, _, _) do
-    metrics = Repo.all(from em in ExternalMetric, where: em.movie_id == ^movie.id)
+  def ratings(movie, _, %{context: %{loader: loader}}) do
+    loader = Dataloader.load(loader, :db, {:external_metrics, %{}}, movie)
 
-    result = %{
-      tmdb: find_value(metrics, "tmdb", "rating_average"),
-      tmdb_votes: float_to_int(find_value(metrics, "tmdb", "rating_votes")),
-      imdb: find_value(metrics, "imdb", "rating_average"),
-      imdb_votes: float_to_int(find_value(metrics, "imdb", "rating_votes")),
-      rotten_tomatoes: float_to_int(find_value(metrics, "rotten_tomatoes", "tomatometer")),
-      metacritic: float_to_int(find_value(metrics, "metacritic", "metascore"))
-    }
+    on_load(loader, fn loader ->
+      metrics = Dataloader.get(loader, :db, {:external_metrics, %{}}, movie)
 
-    {:ok, result}
+      result = %{
+        tmdb: find_value(metrics, "tmdb", "rating_average"),
+        tmdb_votes: float_to_int(find_value(metrics, "tmdb", "rating_votes")),
+        imdb: find_value(metrics, "imdb", "rating_average"),
+        imdb_votes: float_to_int(find_value(metrics, "imdb", "rating_votes")),
+        rotten_tomatoes: float_to_int(find_value(metrics, "rotten_tomatoes", "tomatometer")),
+        metacritic: float_to_int(find_value(metrics, "metacritic", "metascore"))
+      }
+
+      {:ok, result}
+    end)
   end
 
   def awards(movie, _, _) do
@@ -105,14 +109,24 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end
   end
 
-  def cri_score(movie, _, _) do
-    score = Repo.get_by(CRIScore, movie_id: movie.id)
-    {:ok, score && score.overall_score}
+  # Both cri_score and cri_breakdown use the same Dataloader key so
+  # Dataloader deduplicates the DB query when both fields are requested.
+  def cri_score(movie, _, %{context: %{loader: loader}}) do
+    loader = Dataloader.load(loader, :db, {:cri_score, %{}}, movie)
+
+    on_load(loader, fn loader ->
+      score = Dataloader.get(loader, :db, {:cri_score, %{}}, movie)
+      {:ok, score && score.overall_score}
+    end)
   end
 
-  def cri_breakdown(movie, _, _) do
-    score = Repo.get_by(CRIScore, movie_id: movie.id)
-    {:ok, score}
+  def cri_breakdown(movie, _, %{context: %{loader: loader}}) do
+    loader = Dataloader.load(loader, :db, {:cri_score, %{}}, movie)
+
+    on_load(loader, fn loader ->
+      score = Dataloader.get(loader, :db, {:cri_score, %{}}, movie)
+      {:ok, score}
+    end)
   end
 
   def cast(movie, _, _) do
@@ -145,11 +159,6 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, videos}
   end
 
-  def credit_person(credit, _, _) do
-    person = Repo.get(Cinegraph.Movies.Person, credit.person_id)
-    {:ok, person}
-  end
-
   # ---------------------------------------------------------------------------
   # Private helpers
   # ---------------------------------------------------------------------------
@@ -169,12 +178,14 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     )
   end
 
-  defp find_value(metrics, source, type) do
+  defp find_value(metrics, source, type) when is_list(metrics) do
     case Enum.find(metrics, fn m -> m.source == source and m.metric_type == type end) do
       nil -> nil
       metric -> metric.value
     end
   end
+
+  defp find_value(_, _, _), do: nil
 
   defp float_to_int(nil), do: nil
   defp float_to_int(v), do: round(v)
