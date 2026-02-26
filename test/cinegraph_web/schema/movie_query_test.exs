@@ -1,5 +1,5 @@
 defmodule CinegraphWeb.Schema.MovieQueryTest do
-  use Cinegraph.DataCase, async: true
+  use Cinegraph.DataCase, async: false
 
   alias CinegraphWeb.Schema
   alias Cinegraph.Repo

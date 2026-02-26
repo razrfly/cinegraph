@@ -48,11 +48,15 @@ config :cinegraph, :crawlbase_api_key, crawlbase_api_key
 config :cinegraph, :crawlbase_js_api_key, crawlbase_js_api_key
 
 # GraphQL API key — used by CinegraphWeb.Middleware.ApiAuth
-# If not set, auth is bypassed in dev for convenience
+# dev:  optional (nil bypasses auth for convenience)
+# prod: required — raises at startup if missing
+# test: optional (tests override via Application.put_env)
 api_key =
-  if config_env() == :dev,
-    do: env!("CINEGRAPH_API_KEY", :string, nil),
-    else: System.get_env("CINEGRAPH_API_KEY")
+  cond do
+    config_env() == :dev -> env!("CINEGRAPH_API_KEY", :string, nil)
+    config_env() == :prod -> System.fetch_env!("CINEGRAPH_API_KEY")
+    true -> System.get_env("CINEGRAPH_API_KEY")
+  end
 
 config :cinegraph, :api_key, api_key
 
