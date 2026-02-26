@@ -784,6 +784,86 @@ The result is a living, data-driven understanding of which films truly matter ac
 
 ---
 
+## GraphQL API
+
+Cinegraph exposes a read-only GraphQL API for querying movie data, ratings, awards,
+cast/crew, and Cultural Relevance Index (CRI) scores.
+
+### Endpoint
+
+| Environment | URL |
+|---|---|
+| Local dev | `http://localhost:4001/api/graphql` |
+| Fly.io (internal) | `http://cinegraph.internal:4000/api/graphql` |
+| GraphiQL playground (dev only) | `http://localhost:4001/api/graphiql` |
+
+### Authentication
+
+Include a Bearer token in the `Authorization` header:
+
+    Authorization: Bearer <your_api_key>
+
+Set the key via environment variable: `CINEGRAPH_API_KEY=your_secret_key`
+
+In local dev, the key check is skipped if `CINEGRAPH_API_KEY` is not set.
+
+### Sample Queries
+
+```graphql
+# Single movie by TMDb ID
+query {
+  movie(tmdbId: 550) {
+    title
+    slug
+    releaseDate
+    runtime
+    canonicalSources
+    ratings { tmdb tmdbVotes imdb imdbVotes rottenTomatoes metacritic }
+    awards { summary oscarWins totalWins totalNominations }
+    criScore
+    criBreakdown { overallScore timelessnessScore culturalPenetrationScore }
+    cast { creditType character castOrder person { name tmdbId } }
+    crew { creditType job department person { name } }
+    videos { name key site type official }
+  }
+}
+
+# Batch lookup
+query {
+  movies(tmdbIds: [550, 278, 238]) {
+    title
+    ratings { tmdb imdb }
+  }
+}
+
+# Search
+query {
+  searchMovies(query: "Fight Club", limit: 5) {
+    title
+    releaseDate
+    ratings { tmdb }
+  }
+}
+
+# Person lookup
+query {
+  person(tmdbId: 287) {
+    name
+    slug
+    knownForDepartment
+    birthday
+  }
+}
+```
+
+### Rate Limiting
+
+No hard rate limit currently enforced. Both apps are on Fly.io internal
+networking — use `http://cinegraph.internal:4000/api/graphql` for near-zero
+latency without public DNS or TLS overhead.
+
+---
+
 ## 📄 License
 
 [Add your license information here]
