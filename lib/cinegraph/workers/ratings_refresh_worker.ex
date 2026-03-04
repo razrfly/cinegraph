@@ -127,8 +127,16 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
       job = OMDbEnrichmentWorker.new(Map.merge(%{"movie_id" => id}, extra_args))
 
       case Oban.insert(job) do
-        {:ok, _} -> count + 1
-        {:error, _} -> count
+        {:ok, _} ->
+          count + 1
+
+        {:error, reason} ->
+          Logger.error(
+            "RatingsRefresh: failed to insert OMDb job for movie_id=#{id} " <>
+              "extra_args=#{inspect(extra_args)} error=#{inspect(reason)}"
+          )
+
+          count
       end
     end)
   end
