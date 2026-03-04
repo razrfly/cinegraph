@@ -39,6 +39,9 @@ config :cinegraph, Cinegraph.Mailer, adapter: Swoosh.Adapters.Test
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
+# Oban — disable job processing in tests; use Oban.Testing helpers to inspect enqueued jobs
+config :cinegraph, Oban, testing: :manual
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

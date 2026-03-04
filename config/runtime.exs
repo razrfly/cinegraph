@@ -49,6 +49,14 @@ omdb_daily_batch_size =
     do: env!("OMDB_DAILY_BATCH_SIZE", :integer, 500),
     else: String.to_integer(System.get_env("OMDB_DAILY_BATCH_SIZE") || "500")
 
+omdb_daily_batch_size =
+  if omdb_daily_batch_size > 0,
+    do: omdb_daily_batch_size,
+    else:
+      raise(
+        "OMDB_DAILY_BATCH_SIZE must be a positive integer, got: #{omdb_daily_batch_size}"
+      )
+
 config :cinegraph, :omdb_daily_batch_size, omdb_daily_batch_size
 
 # Configure Crawlbase API (for Oscar and IMDb scraping)
