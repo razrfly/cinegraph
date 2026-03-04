@@ -23,7 +23,9 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
     try do
       movie = Movies.get_movie!(movie_id)
 
-      if movie.omdb_data do
+      force = Map.get(args, "force", false)
+
+      if movie.omdb_data && !force do
         Logger.info("Movie #{movie_id} already has OMDb data, skipping")
         :ok
       else

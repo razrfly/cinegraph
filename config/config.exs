@@ -113,7 +113,9 @@ config :cinegraph, Oban,
        {"0 2 * * *", Cinegraph.Workers.SitemapWorker},
        # Backfill queue regulation - runs every 15 minutes to check queue health
        # Queues more movies if pending jobs fall below threshold (stateless approach)
-       {"*/15 * * * *", Cinegraph.Workers.ScheduledBackfillWorker}
+       {"*/15 * * * *", Cinegraph.Workers.ScheduledBackfillWorker},
+       # Daily OMDb gap fill + stale refresh at 3 AM UTC
+       {"0 3 * * *", Cinegraph.Workers.RatingsRefreshWorker}
      ]}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format
