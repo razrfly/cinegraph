@@ -43,6 +43,14 @@ config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: tmdb_api_key
 # Configure OMDb (optional)
 config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 
+# Daily OMDb batch size for RatingsRefreshWorker (default 500)
+omdb_daily_batch_size =
+  if config_env() == :dev,
+    do: env!("OMDB_DAILY_BATCH_SIZE", :integer, 500),
+    else: String.to_integer(System.get_env("OMDB_DAILY_BATCH_SIZE") || "500")
+
+config :cinegraph, :omdb_daily_batch_size, omdb_daily_batch_size
+
 # Configure Crawlbase API (for Oscar and IMDb scraping)
 config :cinegraph, :crawlbase_api_key, crawlbase_api_key
 config :cinegraph, :crawlbase_js_api_key, crawlbase_js_api_key
