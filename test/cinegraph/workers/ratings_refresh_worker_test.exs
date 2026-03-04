@@ -7,6 +7,12 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
   alias Cinegraph.Workers.RatingsRefreshWorker
   alias Cinegraph.Workers.OMDbEnrichmentWorker
 
+  # Sets the daily batch size for the duration of the test and restores it on exit.
+  defp with_batch_size(size) do
+    Application.put_env(:cinegraph, :omdb_daily_batch_size, size)
+    on_exit(fn -> Application.delete_env(:cinegraph, :omdb_daily_batch_size) end)
+  end
+
   # Insert a minimal movie fixture with sensible defaults
   defp insert_movie(attrs) do
     defaults = %{
@@ -28,7 +34,6 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
     test "queues movies where omdb_data is nil" do
       movie = insert_movie(%{omdb_data: nil})
 
-      RatingsRefreshWorker.new(%{}) |> Oban.insert()
       perform_job(RatingsRefreshWorker, %{})
 
       assert_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => movie.id})
@@ -36,7 +41,7 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
 
     test "movies with omdb_data are only queued via Phase B (with force: true, never without)" do
       # No null movies → Phase A queues nothing, Phase B picks up the enriched movie
-      Application.put_env(:cinegraph, :omdb_daily_batch_size, 1)
+      with_batch_size(1)
       movie = insert_movie(%{omdb_data: %{"Title" => "Already Enriched"}})
 
       perform_job(RatingsRefreshWorker, %{})
@@ -46,8 +51,6 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
         worker: OMDbEnrichmentWorker,
         args: %{"movie_id" => movie.id, "force" => true}
       )
-    after
-      Application.delete_env(:cinegraph, :omdb_daily_batch_size)
     end
 
     test "skips movies without an imdb_id" do
@@ -81,7 +84,7 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
   describe "Phase B – stale refresh" do
     test "queues stale movies with force: true when Phase A is under batch size" do
       # One null movie (Phase A) and one already-enriched movie (Phase B candidate)
-      Application.put_env(:cinegraph, :omdb_daily_batch_size, 2)
+      with_batch_size(2)
 
       _null_movie = insert_movie(%{omdb_data: nil})
       stale_movie = insert_movie(%{omdb_data: %{"Title" => "Stale"}})
@@ -92,12 +95,10 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
         worker: OMDbEnrichmentWorker,
         args: %{"movie_id" => stale_movie.id, "force" => true}
       )
-    after
-      Application.delete_env(:cinegraph, :omdb_daily_batch_size)
     end
 
     test "Phase B does not run when Phase A fills the entire batch" do
-      Application.put_env(:cinegraph, :omdb_daily_batch_size, 1)
+      with_batch_size(1)
 
       _null_movie = insert_movie(%{omdb_data: nil})
       stale_movie = insert_movie(%{omdb_data: %{"Title" => "Stale"}})
@@ -108,12 +109,10 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
         worker: OMDbEnrichmentWorker,
         args: %{"movie_id" => stale_movie.id, "force" => true}
       )
-    after
-      Application.delete_env(:cinegraph, :omdb_daily_batch_size)
     end
 
     test "Phase B skips enriched movies without an imdb_id" do
-      Application.put_env(:cinegraph, :omdb_daily_batch_size, 2)
+      with_batch_size(2)
 
       _null_movie = insert_movie(%{omdb_data: nil})
       no_imdb = insert_movie(%{omdb_data: %{"Title" => "No IMDb"}, imdb_id: nil})
@@ -121,8 +120,6 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
       perform_job(RatingsRefreshWorker, %{})
 
       refute_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => no_imdb.id})
-    after
-      Application.delete_env(:cinegraph, :omdb_daily_batch_size)
     end
   end
 end
