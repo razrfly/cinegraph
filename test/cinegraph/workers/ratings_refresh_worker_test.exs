@@ -4,6 +4,7 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
 
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.ExternalMetric
   alias Cinegraph.Workers.RatingsRefreshWorker
   alias Cinegraph.Workers.OMDbEnrichmentWorker
 
@@ -78,6 +79,42 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
       jobs = all_enqueued(worker: OMDbEnrichmentWorker)
       assert length(jobs) > 0
       Enum.each(jobs, fn job -> refute Map.has_key?(job.args, "force") end)
+    end
+  end
+
+  defp insert_fetch_attempt(movie_id, fetched_at) do
+    {:ok, metric} =
+      %ExternalMetric{}
+      |> ExternalMetric.changeset(%{
+        movie_id: movie_id,
+        source: "omdb",
+        metric_type: "fetch_attempt",
+        text_value: "Error getting data.",
+        fetched_at: fetched_at
+      })
+      |> Repo.insert()
+
+    metric
+  end
+
+  describe "Phase A – fetch_attempt cooldown" do
+    test "excludes movies with a recent fetch_attempt record" do
+      movie = insert_movie(%{omdb_data: nil})
+      insert_fetch_attempt(movie.id, DateTime.utc_now() |> DateTime.truncate(:second))
+
+      perform_job(RatingsRefreshWorker, %{})
+
+      refute_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => movie.id})
+    end
+
+    test "re-includes movies whose fetch_attempt is older than 90 days" do
+      movie = insert_movie(%{omdb_data: nil})
+      old_fetched_at = DateTime.add(DateTime.utc_now(), -91 * 24 * 3600, :second) |> DateTime.truncate(:second)
+      insert_fetch_attempt(movie.id, old_fetched_at)
+
+      perform_job(RatingsRefreshWorker, %{})
+
+      assert_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => movie.id})
     end
   end
 

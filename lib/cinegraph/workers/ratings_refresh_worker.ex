@@ -80,12 +80,23 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
     |> Repo.one()
   end
 
-  # Phase A: queue movies where omdb_data IS NULL, by tmdb popularity DESC
+  # Phase A: queue movies where omdb_data IS NULL, by tmdb popularity DESC,
+  # excluding movies with a recent fetch_attempt record (90-day cooldown).
   defp fetch_null_backlog(limit) do
+    cutoff = DateTime.add(DateTime.utc_now(), -90 * 24 * 3600, :second)
+
+    recently_checked =
+      from(em in ExternalMetric,
+        where: em.source == "omdb" and em.metric_type == "fetch_attempt",
+        where: em.fetched_at > ^cutoff,
+        select: em.movie_id
+      )
+
     from(m in Movie,
       where: m.import_status == "full",
       where: is_nil(m.omdb_data),
       where: not is_nil(m.imdb_id),
+      where: m.id not in subquery(recently_checked),
       order_by: fragment("(tmdb_data->>'popularity')::float DESC NULLS LAST"),
       limit: ^limit,
       select: m.id
