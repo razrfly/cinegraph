@@ -13,6 +13,7 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
     unique: [fields: [:args], keys: [:movie_id], period: 3600]
 
   alias Cinegraph.Movies
+  alias Cinegraph.Metrics
   alias Cinegraph.ApiProcessors.OMDb
   require Logger
 
@@ -51,9 +52,29 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
         # Retry in 1 hour
         {:snooze, 3600}
 
+      {:error, reason} when reason in ["Error getting data.", "Incorrect IMDb ID."] ->
+        Logger.info("OMDb unavailable for movie #{movie.id} (#{reason}), recording fetch attempt")
+        record_fetch_attempt(movie.id, reason)
+        :ok
+
+      {:error, %Jason.DecodeError{}} ->
+        Logger.warning("OMDb returned malformed JSON for movie #{movie.id}, recording fetch attempt")
+        record_fetch_attempt(movie.id, "malformed_response")
+        :ok
+
       {:error, reason} ->
         Logger.error("Failed to enrich movie #{movie.id} with OMDb: #{inspect(reason)}")
         {:error, reason}
     end
+  end
+
+  defp record_fetch_attempt(movie_id, reason) do
+    Metrics.upsert_metric(%{
+      movie_id: movie_id,
+      source: "omdb",
+      metric_type: "fetch_attempt",
+      text_value: reason,
+      fetched_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
   end
 end

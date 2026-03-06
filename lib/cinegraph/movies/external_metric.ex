@@ -80,7 +80,10 @@ defmodule Cinegraph.Movies.ExternalMetric do
       "oscar_wins",
       "oscar_nominations",
       "total_awards",
-      "total_nominations"
+      "total_nominations",
+
+      # Availability
+      "fetch_attempt"
     ]
   end
 
