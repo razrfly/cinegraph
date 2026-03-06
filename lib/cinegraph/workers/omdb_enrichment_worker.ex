@@ -69,12 +69,23 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
   end
 
   defp record_fetch_attempt(movie_id, reason) do
-    Metrics.upsert_metric(%{
-      movie_id: movie_id,
-      source: "omdb",
-      metric_type: "fetch_attempt",
-      text_value: reason,
-      fetched_at: DateTime.utc_now() |> DateTime.truncate(:second)
-    })
+    case Metrics.upsert_metric(%{
+           movie_id: movie_id,
+           source: "omdb",
+           metric_type: "fetch_attempt",
+           text_value: reason,
+           fetched_at: DateTime.utc_now() |> DateTime.truncate(:second)
+         }) do
+      {:ok, _} ->
+        :ok
+
+      {:error, changeset} ->
+        Logger.error(
+          "Failed to record fetch_attempt for movie #{movie_id} " <>
+            "(reason=#{reason}): #{inspect(changeset.errors)}"
+        )
+
+        :ok
+    end
   end
 end

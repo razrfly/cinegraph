@@ -70,11 +70,23 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
     :ok
   end
 
+  # Subquery for movies with a fetch_attempt record within the 90-day cooldown window.
+  defp recently_checked_subquery do
+    cutoff = DateTime.add(DateTime.utc_now(), -90 * 24 * 3600, :second)
+
+    from(em in ExternalMetric,
+      where: em.source == "omdb" and em.metric_type == "fetch_attempt",
+      where: em.fetched_at > ^cutoff,
+      select: em.movie_id
+    )
+  end
+
   defp count_null_backlog do
     from(m in Movie,
       where: m.import_status == "full",
       where: is_nil(m.omdb_data),
       where: not is_nil(m.imdb_id),
+      where: m.id not in subquery(recently_checked_subquery()),
       select: count(m.id)
     )
     |> Repo.one()
@@ -83,20 +95,11 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
   # Phase A: queue movies where omdb_data IS NULL, by tmdb popularity DESC,
   # excluding movies with a recent fetch_attempt record (90-day cooldown).
   defp fetch_null_backlog(limit) do
-    cutoff = DateTime.add(DateTime.utc_now(), -90 * 24 * 3600, :second)
-
-    recently_checked =
-      from(em in ExternalMetric,
-        where: em.source == "omdb" and em.metric_type == "fetch_attempt",
-        where: em.fetched_at > ^cutoff,
-        select: em.movie_id
-      )
-
     from(m in Movie,
       where: m.import_status == "full",
       where: is_nil(m.omdb_data),
       where: not is_nil(m.imdb_id),
-      where: m.id not in subquery(recently_checked),
+      where: m.id not in subquery(recently_checked_subquery()),
       order_by: fragment("(tmdb_data->>'popularity')::float DESC NULLS LAST"),
       limit: ^limit,
       select: m.id
