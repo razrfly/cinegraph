@@ -82,7 +82,7 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
       {:error, changeset} ->
         Logger.error(
           "Failed to record fetch_attempt for movie #{movie_id} " <>
-            "(reason=#{reason}): #{inspect(changeset.errors)}"
+            "(reason=#{reason}): #{inspect(changeset)}"
         )
 
         :ok
