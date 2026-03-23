@@ -481,7 +481,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           ),
         score_confidence:
           fragment(
-            "(CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END) / 4.0",
+            "(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END) / 4.0",
             ir.value,
             tr.value,
             rt.value,

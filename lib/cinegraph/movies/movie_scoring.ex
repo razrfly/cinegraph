@@ -166,7 +166,13 @@ defmodule Cinegraph.Movies.MovieScoring do
   """
   def calculate_score_confidence(metrics) do
     keys = [:imdb_rating, :tmdb_rating, :rt_tomatometer, :metacritic]
-    present = Enum.count(keys, &(not is_nil(Map.get(metrics, &1))))
+
+    present =
+      Enum.count(keys, fn k ->
+        v = Map.get(metrics, k)
+        not is_nil(v) and v != 0
+      end)
+
     present / 4.0
   end
 
