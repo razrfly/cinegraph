@@ -167,22 +167,20 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
          """
          (
            SELECT CASE
-             WHEN ir.value IS NOT NULL AND tr.value IS NOT NULL
-               THEN (ir.value / 10.0 + tr.value / 10.0) / 2.0
-             WHEN ir.value IS NOT NULL THEN ir.value / 10.0
-             WHEN tr.value IS NOT NULL THEN tr.value / 10.0
+             WHEN ir_v IS NOT NULL AND tr_v IS NOT NULL THEN (ir_v / 10.0 + tr_v / 10.0) / 2.0
+             WHEN ir_v IS NOT NULL THEN ir_v / 10.0
+             WHEN tr_v IS NOT NULL THEN tr_v / 10.0
              ELSE NULL
            END
            FROM (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) tr,
-                (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) ir
+             SELECT
+               (SELECT value FROM external_metrics
+                WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
+                ORDER BY fetched_at DESC LIMIT 1) AS ir_v,
+               (SELECT value FROM external_metrics
+                WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+                ORDER BY fetched_at DESC LIMIT 1) AS tr_v
+           ) AS vals
          )
          """,
          m.id,
@@ -200,22 +198,20 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
          """
          (
            SELECT CASE
-             WHEN rt.value IS NOT NULL AND mc.value IS NOT NULL
-               THEN (rt.value / 100.0 + mc.value / 100.0) / 2.0
-             WHEN rt.value IS NOT NULL THEN rt.value / 100.0
-             WHEN mc.value IS NOT NULL THEN mc.value / 100.0
+             WHEN rt_v IS NOT NULL AND mc_v IS NOT NULL THEN (rt_v / 100.0 + mc_v / 100.0) / 2.0
+             WHEN rt_v IS NOT NULL THEN rt_v / 100.0
+             WHEN mc_v IS NOT NULL THEN mc_v / 100.0
              ELSE NULL
            END
            FROM (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) rt,
-                (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) mc
+             SELECT
+               (SELECT value FROM external_metrics
+                WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer'
+                ORDER BY fetched_at DESC LIMIT 1) AS rt_v,
+               (SELECT value FROM external_metrics
+                WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
+                ORDER BY fetched_at DESC LIMIT 1) AS mc_v
+           ) AS vals
          )
          """,
          m.id,

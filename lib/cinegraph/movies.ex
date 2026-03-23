@@ -59,16 +59,22 @@ defmodule Cinegraph.Movies do
     sort in [
       "mob",
       "mob_asc",
+      "mob_desc",
       "ivory_tower",
       "ivory_tower_asc",
+      "ivory_tower_desc",
       "popular_opinion",
       "popular_opinion_asc",
+      "popular_opinion_desc",
       "industry_recognition",
       "industry_recognition_asc",
+      "industry_recognition_desc",
       "cultural_impact",
       "cultural_impact_asc",
+      "cultural_impact_desc",
       "people_quality",
-      "people_quality_asc"
+      "people_quality_asc",
+      "people_quality_desc"
     ]
   end
 

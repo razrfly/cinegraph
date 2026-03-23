@@ -292,7 +292,8 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
       cond do
         Map.has_key?(weights, :mob) or Map.has_key?(weights, :ivory_tower) ->
           # New-style: combine mob + ivory_tower as total ratings weight
-          Map.get(weights, :mob, 0.0) + Map.get(weights, :ivory_tower, 0.0)
+          # Default each to 0.125 so their sum equals the legacy 0.25 default
+          Map.get(weights, :mob, 0.125) + Map.get(weights, :ivory_tower, 0.125)
 
         Map.has_key?(weights, :critical_acclaim) ->
           # Legacy case: ignore critical_acclaim, use only popular_opinion
