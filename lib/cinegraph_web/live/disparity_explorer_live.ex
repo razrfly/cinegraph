@@ -20,8 +20,8 @@ defmodule CinegraphWeb.DisparityExplorerLive do
      |> assign(:active_tab, "critics_darling")
      |> assign(:page, 1)
      |> assign(:movies, [])
-     |> assign(:total_count, 0)
-     |> load_movies("critics_darling", 1)}
+     |> assign(:per_page, @per_page)
+     |> load_movies("critics_darling")}
   end
 
   @impl true
@@ -31,7 +31,7 @@ defmodule CinegraphWeb.DisparityExplorerLive do
      socket
      |> assign(:active_tab, tab)
      |> assign(:page, 1)
-     |> load_movies(tab, 1)}
+     |> load_movies(tab)}
   end
 
   def handle_params(_params, _url, socket) do
@@ -44,7 +44,6 @@ defmodule CinegraphWeb.DisparityExplorerLive do
      socket
      |> assign(:active_tab, tab)
      |> assign(:page, 1)
-     |> load_movies(tab, 1)
      |> push_patch(to: ~p"/explore/disparity?tab=#{tab}")}
   end
 
@@ -58,7 +57,7 @@ defmodule CinegraphWeb.DisparityExplorerLive do
      |> load_more_movies(socket.assigns.active_tab, next_page)}
   end
 
-  defp load_movies(socket, category, _page) do
+  defp load_movies(socket, category) do
     movies = Movies.list_movies_by_disparity_category(category, limit: @per_page)
     assign(socket, :movies, movies)
   end

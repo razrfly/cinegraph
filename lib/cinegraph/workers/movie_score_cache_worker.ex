@@ -1,8 +1,15 @@
 defmodule Cinegraph.Workers.MovieScoreCacheWorker do
   use Oban.Worker, queue: :default, max_attempts: 3
 
-  alias Cinegraph.{Repo, Movies.Movie, Movies.MovieScoreCache, Movies.MovieScoring,
-                   Metrics.DisparityCalculator}
+  import Ecto.Query
+
+  alias Cinegraph.{
+    Repo,
+    Movies.Movie,
+    Movies.MovieScoreCache,
+    Movies.MovieScoring,
+    Metrics.DisparityCalculator
+  }
 
   @calculation_version "1"
 
@@ -29,11 +36,16 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
       calculation_version: @calculation_version
     }
 
-    cache = Repo.get_by(MovieScoreCache, movie_id: movie_id) || %MovieScoreCache{}
-
-    cache
+    %MovieScoreCache{}
     |> MovieScoreCache.changeset(attrs)
-    |> Repo.insert_or_update()
+    |> Repo.insert(
+      on_conflict:
+        {:replace, ~w[mob_score ivory_tower_score industry_recognition_score cultural_impact_score
+            people_quality_score financial_performance_score overall_score score_confidence
+            disparity_score disparity_category unpredictability_score
+            calculated_at calculation_version updated_at]a},
+      conflict_target: :movie_id
+    )
     |> case do
       {:ok, _} -> :ok
       {:error, cs} -> {:error, inspect(cs.errors)}
@@ -45,13 +57,13 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
   Run from IEx: Cinegraph.Workers.MovieScoreCacheWorker.queue_all()
   """
   def queue_all(opts \\ []) do
-    batch_size = Elixir.Keyword.get(opts, :batch_size, 500)
+    batch_size = Keyword.get(opts, :batch_size, 500)
 
-    Movie
-    |> Repo.all(select: [:id])
+    from(m in Movie, select: m.id)
+    |> Repo.all()
     |> Enum.chunk_every(batch_size)
     |> Enum.each(fn batch ->
-      jobs = Enum.map(batch, fn %{id: id} -> new(%{"movie_id" => id}) end)
+      jobs = Enum.map(batch, fn id -> new(%{"movie_id" => id}) end)
       Oban.insert_all(jobs)
     end)
   end

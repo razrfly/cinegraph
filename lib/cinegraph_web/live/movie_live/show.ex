@@ -153,13 +153,24 @@ defmodule CinegraphWeb.MovieLive.Show do
     # Load aggregated metrics for backward compatibility
     metrics = Metrics.get_movie_aggregates(id)
 
-    # Calculate real Cinegraph scores using the context module
-    score_data = MovieScoring.calculate_movie_scores(movie)
-    disparity_data = DisparityCalculator.calculate_all(score_data)
-
-    # Preload score cache and build unified display scores (cache wins over live calc)
+    # Preload score cache first — skip live calculation when cache is warm
     movie = Repo.preload(movie, :score_cache)
-    display_scores = build_display_scores(movie.score_cache, score_data)
+
+    {display_scores, disparity_data} =
+      if movie.score_cache do
+        ds = build_display_scores(movie.score_cache, nil)
+
+        dd = %{
+          disparity_score: movie.score_cache.disparity_score,
+          disparity_category: movie.score_cache.disparity_category,
+          unpredictability_score: movie.score_cache.unpredictability_score
+        }
+
+        {ds, dd}
+      else
+        score_data = MovieScoring.calculate_movie_scores(movie)
+        {build_display_scores(nil, score_data), DisparityCalculator.calculate_all(score_data)}
+      end
 
     # Load credits (cast and crew)
     credits = Movies.get_movie_credits(id)
@@ -229,7 +240,6 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:all_external_sources, all_external_sources)
     |> Map.put(:missing_data, missing_data)
     |> Map.put(:key_collaborations, key_collaborations)
-    |> Map.put(:score_data, score_data)
     |> Map.put(:display_scores, display_scores)
     |> Map.put(:disparity_data, disparity_data)
     |> Map.put(:related_movies, related_movies)
@@ -549,9 +559,9 @@ defmodule CinegraphWeb.MovieLive.Show do
     }
   end
 
-  def format_lens_score(nil), do: "—"
-  def format_lens_score(val) when val == 0, do: "—"
-  def format_lens_score(val), do: to_string(val)
+  defp format_lens_score(nil), do: "—"
+  defp format_lens_score(val) when val == 0, do: "—"
+  defp format_lens_score(val), do: to_string(val)
 
   defp format_error(:not_found), do: "Movie not found in TMDb"
   defp format_error({:error, reason}), do: format_error(reason)
