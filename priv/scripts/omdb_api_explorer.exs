@@ -15,7 +15,7 @@ alias Cinegraph.Repo
 alias Cinegraph.Movies.Movie
 import Ecto.Query
 
-@test_imdb_id "tt0111161"
+test_imdb_id = "tt0111161"
 
 defmodule OMDbExplorer do
   # Fields currently extracted by from_omdb/2
@@ -85,7 +85,7 @@ end
 OMDbExplorer.separator("Call A — Standard (no tomatoes param)")
 
 call_a =
-  case Client.get_movie_by_imdb_id(@test_imdb_id) do
+  case Client.get_movie_by_imdb_id(test_imdb_id) do
     {:ok, data} ->
       IO.puts("SUCCESS — #{map_size(data)} fields returned")
       OMDbExplorer.print_fields(data, "All fields")
@@ -101,7 +101,7 @@ OMDbExplorer.separator("Call B — With tomatoes: true")
 
 call_b =
   case HTTPoison.get(
-         "https://www.omdbapi.com/?i=#{@test_imdb_id}&tomatoes=true&plot=short&r=json&apikey=#{Application.get_env(:cinegraph, Cinegraph.Services.OMDb.Client)[:api_key]}",
+         "https://www.omdbapi.com/?i=#{test_imdb_id}&tomatoes=true&plot=short&r=json&apikey=#{Application.get_env(:cinegraph, Cinegraph.Services.OMDb.Client)[:api_key]}",
          [],
          timeout: 30_000,
          recv_timeout: 30_000
@@ -132,7 +132,7 @@ OMDbExplorer.separator("Call C — With plot=full")
 
 call_c =
   case HTTPoison.get(
-         "https://www.omdbapi.com/?i=#{@test_imdb_id}&plot=full&r=json&apikey=#{Application.get_env(:cinegraph, Cinegraph.Services.OMDb.Client)[:api_key]}",
+         "https://www.omdbapi.com/?i=#{test_imdb_id}&plot=full&r=json&apikey=#{Application.get_env(:cinegraph, Cinegraph.Services.OMDb.Client)[:api_key]}",
          [],
          timeout: 30_000,
          recv_timeout: 30_000
