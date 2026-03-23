@@ -513,8 +513,8 @@
             <!-- Category Weights -->
             <tr>
               <td class="px-4 py-2 text-sm font-medium text-gray-900">
-                Popular Opinion<br />
-                <span class="text-xs text-gray-500">(all ratings)</span>
+                The Mob<br />
+                <span class="text-xs text-gray-500">(IMDb, TMDb)</span>
               </td>
               <%= for profile <- @weight_profiles do %>
                 <td class="px-4 py-2 text-center">
@@ -522,12 +522,34 @@
                     <div class="w-20 bg-gray-200 rounded-full h-2 mr-2">
                       <div
                         class="bg-blue-600 h-2 rounded-full"
-                        style={"width: #{min(100, get_profile_weight_actual(profile, "popular_opinion"))}%"}
+                        style={"width: #{min(100, get_profile_weight_actual(profile, "mob"))}%"}
                       >
                       </div>
                     </div>
                     <span class="text-sm font-medium">
-                      {get_profile_weight_actual(profile, "popular_opinion")}%
+                      {get_profile_weight_actual(profile, "mob")}%
+                    </span>
+                  </div>
+                </td>
+              <% end %>
+            </tr>
+            <tr>
+              <td class="px-4 py-2 text-sm font-medium text-gray-900">
+                The Ivory Tower<br />
+                <span class="text-xs text-gray-500">(RT, Metacritic)</span>
+              </td>
+              <%= for profile <- @weight_profiles do %>
+                <td class="px-4 py-2 text-center">
+                  <div class="inline-flex items-center">
+                    <div class="w-20 bg-gray-200 rounded-full h-2 mr-2">
+                      <div
+                        class="bg-purple-600 h-2 rounded-full"
+                        style={"width: #{min(100, get_profile_weight_actual(profile, "ivory_tower"))}%"}
+                      >
+                      </div>
+                    </div>
+                    <span class="text-sm font-medium">
+                      {get_profile_weight_actual(profile, "ivory_tower")}%
                     </span>
                   </div>
                 </td>
@@ -884,10 +906,10 @@
                     {Float.round(movie.score * 100, 1)}%
                   </div>
                   <div class="text-xs text-gray-500">
-                    Pop: {Float.round((movie.components["popular_opinion"] || 0) * 100, 0)}% |
+                    Mob: {Float.round((movie.components["mob"] || 0) * 100, 0)}% |
+                    IT: {Float.round((movie.components["ivory_tower"] || 0) * 100, 0)}% |
                     Ind: {Float.round((movie.components["industry_recognition"] || 0) * 100, 0)}% |
-                    Cult: {Float.round((movie.components["cultural_impact"] || 0) * 100, 0)}% |
-                    People: {Float.round((movie.components["people_quality"] || 0) * 100, 0)}%
+                    Cult: {Float.round((movie.components["cultural_impact"] || 0) * 100, 0)}%
                   </div>
                 </div>
               </div>

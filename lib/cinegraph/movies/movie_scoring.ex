@@ -99,7 +99,8 @@ defmodule Cinegraph.Movies.MovieScoring do
       end
 
     # Calculate component scores (0-10 scale)
-    popular_opinion = calculate_popular_opinion(metrics)
+    mob = calculate_mob_score(metrics)
+    ivory_tower = calculate_ivory_tower_score(metrics)
     industry_recognition = calculate_industry_recognition(festival_data)
     cultural_impact = calculate_cultural_impact(movie, metrics)
     # Convert from 0-100 to 0-10
@@ -107,9 +108,10 @@ defmodule Cinegraph.Movies.MovieScoring do
     # Calculate financial performance score
     financial_performance = calculate_financial_performance(metrics)
 
-    # Calculate overall score (weighted average with equal weights for all 5 categories)
+    # Calculate overall score (mob + ivory_tower each weight 0.10, others 0.20)
     overall =
-      popular_opinion * 0.20 +
+      mob * 0.10 +
+        ivory_tower * 0.10 +
         industry_recognition * 0.20 +
         cultural_impact * 0.20 +
         people_quality_score * 0.20 +
@@ -117,8 +119,10 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     %{
       overall_score: Float.round(overall, 1),
+      score_confidence: calculate_score_confidence(metrics),
       components: %{
-        popular_opinion: Float.round(popular_opinion, 1),
+        mob: Float.round(mob, 1),
+        ivory_tower: Float.round(ivory_tower, 1),
         industry_recognition: Float.round(industry_recognition, 1),
         cultural_impact: Float.round(cultural_impact, 1),
         people_quality: Float.round(people_quality_score, 1),
@@ -129,30 +133,51 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
+  Calculate mob score (audience): IMDb + TMDb ratings, null-aware averaging.
+  Returns a 0–10 score.
+  """
+  def calculate_mob_score(metrics) do
+    imdb = Map.get(metrics, :imdb_rating)
+    tmdb = Map.get(metrics, :tmdb_rating)
+    sources = [imdb, tmdb] |> Enum.reject(&is_nil/1) |> Enum.filter(&(&1 > 0))
+
+    if sources == [], do: 0.0, else: Enum.sum(sources) / length(sources)
+  end
+
+  @doc """
+  Calculate ivory tower score (critics): RT Tomatometer + Metacritic, null-aware averaging.
+  Returns a 0–10 score (normalizes from 0–100 sources).
+  """
+  def calculate_ivory_tower_score(metrics) do
+    rt = Map.get(metrics, :rt_tomatometer)
+    mc = Map.get(metrics, :metacritic)
+
+    sources =
+      [{rt, 100.0}, {mc, 100.0}]
+      |> Enum.reject(fn {v, _} -> is_nil(v) or v == 0 end)
+      |> Enum.map(fn {v, scale} -> v / scale * 10.0 end)
+
+    if sources == [], do: 0.0, else: Enum.sum(sources) / length(sources)
+  end
+
+  @doc """
+  Calculate score confidence: fraction of the 4 core rating sources present (0.0–1.0).
+  """
+  def calculate_score_confidence(metrics) do
+    keys = [:imdb_rating, :tmdb_rating, :rt_tomatometer, :metacritic]
+    present = Enum.count(keys, &(not is_nil(Map.get(metrics, &1))))
+    present / 4.0
+  end
+
+  @doc """
   Calculate popular opinion score based on all rating sources.
+  Kept for backward compatibility — prefer calculate_mob_score/calculate_ivory_tower_score.
   """
   def calculate_popular_opinion(metrics) do
-    imdb = Map.get(metrics, :imdb_rating, 0) || 0
-    tmdb = Map.get(metrics, :tmdb_rating, 0) || 0
-    rt_audience = Map.get(metrics, :rt_audience, 0) || 0
-    metacritic = Map.get(metrics, :metacritic, 0) || 0
-    rt_tomatometer = Map.get(metrics, :rt_tomatometer, 0) || 0
-
-    scores =
-      [
-        imdb,
-        tmdb,
-        rt_audience / 10.0,
-        metacritic / 10.0,
-        rt_tomatometer / 10.0
-      ]
-      |> Enum.filter(&(&1 > 0))
-
-    if length(scores) > 0 do
-      Enum.sum(scores) / length(scores)
-    else
-      5.0
-    end
+    mob = calculate_mob_score(metrics)
+    ivory = calculate_ivory_tower_score(metrics)
+    sources = [mob, ivory] |> Enum.filter(&(&1 > 0))
+    if sources == [], do: 5.0, else: Enum.sum(sources) / length(sources)
   end
 
   @doc """

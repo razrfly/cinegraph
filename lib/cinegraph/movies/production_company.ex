@@ -42,6 +42,9 @@ defmodule Cinegraph.Movies.ProductionCompany do
   end
 
   defp truncate(nil, _max), do: nil
-  defp truncate(str, max) when is_binary(str) and byte_size(str) > max, do: String.slice(str, 0, max)
+
+  defp truncate(str, max) when is_binary(str) and byte_size(str) > max,
+    do: String.slice(str, 0, max)
+
   defp truncate(str, _max), do: str
 end

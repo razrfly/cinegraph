@@ -475,7 +475,15 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
         where(
           base,
           [mc],
-          mc.job in ["Writer", "Screenplay", "Story", "Novel", "Characters", "Teleplay", "Adaptation"]
+          mc.job in [
+            "Writer",
+            "Screenplay",
+            "Story",
+            "Novel",
+            "Characters",
+            "Teleplay",
+            "Adaptation"
+          ]
         )
 
       "producer" ->
@@ -492,10 +500,18 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
         )
 
       "cinematographer" ->
-        where(base, [mc], mc.job in ["Director of Photography", "Cinematography", "Cinematographer"])
+        where(
+          base,
+          [mc],
+          mc.job in ["Director of Photography", "Cinematography", "Cinematographer"]
+        )
 
       "composer" ->
-        where(base, [mc], mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"])
+        where(
+          base,
+          [mc],
+          mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"]
+        )
 
       "editor" ->
         where(base, [mc], mc.job in ["Editor", "Film Editor", "Editorial", "Editing"])

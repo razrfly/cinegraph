@@ -109,7 +109,10 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
 
     test "re-includes movies whose fetch_attempt is older than 90 days" do
       movie = insert_movie(%{omdb_data: nil})
-      old_fetched_at = DateTime.add(DateTime.utc_now(), -91 * 24 * 3600, :second) |> DateTime.truncate(:second)
+
+      old_fetched_at =
+        DateTime.add(DateTime.utc_now(), -91 * 24 * 3600, :second) |> DateTime.truncate(:second)
+
       insert_fetch_attempt(movie.id, old_fetched_at)
 
       perform_job(RatingsRefreshWorker, %{})

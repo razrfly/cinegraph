@@ -61,7 +61,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: "Fallback",
       description: "Emergency fallback profile",
       category_weights: %{
-        "popular_opinion" => 0.20,
+        "mob" => 0.10,
+        "ivory_tower" => 0.10,
         "awards" => 0.20,
         "cultural" => 0.20,
         "people" => 0.20,
@@ -83,28 +84,34 @@ defmodule Cinegraph.Metrics.ScoringService do
   - "people" category represents person quality scores (directors, actors, etc.)
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
-    # Use popular_opinion if it exists, otherwise fall back to ratings for backward compatibility
-    popular_weight =
-      get_category_weight(
-        profile,
-        "popular_opinion",
-        get_category_weight(profile, "ratings", 0.4)
-      )
+    # If profile has legacy popular_opinion, split it 50/50 into mob + ivory_tower
+    legacy_popular = get_category_weight(profile, "popular_opinion", nil)
 
-    financial_weight = get_category_weight(profile, "financial", 0.0)
-    cultural_weight = get_category_weight(profile, "cultural", 0.2)
-    people_weight = get_category_weight(profile, "people", 0.2)
+    {mob_weight, ivory_tower_weight} =
+      if legacy_popular do
+        half = legacy_popular / 2.0
+        {half, half}
+      else
+        mob =
+          get_category_weight(profile, "mob", get_category_weight(profile, "ratings", 0.2) / 2)
 
-    # All rating sources are now combined into popular_opinion
+        ivory =
+          get_category_weight(
+            profile,
+            "ivory_tower",
+            get_category_weight(profile, "ratings", 0.2) / 2
+          )
+
+        {mob, ivory}
+      end
+
     %{
-      popular_opinion: popular_weight,
+      mob: mob_weight,
+      ivory_tower: ivory_tower_weight,
       industry_recognition: get_category_weight(profile, "awards", 0.2),
-      # Cultural impact (separate from financial now that we expose both)
-      cultural_impact: cultural_weight,
-      # Person quality from directors, actors, writers, etc.
-      people_quality: people_weight,
-      # Financial success as separate dimension for UI control
-      financial_success: financial_weight
+      cultural_impact: get_category_weight(profile, "cultural", 0.2),
+      people_quality: get_category_weight(profile, "people", 0.2),
+      financial_success: get_category_weight(profile, "financial", 0.0)
     }
   end
 
@@ -116,7 +123,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: name,
       description: "Custom weight profile created from discovery UI",
       category_weights: %{
-        "popular_opinion" => Map.get(weights, :popular_opinion, 0.2),
+        "mob" => Map.get(weights, :mob, 0.1),
+        "ivory_tower" => Map.get(weights, :ivory_tower, 0.1),
         "awards" => Map.get(weights, :industry_recognition, 0.2),
         "financial" => Map.get(weights, :financial_success, 0.2),
         "cultural" => Map.get(weights, :cultural_impact, 0.2),
@@ -213,19 +221,20 @@ defmodule Cinegraph.Metrics.ScoringService do
   # The discovery score calculation is kept inline in each context for now
 
   defp build_metric_weights_from_discovery(weights) do
-    # All rating sources now combined under popular_opinion
-    pop_weight = Map.get(weights, :popular_opinion, 0.4)
+    mob_weight = Map.get(weights, :mob, 0.2)
+    ivory_weight = Map.get(weights, :ivory_tower, 0.2)
     award_weight = Map.get(weights, :industry_recognition, 0.2)
     cultural_weight = Map.get(weights, :cultural_impact, 0.2)
 
     %{
-      # Popular Opinion metrics (all rating sources)
-      "imdb_rating" => pop_weight * 1.0,
-      "tmdb_rating" => pop_weight * 1.0,
-      "metacritic_metascore" => pop_weight * 1.0,
-      "rotten_tomatoes_tomatometer" => pop_weight * 1.0,
-      "rotten_tomatoes_audience_score" => pop_weight * 0.8,
-      "imdb_rating_votes" => pop_weight * 0.5,
+      # Mob (audience) metrics
+      "imdb_rating" => mob_weight * 1.0,
+      "tmdb_rating" => mob_weight * 1.0,
+      "imdb_rating_votes" => mob_weight * 0.5,
+      # Ivory Tower (critics) metrics
+      "metacritic_metascore" => ivory_weight * 1.0,
+      "rotten_tomatoes_tomatometer" => ivory_weight * 1.0,
+      "rotten_tomatoes_audience_score" => ivory_weight * 0.8,
 
       # Industry Recognition metrics
       "oscar_wins" => award_weight * 3,
@@ -247,7 +256,8 @@ defmodule Cinegraph.Metrics.ScoringService do
 
     if total == 0 do
       %{
-        popular_opinion: 0.20,
+        mob: 0.10,
+        ivory_tower: 0.10,
         industry_recognition: 0.20,
         cultural_impact: 0.20,
         people_quality: 0.20,
@@ -390,21 +400,45 @@ defmodule Cinegraph.Metrics.ScoringService do
         discovery_score:
           fragment(
             """
-            ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + 
-            ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
+            ? * CASE
+              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
+              WHEN ? IS NOT NULL THEN ? / 10.0
+              WHEN ? IS NOT NULL THEN ? / 10.0
+              ELSE 0.0
+            END +
+            ? * CASE
+              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
+              WHEN ? IS NOT NULL THEN ? / 100.0
+              WHEN ? IS NOT NULL THEN ? / 100.0
+              ELSE 0.0
+            END +
+            ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
             ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
-            ? * COALESCE(CASE 
-              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+            ? * COALESCE(CASE
+              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
               THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
               ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
             END, 0)
             """,
-            ^weights.popular_opinion,
+            ^Map.get(weights, :mob, 0.0),
+            ir.value,
             tr.value,
             ir.value,
+            tr.value,
+            ir.value,
+            ir.value,
+            tr.value,
+            tr.value,
+            ^Map.get(weights, :ivory_tower, 0.0),
+            rt.value,
             mc.value,
             rt.value,
+            mc.value,
+            rt.value,
+            rt.value,
+            mc.value,
+            mc.value,
             ^weights.industry_recognition,
             f.wins,
             f.nominations,
@@ -422,14 +456,62 @@ defmodule Cinegraph.Metrics.ScoringService do
             b.value,
             r.value
           ),
+        mob_score:
+          fragment(
+            "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 10.0 WHEN ? IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
+            ir.value,
+            tr.value,
+            ir.value,
+            tr.value,
+            ir.value,
+            ir.value,
+            tr.value,
+            tr.value
+          ),
+        ivory_tower_score:
+          fragment(
+            "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 100.0 WHEN ? IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
+            rt.value,
+            mc.value,
+            rt.value,
+            mc.value,
+            rt.value,
+            rt.value,
+            mc.value,
+            mc.value
+          ),
+        score_confidence:
+          fragment(
+            "(CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN ? IS NOT NULL THEN 1 ELSE 0 END) / 4.0",
+            ir.value,
+            tr.value,
+            rt.value,
+            mc.value
+          ),
         score_components: %{
-          popular_opinion:
+          mob:
             fragment(
-              "COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0)",
+              "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 10.0 WHEN ? IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
+              ir.value,
               tr.value,
               ir.value,
+              tr.value,
+              ir.value,
+              ir.value,
+              tr.value,
+              tr.value
+            ),
+          ivory_tower:
+            fragment(
+              "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 100.0 WHEN ? IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
+              rt.value,
               mc.value,
-              rt.value
+              rt.value,
+              mc.value,
+              rt.value,
+              rt.value,
+              mc.value,
+              mc.value
             ),
           industry_recognition:
             fragment(
@@ -452,8 +534,8 @@ defmodule Cinegraph.Metrics.ScoringService do
           financial_success:
             fragment(
               """
-              COALESCE(CASE 
-                WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+              COALESCE(CASE
+                WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
                 THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
                 ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
               END, 0)
@@ -491,21 +573,45 @@ defmodule Cinegraph.Metrics.ScoringService do
         discovery_score:
           fragment(
             """
-            ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + 
-            ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
+            ? * CASE
+              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+              ELSE 0.0
+            END +
+            ? * CASE
+              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+              ELSE 0.0
+            END +
+            ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
             ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
-            ? * COALESCE(CASE 
-              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+            ? * COALESCE(CASE
+              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
               THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
               ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
             END, 0)
             """,
-            ^weights.popular_opinion,
+            ^Map.get(weights, :mob, 0.0),
+            ir.value,
             tr.value,
             ir.value,
+            tr.value,
+            ir.value,
+            ir.value,
+            tr.value,
+            tr.value,
+            ^Map.get(weights, :ivory_tower, 0.0),
+            rt.value,
             mc.value,
             rt.value,
+            mc.value,
+            rt.value,
+            rt.value,
+            mc.value,
+            mc.value,
             ^weights.industry_recognition,
             f.wins,
             f.nominations,
@@ -524,13 +630,29 @@ defmodule Cinegraph.Metrics.ScoringService do
             r.value
           ),
         score_components: %{
-          popular_opinion:
+          mob:
             fragment(
-              "COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0)",
+              "CASE WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0 ELSE 0.0 END",
+              ir.value,
               tr.value,
               ir.value,
+              tr.value,
+              ir.value,
+              ir.value,
+              tr.value,
+              tr.value
+            ),
+          ivory_tower:
+            fragment(
+              "CASE WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0 ELSE 0.0 END",
+              rt.value,
               mc.value,
-              rt.value
+              rt.value,
+              mc.value,
+              rt.value,
+              rt.value,
+              mc.value,
+              mc.value
             ),
           industry_recognition:
             fragment(
@@ -553,8 +675,8 @@ defmodule Cinegraph.Metrics.ScoringService do
           financial_success:
             fragment(
               """
-              COALESCE(CASE 
-                WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+              COALESCE(CASE
+                WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
                 THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
                 ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
               END, 0)
@@ -590,21 +712,45 @@ defmodule Cinegraph.Metrics.ScoringService do
         ],
         fragment(
           """
-          ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + 
-          ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
-          ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + 
+          ? * CASE
+            WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
+            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+            ELSE 0.0
+          END +
+          ? * CASE
+            WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
+            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+            ELSE 0.0
+          END +
+          ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
+          ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
           ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
-          ? * COALESCE(CASE 
-            WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+          ? * COALESCE(CASE
+            WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
             THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
             ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
           END, 0) >= ?
           """,
-          ^weights.popular_opinion,
+          ^Map.get(weights, :mob, 0.0),
+          ir.value,
           tr.value,
           ir.value,
+          tr.value,
+          ir.value,
+          ir.value,
+          tr.value,
+          tr.value,
+          ^Map.get(weights, :ivory_tower, 0.0),
+          rt.value,
           mc.value,
           rt.value,
+          mc.value,
+          rt.value,
+          rt.value,
+          mc.value,
+          mc.value,
           ^weights.industry_recognition,
           f.wins,
           f.nominations,
@@ -641,21 +787,45 @@ defmodule Cinegraph.Metrics.ScoringService do
         ],
         fragment(
           """
-          ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + 
-          ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
-          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + 
+          ? * CASE
+            WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
+            WHEN ? IS NOT NULL THEN ? / 10.0
+            WHEN ? IS NOT NULL THEN ? / 10.0
+            ELSE 0.0
+          END +
+          ? * CASE
+            WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
+            WHEN ? IS NOT NULL THEN ? / 100.0
+            WHEN ? IS NOT NULL THEN ? / 100.0
+            ELSE 0.0
+          END +
+          ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
+          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
           ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
-          ? * COALESCE(CASE 
-            WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+          ? * COALESCE(CASE
+            WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
             THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
             ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
           END, 0) >= ?
           """,
-          ^weights.popular_opinion,
+          ^Map.get(weights, :mob, 0.0),
+          ir.value,
           tr.value,
           ir.value,
+          tr.value,
+          ir.value,
+          ir.value,
+          tr.value,
+          tr.value,
+          ^Map.get(weights, :ivory_tower, 0.0),
+          rt.value,
           mc.value,
           rt.value,
+          mc.value,
+          rt.value,
+          rt.value,
+          mc.value,
+          mc.value,
           ^weights.industry_recognition,
           f.wins,
           f.nominations,
@@ -697,21 +867,45 @@ defmodule Cinegraph.Metrics.ScoringService do
         desc:
           fragment(
             """
-            ? * COALESCE((COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 10.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25 + COALESCE(MAX(?), 0) / 100.0 * 0.25), 0) + 
-            ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) + 
-            ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) + 
+            ? * CASE
+              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+              ELSE 0.0
+            END +
+            ? * CASE
+              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+              ELSE 0.0
+            END +
+            ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
+            ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
-            ? * COALESCE(CASE 
-              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0 
+            ? * COALESCE(CASE
+              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
               THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
               ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
             END, 0)
             """,
-            ^weights.popular_opinion,
+            ^Map.get(weights, :mob, 0.0),
+            ir.value,
             tr.value,
             ir.value,
+            tr.value,
+            ir.value,
+            ir.value,
+            tr.value,
+            tr.value,
+            ^Map.get(weights, :ivory_tower, 0.0),
+            rt.value,
             mc.value,
             rt.value,
+            mc.value,
+            rt.value,
+            rt.value,
+            mc.value,
+            mc.value,
             ^weights.industry_recognition,
             f.wins,
             f.nominations,
@@ -748,21 +942,45 @@ defmodule Cinegraph.Metrics.ScoringService do
         desc:
           fragment(
             """
-            ? * COALESCE((COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 10.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25 + COALESCE(?, 0) / 100.0 * 0.25), 0) + 
-            ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) + 
-            ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) + 
+            ? * CASE
+              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
+              WHEN ? IS NOT NULL THEN ? / 10.0
+              WHEN ? IS NOT NULL THEN ? / 10.0
+              ELSE 0.0
+            END +
+            ? * CASE
+              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
+              WHEN ? IS NOT NULL THEN ? / 100.0
+              WHEN ? IS NOT NULL THEN ? / 100.0
+              ELSE 0.0
+            END +
+            ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
+            ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
-            ? * COALESCE(CASE 
-              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0 
+            ? * COALESCE(CASE
+              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
               THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
               ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
             END, 0)
             """,
-            ^weights.popular_opinion,
+            ^Map.get(weights, :mob, 0.0),
+            ir.value,
             tr.value,
             ir.value,
+            tr.value,
+            ir.value,
+            ir.value,
+            tr.value,
+            tr.value,
+            ^Map.get(weights, :ivory_tower, 0.0),
+            rt.value,
             mc.value,
             rt.value,
+            mc.value,
+            rt.value,
+            rt.value,
+            mc.value,
+            mc.value,
             ^weights.industry_recognition,
             f.wins,
             f.nominations,
