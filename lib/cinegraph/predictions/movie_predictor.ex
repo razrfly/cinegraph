@@ -43,7 +43,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
 
     # Apply database-driven scoring to all movies
     # Use extended timeout (120s) for this complex query with many JOINs
-    scored_query = ScoringService.apply_scoring(all_movies_query, profile)
+    scored_query = ScoringService.apply_scoring(all_movies_query, profile, %{min_score: nil})
     all_movies_with_scores = Repo.all(scored_query, timeout: :timer.seconds(120))
 
     # Format and sort all movies by score

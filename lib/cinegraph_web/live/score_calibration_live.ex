@@ -12,9 +12,21 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
   alias Cinegraph.Calibration
   alias Cinegraph.Calibration.ScoringConfiguration
+  alias Cinegraph.Metrics.ScoringService
+  alias Cinegraph.Workers.RecallCalibrationWorker
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Cinegraph.PubSub, RecallCalibrationWorker.pubsub_topic())
+    end
+
+    default_profile = "Cinegraph Editorial"
+    default_threshold = 0.25
+    cached_recall = RecallCalibrationWorker.get_cached(
+      "1001-movies", default_profile, default_threshold
+    )
+
     socket =
       socket
       |> assign(:page_title, "Score Calibration")
@@ -30,6 +42,11 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
       |> assign(:show_create_modal, false)
       |> assign(:new_config_name, "")
       |> assign(:loading, false)
+      |> assign(:recall_results, cached_recall)
+      |> assign(:recall_running, false)
+      |> assign(:recall_profile, default_profile)
+      |> assign(:recall_threshold, default_threshold)
+      |> assign(:all_profiles, ScoringService.get_all_profiles())
 
     {:ok, socket}
   end
@@ -212,6 +229,51 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   end
 
   @impl true
+  def handle_event("run_calibration", _params, socket) do
+    profile = socket.assigns.recall_profile
+    threshold = socket.assigns.recall_threshold
+
+    case RecallCalibrationWorker.enqueue("1001-movies", profile, threshold) do
+      {:ok, _job} ->
+        {:noreply, assign(socket, recall_running: true, recall_results: nil)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to queue calibration: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("select_recall_profile", %{"profile" => name}, socket) do
+    {:noreply, assign(socket, recall_profile: name, recall_results: nil)}
+  end
+
+  @impl true
+  def handle_event("update_recall_threshold", %{"threshold" => t}, socket) do
+    case Float.parse(t) do
+      {threshold, _} -> {:noreply, assign(socket, recall_threshold: threshold, recall_results: nil)}
+      :error -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:recall_update, %{status: :complete, results: results}}, socket) do
+    {:noreply, assign(socket, recall_results: results, recall_running: false)}
+  end
+
+  @impl true
+  def handle_info({:recall_update, %{status: :error, error: reason}}, socket) do
+    {:noreply,
+     socket
+     |> assign(recall_running: false, recall_results: {:error, reason})
+     |> put_flash(:error, "Calibration failed: #{reason}")}
+  end
+
+  @impl true
+  def handle_info({:recall_update, %{status: :running}}, socket) do
+    {:noreply, assign(socket, recall_running: true)}
+  end
+
+  @impl true
   def handle_info({:load_correlation, list_id}, socket) do
     correlation_data =
       case Calibration.calculate_correlation(list_id) do
@@ -233,37 +295,44 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gray-900 text-white">
-      <div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div>
         <header class="mb-8">
-          <h1 class="text-3xl font-bold">Score Calibration</h1>
-          <p class="text-gray-400 mt-1">
+          <h1 class="text-3xl font-bold text-gray-900">Score Calibration</h1>
+          <p class="text-gray-500 mt-1">
             Tune the Cinegraph scoring algorithm using reference datasets
           </p>
         </header>
-        
+
     <!-- Tab Navigation -->
-        <nav class="flex space-x-4 mb-8 border-b border-gray-700 pb-4">
+        <nav class="flex space-x-1 mb-8 border-b border-gray-200">
           <button
             phx-click="select_tab"
             phx-value-tab="overview"
-            class={"px-4 py-2 rounded-lg #{if @active_tab == :overview, do: "bg-blue-600 text-white", else: "text-gray-400 hover:text-white"}"}
+            class={"px-4 py-2 text-sm font-medium border-b-2 -mb-px #{if @active_tab == :overview, do: "border-blue-600 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
           >
             Overview
           </button>
           <button
             phx-click="select_tab"
             phx-value-tab="weights"
-            class={"px-4 py-2 rounded-lg #{if @active_tab == :weights, do: "bg-blue-600 text-white", else: "text-gray-400 hover:text-white"}"}
+            class={"px-4 py-2 text-sm font-medium border-b-2 -mb-px #{if @active_tab == :weights, do: "border-blue-600 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
           >
             Weight Adjustment
           </button>
           <button
             phx-click="select_tab"
             phx-value-tab="history"
-            class={"px-4 py-2 rounded-lg #{if @active_tab == :history, do: "bg-blue-600 text-white", else: "text-gray-400 hover:text-white"}"}
+            class={"px-4 py-2 text-sm font-medium border-b-2 -mb-px #{if @active_tab == :history, do: "border-blue-600 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
           >
             Configuration History
+          </button>
+          <button
+            phx-click="select_tab"
+            phx-value-tab="recall"
+            class={"px-4 py-2 text-sm font-medium border-b-2 -mb-px #{if @active_tab == :recall, do: "border-blue-600 text-blue-600", else: "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}"}
+          >
+            Recall Benchmark
           </button>
         </nav>
         
@@ -295,6 +364,14 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
                 new_config_name={@new_config_name}
                 draft_weights={@draft_weights}
               />
+            <% :recall -> %>
+              <.recall_tab
+                recall_results={@recall_results}
+                recall_running={@recall_running}
+                recall_profile={@recall_profile}
+                recall_threshold={@recall_threshold}
+                all_profiles={@all_profiles}
+              />
           <% end %>
         </div>
       </div>
@@ -307,18 +384,18 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
     ~H"""
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- Reference List Selector -->
-      <div class="bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Reference Datasets</h2>
+      <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Reference Datasets</h2>
 
         <div class="space-y-3">
           <%= for list <- @reference_lists do %>
             <button
               phx-click="select_list"
               phx-value-list_id={list.id}
-              class={"w-full text-left p-3 rounded-lg border transition-colors #{if @selected_list_id == list.id, do: "border-blue-500 bg-blue-900/30", else: "border-gray-700 hover:border-gray-600"}"}
+              class={"w-full text-left p-3 rounded-lg border transition-colors #{if @selected_list_id == list.id, do: "border-blue-500 bg-blue-50", else: "border-gray-200 hover:border-gray-300"}"}
             >
-              <div class="font-medium">{list.name}</div>
-              <div class="text-sm text-gray-400">
+              <div class="font-medium text-gray-900">{list.name}</div>
+              <div class="text-sm text-gray-500">
                 {list.total_items || 0} movies
                 <%= if list.last_synced_at do %>
                   · Synced {format_relative_time(list.last_synced_at)}
@@ -332,37 +409,37 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           <% end %>
         </div>
 
-        <div class="mt-4 pt-4 border-t border-gray-700">
-          <p class="text-sm text-gray-400 mb-2">Import reference data:</p>
+        <div class="mt-4 pt-4 border-t border-gray-200">
+          <p class="text-sm text-gray-500 mb-2">Import reference data:</p>
           <div class="flex flex-wrap gap-2">
             <button
               phx-click="trigger_import"
               phx-value-slug="imdb-top-250"
-              class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+              class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm"
             >
               IMDb Top 250
             </button>
             <button
               phx-click="trigger_import"
               phx-value-slug="afi-100"
-              class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+              class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm"
             >
               AFI 100
             </button>
             <button
               phx-click="trigger_import"
               phx-value-slug="sight-and-sound-2022"
-              class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+              class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm"
             >
               Sight & Sound
             </button>
           </div>
         </div>
       </div>
-      
+
     <!-- Correlation Metrics -->
-      <div class="lg:col-span-2 bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Correlation Analysis</h2>
+      <div class="lg:col-span-2 bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Correlation Analysis</h2>
 
         <%= if @loading do %>
           <div class="flex items-center justify-center py-12">
@@ -382,17 +459,17 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
     <!-- Current Config Summary -->
     <%= if @active_config do %>
-      <div class="bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">
+      <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">
           Active Configuration: v{@active_config.version} - {@active_config.name}
         </h2>
         <div class="grid grid-cols-5 gap-4">
           <%= for {category, weight} <- @active_config.category_weights do %>
-            <div class="bg-gray-700/50 rounded-lg p-4 text-center">
-              <div class="text-2xl font-bold text-blue-400">
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+              <div class="text-2xl font-bold text-blue-600">
                 {Float.round(weight * 100, 1)}%
               </div>
-              <div class="text-sm text-gray-400 mt-1">
+              <div class="text-sm text-gray-500 mt-1">
                 {format_category_name(category)}
               </div>
             </div>
@@ -403,14 +480,14 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
     <!-- Top Mismatches -->
     <%= if @mismatches != [] do %>
-      <div class="bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Top Score Mismatches</h2>
-        <p class="text-sm text-gray-400 mb-4">
+      <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Top Score Mismatches</h2>
+        <p class="text-sm text-gray-500 mb-4">
           Movies where Cinegraph score differs significantly from external rating
         </p>
         <div class="overflow-x-auto">
           <table class="w-full">
-            <thead class="text-left text-gray-400 text-sm">
+            <thead class="text-left text-gray-500 text-sm">
               <tr>
                 <th class="pb-3">Rank</th>
                 <th class="pb-3">Movie</th>
@@ -421,21 +498,21 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
             </thead>
             <tbody class="text-sm">
               <%= for mismatch <- @mismatches do %>
-                <tr class="border-t border-gray-700">
-                  <td class="py-2 text-gray-400">#{mismatch.rank}</td>
-                  <td class="py-2">
+                <tr class="border-t border-gray-200">
+                  <td class="py-2 text-gray-500">#{mismatch.rank}</td>
+                  <td class="py-2 text-gray-900">
                     {mismatch.title}
                     <span class="text-gray-500">
                       ({if mismatch.release_date, do: mismatch.release_date.year, else: "?"})
                     </span>
                   </td>
-                  <td class="py-2 text-right text-green-400">
+                  <td class="py-2 text-right text-green-600">
                     {Float.round(mismatch.external_score || 0, 1)}
                   </td>
-                  <td class="py-2 text-right text-blue-400">
+                  <td class="py-2 text-right text-blue-600">
                     {Float.round(mismatch.cinegraph_score || 0, 1)}
                   </td>
-                  <td class={"py-2 text-right font-medium #{if mismatch.difference > 0, do: "text-red-400", else: "text-yellow-400"}"}>
+                  <td class={"py-2 text-right font-medium #{if mismatch.difference > 0, do: "text-red-600", else: "text-yellow-600"}"}>
                     {if mismatch.difference > 0, do: "+", else: ""}{Float.round(
                       mismatch.difference || 0,
                       2
@@ -457,8 +534,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
     <div class="space-y-6">
       <!-- Key Metrics -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="bg-gray-700/50 rounded-lg p-4">
-          <div class="text-sm text-gray-400">Pearson Correlation</div>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="text-sm text-gray-500">Pearson Correlation</div>
           <div class={"text-2xl font-bold #{correlation_color(@data.pearson_correlation)}"}>
             {format_correlation(@data.pearson_correlation)}
           </div>
@@ -467,8 +544,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         </div>
 
-        <div class="bg-gray-700/50 rounded-lg p-4">
-          <div class="text-sm text-gray-400">Spearman Correlation</div>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="text-sm text-gray-500">Spearman Correlation</div>
           <div class={"text-2xl font-bold #{correlation_color(@data.spearman_correlation)}"}>
             {format_correlation(@data.spearman_correlation)}
           </div>
@@ -477,9 +554,9 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         </div>
 
-        <div class="bg-gray-700/50 rounded-lg p-4">
-          <div class="text-sm text-gray-400">Mean Absolute Error</div>
-          <div class="text-2xl font-bold text-white">
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="text-sm text-gray-500">Mean Absolute Error</div>
+          <div class="text-2xl font-bold text-gray-900">
             {format_number(@data.mean_absolute_error)}
           </div>
           <div class="text-xs text-gray-500 mt-1">
@@ -487,9 +564,9 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         </div>
 
-        <div class="bg-gray-700/50 rounded-lg p-4">
-          <div class="text-sm text-gray-400">Match Rate</div>
-          <div class="text-2xl font-bold text-white">
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="text-sm text-gray-500">Match Rate</div>
+          <div class="text-2xl font-bold text-gray-900">
             {Float.round((@data.match_rate || 0) * 100, 1)}%
           </div>
           <div class="text-xs text-gray-500 mt-1">
@@ -497,26 +574,26 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         </div>
       </div>
-      
+
     <!-- Score Comparison -->
       <div class="grid grid-cols-2 gap-4">
-        <div class="bg-gray-700/50 rounded-lg p-4">
-          <div class="text-sm text-gray-400">Mean Cinegraph Score</div>
-          <div class="text-xl font-bold text-blue-400">
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="text-sm text-gray-500">Mean Cinegraph Score</div>
+          <div class="text-xl font-bold text-blue-600">
             {format_number(@data.mean_cinegraph_score)}
           </div>
         </div>
-        <div class="bg-gray-700/50 rounded-lg p-4">
-          <div class="text-sm text-gray-400">Mean External Score</div>
-          <div class="text-xl font-bold text-green-400">
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="text-sm text-gray-500">Mean External Score</div>
+          <div class="text-xl font-bold text-green-600">
             {format_number(@data.mean_external_score)}
           </div>
         </div>
       </div>
-      
+
     <!-- Score Distribution -->
       <div>
-        <h3 class="text-lg font-medium mb-3">Score Distribution</h3>
+        <h3 class="text-lg font-medium text-gray-900 mb-3">Score Distribution</h3>
         <div class="flex items-end space-x-2 h-32">
           <%= for {bucket, count} <- @data.score_distribution do %>
             <div class="flex-1 flex flex-col items-center">
@@ -525,8 +602,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
                 style={"height: #{distribution_height(count, @data.score_distribution)}px"}
               >
               </div>
-              <div class="text-xs text-gray-400 mt-1">{bucket}</div>
-              <div class="text-xs text-gray-500">{count}</div>
+              <div class="text-xs text-gray-500 mt-1">{bucket}</div>
+              <div class="text-xs text-gray-400">{count}</div>
             </div>
           <% end %>
         </div>
@@ -540,11 +617,11 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
     ~H"""
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- Weight Sliders -->
-      <div class="bg-gray-800 rounded-lg p-6">
+      <div class="bg-white shadow rounded-lg p-6">
         <div class="flex justify-between items-center mb-6">
-          <h2 class="text-xl font-semibold">Category Weights</h2>
+          <h2 class="text-xl font-semibold text-gray-900">Category Weights</h2>
           <%= if @draft_weights do %>
-            <button phx-click="reset_weights" class="text-sm text-gray-400 hover:text-white">
+            <button phx-click="reset_weights" class="text-sm text-gray-500 hover:text-gray-700">
               Reset to Active
             </button>
           <% end %>
@@ -555,10 +632,10 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
             <% current_weight = get_weight(@draft_weights, @active_config.category_weights, category) %>
             <div>
               <div class="flex justify-between mb-2">
-                <label class="text-sm font-medium">
+                <label class="text-sm font-medium text-gray-700">
                   {format_category_name(category)}
                 </label>
-                <span class="text-sm text-blue-400">
+                <span class="text-sm text-blue-600">
                   {Float.round(current_weight * 100, 1)}%
                 </span>
               </div>
@@ -570,37 +647,37 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
                 phx-change="update_weight"
                 phx-value-category={category}
                 name="value"
-                class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           <% end %>
         </div>
 
-        <div class="mt-6 pt-6 border-t border-gray-700 flex space-x-4">
+        <div class="mt-6 pt-6 border-t border-gray-200 flex space-x-4">
           <button
             phx-click="simulate_weights"
-            class="flex-1 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium"
+            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium"
           >
             Simulate Changes
           </button>
           <button
             phx-click="show_create_modal"
-            class={"flex-1 px-4 py-2 rounded-lg font-medium #{if @draft_weights, do: "bg-green-600 hover:bg-green-700", else: "bg-gray-700 text-gray-400 cursor-not-allowed"}"}
+            class={"flex-1 px-4 py-2 rounded-lg font-medium #{if @draft_weights, do: "bg-green-600 hover:bg-green-700 text-white", else: "bg-gray-100 text-gray-400 cursor-not-allowed"}"}
             disabled={!@draft_weights}
           >
             Save as New Version
           </button>
         </div>
       </div>
-      
+
     <!-- Simulation Results -->
-      <div class="bg-gray-800 rounded-lg p-6">
-        <h2 class="text-xl font-semibold mb-4">Simulation Preview</h2>
+      <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">Simulation Preview</h2>
 
         <%= if @simulation_results do %>
           <div class="overflow-y-auto max-h-[500px]">
             <table class="w-full text-sm">
-              <thead class="text-left text-gray-400 sticky top-0 bg-gray-800">
+              <thead class="text-left text-gray-500 sticky top-0 bg-white">
                 <tr>
                   <th class="pb-3">Movie</th>
                   <th class="pb-3 text-right">Current</th>
@@ -610,12 +687,12 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
               </thead>
               <tbody>
                 <%= for result <- @simulation_results do %>
-                  <tr class="border-t border-gray-700">
-                    <td class="py-2 truncate max-w-[200px]">{result.title}</td>
-                    <td class="py-2 text-right text-gray-400">
+                  <tr class="border-t border-gray-200">
+                    <td class="py-2 truncate max-w-[200px] text-gray-900">{result.title}</td>
+                    <td class="py-2 text-right text-gray-500">
                       {Float.round(result.current_score, 1)}
                     </td>
-                    <td class="py-2 text-right text-blue-400">
+                    <td class="py-2 text-right text-blue-600">
                       {Float.round(result.new_score, 1)}
                     </td>
                     <td class={"py-2 text-right font-medium #{diff_color(result.difference)}"}>
@@ -630,9 +707,9 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           <% avg_change =
             Enum.sum(Enum.map(@simulation_results, & &1.difference)) /
               max(length(@simulation_results), 1) %>
-          <div class="mt-4 pt-4 border-t border-gray-700 text-sm text-gray-400">
+          <div class="mt-4 pt-4 border-t border-gray-200 text-sm text-gray-500">
             Average change:
-            <span class={"font-medium #{if avg_change > 0, do: "text-green-400", else: "text-red-400"}"}>
+            <span class={"font-medium #{if avg_change > 0, do: "text-green-600", else: "text-red-600"}"}>
               {if avg_change > 0, do: "+", else: ""}{Float.round(avg_change, 2)}
             </span>
           </div>
@@ -649,12 +726,12 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   # History Tab Component
   defp history_tab(assigns) do
     ~H"""
-    <div class="bg-gray-800 rounded-lg p-6">
+    <div class="bg-white shadow rounded-lg p-6">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-semibold">Configuration History</h2>
+        <h2 class="text-xl font-semibold text-gray-900">Configuration History</h2>
         <button
           phx-click="show_create_modal"
-          class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm font-medium"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
         >
           Create New Version
         </button>
@@ -662,27 +739,27 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
       <div class="space-y-4">
         <%= for config <- @all_configs do %>
-          <div class={"p-4 rounded-lg border #{if config.is_active, do: "border-green-500 bg-green-900/20", else: "border-gray-700"}"}>
+          <div class={"p-4 rounded-lg border #{if config.is_active, do: "border-green-500 bg-green-50", else: "border-gray-200"}"}>
             <div class="flex justify-between items-start">
               <div>
                 <div class="flex items-center space-x-3">
-                  <span class="font-semibold">v{config.version}</span>
-                  <span class="text-gray-300">{config.name}</span>
+                  <span class="font-semibold text-gray-900">v{config.version}</span>
+                  <span class="text-gray-700">{config.name}</span>
                   <%= if config.is_active do %>
                     <span class="px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">
                       Active
                     </span>
                   <% end %>
                   <%= if config.is_draft do %>
-                    <span class="px-2 py-0.5 bg-yellow-600 text-white text-xs rounded-full">
+                    <span class="px-2 py-0.5 bg-yellow-500 text-white text-xs rounded-full">
                       Draft
                     </span>
                   <% end %>
                 </div>
                 <%= if config.description do %>
-                  <p class="text-sm text-gray-400 mt-1">{config.description}</p>
+                  <p class="text-sm text-gray-500 mt-1">{config.description}</p>
                 <% end %>
-                <div class="text-xs text-gray-500 mt-2">
+                <div class="text-xs text-gray-400 mt-2">
                   Created {format_datetime(config.inserted_at)}
                   <%= if config.deployed_at do %>
                     · Deployed {format_datetime(config.deployed_at)}
@@ -695,20 +772,20 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
                   <button
                     phx-click="activate_config"
                     phx-value-id={config.id}
-                    class="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
+                    class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm"
                   >
                     Activate
                   </button>
                 <% end %>
               </div>
             </div>
-            
+
     <!-- Weight Summary -->
             <div class="mt-4 flex flex-wrap gap-3">
               <%= for {category, weight} <- config.category_weights do %>
-                <div class="text-xs bg-gray-700/50 px-2 py-1 rounded">
-                  <span class="text-gray-400">{format_category_abbrev(category)}:</span>
-                  <span class="text-white font-medium">{Float.round(weight * 100, 0)}%</span>
+                <div class="text-xs bg-gray-100 border border-gray-200 px-2 py-1 rounded">
+                  <span class="text-gray-500">{format_category_abbrev(category)}:</span>
+                  <span class="text-gray-900 font-medium">{Float.round(weight * 100, 0)}%</span>
                 </div>
               <% end %>
             </div>
@@ -724,34 +801,34 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
     <!-- Create Modal -->
     <%= if @show_create_modal do %>
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md">
-          <h3 class="text-xl font-semibold mb-4">Create New Configuration</h3>
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+          <h3 class="text-xl font-semibold text-gray-900 mb-4">Create New Configuration</h3>
 
           <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Configuration Name</label>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Configuration Name</label>
             <input
               type="text"
               value={@new_config_name}
               phx-change="update_config_name"
               name="name"
               placeholder="e.g., Balanced v2, Reduced Financial Penalty"
-              class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <%= if @draft_weights do %>
-            <div class="mb-4 p-3 bg-gray-700/50 rounded-lg">
-              <p class="text-sm text-gray-400 mb-2">New weights:</p>
+            <div class="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <p class="text-sm text-gray-500 mb-2">New weights:</p>
               <div class="flex flex-wrap gap-2">
                 <%= for {category, weight} <- @draft_weights do %>
-                  <span class="text-xs bg-blue-900/50 px-2 py-1 rounded">
+                  <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
                     {format_category_abbrev(category)}: {Float.round(weight * 100, 0)}%
                   </span>
                 <% end %>
               </div>
             </div>
           <% else %>
-            <p class="text-sm text-gray-400 mb-4">
+            <p class="text-sm text-gray-500 mb-4">
               Will use current active configuration weights
             </p>
           <% end %>
@@ -759,13 +836,13 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           <div class="flex space-x-3">
             <button
               phx-click="hide_create_modal"
-              class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg"
+              class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg"
             >
               Cancel
             </button>
             <button
               phx-click="create_configuration"
-              class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
+              class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium"
             >
               Create
             </button>
@@ -773,6 +850,185 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
         </div>
       </div>
     <% end %>
+    """
+  end
+
+  # Recall Tab Component
+  defp recall_tab(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <!-- Controls -->
+      <div class="bg-white shadow rounded-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-900 mb-4">1001 Movies Recall Benchmark</h2>
+        <p class="text-sm text-gray-500 mb-6">
+          Measures what percentage of the <em>1001 Movies You Must See Before You Die</em>
+          list appears in the algorithm's top-ranked results per decade.
+          Target: ≥ 75% overall recall.
+        </p>
+
+        <div class="flex flex-wrap gap-4 items-end">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Scoring Profile</label>
+            <select
+              phx-change="select_recall_profile"
+              name="profile"
+              class="border border-gray-300 rounded-lg px-3 py-2 text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+            >
+              <%= for profile <- @all_profiles do %>
+                <option value={profile.name} selected={profile.name == @recall_profile}>
+                  {profile.name}
+                </option>
+              <% end %>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Threshold</label>
+            <select
+              phx-change="update_recall_threshold"
+              name="threshold"
+              class="border border-gray-300 rounded-lg px-3 py-2 text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+            >
+              <%= for {label, value} <- [{"Top 10%", 0.10}, {"Top 15%", 0.15}, {"Top 20%", 0.20}, {"Top 25%", 0.25}, {"Top 33%", 0.33}] do %>
+                <option value={value} selected={value == @recall_threshold}>{label}</option>
+              <% end %>
+            </select>
+          </div>
+
+          <button
+            phx-click="run_calibration"
+            disabled={@recall_running}
+            class={"px-6 py-2 rounded-lg font-medium #{if @recall_running, do: "bg-gray-100 text-gray-400 cursor-not-allowed", else: "bg-blue-600 hover:bg-blue-700 text-white"}"}
+          >
+            <%= if @recall_running do %>
+              Running…
+            <% else %>
+              Run Calibration
+            <% end %>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <%= if @recall_running do %>
+        <div class="bg-white shadow rounded-lg p-12 text-center">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4">
+          </div>
+          <p class="text-gray-500">Running calibration — this may take 2–3 minutes…</p>
+        </div>
+      <% end %>
+
+      <!-- Results -->
+      <%= if is_map(@recall_results) and not @recall_running do %>
+        <!-- Overall Recall -->
+        <% recall_pct = Float.round((@recall_results.overall_recall || 0) * 100, 1) %>
+        <div class="bg-white shadow rounded-lg p-6">
+          <div class="flex items-end gap-6 mb-4">
+            <div>
+              <div class={"text-6xl font-bold #{recall_color(@recall_results.overall_recall)}"}>
+                {recall_pct}%
+              </div>
+              <div class="text-gray-500 mt-1">Overall Recall</div>
+            </div>
+            <div class="text-gray-500 text-sm pb-1">
+              {@recall_results.total_found} of {@recall_results.total_reference} reference films surfaced
+            </div>
+          </div>
+
+          <div class="w-full bg-gray-200 rounded-full h-4">
+            <div
+              class={"h-4 rounded-full #{recall_bar_color(@recall_results.overall_recall)}"}
+              style={"width: #{min(100, recall_pct)}%"}
+            >
+            </div>
+          </div>
+          <div class="flex justify-between text-xs text-gray-500 mt-1">
+            <span>0%</span>
+            <span class="text-yellow-600">60%</span>
+            <span class="text-green-600">75% target</span>
+            <span>100%</span>
+          </div>
+        </div>
+
+        <!-- Per-Decade Bars -->
+        <div class="bg-white shadow rounded-lg p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Recall by Decade</h3>
+          <div class="space-y-3">
+            <%= for {_decade, r} <- Enum.sort(@recall_results.by_decade, fn {a, _}, {b, _} -> a <= b end) do %>
+              <% pct = Float.round(r.recall * 100, 1) %>
+              <div class="flex items-center gap-3">
+                <div class="w-16 text-sm text-gray-500 text-right">{r.decade_label}</div>
+                <div class="flex-1 bg-gray-200 rounded-full h-5 relative">
+                  <div
+                    class={"h-5 rounded-full #{decade_bar_color(r.recall)}"}
+                    style={"width: #{min(100, pct)}%"}
+                  >
+                  </div>
+                </div>
+                <div class="w-32 text-sm">
+                  <span class={decade_text_color(r.recall)}>{pct}%</span>
+                  <span class="text-gray-400 ml-1">({r.found}/{r.total})</span>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Lens Correlations -->
+        <%= if @recall_results.lens_correlations != [] do %>
+          <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Lens Scores (Reference Films)</h3>
+            <p class="text-sm text-gray-500 mb-4">
+              Mean score per lens across all matched reference films. Higher = this lens naturally elevates reference films.
+            </p>
+            <div class="space-y-3">
+              <%= for corr <- @recall_results.lens_correlations do %>
+                <div class="flex items-center gap-3">
+                  <div class="w-40 text-sm text-gray-700">{corr.label}</div>
+                  <div class="flex-1 bg-gray-200 rounded-full h-4">
+                    <div
+                      class="h-4 rounded-full bg-purple-500"
+                      style={"width: #{min(100, corr.mean_score * 100)}%"}
+                    >
+                    </div>
+                  </div>
+                  <div class="w-16 text-sm text-right text-purple-600">
+                    {Float.round(corr.mean_score * 100, 1)}%
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <!-- Systematic Gaps -->
+        <%= if @recall_results.systematic_gaps != [] do %>
+          <div class="bg-white shadow rounded-lg p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Systematic Gaps</h3>
+            <ul class="space-y-2">
+              <%= for gap <- @recall_results.systematic_gaps do %>
+                <li class="flex items-start gap-3 text-sm">
+                  <span class="px-2 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs text-gray-500 shrink-0 mt-0.5">
+                    {gap.category}
+                  </span>
+                  <span class="text-gray-700">{gap.description}</span>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+      <% end %>
+
+      <!-- Error state -->
+      <%= if match?({:error, _}, @recall_results) and not @recall_running do %>
+        <% {:error, reason} = @recall_results %>
+        <div class="bg-white shadow rounded-lg p-6 text-center">
+          <p class="text-red-600">
+            Calibration failed: {inspect(reason)}. Check that the 1001-movies reference list is imported and matched.
+          </p>
+        </div>
+      <% end %>
+    </div>
     """
   end
 
@@ -805,9 +1061,9 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   defp format_correlation(nil), do: "N/A"
   defp format_correlation(value), do: Float.round(value, 3)
 
-  defp diff_color(value) when value > 0, do: "text-green-400"
-  defp diff_color(value) when value < 0, do: "text-red-400"
-  defp diff_color(_), do: "text-gray-400"
+  defp diff_color(value) when value > 0, do: "text-green-600"
+  defp diff_color(value) when value < 0, do: "text-red-600"
+  defp diff_color(_), do: "text-gray-500"
 
   defp diff_prefix(value) when value > 0, do: "+"
   defp diff_prefix(_), do: ""
@@ -817,9 +1073,9 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   defp format_number(value), do: value
 
   defp correlation_color(nil), do: "text-gray-400"
-  defp correlation_color(value) when value >= 0.75, do: "text-green-400"
-  defp correlation_color(value) when value >= 0.5, do: "text-yellow-400"
-  defp correlation_color(_), do: "text-red-400"
+  defp correlation_color(value) when value >= 0.75, do: "text-green-600"
+  defp correlation_color(value) when value >= 0.5, do: "text-yellow-600"
+  defp correlation_color(_), do: "text-red-600"
 
   defp distribution_height(count, distribution) do
     max_count = distribution |> Map.values() |> Enum.max(fn -> 1 end)
@@ -844,4 +1100,20 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   defp format_datetime(datetime) do
     Calendar.strftime(datetime, "%Y-%m-%d %H:%M")
   end
+
+  defp recall_color(recall) when recall >= 0.75, do: "text-green-600"
+  defp recall_color(recall) when recall >= 0.60, do: "text-yellow-600"
+  defp recall_color(_), do: "text-red-600"
+
+  defp recall_bar_color(recall) when recall >= 0.75, do: "bg-green-500"
+  defp recall_bar_color(recall) when recall >= 0.60, do: "bg-yellow-500"
+  defp recall_bar_color(_), do: "bg-red-500"
+
+  defp decade_bar_color(recall) when recall >= 0.75, do: "bg-green-500"
+  defp decade_bar_color(recall) when recall >= 0.60, do: "bg-yellow-500"
+  defp decade_bar_color(_), do: "bg-red-500"
+
+  defp decade_text_color(recall) when recall >= 0.75, do: "text-green-600"
+  defp decade_text_color(recall) when recall >= 0.60, do: "text-yellow-600"
+  defp decade_text_color(_), do: "text-red-600"
 end

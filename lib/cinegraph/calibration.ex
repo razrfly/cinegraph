@@ -11,6 +11,7 @@ defmodule Cinegraph.Calibration do
   alias Cinegraph.Repo
   alias Cinegraph.Calibration.{ReferenceList, Reference, ScoringConfiguration}
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Calibration.RecallCalculator
 
   # =============================================================================
   # Reference Lists
@@ -363,6 +364,19 @@ defmodule Cinegraph.Calibration do
       |> ScoringConfiguration.activate_changeset()
       |> Repo.update!()
     end)
+  end
+
+  @doc """
+  Measures recall of the 1001 Movies reference list against a scoring profile.
+
+  Returns a recall metrics map or `{:error, reason}`.
+  """
+  def measure_recall(
+        list_slug \\ "1001-movies",
+        profile_name \\ "Cinegraph Editorial",
+        opts \\ []
+      ) do
+    RecallCalculator.measure(list_slug, profile_name, opts)
   end
 
   @doc """
