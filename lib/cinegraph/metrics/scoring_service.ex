@@ -704,6 +704,8 @@ defmodule Cinegraph.Metrics.ScoringService do
     )
   end
 
+  defp filter_by_min_score(query, _weights, nil), do: query
+
   defp filter_by_min_score(query, weights, min_score) do
     if has_group_by?(query) do
       # When grouped, use HAVING instead of WHERE and aggregate functions

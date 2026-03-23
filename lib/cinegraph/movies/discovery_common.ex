@@ -42,6 +42,11 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   # =============================================================================
   # LEGACY WEIGHTS (for existing discovery scoring system)
   # =============================================================================
+  # NOTE: Parallel scoring systems are intentional.
+  # This module (+ DiscoveryScoringSimple) powers the movie listing/search page:
+  # fast, synchronous, uses `popular_opinion` for backward compatibility.
+  # ScoringService (+ MetricWeightProfile) powers calibration/predictions/admin:
+  # it has a legacy shim that splits `popular_opinion` 50/50 → mob + ivory_tower.
 
   @default_weights %{
     # Combined all rating sources

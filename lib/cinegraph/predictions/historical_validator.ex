@@ -83,7 +83,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
     # Apply scoring to all decade movies
     # Use extended timeout (120s) for this complex query with many JOINs
-    scored_query = ScoringService.apply_scoring(all_decade_query, profile, %{})
+    scored_query = ScoringService.apply_scoring(all_decade_query, profile, %{min_score: nil})
     all_decade_movies = Repo.all(scored_query, timeout: :timer.seconds(120))
 
     # Sort by score and take top N where N = number of actual 1001 movies
