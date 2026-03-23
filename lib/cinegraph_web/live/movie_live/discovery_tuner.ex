@@ -15,10 +15,11 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     # Load presets from database
     presets = DiscoveryScoring.get_presets()
 
-    # Get the default/balanced weights - now including people_quality and financial_success
+    # Get the default/balanced weights - mob + ivory_tower replace popular_opinion
     weights =
       Map.get(presets, :balanced, %{
-        popular_opinion: 0.20,
+        mob: 0.10,
+        ivory_tower: 0.10,
         industry_recognition: 0.20,
         cultural_impact: 0.20,
         people_quality: 0.20,
@@ -54,7 +55,8 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
       Enum.reduce(params, %{}, fn
         {key, value}, acc
         when key in [
-               "popular_opinion",
+               "mob",
+               "ivory_tower",
                "industry_recognition",
                "cultural_impact",
                "people_quality",
@@ -321,7 +323,10 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
               </p>
               <ul class="list-disc list-inside mt-2 space-y-1">
                 <li>
-                  <strong>Popular Opinion:</strong> IMDb, TMDb, Metacritic and Rotten Tomatoes ratings
+                  <strong>The Mob:</strong> Audience ratings (IMDb, TMDb)
+                </li>
+                <li>
+                  <strong>The Ivory Tower:</strong> Critics scores (RT Tomatometer, Metacritic)
                 </li>
                 <li>
                   <strong>Industry Recognition:</strong> Festival awards and Oscar nominations/wins
@@ -456,16 +461,16 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   defp humanize_preset(:cult_classic), do: "Cult Classic"
   defp humanize_preset(preset), do: Phoenix.Naming.humanize(preset)
 
-  defp humanize_dimension(:popular_opinion), do: "Popular Opinion"
+  defp humanize_dimension(:mob), do: "The Mob"
+  defp humanize_dimension(:ivory_tower), do: "The Ivory Tower"
   defp humanize_dimension(:industry_recognition), do: "Industry Recognition"
   defp humanize_dimension(:cultural_impact), do: "Cultural Impact"
   defp humanize_dimension(:people_quality), do: "People Quality"
   defp humanize_dimension(:financial_success), do: "Financial Success"
   defp humanize_dimension(dimension), do: Phoenix.Naming.humanize(dimension)
 
-  defp dimension_description(:popular_opinion),
-    do: "All rating sources (IMDb, TMDb, Metacritic, RT)"
-
+  defp dimension_description(:mob), do: "Audience ratings (IMDb, TMDb)"
+  defp dimension_description(:ivory_tower), do: "Critics scores (RT Tomatometer, Metacritic)"
   defp dimension_description(:industry_recognition), do: "Festival awards and nominations"
   defp dimension_description(:cultural_impact), do: "Canonical lists and popularity metrics"
   defp dimension_description(:people_quality), do: "Quality of directors, actors, and crew"

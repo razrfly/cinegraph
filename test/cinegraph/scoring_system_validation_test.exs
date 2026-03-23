@@ -65,12 +65,13 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       end
     end
 
-    test "all 5 categories are present in both systems" do
+    test "all categories are present in both systems" do
       # MovieScoring categories
       movie = %Movie{id: 1, canonical_sources: %{}}
       score_data = MovieScoring.calculate_movie_scores(movie)
 
-      assert Map.has_key?(score_data.components, :popular_opinion)
+      assert Map.has_key?(score_data.components, :mob)
+      assert Map.has_key?(score_data.components, :ivory_tower)
       assert Map.has_key?(score_data.components, :industry_recognition)
       assert Map.has_key?(score_data.components, :cultural_impact)
       assert Map.has_key?(score_data.components, :people_quality)
@@ -80,7 +81,8 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       profile = ScoringService.get_default_profile()
       weights = ScoringService.profile_to_discovery_weights(profile)
 
-      assert Map.has_key?(weights, :popular_opinion)
+      assert Map.has_key?(weights, :mob)
+      assert Map.has_key?(weights, :ivory_tower)
       assert Map.has_key?(weights, :industry_recognition)
       assert Map.has_key?(weights, :cultural_impact)
       assert Map.has_key?(weights, :people_quality)
@@ -99,7 +101,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       scoring_service_categories =
         ScoringService.profile_to_discovery_weights(profile) |> Map.keys()
 
-      # Convert to strings for easier comparison
+      # Convert to strings for easier comparison (financial_performance vs financial_success is expected difference)
       movie_scoring_names = Enum.map(movie_scoring_categories, &to_string/1) |> Enum.sort()
 
       scoring_service_names =
@@ -122,7 +124,8 @@ defmodule Cinegraph.ScoringSystemValidationTest do
     test "all categories have human-readable descriptions" do
       # Check that descriptions exist for all categories
       categories = [
-        :popular_opinion,
+        :mob,
+        :ivory_tower,
         :industry_recognition,
         :cultural_impact,
         :people_quality,
@@ -131,7 +134,8 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
       # These descriptions should be defined in DiscoveryTuner
       descriptions = %{
-        popular_opinion: "All rating sources (IMDb, TMDb, Metacritic, RT)",
+        mob: "Audience ratings (IMDb, TMDb)",
+        ivory_tower: "Critics scores (RT Tomatometer, Metacritic)",
         industry_recognition: "Festival awards and nominations",
         cultural_impact: "Canonical lists and popularity metrics",
         people_quality: "Quality of directors, actors, and crew",
@@ -185,7 +189,8 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         name: "Test Custom Profile",
         description: "Test profile for validation",
         category_weights: %{
-          "popular_opinion" => 0.30,
+          "mob" => 0.15,
+          "ivory_tower" => 0.15,
           "awards" => 0.25,
           "cultural" => 0.20,
           "people" => 0.15,
@@ -204,20 +209,20 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       retrieved = ScoringService.get_profile(created.name)
 
       assert retrieved
-      assert retrieved.category_weights["popular_opinion"] == 0.30
+      assert retrieved.category_weights["mob"] == 0.15
+      assert retrieved.category_weights["ivory_tower"] == 0.15
 
       # Cleanup
       Repo.delete(created)
     end
 
-    test "all weight profiles use the 5-category system" do
+    test "all weight profiles use the 6-category system" do
       profiles = ScoringService.get_all_profiles()
 
       for profile <- profiles do
         weights = profile.category_weights
 
-        # Should have exactly 5 categories (though some may be 0.0)
-        valid_categories = ["popular_opinion", "awards", "cultural", "people", "financial"]
+        valid_categories = ["mob", "ivory_tower", "awards", "cultural", "people", "financial"]
 
         for category <- Map.keys(weights) do
           assert category in valid_categories,
@@ -235,10 +240,11 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
         # Update weights
         new_weights = %{
-          "popular_opinion" => 0.25,
+          "mob" => 0.15,
+          "ivory_tower" => 0.15,
           "awards" => 0.25,
           "cultural" => 0.20,
-          "people" => 0.20,
+          "people" => 0.15,
           "financial" => 0.10
         }
 
@@ -326,12 +332,15 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
       # Should have component scores (even if 0)
       assert is_map(score_data.components)
-      assert Map.has_key?(score_data.components, :popular_opinion)
+      assert Map.has_key?(score_data.components, :mob)
+      assert Map.has_key?(score_data.components, :ivory_tower)
 
       # Verify ScoringService queries database
       profile = ScoringService.get_profile("Balanced")
       assert profile
-      assert profile.category_weights["popular_opinion"] > 0
+
+      assert (profile.category_weights["mob"] || 0) +
+               (profile.category_weights["ivory_tower"] || 0) > 0
     end
 
     test "no hard-coded weight values in scoring calculations" do
@@ -373,7 +382,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
       # User can see breakdown
       assert Map.has_key?(score_data, :components)
-      assert map_size(score_data.components) == 5
+      assert map_size(score_data.components) == 6
 
       # All components have values
       for {_category, score} <- score_data.components do
@@ -406,7 +415,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
   describe "SUCCESS CRITERION 7: Maintainability" do
     test "single source of truth for category definitions" do
-      # Both systems should reference the same 5 categories
+      # Both systems should reference the same 6 categories
       movie_categories =
         MovieScoring.calculate_movie_scores(%Movie{id: 1, canonical_sources: %{}}).components
         |> Map.keys()
@@ -418,8 +427,8 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         |> Enum.sort()
 
       # Should have same number of categories
-      assert length(movie_categories) == 5
-      assert length(scoring_service_categories) == 5
+      assert length(movie_categories) == 6
+      assert length(scoring_service_categories) == 6
     end
 
     test "no duplicate scoring logic across modules" do

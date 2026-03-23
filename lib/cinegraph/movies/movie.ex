@@ -120,6 +120,9 @@ defmodule Cinegraph.Movies.Movie do
     # Virtual fields for discovery scoring
     field :discovery_score, :float, virtual: true
     field :score_components, :map, virtual: true
+    field :mob_score, :float, virtual: true
+    field :ivory_tower_score, :float, virtual: true
+    field :score_confidence, :float, virtual: true
 
     timestamps()
   end

@@ -41,10 +41,14 @@ defmodule Cinegraph.Movies.Credit do
 
   defp truncate_field(changeset, field, max_length) do
     case get_change(changeset, field) do
-      nil -> changeset
+      nil ->
+        changeset
+
       value when is_binary(value) and byte_size(value) > max_length ->
         put_change(changeset, field, String.slice(value, 0, max_length))
-      _ -> changeset
+
+      _ ->
+        changeset
     end
   end
 

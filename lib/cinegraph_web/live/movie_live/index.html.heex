@@ -99,7 +99,8 @@
           %{value: "runtime", label: "⏱️ Runtime", group: "Basic"},
           %{value: "rating", label: "⭐ Rating", group: "Ratings"},
           %{value: "popularity", label: "🔥 Popularity", group: "Ratings"},
-          %{value: "popular_opinion", label: "🎬 Popular Opinion", group: "Discovery Metrics"},
+          %{value: "mob", label: "👥 The Mob", group: "Discovery Metrics"},
+          %{value: "ivory_tower", label: "🎓 The Ivory Tower", group: "Discovery Metrics"},
           %{
             value: "industry_recognition",
             label: "🌟 Industry Recognition",
@@ -374,9 +375,14 @@
               <!-- Score Breakdown -->
               <%= if movie.score_components do %>
                 <div class="flex flex-wrap gap-1 text-xs">
-                  <%= if movie.score_components.popular_opinion && has_meaningful_score?(movie.score_components.popular_opinion) do %>
+                  <%= if movie.score_components[:mob] && has_meaningful_score?(movie.score_components[:mob]) do %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200">
-                      🎬 {to_percentage(movie.score_components.popular_opinion)}%
+                      👥 {to_percentage(movie.score_components[:mob])}%
+                    </span>
+                  <% end %>
+                  <%= if movie.score_components[:ivory_tower] && has_meaningful_score?(movie.score_components[:ivory_tower]) do %>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                      🎓 {to_percentage(movie.score_components[:ivory_tower])}%
                     </span>
                   <% end %>
                   <%= if movie.score_components.industry_recognition && has_meaningful_score?(movie.score_components.industry_recognition) do %>

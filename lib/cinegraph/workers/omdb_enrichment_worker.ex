@@ -58,7 +58,10 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
         :ok
 
       {:error, %Jason.DecodeError{}} ->
-        Logger.warning("OMDb returned malformed JSON for movie #{movie.id}, recording fetch attempt")
+        Logger.warning(
+          "OMDb returned malformed JSON for movie #{movie.id}, recording fetch attempt"
+        )
+
         record_fetch_attempt(movie.id, "malformed_response")
         :ok
 

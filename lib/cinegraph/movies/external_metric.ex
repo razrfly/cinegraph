@@ -222,7 +222,10 @@ defmodule Cinegraph.Movies.ExternalMetric do
     # IMDb Votes
     metrics =
       if omdb_data["imdbVotes"] && omdb_data["imdbVotes"] != "N/A" do
-        case omdb_data["imdbVotes"] |> String.replace(",", "") |> String.trim() |> Integer.parse() do
+        case omdb_data["imdbVotes"]
+             |> String.replace(",", "")
+             |> String.trim()
+             |> Integer.parse() do
           {votes, ""} ->
             [
               %{
@@ -320,7 +323,10 @@ defmodule Cinegraph.Movies.ExternalMetric do
             "Rotten Tomatoes" ->
               # Use Integer.parse/1 to avoid raising on malformed values
               # (e.g., "N/A" slipping through if the outer guard is absent).
-              case rating["Value"] |> String.trim() |> String.replace("%", "") |> Integer.parse() do
+              case rating["Value"]
+                   |> String.trim()
+                   |> String.replace("%", "")
+                   |> Integer.parse() do
                 {value, ""} ->
                   [
                     %{
