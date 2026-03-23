@@ -44,6 +44,7 @@ defmodule CinegraphWeb.DisparityExplorerLive do
      socket
      |> assign(:active_tab, tab)
      |> assign(:page, 1)
+     |> assign(:movies, [])
      |> push_patch(to: ~p"/explore/disparity?tab=#{tab}")}
   end
 
