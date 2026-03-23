@@ -47,11 +47,13 @@ config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 # Defaults to 100,000 — the full Basic plan daily limit.
 # Override via OMDB_DAILY_BATCH_SIZE env var only if you need to throttle.
 omdb_daily_batch_size =
-  if config_env() == :dev,
-    do: env!("OMDB_DAILY_BATCH_SIZE", :integer, 100_000),
-    else: case(Integer.parse(String.trim(System.get_env("OMDB_DAILY_BATCH_SIZE") || ""))) do
-    {n, ""} when n > 0 -> n
-    _ -> 100_000
+  if config_env() == :dev do
+    env!("OMDB_DAILY_BATCH_SIZE", :integer, 100_000)
+  else
+    case Integer.parse(String.trim(System.get_env("OMDB_DAILY_BATCH_SIZE") || "")) do
+      {n, ""} when n > 0 -> n
+      _ -> 100_000
+    end
   end
 
 config :cinegraph, :omdb_daily_batch_size, omdb_daily_batch_size

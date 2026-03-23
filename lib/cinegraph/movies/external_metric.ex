@@ -198,8 +198,8 @@ defmodule Cinegraph.Movies.ExternalMetric do
     # IMDb Rating
     metrics =
       if omdb_data["imdbRating"] && omdb_data["imdbRating"] != "N/A" do
-        case Float.parse(omdb_data["imdbRating"]) do
-          {rating, _} ->
+        case omdb_data["imdbRating"] |> String.trim() |> Float.parse() do
+          {rating, ""} ->
             [
               %{
                 movie_id: movie_id,
@@ -222,8 +222,8 @@ defmodule Cinegraph.Movies.ExternalMetric do
     # IMDb Votes
     metrics =
       if omdb_data["imdbVotes"] && omdb_data["imdbVotes"] != "N/A" do
-        case omdb_data["imdbVotes"] |> String.replace(",", "") |> Integer.parse() do
-          {votes, _} ->
+        case omdb_data["imdbVotes"] |> String.replace(",", "") |> String.trim() |> Integer.parse() do
+          {votes, ""} ->
             [
               %{
                 movie_id: movie_id,
@@ -245,8 +245,8 @@ defmodule Cinegraph.Movies.ExternalMetric do
     # Metascore
     metrics =
       if omdb_data["Metascore"] && omdb_data["Metascore"] != "N/A" do
-        case Integer.parse(omdb_data["Metascore"]) do
-          {score, _} ->
+        case omdb_data["Metascore"] |> String.trim() |> Integer.parse() do
+          {score, ""} ->
             [
               %{
                 movie_id: movie_id,
@@ -271,7 +271,7 @@ defmodule Cinegraph.Movies.ExternalMetric do
     metrics =
       if omdb_data["BoxOffice"] && omdb_data["BoxOffice"] != "N/A" do
         case omdb_data["BoxOffice"] |> String.replace(~r/[^0-9]/, "") |> Integer.parse() do
-          {revenue, _} ->
+          {revenue, ""} ->
             [
               %{
                 movie_id: movie_id,
@@ -320,8 +320,8 @@ defmodule Cinegraph.Movies.ExternalMetric do
             "Rotten Tomatoes" ->
               # Use Integer.parse/1 to avoid raising on malformed values
               # (e.g., "N/A" slipping through if the outer guard is absent).
-              case rating["Value"] |> String.replace("%", "") |> Integer.parse() do
-                {value, _} ->
+              case rating["Value"] |> String.trim() |> String.replace("%", "") |> Integer.parse() do
+                {value, ""} ->
                   [
                     %{
                       movie_id: movie_id,
