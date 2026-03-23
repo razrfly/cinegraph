@@ -83,7 +83,11 @@ defmodule Cinegraph.Movies.ExternalMetric do
       "total_nominations",
 
       # Availability
-      "fetch_attempt"
+      "fetch_attempt",
+
+      # Metadata
+      "content_rating",
+      "page_url"
     ]
   end
 
@@ -298,34 +302,72 @@ defmodule Cinegraph.Movies.ExternalMetric do
       end
 
     # Rotten Tomatoes from Ratings array
-    if omdb_data["Ratings"] && is_list(omdb_data["Ratings"]) do
-      Enum.reduce(omdb_data["Ratings"], metrics, fn rating, acc ->
-        case rating["Source"] do
-          "Rotten Tomatoes" ->
-            value =
-              rating["Value"]
-              |> String.replace("%", "")
-              |> String.to_integer()
+    metrics =
+      if omdb_data["Ratings"] && is_list(omdb_data["Ratings"]) do
+        Enum.reduce(omdb_data["Ratings"], metrics, fn rating, acc ->
+          case rating["Source"] do
+            "Rotten Tomatoes" ->
+              value =
+                rating["Value"]
+                |> String.replace("%", "")
+                |> String.to_integer()
 
-            [
-              %{
-                movie_id: movie_id,
-                source: "rotten_tomatoes",
-                metric_type: "tomatometer",
-                value: value,
-                metadata: %{"scale" => "0-100", "type" => "critics"},
-                fetched_at: now
-              }
-              | acc
-            ]
+              [
+                %{
+                  movie_id: movie_id,
+                  source: "rotten_tomatoes",
+                  metric_type: "tomatometer",
+                  value: value,
+                  metadata: %{"scale" => "0-100", "type" => "critics"},
+                  fetched_at: now
+                }
+                | acc
+              ]
 
-          _ ->
-            acc
-        end
-      end)
-    else
-      metrics
-    end
+            _ ->
+              acc
+          end
+        end)
+      else
+        metrics
+      end
+
+    # Content Rating (MPAA)
+    metrics =
+      if omdb_data["Rated"] &&
+           omdb_data["Rated"] not in ["N/A", "NOT RATED", "UNRATED", "NR"] do
+        [
+          %{
+            movie_id: movie_id,
+            source: "omdb",
+            metric_type: "content_rating",
+            text_value: omdb_data["Rated"],
+            fetched_at: now
+          }
+          | metrics
+        ]
+      else
+        metrics
+      end
+
+    # Rotten Tomatoes page URL (tomatoURL field — populated by OMDb Basic plan)
+    metrics =
+      if omdb_data["tomatoURL"] && omdb_data["tomatoURL"] not in [nil, "N/A"] do
+        [
+          %{
+            movie_id: movie_id,
+            source: "rotten_tomatoes",
+            metric_type: "page_url",
+            text_value: omdb_data["tomatoURL"],
+            fetched_at: now
+          }
+          | metrics
+        ]
+      else
+        metrics
+      end
+
+    metrics
   end
 
   defp parse_awards_text(text) do
