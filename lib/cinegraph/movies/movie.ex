@@ -18,7 +18,8 @@ defmodule Cinegraph.Movies.Movie do
              :movie_release_dates,
              :external_metrics,
              :external_recommendations,
-             :cri_score
+             :cri_score,
+             :score_cache
            ]}
 
   @derive {
@@ -113,6 +114,7 @@ defmodule Cinegraph.Movies.Movie do
     # External data associations  
     has_many :external_metrics, Cinegraph.Movies.ExternalMetric, foreign_key: :movie_id
     has_one :cri_score, Cinegraph.Cultural.CRIScore, foreign_key: :movie_id
+    has_one :score_cache, Cinegraph.Movies.MovieScoreCache, foreign_key: :movie_id
 
     has_many :external_recommendations, Cinegraph.Movies.MovieRecommendation,
       foreign_key: :source_movie_id

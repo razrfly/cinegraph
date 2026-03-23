@@ -131,6 +131,9 @@ defmodule CinegraphWeb.Router do
     #   /awards/:year             - All awards from a specific year
     # ========================================================================
 
+    # Disparity Explorer
+    live "/explore/disparity", DisparityExplorerLive, :index
+
     # Curated Lists routes
     live "/lists", ListLive.Index, :index
     live "/lists/:slug", ListLive.Show, :show

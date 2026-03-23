@@ -10,6 +10,7 @@ defmodule CinegraphWeb.MovieLive.Show do
   alias Cinegraph.Metrics.ApiLookupMetric
   alias Cinegraph.Movies.MovieScoring
   alias Cinegraph.Movies.MovieCollaborations
+  alias Cinegraph.Metrics.DisparityCalculator
   alias Cinegraph.Repo
 
   require Logger
@@ -154,6 +155,11 @@ defmodule CinegraphWeb.MovieLive.Show do
 
     # Calculate real Cinegraph scores using the context module
     score_data = MovieScoring.calculate_movie_scores(movie)
+    disparity_data = DisparityCalculator.calculate_all(score_data)
+
+    # Preload score cache and build unified display scores (cache wins over live calc)
+    movie = Repo.preload(movie, :score_cache)
+    display_scores = build_display_scores(movie.score_cache, score_data)
 
     # Load credits (cast and crew)
     credits = Movies.get_movie_credits(id)
@@ -224,6 +230,8 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:missing_data, missing_data)
     |> Map.put(:key_collaborations, key_collaborations)
     |> Map.put(:score_data, score_data)
+    |> Map.put(:display_scores, display_scores)
+    |> Map.put(:disparity_data, disparity_data)
     |> Map.put(:related_movies, related_movies)
     |> Map.put(:collaboration_timelines, collaboration_timelines)
   end
@@ -514,6 +522,36 @@ defmodule CinegraphWeb.MovieLive.Show do
       name -> name
     end
   end
+
+  defp build_display_scores(nil, score_data) do
+    c = score_data.components
+
+    %{
+      mob: c.mob,
+      ivory_tower: c.ivory_tower,
+      industry_recognition: c.industry_recognition,
+      cultural_impact: c.cultural_impact,
+      people_quality: c.people_quality,
+      financial_performance: c.financial_performance,
+      overall: score_data.overall_score
+    }
+  end
+
+  defp build_display_scores(cache, _score_data) do
+    %{
+      mob: cache.mob_score || 0.0,
+      ivory_tower: cache.ivory_tower_score || 0.0,
+      industry_recognition: cache.industry_recognition_score || 0.0,
+      cultural_impact: cache.cultural_impact_score || 0.0,
+      people_quality: cache.people_quality_score || 0.0,
+      financial_performance: cache.financial_performance_score || 0.0,
+      overall: cache.overall_score || 0.0
+    }
+  end
+
+  def format_lens_score(nil), do: "—"
+  def format_lens_score(val) when val == 0, do: "—"
+  def format_lens_score(val), do: to_string(val)
 
   defp format_error(:not_found), do: "Movie not found in TMDb"
   defp format_error({:error, reason}), do: format_error(reason)

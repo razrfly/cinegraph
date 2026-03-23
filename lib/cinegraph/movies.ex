@@ -1101,6 +1101,36 @@ defmodule Cinegraph.Movies do
     :ok
   end
 
+  @doc "List movies in a disparity category, ordered by disparity score descending."
+  def list_movies_by_disparity_category(category, opts \\ []) do
+    limit = Elixir.Keyword.get(opts, :limit, 50)
+    offset = Elixir.Keyword.get(opts, :offset, 0)
+
+    from(m in Movie,
+      join: s in assoc(m, :score_cache),
+      where: s.disparity_category == ^category,
+      order_by: [desc: s.disparity_score],
+      limit: ^limit,
+      offset: ^offset,
+      preload: [score_cache: s]
+    )
+    |> Repo.all()
+  end
+
+  @doc "List movies with the largest critic/audience gap."
+  def top_disparity_movies(opts \\ []) do
+    limit = Elixir.Keyword.get(opts, :limit, 50)
+
+    from(m in Movie,
+      join: s in assoc(m, :score_cache),
+      where: not is_nil(s.disparity_score),
+      order_by: [desc: s.disparity_score],
+      limit: ^limit,
+      preload: [score_cache: s]
+    )
+    |> Repo.all()
+  end
+
   # Helper to escape SQL LIKE wildcards
   defp escape_like_wildcards(str) do
     str
