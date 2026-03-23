@@ -400,15 +400,15 @@ defmodule Cinegraph.Metrics.ScoringService do
           fragment(
             """
             ? * CASE
-              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
-              WHEN ? IS NOT NULL THEN ? / 10.0
-              WHEN ? IS NOT NULL THEN ? / 10.0
+              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
               ELSE 0.0
             END +
             ? * CASE
-              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
-              WHEN ? IS NOT NULL THEN ? / 100.0
-              WHEN ? IS NOT NULL THEN ? / 100.0
+              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
               ELSE 0.0
             END +
             ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
@@ -457,7 +457,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           ),
         mob_score:
           fragment(
-            "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 10.0 WHEN ? IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
+            "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
             ir.value,
             tr.value,
             ir.value,
@@ -469,7 +469,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           ),
         ivory_tower_score:
           fragment(
-            "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 100.0 WHEN ? IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
+            "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
             rt.value,
             mc.value,
             rt.value,
@@ -490,7 +490,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         score_components: %{
           mob:
             fragment(
-              "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 10.0 WHEN ? IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
+              "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
               ir.value,
               tr.value,
               ir.value,
@@ -502,7 +502,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             ),
           ivory_tower:
             fragment(
-              "CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN ? IS NOT NULL THEN ? / 100.0 WHEN ? IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
+              "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
               rt.value,
               mc.value,
               rt.value,
@@ -573,15 +573,15 @@ defmodule Cinegraph.Metrics.ScoringService do
           fragment(
             """
             ? * CASE
-              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
               ELSE 0.0
             END +
             ? * CASE
-              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
               ELSE 0.0
             END +
             ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
@@ -631,7 +631,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         score_components: %{
           mob:
             fragment(
-              "CASE WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0 ELSE 0.0 END",
+              "CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0 ELSE 0.0 END",
               ir.value,
               tr.value,
               ir.value,
@@ -643,7 +643,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             ),
           ivory_tower:
             fragment(
-              "CASE WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0 WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0 ELSE 0.0 END",
+              "CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0 ELSE 0.0 END",
               rt.value,
               mc.value,
               rt.value,
@@ -712,15 +712,15 @@ defmodule Cinegraph.Metrics.ScoringService do
         fragment(
           """
           ? * CASE
-            WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
-            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
-            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+            WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
+            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
+            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
             ELSE 0.0
           END +
           ? * CASE
-            WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
-            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
-            WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+            WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
+            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
+            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
             ELSE 0.0
           END +
           ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
@@ -787,15 +787,15 @@ defmodule Cinegraph.Metrics.ScoringService do
         fragment(
           """
           ? * CASE
-            WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
-            WHEN ? IS NOT NULL THEN ? / 10.0
-            WHEN ? IS NOT NULL THEN ? / 10.0
+            WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
+            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
+            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
             ELSE 0.0
           END +
           ? * CASE
-            WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
-            WHEN ? IS NOT NULL THEN ? / 100.0
-            WHEN ? IS NOT NULL THEN ? / 100.0
+            WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
+            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
+            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
             ELSE 0.0
           END +
           ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
@@ -867,15 +867,15 @@ defmodule Cinegraph.Metrics.ScoringService do
           fragment(
             """
             ? * CASE
-              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 10.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
               ELSE 0.0
             END +
             ? * CASE
-              WHEN MAX(?) IS NOT NULL AND MAX(?) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
-              WHEN MAX(?) IS NOT NULL THEN MAX(?) / 100.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
+              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
               ELSE 0.0
             END +
             ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
@@ -942,15 +942,15 @@ defmodule Cinegraph.Metrics.ScoringService do
           fragment(
             """
             ? * CASE
-              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
-              WHEN ? IS NOT NULL THEN ? / 10.0
-              WHEN ? IS NOT NULL THEN ? / 10.0
+              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
               ELSE 0.0
             END +
             ? * CASE
-              WHEN ? IS NOT NULL AND ? IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
-              WHEN ? IS NOT NULL THEN ? / 100.0
-              WHEN ? IS NOT NULL THEN ? / 100.0
+              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
+              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
               ELSE 0.0
             END +
             ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
