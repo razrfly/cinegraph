@@ -214,8 +214,11 @@
 <!-- Criterion Description -->
                   <div class="mt-2 text-xs text-gray-600">
                     {case criterion do
-                      :popular_opinion ->
-                        "All rating sources (IMDb, TMDb, Metacritic, RT)"
+                      :mob ->
+                        "Audience ratings (IMDb, TMDb)"
+
+                      :ivory_tower ->
+                        "Critics scores (RT Tomatometer, Metacritic)"
 
                       :industry_recognition ->
                         "Oscars, Cannes, Venice, Berlin awards and nominations"

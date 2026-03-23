@@ -231,10 +231,10 @@ defmodule Cinegraph.Metrics.ScoringService do
       "imdb_rating" => mob_weight * 1.0,
       "tmdb_rating" => mob_weight * 1.0,
       "imdb_rating_votes" => mob_weight * 0.5,
+      "rotten_tomatoes_audience_score" => mob_weight * 0.8,
       # Ivory Tower (critics) metrics
       "metacritic_metascore" => ivory_weight * 1.0,
       "rotten_tomatoes_tomatometer" => ivory_weight * 1.0,
-      "rotten_tomatoes_audience_score" => ivory_weight * 0.8,
 
       # Industry Recognition metrics
       "oscar_wins" => award_weight * 3,

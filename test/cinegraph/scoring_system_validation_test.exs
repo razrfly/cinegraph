@@ -1,6 +1,9 @@
 defmodule Cinegraph.ScoringSystemValidationTest do
   @moduledoc """
-  Phase 4 Validation Tests for the unified 5-category scoring system.
+  Phase 4 Validation Tests for the unified 6-category scoring system.
+
+  Categories: mob, ivory_tower, industry_recognition, cultural_impact,
+  people_quality, financial_performance.
 
   Tests all 7 success criteria:
   1. Consistency - Same movie has same score across all contexts

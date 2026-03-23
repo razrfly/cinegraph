@@ -70,6 +70,8 @@ defmodule Cinegraph.Movies.Query.Params do
     rating rating_asc rating_desc
     popularity popularity_asc popularity_desc
     discovery_score discovery_score_asc discovery_score_desc
+    mob mob_asc mob_desc
+    ivory_tower ivory_tower_asc ivory_tower_desc
     popular_opinion popular_opinion_asc popular_opinion_desc
     industry_recognition industry_recognition_asc industry_recognition_desc
     cultural_impact cultural_impact_asc cultural_impact_desc

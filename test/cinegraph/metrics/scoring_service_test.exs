@@ -3,11 +3,12 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
   alias Cinegraph.Metrics.{ScoringService, MetricWeightProfile}
 
   describe "profile_to_discovery_weights/1" do
-    test "correctly converts all 5 categories to discovery weights" do
+    test "correctly converts mob and ivory_tower categories to discovery weights" do
       profile = %MetricWeightProfile{
         name: "Test Profile",
         category_weights: %{
-          "popular_opinion" => 0.20,
+          "mob" => 0.10,
+          "ivory_tower" => 0.10,
           "awards" => 0.20,
           "cultural" => 0.20,
           "people" => 0.20,
@@ -17,16 +18,17 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      assert result.popular_opinion == 0.20
+      assert result.mob == 0.10
+      assert result.ivory_tower == 0.10
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
       assert result.financial_success == 0.20
     end
 
-    test "handles popular_opinion category correctly" do
+    test "splits legacy popular_opinion 50/50 into mob and ivory_tower" do
       profile = %MetricWeightProfile{
-        name: "Test Profile",
+        name: "Legacy Profile",
         category_weights: %{
           "popular_opinion" => 0.40,
           "awards" => 0.20,
@@ -38,7 +40,8 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      assert result.popular_opinion == 0.40
+      assert result.mob == 0.20
+      assert result.ivory_tower == 0.20
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.10
@@ -53,9 +56,9 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # Should use fallback defaults: popular_opinion falls back to ratings (0.40),
-      # financial defaults to 0.00, others default to 0.20
-      assert result.popular_opinion == 0.40
+      # mob and ivory_tower each get half of ratings default (0.20)
+      assert result.mob == 0.10
+      assert result.ivory_tower == 0.10
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
@@ -70,19 +73,20 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # Should use same fallback defaults as empty category_weights
-      assert result.popular_opinion == 0.40
+      assert result.mob == 0.10
+      assert result.ivory_tower == 0.10
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
       assert result.financial_success == 0.00
     end
 
-    test "handles zero popular_opinion weight" do
+    test "handles zero mob/ivory_tower weights" do
       profile = %MetricWeightProfile{
         name: "No Ratings Profile",
         category_weights: %{
-          "popular_opinion" => 0.00,
+          "mob" => 0.00,
+          "ivory_tower" => 0.00,
           "awards" => 0.50,
           "cultural" => 0.30,
           "people" => 0.10,
@@ -92,18 +96,20 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      assert result.popular_opinion == 0.00
+      assert result.mob == 0.00
+      assert result.ivory_tower == 0.00
       assert result.industry_recognition == 0.50
       assert result.cultural_impact == 0.30
       assert result.people_quality == 0.10
       assert result.financial_success == 0.10
     end
 
-    test "handles full popular_opinion weight" do
+    test "handles full mob weight" do
       profile = %MetricWeightProfile{
-        name: "All Ratings Profile",
+        name: "All Mob Profile",
         category_weights: %{
-          "popular_opinion" => 1.00,
+          "mob" => 1.00,
+          "ivory_tower" => 0.00,
           "awards" => 0.00,
           "cultural" => 0.00,
           "people" => 0.00,
@@ -113,7 +119,8 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      assert result.popular_opinion == 1.00
+      assert result.mob == 1.00
+      assert result.ivory_tower == 0.00
       assert result.industry_recognition == 0.00
       assert result.cultural_impact == 0.00
       assert result.people_quality == 0.00
@@ -133,8 +140,9 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # Old "ratings" should map to popular_opinion
-      assert result.popular_opinion == 0.40
+      # Old "ratings" splits 50/50 into mob + ivory_tower
+      assert result.mob == 0.20
+      assert result.ivory_tower == 0.20
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
@@ -144,7 +152,8 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
   describe "discovery_weights_to_profile/2" do
     test "converts discovery weights back to profile format" do
       weights = %{
-        popular_opinion: 0.30,
+        mob: 0.15,
+        ivory_tower: 0.15,
         industry_recognition: 0.25,
         cultural_impact: 0.20,
         people_quality: 0.15,
@@ -154,7 +163,8 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       result = ScoringService.discovery_weights_to_profile(weights, "Custom Test")
 
       assert result.name == "Custom Test"
-      assert result.category_weights["popular_opinion"] == 0.30
+      assert result.category_weights["mob"] == 0.15
+      assert result.category_weights["ivory_tower"] == 0.15
       assert result.category_weights["awards"] == 0.25
       assert result.category_weights["cultural"] == 0.20
       assert result.category_weights["people"] == 0.15
@@ -163,14 +173,16 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
     test "handles missing weights with defaults" do
       weights = %{
-        popular_opinion: 0.50,
+        mob: 0.30,
+        ivory_tower: 0.20,
         industry_recognition: 0.50
       }
 
       result = ScoringService.discovery_weights_to_profile(weights, "Partial Weights")
 
       assert result.name == "Partial Weights"
-      assert result.category_weights["popular_opinion"] == 0.50
+      assert result.category_weights["mob"] == 0.30
+      assert result.category_weights["ivory_tower"] == 0.20
       assert result.category_weights["awards"] == 0.50
       # Missing weights should default to 0.2
       assert result.category_weights["cultural"] == 0.20

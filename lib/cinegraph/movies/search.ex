@@ -41,6 +41,8 @@ defmodule Cinegraph.Movies.Search do
         rating rating_asc rating_desc
         popularity popularity_asc popularity_desc
         discovery_score discovery_score_asc discovery_score_desc
+        mob mob_asc mob_desc
+        ivory_tower ivory_tower_asc ivory_tower_desc
         popular_opinion popular_opinion_asc popular_opinion_desc
         industry_recognition industry_recognition_asc industry_recognition_desc
         cultural_impact cultural_impact_asc cultural_impact_desc
@@ -167,7 +169,7 @@ defmodule Cinegraph.Movies.Search do
           sort
       end
 
-    base in ~w(discovery_score popular_opinion industry_recognition cultural_impact people_quality)
+    base in ~w(discovery_score mob ivory_tower popular_opinion industry_recognition cultural_impact people_quality)
   end
 
   defp list_genres do
@@ -229,7 +231,8 @@ defmodule Cinegraph.Movies.Search do
       %{id: "runtime_desc", value: "runtime_desc", label: "Runtime (Longest)"},
       %{id: "rating", value: "rating", label: "Rating (Highest)"},
       %{id: "popularity", value: "popularity", label: "Popularity"},
-      %{id: "popular_opinion", value: "popular_opinion", label: "Popular Opinion"},
+      %{id: "mob", value: "mob", label: "The Mob (Audience)"},
+      %{id: "ivory_tower", value: "ivory_tower", label: "The Ivory Tower (Critics)"},
       %{id: "industry_recognition", value: "industry_recognition", label: "Industry Recognition"},
       %{id: "cultural_impact", value: "cultural_impact", label: "Cultural Impact"},
       %{id: "people_quality", value: "people_quality", label: "People Quality"}

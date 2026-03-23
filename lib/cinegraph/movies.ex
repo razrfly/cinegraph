@@ -57,6 +57,10 @@ defmodule Cinegraph.Movies do
 
   defp uses_discovery_sorting?(sort) do
     sort in [
+      "mob",
+      "mob_asc",
+      "ivory_tower",
+      "ivory_tower_asc",
       "popular_opinion",
       "popular_opinion_asc",
       "industry_recognition",
