@@ -134,13 +134,20 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate mob score (audience): IMDb + TMDb ratings, null-aware averaging.
+  Calculate mob score (audience): IMDb + TMDb + RT Audience ratings, null-aware averaging.
   Returns a 0–10 score.
   """
   def calculate_mob_score(metrics) do
     imdb = Map.get(metrics, :imdb_rating)
     tmdb = Map.get(metrics, :tmdb_rating)
-    sources = [imdb, tmdb] |> Enum.reject(&is_nil/1) |> Enum.filter(&(&1 > 0))
+
+    rta =
+      case Map.get(metrics, :rt_audience) do
+        v when is_number(v) and v > 0 -> v / 10.0
+        _ -> nil
+      end
+
+    sources = [imdb, tmdb, rta] |> Enum.reject(&is_nil/1) |> Enum.filter(&(&1 > 0))
 
     if sources == [], do: 0.0, else: Enum.sum(sources) / length(sources)
   end
@@ -162,10 +169,10 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate score confidence: fraction of the 4 core rating sources present (0.0–1.0).
+  Calculate score confidence: fraction of the 5 core rating sources present (0.0–1.0).
   """
   def calculate_score_confidence(metrics) do
-    keys = [:imdb_rating, :tmdb_rating, :rt_tomatometer, :metacritic]
+    keys = [:imdb_rating, :tmdb_rating, :rt_tomatometer, :metacritic, :rt_audience]
 
     present =
       Enum.count(keys, fn k ->
@@ -173,7 +180,7 @@ defmodule Cinegraph.Movies.MovieScoring do
         not is_nil(v) and v != 0
       end)
 
-    present / 4.0
+    present / 5.0
   end
 
   @doc """

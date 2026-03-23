@@ -789,7 +789,6 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
     case category do
       "mob" -> "Mob"
       "ivory_tower" -> "IT"
-      "popular_opinion" -> "Pop"
       "industry_recognition" -> "Ind"
       "cultural_impact" -> "Cult"
       "people_quality" -> "Ppl"
