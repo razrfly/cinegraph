@@ -49,7 +49,10 @@ config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 omdb_daily_batch_size =
   if config_env() == :dev,
     do: env!("OMDB_DAILY_BATCH_SIZE", :integer, 100_000),
-    else: String.to_integer(System.get_env("OMDB_DAILY_BATCH_SIZE") || "100000")
+    else: case(Integer.parse(String.trim(System.get_env("OMDB_DAILY_BATCH_SIZE") || ""))) do
+    {n, ""} when n > 0 -> n
+    _ -> 100_000
+  end
 
 config :cinegraph, :omdb_daily_batch_size, omdb_daily_batch_size
 

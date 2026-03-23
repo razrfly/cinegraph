@@ -198,19 +198,23 @@ defmodule Cinegraph.Movies.ExternalMetric do
     # IMDb Rating
     metrics =
       if omdb_data["imdbRating"] && omdb_data["imdbRating"] != "N/A" do
-        rating = String.to_float(omdb_data["imdbRating"])
+        case Float.parse(omdb_data["imdbRating"]) do
+          {rating, _} ->
+            [
+              %{
+                movie_id: movie_id,
+                source: "imdb",
+                metric_type: "rating_average",
+                value: rating,
+                metadata: %{"scale" => "1-10"},
+                fetched_at: now
+              }
+              | metrics
+            ]
 
-        [
-          %{
-            movie_id: movie_id,
-            source: "imdb",
-            metric_type: "rating_average",
-            value: rating,
-            metadata: %{"scale" => "1-10"},
-            fetched_at: now
-          }
-          | metrics
-        ]
+          :error ->
+            metrics
+        end
       else
         metrics
       end
@@ -218,21 +222,22 @@ defmodule Cinegraph.Movies.ExternalMetric do
     # IMDb Votes
     metrics =
       if omdb_data["imdbVotes"] && omdb_data["imdbVotes"] != "N/A" do
-        votes =
-          omdb_data["imdbVotes"]
-          |> String.replace(",", "")
-          |> String.to_integer()
+        case omdb_data["imdbVotes"] |> String.replace(",", "") |> Integer.parse() do
+          {votes, _} ->
+            [
+              %{
+                movie_id: movie_id,
+                source: "imdb",
+                metric_type: "rating_votes",
+                value: votes,
+                fetched_at: now
+              }
+              | metrics
+            ]
 
-        [
-          %{
-            movie_id: movie_id,
-            source: "imdb",
-            metric_type: "rating_votes",
-            value: votes,
-            fetched_at: now
-          }
-          | metrics
-        ]
+          :error ->
+            metrics
+        end
       else
         metrics
       end
@@ -240,42 +245,48 @@ defmodule Cinegraph.Movies.ExternalMetric do
     # Metascore
     metrics =
       if omdb_data["Metascore"] && omdb_data["Metascore"] != "N/A" do
-        score = String.to_integer(omdb_data["Metascore"])
+        case Integer.parse(omdb_data["Metascore"]) do
+          {score, _} ->
+            [
+              %{
+                movie_id: movie_id,
+                source: "metacritic",
+                metric_type: "metascore",
+                value: score,
+                metadata: %{"scale" => "0-100", "type" => "critics"},
+                fetched_at: now
+              }
+              | metrics
+            ]
 
-        [
-          %{
-            movie_id: movie_id,
-            source: "metacritic",
-            metric_type: "metascore",
-            value: score,
-            metadata: %{"scale" => "0-100", "type" => "critics"},
-            fetched_at: now
-          }
-          | metrics
-        ]
+          :error ->
+            metrics
+        end
       else
         metrics
       end
 
-    # Box Office
+    # Box Office — strip non-digits first; Integer.parse guards against empty result
+    # (e.g., a value of "$" would produce "" after stripping, causing String.to_integer to raise)
     metrics =
       if omdb_data["BoxOffice"] && omdb_data["BoxOffice"] != "N/A" do
-        revenue =
-          omdb_data["BoxOffice"]
-          |> String.replace(~r/[^0-9]/, "")
-          |> String.to_integer()
+        case omdb_data["BoxOffice"] |> String.replace(~r/[^0-9]/, "") |> Integer.parse() do
+          {revenue, _} ->
+            [
+              %{
+                movie_id: movie_id,
+                source: "omdb",
+                metric_type: "revenue_domestic",
+                value: revenue,
+                metadata: %{"currency" => "USD", "territory" => "USA/Canada"},
+                fetched_at: now
+              }
+              | metrics
+            ]
 
-        [
-          %{
-            movie_id: movie_id,
-            source: "omdb",
-            metric_type: "revenue_domestic",
-            value: revenue,
-            metadata: %{"currency" => "USD", "territory" => "USA/Canada"},
-            fetched_at: now
-          }
-          | metrics
-        ]
+          :error ->
+            metrics
+        end
       else
         metrics
       end
