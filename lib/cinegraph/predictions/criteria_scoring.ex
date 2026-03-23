@@ -340,6 +340,11 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     value || 0.0
   end
 
+  defp normalize_rating_score("rotten_tomatoes", "audience_score", value) do
+    # RT Audience Score is already 0-100; clamp to valid range
+    max(0.0, min(100.0, value || 0.0))
+  end
+
   defp normalize_rating_score("rotten_tomatoes", "tomatometer", value) do
     # RT Tomatometer is already 0-100
     value || 0.0

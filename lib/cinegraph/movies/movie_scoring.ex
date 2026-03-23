@@ -18,7 +18,7 @@ defmodule Cinegraph.Movies.MovieScoring do
   festival data, person quality, and financial performance.
 
   Uses the standard 6-category scoring system:
-  - The Mob (audience ratings from IMDb and TMDb)
+  - The Mob (audience ratings from IMDb, TMDb, and RT Audience Score)
   - The Ivory Tower (critics scores from Metacritic and RT Tomatometer)
   - Industry Recognition (festival wins and nominations)
   - Cultural Impact (canonical sources and popularity)
