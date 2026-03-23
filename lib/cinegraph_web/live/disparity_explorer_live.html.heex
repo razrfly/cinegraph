@@ -1,0 +1,112 @@
+<div class="min-h-screen bg-gray-950">
+  <!-- Header -->
+  <div class="bg-gray-900 border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div class="mb-2">
+        <.link navigate={~p"/movies"} class="text-white/50 hover:text-white/80 text-sm transition-colors">
+          ← Movies
+        </.link>
+      </div>
+      <h1 class="text-3xl font-bold text-white">Disparity Explorer</h1>
+      <p class="text-white/60 mt-2">
+        Where critics and audiences see the same film through very different eyes.
+      </p>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav class="-mb-px flex space-x-1 overflow-x-auto scrollbar-hide">
+        <%= for tab <- @tabs do %>
+          <button
+            phx-click="switch_tab"
+            phx-value-tab={tab.id}
+            class={[
+              "whitespace-nowrap py-4 px-4 border-b-2 font-medium text-sm transition-colors flex items-center gap-2",
+              if(@active_tab == tab.id,
+                do: "border-white text-white",
+                else: "border-transparent text-white/50 hover:text-white/80 hover:border-white/30"
+              )
+            ]}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        <% end %>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Movie Grid -->
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <%= if @movies == [] do %>
+      <div class="text-center py-16">
+        <p class="text-white/40 text-lg">No movies found in this category yet.</p>
+        <p class="text-white/30 text-sm mt-2">Scores need to be calculated first — run <code class="text-white/50">MovieScoreCacheWorker.queue_all()</code></p>
+      </div>
+    <% else %>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <%= for movie <- @movies do %>
+          <% cache = movie.score_cache %>
+          <.link navigate={~p"/movies/#{movie.slug || movie.id}"} class="group block">
+            <div class="relative bg-gray-800 rounded-lg overflow-hidden hover:ring-2 hover:ring-white/30 transition-all">
+              <!-- Poster -->
+              <%= if movie.poster_path do %>
+                <img
+                  src={"https://image.tmdb.org/t/p/w300#{movie.poster_path}"}
+                  alt={movie.title}
+                  class="w-full aspect-[2/3] object-cover"
+                  loading="lazy"
+                />
+              <% else %>
+                <div class="w-full aspect-[2/3] bg-gray-700 flex items-center justify-center">
+                  <span class="text-white/30 text-xs text-center px-2">{movie.title}</span>
+                </div>
+              <% end %>
+
+              <!-- Category badge -->
+              <div class="absolute top-2 left-2">
+                <span class={["text-xs font-semibold px-2 py-0.5 rounded-full", disparity_badge_class(cache && cache.disparity_category)]}>
+                  <%= if cache, do: disparity_label(cache.disparity_category), else: "—" %>
+                </span>
+              </div>
+            </div>
+
+            <!-- Movie info below card -->
+            <div class="mt-2 px-1">
+              <p class="text-white text-xs font-medium line-clamp-2 group-hover:text-white/80">
+                {movie.title}
+              </p>
+              <p class="text-white/40 text-xs mt-0.5">
+                {movie.release_year}
+              </p>
+              <%= if cache && cache.disparity_score do %>
+                <div class="flex items-center gap-1 mt-1">
+                  <span class="text-white/50 text-xs">Gap:</span>
+                  <span class="text-white text-xs font-semibold"><%= Float.round(cache.disparity_score, 1) %></span>
+                </div>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span class="text-orange-400 text-xs">🔥 <%= cache.mob_score && Float.round(cache.mob_score, 1) || "—" %></span>
+                  <span class="text-purple-400 text-xs">🎭 <%= cache.ivory_tower_score && Float.round(cache.ivory_tower_score, 1) || "—" %></span>
+                </div>
+              <% end %>
+            </div>
+          </.link>
+        <% end %>
+      </div>
+
+      <!-- Load More -->
+      <%= if length(@movies) >= 24 do %>
+        <div class="text-center mt-10">
+          <button
+            phx-click="load_more"
+            class="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+          >
+            Load more
+          </button>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</div>

@@ -167,23 +167,24 @@
 <!-- Main Score -->
         <div class="text-center mb-6">
           <div class="text-5xl font-bold text-white mb-2">
-            <% score_data = Map.get(@movie, :score_data) %>
-            <%= if score_data do %>
-              {score_data.overall_score}
+            <% display_scores = Map.get(@movie, :display_scores) %>
+            <%= if display_scores do %>
+              {format_lens_score(display_scores.overall)}
             <% else %>
               N/A
             <% end %>
           </div>
           <div class="text-white/60 text-sm">Overall Quality</div>
         </div>
-        
-<!-- 5-Category Breakdown -->
-        <% score_data = Map.get(@movie, :score_data) %>
-        <%= if score_data do %>
+
+<!-- 6-Lens Breakdown -->
+        <% display_scores = Map.get(@movie, :display_scores) %>
+        <%= if display_scores do %>
           <div class="space-y-3">
             <!-- The Mob -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
+                <span class="mr-1 text-sm">🔥</span>
                 <span class="text-white/80 text-sm">The Mob</span>
                 <div class="relative ml-1">
                   <svg
@@ -208,19 +209,20 @@
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
-                    class="h-2 bg-blue-400 rounded-full"
-                    style={"width: #{(score_data.components[:mob] || 0) * 10}%"}
+                    class="h-2 bg-orange-400 rounded-full"
+                    style={"width: #{display_scores.mob * 10}%"}
                   >
                   </div>
                 </div>
                 <span class="text-white text-sm w-8">
-                  {score_data.components[:mob] || 0}
+                  {format_lens_score(display_scores.mob)}
                 </span>
               </div>
             </div>
             <!-- The Ivory Tower -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
+                <span class="mr-1 text-sm">🎭</span>
                 <span class="text-white/80 text-sm">The Ivory Tower</span>
                 <div class="relative ml-1">
                   <svg
@@ -246,21 +248,22 @@
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
-                    class="h-2 bg-purple-400 rounded-full"
-                    style={"width: #{(score_data.components[:ivory_tower] || 0) * 10}%"}
+                    class="h-2 bg-purple-600 rounded-full"
+                    style={"width: #{display_scores.ivory_tower * 10}%"}
                   >
                   </div>
                 </div>
                 <span class="text-white text-sm w-8">
-                  {score_data.components[:ivory_tower] || 0}
+                  {format_lens_score(display_scores.ivory_tower)}
                 </span>
               </div>
             </div>
-            
-<!-- Industry Recognition -->
+
+<!-- The Inner Circle -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
-                <span class="text-white/80 text-sm">Industry Recognition</span>
+                <span class="mr-1 text-sm">🏆</span>
+                <span class="text-white/80 text-sm">The Inner Circle</span>
                 <div class="relative ml-1">
                   <svg
                     class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
@@ -277,7 +280,7 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>Industry Recognition:</strong>
+                    <strong>The Inner Circle:</strong>
                     Awards and nominations from major film festivals (Cannes, Venice, Berlin, etc.)
                   </div>
                 </div>
@@ -285,20 +288,21 @@
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
-                    class="h-2 bg-yellow-400 rounded-full"
-                    style={"width: #{score_data.components.industry_recognition * 10}%"}
+                    class="h-2 bg-yellow-500 rounded-full"
+                    style={"width: #{display_scores.industry_recognition * 10}%"}
                   >
                   </div>
                 </div>
                 <span class="text-white text-sm w-8">
-                  {score_data.components.industry_recognition}
+                  {format_lens_score(display_scores.industry_recognition)}
                 </span>
               </div>
             </div>
-            
+
 <!-- Cultural Impact -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
+                <span class="mr-1 text-sm">📡</span>
                 <span class="text-white/80 text-sm">Cultural Impact</span>
                 <div class="relative ml-1">
                   <svg
@@ -324,21 +328,22 @@
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
-                    class="h-2 bg-purple-400 rounded-full"
-                    style={"width: #{score_data.components.cultural_impact * 10}%"}
+                    class="h-2 bg-teal-400 rounded-full"
+                    style={"width: #{display_scores.cultural_impact * 10}%"}
                   >
                   </div>
                 </div>
                 <span class="text-white text-sm w-8">
-                  {score_data.components.cultural_impact}
+                  {format_lens_score(display_scores.cultural_impact)}
                 </span>
               </div>
             </div>
-            
-<!-- People Quality -->
+
+<!-- The Auteurs -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
-                <span class="text-white/80 text-sm">People Quality</span>
+                <span class="mr-1 text-sm">🎬</span>
+                <span class="text-white/80 text-sm">The Auteurs</span>
                 <div class="relative ml-1">
                   <svg
                     class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
@@ -355,7 +360,7 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>People Quality:</strong>
+                    <strong>The Auteurs:</strong>
                     Caliber of director, actors, and key crew based on their overall career achievements
                   </div>
                 </div>
@@ -363,19 +368,20 @@
               <div class="flex items-center">
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
-                    class="h-2 bg-red-400 rounded-full"
-                    style={"width: #{score_data.components.people_quality * 10}%"}
+                    class="h-2 bg-amber-400 rounded-full"
+                    style={"width: #{display_scores.people_quality * 10}%"}
                   >
                   </div>
                 </div>
-                <span class="text-white text-sm w-8">{score_data.components.people_quality}</span>
+                <span class="text-white text-sm w-8">{format_lens_score(display_scores.people_quality)}</span>
               </div>
             </div>
-            
-<!-- Financial Performance -->
+
+<!-- The Box Office -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
-                <span class="text-white/80 text-sm">Financial Performance</span>
+                <span class="mr-1 text-sm">💵</span>
+                <span class="text-white/80 text-sm">The Box Office</span>
                 <div class="relative ml-1">
                   <svg
                     class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
@@ -392,7 +398,7 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>Financial Performance:</strong>
+                    <strong>The Box Office:</strong>
                     Box office revenue and return on investment (60% revenue scale, 40% ROI ratio)
                   </div>
                 </div>
@@ -401,16 +407,36 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-green-400 rounded-full"
-                    style={"width: #{score_data.components.financial_performance * 10}%"}
+                    style={"width: #{display_scores.financial_performance * 10}%"}
                   >
                   </div>
                 </div>
                 <span class="text-white text-sm w-8">
-                  {score_data.components.financial_performance}
+                  {format_lens_score(display_scores.financial_performance)}
                 </span>
               </div>
             </div>
           </div>
+
+<!-- Disparity Callout -->
+          <% disparity = Map.get(@movie, :disparity_data) %>
+          <%= if disparity && disparity.disparity_score && disparity.disparity_score > 1.5 do %>
+            <div class="mt-4 p-3 rounded-lg bg-white/10 border border-white/20 text-center">
+              <p class="text-white/90 text-xs font-medium">
+                Critics and audiences disagree —
+                <span class="font-bold"><%= Float.round(disparity.disparity_score, 1) %></span> gap
+              </p>
+              <p class="text-white/60 text-xs mt-1">
+                <%= case disparity.disparity_category do
+                  "critics_darling" -> "Critics' Darling"
+                  "peoples_champion" -> "People's Champion"
+                  "perfect_harmony" -> "Perfect Harmony"
+                  "polarizer" -> "The Polarizer"
+                  _ -> ""
+                end %>
+              </p>
+            </div>
+          <% end %>
         <% else %>
           <p class="text-white/60 text-sm text-center">Score data unavailable</p>
         <% end %>
