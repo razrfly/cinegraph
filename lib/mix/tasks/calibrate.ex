@@ -64,7 +64,13 @@ defmodule Mix.Tasks.Calibrate do
 
       results ->
         if json? do
-          IO.puts(Jason.encode!(results, pretty: true))
+          # `by_decade` has integer keys; stringify them so Jason can encode the map
+          results_for_json =
+            Map.update!(results, :by_decade, fn by_decade ->
+              Map.new(by_decade, fn {k, v} -> {to_string(k), v} end)
+            end)
+
+          IO.puts(Jason.encode!(results_for_json, pretty: true))
         else
           print_results(results, profile_name, threshold)
         end
@@ -95,7 +101,10 @@ defmodule Mix.Tasks.Calibrate do
       pct = Float.round(r.recall * 100, 1)
       bar = build_bar(r.recall, 20)
       flag = if r.recall < 0.60, do: " ⚠", else: if(r.recall >= 0.75, do: " ✓", else: "")
-      Mix.shell().info("  #{String.pad_leading(r.decade_label, 6)}  #{bar}  #{String.pad_leading("#{pct}%", 6)}  (#{r.found}/#{r.total})#{flag}")
+
+      Mix.shell().info(
+        "  #{String.pad_leading(r.decade_label, 6)}  #{bar}  #{String.pad_leading("#{pct}%", 6)}  (#{r.found}/#{r.total})#{flag}"
+      )
     end)
 
     # Lens correlations
@@ -125,11 +134,20 @@ defmodule Mix.Tasks.Calibrate do
     Mix.shell().info("")
 
     target_met = results.overall_recall >= 0.75
-    decade_floor_met = Enum.all?(results.by_decade, fn {_, r} -> r.total == 0 or r.recall >= 0.60 end)
+
+    decade_floor_met =
+      Enum.all?(results.by_decade, fn {_, r} -> r.total == 0 or r.recall >= 0.60 end)
 
     Mix.shell().info("Targets:")
-    Mix.shell().info("  Overall ≥ 75%:           #{if target_met, do: "✅ PASS (#{overall_pct}%)", else: "❌ FAIL (#{overall_pct}%)"}")
-    Mix.shell().info("  All decades ≥ 60%:       #{if decade_floor_met, do: "✅ PASS", else: "❌ FAIL — see ⚠ decades above"}")
+
+    Mix.shell().info(
+      "  Overall ≥ 75%:           #{if target_met, do: "✅ PASS (#{overall_pct}%)", else: "❌ FAIL (#{overall_pct}%)"}"
+    )
+
+    Mix.shell().info(
+      "  All decades ≥ 60%:       #{if decade_floor_met, do: "✅ PASS", else: "❌ FAIL — see ⚠ decades above"}"
+    )
+
     Mix.shell().info("")
   end
 

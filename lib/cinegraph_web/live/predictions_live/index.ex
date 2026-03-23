@@ -34,6 +34,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
       # Check if cache is empty or needs refresh based on enhanced status
       cache_empty = predictions_result.predictions == []
+
       cache_needs_refresh =
         Map.get(cache_status, :needs_refresh, true) ||
           stale_cache?(predictions_result.predictions)
@@ -512,9 +513,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   # Returns true if the cached predictions were built with the old popular_opinion key,
   # indicating the cache needs to be refreshed with the current scoring model.
-  defp stale_cache?(predictions) when is_list(predictions) and length(predictions) > 0 do
-    sample = List.first(predictions)
-
+  defp stale_cache?([sample | _]) do
     criteria =
       get_in(sample, [:prediction, :criteria_scores]) ||
         get_in(sample, ["prediction", "criteria_scores"]) ||

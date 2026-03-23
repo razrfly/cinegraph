@@ -40,12 +40,15 @@ defmodule Cinegraph.Calibration.RecallCalculator do
         {:error, :list_not_found}
 
       ref_list ->
-        references = Calibration.list_references(ref_list.id, include_unmatched: false, limit: 9999)
+        references =
+          Calibration.list_references(ref_list.id, include_unmatched: false, limit: 9999)
 
         if references == [] do
           {:error, :no_matched_references}
         else
-          profile = ScoringService.get_profile(profile_name) || ScoringService.get_default_profile()
+          profile =
+            ScoringService.get_profile(profile_name) || ScoringService.get_default_profile()
+
           do_measure(references, profile, threshold)
         end
     end
@@ -54,8 +57,8 @@ defmodule Cinegraph.Calibration.RecallCalculator do
   defp do_measure(references, profile, threshold) do
     by_decade_refs = group_by_decade(references)
 
-    # Per-decade recall (parallel, max 3 concurrent DB queries)
-    decade_results =
+    # Per-decade recall (parallel, max 1 concurrent DB query)
+    decade_results_result =
       by_decade_refs
       |> Task.async_stream(
         fn {decade, refs} ->
@@ -64,25 +67,31 @@ defmodule Cinegraph.Calibration.RecallCalculator do
         max_concurrency: 1,
         timeout: 300_000
       )
-      |> Enum.reduce(%{}, fn
-        {:ok, result}, acc -> Map.put(acc, result.decade, result)
-        {:exit, _reason}, acc -> acc
+      |> Enum.reduce_while({:ok, %{}}, fn
+        {:ok, result}, {:ok, acc} -> {:cont, {:ok, Map.put(acc, result.decade, result)}}
+        {:exit, reason}, _acc -> {:halt, {:error, reason}}
       end)
 
-    total_found = Enum.sum(Enum.map(decade_results, fn {_, r} -> r.found end))
-    total_reference = length(references)
+    case decade_results_result do
+      {:error, reason} ->
+        {:error, reason}
 
-    lens_correlations = calculate_lens_correlations(references, profile)
-    systematic_gaps = find_systematic_gaps(references, decade_results)
+      {:ok, decade_results} ->
+        total_found = Enum.sum(Enum.map(decade_results, fn {_, r} -> r.found end))
+        total_reference = length(references)
 
-    %{
-      overall_recall: if(total_reference > 0, do: total_found / total_reference, else: 0.0),
-      total_found: total_found,
-      total_reference: total_reference,
-      by_decade: decade_results,
-      lens_correlations: lens_correlations,
-      systematic_gaps: systematic_gaps
-    }
+        lens_correlations = calculate_lens_correlations(references, profile)
+        systematic_gaps = find_systematic_gaps(references, decade_results)
+
+        %{
+          overall_recall: if(total_reference > 0, do: total_found / total_reference, else: 0.0),
+          total_found: total_found,
+          total_reference: total_reference,
+          by_decade: decade_results,
+          lens_correlations: lens_correlations,
+          systematic_gaps: systematic_gaps
+        }
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -101,12 +110,14 @@ defmodule Cinegraph.Calibration.RecallCalculator do
   end
 
   defp get_reference_year(%{movie: %Movie{release_date: %Date{year: year}}}), do: year
+
   defp get_reference_year(%{movie: %Movie{release_date: date}}) when not is_nil(date) do
     case date do
       %{year: year} -> year
       _ -> nil
     end
   end
+
   defp get_reference_year(%{external_year: year}) when is_integer(year), do: year
   defp get_reference_year(_), do: nil
 
@@ -117,12 +128,14 @@ defmodule Cinegraph.Calibration.RecallCalculator do
   defp compute_decade_recall(decade, refs, profile, threshold) do
     year_start = decade * 10
     year_end = year_start + 9
+    start_date = Date.new!(year_start, 1, 1)
+    end_date = Date.new!(year_end, 12, 31)
 
     total_in_db =
       from(m in Movie,
         where: not is_nil(m.release_date),
-        where: fragment("EXTRACT(year FROM ?)::int", m.release_date) >= ^year_start,
-        where: fragment("EXTRACT(year FROM ?)::int", m.release_date) <= ^year_end
+        where: m.release_date >= ^start_date,
+        where: m.release_date <= ^end_date
       )
       |> Repo.aggregate(:count, timeout: 120_000)
 
@@ -131,8 +144,8 @@ defmodule Cinegraph.Calibration.RecallCalculator do
     top_ids =
       from(m in Movie,
         where: not is_nil(m.release_date),
-        where: fragment("EXTRACT(year FROM ?)::int", m.release_date) >= ^year_start,
-        where: fragment("EXTRACT(year FROM ?)::int", m.release_date) <= ^year_end
+        where: m.release_date >= ^start_date,
+        where: m.release_date <= ^end_date
       )
       |> ScoringService.apply_scoring(profile, %{min_score: nil})
       |> limit(^threshold_count)
@@ -177,7 +190,7 @@ defmodule Cinegraph.Calibration.RecallCalculator do
     else
       scored =
         from(m in Movie, where: m.id in ^ref_movie_ids)
-        |> ScoringService.apply_scoring(profile)
+        |> ScoringService.apply_scoring(profile, %{min_score: nil})
         |> Repo.all()
 
       lenses = [
@@ -262,7 +275,8 @@ defmodule Cinegraph.Calibration.RecallCalculator do
       %{
         category: "decade",
         count: r.total - r.found,
-        description: "#{r.decade_label}: #{Float.round(r.recall * 100, 0)}% recall (#{r.found}/#{r.total})"
+        description:
+          "#{r.decade_label}: #{Float.round(r.recall * 100, 0)}% recall (#{r.found}/#{r.total})"
       }
     end)
   end

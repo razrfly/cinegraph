@@ -16,15 +16,35 @@ defmodule Cinegraph.Workers.RecallCalibrationWorker do
   @pubsub_topic "recall_calibration"
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"list_slug" => list_slug, "profile_name" => profile_name, "threshold" => threshold}}) do
+  def perform(%Oban.Job{
+        id: job_id,
+        args: %{
+          "list_slug" => list_slug,
+          "profile_name" => profile_name,
+          "threshold" => threshold
+        }
+      }) do
     Logger.info("RecallCalibrationWorker starting: #{list_slug} / #{profile_name} @ #{threshold}")
 
-    broadcast(%{status: :running, list_slug: list_slug, profile_name: profile_name})
+    broadcast(%{
+      status: :running,
+      job_id: job_id,
+      list_slug: list_slug,
+      profile_name: profile_name
+    })
 
     case Cinegraph.Calibration.measure_recall(list_slug, profile_name, threshold: threshold) do
       {:error, reason} = err ->
         Logger.warning("RecallCalibrationWorker failed: #{inspect(reason)}")
-        broadcast(%{status: :error, error: inspect(reason), list_slug: list_slug, profile_name: profile_name})
+
+        broadcast(%{
+          status: :error,
+          job_id: job_id,
+          error: inspect(reason),
+          list_slug: list_slug,
+          profile_name: profile_name
+        })
+
         err
 
       results ->
@@ -37,6 +57,7 @@ defmodule Cinegraph.Workers.RecallCalibrationWorker do
 
         broadcast(%{
           status: :complete,
+          job_id: job_id,
           results: results,
           list_slug: list_slug,
           profile_name: profile_name,
