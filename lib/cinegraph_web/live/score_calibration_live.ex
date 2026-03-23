@@ -787,6 +787,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
   defp format_category_abbrev(category) do
     case category do
+      "mob" -> "Mob"
+      "ivory_tower" -> "IT"
       "popular_opinion" -> "Pop"
       "industry_recognition" -> "Ind"
       "cultural_impact" -> "Cult"

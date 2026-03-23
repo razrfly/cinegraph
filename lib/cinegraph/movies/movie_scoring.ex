@@ -17,8 +17,9 @@ defmodule Cinegraph.Movies.MovieScoring do
   Calculate comprehensive scores for a movie using external metrics,
   festival data, person quality, and financial performance.
 
-  Uses the standard 5-category scoring system:
-  - Popular Opinion (ratings from IMDb, TMDb, Metacritic, RT)
+  Uses the standard 6-category scoring system:
+  - The Mob (audience ratings from IMDb and TMDb)
+  - The Ivory Tower (critics scores from Metacritic and RT Tomatometer)
   - Industry Recognition (festival wins and nominations)
   - Cultural Impact (canonical sources and popularity)
   - People Quality (quality scores of cast and crew)

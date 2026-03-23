@@ -181,17 +181,17 @@
         <% score_data = Map.get(@movie, :score_data) %>
         <%= if score_data do %>
           <div class="space-y-3">
-            <!-- Popular Opinion -->
+            <!-- The Mob -->
             <div class="flex items-center justify-between group">
               <div class="flex items-center">
-                <span class="text-white/80 text-sm">Popular Opinion</span>
+                <span class="text-white/80 text-sm">The Mob</span>
                 <div class="relative ml-1">
                   <svg
                     class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
-                    title="IMDb, TMDb, Metacritic & Rotten Tomatoes ratings"
+                    title="Audience ratings: IMDb & TMDb"
                   >
                     <path
                       stroke-linecap="round"
@@ -201,8 +201,7 @@
                     />
                   </svg>
                   <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
-                    <strong>Popular Opinion:</strong>
-                    Aggregate of IMDb, TMDb, Metacritic, and Rotten Tomatoes ratings
+                    <strong>The Mob:</strong> Audience ratings from IMDb and TMDb
                   </div>
                 </div>
               </div>
@@ -210,12 +209,50 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-blue-400 rounded-full"
-                    style={"width: #{score_data.components.popular_opinion * 10}%"}
+                    style={"width: #{(score_data.components[:mob] || 0) * 10}%"}
                   >
                   </div>
                 </div>
                 <span class="text-white text-sm w-8">
-                  {score_data.components.popular_opinion}
+                  {score_data.components[:mob] || 0}
+                </span>
+              </div>
+            </div>
+            <!-- The Ivory Tower -->
+            <div class="flex items-center justify-between group">
+              <div class="flex items-center">
+                <span class="text-white/80 text-sm">The Ivory Tower</span>
+                <div class="relative ml-1">
+                  <svg
+                    class="w-3.5 h-3.5 text-white/40 group-hover:text-white/60 transition-colors cursor-help"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    title="Critics scores: RT Tomatometer & Metacritic"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div class="hidden group-hover:block absolute z-10 w-64 p-2 mt-1 text-xs bg-gray-900 text-white rounded-lg shadow-lg left-0">
+                    <strong>The Ivory Tower:</strong>
+                    Critics scores from RT Tomatometer and Metacritic
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center">
+                <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
+                  <div
+                    class="h-2 bg-purple-400 rounded-full"
+                    style={"width: #{(score_data.components[:ivory_tower] || 0) * 10}%"}
+                  >
+                  </div>
+                </div>
+                <span class="text-white text-sm w-8">
+                  {score_data.components[:ivory_tower] || 0}
                 </span>
               </div>
             </div>

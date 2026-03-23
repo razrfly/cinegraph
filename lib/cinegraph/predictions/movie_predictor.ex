@@ -180,13 +180,25 @@ defmodule Cinegraph.Predictions.MoviePredictor do
 
   defp convert_ui_weights_to_categories(weights) do
     # Coerce non-numeric values to 0.0 and delegate to ScoringService for consistent mapping
-    # Combine critical_acclaim into popular_opinion if it exists
-    pop_opinion_weight =
-      to_float(Map.get(weights, :popular_opinion, 0.0)) +
-        to_float(Map.get(weights, :critical_acclaim, 0.0))
+    # Support both old popular_opinion key and new mob/ivory_tower keys
+    mob_weight = to_float(Map.get(weights, :mob, 0.0))
+    ivory_tower_weight = to_float(Map.get(weights, :ivory_tower, 0.0))
+
+    # Legacy fallback: split popular_opinion + critical_acclaim 50/50 into mob/ivory_tower
+    {mob_weight, ivory_tower_weight} =
+      if mob_weight == 0.0 and ivory_tower_weight == 0.0 do
+        legacy =
+          to_float(Map.get(weights, :popular_opinion, 0.0)) +
+            to_float(Map.get(weights, :critical_acclaim, 0.0))
+
+        {legacy / 2.0, legacy / 2.0}
+      else
+        {mob_weight, ivory_tower_weight}
+      end
 
     sanitized = %{
-      popular_opinion: pop_opinion_weight,
+      mob: mob_weight,
+      ivory_tower: ivory_tower_weight,
       industry_recognition:
         to_float(
           Map.get(weights, :industry_recognition, Map.get(weights, :festival_recognition, 0.0))
@@ -258,7 +270,8 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     components = Map.get(movie, :score_components, %{})
     # Use provided weights or fallback to equal weights
     default_weights = %{
-      popular_opinion: 0.30,
+      mob: 0.15,
+      ivory_tower: 0.15,
       industry_recognition: 0.20,
       financial_success: 0.20,
       cultural_impact: 0.15,
@@ -269,13 +282,24 @@ defmodule Cinegraph.Predictions.MoviePredictor do
 
     [
       %{
-        criterion: :popular_opinion,
-        raw_score: Float.round(to_float(components[:popular_opinion]) * 100, 1),
-        weight: Map.get(actual_weights, :popular_opinion, 0.30),
+        criterion: :mob,
+        raw_score: Float.round(to_float(components[:mob]) * 100, 1),
+        weight: Map.get(actual_weights, :mob, 0.15),
         weighted_points:
           Float.round(
-            to_float(components[:popular_opinion]) *
-              Map.get(actual_weights, :popular_opinion, 0.30) * 100,
+            to_float(components[:mob]) *
+              Map.get(actual_weights, :mob, 0.15) * 100,
+            1
+          )
+      },
+      %{
+        criterion: :ivory_tower,
+        raw_score: Float.round(to_float(components[:ivory_tower]) * 100, 1),
+        weight: Map.get(actual_weights, :ivory_tower, 0.15),
+        weighted_points:
+          Float.round(
+            to_float(components[:ivory_tower]) *
+              Map.get(actual_weights, :ivory_tower, 0.15) * 100,
             1
           )
       },

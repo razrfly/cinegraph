@@ -305,7 +305,7 @@ defmodule Cinegraph.Movies.Cache do
       %{"sort" => "release_date_desc"},
       %{"sort" => "rating"},
       %{"sort" => "popularity"},
-      %{"sort" => "popular_opinion"},
+      %{"sort" => "mob"},
 
       # Common filters
       %{"decade" => "2020"},

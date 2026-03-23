@@ -32,7 +32,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in ~w(popular_opinion industry_recognition cultural_impact people_quality) ->
+      field in ~w(mob ivory_tower popular_opinion industry_recognition cultural_impact people_quality) ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->
@@ -158,6 +158,72 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
     ])
   end
 
+  defp apply_discovery_metric_sort(query, "mob", direction) do
+    order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+    order_by(query, [m], [
+      {^order_func,
+       fragment(
+         """
+         (
+           SELECT CASE
+             WHEN ir.value IS NOT NULL AND tr.value IS NOT NULL
+               THEN (ir.value / 10.0 + tr.value / 10.0) / 2.0
+             WHEN ir.value IS NOT NULL THEN ir.value / 10.0
+             WHEN tr.value IS NOT NULL THEN tr.value / 10.0
+             ELSE NULL
+           END
+           FROM (
+                 SELECT value FROM external_metrics
+                 WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+                 ORDER BY fetched_at DESC LIMIT 1
+                ) tr,
+                (
+                 SELECT value FROM external_metrics
+                 WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
+                 ORDER BY fetched_at DESC LIMIT 1
+                ) ir
+         )
+         """,
+         m.id,
+         m.id
+       )}
+    ])
+  end
+
+  defp apply_discovery_metric_sort(query, "ivory_tower", direction) do
+    order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+    order_by(query, [m], [
+      {^order_func,
+       fragment(
+         """
+         (
+           SELECT CASE
+             WHEN rt.value IS NOT NULL AND mc.value IS NOT NULL
+               THEN (rt.value / 100.0 + mc.value / 100.0) / 2.0
+             WHEN rt.value IS NOT NULL THEN rt.value / 100.0
+             WHEN mc.value IS NOT NULL THEN mc.value / 100.0
+             ELSE NULL
+           END
+           FROM (
+                 SELECT value FROM external_metrics
+                 WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer'
+                 ORDER BY fetched_at DESC LIMIT 1
+                ) rt,
+                (
+                 SELECT value FROM external_metrics
+                 WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
+                 ORDER BY fetched_at DESC LIMIT 1
+                ) mc
+         )
+         """,
+         m.id,
+         m.id
+       )}
+    ])
+  end
+
   defp apply_discovery_metric_sort(query, "popular_opinion", direction) do
     order_func = if direction == :desc, do: :desc, else: :asc
 
@@ -166,9 +232,9 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
        fragment(
          """
          COALESCE((
-           SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
+           SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 +
                    COALESCE(ir.value, 0) / 10.0 * 0.25 +
-                   COALESCE(mc.value, 0) / 100.0 * 0.25 + 
+                   COALESCE(mc.value, 0) / 100.0 * 0.25 +
                    COALESCE(rt.value, 0) / 100.0 * 0.25)
            FROM (
                  SELECT value FROM external_metrics
