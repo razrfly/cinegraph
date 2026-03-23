@@ -12,7 +12,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
   @normalization_methods ~w(none bayesian percentile zscore)
   @missing_data_strategies ~w(neutral exclude average penalize)
 
-  @categories ~w(popular_opinion industry_recognition cultural_impact people_quality financial_performance)
+  @categories ~w(mob ivory_tower industry_recognition cultural_impact people_quality financial_performance)
 
   schema "calibration_scoring_configurations" do
     field :version, :integer
@@ -24,7 +24,8 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
     # Category weights (must sum to 1.0)
     field :category_weights, :map,
       default: %{
-        "popular_opinion" => 0.20,
+        "mob" => 0.10,
+        "ivory_tower" => 0.10,
         "industry_recognition" => 0.20,
         "cultural_impact" => 0.20,
         "people_quality" => 0.20,
@@ -38,7 +39,8 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
     # Per-category missing data handling
     field :missing_data_strategies, :map,
       default: %{
-        "popular_opinion" => "neutral",
+        "mob" => "neutral",
+        "ivory_tower" => "neutral",
         "industry_recognition" => "exclude",
         "cultural_impact" => "neutral",
         "people_quality" => "average",
@@ -205,7 +207,8 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       is_active: true,
       is_draft: false,
       category_weights: %{
-        "popular_opinion" => 0.20,
+        "mob" => 0.10,
+        "ivory_tower" => 0.10,
         "industry_recognition" => 0.20,
         "cultural_impact" => 0.20,
         "people_quality" => 0.20,
@@ -213,7 +216,8 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       },
       normalization_method: "none",
       missing_data_strategies: %{
-        "popular_opinion" => "neutral",
+        "mob" => "neutral",
+        "ivory_tower" => "neutral",
         "industry_recognition" => "exclude",
         "cultural_impact" => "neutral",
         "people_quality" => "average",
@@ -232,7 +236,8 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       description: "Weights adjusted to reduce financial penalty and emphasize ratings",
       is_draft: true,
       category_weights: %{
-        "popular_opinion" => 0.40,
+        "mob" => 0.20,
+        "ivory_tower" => 0.20,
         "industry_recognition" => 0.15,
         "cultural_impact" => 0.25,
         "people_quality" => 0.15,
@@ -244,7 +249,8 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
         "min_votes" => 500
       },
       missing_data_strategies: %{
-        "popular_opinion" => "neutral",
+        "mob" => "neutral",
+        "ivory_tower" => "neutral",
         "industry_recognition" => "exclude",
         "cultural_impact" => "neutral",
         "people_quality" => "average",

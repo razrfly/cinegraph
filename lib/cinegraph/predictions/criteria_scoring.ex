@@ -1,13 +1,14 @@
 defmodule Cinegraph.Predictions.CriteriaScoring do
   @moduledoc """
-  Implements the 5-criteria scoring system for predicting 1001 Movies list additions.
+  Implements the 6-criteria scoring system for predicting 1001 Movies list additions.
 
-  The 5 criteria with default weights:
-  1. Popular Opinion (35%) - All rating sources combined
-  2. Festival Recognition (30%) 
-  3. Cultural Impact (20%)
-  4. Technical Innovation (10%)
-  5. Auteur Recognition (5%)
+  The 6 criteria with default weights:
+  1. The Mob (17.5%) - Audience ratings: IMDb, TMDb, RT Audience Score
+  2. Ivory Tower (17.5%) - Critic ratings: Metacritic, RT Tomatometer
+  3. Festival Recognition (30%)
+  4. Cultural Impact (20%)
+  5. Technical Innovation (10%)
+  6. Auteur Recognition (5%)
   """
 
   import Ecto.Query
@@ -15,7 +16,8 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   alias Cinegraph.Movies.Movie
 
   @default_weights %{
-    popular_opinion: 0.35,
+    mob: 0.175,
+    ivory_tower: 0.175,
     festival_recognition: 0.30,
     cultural_impact: 0.20,
     technical_innovation: 0.10,
@@ -69,7 +71,8 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   """
   def calculate_movie_score(movie, weights \\ @default_weights) do
     scores = %{
-      popular_opinion: score_popular_opinion(movie) || 0.0,
+      mob: score_mob(movie) || 0.0,
+      ivory_tower: score_ivory_tower(movie) || 0.0,
       festival_recognition: score_festival_recognition(movie) || 0.0,
       cultural_impact: score_cultural_impact(movie) || 0.0,
       technical_innovation: score_technical_innovation(movie) || 0.0,
@@ -93,38 +96,36 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   end
 
   @doc """
-  Score based on popular opinion (all rating sources combined).
+  Score based on mob (audience ratings: IMDb, TMDb, RT Audience Score).
   Returns 0-100 score.
   """
-  def score_popular_opinion(movie) do
+  def score_mob(movie) do
     query =
       from em in "external_metrics",
         where: em.movie_id == ^movie.id,
         where:
           (em.source == "imdb" and em.metric_type == "rating_average") or
             (em.source == "tmdb" and em.metric_type == "rating_average") or
-            (em.source == "metacritic" and em.metric_type == "metascore") or
+            (em.source == "rotten_tomatoes" and em.metric_type == "audience_score"),
+        select: [em.source, em.metric_type, em.value]
+
+    score_mob_from_metrics(Repo.all(query))
+  end
+
+  @doc """
+  Score based on ivory tower (critic ratings: Metacritic, RT Tomatometer).
+  Returns 0-100 score.
+  """
+  def score_ivory_tower(movie) do
+    query =
+      from em in "external_metrics",
+        where: em.movie_id == ^movie.id,
+        where:
+          (em.source == "metacritic" and em.metric_type == "metascore") or
             (em.source == "rotten_tomatoes" and em.metric_type == "tomatometer"),
         select: [em.source, em.metric_type, em.value]
 
-    metrics = Repo.all(query)
-
-    if length(metrics) == 0 do
-      0.0
-    else
-      # Convert all scores to 0-100 scale and average
-      normalized_scores =
-        Enum.map(metrics, fn [source, metric_type, value] ->
-          normalize_rating_score(source, metric_type, value)
-        end)
-        |> Enum.filter(&(&1 > 0))
-
-      if length(normalized_scores) > 0 do
-        Enum.sum(normalized_scores) / length(normalized_scores)
-      else
-        0.0
-      end
-    end
+    score_ivory_tower_from_metrics(Repo.all(query))
   end
 
   @doc """
@@ -541,7 +542,8 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
     # Calculate individual scores, ensuring they're all 0-100 range
     scores = %{
-      popular_opinion: min(score_popular_opinion_from_batch(external_metrics) || 0.0, 100.0),
+      mob: min(score_mob_from_metrics(external_metrics) || 0.0, 100.0),
+      ivory_tower: min(score_ivory_tower_from_metrics(external_metrics) || 0.0, 100.0),
       festival_recognition:
         min(score_festival_recognition_from_batch(festival_nominations) || 0.0, 100.0),
       cultural_impact:
@@ -572,34 +574,42 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     }
   end
 
-  defp score_popular_opinion_from_batch(metrics) do
-    if length(metrics) == 0 do
-      0.0
-    else
-      # Filter to only rating metrics and normalize
-      # Fixed: Use actual metric types from database
-      normalized_scores =
-        metrics
-        |> Enum.filter(fn [source, metric_type, _value] ->
-          case source do
-            "imdb" -> metric_type == "rating_average"
-            "tmdb" -> metric_type == "rating_average"
-            "metacritic" -> metric_type == "metascore"
-            "rotten_tomatoes" -> metric_type == "tomatometer"
-            _ -> false
-          end
-        end)
-        |> Enum.map(fn [source, metric_type, value] ->
-          normalize_rating_score(source, metric_type, value || 0.0)
-        end)
-        |> Enum.filter(&(&1 > 0))
+  defp score_mob_from_metrics(metrics) do
+    normalized_scores =
+      metrics
+      |> Enum.filter(fn [source, metric_type, _value] ->
+        (source == "imdb" and metric_type == "rating_average") or
+          (source == "tmdb" and metric_type == "rating_average") or
+          (source == "rotten_tomatoes" and metric_type == "audience_score")
+      end)
+      |> Enum.map(fn [source, metric_type, value] ->
+        normalize_rating_score(source, metric_type, value || 0.0)
+      end)
+      |> Enum.filter(&(&1 > 0))
 
-      if length(normalized_scores) > 0 do
-        # Average the scores, but cap at 100
-        min(Enum.sum(normalized_scores) / length(normalized_scores), 100.0)
-      else
-        0.0
-      end
+    if length(normalized_scores) > 0 do
+      min(Enum.sum(normalized_scores) / length(normalized_scores), 100.0)
+    else
+      0.0
+    end
+  end
+
+  defp score_ivory_tower_from_metrics(metrics) do
+    normalized_scores =
+      metrics
+      |> Enum.filter(fn [source, metric_type, _value] ->
+        (source == "metacritic" and metric_type == "metascore") or
+          (source == "rotten_tomatoes" and metric_type == "tomatometer")
+      end)
+      |> Enum.map(fn [source, metric_type, value] ->
+        normalize_rating_score(source, metric_type, value || 0.0)
+      end)
+      |> Enum.filter(&(&1 > 0))
+
+    if length(normalized_scores) > 0 do
+      min(Enum.sum(normalized_scores) / length(normalized_scores), 100.0)
+    else
+      0.0
     end
   end
 

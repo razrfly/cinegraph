@@ -665,7 +665,8 @@ defmodule Cinegraph.Calibration do
     weights = Map.get(config, :category_weights, %{})
 
     # Get component scores
-    popular = get_popular_opinion_score(movie.id)
+    mob = get_mob_score(movie.id)
+    ivory_tower = get_ivory_tower_score(movie.id)
     awards = get_awards_score(movie.id)
     cultural = get_cultural_score(movie.id)
     people = get_people_score(movie.id)
@@ -673,7 +674,8 @@ defmodule Cinegraph.Calibration do
 
     # Apply weights and missing data strategies
     components = [
-      {popular, Map.get(weights, "popular_opinion", 0.2), "popular_opinion"},
+      {mob, Map.get(weights, "mob", 0.1), "mob"},
+      {ivory_tower, Map.get(weights, "ivory_tower", 0.1), "ivory_tower"},
       {awards, Map.get(weights, "industry_recognition", 0.2), "industry_recognition"},
       {cultural, Map.get(weights, "cultural_impact", 0.2), "cultural_impact"},
       {people, Map.get(weights, "people_quality", 0.2), "people_quality"},
@@ -709,13 +711,35 @@ defmodule Cinegraph.Calibration do
     end
   end
 
-  defp get_popular_opinion_score(movie_id) do
+  defp get_mob_score(movie_id) do
     query = """
-    SELECT AVG(value)
+    SELECT AVG(CASE
+      WHEN source = 'imdb' AND metric_type = 'rating_average' THEN value
+      WHEN source = 'tmdb' AND metric_type = 'rating_average' THEN value
+      WHEN source = 'rotten_tomatoes' AND metric_type = 'audience_score' THEN value / 10.0
+    END)
     FROM external_metrics
     WHERE movie_id = $1
-      AND source IN ('imdb', 'tmdb')
-      AND metric_type = 'rating_average'
+      AND ((source IN ('imdb', 'tmdb') AND metric_type = 'rating_average')
+        OR (source = 'rotten_tomatoes' AND metric_type = 'audience_score'))
+    """
+
+    case Repo.query(query, [movie_id]) do
+      {:ok, %{rows: [[score]]}} -> to_float(score)
+      _ -> nil
+    end
+  end
+
+  defp get_ivory_tower_score(movie_id) do
+    query = """
+    SELECT AVG(CASE
+      WHEN source = 'rotten_tomatoes' AND metric_type = 'tomatometer' THEN value / 10.0
+      WHEN source = 'metacritic' AND metric_type = 'metascore' THEN value / 10.0
+    END)
+    FROM external_metrics
+    WHERE movie_id = $1
+      AND ((source = 'rotten_tomatoes' AND metric_type = 'tomatometer')
+        OR  (source = 'metacritic' AND metric_type = 'metascore'))
     """
 
     case Repo.query(query, [movie_id]) do

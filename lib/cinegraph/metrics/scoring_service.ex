@@ -297,6 +297,13 @@ defmodule Cinegraph.Metrics.ScoringService do
           em_rt.metric_type == "tomatometer",
       as: :rotten_tomatoes
     )
+    |> join(:left, [m], em_rta in "external_metrics",
+      on:
+        em_rta.movie_id == m.id and
+          em_rta.source == "rotten_tomatoes" and
+          em_rta.metric_type == "audience_score",
+      as: :rt_audience
+    )
     |> join(:left, [m], em_pop in "external_metrics",
       on:
         em_pop.movie_id == m.id and
@@ -389,6 +396,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         imdb_rating: ir,
         metacritic: mc,
         rotten_tomatoes: rt,
+        rt_audience: ra,
         popularity: pop,
         festivals: f,
         person_quality: pq,
@@ -399,12 +407,18 @@ defmodule Cinegraph.Metrics.ScoringService do
         discovery_score:
           fragment(
             """
-            ? * CASE
-              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
-              ELSE 0.0
-            END +
+            ? * COALESCE(
+              (COALESCE(NULLIF(?, 0), 0) / 10.0 +
+               COALESCE(NULLIF(?, 0), 0) / 10.0 +
+               COALESCE(NULLIF(?, 0), 0) / 100.0) /
+              NULLIF(
+                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END,
+                0
+              ),
+              0.0
+            ) +
             ? * CASE
               WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
               WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
@@ -423,12 +437,10 @@ defmodule Cinegraph.Metrics.ScoringService do
             ^Map.get(weights, :mob, 0.0),
             ir.value,
             tr.value,
+            ra.value,
             ir.value,
             tr.value,
-            ir.value,
-            ir.value,
-            tr.value,
-            tr.value,
+            ra.value,
             ^Map.get(weights, :ivory_tower, 0.0),
             rt.value,
             mc.value,
@@ -457,15 +469,13 @@ defmodule Cinegraph.Metrics.ScoringService do
           ),
         mob_score:
           fragment(
-            "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
+            "COALESCE((COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 100.0) / NULLIF(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END, 0), 0.0)",
             ir.value,
             tr.value,
+            ra.value,
             ir.value,
             tr.value,
-            ir.value,
-            ir.value,
-            tr.value,
-            tr.value
+            ra.value
           ),
         ivory_tower_score:
           fragment(
@@ -481,24 +491,23 @@ defmodule Cinegraph.Metrics.ScoringService do
           ),
         score_confidence:
           fragment(
-            "(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END) / 4.0",
+            "(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END) / 5.0",
             ir.value,
             tr.value,
             rt.value,
-            mc.value
+            mc.value,
+            ra.value
           ),
         score_components: %{
           mob:
             fragment(
-              "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0 ELSE 0.0 END",
+              "COALESCE((COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 100.0) / NULLIF(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END, 0), 0.0)",
               ir.value,
               tr.value,
+              ra.value,
               ir.value,
               tr.value,
-              ir.value,
-              ir.value,
-              tr.value,
-              tr.value
+              ra.value
             ),
           ivory_tower:
             fragment(
@@ -562,6 +571,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         imdb_rating: ir,
         metacritic: mc,
         rotten_tomatoes: rt,
+        rt_audience: ra,
         popularity: pop,
         festivals: f,
         person_quality: pq,
@@ -572,12 +582,18 @@ defmodule Cinegraph.Metrics.ScoringService do
         discovery_score:
           fragment(
             """
-            ? * CASE
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
-              ELSE 0.0
-            END +
+            ? * COALESCE(
+              (COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
+               COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
+               COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) /
+              NULLIF(
+                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END,
+                0
+              ),
+              0.0
+            ) +
             ? * CASE
               WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
               WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
@@ -596,12 +612,10 @@ defmodule Cinegraph.Metrics.ScoringService do
             ^Map.get(weights, :mob, 0.0),
             ir.value,
             tr.value,
+            ra.value,
             ir.value,
             tr.value,
-            ir.value,
-            ir.value,
-            tr.value,
-            tr.value,
+            ra.value,
             ^Map.get(weights, :ivory_tower, 0.0),
             rt.value,
             mc.value,
@@ -631,15 +645,13 @@ defmodule Cinegraph.Metrics.ScoringService do
         score_components: %{
           mob:
             fragment(
-              "CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0 ELSE 0.0 END",
+              "COALESCE((COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 + COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 + COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) / NULLIF(CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END, 0), 0.0)",
               ir.value,
               tr.value,
+              ra.value,
               ir.value,
               tr.value,
-              ir.value,
-              ir.value,
-              tr.value,
-              tr.value
+              ra.value
             ),
           ivory_tower:
             fragment(
@@ -703,6 +715,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           imdb_rating: ir,
           metacritic: mc,
           rotten_tomatoes: rt,
+          rt_audience: ra,
           popularity: pop,
           festivals: f,
           person_quality: pq,
@@ -711,12 +724,18 @@ defmodule Cinegraph.Metrics.ScoringService do
         ],
         fragment(
           """
-          ? * CASE
-            WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
-            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
-            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
-            ELSE 0.0
-          END +
+          ? * COALESCE(
+            (COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
+             COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
+             COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) /
+            NULLIF(
+              CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
+              CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
+              CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END,
+              0
+            ),
+            0.0
+          ) +
           ? * CASE
             WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
             WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
@@ -735,12 +754,10 @@ defmodule Cinegraph.Metrics.ScoringService do
           ^Map.get(weights, :mob, 0.0),
           ir.value,
           tr.value,
+          ra.value,
           ir.value,
           tr.value,
-          ir.value,
-          ir.value,
-          tr.value,
-          tr.value,
+          ra.value,
           ^Map.get(weights, :ivory_tower, 0.0),
           rt.value,
           mc.value,
@@ -778,6 +795,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           imdb_rating: ir,
           metacritic: mc,
           rotten_tomatoes: rt,
+          rt_audience: ra,
           popularity: pop,
           festivals: f,
           person_quality: pq,
@@ -786,12 +804,18 @@ defmodule Cinegraph.Metrics.ScoringService do
         ],
         fragment(
           """
-          ? * CASE
-            WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
-            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
-            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
-            ELSE 0.0
-          END +
+          ? * COALESCE(
+            (COALESCE(NULLIF(?, 0), 0) / 10.0 +
+             COALESCE(NULLIF(?, 0), 0) / 10.0 +
+             COALESCE(NULLIF(?, 0), 0) / 100.0) /
+            NULLIF(
+              CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
+              CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
+              CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END,
+              0
+            ),
+            0.0
+          ) +
           ? * CASE
             WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
             WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
@@ -810,12 +834,10 @@ defmodule Cinegraph.Metrics.ScoringService do
           ^Map.get(weights, :mob, 0.0),
           ir.value,
           tr.value,
+          ra.value,
           ir.value,
           tr.value,
-          ir.value,
-          ir.value,
-          tr.value,
-          tr.value,
+          ra.value,
           ^Map.get(weights, :ivory_tower, 0.0),
           rt.value,
           mc.value,
@@ -857,6 +879,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           imdb_rating: ir,
           metacritic: mc,
           rotten_tomatoes: rt,
+          rt_audience: ra,
           popularity: pop,
           festivals: f,
           person_quality: pq,
@@ -866,12 +889,18 @@ defmodule Cinegraph.Metrics.ScoringService do
         desc:
           fragment(
             """
-            ? * CASE
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 10.0 + MAX(?) / 10.0) / 2.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 10.0
-              ELSE 0.0
-            END +
+            ? * COALESCE(
+              (COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
+               COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
+               COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) /
+              NULLIF(
+                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END,
+                0
+              ),
+              0.0
+            ) +
             ? * CASE
               WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
               WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
@@ -890,12 +919,10 @@ defmodule Cinegraph.Metrics.ScoringService do
             ^Map.get(weights, :mob, 0.0),
             ir.value,
             tr.value,
+            ra.value,
             ir.value,
             tr.value,
-            ir.value,
-            ir.value,
-            tr.value,
-            tr.value,
+            ra.value,
             ^Map.get(weights, :ivory_tower, 0.0),
             rt.value,
             mc.value,
@@ -932,6 +959,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           imdb_rating: ir,
           metacritic: mc,
           rotten_tomatoes: rt,
+          rt_audience: ra,
           popularity: pop,
           festivals: f,
           person_quality: pq,
@@ -941,12 +969,18 @@ defmodule Cinegraph.Metrics.ScoringService do
         desc:
           fragment(
             """
-            ? * CASE
-              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 10.0 + ? / 10.0) / 2.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 10.0
-              ELSE 0.0
-            END +
+            ? * COALESCE(
+              (COALESCE(NULLIF(?, 0), 0) / 10.0 +
+               COALESCE(NULLIF(?, 0), 0) / 10.0 +
+               COALESCE(NULLIF(?, 0), 0) / 100.0) /
+              NULLIF(
+                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
+                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END,
+                0
+              ),
+              0.0
+            ) +
             ? * CASE
               WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
               WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
@@ -965,12 +999,10 @@ defmodule Cinegraph.Metrics.ScoringService do
             ^Map.get(weights, :mob, 0.0),
             ir.value,
             tr.value,
+            ra.value,
             ir.value,
             tr.value,
-            ir.value,
-            ir.value,
-            tr.value,
-            tr.value,
+            ra.value,
             ^Map.get(weights, :ivory_tower, 0.0),
             rt.value,
             mc.value,
