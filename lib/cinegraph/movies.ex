@@ -1109,12 +1109,12 @@ defmodule Cinegraph.Movies do
     from(m in Movie,
       join: s in assoc(m, :score_cache),
       where: s.disparity_category == ^category,
-      order_by: [desc: s.disparity_score],
+      order_by: [desc: s.disparity_score, asc: m.id],
       limit: ^limit,
       offset: ^offset,
       preload: [score_cache: s]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   @doc "List movies with the largest critic/audience gap."
@@ -1124,11 +1124,11 @@ defmodule Cinegraph.Movies do
     from(m in Movie,
       join: s in assoc(m, :score_cache),
       where: not is_nil(s.disparity_score),
-      order_by: [desc: s.disparity_score],
+      order_by: [desc: s.disparity_score, asc: m.id],
       limit: ^limit,
       preload: [score_cache: s]
     )
-    |> Repo.all()
+    |> Repo.replica().all()
   end
 
   # Helper to escape SQL LIKE wildcards

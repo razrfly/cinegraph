@@ -46,7 +46,20 @@ defmodule Cinegraph.Movies.MovieScoreCache do
       :calculated_at,
       :calculation_version
     ])
-    |> validate_required([:movie_id, :calculated_at, :calculation_version])
+    |> validate_required([
+      :movie_id,
+      :mob_score,
+      :ivory_tower_score,
+      :industry_recognition_score,
+      :cultural_impact_score,
+      :people_quality_score,
+      :financial_performance_score,
+      :overall_score,
+      :score_confidence,
+      :unpredictability_score,
+      :calculated_at,
+      :calculation_version
+    ])
     |> foreign_key_constraint(:movie_id)
     |> unique_constraint(:movie_id)
   end

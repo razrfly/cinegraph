@@ -97,7 +97,7 @@
       </div>
 
       <!-- Load More -->
-      <%= if length(@movies) >= 24 do %>
+      <%= if length(@movies) >= @per_page do %>
         <div class="text-center mt-10">
           <button
             phx-click="load_more"

@@ -420,7 +420,7 @@
 
 <!-- Disparity Callout -->
           <% disparity = Map.get(@movie, :disparity_data) %>
-          <%= if disparity && disparity.disparity_score && disparity.disparity_score > 1.5 do %>
+          <%= if disparity && disparity.disparity_score && disparity.disparity_category && disparity.disparity_score > 1.5 do %>
             <div class="mt-4 p-3 rounded-lg bg-white/10 border border-white/20 text-center">
               <p class="text-white/90 text-xs font-medium">
                 Critics and audiences disagree —
@@ -430,7 +430,6 @@
                 <%= case disparity.disparity_category do
                   "critics_darling" -> "Critics' Darling"
                   "peoples_champion" -> "People's Champion"
-                  "perfect_harmony" -> "Perfect Harmony"
                   "polarizer" -> "The Polarizer"
                   _ -> ""
                 end %>
