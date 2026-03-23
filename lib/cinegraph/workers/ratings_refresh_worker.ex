@@ -16,7 +16,7 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
   queuing with `"force" => true` to bypass the existing-data skip.
 
   ## Configuration
-  - `OMDB_DAILY_BATCH_SIZE` env var (default 500)
+  - `OMDB_DAILY_BATCH_SIZE` env var (default 100_000)
   """
 
   use Oban.Worker,
