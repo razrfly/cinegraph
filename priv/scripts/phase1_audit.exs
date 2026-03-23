@@ -9,6 +9,7 @@
 
 alias Cinegraph.{Repo, Movies}
 alias Cinegraph.Metrics.ScoringService
+import Ecto.Query
 
 IO.puts("\n=== Phase 1 Audit: 1001 Movies Baseline ===\n")
 
@@ -18,6 +19,7 @@ IO.puts("\n=== Phase 1 Audit: 1001 Movies Baseline ===\n")
 total_1001 = Movies.count_canonical_movies("1001_movies")
 IO.puts("1. 1001 Movies DB coverage: #{total_1001} films")
 IO.puts("   (target ≥ 90% of ~1,214 editions = ~1,093 films)")
+# 1,214 = total films across all known editions of the 1001 Movies book
 coverage_pct = Float.round(total_1001 / 1214 * 100, 1)
 IO.puts("   Current coverage: #{coverage_pct}%\n")
 
@@ -43,11 +45,26 @@ WHERE m.canonical_sources ? '1001_movies'
   Repo.query!(coverage_sql)
 
 IO.puts("   Total 1001 films (double-check): #{total_check}")
-IO.puts("   IMDb rating:              #{imdb} / #{total_check} (#{Float.round(imdb / max(total_check, 1) * 100, 1)}%)")
-IO.puts("   RT Tomatometer:           #{rt_tom} / #{total_check} (#{Float.round(rt_tom / max(total_check, 1) * 100, 1)}%)")
-IO.puts("   RT Audience score:        #{rt_aud} / #{total_check} (#{Float.round(rt_aud / max(total_check, 1) * 100, 1)}%)")
-IO.puts("   Metacritic metascore:     #{meta} / #{total_check} (#{Float.round(meta / max(total_check, 1) * 100, 1)}%)")
-IO.puts("   TMDb rating:              #{tmdb} / #{total_check} (#{Float.round(tmdb / max(total_check, 1) * 100, 1)}%)\n")
+
+IO.puts(
+  "   IMDb rating:              #{imdb} / #{total_check} (#{Float.round(imdb / max(total_check, 1) * 100, 1)}%)"
+)
+
+IO.puts(
+  "   RT Tomatometer:           #{rt_tom} / #{total_check} (#{Float.round(rt_tom / max(total_check, 1) * 100, 1)}%)"
+)
+
+IO.puts(
+  "   RT Audience score:        #{rt_aud} / #{total_check} (#{Float.round(rt_aud / max(total_check, 1) * 100, 1)}%)"
+)
+
+IO.puts(
+  "   Metacritic metascore:     #{meta} / #{total_check} (#{Float.round(meta / max(total_check, 1) * 100, 1)}%)"
+)
+
+IO.puts(
+  "   TMDb rating:              #{tmdb} / #{total_check} (#{Float.round(tmdb / max(total_check, 1) * 100, 1)}%)\n"
+)
 
 # ---------------------------------------------------------------------------
 # 3. Scoring distribution for 1001-list films (decile buckets)
@@ -57,8 +74,6 @@ IO.puts("3. Scoring distribution for 1001 films (decile buckets):")
 profile = ScoringService.get_default_profile()
 
 if profile do
-  import Ecto.Query
-
   base_query =
     from(m in Cinegraph.Movies.Movie,
       where: fragment("? \\? '1001_movies'", m.canonical_sources)
@@ -85,7 +100,9 @@ if profile do
       |> Enum.sort_by(fn {bucket, _} -> bucket end, :desc)
 
     Enum.each(buckets, fn {bucket, films} ->
-      IO.puts("   #{String.pad_leading(to_string(bucket), 3)}–#{bucket + 10}: #{length(films)} films")
+      IO.puts(
+        "   #{String.pad_leading(to_string(bucket), 3)}–#{bucket + 10}: #{length(films)} films"
+      )
     end)
   end
 else
@@ -100,20 +117,20 @@ IO.puts("")
 IO.puts("4. 1001 films vs full catalog top-20% recall:")
 
 if profile do
-  import Ecto.Query
-
   # Use raw SQL with PERCENT_RANK window function to avoid loading all movies into memory.
   # Weights from the default profile: popular_opinion=0.3, awards=0.2, cultural=0.15,
   # people=0.15, financial=0.2 (these match the normalized weights from the query above).
   pw = profile.category_weights || %{}
-  pop_w = (Map.get(pw, "popular_opinion") || Map.get(pw, "ratings") || 0.3)
-  awd_w = (Map.get(pw, "awards") || 0.2)
-  cul_w = (Map.get(pw, "cultural") || 0.15)
-  ppl_w = (Map.get(pw, "people") || 0.15)
+  pop_w = Map.get(pw, "popular_opinion") || Map.get(pw, "ratings") || 0.3
+  awd_w = Map.get(pw, "awards") || 0.2
+  cul_w = Map.get(pw, "cultural") || 0.15
+  ppl_w = Map.get(pw, "people") || 0.15
   total_w = pop_w + awd_w + cul_w + ppl_w
-  {pop_n, awd_n, cul_n, ppl_n} = if total_w > 0,
-    do: {pop_w/total_w, awd_w/total_w, cul_w/total_w, ppl_w/total_w},
-    else: {0.25, 0.25, 0.25, 0.25}
+
+  {pop_n, awd_n, cul_n, ppl_n} =
+    if total_w > 0,
+      do: {pop_w / total_w, awd_w / total_w, cul_w / total_w, ppl_w / total_w},
+      else: {0.25, 0.25, 0.25, 0.25}
 
   recall_sql = """
   WITH scored AS (
@@ -160,7 +177,8 @@ if profile do
   %{rows: [[in_top_20, total_1001_scored, total_catalog]]} =
     Repo.query!(recall_sql, [], timeout: 120_000)
 
-  recall_pct = if total_1001_scored > 0, do: Float.round(in_top_20 / total_1001_scored * 100, 1), else: 0.0
+  recall_pct =
+    if total_1001_scored > 0, do: Float.round(in_top_20 / total_1001_scored * 100, 1), else: 0.0
 
   IO.puts("   Total scored films in catalog: #{total_catalog}")
   IO.puts("   1001 films in catalog (scored): #{total_1001_scored}")

@@ -43,19 +43,13 @@ config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: tmdb_api_key
 # Configure OMDb (optional)
 config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 
-# Daily OMDb batch size for RatingsRefreshWorker (default 500)
+# Daily OMDb batch size for RatingsRefreshWorker.
+# Defaults to 100,000 — the full Basic plan daily limit.
+# Override via OMDB_DAILY_BATCH_SIZE env var only if you need to throttle.
 omdb_daily_batch_size =
   if config_env() == :dev,
-    do: env!("OMDB_DAILY_BATCH_SIZE", :integer, 500),
-    else: String.to_integer(System.get_env("OMDB_DAILY_BATCH_SIZE") || "500")
-
-omdb_daily_batch_size =
-  if omdb_daily_batch_size > 0,
-    do: omdb_daily_batch_size,
-    else:
-      raise(
-        "OMDB_DAILY_BATCH_SIZE must be a positive integer, got: #{omdb_daily_batch_size}"
-      )
+    do: env!("OMDB_DAILY_BATCH_SIZE", :integer, 100_000),
+    else: String.to_integer(System.get_env("OMDB_DAILY_BATCH_SIZE") || "100000")
 
 config :cinegraph, :omdb_daily_batch_size, omdb_daily_batch_size
 

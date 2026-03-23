@@ -307,22 +307,25 @@ defmodule Cinegraph.Movies.ExternalMetric do
         Enum.reduce(omdb_data["Ratings"], metrics, fn rating, acc ->
           case rating["Source"] do
             "Rotten Tomatoes" ->
-              value =
-                rating["Value"]
-                |> String.replace("%", "")
-                |> String.to_integer()
+              # Use Integer.parse/1 to avoid raising on malformed values
+              # (e.g., "N/A" slipping through if the outer guard is absent).
+              case rating["Value"] |> String.replace("%", "") |> Integer.parse() do
+                {value, _} ->
+                  [
+                    %{
+                      movie_id: movie_id,
+                      source: "rotten_tomatoes",
+                      metric_type: "tomatometer",
+                      value: value,
+                      metadata: %{"scale" => "0-100", "type" => "critics"},
+                      fetched_at: now
+                    }
+                    | acc
+                  ]
 
-              [
-                %{
-                  movie_id: movie_id,
-                  source: "rotten_tomatoes",
-                  metric_type: "tomatometer",
-                  value: value,
-                  metadata: %{"scale" => "0-100", "type" => "critics"},
-                  fetched_at: now
-                }
-                | acc
-              ]
+                :error ->
+                  acc
+              end
 
             _ ->
               acc

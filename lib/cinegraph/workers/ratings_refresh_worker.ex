@@ -36,7 +36,7 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    batch_size = Application.get_env(:cinegraph, :omdb_daily_batch_size, 500)
+    batch_size = Application.get_env(:cinegraph, :omdb_daily_batch_size, 100_000)
 
     null_count = count_null_backlog()
 
