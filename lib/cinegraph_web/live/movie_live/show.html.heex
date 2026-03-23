@@ -1481,19 +1481,29 @@
         
 <!-- Intro -->
         <p class="text-white/80 mb-6 leading-relaxed">
-          The Cinegraph Score is a comprehensive quality metric that evaluates films across five key dimensions, each contributing to the overall score based on configurable weights.
+          The Cinegraph Score is a comprehensive quality metric that evaluates films across six key dimensions, each contributing to the overall score based on configurable weights.
         </p>
         
 <!-- Categories -->
         <div class="space-y-6">
-          <!-- Popular Opinion -->
+          <!-- The Mob -->
           <div class="bg-white/5 rounded-lg p-4">
             <div class="flex items-center mb-2">
               <div class="w-3 h-3 bg-blue-400 rounded-full mr-2"></div>
-              <h3 class="text-lg font-semibold">Popular Opinion (Default: 20%)</h3>
+              <h3 class="text-lg font-semibold">The Mob (Default: 10%)</h3>
             </div>
             <p class="text-white/70 text-sm leading-relaxed">
-              Aggregates ratings from major review platforms: IMDb user ratings, TMDb community scores, Metacritic metascores, and Rotten Tomatoes critic/audience ratings. Normalized to a 0-10 scale.
+              Audience ratings from IMDb, TMDb, and Rotten Tomatoes audience score. Null-aware average so films with partial coverage are not penalized.
+            </p>
+          </div>
+          <!-- The Ivory Tower -->
+          <div class="bg-white/5 rounded-lg p-4">
+            <div class="flex items-center mb-2">
+              <div class="w-3 h-3 bg-purple-400 rounded-full mr-2"></div>
+              <h3 class="text-lg font-semibold">The Ivory Tower (Default: 10%)</h3>
+            </div>
+            <p class="text-white/70 text-sm leading-relaxed">
+              Critical consensus from Metacritic metascores and Rotten Tomatoes Tomatometer. Normalized to a 0-10 scale with null-aware averaging.
             </p>
           </div>
           

@@ -184,9 +184,11 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     mob_weight = to_float(Map.get(weights, :mob, 0.0))
     ivory_tower_weight = to_float(Map.get(weights, :ivory_tower, 0.0))
 
-    # Legacy fallback: split popular_opinion + critical_acclaim 50/50 into mob/ivory_tower
+    # Legacy fallback: if neither mob nor ivory_tower key is present at all,
+    # split popular_opinion + critical_acclaim 50/50. Using key presence (not value
+    # equality) so an explicit {mob: 0.0, ivory_tower: 0.0} is honoured as-is.
     {mob_weight, ivory_tower_weight} =
-      if mob_weight == 0.0 and ivory_tower_weight == 0.0 do
+      if not Map.has_key?(weights, :mob) and not Map.has_key?(weights, :ivory_tower) do
         legacy =
           to_float(Map.get(weights, :popular_opinion, 0.0)) +
             to_float(Map.get(weights, :critical_acclaim, 0.0))
@@ -270,12 +272,12 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     components = Map.get(movie, :score_components, %{})
     # Use provided weights or fallback to equal weights
     default_weights = %{
-      mob: 0.15,
-      ivory_tower: 0.15,
+      mob: 0.10,
+      ivory_tower: 0.10,
       industry_recognition: 0.20,
       financial_success: 0.20,
-      cultural_impact: 0.15,
-      people_quality: 0.15
+      cultural_impact: 0.20,
+      people_quality: 0.20
     }
 
     actual_weights = weights || default_weights
