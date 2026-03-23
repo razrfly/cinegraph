@@ -108,7 +108,7 @@ defmodule Cinegraph.ApiProcessors.OMDb do
   end
 
   defp fetch_and_store_omdb_data(movie) do
-    case OMDb.Client.get_movie_by_imdb_id(movie.imdb_id, tomatoes: true) do
+    case OMDb.Client.get_movie_by_imdb_id(movie.imdb_id) do
       {:ok, omdb_data} ->
         store_omdb_data(omdb_data, movie)
 

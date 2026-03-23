@@ -57,61 +57,11 @@ defmodule Cinegraph.Workers.PredictionCalculator do
 
     Logger.info("Successfully cached #{map_size(movie_scores)} predictions for decade #{decade}")
 
-    # Also calculate and cache validation data to avoid expensive queries
-    # But only for 2020s decade to avoid making this job too heavy
-    if decade == 2020 do
-      Logger.info("Calculating validation data for profile #{profile_id}...")
-
-      validation_result =
-        try do
-          Cinegraph.Predictions.HistoricalValidator.validate_all_decades(profile)
-        rescue
-          error ->
-            Logger.error("Failed to calculate validation: #{inspect(error)}")
-            nil
-        end
-
-      if validation_result do
-        # Cache validation in Cachex for fast access
-        validation_cache_key = "validation:#{profile.name}:#{profile_hash(profile)}"
-
-        Cachex.put(:predictions_cache, validation_cache_key, validation_result,
-          ttl: :timer.hours(24)
-        )
-
-        Logger.info("Cached validation data for profile #{profile.name}")
-
-        # Also store validation in database cache metadata for persistence
-        cache = PredictionCache.get_cached_predictions(decade, profile_id)
-
-        if cache do
-          updated_metadata =
-            Map.put(cache.metadata || %{}, "validation_result", validation_result)
-
-          PredictionCache.upsert_cache(%{
-            decade: decade,
-            profile_id: profile_id,
-            movie_scores: cache.movie_scores,
-            statistics: cache.statistics,
-            calculated_at: cache.calculated_at,
-            metadata: updated_metadata
-          })
-        end
-      end
-    end
-
     :ok
   end
 
-  defp profile_hash(profile) do
-    profile.category_weights
-    |> :erlang.term_to_binary()
-    |> then(&:crypto.hash(:md5, &1))
-    |> Base.encode16(case: :lower)
-  end
-
   @impl Oban.Worker
-  def timeout(_job), do: :timer.seconds(60)
+  def timeout(_job), do: :timer.minutes(5)
 
   # Private helpers
 

@@ -77,7 +77,8 @@ config :cinegraph, Oban,
     # All TMDb API work (orchestration, discovery, details) - single rate limit
     tmdb: 15,
     # OMDb data enrichment (separate API rate limit)
-    omdb: 5,
+    # Temporarily 20 for backfill burst — revert to 5 after backlog cleared
+    omdb: 20,
     # Collaboration processing
     collaboration: 5,
     # Web scraping (IMDb, festivals, Oscars) - low concurrency for rate limiting

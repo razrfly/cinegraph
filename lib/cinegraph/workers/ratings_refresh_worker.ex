@@ -45,7 +45,16 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
         "null_backlog=#{null_count})"
     )
 
-    phase_a_ids = fetch_null_backlog(batch_size)
+    # Phase A0: 1001-list priority — fill first from movies on the canonical 1001 list
+    phase_a0_ids = fetch_1001_priority(batch_size)
+    phase_a0_count = queue_enrichment_jobs(phase_a0_ids, %{})
+
+    Logger.info("RatingsRefresh: Phase A0 queued #{phase_a0_count} 1001-list priority movies")
+
+    remaining_after_a0 = batch_size - phase_a0_count
+
+    # Phase A: fill remaining budget with null-backlog movies by popularity
+    phase_a_ids = fetch_null_backlog(remaining_after_a0, phase_a0_ids)
     phase_a_count = queue_enrichment_jobs(phase_a_ids, %{})
 
     Logger.info(
@@ -53,7 +62,7 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
         "(count includes Oban-deduplicated jobs from prior runs)"
     )
 
-    remaining = batch_size - phase_a_count
+    remaining = remaining_after_a0 - phase_a_count
 
     if remaining > 0 do
       phase_b_ids = fetch_stale_refresh(remaining)
@@ -64,7 +73,7 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
           "(count includes Oban-deduplicated jobs from prior runs)"
       )
     else
-      Logger.info("RatingsRefresh: Phase A filled batch, skipping Phase B")
+      Logger.info("RatingsRefresh: Phase A0+A filled batch, skipping Phase B")
     end
 
     :ok
@@ -92,13 +101,32 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
     |> Repo.one()
   end
 
-  # Phase A: queue movies where omdb_data IS NULL, by tmdb popularity DESC,
-  # excluding movies with a recent fetch_attempt record (90-day cooldown).
-  defp fetch_null_backlog(limit) do
+  # Phase A0: 1001-list priority — queue movies on the canonical 1001 list first.
+  defp fetch_1001_priority(limit) do
     from(m in Movie,
       where: m.import_status == "full",
       where: is_nil(m.omdb_data),
       where: not is_nil(m.imdb_id),
+      where: fragment("? \\? '1001_movies'", m.canonical_sources),
+      where: m.id not in subquery(recently_checked_subquery()),
+      order_by: fragment("(tmdb_data->>'popularity')::float DESC NULLS LAST"),
+      limit: ^limit,
+      select: m.id
+    )
+    |> Repo.all()
+  end
+
+  # Phase A: queue movies where omdb_data IS NULL, by tmdb popularity DESC,
+  # excluding movies with a recent fetch_attempt record (90-day cooldown)
+  # and any IDs already queued by Phase A0.
+  defp fetch_null_backlog(0, _exclude_ids), do: []
+
+  defp fetch_null_backlog(limit, exclude_ids) do
+    from(m in Movie,
+      where: m.import_status == "full",
+      where: is_nil(m.omdb_data),
+      where: not is_nil(m.imdb_id),
+      where: m.id not in ^exclude_ids,
       where: m.id not in subquery(recently_checked_subquery()),
       order_by: fragment("(tmdb_data->>'popularity')::float DESC NULLS LAST"),
       limit: ^limit,

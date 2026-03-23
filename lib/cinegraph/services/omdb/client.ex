@@ -73,17 +73,13 @@ defmodule Cinegraph.Services.OMDb.Client do
     end
   end
 
-  defp base_params(opts) do
+  defp base_params(_opts) do
     %{
       "apikey" => api_key(),
       "plot" => "short",
       "r" => "json"
     }
-    |> maybe_add_tomatoes(opts[:tomatoes])
   end
-
-  defp maybe_add_tomatoes(params, true), do: Map.put(params, "tomatoes", "true")
-  defp maybe_add_tomatoes(params, _), do: params
 
   defp make_request(params) do
     url = build_url(params)
