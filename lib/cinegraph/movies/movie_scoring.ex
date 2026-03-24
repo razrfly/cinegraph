@@ -349,16 +349,7 @@ defmodule Cinegraph.Movies.MovieScoring do
     JOIN people p ON p.id = mc.person_id
     WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
     GROUP BY mc.person_id
-    ORDER BY MAX(pm.score) * MAX(CASE mc.department
-      WHEN 'Directing'  THEN 3.0
-      WHEN 'Writing'    THEN 1.5
-      WHEN 'Production' THEN 1.0
-      ELSE
-        CASE WHEN mc.cast_order <= 3  THEN 2.0
-             WHEN mc.cast_order <= 10 THEN 1.5
-             ELSE 1.0
-        END
-      END) DESC
+    ORDER BY max_score * role_weight DESC
     LIMIT 10
     """
 

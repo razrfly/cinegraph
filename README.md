@@ -907,7 +907,7 @@ No subjective ratings are used. Scores emerge from public data, not editorial ju
 
 ### The Formula (v3.0)
 
-```
+```text
 raw = (canonical_appearances × 10)
     + (high_rated_films × 3)
     + (total_films × 1)
