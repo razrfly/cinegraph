@@ -63,8 +63,24 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
         assert likelihood >= 0.0
         assert likelihood <= 100.0
 
-        # Criteria scores should all be 0-100
-        assert map_size(criteria_scores) == 5
+        # CriteriaScoring uses its own 6-criterion predictions vocabulary
+        # (mob, ivory_tower, festival_recognition, cultural_impact,
+        #  technical_innovation, auteur_recognition) — separate from the
+        # production ScoringConfiguration which uses industry_recognition,
+        # people_quality, financial_performance.
+        assert map_size(criteria_scores) == 6
+
+        expected_criteria =
+          MapSet.new([
+            :mob,
+            :ivory_tower,
+            :festival_recognition,
+            :cultural_impact,
+            :technical_innovation,
+            :auteur_recognition
+          ])
+
+        assert MapSet.new(Map.keys(criteria_scores)) == expected_criteria
 
         for {_criterion, score} <- criteria_scores do
           assert is_number(score)
@@ -72,8 +88,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
           assert score <= 100.0
         end
 
-        # Breakdown should have 5 entries (CriteriaScoring 5-criterion model)
-        assert length(breakdown) == 5
+        assert length(breakdown) == 6
 
         for breakdown_item <- breakdown do
           assert %{
@@ -83,14 +98,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
                    weighted_points: weighted_points
                  } = breakdown_item
 
-          assert criterion in [
-                   :mob,
-                   :ivory_tower,
-                   :festival_recognition,
-                   :cultural_impact,
-                   :technical_innovation,
-                   :auteur_recognition
-                 ]
+          assert criterion in expected_criteria
 
           assert is_number(raw_score) and raw_score >= 0.0 and raw_score <= 100.0
           assert is_number(weight) and weight >= 0.0 and weight <= 1.0
