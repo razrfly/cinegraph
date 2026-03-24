@@ -30,8 +30,8 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
     # - people_quality: Quality scores of cast and crew
     field :category_weights, :map,
       default: %{
-        "mob" => 0.10,
-        "ivory_tower" => 0.10,
+        "mob" => 0.15,
+        "ivory_tower" => 0.15,
         "industry_recognition" => 0.20,
         "financial_performance" => 0.20,
         "cultural_impact" => 0.20,

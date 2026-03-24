@@ -49,10 +49,9 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   # it has a legacy shim that splits `popular_opinion` 50/50 → mob + ivory_tower.
 
   @default_weights %{
-    # Combined all rating sources
-    popular_opinion: 0.25,
+    mob: 0.25,
+    ivory_tower: 0.25,
     industry_recognition: 0.25,
-    cultural_impact: 0.25,
     people_quality: 0.25
   }
 
@@ -63,29 +62,29 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
     %{
       balanced: @default_weights,
       crowd_pleaser: %{
-        # Focus on popular ratings
-        popular_opinion: 0.5,
+        mob: 0.5,
+        ivory_tower: 0.0,
         industry_recognition: 0.1,
         cultural_impact: 0.2,
         people_quality: 0.2
       },
       critics_choice: %{
-        # All ratings, but Metacritic/RT weighted higher in implementation
-        popular_opinion: 0.5,
+        mob: 0.25,
+        ivory_tower: 0.25,
         industry_recognition: 0.2,
         cultural_impact: 0.1,
         people_quality: 0.2
       },
       award_winner: %{
-        # Some consideration of ratings
-        popular_opinion: 0.25,
+        mob: 0.125,
+        ivory_tower: 0.125,
         industry_recognition: 0.5,
         cultural_impact: 0.1,
         people_quality: 0.15
       },
       cult_classic: %{
-        # Moderate ratings consideration
-        popular_opinion: 0.25,
+        mob: 0.125,
+        ivory_tower: 0.125,
         industry_recognition: 0.1,
         cultural_impact: 0.5,
         people_quality: 0.15

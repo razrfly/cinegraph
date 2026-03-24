@@ -125,6 +125,7 @@ defmodule Cinegraph.Movies.Movie do
     field :mob_score, :float, virtual: true
     field :ivory_tower_score, :float, virtual: true
     field :score_confidence, :float, virtual: true
+    field :overall_score, :float, virtual: true
 
     timestamps()
   end
