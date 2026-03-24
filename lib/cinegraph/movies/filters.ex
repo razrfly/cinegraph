@@ -27,6 +27,7 @@ defmodule Cinegraph.Movies.Filters do
     |> filter_by_ratings(params)
     |> filter_by_people(params)
     |> filter_by_metric_scores(params)
+    |> filter_by_disparity(params["disparity"])
     # Apply distinct only once at the end if any joins were added
     |> maybe_distinct()
   end
@@ -100,13 +101,20 @@ defmodule Cinegraph.Movies.Filters do
             )
         )
 
+      # Score cache sorts (preset-weighted overall score)
+      "score" ->
+        query
+        |> maybe_join_score_cache()
+        |> select_merge([m, score_cache: sc], %{overall_score: sc.overall_score})
+        |> order_by([score_cache: sc], desc: fragment("COALESCE(?, 0)", sc.overall_score))
+
+      "score_asc" ->
+        query
+        |> maybe_join_score_cache()
+        |> select_merge([m, score_cache: sc], %{overall_score: sc.overall_score})
+        |> order_by([score_cache: sc], asc: fragment("COALESCE(?, 0)", sc.overall_score))
+
       # Discovery Metric Sorts
-      "popular_opinion" ->
-        sort_by_metric_dimension(query, :popular_opinion, :desc)
-
-      "popular_opinion_asc" ->
-        sort_by_metric_dimension(query, :popular_opinion, :asc)
-
       "industry_recognition" ->
         sort_by_metric_dimension(query, :industry_recognition, :desc)
 
@@ -136,52 +144,6 @@ defmodule Cinegraph.Movies.Filters do
   defp sort_by_metric_dimension(query, dimension, direction) do
     # Apply the ordering with the specific dimension score calculation
     case {dimension, direction} do
-      {:popular_opinion, :desc} ->
-        order_by(query, [m],
-          desc:
-            fragment(
-              """
-              COALESCE((
-                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
-                        COALESCE(ir.value, 0) / 10.0 * 0.25 +
-                        COALESCE(mc.value, 0) / 100.0 * 0.25 + 
-                        COALESCE(rt.value, 0) / 100.0 * 0.25)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' ORDER BY fetched_at DESC LIMIT 1) mc,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' ORDER BY fetched_at DESC LIMIT 1) rt
-              ), 0)
-              """,
-              m.id,
-              m.id,
-              m.id,
-              m.id
-            )
-        )
-
-      {:popular_opinion, :asc} ->
-        order_by(query, [m],
-          asc:
-            fragment(
-              """
-              COALESCE((
-                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
-                        COALESCE(ir.value, 0) / 10.0 * 0.25 +
-                        COALESCE(mc.value, 0) / 100.0 * 0.25 + 
-                        COALESCE(rt.value, 0) / 100.0 * 0.25)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' ORDER BY fetched_at DESC LIMIT 1) mc,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' ORDER BY fetched_at DESC LIMIT 1) rt
-              ), 0)
-              """,
-              m.id,
-              m.id,
-              m.id,
-              m.id
-            )
-        )
-
       {:industry_recognition, :desc} ->
         order_by(query, [m],
           desc:
@@ -317,6 +279,25 @@ defmodule Cinegraph.Movies.Filters do
               m.id
             )
         )
+    end
+  end
+
+  defp filter_by_disparity(query, cat) when cat in [nil, ""], do: query
+
+  defp filter_by_disparity(query, category) do
+    query
+    |> maybe_join_score_cache()
+    |> where([score_cache: sc], sc.disparity_category == ^category)
+  end
+
+  defp maybe_join_score_cache(query) do
+    if has_named_binding?(query, :score_cache) do
+      query
+    else
+      join(query, :left, [m], sc in "movie_score_caches",
+        on: sc.movie_id == m.id,
+        as: :score_cache
+      )
     end
   end
 
@@ -1047,7 +1028,7 @@ defmodule Cinegraph.Movies.Filters do
     |> maybe_apply_discovery_preset(params["discovery_preset"])
     |> maybe_apply_award_preset(params["award_preset"])
     # Keep legacy support for numeric thresholds
-    |> filter_by_metric_dimension(params["popular_opinion_min"], :popular_opinion)
+    |> filter_by_metric_dimension(params["mob_min"], :mob)
     |> filter_by_metric_dimension(params["industry_recognition_min"], :industry_recognition)
     |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
     |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
@@ -1207,26 +1188,20 @@ defmodule Cinegraph.Movies.Filters do
 
     if min_val do
       case dimension do
-        :popular_opinion ->
-          # Filter by popular opinion score (all rating sources: TMDb + IMDb + Metacritic + RT)
+        :mob ->
+          # Filter by mob score (audience ratings: TMDb + IMDb)
           where(
             query,
             [m],
             fragment(
               """
               COALESCE((
-                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
-                        COALESCE(ir.value, 0) / 10.0 * 0.25 +
-                        COALESCE(mc.value, 0) / 100.0 * 0.25 + 
-                        COALESCE(rt.value, 0) / 100.0 * 0.25)
+                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 +
+                        COALESCE(ir.value, 0) / 10.0 * 0.5)
                 FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore' ORDER BY fetched_at DESC LIMIT 1) mc,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer' ORDER BY fetched_at DESC LIMIT 1) rt
+                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir
               ), 0) >= ?
               """,
-              m.id,
-              m.id,
               m.id,
               m.id,
               ^min_val

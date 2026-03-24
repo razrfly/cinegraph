@@ -54,7 +54,10 @@ defmodule CinegraphWeb.MovieLive.Index do
      |> assign(:festival_organizations, filter_options.festivals)
      |> assign(:director_options, [])
      |> assign(:actor_options, [])
-     |> assign(:person_options, [])}
+     |> assign(:person_options, [])
+     |> assign(:active_preset, nil)
+     |> assign(:weight_presets, [])
+     |> assign(:show_scoring_info, false)}
   end
 
   @impl true
@@ -73,6 +76,8 @@ defmodule CinegraphWeb.MovieLive.Index do
          |> assign(:search_term, params["search"] || "")
          |> assign(:sort_criteria, extract_sort_criteria(params["sort"] || "release_date_desc"))
          |> assign(:sort_direction, extract_sort_direction(params["sort"] || "release_date_desc"))
+         |> assign(:active_preset, params["preset"])
+         |> assign(:weight_presets, load_weight_presets())
          |> assign_pagination(meta)
          |> apply_action(socket.assigns.live_action, params)}
 
@@ -144,6 +149,47 @@ defmodule CinegraphWeb.MovieLive.Index do
     {:noreply, push_patch(socket, to: path)}
   end
 
+  @impl true
+  def handle_event("select_preset", %{"preset" => preset}, socket) do
+    params =
+      socket.assigns.params
+      |> Map.put("preset", preset)
+      |> Map.put("sort", "score")
+      |> Map.delete("page")
+
+    {:noreply, push_patch(socket, to: ~p"/movies?#{params}")}
+  end
+
+  @impl true
+  def handle_event("clear_preset", _, socket) do
+    params =
+      socket.assigns.params
+      |> Map.delete("preset")
+      |> Map.delete("disparity")
+      |> Map.put("sort", "release_date_desc")
+      |> Map.delete("page")
+
+    {:noreply, push_patch(socket, to: ~p"/movies?#{params}")}
+  end
+
+  @impl true
+  def handle_event("set_disparity", %{"disparity" => cat}, socket) do
+    params =
+      if cat == "",
+        do: Map.delete(socket.assigns.params, "disparity"),
+        else: Map.put(socket.assigns.params, "disparity", cat)
+
+    {:noreply, push_patch(socket, to: ~p"/movies?#{Map.delete(params, "page")}")}
+  end
+
+  @impl true
+  def handle_event("show_scoring_info", _, socket),
+    do: {:noreply, assign(socket, :show_scoring_info, true)}
+
+  @impl true
+  def handle_event("hide_scoring_info", _, socket),
+    do: {:noreply, assign(socket, :show_scoring_info, false)}
+
   # Delegate all other events to the SearchEventHandlers macro
   @impl true
   def handle_event(event, params, socket) do
@@ -210,7 +256,10 @@ defmodule CinegraphWeb.MovieLive.Index do
       discovery_preset: params["discovery_preset"],
       award_preset: params["award_preset"],
       # People search handled specially
-      people_search: parse_people_search(params)
+      people_search: parse_people_search(params),
+      # Preset scoring
+      preset: params["preset"],
+      disparity: params["disparity"]
     }
   end
 
@@ -226,6 +275,16 @@ defmodule CinegraphWeb.MovieLive.Index do
         nil
     end
   end
+
+  defp load_weight_presets do
+    Cinegraph.Metrics.ScoringService.get_all_profiles()
+    |> Enum.map(fn p ->
+      %{slug: name_to_slug(p.name), name: p.name}
+    end)
+  end
+
+  defp name_to_slug(name),
+    do: name |> String.downcase() |> String.replace(" ", "_")
 
   # Helper functions for building URLs and pagination
   def build_pagination_path(params_or_assigns, new_params \\ %{}) do
@@ -273,7 +332,9 @@ defmodule CinegraphWeb.MovieLive.Index do
       "discovery_preset",
       "award_preset",
       "people_ids",
-      "people_role"
+      "people_role",
+      "preset",
+      "disparity"
     ]
 
     case Map.get(assigns, :params) do

@@ -35,6 +35,63 @@
   
 <!-- Filter Section -->
   <div class="mb-8">
+    <!-- Preset Pill Row -->
+    <div class="flex items-center gap-2 flex-wrap mb-3">
+      <span class="text-sm font-medium text-gray-500">Score by:</span>
+      <%= for preset <- @weight_presets do %>
+        <button
+          phx-click="select_preset"
+          phx-value-preset={preset.slug}
+          class={
+            if @active_preset == preset.slug,
+              do:
+                "px-3 py-1.5 text-sm rounded-full bg-indigo-600 text-white font-medium shadow-sm",
+              else:
+                "px-3 py-1.5 text-sm rounded-full bg-white border border-gray-300 text-gray-700 hover:border-indigo-400 hover:text-indigo-600"
+          }
+        >
+          {preset.name}
+        </button>
+      <% end %>
+      <%= if @active_preset do %>
+        <button phx-click="clear_preset" class="text-xs text-gray-400 hover:text-gray-600 ml-1">
+          ✕ Clear
+        </button>
+      <% end %>
+      <button
+        phx-click="show_scoring_info"
+        class="w-5 h-5 rounded-full border border-gray-300 text-gray-400 hover:text-indigo-600 hover:border-indigo-400 text-xs font-bold ml-1"
+        title="How we score"
+      >
+        ?
+      </button>
+    </div>
+    <!-- Disparity Filter Row (only when preset active) -->
+    <%= if @active_preset do %>
+      <div class="flex items-center gap-2 flex-wrap mb-3">
+        <span class="text-sm text-gray-500">Filter:</span>
+        <%= for {label, value} <- [
+          {"All", ""},
+          {"Critics' Darlings", "critics_darling"},
+          {"People's Champions", "peoples_champion"},
+          {"Perfect Harmony", "perfect_harmony"},
+          {"The Polarizers", "polarizer"}
+        ] do %>
+          <button
+            phx-click="set_disparity"
+            phx-value-disparity={value}
+            class={
+              if (@filters[:disparity] || "") == value,
+                do: "px-2.5 py-1 text-xs rounded-full bg-gray-800 text-white",
+                else:
+                  "px-2.5 py-1 text-xs rounded-full bg-white border border-gray-200 text-gray-600 hover:border-gray-400"
+            }
+          >
+            {label}
+          </button>
+        <% end %>
+      </div>
+    <% end %>
     <!-- Filter Toggle and Sort -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
       <div class="flex gap-2">
@@ -99,6 +156,7 @@
           %{value: "runtime", label: "⏱️ Runtime", group: "Basic"},
           %{value: "rating", label: "⭐ Rating", group: "Ratings"},
           %{value: "popularity", label: "🔥 Popularity", group: "Ratings"},
+          %{value: "score", label: "🎯 Score", group: "Score"},
           %{value: "mob", label: "👥 The Mob", group: "Discovery Metrics"},
           %{value: "ivory_tower", label: "🎓 The Ivory Tower", group: "Discovery Metrics"},
           %{
@@ -350,11 +408,17 @@
               </div>
             <% end %>
             
-<!-- Discovery Score Badge -->
-            <%= if movie.discovery_score && has_meaningful_score?(movie.discovery_score) do %>
-              <div class="absolute top-2 left-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm px-3 py-1 rounded-full font-medium shadow-lg">
-                🎯 {to_percentage(movie.discovery_score)}%
-              </div>
+<!-- Score Badge -->
+            <%= cond do %>
+              <% @active_preset && not is_nil(movie.overall_score) -> %>
+                <div class="absolute top-2 left-2 bg-gradient-to-r from-indigo-600 to-purple-700 text-white text-sm px-3 py-1 rounded-full font-medium shadow-lg">
+                  🎯 {Float.round(movie.overall_score * 1.0, 1)}
+                </div>
+              <% movie.discovery_score && has_meaningful_score?(movie.discovery_score) -> %>
+                <div class="absolute top-2 left-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm px-3 py-1 rounded-full font-medium shadow-lg">
+                  🎯 {to_percentage(movie.discovery_score)}%
+                </div>
+              <% true -> %>
             <% end %>
           </div>
           
@@ -445,3 +509,42 @@
     build_path={fn page -> build_pagination_path(assigns, %{"page" => page}) end}
   />
 </div>
+
+<!-- How We Score Modal -->
+<%= if @show_scoring_info do %>
+  <div
+    class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+    phx-click="hide_scoring_info"
+  >
+    <div
+      class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl"
+      phx-click-away="hide_scoring_info"
+    >
+      <div class="flex justify-between items-start mb-5">
+        <h2 class="text-xl font-bold text-gray-900">How Cinegraph Scores Movies</h2>
+        <button phx-click="hide_scoring_info" class="text-gray-400 hover:text-gray-600 text-xl">
+          ✕
+        </button>
+      </div>
+      <div class="space-y-4">
+        <%= for {emoji, name, tagline, desc} <- [
+          {"🔥", "The Mob", "Millions voted.", "IMDb, TMDb, and Rotten Tomatoes audience scores."},
+          {"🎭", "The Ivory Tower", "The anointed few.", "Metacritic Metascore + RT Tomatometer."},
+          {"🏆", "The Inner Circle", "Hollywood pats itself.", "Festival wins, Oscar nominations, major awards."},
+          {"⏳", "The Time Machine", "What survives the hype.", "Criterion, 1001 Movies, Sight & Sound lists."},
+          {"🎬", "The Auteurs", "Great films start with great people.", "Director and cast quality scores."},
+          {"💵", "The Box Office", "Follow the money.", "Global revenue relative to budget."}
+        ] do %>
+          <div class="flex gap-3">
+            <div class="text-2xl flex-shrink-0">{emoji}</div>
+            <div>
+              <div class="font-semibold text-gray-900">{name}</div>
+              <div class="text-xs text-gray-500 italic mb-0.5">"{tagline}"</div>
+              <div class="text-sm text-gray-600">{desc}</div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+<% end %>

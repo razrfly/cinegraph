@@ -23,9 +23,13 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
 
     default_profile = "Cinegraph Editorial"
     default_threshold = 0.25
-    cached_recall = RecallCalibrationWorker.get_cached(
-      "1001-movies", default_profile, default_threshold
-    )
+
+    cached_recall =
+      RecallCalibrationWorker.get_cached(
+        "1001-movies",
+        default_profile,
+        default_threshold
+      )
 
     socket =
       socket
@@ -250,8 +254,11 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   @impl true
   def handle_event("update_recall_threshold", %{"threshold" => t}, socket) do
     case Float.parse(t) do
-      {threshold, _} -> {:noreply, assign(socket, recall_threshold: threshold, recall_results: nil)}
-      :error -> {:noreply, socket}
+      {threshold, _} ->
+        {:noreply, assign(socket, recall_threshold: threshold, recall_results: nil)}
+
+      :error ->
+        {:noreply, socket}
     end
   end
 
@@ -303,7 +310,7 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
             Tune the Cinegraph scoring algorithm using reference datasets
           </p>
         </header>
-
+        
     <!-- Tab Navigation -->
         <nav class="flex space-x-1 mb-8 border-b border-gray-200">
           <button
@@ -436,7 +443,7 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         </div>
       </div>
-
+      
     <!-- Correlation Metrics -->
       <div class="lg:col-span-2 bg-white shadow rounded-lg p-6">
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Correlation Analysis</h2>
@@ -574,7 +581,7 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         </div>
       </div>
-
+      
     <!-- Score Comparison -->
       <div class="grid grid-cols-2 gap-4">
         <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -590,7 +597,7 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         </div>
       </div>
-
+      
     <!-- Score Distribution -->
       <div>
         <h3 class="text-lg font-medium text-gray-900 mb-3">Score Distribution</h3>
@@ -669,7 +676,7 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </button>
         </div>
       </div>
-
+      
     <!-- Simulation Results -->
       <div class="bg-white shadow rounded-lg p-6">
         <h2 class="text-xl font-semibold text-gray-900 mb-4">Simulation Preview</h2>
@@ -779,7 +786,7 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
                 <% end %>
               </div>
             </div>
-
+            
     <!-- Weight Summary -->
             <div class="mt-4 flex flex-wrap gap-3">
               <%= for {category, weight} <- config.category_weights do %>
@@ -908,8 +915,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </button>
         </div>
       </div>
-
-      <!-- Loading state -->
+      
+    <!-- Loading state -->
       <%= if @recall_running do %>
         <div class="bg-white shadow rounded-lg p-12 text-center">
           <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4">
@@ -917,8 +924,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           <p class="text-gray-500">Running calibration — this may take 2–3 minutes…</p>
         </div>
       <% end %>
-
-      <!-- Results -->
+      
+    <!-- Results -->
       <%= if is_map(@recall_results) and not @recall_running do %>
         <!-- Overall Recall -->
         <% recall_pct = Float.round((@recall_results.overall_recall || 0) * 100, 1) %>
@@ -949,8 +956,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
             <span>100%</span>
           </div>
         </div>
-
-        <!-- Per-Decade Bars -->
+        
+    <!-- Per-Decade Bars -->
         <div class="bg-white shadow rounded-lg p-6">
           <h3 class="text-lg font-semibold text-gray-900 mb-4">Recall by Decade</h3>
           <div class="space-y-3">
@@ -973,8 +980,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
             <% end %>
           </div>
         </div>
-
-        <!-- Lens Correlations -->
+        
+    <!-- Lens Correlations -->
         <%= if @recall_results.lens_correlations != [] do %>
           <div class="bg-white shadow rounded-lg p-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Lens Scores (Reference Films)</h3>
@@ -1000,8 +1007,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
             </div>
           </div>
         <% end %>
-
-        <!-- Systematic Gaps -->
+        
+    <!-- Systematic Gaps -->
         <%= if @recall_results.systematic_gaps != [] do %>
           <div class="bg-white shadow rounded-lg p-6">
             <h3 class="text-lg font-semibold text-gray-900 mb-4">Systematic Gaps</h3>
@@ -1018,8 +1025,8 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
           </div>
         <% end %>
       <% end %>
-
-      <!-- Error state -->
+      
+    <!-- Error state -->
       <%= if match?({:error, _}, @recall_results) and not @recall_running do %>
         <% {:error, reason} = @recall_results %>
         <div class="bg-white shadow rounded-lg p-6 text-center">

@@ -61,8 +61,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: "Fallback",
       description: "Emergency fallback profile",
       category_weights: %{
-        "mob" => 0.10,
-        "ivory_tower" => 0.10,
+        "mob" => 0.15,
+        "ivory_tower" => 0.15,
         "industry_recognition" => 0.20,
         "cultural_impact" => 0.20,
         "people_quality" => 0.20,
@@ -76,12 +76,12 @@ defmodule Cinegraph.Metrics.ScoringService do
 
   @doc """
   Converts a database weight profile to the format expected by the discovery UI.
-  Maps category_weights to the five main dimensions including financial success.
+  Maps category_weights to the six scoring lenses.
 
-  Note: 
-  - "popular_opinion" category includes all rating sources (IMDb, TMDb, Metacritic, RT)
-  - "financial" category represents box office success (revenue, budget, ROI)
-  - "people" category represents person quality scores (directors, actors, etc.)
+  Note:
+  - Legacy "popular_opinion" profiles are split 50/50 into mob + ivory_tower
+  - "financial_performance" represents box office success (revenue, budget, ROI)
+  - "people_quality" represents person quality scores (directors, actors, etc.)
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
     # If profile has legacy popular_opinion, split it 50/50 into mob + ivory_tower

@@ -9,214 +9,6 @@ Repo.delete_all(from mwp in "metric_weight_profiles", where: field(mwp, :is_syst
 
 weight_profiles = [
   %{
-    name: "Balanced",
-    description:
-      "Balanced weight across all six criteria: mob (15%), ivory tower (15%), awards (20%), financial success (20%), cultural impact (15%), people quality (15%)",
-    weights: %{
-      # Mob (audience ratings)
-      "imdb_rating" => 1.0,
-      "tmdb_rating" => 1.0,
-      "imdb_rating_votes" => 0.5,
-      "rotten_tomatoes_audience_score" => 0.8,
-
-      # Ivory Tower (critic ratings)
-      "metacritic_metascore" => 1.0,
-      "rotten_tomatoes_tomatometer" => 1.0,
-
-      # Industry Recognition
-      "oscar_wins" => 2.0,
-      "oscar_nominations" => 1.0,
-      "cannes_palme_dor" => 1.5,
-      "venice_golden_lion" => 1.5,
-      "berlin_golden_bear" => 1.5,
-
-      # Cultural Impact
-      "1001_movies" => 1.5,
-      "criterion" => 1.5,
-      "national_film_registry" => 1.5,
-      "sight_sound_critics_2022" => 1.5,
-      "afi_top_100" => 1.0,
-      "bfi_top_100" => 1.0,
-
-      # Financial (included but lower weight in balanced)
-      "tmdb_revenue_worldwide" => 0.5,
-      "tmdb_budget" => 0.3,
-
-      # People Quality
-      "person_quality_score" => 1.5
-    },
-    category_weights: %{
-      "mob" => 0.15,
-      "ivory_tower" => 0.15,
-      "industry_recognition" => 0.20,
-      "financial_performance" => 0.20,
-      "cultural_impact" => 0.15,
-      "people_quality" => 0.15
-    },
-    active: true,
-    is_default: true,
-    is_system: true
-  },
-  %{
-    name: "Award Winner",
-    description:
-      "Emphasizes festival awards and industry recognition (45% awards, 20% cultural, 12.5% mob, 12.5% ivory tower, 10% people)",
-    weights: %{
-      # Industry Recognition (45%)
-      "oscar_wins" => 3.0,
-      "oscar_nominations" => 2.0,
-      "cannes_palme_dor" => 2.5,
-      "venice_golden_lion" => 2.5,
-      "berlin_golden_bear" => 2.5,
-
-      # Mob (12.5%)
-      "imdb_rating" => 0.8,
-      "tmdb_rating" => 0.8,
-
-      # Ivory Tower (12.5%)
-      "metacritic_metascore" => 1.0,
-      "rotten_tomatoes_tomatometer" => 1.0,
-
-      # Cultural Impact (20%)
-      "1001_movies" => 1.0,
-      "criterion" => 1.0,
-      "sight_sound_critics_2022" => 1.0,
-
-      # People Quality (10%)
-      "person_quality_score" => 1.0
-    },
-    category_weights: %{
-      "mob" => 0.125,
-      "ivory_tower" => 0.125,
-      "industry_recognition" => 0.45,
-      "financial_performance" => 0.00,
-      "cultural_impact" => 0.20,
-      "people_quality" => 0.10
-    },
-    active: true,
-    is_default: false,
-    is_system: true
-  },
-  %{
-    name: "Critics Choice",
-    description:
-      "Prioritizes critic-favored platforms (25% mob, 25% ivory tower) with cultural impact (30%), some awards (15%), minimal people (5%)",
-    weights: %{
-      # Ivory Tower with critic platforms weighted higher (25%)
-      "metacritic_metascore" => 3.0,
-      "rotten_tomatoes_tomatometer" => 3.0,
-
-      # Mob (25%)
-      "imdb_rating" => 0.5,
-      "tmdb_rating" => 0.5,
-
-      # Cultural Impact (30%)
-      "sight_sound_critics_2022" => 2.0,
-      "criterion" => 2.0,
-      "1001_movies" => 1.5,
-      "national_film_registry" => 1.5,
-
-      # Industry Recognition (15%)
-      "oscar_wins" => 1.0,
-      "oscar_nominations" => 0.8,
-      "cannes_palme_dor" => 1.0,
-
-      # People Quality (5%)
-      "person_quality_score" => 0.5
-    },
-    category_weights: %{
-      "mob" => 0.25,
-      "ivory_tower" => 0.25,
-      "industry_recognition" => 0.15,
-      "financial_performance" => 0.00,
-      "cultural_impact" => 0.30,
-      "people_quality" => 0.05
-    },
-    active: true,
-    is_default: false,
-    is_system: true
-  },
-  %{
-    name: "Crowd Pleaser",
-    description:
-      "Focuses on mainstream audience (22.5% mob), cultural reach (35%), ivory tower (22.5%), minimal awards (10%), financial (10%)",
-    weights: %{
-      # Mob with mainstream platforms weighted higher (22.5%)
-      "imdb_rating" => 2.5,
-      "tmdb_rating" => 2.0,
-      "imdb_rating_votes" => 1.5,
-      "rotten_tomatoes_audience_score" => 2.0,
-
-      # Ivory Tower (22.5%)
-      "metacritic_metascore" => 0.5,
-      "rotten_tomatoes_tomatometer" => 0.5,
-
-      # Financial Success
-      "tmdb_revenue_worldwide" => 2.0,
-      "tmdb_budget" => 0.5,
-
-      # Industry Recognition (10%)
-      "oscar_wins" => 0.5,
-      "oscar_nominations" => 0.3,
-
-      # People Quality (5%)
-      "person_quality_score" => 0.5
-    },
-    category_weights: %{
-      "mob" => 0.225,
-      "ivory_tower" => 0.225,
-      "industry_recognition" => 0.10,
-      "financial_performance" => 0.10,
-      "cultural_impact" => 0.30,
-      "people_quality" => 0.05
-    },
-    active: true,
-    is_default: false,
-    is_system: true
-  },
-  %{
-    name: "Cult Classic",
-    description:
-      "Finds films with dedicated followings: cultural lists (35%), moderate ratings (40% split mob/ivory), some awards (10%), people (15%)",
-    weights: %{
-      # Cultural Lists (35%)
-      "criterion" => 2.5,
-      "1001_movies" => 2.0,
-      "sight_sound_critics_2022" => 1.5,
-
-      # Mob (20%)
-      "imdb_rating" => 1.0,
-      "tmdb_rating" => 0.8,
-      "imdb_rating_votes" => 0.3,
-
-      # Ivory Tower (20%)
-      "metacritic_metascore" => 0.8,
-      "rotten_tomatoes_tomatometer" => 0.6,
-
-      # Festival presence (10%)
-      "cannes_palme_dor" => 1.5,
-      "venice_golden_lion" => 1.5,
-      "berlin_golden_bear" => 1.5,
-
-      # People Quality (15% - important for cult films)
-      "person_quality_score" => 2.0
-
-      # Note: Financial metrics intentionally excluded
-      # Cult classics often have low box office but high cultural impact
-    },
-    category_weights: %{
-      "mob" => 0.20,
-      "ivory_tower" => 0.20,
-      "industry_recognition" => 0.10,
-      "financial_performance" => 0.00,
-      "cultural_impact" => 0.35,
-      "people_quality" => 0.15
-    },
-    active: true,
-    is_default: false,
-    is_system: true
-  },
-  %{
     name: "Cinegraph Editorial",
     description:
       "Calibrated against 1001 Movies You Must See Before You Die. Emphasizes cultural impact and critical consensus over popularity and financial metrics.",
@@ -225,7 +17,7 @@ weight_profiles = [
       "metacritic_metascore" => 2.0,
       "rotten_tomatoes_tomatometer" => 2.0,
 
-      # Mob (10%)
+      # Mob (5%)
       "imdb_rating" => 0.8,
       "tmdb_rating" => 0.8,
       "rotten_tomatoes_audience_score" => 0.5,
@@ -244,7 +36,7 @@ weight_profiles = [
       "national_film_registry" => 1.5,
       "afi_top_100" => 1.0,
 
-      # People Quality (10%)
+      # People Quality (15%)
       "person_quality_score" => 1.0,
 
       # Financial (5% — de-emphasized)
@@ -252,12 +44,147 @@ weight_profiles = [
       "tmdb_budget" => 0.1
     },
     category_weights: %{
-      "mob" => 0.10,
+      "mob" => 0.05,
       "ivory_tower" => 0.25,
       "industry_recognition" => 0.20,
       "financial_performance" => 0.05,
       "cultural_impact" => 0.30,
-      "people_quality" => 0.10
+      "people_quality" => 0.15
+    },
+    active: true,
+    is_default: true,
+    is_system: true
+  },
+  %{
+    name: "Critics Choice",
+    description:
+      "Prioritizes critic scores. Ivory Tower is dominant with cultural recognition secondary.",
+    weights: %{
+      # Mob (10%)
+      "imdb_rating" => 0.8,
+      "tmdb_rating" => 0.8,
+      "rotten_tomatoes_audience_score" => 0.5,
+
+      # Ivory Tower (50%)
+      "metacritic_metascore" => 3.0,
+      "rotten_tomatoes_tomatometer" => 3.0,
+
+      # Industry Recognition (20%)
+      "oscar_wins" => 2.0,
+      "oscar_nominations" => 1.0,
+      "cannes_palme_dor" => 2.0,
+      "venice_golden_lion" => 2.0,
+      "berlin_golden_bear" => 2.0,
+
+      # Cultural Impact (20%)
+      "1001_movies" => 1.5,
+      "criterion" => 1.5,
+      "sight_sound_critics_2022" => 1.5
+    },
+    category_weights: %{
+      "mob" => 0.10,
+      "ivory_tower" => 0.50,
+      "industry_recognition" => 0.20,
+      "financial_performance" => 0.00,
+      "cultural_impact" => 0.20,
+      "people_quality" => 0.00
+    },
+    active: true,
+    is_default: false,
+    is_system: true
+  },
+  %{
+    name: "Crowd Pleaser",
+    description:
+      "Focuses on what mainstream audiences love. Mob score dominant with financial performance secondary.",
+    weights: %{
+      # Mob (60%)
+      "imdb_rating" => 2.5,
+      "tmdb_rating" => 2.0,
+      "imdb_rating_votes" => 1.5,
+      "rotten_tomatoes_audience_score" => 2.0,
+
+      # Cultural Impact (15%)
+      "1001_movies" => 1.0,
+      "criterion" => 1.0,
+
+      # Financial (25%)
+      "tmdb_revenue_worldwide" => 2.0,
+      "tmdb_budget" => 0.5
+    },
+    category_weights: %{
+      "mob" => 0.60,
+      "ivory_tower" => 0.00,
+      "industry_recognition" => 0.00,
+      "financial_performance" => 0.25,
+      "cultural_impact" => 0.15,
+      "people_quality" => 0.00
+    },
+    active: true,
+    is_default: false,
+    is_system: true
+  },
+  %{
+    name: "Award Season",
+    description:
+      "Finds films that win awards. Industry recognition is dominant with critical consensus secondary.",
+    weights: %{
+      # Ivory Tower (30%)
+      "metacritic_metascore" => 2.0,
+      "rotten_tomatoes_tomatometer" => 2.0,
+
+      # Industry Recognition (60%)
+      "oscar_wins" => 3.0,
+      "oscar_nominations" => 2.0,
+      "cannes_palme_dor" => 2.5,
+      "venice_golden_lion" => 2.5,
+      "berlin_golden_bear" => 2.5,
+
+      # Cultural Impact (10%)
+      "1001_movies" => 1.0,
+      "criterion" => 1.0
+    },
+    category_weights: %{
+      "mob" => 0.00,
+      "ivory_tower" => 0.30,
+      "industry_recognition" => 0.60,
+      "financial_performance" => 0.00,
+      "cultural_impact" => 0.10,
+      "people_quality" => 0.00
+    },
+    active: true,
+    is_default: false,
+    is_system: true
+  },
+  %{
+    name: "Hidden Gems",
+    description:
+      "Surfaces overlooked films with strong cultural longevity and auteur craft over mass appeal.",
+    weights: %{
+      # Mob (20%)
+      "imdb_rating" => 1.0,
+      "tmdb_rating" => 1.0,
+
+      # Ivory Tower (10%)
+      "metacritic_metascore" => 1.0,
+      "rotten_tomatoes_tomatometer" => 1.0,
+
+      # Cultural Impact (40%)
+      "1001_movies" => 2.0,
+      "criterion" => 2.0,
+      "sight_sound_critics_2022" => 2.0,
+      "national_film_registry" => 1.5,
+
+      # People Quality (30%)
+      "person_quality_score" => 2.0
+    },
+    category_weights: %{
+      "mob" => 0.20,
+      "ivory_tower" => 0.10,
+      "industry_recognition" => 0.00,
+      "financial_performance" => 0.00,
+      "cultural_impact" => 0.40,
+      "people_quality" => 0.30
     },
     active: true,
     is_default: false,
