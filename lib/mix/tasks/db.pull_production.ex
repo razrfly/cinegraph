@@ -566,7 +566,6 @@ defmodule Mix.Tasks.Db.PullProduction do
         [
           :binary,
           :exit_status,
-          :stderr_to_stdout,
           {:args, args},
           {:env, [{"PGPASSWORD", local_password()}]}
         ]

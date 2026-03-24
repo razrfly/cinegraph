@@ -79,7 +79,7 @@ defmodule Cinegraph.Imports.ImportStats do
 
   defp update_import_stats do
     current_time = DateTime.utc_now()
-    current_movie_count = Cinegraph.Repo.aggregate(Cinegraph.Movies.Movie, :count, :id)
+    current_movie_count = fast_movie_count()
 
     prev_stats =
       case :ets.lookup(@table_name, :current_stats) do
@@ -108,6 +108,18 @@ defmodule Cinegraph.Imports.ImportStats do
     }
 
     :ets.insert(@table_name, {:current_stats, new_stats})
+  end
+
+  # Use pg_class statistics estimate instead of a full sequential count.
+  # With 895K+ rows, COUNT(*) takes 15s+ and times out the connection pool.
+  defp fast_movie_count do
+    case Cinegraph.Repo.query(
+           "SELECT reltuples::bigint FROM pg_class WHERE relname = 'movies'",
+           []
+         ) do
+      {:ok, %{rows: [[count]]}} -> max(count, 0)
+      _ -> 0
+    end
   end
 
   defp calculate_active_jobs do

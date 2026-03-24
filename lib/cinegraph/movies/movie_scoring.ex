@@ -85,18 +85,24 @@ defmodule Cinegraph.Movies.MovieScoring do
           %{wins: 0, nominations: 0}
       end
 
-    # Get average person quality
+    # Get average person quality — deduplicated top-10 by score
     person_query = """
-    SELECT AVG(pm.score) as avg_quality
-    FROM movie_credits mc
-    JOIN person_metrics pm ON pm.person_id = mc.person_id
-    WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
+    SELECT AVG(max_score) as avg_quality
+    FROM (
+      SELECT mc.person_id, MAX(pm.score) as max_score
+      FROM movie_credits mc
+      JOIN person_metrics pm ON pm.person_id = mc.person_id
+      WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
+      GROUP BY mc.person_id
+      ORDER BY max_score DESC
+      LIMIT 10
+    ) top_talent
     """
 
     person_quality =
       case Repo.query(person_query, [movie.id]) do
-        {:ok, %{rows: [[avg]]}} -> normalize_number(avg) || 50.0
-        _ -> 50.0
+        {:ok, %{rows: [[avg]]}} -> normalize_number(avg) || 0.0
+        _ -> 0.0
       end
 
     # Calculate component scores (0-10 scale)
@@ -299,5 +305,70 @@ defmodule Cinegraph.Movies.MovieScoring do
       _ ->
         nil
     end
+  end
+
+  @doc """
+  Explains the people_quality score for a movie.
+
+  Returns a map with:
+    - avg_top10: the average quality score of the top-10 unique people (0–100 scale)
+    - unique_people: total unique people with a quality score
+    - total_credits: total credit rows for this movie
+    - top_people: list of {name, job, score} for the top 10
+
+  Usage:
+    iex> Cinegraph.Movies.MovieScoring.explain_people_quality(123)
+  """
+  def explain_people_quality(movie_id) do
+    top_query = """
+    SELECT p.name, mc.job, MAX(pm.score) as max_score
+    FROM movie_credits mc
+    JOIN person_metrics pm ON pm.person_id = mc.person_id
+    JOIN people p ON p.id = mc.person_id
+    WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
+    GROUP BY p.name, mc.job, mc.person_id
+    ORDER BY max_score DESC
+    LIMIT 10
+    """
+
+    stats_query = """
+    SELECT
+      COUNT(DISTINCT mc.person_id) as unique_people,
+      COUNT(*) as total_credits
+    FROM movie_credits mc
+    WHERE mc.movie_id = $1
+    """
+
+    top_people =
+      case Repo.query(top_query, [movie_id]) do
+        {:ok, %{rows: rows}} ->
+          Enum.map(rows, fn [name, job, score] ->
+            {name, job, normalize_number(score)}
+          end)
+
+        _ ->
+          []
+      end
+
+    {unique_people, total_credits} =
+      case Repo.query(stats_query, [movie_id]) do
+        {:ok, %{rows: [[u, t]]}} -> {u, t}
+        _ -> {0, 0}
+      end
+
+    avg_top10 =
+      if top_people == [] do
+        0.0
+      else
+        scores = Enum.map(top_people, fn {_, _, score} -> score || 0.0 end)
+        Enum.sum(scores) / length(scores)
+      end
+
+    %{
+      avg_top10: avg_top10,
+      unique_people: unique_people,
+      total_credits: total_credits,
+      top_people: top_people
+    }
   end
 end
