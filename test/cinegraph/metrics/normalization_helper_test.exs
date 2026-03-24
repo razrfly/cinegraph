@@ -20,8 +20,8 @@ defmodule Cinegraph.Metrics.NormalizationHelperTest do
       result = NormalizationHelper.logarithmic_normalize(100, 1000)
       assert result > 0.0
       assert result < 1.0
-      # Expected value: ln(101)/ln(1001) ≈ 0.6655
-      assert_in_delta(result, 0.6655, 0.001)
+      # Expected value: ln(101)/ln(1001) ≈ 0.6680
+      assert_in_delta(result, 0.6680, 0.001)
     end
 
     test "returns value greater than 1 for input greater than threshold" do
@@ -31,10 +31,10 @@ defmodule Cinegraph.Metrics.NormalizationHelperTest do
 
     test "normalizes TMDb popularity values correctly" do
       # Common TMDb popularity values
-      assert_in_delta(NormalizationHelper.logarithmic_normalize(10, 1000), 0.3320, 0.001)
-      assert_in_delta(NormalizationHelper.logarithmic_normalize(50, 1000), 0.5639, 0.001)
-      assert_in_delta(NormalizationHelper.logarithmic_normalize(100, 1000), 0.6655, 0.001)
-      assert_in_delta(NormalizationHelper.logarithmic_normalize(500, 1000), 0.8988, 0.001)
+      assert_in_delta(NormalizationHelper.logarithmic_normalize(10, 1000), 0.3471, 0.001)
+      assert_in_delta(NormalizationHelper.logarithmic_normalize(50, 1000), 0.5691, 0.001)
+      assert_in_delta(NormalizationHelper.logarithmic_normalize(100, 1000), 0.6680, 0.001)
+      assert_in_delta(NormalizationHelper.logarithmic_normalize(500, 1000), 0.8998, 0.001)
     end
   end
 

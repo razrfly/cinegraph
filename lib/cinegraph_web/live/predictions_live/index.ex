@@ -160,7 +160,10 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> assign(:show_weight_tuner, false)
          |> assign(:profile_comparison, nil)
          |> assign(:show_comparison, false)
-         |> assign(:last_updated, DateTime.utc_now())}
+         |> assign(:last_updated, DateTime.utc_now())
+         |> assign(:cache_empty, true)
+         |> assign(:cache_needs_refresh, false)
+         |> assign(:cache_status, %{cached: false, needs_refresh: true})}
     end
   end
 

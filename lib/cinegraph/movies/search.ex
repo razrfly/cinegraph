@@ -204,7 +204,7 @@ defmodule Cinegraph.Movies.Search do
           sort
       end
 
-    base in ~w(discovery_score mob ivory_tower industry_recognition cultural_impact people_quality)
+    base in ~w(discovery_score mob ivory_tower industry_recognition cultural_impact people_quality financial_performance)
   end
 
   defp list_genres do

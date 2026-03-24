@@ -50,18 +50,20 @@ defmodule Mix.Tasks.Db.PullProduction do
 
   @shortdoc "Pull production DB locally via SSH (cinegraph_prod → cinegraph_dev)"
 
-  # Configuration
+  # Static configuration (compile-time)
   @dump_dir "priv/dumps"
-  @local_db "cinegraph_dev"
-  @local_user "postgres"
-  @local_password "postgres"
-  @local_host "localhost"
-  @local_port "5432"
 
-  # SSH / remote config
-  @ssh_host "192.168.1.205"
-  @remote_db_user "holden"
-  @remote_db_name "cinegraph_prod"
+  # Runtime configuration — override via environment variables
+  defp local_db, do: System.get_env("LOCAL_DB", "cinegraph_dev")
+  defp local_user, do: System.get_env("LOCAL_DB_USER", "postgres")
+  defp local_password, do: System.get_env("LOCAL_DB_PASSWORD", "postgres")
+  defp local_host, do: System.get_env("LOCAL_DB_HOST", "localhost")
+  defp local_port, do: System.get_env("LOCAL_DB_PORT", "5432")
+
+  # SSH / remote config — override via environment variables
+  defp ssh_host, do: System.get_env("REMOTE_SSH_HOST", "192.168.1.205")
+  defp remote_db_user, do: System.get_env("REMOTE_DB_USER", "holden")
+  defp remote_db_name, do: System.get_env("REMOTE_DB_NAME", "cinegraph_prod")
 
   # Tables to verify after import
   @verify_tables ~w(movies people movie_credits collaborations festival_events genres)
@@ -188,7 +190,7 @@ defmodule Mix.Tasks.Db.PullProduction do
         ]
       else
         [
-          {"Checking SSH to #{@ssh_host}", &check_ssh_connectivity/0},
+          {"Checking SSH to #{ssh_host()}", &check_ssh_connectivity/0},
           {"Checking pg_dump on remote", &check_remote_pg_dump/0},
           {"Checking pg_restore in PATH", &check_pg_restore/0},
           {"Checking local PostgreSQL", &check_local_postgres/0}
@@ -201,22 +203,22 @@ defmodule Mix.Tasks.Db.PullProduction do
   defp check_ssh_connectivity do
     case System.cmd(
            "ssh",
-           ["-o", "ConnectTimeout=5", "-o", "BatchMode=yes", @ssh_host, "echo ok"],
+           ["-o", "ConnectTimeout=5", "-o", "BatchMode=yes", ssh_host(), "echo ok"],
            stderr_to_stdout: true
          ) do
       {"ok\n", 0} -> :ok
-      {output, _} -> {:error, "Cannot SSH to #{@ssh_host}: #{String.trim(output)}"}
+      {output, _} -> {:error, "Cannot SSH to #{ssh_host()}: #{String.trim(output)}"}
     end
   end
 
   defp check_remote_pg_dump do
     case System.cmd(
            "ssh",
-           ["-o", "ConnectTimeout=5", "-o", "BatchMode=yes", @ssh_host, "which pg_dump"],
+           ["-o", "ConnectTimeout=5", "-o", "BatchMode=yes", ssh_host(), "which pg_dump"],
            stderr_to_stdout: true
          ) do
       {_, 0} -> :ok
-      {output, _} -> {:error, "pg_dump not found on #{@ssh_host}: #{String.trim(output)}"}
+      {output, _} -> {:error, "pg_dump not found on #{ssh_host()}: #{String.trim(output)}"}
     end
   end
 
@@ -228,10 +230,19 @@ defmodule Mix.Tasks.Db.PullProduction do
   end
 
   defp check_local_postgres do
-    cmd =
-      "PGPASSWORD='#{@local_password}' psql -h #{@local_host} -p #{@local_port} -U #{@local_user} -c 'SELECT 1' postgres 2>&1"
+    args = [
+      "-h",
+      local_host(),
+      "-p",
+      local_port(),
+      "-U",
+      local_user(),
+      "-c",
+      "SELECT 1",
+      "postgres"
+    ]
 
-    case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
+    case System.cmd("psql", args, env: [{"PGPASSWORD", local_password()}], stderr_to_stdout: true) do
       {_, 0} ->
         :ok
 
@@ -265,7 +276,7 @@ defmodule Mix.Tasks.Db.PullProduction do
   # ============================================================================
 
   defp export_database(_opts) do
-    info("📤 Exporting #{@remote_db_name} from #{@ssh_host} via SSH...")
+    info("📤 Exporting #{remote_db_name()} from #{ssh_host()} via SSH...")
 
     with :ok <- ensure_dump_dir(),
          {:ok, dump_path} <- run_pg_dump_via_ssh() do
@@ -285,9 +296,9 @@ defmodule Mix.Tasks.Db.PullProduction do
     # Stream pg_dump stdout over SSH into local file; stderr goes to our process
     # Use single quotes around the remote command to avoid double-quote nesting inside sh -c "..."
     cmd =
-      ~s(ssh #{@ssh_host} 'pg_dump -U #{@remote_db_user} -Fc #{@remote_db_name}' > '#{dump_path}')
+      ~s(ssh #{ssh_host()} 'pg_dump -U #{remote_db_user()} -Fc #{remote_db_name()}' > '#{dump_path}')
 
-    info("  → Streaming dump from #{@ssh_host}...")
+    info("  → Streaming dump from #{ssh_host()}...")
 
     parent = self()
     monitor_pid = spawn_link(fn -> monitor_dump_progress(dump_path, parent) end)
@@ -433,10 +444,20 @@ defmodule Mix.Tasks.Db.PullProduction do
   defp drop_local_database do
     # Use DROP DATABASE WITH (FORCE) to atomically terminate all connections and drop
     # This avoids race conditions with apps that reconnect between terminate and drop
-    cmd =
-      "PGPASSWORD='#{@local_password}' psql -h #{@local_host} -p #{@local_port} -U #{@local_user} -d postgres -c \"DROP DATABASE IF EXISTS #{@local_db} WITH (FORCE)\" 2>&1"
+    args = [
+      "-h",
+      local_host(),
+      "-p",
+      local_port(),
+      "-U",
+      local_user(),
+      "-d",
+      "postgres",
+      "-c",
+      "DROP DATABASE IF EXISTS #{local_db()} WITH (FORCE)"
+    ]
 
-    case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
+    case System.cmd("psql", args, env: [{"PGPASSWORD", local_password()}], stderr_to_stdout: true) do
       {_output, 0} ->
         info("  ✓ Dropped existing database")
         :ok
@@ -453,10 +474,12 @@ defmodule Mix.Tasks.Db.PullProduction do
   end
 
   defp create_local_database do
-    cmd =
-      "PGPASSWORD='#{@local_password}' createdb -h #{@local_host} -p #{@local_port} -U #{@local_user} #{@local_db} 2>&1"
+    args = ["-h", local_host(), "-p", local_port(), "-U", local_user(), local_db()]
 
-    case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
+    case System.cmd("createdb", args,
+           env: [{"PGPASSWORD", local_password()}],
+           stderr_to_stdout: true
+         ) do
       {_output, 0} ->
         info("  ✓ Created fresh database")
         :ok
@@ -487,11 +510,11 @@ defmodule Mix.Tasks.Db.PullProduction do
 
     # Use --verbose to get table-by-table progress
     cmd = """
-    PGPASSWORD='#{@local_password}' pg_restore \
-      -h #{@local_host} \
-      -p #{@local_port} \
-      -U #{@local_user} \
-      -d #{@local_db} \
+    PGPASSWORD='#{local_password()}' pg_restore \
+      -h #{local_host()} \
+      -p #{local_port()} \
+      -U #{local_user()} \
+      -d #{local_db()} \
       --no-owner \
       --no-acl \
       --verbose \
@@ -635,11 +658,11 @@ defmodule Mix.Tasks.Db.PullProduction do
   defp start_repo do
     # Use longer timeout for post-import operations like materialized view refresh
     repo_config = [
-      username: @local_user,
-      password: @local_password,
-      hostname: @local_host,
-      port: String.to_integer(@local_port),
-      database: @local_db,
+      username: local_user(),
+      password: local_password(),
+      hostname: local_host(),
+      port: String.to_integer(local_port()),
+      database: local_db(),
       pool_size: 2,
       timeout: 120_000
     ]
@@ -709,9 +732,10 @@ defmodule Mix.Tasks.Db.PullProduction do
   defp refresh_materialized_views do
     verbose_info("  → Refreshing materialized views...")
 
-    # Find all materialized views
+    # Find all materialized views; quote_ident ensures the returned names are safe to
+    # interpolate directly into the subsequent REFRESH MATERIALIZED VIEW statement.
     query = """
-    SELECT schemaname || '.' || matviewname
+    SELECT quote_ident(schemaname) || '.' || quote_ident(matviewname)
     FROM pg_matviews
     WHERE schemaname = 'public'
     """

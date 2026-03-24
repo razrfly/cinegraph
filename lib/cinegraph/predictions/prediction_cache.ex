@@ -45,6 +45,8 @@ defmodule Cinegraph.Predictions.PredictionCache do
   Get cached predictions for a decade and profile.
   Returns nil if no cache exists.
   """
+  def get_cached_predictions(_decade, nil), do: nil
+
   def get_cached_predictions(decade, profile_id) do
     Repo.one(
       from pc in __MODULE__,

@@ -10,7 +10,8 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
       weights = CriteriaScoring.get_default_weights()
 
       assert %{
-               critical_acclaim: critical_acclaim,
+               mob: mob,
+               ivory_tower: ivory_tower,
                festival_recognition: festival_recognition,
                cultural_impact: cultural_impact,
                technical_innovation: technical_innovation,
@@ -18,7 +19,8 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
              } = weights
 
       # All weights should be numbers between 0 and 1
-      assert is_number(critical_acclaim) and critical_acclaim >= 0 and critical_acclaim <= 1
+      assert is_number(mob) and mob >= 0 and mob <= 1
+      assert is_number(ivory_tower) and ivory_tower >= 0 and ivory_tower <= 1
 
       assert is_number(festival_recognition) and festival_recognition >= 0 and
                festival_recognition <= 1
@@ -185,11 +187,22 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
   end
 
   describe "individual scoring functions" do
-    test "score_critical_acclaim/1 returns valid scores" do
+    test "score_mob/1 returns valid scores" do
       movie = Repo.all(Movie) |> List.first()
 
       if movie do
-        score = CriteriaScoring.score_critical_acclaim(movie)
+        score = CriteriaScoring.score_mob(movie)
+        assert is_number(score)
+        assert score >= 0.0
+        assert score <= 100.0
+      end
+    end
+
+    test "score_ivory_tower/1 returns valid scores" do
+      movie = Repo.all(Movie) |> List.first()
+
+      if movie do
+        score = CriteriaScoring.score_ivory_tower(movie)
         assert is_number(score)
         assert score >= 0.0
         assert score <= 100.0
@@ -267,7 +280,8 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
       }
 
       # Individual functions should handle nil gracefully
-      assert is_number(CriteriaScoring.score_critical_acclaim(movie))
+      assert is_number(CriteriaScoring.score_mob(movie))
+      assert is_number(CriteriaScoring.score_ivory_tower(movie))
       assert is_number(CriteriaScoring.score_festival_recognition(movie))
       assert is_number(CriteriaScoring.score_cultural_impact(movie))
       assert is_number(CriteriaScoring.score_technical_innovation(movie))
