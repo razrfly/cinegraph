@@ -246,7 +246,6 @@ defmodule Mix.Tasks.ImportMovies do
 
     # Clear in order to respect foreign keys - only tables that exist in clean schema
     tables = [
-      "cri_scores",
       "external_ratings",
       "external_recommendations",
       "movie_list_items",

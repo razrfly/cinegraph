@@ -179,36 +179,16 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   end
 
   defp convert_ui_weights_to_categories(weights) do
-    # Coerce non-numeric values to 0.0 and delegate to ScoringService for consistent mapping
-    # Support both old popular_opinion key and new mob/ivory_tower keys
     mob_weight = to_float(Map.get(weights, :mob, 0.0))
     ivory_tower_weight = to_float(Map.get(weights, :ivory_tower, 0.0))
-
-    # Legacy fallback: if neither mob nor ivory_tower key is present at all,
-    # split popular_opinion + critical_acclaim 50/50. Using key presence (not value
-    # equality) so an explicit {mob: 0.0, ivory_tower: 0.0} is honoured as-is.
-    {mob_weight, ivory_tower_weight} =
-      if not Map.has_key?(weights, :mob) and not Map.has_key?(weights, :ivory_tower) do
-        legacy =
-          to_float(Map.get(weights, :popular_opinion, 0.0)) +
-            to_float(Map.get(weights, :critical_acclaim, 0.0))
-
-        {legacy / 2.0, legacy / 2.0}
-      else
-        {mob_weight, ivory_tower_weight}
-      end
 
     sanitized = %{
       mob: mob_weight,
       ivory_tower: ivory_tower_weight,
-      industry_recognition:
-        to_float(
-          Map.get(weights, :industry_recognition, Map.get(weights, :festival_recognition, 0.0))
-        ),
+      industry_recognition: to_float(Map.get(weights, :industry_recognition, 0.0)),
       cultural_impact: to_float(Map.get(weights, :cultural_impact, 0.0)),
-      people_quality:
-        to_float(Map.get(weights, :people_quality, Map.get(weights, :auteur_recognition, 0.0))),
-      financial_success: to_float(Map.get(weights, :financial_success, 0.0))
+      people_quality: to_float(Map.get(weights, :people_quality, 0.0)),
+      financial_performance: to_float(Map.get(weights, :financial_performance, 0.0))
     }
 
     ScoringService.discovery_weights_to_profile(sanitized).category_weights
@@ -275,7 +255,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       mob: 0.10,
       ivory_tower: 0.10,
       industry_recognition: 0.20,
-      financial_success: 0.20,
+      financial_performance: 0.20,
       cultural_impact: 0.20,
       people_quality: 0.20
     }
@@ -339,13 +319,13 @@ defmodule Cinegraph.Predictions.MoviePredictor do
           )
       },
       %{
-        criterion: :financial_success,
-        raw_score: Float.round(to_float(components[:financial_success]) * 100, 1),
-        weight: Map.get(actual_weights, :financial_success, 0.20),
+        criterion: :financial_performance,
+        raw_score: Float.round(to_float(components[:financial_performance]) * 100, 1),
+        weight: Map.get(actual_weights, :financial_performance, 0.20),
         weighted_points:
           Float.round(
-            to_float(components[:financial_success]) *
-              Map.get(actual_weights, :financial_success, 0.20) * 100,
+            to_float(components[:financial_performance]) *
+              Map.get(actual_weights, :financial_performance, 0.20) * 100,
             1
           )
       }

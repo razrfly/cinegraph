@@ -15,7 +15,6 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     # Load presets from database
     presets = DiscoveryScoring.get_presets()
 
-    # Get the default/balanced weights - mob + ivory_tower replace popular_opinion
     weights =
       Map.get(presets, :balanced, %{
         mob: 0.10,
@@ -23,7 +22,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
         industry_recognition: 0.20,
         cultural_impact: 0.20,
         people_quality: 0.20,
-        financial_success: 0.20
+        financial_performance: 0.20
       })
 
     # Store the current profile for database lookups
@@ -60,7 +59,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                "industry_recognition",
                "cultural_impact",
                "people_quality",
-               "financial_success"
+               "financial_performance"
              ] ->
           dimension = String.to_atom(key)
 
@@ -466,7 +465,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   defp humanize_dimension(:industry_recognition), do: "Industry Recognition"
   defp humanize_dimension(:cultural_impact), do: "Cultural Impact"
   defp humanize_dimension(:people_quality), do: "People Quality"
-  defp humanize_dimension(:financial_success), do: "Financial Success"
+  defp humanize_dimension(:financial_performance), do: "Financial Performance"
   defp humanize_dimension(dimension), do: Phoenix.Naming.humanize(dimension)
 
   defp dimension_description(:mob), do: "Audience ratings (IMDb, TMDb)"
@@ -474,7 +473,10 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   defp dimension_description(:industry_recognition), do: "Festival awards and nominations"
   defp dimension_description(:cultural_impact), do: "Canonical lists and popularity metrics"
   defp dimension_description(:people_quality), do: "Quality of directors, actors, and crew"
-  defp dimension_description(:financial_success), do: "Box office revenue and budget performance"
+
+  defp dimension_description(:financial_performance),
+    do: "Box office revenue and budget performance"
+
   defp dimension_description(_), do: ""
 
   defp format_score(nil), do: "N/A"

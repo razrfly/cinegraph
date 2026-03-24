@@ -525,55 +525,12 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   # Metric threshold filters
   defp filter_by_metric_thresholds(query, params) do
     query
-    |> filter_by_metric(:popular_opinion, params.popular_opinion_min)
     |> filter_by_metric(:industry_recognition, params.industry_recognition_min)
     |> filter_by_metric(:cultural_impact, params.cultural_impact_min)
     |> filter_by_metric(:people_quality, params.people_quality_min)
   end
 
   defp filter_by_metric(query, _dimension, nil), do: query
-
-  defp filter_by_metric(query, :popular_opinion, min_value) do
-    where(
-      query,
-      [m],
-      fragment(
-        """
-        COALESCE((
-          SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 + 
-                  COALESCE(ir.value, 0) / 10.0 * 0.25 +
-                  COALESCE(mc.value, 0) / 100.0 * 0.25 + 
-                  COALESCE(rt.value, 0) / 100.0 * 0.25)
-          FROM (
-                SELECT value FROM external_metrics
-                WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
-                ORDER BY fetched_at DESC LIMIT 1
-               ) tr,
-               (
-                SELECT value FROM external_metrics
-                WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
-                ORDER BY fetched_at DESC LIMIT 1
-               ) ir,
-               (
-                SELECT value FROM external_metrics
-                WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
-                ORDER BY fetched_at DESC LIMIT 1
-               ) mc,
-               (
-                SELECT value FROM external_metrics
-                WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer'
-                ORDER BY fetched_at DESC LIMIT 1
-               ) rt
-        ), 0) >= ?
-        """,
-        m.id,
-        m.id,
-        m.id,
-        m.id,
-        ^min_value
-      )
-    )
-  end
 
   defp filter_by_metric(query, :industry_recognition, min_value) do
     where(

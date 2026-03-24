@@ -199,7 +199,7 @@ defmodule Cinegraph.Calibration.RecallCalculator do
         {:industry_recognition, "Industry Recognition"},
         {:cultural_impact, "Cultural Impact"},
         {:people_quality, "People Quality"},
-        {:financial_success, "Financial Success"}
+        {:financial_performance, "Financial Performance"}
       ]
 
       Enum.map(lenses, fn {lens, label} ->

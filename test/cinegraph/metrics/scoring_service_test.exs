@@ -9,10 +9,10 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
         category_weights: %{
           "mob" => 0.10,
           "ivory_tower" => 0.10,
-          "awards" => 0.20,
-          "cultural" => 0.20,
-          "people" => 0.20,
-          "financial" => 0.20
+          "industry_recognition" => 0.20,
+          "cultural_impact" => 0.20,
+          "people_quality" => 0.20,
+          "financial_performance" => 0.20
         }
       }
 
@@ -23,29 +23,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
-      assert result.financial_success == 0.20
-    end
-
-    test "splits legacy popular_opinion 50/50 into mob and ivory_tower" do
-      profile = %MetricWeightProfile{
-        name: "Legacy Profile",
-        category_weights: %{
-          "popular_opinion" => 0.40,
-          "awards" => 0.20,
-          "cultural" => 0.20,
-          "people" => 0.10,
-          "financial" => 0.10
-        }
-      }
-
-      result = ScoringService.profile_to_discovery_weights(profile)
-
-      assert result.mob == 0.20
-      assert result.ivory_tower == 0.20
-      assert result.industry_recognition == 0.20
-      assert result.cultural_impact == 0.20
-      assert result.people_quality == 0.10
-      assert result.financial_success == 0.10
+      assert result.financial_performance == 0.20
     end
 
     test "uses default weights when categories are missing" do
@@ -56,13 +34,12 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       result = ScoringService.profile_to_discovery_weights(profile)
 
-      # mob and ivory_tower each get half of ratings default (0.20)
       assert result.mob == 0.10
       assert result.ivory_tower == 0.10
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
-      assert result.financial_success == 0.00
+      assert result.financial_performance == 0.20
     end
 
     test "handles nil category_weights gracefully" do
@@ -78,7 +55,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.industry_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
-      assert result.financial_success == 0.00
+      assert result.financial_performance == 0.20
     end
 
     test "handles zero mob/ivory_tower weights" do
@@ -87,10 +64,10 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
         category_weights: %{
           "mob" => 0.00,
           "ivory_tower" => 0.00,
-          "awards" => 0.50,
-          "cultural" => 0.30,
-          "people" => 0.10,
-          "financial" => 0.10
+          "industry_recognition" => 0.50,
+          "cultural_impact" => 0.30,
+          "people_quality" => 0.10,
+          "financial_performance" => 0.10
         }
       }
 
@@ -101,7 +78,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.industry_recognition == 0.50
       assert result.cultural_impact == 0.30
       assert result.people_quality == 0.10
-      assert result.financial_success == 0.10
+      assert result.financial_performance == 0.10
     end
 
     test "handles full mob weight" do
@@ -110,10 +87,10 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
         category_weights: %{
           "mob" => 1.00,
           "ivory_tower" => 0.00,
-          "awards" => 0.00,
-          "cultural" => 0.00,
-          "people" => 0.00,
-          "financial" => 0.00
+          "industry_recognition" => 0.00,
+          "cultural_impact" => 0.00,
+          "people_quality" => 0.00,
+          "financial_performance" => 0.00
         }
       }
 
@@ -124,28 +101,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.industry_recognition == 0.00
       assert result.cultural_impact == 0.00
       assert result.people_quality == 0.00
-      assert result.financial_success == 0.00
-    end
-
-    test "handles backward compatibility with old 'ratings' category" do
-      profile = %MetricWeightProfile{
-        name: "Old Format Profile",
-        category_weights: %{
-          "ratings" => 0.40,
-          "awards" => 0.20,
-          "cultural" => 0.20,
-          "people" => 0.20
-        }
-      }
-
-      result = ScoringService.profile_to_discovery_weights(profile)
-
-      # Old "ratings" splits 50/50 into mob + ivory_tower
-      assert result.mob == 0.20
-      assert result.ivory_tower == 0.20
-      assert result.industry_recognition == 0.20
-      assert result.cultural_impact == 0.20
-      assert result.people_quality == 0.20
+      assert result.financial_performance == 0.00
     end
   end
 
@@ -157,7 +113,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
         industry_recognition: 0.25,
         cultural_impact: 0.20,
         people_quality: 0.15,
-        financial_success: 0.10
+        financial_performance: 0.10
       }
 
       result = ScoringService.discovery_weights_to_profile(weights, "Custom Test")
@@ -165,10 +121,10 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.name == "Custom Test"
       assert result.category_weights["mob"] == 0.15
       assert result.category_weights["ivory_tower"] == 0.15
-      assert result.category_weights["awards"] == 0.25
-      assert result.category_weights["cultural"] == 0.20
-      assert result.category_weights["people"] == 0.15
-      assert result.category_weights["financial"] == 0.10
+      assert result.category_weights["industry_recognition"] == 0.25
+      assert result.category_weights["cultural_impact"] == 0.20
+      assert result.category_weights["people_quality"] == 0.15
+      assert result.category_weights["financial_performance"] == 0.10
     end
 
     test "handles missing weights with defaults" do
@@ -183,11 +139,10 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.name == "Partial Weights"
       assert result.category_weights["mob"] == 0.30
       assert result.category_weights["ivory_tower"] == 0.20
-      assert result.category_weights["awards"] == 0.50
-      # Missing weights should default to 0.2
-      assert result.category_weights["cultural"] == 0.20
-      assert result.category_weights["people"] == 0.20
-      assert result.category_weights["financial"] == 0.20
+      assert result.category_weights["industry_recognition"] == 0.50
+      assert result.category_weights["cultural_impact"] == 0.20
+      assert result.category_weights["people_quality"] == 0.20
+      assert result.category_weights["financial_performance"] == 0.20
     end
   end
 end

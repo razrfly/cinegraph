@@ -1,8 +1,8 @@
 defmodule Cinegraph.Movies.DiscoveryCommon do
   @moduledoc """
   Shared logic for discovery scoring modules.
-  Contains presets and normalization functions used by both
-  DiscoveryScoring and DiscoveryScoringSimple modules.
+  Contains presets and normalization functions used by the
+  DiscoveryScoringSimple module.
 
   ## Discovery Score Configuration
 
@@ -16,7 +16,7 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   ### Weight Distribution
   Weights should sum to 1.0. Adjust to change what matters most:
   - Higher `recency` = favor newer films
-  - Higher `popular_opinion` = favor well-rated films
+  - Higher `mob`/`ivory_tower` = favor well-rated films
   - Higher `cultural_impact` = favor popular/canonical films
   """
 
@@ -39,21 +39,13 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   # Minimum votes required to include rating in score (prevents low-sample bias)
   @min_votes_for_rating 10
 
-  # =============================================================================
-  # LEGACY WEIGHTS (for existing discovery scoring system)
-  # =============================================================================
-  # NOTE: Parallel scoring systems are intentional.
-  # This module (+ DiscoveryScoringSimple) powers the movie listing/search page:
-  # fast, synchronous, uses `popular_opinion` for backward compatibility.
-  # ScoringService (+ MetricWeightProfile) powers calibration/predictions/admin:
-  # it has a legacy shim that splits `popular_opinion` 50/50 → mob + ivory_tower.
-
   @default_weights %{
     mob: 0.20,
     ivory_tower: 0.20,
     industry_recognition: 0.20,
     cultural_impact: 0.20,
-    people_quality: 0.20
+    people_quality: 0.20,
+    financial_performance: 0.0
   }
 
   @doc """
