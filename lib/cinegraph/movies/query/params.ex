@@ -81,6 +81,11 @@ defmodule Cinegraph.Movies.Query.Params do
     industry_recognition industry_recognition_asc industry_recognition_desc
     cultural_impact cultural_impact_asc cultural_impact_desc
     people_quality people_quality_asc people_quality_desc
+    cinegraph_editorial cinegraph_editorial_asc cinegraph_editorial_desc
+    critics_choice critics_choice_asc critics_choice_desc
+    crowd_pleaser crowd_pleaser_asc crowd_pleaser_desc
+    award_season award_season_asc award_season_desc
+    hidden_gems hidden_gems_asc hidden_gems_desc
   )
 
   @valid_rating_presets ~w(highly_rated well_reviewed critically_acclaimed)
@@ -253,7 +258,8 @@ defmodule Cinegraph.Movies.Query.Params do
   end
 
   defp normalize_blank_enums(params) do
-    enum_fields = ~w(rating_preset discovery_preset award_preset award_status people_role search preset disparity)
+    enum_fields =
+      ~w(rating_preset discovery_preset award_preset award_status people_role search preset disparity)
 
     Enum.reduce(enum_fields, params, fn f, acc ->
       case Map.get(acc, f) do

@@ -29,7 +29,14 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field == "discovery_score" ->
         apply_discovery_score_sort(query, direction)
 
-      field == "score" ->
+      field in [
+        "score",
+        "cinegraph_editorial",
+        "critics_choice",
+        "crowd_pleaser",
+        "award_season",
+        "hidden_gems"
+      ] ->
         apply_score_cache_sort(query, direction, preset_weights)
 
       field in ["rating", "popularity"] ->
@@ -354,10 +361,17 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
   defp apply_score_cache_sort(query, direction, nil) do
     order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
-    query
-    |> maybe_join_score_cache()
-    |> select_merge([m, score_cache: sc], %{overall_score: sc.overall_score})
-    |> order_by([score_cache: sc], [{^order_func, sc.overall_score}])
+    if has_group_by?(query) do
+      query
+      |> maybe_join_score_cache()
+      |> select_merge([m, score_cache: sc], %{overall_score: fragment("MAX(?)", sc.overall_score)})
+      |> order_by([score_cache: sc], [{^order_func, fragment("MAX(?)", sc.overall_score)}])
+    else
+      query
+      |> maybe_join_score_cache()
+      |> select_merge([m, score_cache: sc], %{overall_score: sc.overall_score})
+      |> order_by([score_cache: sc], [{^order_func, sc.overall_score}])
+    end
   end
 
   # Sorts by a weighted combination of the individual lens scores from the cache
@@ -371,33 +385,93 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
 
     order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
-    query
-    |> maybe_join_score_cache()
-    |> select_merge([m, score_cache: sc], %{
-      overall_score:
-        fragment(
-          "?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0)",
-          ^mob, sc.mob_score,
-          ^ivory, sc.ivory_tower_score,
-          ^industry, sc.industry_recognition_score,
-          ^cultural, sc.cultural_impact_score,
-          ^people, sc.people_quality_score,
-          ^financial, sc.financial_performance_score
-        )
-    })
-    |> order_by([score_cache: sc], [
-      {^order_func,
-       fragment(
-         "?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0)",
-         ^mob, sc.mob_score,
-         ^ivory, sc.ivory_tower_score,
-         ^industry, sc.industry_recognition_score,
-         ^cultural, sc.cultural_impact_score,
-         ^people, sc.people_quality_score,
-         ^financial, sc.financial_performance_score
-       )}
-    ])
+    if has_group_by?(query) do
+      query
+      |> maybe_join_score_cache()
+      |> select_merge([m, score_cache: sc], %{
+        overall_score:
+          fragment(
+            "CASE WHEN MAX(?.id) IS NULL THEN NULL ELSE ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) END",
+            sc,
+            ^mob,
+            sc.mob_score,
+            ^ivory,
+            sc.ivory_tower_score,
+            ^industry,
+            sc.industry_recognition_score,
+            ^cultural,
+            sc.cultural_impact_score,
+            ^people,
+            sc.people_quality_score,
+            ^financial,
+            sc.financial_performance_score
+          )
+      })
+      |> order_by([score_cache: sc], [
+        {^order_func,
+         fragment(
+           "CASE WHEN MAX(?.id) IS NULL THEN NULL ELSE ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) + ?::float * MAX(?) END",
+           sc,
+           ^mob,
+           sc.mob_score,
+           ^ivory,
+           sc.ivory_tower_score,
+           ^industry,
+           sc.industry_recognition_score,
+           ^cultural,
+           sc.cultural_impact_score,
+           ^people,
+           sc.people_quality_score,
+           ^financial,
+           sc.financial_performance_score
+         )}
+      ])
+    else
+      query
+      |> maybe_join_score_cache()
+      |> select_merge([m, score_cache: sc], %{
+        overall_score:
+          fragment(
+            "CASE WHEN ?.id IS NULL THEN NULL ELSE ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) END",
+            sc,
+            ^mob,
+            sc.mob_score,
+            ^ivory,
+            sc.ivory_tower_score,
+            ^industry,
+            sc.industry_recognition_score,
+            ^cultural,
+            sc.cultural_impact_score,
+            ^people,
+            sc.people_quality_score,
+            ^financial,
+            sc.financial_performance_score
+          )
+      })
+      |> order_by([score_cache: sc], [
+        {^order_func,
+         fragment(
+           "CASE WHEN ?.id IS NULL THEN NULL ELSE ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) END",
+           sc,
+           ^mob,
+           sc.mob_score,
+           ^ivory,
+           sc.ivory_tower_score,
+           ^industry,
+           sc.industry_recognition_score,
+           ^cultural,
+           sc.cultural_impact_score,
+           ^people,
+           sc.people_quality_score,
+           ^financial,
+           sc.financial_performance_score
+         )}
+      ])
+    end
   end
+
+  defp has_group_by?(%Ecto.Query{group_bys: group_bys}) when length(group_bys) > 0, do: true
+  defp has_group_by?(_), do: false
 
   defp maybe_join_score_cache(query) do
     if has_named_binding?(query, :score_cache) do

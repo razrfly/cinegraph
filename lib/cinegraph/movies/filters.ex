@@ -159,32 +159,9 @@ defmodule Cinegraph.Movies.Filters do
       {:mob, dir} when dir in [:desc, :asc] ->
         order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
-        order_by(query, [m], [
-          {^order_func,
-           fragment(
-             """
-             (
-               SELECT CASE
-                 WHEN ir_v IS NOT NULL AND tr_v IS NOT NULL THEN (ir_v / 10.0 + tr_v / 10.0) / 2.0
-                 WHEN ir_v IS NOT NULL THEN ir_v / 10.0
-                 WHEN tr_v IS NOT NULL THEN tr_v / 10.0
-                 ELSE NULL
-               END
-               FROM (
-                 SELECT
-                   (SELECT value FROM external_metrics
-                    WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
-                    ORDER BY fetched_at DESC LIMIT 1) AS ir_v,
-                   (SELECT value FROM external_metrics
-                    WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
-                    ORDER BY fetched_at DESC LIMIT 1) AS tr_v
-               ) AS vals
-             )
-             """,
-             m.id,
-             m.id
-           )}
-        ])
+        query
+        |> maybe_join_score_cache()
+        |> order_by([m, score_cache: sc], [{^order_func, sc.mob_score}])
 
       {:ivory_tower, dir} when dir in [:desc, :asc] ->
         order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
@@ -1261,31 +1238,10 @@ defmodule Cinegraph.Movies.Filters do
     if min_val do
       case dimension do
         :mob ->
-          # Filter by mob score (audience ratings: TMDb + IMDb, null-aware avg)
-          where(
-            query,
-            [m],
-            fragment(
-              """
-              COALESCE((
-                SELECT CASE
-                  WHEN tmdb_v IS NOT NULL AND imdb_v IS NOT NULL THEN (tmdb_v / 10.0 + imdb_v / 10.0) / 2.0
-                  WHEN tmdb_v IS NOT NULL THEN tmdb_v / 10.0
-                  WHEN imdb_v IS NOT NULL THEN imdb_v / 10.0
-                  ELSE NULL
-                END
-                FROM (
-                  SELECT
-                    (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) AS tmdb_v,
-                    (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) AS imdb_v
-                ) AS vals
-              ), 0) >= ?
-              """,
-              m.id,
-              m.id,
-              ^min_val
-            )
-          )
+          # Filter by cached mob score (audience ratings: IMDb + TMDb + RT audience)
+          query
+          |> maybe_join_score_cache()
+          |> where([score_cache: sc], not is_nil(sc.mob_score) and sc.mob_score >= ^min_val)
 
         :industry_recognition ->
           # Filter by industry recognition (awards)
