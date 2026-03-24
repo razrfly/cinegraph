@@ -891,6 +891,135 @@ latency without public DNS or TLS overhead.
 
 ---
 
+## 🎭 Person Quality Score (PQS) System
+
+The Person Quality Score (PQS) measures the **objective career achievement** of any film industry person — director, actor, writer, composer, or producer — using only independently verifiable data.
+
+### What PQS Measures
+
+PQS captures four objective signals:
+- **Canonical list appearances** — films on 1001 Movies, Criterion, NFR, Sight & Sound
+- **High-rated film volume** — films with IMDb/TMDb ≥ 7.0
+- **Festival recognition** — wins and nominations, both direct (person-level) and via films
+- **Total film count** — career productivity
+
+No subjective ratings are used. Scores emerge from public data, not editorial judgment.
+
+### The Formula (v3.0)
+
+```
+raw = (canonical_appearances × 10)
+    + (high_rated_films × 3)
+    + (total_films × 1)
+    + (movie_festival_wins × 15) + (direct_festival_wins × 15)
+    + (movie_festival_noms × 5) + (direct_festival_noms × 5)
+
+score = min(100, log10(raw + 1) / log10(ceiling + 1) × 100)
+```
+
+The log-scale normalization prevents score ceiling collapse. Current `@normalization_ceiling` is `1000.0`, defined in `lib/cinegraph/metrics/person_quality_score.ex`. Re-calibrate after major data imports using:
+
+```sql
+SELECT
+  MAX((components->>'raw_score')::float) as max_raw,
+  percentile_cont(0.999) WITHIN GROUP (ORDER BY (components->>'raw_score')::float) as p999_raw,
+  percentile_cont(0.99) WITHIN GROUP (ORDER BY (components->>'raw_score')::float) as p99_raw
+FROM person_metrics
+WHERE metric_type = 'quality_score' AND components ? 'raw_score';
+```
+
+Set `@normalization_ceiling` = `p99_raw * 2` (rounded to nearest 100).
+
+### Role Weighting (Movie-Level)
+
+When computing a film's `people_quality` score, each person's PQS is weighted by their role so directors and leads outrank extras:
+
+| Role | Weight |
+|---|---|
+| Director | 3× |
+| Writer | 1.5× |
+| Lead cast (cast_order 1–3) | 2× |
+| Supporting cast (cast_order 4–10) | 1.5× |
+| Producer / other crew | 1× |
+
+Top-10 people by weighted score are selected; the final value is a weighted average (0–100 scale preserved).
+
+### Audit Workflow
+
+```bash
+# Run ground-truth audit (prints table, flags ⚠️ failures)
+mix cinegraph.audit_people_scores
+
+# Inspect a specific film's people_quality breakdown (IEx)
+Cinegraph.Movies.MovieScoring.explain_people_quality(movie_id)
+```
+
+Run the audit after any major data import, festival update, or scoring formula change. Ground-truth films are maintained in `lib/mix/tasks/cinegraph.audit_people_scores.ex`.
+
+### Periodic Maintenance
+
+```bash
+# Rebuild all person scores (monthly or after formula changes)
+mix pqs.batch 1
+
+# Check coverage and staleness
+mix pqs.status
+```
+
+```elixir
+# Rebuild movie score cache after PQS rebuild (IEx)
+Cinegraph.Workers.MovieScoreCacheWorker.queue_all()
+```
+
+The weekly PQS scheduler (`PqsScheduler`) runs automatically. Manual rebuild is needed after formula changes.
+
+### Objectivity Principles
+
+- All inputs are independently verifiable (public canonical lists, public festival records, public ratings)
+- Formula version stored with every score in `person_metrics.metadata.version`
+- No editorial overrides — scores emerge from data, not curation
+- Full breakdown available via `explain_people_quality/1`
+
+### Known Limitations
+
+- Festival coverage is stronger post-1980 → classic directors are systematically underscored until more festival data is imported
+- Non-English canonical lists are underrepresented → Japanese, Korean, and European talent scores lower than their cultural impact warrants
+- Credit data is sparse for pre-1970 films → low people_quality even for legendary films
+
+### How to Improve Scores
+
+```elixir
+# Backfill credits for a specific film (IEx)
+Oban.insert(Cinegraph.Workers.TMDbDetailsWorker.new(%{"movie_id" => 1832}))
+
+# Find canonical films with < 10 credits
+Cinegraph.Repo.query!("""
+  SELECT m.tmdb_id, m.title, COUNT(mc.id) as credits
+  FROM movies m
+  LEFT JOIN movie_credits mc ON mc.movie_id = m.id
+  WHERE m.canonical_sources != '{}'::jsonb
+  GROUP BY m.id HAVING COUNT(mc.id) < 10
+  ORDER BY COUNT(mc.id)
+  LIMIT 20
+""")
+```
+
+### Post-Deploy Operational Steps
+
+```bash
+# 1. Calibrate @normalization_ceiling (see calibration query above)
+# 2. Update constant in person_quality_score.ex if needed, recompile
+# 3. Backfill credits for sparse canonical films (IEx, see above)
+# 4. Rebuild all PQS scores
+mix pqs.batch 1
+# 5. Rebuild movie score cache (IEx)
+#    Cinegraph.Workers.MovieScoreCacheWorker.queue_all()
+# 6. Re-run audit
+mix cinegraph.audit_people_scores
+```
+
+---
+
 ## 📄 License
 
 [Add your license information here]

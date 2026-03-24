@@ -105,7 +105,7 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
       score: score,
       components: components,
       metadata: %{
-        "version" => "2.0",
+        "version" => "3.0",
         "algorithm" => "universal_objective",
         "weights" => %{
           "canonical" => @canonical_weight,
@@ -354,28 +354,20 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
     end
   end
 
-  defp normalize_score(raw_score, film_count) do
-    # Adaptive normalization based on film volume
-    # People with more films need higher raw scores to get top ratings
-    base_max =
-      case film_count do
-        # Prolific careers
-        count when count >= 50 -> 800
-        # Major careers  
-        count when count >= 20 -> 600
-        # Solid careers
-        count when count >= 10 -> 400
-        # Emerging careers
-        count when count >= 5 -> 200
-        # Limited careers
-        _ -> 100
-      end
+  # Set from calibration query: p99_raw * 2, rounded to nearest 100.
+  # Re-run calibration after major data imports and update if distribution shifts.
+  # Calibration query:
+  #   SELECT percentile_cont(0.99) WITHIN GROUP (ORDER BY (components->>'raw_score')::float) as p99_raw
+  #   FROM person_metrics WHERE metric_type = 'quality_score' AND components ? 'raw_score';
+  @normalization_ceiling 1000.0
 
-    # Scale to 0-100, but allow exceptional scores to go higher initially
-    score = raw_score / base_max * 100
+  defp normalize_score(raw_score, _film_count) when raw_score <= 0, do: 0.0
 
-    # Apply ceiling at 100 for final score
-    min(100.0, score)
+  defp normalize_score(raw_score, _film_count) do
+    Float.round(
+      min(100.0, :math.log10(raw_score + 1) / :math.log10(@normalization_ceiling + 1) * 100),
+      2
+    )
   end
 
   # Backward compatibility functions for existing code

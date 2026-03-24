@@ -2,9 +2,8 @@ defmodule Cinegraph.Metrics.PeopleQualityBenchmarkTest do
   @moduledoc """
   Ground-truth benchmark tests for people_quality scoring.
 
-  These tests require real data in the database and are skipped automatically
-  when the movie is not present. They serve as regression guards after scoring
-  changes.
+  These tests require real data in the database and will fail if a ground-truth
+  movie is absent. They serve as regression guards after scoring changes.
   """
   use Cinegraph.DataCase, async: false
 
@@ -26,7 +25,7 @@ defmodule Cinegraph.Metrics.PeopleQualityBenchmarkTest do
       movie = Repo.get_by(Movie, tmdb_id: tmdb_id)
 
       if is_nil(movie) do
-        IO.puts("Skipping #{title} — not in database")
+        flunk("#{title} (tmdb_id=#{tmdb_id}) not in database — add it to run benchmarks")
       else
         scores = MovieScoring.calculate_movie_scores(movie)
         people_quality = scores.components.people_quality

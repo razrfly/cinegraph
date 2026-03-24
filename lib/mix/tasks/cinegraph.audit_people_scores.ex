@@ -22,8 +22,12 @@ defmodule Mix.Tasks.Cinegraph.AuditPeopleScores do
     {240, "The Godfather Part II", 8.0},
     {680, "Pulp Fiction", 8.0},
     {155, "The Dark Knight", 8.0},
-    {637, "The Seventh Seal", 7.5},
-    {372_058, "Your Name.", 7.0}
+    {490, "The Seventh Seal", 7.5},
+    {372_058, "Your Name.", 7.0},
+    {10430, "Rashomon", 7.5},
+    {129, "Spirited Away", 7.0},
+    {843, "In the Mood for Love", 7.0},
+    {11517, "Persona", 7.5}
   ]
 
   @impl Mix.Task
@@ -58,7 +62,7 @@ defmodule Mix.Tasks.Cinegraph.AuditPeopleScores do
           top_names =
             info.top_people
             |> Enum.take(3)
-            |> Enum.map(fn {name, _job, _score} -> name end)
+            |> Enum.map(fn {name, _job, _score, _weight} -> name end)
             |> Enum.join(", ")
 
           flag = if score_10 < min_score, do: " ⚠️ ", else: "   "
