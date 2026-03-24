@@ -57,6 +57,7 @@ defmodule Cinegraph.Movies.Search do
           industry_recognition industry_recognition_asc industry_recognition_desc
           cultural_impact cultural_impact_asc cultural_impact_desc
           people_quality people_quality_asc people_quality_desc
+          financial_performance financial_performance_asc financial_performance_desc
         ) or validated_params.sort in @preset_sort_variants
 
       # Resolve preset weights for score-cache sorts

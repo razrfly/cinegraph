@@ -124,6 +124,31 @@ mix ecto.migrate
 mix run priv/repo/seeds.exs
 ```
 
+### Pulling Production Data Locally
+
+To sync the production database (`cinegraph_prod`) to local dev (`cinegraph_dev`):
+
+```bash
+# Full sync: dump prod over SSH, drop local, restore, clean Oban jobs
+mix db.pull_production
+
+# Export only (save dump, don't touch local DB)
+mix db.pull_production --export-only
+
+# Import from existing dump (skip SSH step)
+mix db.pull_production --import-only --dump-file priv/dumps/cinegraph_prod_20260324_120000.dump
+
+# Faster restore with parallel workers
+mix db.pull_production --parallel 4
+
+# Verbose output
+mix db.pull_production --verbose
+```
+
+**Prerequisites:** SSH access to `192.168.1.205`, `pg_dump`/`pg_restore` in PATH, local PostgreSQL running.
+Dumps are saved to `priv/dumps/` (gitignored). Oban jobs are deleted after restore to prevent
+production jobs from running locally.
+
 ### Database Population
 
 CineGraph uses an **Oban-based background job system** for importing movie data. This provides rate-limited, resumable, and parallelized imports from multiple data sources.

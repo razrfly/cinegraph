@@ -110,11 +110,12 @@ defmodule CinegraphWeb.PredictionsLive.Index do
             %Cinegraph.Metrics.MetricWeightProfile{
               name: "Balanced",
               category_weights: %{
-                "ratings" => 0.4,
-                "awards" => 0.2,
-                "cultural" => 0.2,
-                "financial" => 0.0,
-                "people" => 0.2
+                "mob" => 0.10,
+                "ivory_tower" => 0.10,
+                "industry_recognition" => 0.20,
+                "cultural_impact" => 0.20,
+                "people_quality" => 0.20,
+                "financial_performance" => 0.20
               }
             }
 
@@ -154,15 +155,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
          |> assign(:available_profiles, ScoringService.get_all_profiles() || [])
          |> assign(
            :algorithm_weights,
-           ScoringService.profile_to_discovery_weights(default_profile) ||
-             %{
-               mob: 0.10,
-               ivory_tower: 0.10,
-               industry_recognition: 0.20,
-               cultural_impact: 0.20,
-               people_quality: 0.20,
-               financial_performance: 0.20
-             }
+           ScoringService.profile_to_discovery_weights(default_profile)
          )
          |> assign(:show_weight_tuner, false)
          |> assign(:profile_comparison, nil)
@@ -509,6 +502,16 @@ defmodule CinegraphWeb.PredictionsLive.Index do
           "Unknown"
         end
     end
+  end
+
+  defp stale_cache?([sample | _]) do
+    criteria =
+      get_in(sample, [:prediction, :criteria_scores]) ||
+        get_in(sample, ["prediction", "criteria_scores"]) ||
+        %{}
+
+    Map.has_key?(criteria, :financial_success) or
+      Map.has_key?(criteria, "financial_success")
   end
 
   defp stale_cache?(_), do: false

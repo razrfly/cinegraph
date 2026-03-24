@@ -1,9 +1,9 @@
-defmodule Mix.Tasks.SyncProduction do
+defmodule Mix.Tasks.Db.PullProduction do
   @moduledoc """
-  Sync production PlanetScale Postgres database to local development.
+  Pull the production database (cinegraph_prod) to local development (cinegraph_dev) via SSH.
 
   This task automates the process of:
-  1. Exporting the production database using pg_dump
+  1. Exporting the production database using pg_dump over SSH
   2. Dropping and recreating the local database
   3. Importing the dump using pg_restore
   4. Verifying the import was successful
@@ -11,47 +11,44 @@ defmodule Mix.Tasks.SyncProduction do
   ## Usage
 
       # Full sync (drops local, imports fresh)
-      mix sync_production
+      mix db.pull_production
 
       # Export only (saves dump file)
-      mix sync_production --export-only
+      mix db.pull_production --export-only
 
       # Import from existing dump
-      mix sync_production --import-only --dump-file priv/dumps/planetscale_20250125.dump
+      mix db.pull_production --import-only --dump-file priv/dumps/cinegraph_prod_20260324_120000.dump
 
       # Parallel operations (faster for large DBs)
-      mix sync_production --parallel 4
+      mix db.pull_production --parallel 4
 
       # Verbose mode with progress
-      mix sync_production --verbose
+      mix db.pull_production --verbose
 
       # Skip verification step
-      mix sync_production --skip-verify
+      mix db.pull_production --skip-verify
 
       # Keep dump file after import (default: keeps it)
-      mix sync_production --no-keep-dump
+      mix db.pull_production --no-keep-dump
 
-  ## Environment Variables Required
+  ## Prerequisites
 
-  The following environment variables must be set (typically in .env):
-
-      DATABASE_HOST=eu-central-1.pg.psdb.cloud
-      DATABASE_USERNAME=postgres.xxxxx
-      DATABASE_PASSWORD=xxxxx
-      DATABASE=postgres  # optional, defaults to "postgres"
+  - SSH access to 192.168.1.205 (key-based auth, no password prompt)
+  - pg_dump and pg_restore in PATH (`brew install libpq` if missing)
+  - Local PostgreSQL running
 
   ## Notes
 
-  - Both source (PlanetScale) and target (local) are PostgreSQL
+  - Uses SSH to stream pg_dump output directly to a local file
   - Uses pg_dump custom format (-Fc) for compression
-  - Requires pg_dump, pg_restore, dropdb, createdb in PATH
-  - SSL is required for PlanetScale connections
+  - Dumps are saved to priv/dumps/ (gitignored)
+  - Oban jobs are deleted after restore to prevent production jobs running locally
   """
 
   use Mix.Task
   require Logger
 
-  @shortdoc "Sync PlanetScale Postgres to local database"
+  @shortdoc "Pull production DB locally via SSH (cinegraph_prod → cinegraph_dev)"
 
   # Configuration
   @dump_dir "priv/dumps"
@@ -61,15 +58,16 @@ defmodule Mix.Tasks.SyncProduction do
   @local_host "localhost"
   @local_port "5432"
 
+  # SSH / remote config
+  @ssh_host "192.168.1.205"
+  @remote_db_user "holden"
+  @remote_db_name "cinegraph_prod"
+
   # Tables to verify after import
   @verify_tables ~w(movies people movie_credits collaborations festival_events genres)
 
   @impl Mix.Task
   def run(args) do
-    # Load .env file for credentials
-    load_env()
-
-    # Parse options
     {opts, _, _} =
       OptionParser.parse(args,
         switches: [
@@ -98,7 +96,18 @@ defmodule Mix.Tasks.SyncProduction do
       Application.put_env(:cinegraph, :verbose_sync, true)
     end
 
-    # Execute based on options
+    case run_preflight_checks(opts) do
+      :ok ->
+        info("\n✅ Pre-flight checks passed\n")
+        execute_sync(opts)
+
+      {:error, reason} ->
+        error("\n❌ Pre-flight failed: #{reason}")
+        Mix.raise("Pre-flight checks failed")
+    end
+  end
+
+  defp execute_sync(opts) do
     result =
       cond do
         opts[:export_only] ->
@@ -165,224 +174,161 @@ defmodule Mix.Tasks.SyncProduction do
   end
 
   # ============================================================================
+  # Pre-flight Checks
+  # ============================================================================
+
+  defp run_preflight_checks(opts) do
+    info("\n🔍 Running pre-flight checks...\n")
+
+    checks =
+      if opts[:import_only] do
+        [
+          {"Checking pg_restore in PATH", &check_pg_restore/0},
+          {"Checking local PostgreSQL", &check_local_postgres/0}
+        ]
+      else
+        [
+          {"Checking SSH to #{@ssh_host}", &check_ssh_connectivity/0},
+          {"Checking pg_dump on remote", &check_remote_pg_dump/0},
+          {"Checking pg_restore in PATH", &check_pg_restore/0},
+          {"Checking local PostgreSQL", &check_local_postgres/0}
+        ]
+      end
+
+    run_checks(checks)
+  end
+
+  defp check_ssh_connectivity do
+    case System.cmd(
+           "ssh",
+           ["-o", "ConnectTimeout=5", "-o", "BatchMode=yes", @ssh_host, "echo ok"],
+           stderr_to_stdout: true
+         ) do
+      {"ok\n", 0} -> :ok
+      {output, _} -> {:error, "Cannot SSH to #{@ssh_host}: #{String.trim(output)}"}
+    end
+  end
+
+  defp check_remote_pg_dump do
+    case System.cmd(
+           "ssh",
+           ["-o", "ConnectTimeout=5", "-o", "BatchMode=yes", @ssh_host, "which pg_dump"],
+           stderr_to_stdout: true
+         ) do
+      {_, 0} -> :ok
+      {output, _} -> {:error, "pg_dump not found on #{@ssh_host}: #{String.trim(output)}"}
+    end
+  end
+
+  defp check_pg_restore do
+    case System.cmd("which", ["pg_restore"], stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      _ -> {:error, "pg_restore not found in PATH. Install via: brew install libpq"}
+    end
+  end
+
+  defp check_local_postgres do
+    cmd =
+      "PGPASSWORD='#{@local_password}' psql -h #{@local_host} -p #{@local_port} -U #{@local_user} -c 'SELECT 1' postgres 2>&1"
+
+    case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
+      {_, 0} ->
+        :ok
+
+      {output, _} ->
+        if String.contains?(output, "connection refused") do
+          {:error, "PostgreSQL not running. Start with: brew services start postgresql@16"}
+        else
+          {:error, "Cannot connect to local PostgreSQL: #{String.trim(output)}"}
+        end
+    end
+  end
+
+  defp run_checks([]), do: :ok
+
+  defp run_checks([{label, check_fn} | rest]) do
+    IO.write("  #{label}... ")
+
+    case check_fn.() do
+      :ok ->
+        IO.puts("✓")
+        run_checks(rest)
+
+      {:error, reason} ->
+        IO.puts("✗")
+        {:error, reason}
+    end
+  end
+
+  # ============================================================================
   # Export Phase
   # ============================================================================
 
-  defp export_database(opts) do
-    info("📤 Exporting from PlanetScale...")
+  defp export_database(_opts) do
+    info("📤 Exporting #{@remote_db_name} from #{@ssh_host} via SSH...")
 
-    with {:ok, creds} <- get_production_credentials(),
-         :ok <- ensure_dump_dir(),
-         {:ok, dump_path} <- run_pg_dump(creds, opts) do
+    with :ok <- ensure_dump_dir(),
+         {:ok, dump_path} <- run_pg_dump_via_ssh() do
       {:ok, dump_path}
     end
   end
 
-  defp get_production_credentials do
-    host = System.get_env("DATABASE_HOST")
-    username = System.get_env("DATABASE_USERNAME")
-    password = System.get_env("DATABASE_PASSWORD")
-    database = System.get_env("DATABASE") || "postgres"
-    port = System.get_env("DATABASE_PORT") || "5432"
-
-    cond do
-      is_nil(host) ->
-        error("  ✗ DATABASE_HOST environment variable not set")
-        {:error, "Missing DATABASE_HOST"}
-
-      is_nil(username) ->
-        error("  ✗ DATABASE_USERNAME environment variable not set")
-        {:error, "Missing DATABASE_USERNAME"}
-
-      is_nil(password) ->
-        error("  ✗ DATABASE_PASSWORD environment variable not set")
-        {:error, "Missing DATABASE_PASSWORD"}
-
-      true ->
-        verbose_info("  → Connecting to #{host}:#{port}/#{database}")
-
-        {:ok,
-         %{
-           host: host,
-           username: username,
-           password: password,
-           database: database,
-           port: port
-         }}
-    end
-  end
-
-  defp ensure_dump_dir do
-    File.mkdir_p!(@dump_dir)
-    :ok
-  end
-
-  defp run_pg_dump(creds, opts) do
+  defp run_pg_dump_via_ssh do
     timestamp =
       DateTime.utc_now()
       |> DateTime.to_iso8601(:basic)
       |> String.slice(0, 15)
       |> String.replace("T", "_")
 
-    dump_path = Path.join(@dump_dir, "planetscale_#{timestamp}.dump")
+    dump_path = Path.join(@dump_dir, "cinegraph_prod_#{timestamp}.dump")
 
-    # pg_dump's -j/--jobs only works with directory format (-Fd), not custom format (-Fc)
-    # Since we use custom format for compression, warn and ignore the parallel option
-    parallel_arg =
-      if opts[:parallel] do
-        info("  ⚠ --parallel ignored for pg_dump: -j/--jobs requires directory format (-Fd)")
+    # Stream pg_dump stdout over SSH into local file; stderr goes to our process
+    # Use single quotes around the remote command to avoid double-quote nesting inside sh -c "..."
+    cmd =
+      ~s(ssh #{@ssh_host} 'pg_dump -U #{@remote_db_user} -Fc #{@remote_db_name}' > '#{dump_path}')
 
-        info(
-          "    Using custom format (-Fc) for compression. Parallel is supported during restore."
-        )
+    info("  → Streaming dump from #{@ssh_host}...")
 
-        ""
-      else
-        ""
-      end
-
-    # Build connection string with SSL and connection timeout
-    # PlanetScale requires SSL
-    conn_string =
-      "postgresql://#{creds.username}:#{URI.encode_www_form(creds.password)}@#{creds.host}:#{creds.port}/#{creds.database}?sslmode=require&connect_timeout=30"
-
-    # Use --verbose to get table-by-table progress
-    cmd = """
-    pg_dump '#{conn_string}' \
-      -Fc \
-      --no-owner \
-      --no-acl \
-      --verbose \
-      #{parallel_arg} \
-      -f '#{dump_path}' \
-      2>&1
-    """
-
-    info("  → Connecting to #{creds.host}...")
-
-    # Start progress monitor that also tracks activity
     parent = self()
     monitor_pid = spawn_link(fn -> monitor_dump_progress(dump_path, parent) end)
     start_time = System.monotonic_time(:second)
 
-    # Run pg_dump and capture output for verbose table progress
     port = Port.open({:spawn, "sh -c \"#{cmd}\""}, [:binary, :exit_status, :stderr_to_stdout])
+    result = collect_ssh_output(port)
 
-    result = collect_dump_output(port, creds.password, [], monitor_pid)
-
-    # Stop the monitor
     send(monitor_pid, :stop)
-
     elapsed = System.monotonic_time(:second) - start_time
 
     case result do
-      {:ok, _output} ->
-        # Clear the progress line and show final result
+      :ok ->
         IO.write("\r\e[K")
         size = File.stat!(dump_path).size |> format_size()
         info("  ✓ Exported to #{dump_path} (#{size}) in #{elapsed}s")
         {:ok, dump_path}
 
-      {:error, output, code} ->
+      {:error, _output, code} ->
         IO.write("\r\e[K")
-        # Sanitize output to remove password
-        sanitized = String.replace(output, creds.password, "***")
-        error("  ✗ pg_dump failed (exit code #{code})")
-        verbose_info("  Output: #{sanitized}")
-        {:error, "pg_dump failed: #{sanitized}"}
+        File.rm(dump_path)
+        error("  ✗ pg_dump via SSH failed (exit #{code})")
+        {:error, "pg_dump via SSH failed"}
     end
   end
 
-  defp collect_dump_output(port, password, acc, monitor_pid) do
+  # SSH pipes pg_dump stdout directly to file; stderr/errors come through as port data
+  defp collect_ssh_output(port) do
     receive do
-      {^port, {:data, data}} ->
-        # Notify monitor of activity
-        send(monitor_pid, :activity)
-
-        # Sanitize password from output
-        sanitized = String.replace(data, password, "***")
-
-        # Show table progress from verbose output
-        sanitized
-        |> String.split("\n")
-        |> Enum.each(fn line ->
-          line = String.trim(line)
-
-          cond do
-            line == "" ->
-              :ok
-
-            String.contains?(line, "dumping contents of table") ->
-              table = extract_table_name(line)
-              IO.write("\r\e[K  → Dumping: #{table}...")
-
-            String.contains?(line, "saving") && String.contains?(line, "statistics") ->
-              IO.write("\r\e[K  → Saving statistics...")
-
-            # Show errors and important messages
-            String.contains?(String.downcase(line), "error") ||
-              String.contains?(String.downcase(line), "fatal") ||
-              String.contains?(String.downcase(line), "failed") ||
-              String.contains?(String.downcase(line), "denied") ||
-                String.contains?(String.downcase(line), "refused") ->
-              IO.write("\r\e[K")
-              IO.puts("  ⚠ #{line}")
-
-            # Show connection progress
-            String.contains?(line, "reading") ||
-              String.contains?(line, "identifying") ||
-                String.contains?(line, "started") ->
-              IO.write("\r\e[K  → #{line}")
-
-            true ->
-              :ok
-          end
-        end)
-
-        collect_dump_output(port, password, [sanitized | acc], monitor_pid)
+      {^port, {:data, _data}} ->
+        collect_ssh_output(port)
 
       {^port, {:exit_status, 0}} ->
-        {:ok, acc |> Enum.reverse() |> Enum.join()}
+        :ok
 
       {^port, {:exit_status, code}} ->
-        output = acc |> Enum.reverse() |> Enum.join()
-        # Show the last part of output for debugging
-        if String.length(output) > 0 do
-          IO.write("\r\e[K")
-          IO.puts("  Debug output:")
-
-          output
-          |> String.split("\n")
-          |> Enum.take(-10)
-          |> Enum.each(&IO.puts("    #{&1}"))
-        end
-
-        {:error, output, code}
+        {:error, "", code}
 
       {:timeout_stalled} ->
         Port.close(port)
-        output = acc |> Enum.reverse() |> Enum.join()
-        IO.puts("\n  Last output before stall timeout:")
-
-        output
-        |> String.split("\n")
-        |> Enum.take(-5)
-        |> Enum.each(&IO.puts("    #{&1}"))
-
-        {:error, "No progress for 15 minutes - connection may have stalled", 1}
-    end
-  end
-
-  defp extract_table_name(line) do
-    case Regex.run(~r/table "?([^"]+)"?\.?"?([^"]+)"?/, line) do
-      [_, schema, table] ->
-        "#{schema}.#{table}"
-
-      _ ->
-        case Regex.run(~r/table (\S+)/, line) do
-          [_, table] -> table
-          _ -> "..."
-        end
+        {:error, "No progress for 15 minutes", 1}
     end
   end
 
@@ -485,8 +431,10 @@ defmodule Mix.Tasks.SyncProduction do
   end
 
   defp drop_local_database do
+    # Use DROP DATABASE WITH (FORCE) to atomically terminate all connections and drop
+    # This avoids race conditions with apps that reconnect between terminate and drop
     cmd =
-      "PGPASSWORD='#{@local_password}' dropdb --if-exists -h #{@local_host} -p #{@local_port} -U #{@local_user} #{@local_db} 2>&1"
+      "PGPASSWORD='#{@local_password}' psql -h #{@local_host} -p #{@local_port} -U #{@local_user} -d postgres -c \"DROP DATABASE IF EXISTS #{@local_db} WITH (FORCE)\" 2>&1"
 
     case System.cmd("sh", ["-c", cmd], stderr_to_stdout: true) do
       {_output, 0} ->
@@ -554,7 +502,6 @@ defmodule Mix.Tasks.SyncProduction do
 
     start_time = System.monotonic_time(:second)
 
-    # Run pg_restore and capture output for progress
     port = Port.open({:spawn, "sh -c \"#{cmd}\""}, [:binary, :exit_status, :stderr_to_stdout])
 
     result = collect_restore_output(port, [])
@@ -686,7 +633,6 @@ defmodule Mix.Tasks.SyncProduction do
   end
 
   defp start_repo do
-    # Get repo config from dev environment
     # Use longer timeout for post-import operations like materialized view refresh
     repo_config = [
       username: @local_user,
@@ -873,31 +819,9 @@ defmodule Mix.Tasks.SyncProduction do
     end
   end
 
-  defp load_env do
-    # Load .env file if it exists
-    env_file = Path.join(File.cwd!(), ".env")
-
-    if File.exists?(env_file) do
-      env_file
-      |> File.read!()
-      |> String.split("\n")
-      |> Enum.each(fn line ->
-        case String.split(line, "=", parts: 2) do
-          [key, value] ->
-            key = String.trim(key)
-            value = String.trim(value) |> String.trim("\"") |> String.trim("'")
-
-            unless String.starts_with?(key, "#") || key == "" do
-              System.put_env(key, value)
-            end
-
-          _ ->
-            :ok
-        end
-      end)
-
-      verbose_info("Loaded environment from .env")
-    end
+  defp ensure_dump_dir do
+    File.mkdir_p!(@dump_dir)
+    :ok
   end
 
   defp format_size(bytes) when bytes < 1024, do: "#{bytes} B"
@@ -924,7 +848,6 @@ defmodule Mix.Tasks.SyncProduction do
   defp error(message), do: Mix.shell().error(message)
 
   defp verbose_info(message) do
-    # Always show in verbose mode, but for now show important messages
     if Application.get_env(:cinegraph, :verbose_sync, false) do
       Mix.shell().info(message)
     end
