@@ -387,6 +387,15 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           _ -> value
         end
 
+      key == "disparity" ->
+        case value do
+          "critics_darling" -> "Critics' Darlings"
+          "peoples_champion" -> "People's Champions"
+          "perfect_harmony" -> "Perfect Harmony"
+          "polarizer" -> "The Polarizers"
+          _ -> value
+        end
+
       # Legacy filter values
       key in ["award_status"] ->
         case value do

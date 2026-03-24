@@ -80,6 +80,8 @@ defmodule Cinegraph.Movies.Search do
             nil -> nil
             profile -> profile.category_weights
           end
+        else
+          nil
         end
 
       # Apply custom sorting if needed
