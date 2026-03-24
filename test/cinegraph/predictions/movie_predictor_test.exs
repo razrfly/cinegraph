@@ -157,11 +157,12 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
   describe "error handling" do
     test "handles invalid weights gracefully" do
       invalid_weights = %{
-        critical_acclaim: "invalid",
-        festival_recognition: 0.30,
+        mob: "invalid",
+        ivory_tower: 0.20,
+        industry_recognition: 0.20,
         cultural_impact: 0.20,
-        technical_innovation: 0.10,
-        auteur_recognition: 0.05
+        people_quality: 0.10,
+        financial_performance: 0.10
       }
 
       # Should not crash, may return empty results or use defaults

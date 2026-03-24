@@ -270,7 +270,12 @@ defmodule Cinegraph.Movies.Search do
       %{id: "ivory_tower", value: "ivory_tower", label: "The Ivory Tower (Critics)"},
       %{id: "industry_recognition", value: "industry_recognition", label: "Industry Recognition"},
       %{id: "cultural_impact", value: "cultural_impact", label: "Cultural Impact"},
-      %{id: "people_quality", value: "people_quality", label: "People Quality"}
+      %{id: "people_quality", value: "people_quality", label: "People Quality"},
+      %{
+        id: "financial_performance",
+        value: "financial_performance",
+        label: "Financial Performance"
+      }
     ]
   end
 
