@@ -9,6 +9,13 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   4. Cultural Impact (20%)
   5. Technical Innovation (10%)
   6. Auteur Recognition (5%)
+
+  NOTE: This module uses its own criterion vocabulary (festival_recognition,
+  technical_innovation, auteur_recognition) which is intentionally different from
+  the production `Cinegraph.Metrics.ScoringService` / `ScoringConfiguration` system
+  (industry_recognition, people_quality, financial_performance). These are two
+  independent scoring subsystems: this one drives the predictions algorithm for
+  future 1001 Movies additions; the other drives the discovery and disparity UIs.
   """
 
   import Ecto.Query
