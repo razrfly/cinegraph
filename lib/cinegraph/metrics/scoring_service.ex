@@ -10,6 +10,15 @@ defmodule Cinegraph.Metrics.ScoringService do
 
   require Logger
 
+  @default_category_weights %{
+    "mob" => 0.10,
+    "ivory_tower" => 0.10,
+    "industry_recognition" => 0.20,
+    "cultural_impact" => 0.20,
+    "people_quality" => 0.20,
+    "financial_performance" => 0.20
+  }
+
   @doc """
   Gets a weight profile by name from the database.
   Returns the profile or nil if not found.
@@ -70,14 +79,7 @@ defmodule Cinegraph.Metrics.ScoringService do
     %MetricWeightProfile{
       name: "Fallback",
       description: "Emergency fallback profile",
-      category_weights: %{
-        "mob" => 0.10,
-        "ivory_tower" => 0.10,
-        "industry_recognition" => 0.20,
-        "cultural_impact" => 0.20,
-        "people_quality" => 0.20,
-        "financial_performance" => 0.20
-      },
+      category_weights: @default_category_weights,
       weights: %{},
       active: true,
       is_default: true
@@ -102,17 +104,37 @@ defmodule Cinegraph.Metrics.ScoringService do
         half = legacy_popular / 2.0
         {half, half}
       else
-        {get_category_weight(profile, "mob", 0.15),
-         get_category_weight(profile, "ivory_tower", 0.15)}
+        {get_category_weight(profile, "mob", @default_category_weights["mob"]),
+         get_category_weight(profile, "ivory_tower", @default_category_weights["ivory_tower"])}
       end
 
     %{
       mob: mob_weight,
       ivory_tower: ivory_tower_weight,
-      industry_recognition: get_category_weight(profile, "industry_recognition", 0.2),
-      cultural_impact: get_category_weight(profile, "cultural_impact", 0.2),
-      people_quality: get_category_weight(profile, "people_quality", 0.15),
-      financial_performance: get_category_weight(profile, "financial_performance", 0.15)
+      industry_recognition:
+        get_category_weight(
+          profile,
+          "industry_recognition",
+          @default_category_weights["industry_recognition"]
+        ),
+      cultural_impact:
+        get_category_weight(
+          profile,
+          "cultural_impact",
+          @default_category_weights["cultural_impact"]
+        ),
+      people_quality:
+        get_category_weight(
+          profile,
+          "people_quality",
+          @default_category_weights["people_quality"]
+        ),
+      financial_performance:
+        get_category_weight(
+          profile,
+          "financial_performance",
+          @default_category_weights["financial_performance"]
+        )
     }
   end
 
@@ -124,12 +146,24 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: name,
       description: "Custom weight profile created from discovery UI",
       category_weights: %{
-        "mob" => Map.get(weights, :mob, 0.15),
-        "ivory_tower" => Map.get(weights, :ivory_tower, 0.15),
-        "industry_recognition" => Map.get(weights, :industry_recognition, 0.2),
-        "financial_performance" => Map.get(weights, :financial_performance, 0.15),
-        "cultural_impact" => Map.get(weights, :cultural_impact, 0.2),
-        "people_quality" => Map.get(weights, :people_quality, 0.15)
+        "mob" => Map.get(weights, :mob, @default_category_weights["mob"]),
+        "ivory_tower" => Map.get(weights, :ivory_tower, @default_category_weights["ivory_tower"]),
+        "industry_recognition" =>
+          Map.get(
+            weights,
+            :industry_recognition,
+            @default_category_weights["industry_recognition"]
+          ),
+        "financial_performance" =>
+          Map.get(
+            weights,
+            :financial_performance,
+            @default_category_weights["financial_performance"]
+          ),
+        "cultural_impact" =>
+          Map.get(weights, :cultural_impact, @default_category_weights["cultural_impact"]),
+        "people_quality" =>
+          Map.get(weights, :people_quality, @default_category_weights["people_quality"])
       },
       weights: build_metric_weights_from_discovery(weights),
       active: true,

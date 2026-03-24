@@ -185,6 +185,31 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
           </div>
         </div>
       </div>
+      <!-- Audience vs Critics -->
+      <div class="border-t pt-4">
+        <h3 class="text-sm font-semibold text-gray-900 mb-1">⚖️ Audience vs Critics</h3>
+        <p class="text-xs text-gray-500 mb-3">
+          Requires a Scored Preset to be selected as sort order.
+        </p>
+        <select
+          name="filters[disparity]"
+          class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+        >
+          <option value="" selected={@filters["disparity"] in [nil, ""]}>Any</option>
+          <option value="critics_darling" selected={@filters["disparity"] == "critics_darling"}>
+            Critics' Darlings — high critics score, low audience
+          </option>
+          <option value="peoples_champion" selected={@filters["disparity"] == "peoples_champion"}>
+            People's Champions — high audience, low critics
+          </option>
+          <option value="perfect_harmony" selected={@filters["disparity"] == "perfect_harmony"}>
+            Perfect Harmony — critics and audience agree
+          </option>
+          <option value="polarizer" selected={@filters["disparity"] == "polarizer"}>
+            The Polarizers — strong disagreement both ways
+          </option>
+        </select>
+      </div>
     </div>
     """
   end
@@ -196,7 +221,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
     new_filter_keys = [
       "rating_preset",
       "discovery_preset",
-      "award_preset"
+      "award_preset",
+      "disparity"
     ]
 
     # Legacy filters
@@ -253,7 +279,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "people_search",
       "rating_preset",
       "discovery_preset",
-      "award_preset"
+      "award_preset",
+      "disparity"
     ]
 
     legacy_keys = [
@@ -303,6 +330,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "rating_preset" -> "Rating Quality"
       "discovery_preset" -> "Discovery Type"
       "award_preset" -> "Award Era"
+      "disparity" -> "Audience vs Critics"
       # Legacy filters
       "award_status" -> "Award Status"
       "festival_id" -> "Festival"

@@ -13,6 +13,14 @@ defmodule Cinegraph.Movies.Search do
   alias Cinegraph.Movies.Query.{Params, CustomFilters, CustomSorting}
   alias Cinegraph.Metrics.ScoringService
 
+  @preset_sort_variants ~w(
+    cinegraph_editorial cinegraph_editorial_asc cinegraph_editorial_desc
+    critics_choice critics_choice_asc critics_choice_desc
+    crowd_pleaser crowd_pleaser_asc crowd_pleaser_desc
+    award_season award_season_asc award_season_desc
+    hidden_gems hidden_gems_asc hidden_gems_desc
+  )
+
   @doc """
   Search movies with validated parameters.
   Returns {movies, meta} tuple where meta contains pagination info.
@@ -38,25 +46,37 @@ defmodule Cinegraph.Movies.Search do
       filtered_query = CustomFilters.apply_all(base_query, validated_params)
 
       # Check if we need custom sorting
-      needs_custom_sort = validated_params.sort in ~w(
-        rating rating_asc rating_desc
-        popularity popularity_asc popularity_desc
-        discovery_score discovery_score_asc discovery_score_desc
-        score score_asc score_desc
-        mob mob_asc mob_desc
-        ivory_tower ivory_tower_asc ivory_tower_desc
-        popular_opinion popular_opinion_asc popular_opinion_desc
-        industry_recognition industry_recognition_asc industry_recognition_desc
-        cultural_impact cultural_impact_asc cultural_impact_desc
-        people_quality people_quality_asc people_quality_desc
-      )
+      needs_custom_sort =
+        validated_params.sort in ~w(
+          rating rating_asc rating_desc
+          popularity popularity_asc popularity_desc
+          discovery_score discovery_score_asc discovery_score_desc
+          score score_asc score_desc
+          mob mob_asc mob_desc
+          ivory_tower ivory_tower_asc ivory_tower_desc
+          popular_opinion popular_opinion_asc popular_opinion_desc
+          industry_recognition industry_recognition_asc industry_recognition_desc
+          cultural_impact cultural_impact_asc cultural_impact_desc
+          people_quality people_quality_asc people_quality_desc
+        ) or validated_params.sort in @preset_sort_variants
 
       # Resolve preset weights for score-cache sorts
+      preset_slug =
+        cond do
+          validated_params.sort in @preset_sort_variants ->
+            String.replace(validated_params.sort, ~r/_(asc|desc)$/, "")
+
+          validated_params.sort in ~w(score score_asc score_desc) and
+              not is_nil(validated_params.preset) ->
+            validated_params.preset
+
+          true ->
+            nil
+        end
+
       preset_weights =
-        if needs_custom_sort and
-             validated_params.sort in ~w(score score_asc score_desc) and
-             not is_nil(validated_params.preset) do
-          case ScoringService.get_profile_by_slug(validated_params.preset) do
+        if preset_slug do
+          case ScoringService.get_profile_by_slug(preset_slug) do
             nil -> nil
             profile -> profile.category_weights
           end

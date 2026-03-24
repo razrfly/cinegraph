@@ -55,8 +55,9 @@ defmodule CinegraphWeb.MovieLive.Index do
      |> assign(:director_options, [])
      |> assign(:actor_options, [])
      |> assign(:person_options, [])
-     |> assign(:active_preset, nil)
      |> assign(:weight_presets, [])
+     |> assign(:sort_options, build_sort_options([]))
+     |> assign(:sort_is_preset, false)
      |> assign(:show_scoring_info, false)}
   end
 
@@ -76,8 +77,16 @@ defmodule CinegraphWeb.MovieLive.Index do
          |> assign(:search_term, params["search"] || "")
          |> assign(:sort_criteria, extract_sort_criteria(params["sort"] || "release_date_desc"))
          |> assign(:sort_direction, extract_sort_direction(params["sort"] || "release_date_desc"))
-         |> assign(:active_preset, params["preset"])
-         |> assign(:weight_presets, load_weight_presets())
+         |> then(fn socket ->
+           presets = load_weight_presets()
+           sort = params["sort"] || "release_date_desc"
+           preset_slugs = Enum.map(presets, & &1.slug)
+
+           socket
+           |> assign(:weight_presets, presets)
+           |> assign(:sort_options, build_sort_options(presets))
+           |> assign(:sort_is_preset, String.replace(sort, ~r/_(asc|desc)$/, "") in preset_slugs)
+         end)
          |> assign_pagination(meta)
          |> apply_action(socket.assigns.live_action, params)}
 
@@ -147,39 +156,6 @@ defmodule CinegraphWeb.MovieLive.Index do
 
     path = build_path(socket, new_params)
     {:noreply, push_patch(socket, to: path)}
-  end
-
-  @impl true
-  def handle_event("select_preset", %{"preset" => preset}, socket) do
-    params =
-      socket.assigns.params
-      |> Map.put("preset", preset)
-      |> Map.put("sort", "score")
-      |> Map.delete("page")
-
-    {:noreply, push_patch(socket, to: ~p"/movies?#{params}")}
-  end
-
-  @impl true
-  def handle_event("clear_preset", _, socket) do
-    params =
-      socket.assigns.params
-      |> Map.delete("preset")
-      |> Map.delete("disparity")
-      |> Map.put("sort", "release_date_desc")
-      |> Map.delete("page")
-
-    {:noreply, push_patch(socket, to: ~p"/movies?#{params}")}
-  end
-
-  @impl true
-  def handle_event("set_disparity", %{"disparity" => cat}, socket) do
-    params =
-      if cat == "",
-        do: Map.delete(socket.assigns.params, "disparity"),
-        else: Map.put(socket.assigns.params, "disparity", cat)
-
-    {:noreply, push_patch(socket, to: ~p"/movies?#{Map.delete(params, "page")}")}
   end
 
   @impl true
@@ -257,8 +233,7 @@ defmodule CinegraphWeb.MovieLive.Index do
       award_preset: params["award_preset"],
       # People search handled specially
       people_search: parse_people_search(params),
-      # Preset scoring
-      preset: params["preset"],
+      # Scoring disparity filter
       disparity: params["disparity"]
     }
   end
@@ -285,6 +260,28 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   defp name_to_slug(name),
     do: name |> String.downcase() |> String.replace(" ", "_")
+
+  defp build_sort_options(presets) do
+    static = [
+      %{value: "release_date", label: "📅 Release Date", group: "Basic"},
+      %{value: "title", label: "🔤 Title", group: "Basic"},
+      %{value: "runtime", label: "⏱️ Runtime", group: "Basic"},
+      %{value: "rating", label: "⭐ Rating", group: "Ratings"},
+      %{value: "popularity", label: "🔥 Popularity", group: "Ratings"},
+      %{value: "mob", label: "👥 The Mob", group: "By Lens"},
+      %{value: "ivory_tower", label: "🎭 The Ivory Tower", group: "By Lens"},
+      %{value: "industry_recognition", label: "🏆 Industry Recognition", group: "By Lens"},
+      %{value: "cultural_impact", label: "⏳ Cultural Impact", group: "By Lens"},
+      %{value: "people_quality", label: "🎬 People Quality", group: "By Lens"}
+    ]
+
+    preset_options =
+      Enum.map(presets, fn p ->
+        %{value: p.slug, label: p.name, group: "Scored Presets"}
+      end)
+
+    static ++ preset_options
+  end
 
   # Helper functions for building URLs and pagination
   def build_pagination_path(params_or_assigns, new_params \\ %{}) do
@@ -333,7 +330,6 @@ defmodule CinegraphWeb.MovieLive.Index do
       "award_preset",
       "people_ids",
       "people_role",
-      "preset",
       "disparity"
     ]
 
