@@ -89,7 +89,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       assert Map.has_key?(weights, :industry_recognition)
       assert Map.has_key?(weights, :cultural_impact)
       assert Map.has_key?(weights, :people_quality)
-      assert Map.has_key?(weights, :financial_success)
+      assert Map.has_key?(weights, :financial_performance)
     end
 
     test "category names are consistent between systems" do
@@ -108,10 +108,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       movie_scoring_names = Enum.map(movie_scoring_categories, &to_string/1) |> Enum.sort()
 
       scoring_service_names =
-        Enum.map(scoring_service_categories, fn
-          :financial_success -> "financial_performance"
-          other -> to_string(other)
-        end)
+        Enum.map(scoring_service_categories, &to_string/1)
         |> Enum.sort()
 
       assert movie_scoring_names == scoring_service_names,
@@ -132,7 +129,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         :industry_recognition,
         :cultural_impact,
         :people_quality,
-        :financial_success
+        :financial_performance
       ]
 
       # These descriptions should be defined in DiscoveryTuner
@@ -142,7 +139,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         industry_recognition: "Festival awards and nominations",
         cultural_impact: "Canonical lists and popularity metrics",
         people_quality: "Quality of directors, actors, and crew",
-        financial_success: "Box office revenue and budget performance"
+        financial_performance: "Box office revenue and budget performance"
       }
 
       for category <- categories do
@@ -194,10 +191,10 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         category_weights: %{
           "mob" => 0.15,
           "ivory_tower" => 0.15,
-          "awards" => 0.25,
-          "cultural" => 0.20,
-          "people" => 0.15,
-          "financial" => 0.10
+          "industry_recognition" => 0.25,
+          "cultural_impact" => 0.20,
+          "people_quality" => 0.15,
+          "financial_performance" => 0.10
         },
         weights: %{},
         active: true,
@@ -225,7 +222,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       for profile <- profiles do
         weights = profile.category_weights
 
-        valid_categories = ["mob", "ivory_tower", "awards", "cultural", "people", "financial"]
+        valid_categories = [
+          "mob",
+          "ivory_tower",
+          "industry_recognition",
+          "cultural_impact",
+          "people_quality",
+          "financial_performance"
+        ]
 
         for category <- Map.keys(weights) do
           assert category in valid_categories,
@@ -245,10 +249,10 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         new_weights = %{
           "mob" => 0.15,
           "ivory_tower" => 0.15,
-          "awards" => 0.25,
-          "cultural" => 0.20,
-          "people" => 0.15,
-          "financial" => 0.10
+          "industry_recognition" => 0.25,
+          "cultural_impact" => 0.20,
+          "people_quality" => 0.15,
+          "financial_performance" => 0.10
         }
 
         changeset =

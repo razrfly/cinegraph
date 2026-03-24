@@ -145,6 +145,12 @@ defmodule Cinegraph.Movies.Filters do
       "people_quality_asc" ->
         sort_by_metric_dimension(query, :people_quality, :asc)
 
+      "financial_performance" ->
+        sort_by_metric_dimension(query, :financial_performance, :desc)
+
+      "financial_performance_asc" ->
+        sort_by_metric_dimension(query, :financial_performance, :asc)
+
       # Default
       _ ->
         order_by(query, [m], desc: m.release_date)
@@ -328,6 +334,13 @@ defmodule Cinegraph.Movies.Filters do
               m.id
             )
         )
+
+      {:financial_performance, dir} when dir in [:desc, :asc] ->
+        order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+        query
+        |> maybe_join_score_cache()
+        |> order_by([m, score_cache: sc], [{^order_func, sc.financial_performance_score}])
     end
   end
 

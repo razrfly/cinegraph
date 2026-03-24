@@ -339,7 +339,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                   Quality scores of directors, actors, and crew members
                 </li>
                 <li>
-                  <strong>Financial Success:</strong>
+                  <strong>Financial Performance:</strong>
                   Box office revenue and budget performance metrics
                 </li>
               </ul>

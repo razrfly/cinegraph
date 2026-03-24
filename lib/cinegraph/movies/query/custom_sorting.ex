@@ -42,7 +42,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in ~w(mob ivory_tower industry_recognition cultural_impact people_quality) ->
+      field in ~w(mob ivory_tower industry_recognition cultural_impact people_quality financial_performance) ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->
@@ -306,6 +306,14 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
          m.id
        )}
     ])
+  end
+
+  defp apply_discovery_metric_sort(query, "financial_performance", direction) do
+    order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+    query
+    |> maybe_join_score_cache()
+    |> order_by([score_cache: sc], [{^order_func, sc.financial_performance_score}])
   end
 
   defp apply_discovery_metric_sort(query, _, _), do: query

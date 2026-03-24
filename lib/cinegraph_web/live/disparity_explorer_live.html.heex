@@ -88,7 +88,7 @@
                 {movie.title}
               </p>
               <p class="text-white/40 text-xs mt-0.5">
-                {movie.release_year}
+                {movie.release_date && movie.release_date.year}
               </p>
               <%= if cache && cache.disparity_score do %>
                 <div class="flex items-center gap-1 mt-1">
