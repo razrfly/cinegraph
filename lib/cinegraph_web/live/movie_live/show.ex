@@ -162,8 +162,7 @@ defmodule CinegraphWeb.MovieLive.Show do
 
         dd = %{
           disparity_score: movie.score_cache.disparity_score,
-          disparity_category: movie.score_cache.disparity_category,
-          unpredictability_score: movie.score_cache.unpredictability_score
+          disparity_category: movie.score_cache.disparity_category
         }
 
         {ds, dd}
