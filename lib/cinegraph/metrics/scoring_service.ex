@@ -63,10 +63,10 @@ defmodule Cinegraph.Metrics.ScoringService do
       category_weights: %{
         "mob" => 0.10,
         "ivory_tower" => 0.10,
-        "awards" => 0.20,
-        "cultural" => 0.20,
-        "people" => 0.20,
-        "financial" => 0.20
+        "industry_recognition" => 0.20,
+        "cultural_impact" => 0.20,
+        "people_quality" => 0.20,
+        "financial_performance" => 0.20
       },
       weights: %{},
       active: true,
@@ -92,26 +92,17 @@ defmodule Cinegraph.Metrics.ScoringService do
         half = legacy_popular / 2.0
         {half, half}
       else
-        mob =
-          get_category_weight(profile, "mob", get_category_weight(profile, "ratings", 0.2) / 2)
-
-        ivory =
-          get_category_weight(
-            profile,
-            "ivory_tower",
-            get_category_weight(profile, "ratings", 0.2) / 2
-          )
-
-        {mob, ivory}
+        {get_category_weight(profile, "mob", 0.15),
+         get_category_weight(profile, "ivory_tower", 0.15)}
       end
 
     %{
       mob: mob_weight,
       ivory_tower: ivory_tower_weight,
-      industry_recognition: get_category_weight(profile, "awards", 0.2),
-      cultural_impact: get_category_weight(profile, "cultural", 0.2),
-      people_quality: get_category_weight(profile, "people", 0.2),
-      financial_success: get_category_weight(profile, "financial", 0.0)
+      industry_recognition: get_category_weight(profile, "industry_recognition", 0.2),
+      cultural_impact: get_category_weight(profile, "cultural_impact", 0.2),
+      people_quality: get_category_weight(profile, "people_quality", 0.15),
+      financial_performance: get_category_weight(profile, "financial_performance", 0.15)
     }
   end
 
@@ -123,12 +114,12 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: name,
       description: "Custom weight profile created from discovery UI",
       category_weights: %{
-        "mob" => Map.get(weights, :mob, 0.1),
-        "ivory_tower" => Map.get(weights, :ivory_tower, 0.1),
-        "awards" => Map.get(weights, :industry_recognition, 0.2),
-        "financial" => Map.get(weights, :financial_success, 0.2),
-        "cultural" => Map.get(weights, :cultural_impact, 0.2),
-        "people" => Map.get(weights, :people_quality, 0.2)
+        "mob" => Map.get(weights, :mob, 0.15),
+        "ivory_tower" => Map.get(weights, :ivory_tower, 0.15),
+        "industry_recognition" => Map.get(weights, :industry_recognition, 0.2),
+        "financial_performance" => Map.get(weights, :financial_performance, 0.15),
+        "cultural_impact" => Map.get(weights, :cultural_impact, 0.2),
+        "people_quality" => Map.get(weights, :people_quality, 0.15)
       },
       weights: build_metric_weights_from_discovery(weights),
       active: true,
@@ -260,7 +251,7 @@ defmodule Cinegraph.Metrics.ScoringService do
         industry_recognition: 0.20,
         cultural_impact: 0.20,
         people_quality: 0.20,
-        financial_success: 0.20
+        financial_performance: 0.20
       }
     else
       Map.new(weights, fn {k, v} -> {k, v / total} end)
@@ -459,7 +450,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             ^weights.people_quality,
             pq.avg_person_quality,
-            ^Map.get(weights, :financial_success, 0.0),
+            ^Map.get(weights, :financial_performance, 0.0),
             b.value,
             r.value,
             r.value,
@@ -539,7 +530,7 @@ defmodule Cinegraph.Metrics.ScoringService do
               "COALESCE(COALESCE(?, 0) / 100.0, 0)",
               pq.avg_person_quality
             ),
-          financial_success:
+          financial_performance:
             fragment(
               """
               COALESCE(CASE
@@ -634,7 +625,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             ^weights.people_quality,
             pq.avg_person_quality,
-            ^Map.get(weights, :financial_success, 0.0),
+            ^Map.get(weights, :financial_performance, 0.0),
             b.value,
             r.value,
             r.value,
@@ -683,7 +674,7 @@ defmodule Cinegraph.Metrics.ScoringService do
               "COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
               pq.avg_person_quality
             ),
-          financial_success:
+          financial_performance:
             fragment(
               """
               COALESCE(CASE
@@ -778,7 +769,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           pop.value,
           ^weights.people_quality,
           pq.avg_person_quality,
-          ^Map.get(weights, :financial_success, 0.0),
+          ^Map.get(weights, :financial_performance, 0.0),
           b.value,
           r.value,
           r.value,
@@ -858,7 +849,7 @@ defmodule Cinegraph.Metrics.ScoringService do
           pop.value,
           ^weights.people_quality,
           pq.avg_person_quality,
-          ^Map.get(weights, :financial_success, 0.0),
+          ^Map.get(weights, :financial_performance, 0.0),
           b.value,
           r.value,
           r.value,
@@ -943,7 +934,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             ^weights.people_quality,
             pq.avg_person_quality,
-            ^Map.get(weights, :financial_success, 0.0),
+            ^Map.get(weights, :financial_performance, 0.0),
             b.value,
             r.value,
             r.value,
@@ -1023,7 +1014,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             pop.value,
             ^weights.people_quality,
             pq.avg_person_quality,
-            ^Map.get(weights, :financial_success, 0.0),
+            ^Map.get(weights, :financial_performance, 0.0),
             b.value,
             r.value,
             r.value,

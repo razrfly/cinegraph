@@ -21,21 +21,21 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
     # Example: {"imdb_rating" => 1.0, "oscar_wins" => 2.0, "revenue_worldwide" => 0.8}
 
     # Category multipliers (applied after individual weights)
-    # Using the standard 6-category scoring system:
-    # - mob: Audience ratings (IMDb, TMDb)
+    # Using the standard 6-lens scoring system:
+    # - mob: Audience ratings (IMDb, TMDb, RT Audience)
     # - ivory_tower: Critics scores (RT Tomatometer, Metacritic)
-    # - awards: Industry recognition through festival wins and nominations
-    # - financial: Revenue and budget performance
-    # - cultural: Canonical sources and cultural impact
-    # - people: Quality scores of cast and crew
+    # - industry_recognition: Festival wins and nominations
+    # - financial_performance: Revenue and budget performance
+    # - cultural_impact: Canonical sources and cultural reach
+    # - people_quality: Quality scores of cast and crew
     field :category_weights, :map,
       default: %{
         "mob" => 0.10,
         "ivory_tower" => 0.10,
-        "awards" => 0.20,
-        "financial" => 0.20,
-        "cultural" => 0.20,
-        "people" => 0.20
+        "industry_recognition" => 0.20,
+        "financial_performance" => 0.20,
+        "cultural_impact" => 0.20,
+        "people_quality" => 0.20
       }
 
     # Usage tracking
@@ -80,11 +80,10 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
         valid_categories = [
           "mob",
           "ivory_tower",
-          "ratings",
-          "awards",
-          "financial",
-          "cultural",
-          "people"
+          "industry_recognition",
+          "financial_performance",
+          "cultural_impact",
+          "people_quality"
         ]
 
         cond do

@@ -10,7 +10,8 @@ Repo.delete_all(from mwp in "metric_weight_profiles", where: field(mwp, :is_syst
 weight_profiles = [
   %{
     name: "Balanced",
-    description: "Balanced weight across all six criteria: mob (15%), ivory tower (15%), awards (20%), financial success (20%), cultural impact (15%), people quality (15%)",
+    description:
+      "Balanced weight across all six criteria: mob (15%), ivory tower (15%), awards (20%), financial success (20%), cultural impact (15%), people quality (15%)",
     weights: %{
       # Mob (audience ratings)
       "imdb_rating" => 1.0,
@@ -47,19 +48,19 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.15,
       "ivory_tower" => 0.15,
-      "awards" => 0.20,
-      "financial" => 0.20,
-      "cultural" => 0.15,
-      "people" => 0.15
+      "industry_recognition" => 0.20,
+      "financial_performance" => 0.20,
+      "cultural_impact" => 0.15,
+      "people_quality" => 0.15
     },
     active: true,
     is_default: true,
     is_system: true
   },
-
   %{
     name: "Award Winner",
-    description: "Emphasizes festival awards and industry recognition (45% awards, 20% cultural, 12.5% mob, 12.5% ivory tower, 10% people)",
+    description:
+      "Emphasizes festival awards and industry recognition (45% awards, 20% cultural, 12.5% mob, 12.5% ivory tower, 10% people)",
     weights: %{
       # Industry Recognition (45%)
       "oscar_wins" => 3.0,
@@ -87,19 +88,19 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.125,
       "ivory_tower" => 0.125,
-      "awards" => 0.45,
-      "financial" => 0.00,
-      "cultural" => 0.20,
-      "people" => 0.10
+      "industry_recognition" => 0.45,
+      "financial_performance" => 0.00,
+      "cultural_impact" => 0.20,
+      "people_quality" => 0.10
     },
     active: true,
     is_default: false,
     is_system: true
   },
-
   %{
     name: "Critics Choice",
-    description: "Prioritizes critic-favored platforms (25% mob, 25% ivory tower) with cultural impact (30%), some awards (15%), minimal people (5%)",
+    description:
+      "Prioritizes critic-favored platforms (25% mob, 25% ivory tower) with cultural impact (30%), some awards (15%), minimal people (5%)",
     weights: %{
       # Ivory Tower with critic platforms weighted higher (25%)
       "metacritic_metascore" => 3.0,
@@ -126,19 +127,19 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.25,
       "ivory_tower" => 0.25,
-      "awards" => 0.15,
-      "financial" => 0.00,
-      "cultural" => 0.30,
-      "people" => 0.05
+      "industry_recognition" => 0.15,
+      "financial_performance" => 0.00,
+      "cultural_impact" => 0.30,
+      "people_quality" => 0.05
     },
     active: true,
     is_default: false,
     is_system: true
   },
-
   %{
     name: "Crowd Pleaser",
-    description: "Focuses on mainstream audience (22.5% mob), cultural reach (35%), ivory tower (22.5%), minimal awards (10%), financial (10%)",
+    description:
+      "Focuses on mainstream audience (22.5% mob), cultural reach (35%), ivory tower (22.5%), minimal awards (10%), financial (10%)",
     weights: %{
       # Mob with mainstream platforms weighted higher (22.5%)
       "imdb_rating" => 2.5,
@@ -164,19 +165,19 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.225,
       "ivory_tower" => 0.225,
-      "awards" => 0.10,
-      "financial" => 0.10,
-      "cultural" => 0.30,
-      "people" => 0.05
+      "industry_recognition" => 0.10,
+      "financial_performance" => 0.10,
+      "cultural_impact" => 0.30,
+      "people_quality" => 0.05
     },
     active: true,
     is_default: false,
     is_system: true
   },
-
   %{
     name: "Cult Classic",
-    description: "Finds films with dedicated followings: cultural lists (35%), moderate ratings (40% split mob/ivory), some awards (10%), people (15%)",
+    description:
+      "Finds films with dedicated followings: cultural lists (35%), moderate ratings (40% split mob/ivory), some awards (10%), people (15%)",
     weights: %{
       # Cultural Lists (35%)
       "criterion" => 2.5,
@@ -206,19 +207,19 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.20,
       "ivory_tower" => 0.20,
-      "awards" => 0.10,
-      "financial" => 0.00,
-      "cultural" => 0.35,
-      "people" => 0.15
+      "industry_recognition" => 0.10,
+      "financial_performance" => 0.00,
+      "cultural_impact" => 0.35,
+      "people_quality" => 0.15
     },
     active: true,
     is_default: false,
     is_system: true
   },
-
   %{
     name: "Cinegraph Editorial",
-    description: "Calibrated against 1001 Movies You Must See Before You Die. Emphasizes cultural impact and critical consensus over popularity and financial metrics.",
+    description:
+      "Calibrated against 1001 Movies You Must See Before You Die. Emphasizes cultural impact and critical consensus over popularity and financial metrics.",
     weights: %{
       # Ivory Tower (25%)
       "metacritic_metascore" => 2.0,
@@ -253,10 +254,10 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.10,
       "ivory_tower" => 0.25,
-      "awards" => 0.20,
-      "cultural" => 0.30,
-      "people" => 0.10,
-      "financial" => 0.05
+      "industry_recognition" => 0.20,
+      "financial_performance" => 0.05,
+      "cultural_impact" => 0.30,
+      "people_quality" => 0.10
     },
     active: true,
     is_default: false,
@@ -272,7 +273,14 @@ Enum.each(weight_profiles, fn profile ->
   weights = profile.category_weights || %{}
 
   relevant_weights =
-    Map.take(weights, ["mob", "ivory_tower", "awards", "cultural", "people", "financial"])
+    Map.take(weights, [
+      "mob",
+      "ivory_tower",
+      "industry_recognition",
+      "financial_performance",
+      "cultural_impact",
+      "people_quality"
+    ])
 
   sum = Map.values(relevant_weights) |> Enum.sum()
 
@@ -281,14 +289,14 @@ Enum.each(weight_profiles, fn profile ->
       IO.puts("WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (> 1.01)")
 
       IO.puts(
-        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}, financial=#{weights["financial"]}"
+        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, industry_recognition=#{weights["industry_recognition"]}, cultural_impact=#{weights["cultural_impact"]}, people_quality=#{weights["people_quality"]}, financial_performance=#{weights["financial_performance"]}"
       )
 
     sum < 0.99 ->
       IO.puts("WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (< 0.99)")
 
       IO.puts(
-        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, awards=#{weights["awards"]}, cultural=#{weights["cultural"]}, people=#{weights["people"]}, financial=#{weights["financial"]}"
+        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, industry_recognition=#{weights["industry_recognition"]}, cultural_impact=#{weights["cultural_impact"]}, people_quality=#{weights["people_quality"]}, financial_performance=#{weights["financial_performance"]}"
       )
 
     true ->
@@ -296,7 +304,7 @@ Enum.each(weight_profiles, fn profile ->
   end
 
   # Also warn if financial weights are defined but category weight is 0
-  financial_weight = weights["financial"] || 0.0
+  financial_weight = weights["financial_performance"] || 0.0
 
   if financial_weight == 0.0 do
     profile_weights = profile.weights || %{}
@@ -309,7 +317,7 @@ Enum.each(weight_profiles, fn profile ->
 
     if length(defined_financial) > 0 do
       IO.puts(
-        "INFO: #{profile.name} has financial metric weights defined but financial category weight is 0:"
+        "INFO: #{profile.name} has financial metric weights defined but financial_performance category weight is 0:"
       )
 
       IO.puts("  Unused metrics: #{Enum.join(defined_financial, ", ")}")
@@ -333,7 +341,8 @@ Repo.insert_all(
   entries,
   conflict_target: [:name],
   on_conflict:
-    {:replace, [:description, :weights, :category_weights, :active, :is_default, :is_system, :updated_at]}
+    {:replace,
+     [:description, :weights, :category_weights, :active, :is_default, :is_system, :updated_at]}
 )
 
 IO.puts("Upserted #{length(weight_profiles)} metric weight profiles")

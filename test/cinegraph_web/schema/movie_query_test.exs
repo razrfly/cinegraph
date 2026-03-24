@@ -169,6 +169,76 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
     end
   end
 
+  describe "lens_scores field" do
+    test "returns null when no score cache exists" do
+      movie = insert_movie(%{tmdb_id: 60_001, title: "Uncached Movie"})
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          lensScores {
+            mob
+            ivoryTower
+            overall
+            disparityCategory
+          }
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      assert result["lensScores"] == nil
+    end
+
+    test "returns lens scores when score cache exists" do
+      movie = insert_movie(%{tmdb_id: 60_002, title: "Cached Movie"})
+
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      {:ok, _} =
+        %Cinegraph.Movies.MovieScoreCache{}
+        |> Cinegraph.Movies.MovieScoreCache.changeset(%{
+          movie_id: movie.id,
+          mob_score: 7.5,
+          ivory_tower_score: 8.2,
+          industry_recognition_score: 6.0,
+          cultural_impact_score: 5.5,
+          people_quality_score: 7.0,
+          financial_performance_score: 4.0,
+          overall_score: 6.8,
+          score_confidence: 0.85,
+          disparity_score: 0.7,
+          disparity_category: "critics_darling",
+          unpredictability_score: 2.1,
+          calculated_at: now,
+          calculation_version: "1.0"
+        })
+        |> Repo.insert()
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          lensScores {
+            mob
+            ivoryTower
+            overall
+            confidence
+            disparityCategory
+          }
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      scores = result["lensScores"]
+      assert scores["mob"] == 7.5
+      assert scores["ivoryTower"] == 8.2
+      assert scores["overall"] == 6.8
+      assert scores["confidence"] == 0.85
+      assert scores["disparityCategory"] == "critics_darling"
+    end
+  end
+
   describe "authentication" do
     setup do
       Application.put_env(:cinegraph, :api_key, "secret-key")

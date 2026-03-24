@@ -23,6 +23,24 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :total_nominations, :integer, description: "Total nominations across all ceremonies"
   end
 
+  @desc "Cached 6-lens scores for a movie"
+  object :lens_scores do
+    field :mob, :float, description: "Audience score (IMDb, TMDb, RT Audience) — 0-10"
+    field :ivory_tower, :float, description: "Critics score (Metacritic, RT Tomatometer) — 0-10"
+    field :industry_recognition, :float, description: "Festival & award recognition — 0-10"
+    field :cultural_impact, :float, description: "Canonical sources & cultural reach — 0-10"
+    field :people_quality, :float, description: "Cast & crew quality — 0-10"
+    field :financial_performance, :float, description: "Box office performance — 0-10"
+    field :overall, :float, description: "Weighted overall score — 0-10"
+    field :confidence, :float, description: "Data confidence — 0-1"
+    field :disparity_score, :float, description: "Mob vs ivory_tower gap"
+
+    field :disparity_category, :string,
+      description: "critics_darling | peoples_champion | perfect_harmony | polarizer"
+
+    field :unpredictability_score, :float, description: "Score volatility — 0-10"
+  end
+
   @desc "Cultural Relevance Index breakdown by dimension"
   object :cri_breakdown do
     field :overall_score, :float
@@ -74,6 +92,10 @@ defmodule CinegraphWeb.Schema.MovieTypes do
 
     field :awards, :movie_awards do
       resolve(&MovieResolver.awards/3)
+    end
+
+    field :lens_scores, :lens_scores do
+      resolve(&MovieResolver.lens_scores/3)
     end
 
     field :cri_score, :float do

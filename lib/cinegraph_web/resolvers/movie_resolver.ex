@@ -109,6 +109,35 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end
   end
 
+  def lens_scores(movie, _, %{context: %{loader: loader}}) do
+    loader = Dataloader.load(loader, :db, {:score_cache, %{}}, movie)
+
+    on_load(loader, fn loader ->
+      cache = Dataloader.get(loader, :db, {:score_cache, %{}}, movie)
+
+      result =
+        if cache do
+          %{
+            mob: cache.mob_score,
+            ivory_tower: cache.ivory_tower_score,
+            industry_recognition: cache.industry_recognition_score,
+            cultural_impact: cache.cultural_impact_score,
+            people_quality: cache.people_quality_score,
+            financial_performance: cache.financial_performance_score,
+            overall: cache.overall_score,
+            confidence: cache.score_confidence,
+            disparity_score: cache.disparity_score,
+            disparity_category: cache.disparity_category,
+            unpredictability_score: cache.unpredictability_score
+          }
+        else
+          nil
+        end
+
+      {:ok, result}
+    end)
+  end
+
   # Both cri_score and cri_breakdown use the same Dataloader key so
   # Dataloader deduplicates the DB query when both fields are requested.
   def cri_score(movie, _, %{context: %{loader: loader}}) do
