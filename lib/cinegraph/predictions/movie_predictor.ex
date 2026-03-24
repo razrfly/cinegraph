@@ -7,8 +7,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   import Ecto.Query
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
-  alias Cinegraph.Metrics.ScoringService
-  alias Cinegraph.Metrics.MetricWeightProfile
+  alias Cinegraph.Predictions.CriteriaScoring
 
   @doc """
   Get top 2020s movies ranked by likelihood of being added to future 1001 Movies lists.
@@ -24,16 +23,14 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   This is the generic version that works for all decades.
   """
   def predict_decade_movies(decade, limit \\ 100, profile_or_weights \\ nil) do
-    # Get the weight profile to use
-    profile = get_weight_profile(profile_or_weights)
-    weights = ScoringService.profile_to_discovery_weights(profile)
+    weights = get_criteria_weights(profile_or_weights)
 
     # Calculate date range for the decade
     start_date = Date.new!(decade, 1, 1)
     end_date = Date.new!(decade + 9, 12, 31)
 
-    # Get movies from the decade with scoring
-    # Reduced from 1000 to 300 to improve query performance in production
+    # Get movies from the decade
+    # Display cap only (not used for backtesting/validation — see HistoricalValidator)
     all_movies_query =
       from m in Movie,
         where: m.release_date >= ^start_date,
@@ -41,21 +38,19 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         where: m.import_status == "full",
         limit: 300
 
-    # Apply database-driven scoring to all movies
-    # Use extended timeout (120s) for this complex query with many JOINs
-    scored_query = ScoringService.apply_scoring(all_movies_query, profile, %{min_score: nil})
-    all_movies_with_scores = Repo.all(scored_query, timeout: :timer.seconds(120))
+    all_decade_movies = Repo.all(all_movies_query, timeout: :timer.seconds(120))
+    scored = CriteriaScoring.batch_score_movies(all_decade_movies, weights)
 
     # Format and sort all movies by score
     all_scored_movies =
-      all_movies_with_scores
-      |> Enum.map(&format_prediction_result_from_scored(&1, weights))
+      scored
       |> Enum.sort_by(& &1.prediction.total_score, :desc)
       |> Enum.take(limit)
+      |> Enum.map(&format_prediction_result_from_criteria_scored/1)
 
     # Count candidates (movies not already on 1001 list)
     total_candidates =
-      Enum.count(all_movies_with_scores, fn movie ->
+      Enum.count(scored, fn %{movie: movie} ->
         is_nil(Map.get(movie.canonical_sources || %{}, "1001_movies"))
       end)
 
@@ -63,7 +58,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       predictions: all_scored_movies,
       total_candidates: total_candidates,
       algorithm_info: %{
-        profile_used: profile.name,
+        profile_used: "CriteriaScoring",
         weights_used: weights,
         criteria_count: 6,
         decade: "#{decade}s"
@@ -75,20 +70,9 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   Calculate prediction score for a specific movie using database profiles.
   """
   def calculate_movie_prediction(movie, profile_or_weights \\ nil) do
-    profile = get_weight_profile(profile_or_weights)
-    weights = ScoringService.profile_to_discovery_weights(profile)
-
-    # Build single movie query
-    query = from m in Movie, where: m.id == ^movie.id
-
-    # Apply scoring
-    scored_query = ScoringService.apply_scoring(query, profile, %{})
-
-    # Get scored result
-    case Repo.one(scored_query) do
-      nil -> format_prediction_result_from_movie(movie, 0.0, weights)
-      scored_movie -> format_prediction_result_from_scored(scored_movie, weights)
-    end
+    weights = get_criteria_weights(profile_or_weights)
+    prediction = CriteriaScoring.calculate_movie_score(movie, weights)
+    format_prediction_result_from_criteria_scored(%{movie: movie, prediction: prediction})
   end
 
   @doc """
@@ -111,8 +95,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   Get 2020s movies that are already on the 1001 Movies list for validation.
   """
   def get_confirmed_2020s_additions(profile_or_weights \\ nil) do
-    profile = get_weight_profile(profile_or_weights)
-    weights = ScoringService.profile_to_discovery_weights(profile)
+    weights = get_criteria_weights(profile_or_weights)
 
     query =
       from m in Movie,
@@ -121,28 +104,23 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         order_by: [desc: m.release_date],
         limit: 100
 
-    # Apply scoring to see how well we predict actual additions
-    scored_query = ScoringService.apply_scoring(query, profile)
-
-    Repo.all(scored_query, timeout: :timer.seconds(120))
-    |> Enum.map(&format_prediction_result_from_scored(&1, weights))
+    Repo.all(query, timeout: :timer.seconds(120))
+    |> CriteriaScoring.batch_score_movies(weights)
+    |> Enum.map(&format_prediction_result_from_criteria_scored/1)
   end
 
   @doc """
   Get movies that our algorithm predicts with high confidence.
   """
   def get_high_confidence_predictions(min_score \\ 0.8, profile_or_weights \\ nil) do
-    profile = get_weight_profile(profile_or_weights)
-    weights = ScoringService.profile_to_discovery_weights(profile)
+    weights = get_criteria_weights(profile_or_weights)
 
-    normalized_min =
-      cond do
-        is_integer(min_score) and min_score > 1 -> min_score / 100.0
-        is_float(min_score) and min_score > 1.0 -> min_score / 100.0
-        true -> min_score * 1.0
-      end
+    # Normalize min_score to 0-100 scale (CriteriaScoring uses 0-100)
+    min_score_100 =
+      if is_float(min_score) and min_score <= 1.0,
+        do: min_score * 100.0,
+        else: min_score * 1.0
 
-    # Build query with minimum score filter
     query =
       from m in Movie,
         where: m.release_date >= ^~D[2020-01-01],
@@ -150,205 +128,37 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         where: m.import_status == "full",
         where: is_nil(fragment("? -> ?", m.canonical_sources, "1001_movies"))
 
-    # Apply scoring with min score filter
-    scored_query = ScoringService.apply_scoring(query, profile, %{min_score: normalized_min})
-
-    Repo.all(scored_query, timeout: :timer.seconds(120))
-    |> Enum.map(&format_prediction_result_from_scored(&1, weights))
+    Repo.all(query, timeout: :timer.seconds(120))
+    |> CriteriaScoring.batch_score_movies(weights)
+    |> Enum.filter(&(&1.prediction.total_score >= min_score_100))
+    |> Enum.map(&format_prediction_result_from_criteria_scored/1)
   end
 
   # Private functions
 
-  defp get_weight_profile(nil), do: ScoringService.get_default_profile()
+  defp get_criteria_weights(nil), do: CriteriaScoring.get_default_weights()
 
-  defp get_weight_profile(%MetricWeightProfile{} = profile), do: profile
+  defp get_criteria_weights(name) when is_binary(name),
+    do: CriteriaScoring.get_profile_weights(name)
 
-  defp get_weight_profile(profile_name) when is_binary(profile_name) do
-    ScoringService.get_profile(profile_name) || ScoringService.get_default_profile()
+  defp get_criteria_weights(weights) when is_map(weights) do
+    if Map.has_key?(weights, :festival_recognition),
+      do: weights,
+      else: CriteriaScoring.get_default_weights()
   end
 
-  defp get_weight_profile(weights) when is_map(weights) do
-    # Convert discovery-style weights to a profile
-    # This allows backward compatibility with the UI
-    %MetricWeightProfile{
-      name: "Custom",
-      description: "Custom weights from UI",
-      category_weights: convert_ui_weights_to_categories(weights),
-      active: true
-    }
-  end
+  defp get_criteria_weights(_), do: CriteriaScoring.get_default_weights()
 
-  defp convert_ui_weights_to_categories(weights) do
-    mob_weight = to_float(Map.get(weights, :mob, 0.0))
-    ivory_tower_weight = to_float(Map.get(weights, :ivory_tower, 0.0))
-
-    sanitized = %{
-      mob: mob_weight,
-      ivory_tower: ivory_tower_weight,
-      industry_recognition: to_float(Map.get(weights, :industry_recognition, 0.0)),
-      cultural_impact: to_float(Map.get(weights, :cultural_impact, 0.0)),
-      people_quality: to_float(Map.get(weights, :people_quality, 0.0)),
-      financial_performance: to_float(Map.get(weights, :financial_performance, 0.0))
-    }
-
-    ScoringService.discovery_weights_to_profile(sanitized).category_weights
-  end
-
-  defp to_float(value) when is_number(value), do: value * 1.0
-
-  defp to_float(value) when is_binary(value) do
-    case Float.parse(value) do
-      {float_val, _} -> float_val
-      :error -> 0.0
-    end
-  end
-
-  defp to_float(%Decimal{} = value), do: Decimal.to_float(value)
-  defp to_float(_), do: 0.0
-
-  defp format_prediction_result_from_scored(movie, weights) do
-    # Convert discovery_score (0-1) to likelihood percentage (0-100)
-    discovery_score = to_float(movie.discovery_score)
-    likelihood = convert_score_to_likelihood(discovery_score)
-
+  defp format_prediction_result_from_criteria_scored(%{movie: movie, prediction: prediction}) do
     %{
       id: movie.id,
       title: movie.title,
       release_date: movie.release_date,
       year: extract_year(movie.release_date),
-      prediction: %{
-        total_score: Float.round(discovery_score * 100, 1),
-        likelihood_percentage: Float.round(likelihood, 1),
-        criteria_scores: Map.get(movie, :score_components, %{}),
-        weights_used: weights,
-        breakdown: format_score_breakdown(movie, weights)
-      },
+      prediction: prediction,
       status: determine_movie_status(movie),
       movie: movie
     }
-  end
-
-  defp format_prediction_result_from_movie(movie, score, weights) do
-    likelihood = convert_score_to_likelihood(score)
-
-    %{
-      id: movie.id,
-      title: movie.title,
-      release_date: movie.release_date,
-      year: extract_year(movie.release_date),
-      prediction: %{
-        total_score: Float.round(score * 100, 1),
-        likelihood_percentage: Float.round(likelihood, 1),
-        criteria_scores: %{},
-        weights_used: weights,
-        breakdown: []
-      },
-      status: determine_movie_status(movie),
-      movie: movie
-    }
-  end
-
-  defp format_score_breakdown(movie, weights) do
-    components = Map.get(movie, :score_components, %{})
-    # Use provided weights or fallback to equal weights
-    default_weights = %{
-      mob: 0.10,
-      ivory_tower: 0.10,
-      industry_recognition: 0.20,
-      financial_performance: 0.20,
-      cultural_impact: 0.20,
-      people_quality: 0.20
-    }
-
-    actual_weights = weights || default_weights
-
-    [
-      %{
-        criterion: :mob,
-        raw_score: Float.round(to_float(components[:mob]) * 100, 1),
-        weight: Map.get(actual_weights, :mob, 0.15),
-        weighted_points:
-          Float.round(
-            to_float(components[:mob]) *
-              Map.get(actual_weights, :mob, 0.15) * 100,
-            1
-          )
-      },
-      %{
-        criterion: :ivory_tower,
-        raw_score: Float.round(to_float(components[:ivory_tower]) * 100, 1),
-        weight: Map.get(actual_weights, :ivory_tower, 0.15),
-        weighted_points:
-          Float.round(
-            to_float(components[:ivory_tower]) *
-              Map.get(actual_weights, :ivory_tower, 0.15) * 100,
-            1
-          )
-      },
-      %{
-        criterion: :industry_recognition,
-        raw_score: Float.round(to_float(components[:industry_recognition]) * 100, 1),
-        weight: Map.get(actual_weights, :industry_recognition, 0.20),
-        weighted_points:
-          Float.round(
-            to_float(components[:industry_recognition]) *
-              Map.get(actual_weights, :industry_recognition, 0.20) * 100,
-            1
-          )
-      },
-      %{
-        criterion: :cultural_impact,
-        raw_score: Float.round(to_float(components[:cultural_impact]) * 100, 1),
-        weight: Map.get(actual_weights, :cultural_impact, 0.15),
-        weighted_points:
-          Float.round(
-            to_float(components[:cultural_impact]) *
-              Map.get(actual_weights, :cultural_impact, 0.15) * 100,
-            1
-          )
-      },
-      %{
-        criterion: :people_quality,
-        raw_score: Float.round(to_float(components[:people_quality]) * 100, 1),
-        weight: Map.get(actual_weights, :people_quality, 0.15),
-        weighted_points:
-          Float.round(
-            to_float(components[:people_quality]) * Map.get(actual_weights, :people_quality, 0.15) *
-              100,
-            1
-          )
-      },
-      %{
-        criterion: :financial_performance,
-        raw_score: Float.round(to_float(components[:financial_performance]) * 100, 1),
-        weight: Map.get(actual_weights, :financial_performance, 0.20),
-        weighted_points:
-          Float.round(
-            to_float(components[:financial_performance]) *
-              Map.get(actual_weights, :financial_performance, 0.20) * 100,
-            1
-          )
-      }
-    ]
-  end
-
-  defp convert_score_to_likelihood(score) when is_nil(score), do: 0.0
-
-  defp convert_score_to_likelihood(score) do
-    # Convert 0-1 score to 0-100 likelihood with a sigmoid-like curve
-    # This gives more realistic percentages
-    normalized = score * 100
-
-    cond do
-      normalized >= 90 -> 95 + (normalized - 90) * 0.5
-      normalized >= 80 -> 85 + (normalized - 80) * 1.0
-      normalized >= 70 -> 70 + (normalized - 70) * 1.5
-      normalized >= 60 -> 55 + (normalized - 60) * 1.5
-      normalized >= 50 -> 40 + (normalized - 50) * 1.5
-      normalized >= 40 -> 30 + (normalized - 40) * 1.0
-      normalized >= 30 -> 20 + (normalized - 30) * 1.0
-      true -> normalized * 0.67
-    end
   end
 
   defp determine_movie_status(movie) do

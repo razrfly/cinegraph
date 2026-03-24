@@ -38,6 +38,43 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
     end
   end
 
+  describe "get_named_profiles/0" do
+    test "all named profiles have weights that sum to 1.0" do
+      for profile <- CriteriaScoring.get_named_profiles() do
+        total = Map.values(profile.weights) |> Enum.sum()
+
+        assert abs(total - 1.0) < 0.001,
+               "Profile '#{profile.name}' weights sum to #{total}, expected 1.0"
+      end
+    end
+
+    test "all named profiles have the 6 required criteria keys" do
+      required_keys = ~w(mob ivory_tower festival_recognition cultural_impact technical_innovation auteur_recognition)a
+
+      for profile <- CriteriaScoring.get_named_profiles() do
+        for key <- required_keys do
+          assert Map.has_key?(profile.weights, key),
+                 "Profile '#{profile.name}' is missing key :#{key}"
+        end
+      end
+    end
+
+    test "get_profile/1 returns correct profile by name" do
+      profile = CriteriaScoring.get_profile("festival-heavy")
+      assert profile.name == "festival-heavy"
+      assert profile.weights.festival_recognition == 0.50
+    end
+
+    test "get_profile/1 returns nil for unknown name" do
+      assert CriteriaScoring.get_profile("nonexistent") == nil
+    end
+
+    test "get_profile_weights/1 falls back to defaults for unknown name" do
+      weights = CriteriaScoring.get_profile_weights("nonexistent")
+      assert weights == CriteriaScoring.get_default_weights()
+    end
+  end
+
   describe "calculate_movie_score/2" do
     test "returns valid score structure" do
       movie = Repo.all(Movie) |> List.first()
@@ -49,7 +86,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
                  total_score: total_score,
                  likelihood_percentage: likelihood,
                  criteria_scores: criteria_scores,
-                 weights_used: weights,
+                 weights_used: _weights,
                  breakdown: breakdown
                } = score
 

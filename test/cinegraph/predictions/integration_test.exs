@@ -58,18 +58,18 @@ defmodule Cinegraph.Predictions.IntegrationTest do
     end
 
     test "weight validation works correctly" do
-      # Test valid weights using the 6-category system
+      # Valid CriteriaScoring weights (has :festival_recognition) are passed through unchanged
       valid_weights = %{
         mob: 0.20,
         ivory_tower: 0.20,
-        industry_recognition: 0.20,
+        festival_recognition: 0.30,
         cultural_impact: 0.20,
-        people_quality: 0.10,
-        financial_performance: 0.10
+        technical_innovation: 0.05,
+        auteur_recognition: 0.05
       }
 
       result = MoviePredictor.predict_2020s_movies(5, valid_weights)
-      assert is_map(result.algorithm_info.weights_used)
+      assert result.algorithm_info.weights_used == valid_weights
     end
 
     test "all criteria contribute to scoring" do
