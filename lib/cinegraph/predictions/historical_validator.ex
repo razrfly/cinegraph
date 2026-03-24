@@ -286,29 +286,13 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   end
 
   defp convert_weights_to_categories(weights) do
-    # Map validation weights to database categories
-    # Support both new mob/ivory_tower keys and legacy popular_opinion
-    ratings_weight =
-      cond do
-        Map.has_key?(weights, :mob) or Map.has_key?(weights, :ivory_tower) ->
-          # New-style: combine mob + ivory_tower as total ratings weight
-          # Default each to 0.125 so their sum equals the legacy 0.25 default
-          Map.get(weights, :mob, 0.125) + Map.get(weights, :ivory_tower, 0.125)
-
-        Map.has_key?(weights, :critical_acclaim) ->
-          # Legacy case: ignore critical_acclaim, use only popular_opinion
-          Map.get(weights, :popular_opinion, 0.25)
-
-        true ->
-          Map.get(weights, :popular_opinion, 0.25)
-      end
-
     %{
-      "ratings" => ratings_weight,
-      "awards" => Map.get(weights, :industry_recognition, 0.25),
-      "cultural" => Map.get(weights, :cultural_impact, 0.25),
-      "people" => Map.get(weights, :people_quality, 0.25),
-      "financial" => 0.0
+      "mob" => Map.get(weights, :mob, 0.125),
+      "ivory_tower" => Map.get(weights, :ivory_tower, 0.125),
+      "industry_recognition" => Map.get(weights, :industry_recognition, 0.25),
+      "cultural_impact" => Map.get(weights, :cultural_impact, 0.25),
+      "people_quality" => Map.get(weights, :people_quality, 0.25),
+      "financial_performance" => Map.get(weights, :financial_performance, 0.0)
     }
   end
 

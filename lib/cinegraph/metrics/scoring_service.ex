@@ -91,26 +91,14 @@ defmodule Cinegraph.Metrics.ScoringService do
   Maps category_weights to the six scoring lenses.
 
   Note:
-  - Legacy "popular_opinion" profiles are split 50/50 into mob + ivory_tower
   - "financial_performance" represents box office success (revenue, budget, ROI)
   - "people_quality" represents person quality scores (directors, actors, etc.)
   """
   def profile_to_discovery_weights(%MetricWeightProfile{} = profile) do
-    # If profile has legacy popular_opinion, split it 50/50 into mob + ivory_tower
-    legacy_popular = get_category_weight(profile, "popular_opinion", nil)
-
-    {mob_weight, ivory_tower_weight} =
-      if legacy_popular do
-        half = legacy_popular / 2.0
-        {half, half}
-      else
-        {get_category_weight(profile, "mob", @default_category_weights["mob"]),
-         get_category_weight(profile, "ivory_tower", @default_category_weights["ivory_tower"])}
-      end
-
     %{
-      mob: mob_weight,
-      ivory_tower: ivory_tower_weight,
+      mob: get_category_weight(profile, "mob", @default_category_weights["mob"]),
+      ivory_tower:
+        get_category_weight(profile, "ivory_tower", @default_category_weights["ivory_tower"]),
       industry_recognition:
         get_category_weight(
           profile,

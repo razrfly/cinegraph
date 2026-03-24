@@ -1098,15 +1098,16 @@ defmodule Cinegraph.Movies do
     :ok
   end
 
-  @doc "List movies in a disparity category, ordered by disparity score descending."
+  @doc "List movies in a disparity category, ordered by disparity score (ASC for perfect_harmony, DESC otherwise)."
   def list_movies_by_disparity_category(category, opts \\ []) do
     limit = Elixir.Keyword.get(opts, :limit, 50)
     offset = Elixir.Keyword.get(opts, :offset, 0)
+    order = if category == "perfect_harmony", do: :asc, else: :desc
 
     from(m in Movie,
       join: s in assoc(m, :score_cache),
       where: s.disparity_category == ^category,
-      order_by: [desc: s.disparity_score, asc: m.id],
+      order_by: [{^order, s.disparity_score}, asc: m.id],
       limit: ^limit,
       offset: ^offset,
       preload: [score_cache: s]

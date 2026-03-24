@@ -42,7 +42,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in ~w(mob ivory_tower popular_opinion industry_recognition cultural_impact people_quality) ->
+      field in ~w(mob ivory_tower industry_recognition cultural_impact people_quality) ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->
@@ -224,48 +224,6 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
            ) AS vals
          )
          """,
-         m.id,
-         m.id
-       )}
-    ])
-  end
-
-  defp apply_discovery_metric_sort(query, "popular_opinion", direction) do
-    order_func = if direction == :desc, do: :desc, else: :asc
-
-    order_by(query, [m], [
-      {^order_func,
-       fragment(
-         """
-         COALESCE((
-           SELECT (COALESCE(tr.value, 0) / 10.0 * 0.25 +
-                   COALESCE(ir.value, 0) / 10.0 * 0.25 +
-                   COALESCE(mc.value, 0) / 100.0 * 0.25 +
-                   COALESCE(rt.value, 0) / 100.0 * 0.25)
-           FROM (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) tr,
-                (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) ir,
-                (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) mc,
-                (
-                 SELECT value FROM external_metrics
-                 WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer'
-                 ORDER BY fetched_at DESC LIMIT 1
-                ) rt
-         ), 0)
-         """,
-         m.id,
-         m.id,
          m.id,
          m.id
        )}

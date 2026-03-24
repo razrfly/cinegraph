@@ -161,7 +161,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
                industry_recognition: 0.20,
                cultural_impact: 0.20,
                people_quality: 0.20,
-               financial_success: 0.20
+               financial_performance: 0.20
              }
          )
          |> assign(:show_weight_tuner, false)
@@ -277,7 +277,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         industry_recognition: parse_param.(params["industry_recognition"]),
         cultural_impact: parse_param.(params["cultural_impact"]),
         people_quality: parse_param.(params["people_quality"]),
-        financial_success: parse_param.(params["financial_success"])
+        financial_performance: parse_param.(params["financial_performance"])
       }
 
       # Validate weights sum to approximately 1.0
@@ -487,7 +487,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   defp criterion_label(:industry_recognition), do: "Industry Recognition"
   defp criterion_label(:cultural_impact), do: "Cultural Impact"
   defp criterion_label(:people_quality), do: "People Quality"
-  defp criterion_label(:financial_success), do: "Financial Success"
+  defp criterion_label(:financial_performance), do: "Financial Performance"
   defp criterion_label(other), do: to_string(other)
 
   defp accuracy_color(percentage) when percentage >= 90, do: "text-green-600"
@@ -509,17 +509,6 @@ defmodule CinegraphWeb.PredictionsLive.Index do
           "Unknown"
         end
     end
-  end
-
-  # Returns true if the cached predictions were built with the old popular_opinion key,
-  # indicating the cache needs to be refreshed with the current scoring model.
-  defp stale_cache?([sample | _]) do
-    criteria =
-      get_in(sample, [:prediction, :criteria_scores]) ||
-        get_in(sample, ["prediction", "criteria_scores"]) ||
-        %{}
-
-    Map.has_key?(criteria, :popular_opinion) or Map.has_key?(criteria, "popular_opinion")
   end
 
   defp stale_cache?(_), do: false

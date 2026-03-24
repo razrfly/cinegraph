@@ -41,16 +41,6 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :unpredictability_score, :float, description: "Score volatility — 0-10"
   end
 
-  @desc "Cultural Relevance Index breakdown by dimension"
-  object :cri_breakdown do
-    field :overall_score, :float
-    field :timelessness_score, :float
-    field :cultural_penetration_score, :float
-    field :artistic_impact_score, :float
-    field :institutional_recognition_score, :float
-    field :public_reception_score, :float
-  end
-
   @desc "A credit linking a person to a movie"
   object :credit do
     field :credit_type, :string
@@ -96,14 +86,6 @@ defmodule CinegraphWeb.Schema.MovieTypes do
 
     field :lens_scores, :lens_scores do
       resolve(&MovieResolver.lens_scores/3)
-    end
-
-    field :cri_score, :float do
-      resolve(&MovieResolver.cri_score/3)
-    end
-
-    field :cri_breakdown, :cri_breakdown do
-      resolve(&MovieResolver.cri_breakdown/3)
     end
 
     field :cast, list_of(:credit) do

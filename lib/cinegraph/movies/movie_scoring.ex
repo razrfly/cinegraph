@@ -184,17 +184,6 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate popular opinion score based on all rating sources.
-  Kept for backward compatibility — prefer calculate_mob_score/calculate_ivory_tower_score.
-  """
-  def calculate_popular_opinion(metrics) do
-    mob = calculate_mob_score(metrics)
-    ivory = calculate_ivory_tower_score(metrics)
-    sources = [mob, ivory] |> Enum.filter(&(&1 > 0))
-    if sources == [], do: 5.0, else: Enum.sum(sources) / length(sources)
-  end
-
-  @doc """
   Calculate industry recognition based on festival wins and nominations.
   """
   def calculate_industry_recognition(festival_data) do

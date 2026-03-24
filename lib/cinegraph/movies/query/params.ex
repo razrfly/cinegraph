@@ -57,7 +57,6 @@ defmodule Cinegraph.Movies.Query.Params do
     field :people_role, :string
 
     # Metric thresholds (for advanced users)
-    field :popular_opinion_min, :float
     field :industry_recognition_min, :float
     field :cultural_impact_min, :float
     field :people_quality_min, :float
@@ -77,7 +76,6 @@ defmodule Cinegraph.Movies.Query.Params do
     score score_asc score_desc
     mob mob_asc mob_desc
     ivory_tower ivory_tower_asc ivory_tower_desc
-    popular_opinion popular_opinion_asc popular_opinion_desc
     industry_recognition industry_recognition_asc industry_recognition_desc
     cultural_impact cultural_impact_asc cultural_impact_desc
     people_quality people_quality_asc people_quality_desc
@@ -124,7 +122,6 @@ defmodule Cinegraph.Movies.Query.Params do
       :award_preset,
       :people_ids,
       :people_role,
-      :popular_opinion_min,
       :industry_recognition_min,
       :cultural_impact_min,
       :people_quality_min,
@@ -286,8 +283,7 @@ defmodule Cinegraph.Movies.Query.Params do
                         runtime_min runtime_max festival_id award_category_id
                         award_year_from award_year_to genres countries festivals)
 
-    float_fields = ~w(rating_min popular_opinion_min
-                      industry_recognition_min cultural_impact_min people_quality_min)
+    float_fields = ~w(rating_min industry_recognition_min cultural_impact_min people_quality_min)
 
     params
     |> parse_integers(numeric_fields)

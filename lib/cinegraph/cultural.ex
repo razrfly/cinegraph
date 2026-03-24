@@ -1,7 +1,6 @@
 defmodule Cinegraph.Cultural do
   @moduledoc """
-  The Cultural context manages cultural authorities, curated lists, and 
-  Cultural Relevance Index (CRI) calculations for movies.
+  The Cultural context manages cultural authorities, curated lists, and awards data for movies.
   """
 
   import Ecto.Query, warn: false
@@ -11,8 +10,7 @@ defmodule Cinegraph.Cultural do
     Authority,
     CuratedList,
     MovieListItem,
-    MovieDataChange,
-    CRIScore
+    MovieDataChange
   }
 
   alias Cinegraph.Festivals
@@ -319,68 +317,6 @@ defmodule Cinegraph.Cultural do
       end
 
     Repo.delete_all(query)
-  end
-
-  # ========================================
-  # CRI SCORING
-  # ========================================
-
-  @doc """
-  Gets the latest CRI score for a movie.
-  Uses read replica for better load distribution.
-  """
-  def get_latest_cri_score(movie_id) do
-    from(score in CRIScore,
-      where: score.movie_id == ^movie_id,
-      order_by: [desc: score.calculated_at],
-      limit: 1
-    )
-    |> Repo.replica().one()
-  end
-
-  @doc """
-  Creates or updates a CRI score for a movie.
-  """
-  def upsert_cri_score(movie_id, score_value, components, version \\ "1.0") do
-    attrs = %{
-      movie_id: movie_id,
-      score: score_value,
-      components: components,
-      version: version,
-      calculated_at: DateTime.utc_now()
-    }
-
-    %CRIScore{}
-    |> CRIScore.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc """
-  Calculates Cultural Relevance Index for a movie.
-  This is a simplified version - full implementation would be more complex.
-  """
-  def calculate_cri_score(movie_id) do
-    # Get movie with all cultural data
-    movie_cultural_data = get_movie_cultural_data(movie_id)
-
-    components = %{
-      "authority_presence" => calculate_authority_presence(movie_cultural_data),
-      "list_appearances" => calculate_list_appearances(movie_cultural_data),
-      "award_recognition" => calculate_award_recognition(movie_cultural_data),
-      "cultural_impact" => calculate_cultural_impact(movie_cultural_data)
-    }
-
-    # Weighted average of components
-    score =
-      components["authority_presence"] * 0.3 +
-        components["list_appearances"] * 0.25 +
-        components["award_recognition"] * 0.35 +
-        components["cultural_impact"] * 0.1
-
-    # Scale to 0-100
-    final_score = score * 100
-
-    upsert_cri_score(movie_id, final_score, components)
   end
 
   # ========================================
@@ -1190,81 +1126,5 @@ defmodule Cinegraph.Cultural do
         _existing -> :ok
       end
     end)
-  end
-
-  # ========================================
-  # PRIVATE HELPER FUNCTIONS
-  # ========================================
-
-  defp get_movie_cultural_data(movie_id) do
-    from(movie in Cinegraph.Movies.Movie,
-      left_join: list_items in assoc(movie, :movie_list_items),
-      left_join: lists in assoc(list_items, :list),
-      left_join: authorities in assoc(lists, :authority),
-      where: movie.id == ^movie_id,
-      preload: [movie_list_items: {list_items, list: {lists, authority: authorities}}]
-    )
-    |> Repo.replica().one()
-  end
-
-  defp calculate_authority_presence(movie_data) do
-    if movie_data && movie_data.movie_list_items do
-      authorities =
-        movie_data.movie_list_items
-        |> Enum.map(& &1.list.authority)
-        |> Enum.uniq_by(& &1.id)
-
-      # Weight by authority trust scores
-      total_weight =
-        authorities
-        |> Enum.map(& &1.trust_score)
-        |> Enum.sum()
-
-      # Normalize to 0-1 scale (trust_score is 0-10)
-      min(total_weight / 100.0, 1.0)
-    else
-      0.0
-    end
-  end
-
-  defp calculate_list_appearances(movie_data) do
-    if movie_data && movie_data.movie_list_items do
-      count = length(movie_data.movie_list_items)
-      # Logarithmic scale - more lists = higher score but with diminishing returns
-      # Max around 50 list appearances
-      :math.log(count + 1) / :math.log(50)
-    else
-      0.0
-    end
-  end
-
-  defp calculate_award_recognition(movie_data) do
-    if movie_data && movie_data.movie_list_items do
-      award_items =
-        movie_data.movie_list_items
-        |> Enum.filter(&(&1.award_result in ["winner", "nominee"]))
-
-      winners = Enum.count(award_items, &(&1.award_result == "winner"))
-      nominees = Enum.count(award_items, &(&1.award_result == "nominee"))
-
-      # Winners worth more than nominees
-      score = winners * 1.0 + nominees * 0.5
-
-      # Normalize
-      min(score / 10.0, 1.0)
-    else
-      0.0
-    end
-  end
-
-  defp calculate_cultural_impact(movie_data) do
-    if movie_data && movie_data.movie_list_items do
-      # Count of appearances in lists as a proxy for cultural impact
-      count = length(movie_data.movie_list_items)
-      # Normalize to 0-1 scale with diminishing returns
-      min(count / 20.0, 1.0)
-    else
-      0.0
-    end
   end
 end

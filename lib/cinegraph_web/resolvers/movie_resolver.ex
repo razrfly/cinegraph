@@ -138,26 +138,6 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end)
   end
 
-  # Both cri_score and cri_breakdown use the same Dataloader key so
-  # Dataloader deduplicates the DB query when both fields are requested.
-  def cri_score(movie, _, %{context: %{loader: loader}}) do
-    loader = Dataloader.load(loader, :db, {:cri_score, %{}}, movie)
-
-    on_load(loader, fn loader ->
-      score = Dataloader.get(loader, :db, {:cri_score, %{}}, movie)
-      {:ok, score && score.overall_score}
-    end)
-  end
-
-  def cri_breakdown(movie, _, %{context: %{loader: loader}}) do
-    loader = Dataloader.load(loader, :db, {:cri_score, %{}}, movie)
-
-    on_load(loader, fn loader ->
-      score = Dataloader.get(loader, :db, {:cri_score, %{}}, movie)
-      {:ok, score}
-    end)
-  end
-
   def cast(movie, _, _) do
     credits =
       from(c in Credit,
