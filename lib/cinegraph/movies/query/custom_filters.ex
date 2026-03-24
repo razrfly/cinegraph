@@ -23,6 +23,7 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     |> filter_by_award_preset(params.award_preset)
     |> filter_by_people(params)
     |> filter_by_metric_thresholds(params)
+    |> filter_by_disparity(params.disparity)
     |> apply_distinct_if_needed()
   end
 
@@ -649,6 +650,19 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
         ^min_value
       )
     )
+  end
+
+  defp filter_by_disparity(query, nil), do: query
+  defp filter_by_disparity(query, ""), do: query
+
+  defp filter_by_disparity(query, category) do
+    if has_named_binding?(query, :score_cache) do
+      where(query, [score_cache: sc], sc.disparity_category == ^category)
+    else
+      query
+      |> join(:left, [m], sc in "movie_score_caches", on: sc.movie_id == m.id, as: :score_cache)
+      |> where([score_cache: sc], sc.disparity_category == ^category)
+    end
   end
 
   defp apply_distinct_if_needed(query) do

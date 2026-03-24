@@ -21,13 +21,16 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
   import Ecto.Query
   alias Cinegraph.Movies.DiscoveryCommon
 
-  def apply(query, sort) do
+  def apply(query, sort, preset_weights \\ nil) do
     # Parse sort parameter to extract field and direction
     {field, direction} = parse_sort(sort)
 
     cond do
       field == "discovery_score" ->
         apply_discovery_score_sort(query, direction)
+
+      field == "score" ->
+        apply_score_cache_sort(query, direction, preset_weights)
 
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
@@ -341,4 +344,69 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
   end
 
   defp apply_discovery_metric_sort(query, _, _), do: query
+
+  # ---------------------------------------------------------------------------
+  # Score Cache Sort
+  # Sorts by pre-computed overall_score from movie_score_caches
+  # ---------------------------------------------------------------------------
+
+  # Sorts by the pre-computed overall_score when no preset weights are given
+  defp apply_score_cache_sort(query, direction, nil) do
+    order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+    query
+    |> maybe_join_score_cache()
+    |> select_merge([m, score_cache: sc], %{overall_score: sc.overall_score})
+    |> order_by([score_cache: sc], [{^order_func, sc.overall_score}])
+  end
+
+  # Sorts by a weighted combination of the individual lens scores from the cache
+  defp apply_score_cache_sort(query, direction, weights) when is_map(weights) do
+    mob = weights["mob"] || 0.0
+    ivory = weights["ivory_tower"] || 0.0
+    industry = weights["industry_recognition"] || 0.0
+    cultural = weights["cultural_impact"] || 0.0
+    people = weights["people_quality"] || 0.0
+    financial = weights["financial_performance"] || 0.0
+
+    order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+    query
+    |> maybe_join_score_cache()
+    |> select_merge([m, score_cache: sc], %{
+      overall_score:
+        fragment(
+          "?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0)",
+          ^mob, sc.mob_score,
+          ^ivory, sc.ivory_tower_score,
+          ^industry, sc.industry_recognition_score,
+          ^cultural, sc.cultural_impact_score,
+          ^people, sc.people_quality_score,
+          ^financial, sc.financial_performance_score
+        )
+    })
+    |> order_by([score_cache: sc], [
+      {^order_func,
+       fragment(
+         "?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0)",
+         ^mob, sc.mob_score,
+         ^ivory, sc.ivory_tower_score,
+         ^industry, sc.industry_recognition_score,
+         ^cultural, sc.cultural_impact_score,
+         ^people, sc.people_quality_score,
+         ^financial, sc.financial_performance_score
+       )}
+    ])
+  end
+
+  defp maybe_join_score_cache(query) do
+    if has_named_binding?(query, :score_cache) do
+      query
+    else
+      join(query, :left, [m], sc in "movie_score_caches",
+        on: sc.movie_id == m.id,
+        as: :score_cache
+      )
+    end
+  end
 end

@@ -299,4 +299,5 @@ defmodule CinegraphWeb.LiveViewHelpers do
   def lens_display_name(:cultural_impact), do: {"⏳", "The Time Machine"}
   def lens_display_name(:people_quality), do: {"🎬", "The Auteurs"}
   def lens_display_name(:financial_performance), do: {"💵", "The Box Office"}
+  def lens_display_name(_), do: {"", "Unknown"}
 end

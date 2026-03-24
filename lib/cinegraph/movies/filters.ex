@@ -115,6 +115,18 @@ defmodule Cinegraph.Movies.Filters do
         |> order_by([score_cache: sc], asc: fragment("COALESCE(?, 0)", sc.overall_score))
 
       # Discovery Metric Sorts
+      "mob" ->
+        sort_by_metric_dimension(query, :mob, :desc)
+
+      "mob_asc" ->
+        sort_by_metric_dimension(query, :mob, :asc)
+
+      "ivory_tower" ->
+        sort_by_metric_dimension(query, :ivory_tower, :desc)
+
+      "ivory_tower_asc" ->
+        sort_by_metric_dimension(query, :ivory_tower, :asc)
+
       "industry_recognition" ->
         sort_by_metric_dimension(query, :industry_recognition, :desc)
 
@@ -144,6 +156,66 @@ defmodule Cinegraph.Movies.Filters do
   defp sort_by_metric_dimension(query, dimension, direction) do
     # Apply the ordering with the specific dimension score calculation
     case {dimension, direction} do
+      {:mob, dir} when dir in [:desc, :asc] ->
+        order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+        order_by(query, [m], [
+          {^order_func,
+           fragment(
+             """
+             (
+               SELECT CASE
+                 WHEN ir_v IS NOT NULL AND tr_v IS NOT NULL THEN (ir_v / 10.0 + tr_v / 10.0) / 2.0
+                 WHEN ir_v IS NOT NULL THEN ir_v / 10.0
+                 WHEN tr_v IS NOT NULL THEN tr_v / 10.0
+                 ELSE NULL
+               END
+               FROM (
+                 SELECT
+                   (SELECT value FROM external_metrics
+                    WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average'
+                    ORDER BY fetched_at DESC LIMIT 1) AS ir_v,
+                   (SELECT value FROM external_metrics
+                    WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average'
+                    ORDER BY fetched_at DESC LIMIT 1) AS tr_v
+               ) AS vals
+             )
+             """,
+             m.id,
+             m.id
+           )}
+        ])
+
+      {:ivory_tower, dir} when dir in [:desc, :asc] ->
+        order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+        order_by(query, [m], [
+          {^order_func,
+           fragment(
+             """
+             (
+               SELECT CASE
+                 WHEN rt_v IS NOT NULL AND mc_v IS NOT NULL THEN (rt_v / 100.0 + mc_v / 100.0) / 2.0
+                 WHEN rt_v IS NOT NULL THEN rt_v / 100.0
+                 WHEN mc_v IS NOT NULL THEN mc_v / 100.0
+                 ELSE NULL
+               END
+               FROM (
+                 SELECT
+                   (SELECT value FROM external_metrics
+                    WHERE movie_id = ? AND source = 'rotten_tomatoes' AND metric_type = 'tomatometer'
+                    ORDER BY fetched_at DESC LIMIT 1) AS rt_v,
+                   (SELECT value FROM external_metrics
+                    WHERE movie_id = ? AND source = 'metacritic' AND metric_type = 'metascore'
+                    ORDER BY fetched_at DESC LIMIT 1) AS mc_v
+               ) AS vals
+             )
+             """,
+             m.id,
+             m.id
+           )}
+        ])
+
       {:industry_recognition, :desc} ->
         order_by(query, [m],
           desc:
@@ -1189,17 +1261,24 @@ defmodule Cinegraph.Movies.Filters do
     if min_val do
       case dimension do
         :mob ->
-          # Filter by mob score (audience ratings: TMDb + IMDb)
+          # Filter by mob score (audience ratings: TMDb + IMDb, null-aware avg)
           where(
             query,
             [m],
             fragment(
               """
               COALESCE((
-                SELECT (COALESCE(tr.value, 0) / 10.0 * 0.5 +
-                        COALESCE(ir.value, 0) / 10.0 * 0.5)
-                FROM (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) tr,
-                     (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) ir
+                SELECT CASE
+                  WHEN tmdb_v IS NOT NULL AND imdb_v IS NOT NULL THEN (tmdb_v / 10.0 + imdb_v / 10.0) / 2.0
+                  WHEN tmdb_v IS NOT NULL THEN tmdb_v / 10.0
+                  WHEN imdb_v IS NOT NULL THEN imdb_v / 10.0
+                  ELSE NULL
+                END
+                FROM (
+                  SELECT
+                    (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) AS tmdb_v,
+                    (SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'imdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) AS imdb_v
+                ) AS vals
               ), 0) >= ?
               """,
               m.id,
