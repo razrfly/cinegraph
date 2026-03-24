@@ -368,28 +368,47 @@ defmodule Cinegraph.Metrics.ScoringService do
   end
 
   defp join_person_quality_data(query) do
-    # Get the average person quality score for each movie
-    # This includes directors, actors, writers, etc. with quality scores
-    person_quality_subquery =
+    # Layer 1: deduplicate — max score per (movie, person)
+    deduped =
       from(mc in "movie_credits",
         join: pm in "person_metrics",
-        on: pm.person_id == mc.person_id,
-        where: pm.metric_type == "quality_score",
-        group_by: mc.movie_id,
+        on: pm.person_id == mc.person_id and pm.metric_type == "quality_score",
+        group_by: [mc.movie_id, mc.person_id],
         select: %{
           movie_id: mc.movie_id,
-          avg_person_quality: avg(pm.score),
-          director_quality:
-            avg(fragment("CASE WHEN ? IN ('Directing', 'Director') THEN ? END", mc.job, pm.score)),
-          actor_quality:
-            avg(
-              fragment("CASE WHEN ? IN ('Acting', 'Actor') THEN ? END", mc.department, pm.score)
-            ),
-          total_quality_people: count(fragment("DISTINCT ?", mc.person_id))
+          person_id: mc.person_id,
+          max_score: max(pm.score)
         }
       )
 
-    join(query, :left, [m], pq in subquery(person_quality_subquery),
+    # Layer 2: rank within each movie (best person = rank 1)
+    ranked =
+      from(d in subquery(deduped),
+        select: %{
+          movie_id: d.movie_id,
+          max_score: d.max_score,
+          rn:
+            fragment(
+              "ROW_NUMBER() OVER (PARTITION BY ? ORDER BY ? DESC)",
+              d.movie_id,
+              d.max_score
+            )
+        }
+      )
+
+    # Layer 3: take top-10 per movie, aggregate
+    aggregated =
+      from(r in subquery(ranked),
+        where: r.rn <= 10,
+        group_by: r.movie_id,
+        select: %{
+          movie_id: r.movie_id,
+          avg_person_quality: avg(r.max_score),
+          total_quality_people: count(r.movie_id)
+        }
+      )
+
+    join(query, :left, [m], pq in subquery(aggregated),
       on: pq.movie_id == m.id,
       as: :person_quality
     )
