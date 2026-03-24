@@ -32,7 +32,8 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   }
 
   @doc """
-  Get the default weights for the 5 criteria.
+  Get the default weights for the 6 criteria
+  (mob, ivory_tower, festival_recognition, cultural_impact, technical_innovation, auteur_recognition).
   """
   def get_default_weights, do: @default_weights
 
