@@ -64,7 +64,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
         assert likelihood <= 100.0
 
         # Criteria scores should all be 0-100
-        assert map_size(criteria_scores) == 5
+        assert map_size(criteria_scores) == 6
 
         for {_criterion, score} <- criteria_scores do
           assert is_number(score)
@@ -72,8 +72,8 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
           assert score <= 100.0
         end
 
-        # Breakdown should have 5 entries
-        assert length(breakdown) == 5
+        # Breakdown should have 6 entries
+        assert length(breakdown) == 6
 
         for breakdown_item <- breakdown do
           assert %{
@@ -84,11 +84,12 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
                  } = breakdown_item
 
           assert criterion in [
-                   :critical_acclaim,
-                   :festival_recognition,
+                   :mob,
+                   :ivory_tower,
+                   :industry_recognition,
                    :cultural_impact,
-                   :technical_innovation,
-                   :auteur_recognition
+                   :people_quality,
+                   :financial_performance
                  ]
 
           assert is_number(raw_score) and raw_score >= 0.0 and raw_score <= 100.0
@@ -103,11 +104,12 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
 
       if movie do
         custom_weights = %{
-          critical_acclaim: 0.50,
-          festival_recognition: 0.20,
-          cultural_impact: 0.15,
-          technical_innovation: 0.10,
-          auteur_recognition: 0.05
+          mob: 0.20,
+          ivory_tower: 0.20,
+          industry_recognition: 0.20,
+          cultural_impact: 0.20,
+          people_quality: 0.10,
+          financial_performance: 0.10
         }
 
         score = CriteriaScoring.calculate_movie_score(movie, custom_weights)

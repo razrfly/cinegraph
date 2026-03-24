@@ -186,6 +186,7 @@ defmodule Mix.Tasks.Db.PullProduction do
       if opts[:import_only] do
         [
           {"Checking pg_restore in PATH", &check_pg_restore/0},
+          {"Checking createdb in PATH", &check_createdb/0},
           {"Checking local PostgreSQL", &check_local_postgres/0}
         ]
       else
@@ -193,6 +194,7 @@ defmodule Mix.Tasks.Db.PullProduction do
           {"Checking SSH to #{ssh_host()}", &check_ssh_connectivity/0},
           {"Checking pg_dump on remote", &check_remote_pg_dump/0},
           {"Checking pg_restore in PATH", &check_pg_restore/0},
+          {"Checking createdb in PATH", &check_createdb/0},
           {"Checking local PostgreSQL", &check_local_postgres/0}
         ]
       end
@@ -226,6 +228,13 @@ defmodule Mix.Tasks.Db.PullProduction do
     case System.cmd("which", ["pg_restore"], stderr_to_stdout: true) do
       {_, 0} -> :ok
       _ -> {:error, "pg_restore not found in PATH. Install via: brew install libpq"}
+    end
+  end
+
+  defp check_createdb do
+    case System.cmd("which", ["createdb"], stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      _ -> {:error, "createdb not found in PATH. Install via: brew install libpq"}
     end
   end
 
@@ -293,19 +302,25 @@ defmodule Mix.Tasks.Db.PullProduction do
 
     dump_path = Path.join(@dump_dir, "cinegraph_prod_#{timestamp}.dump")
 
-    # Stream pg_dump stdout over SSH into local file; stderr goes to our process
-    # Use single quotes around the remote command to avoid double-quote nesting inside sh -c "..."
-    cmd =
-      ~s(ssh #{ssh_host()} 'pg_dump -U #{remote_db_user()} -Fc #{remote_db_name()}' > '#{dump_path}')
+    # Stream pg_dump stdout over SSH into a local file using argv (no shell interpolation).
+    # SSH stdout (the pg_dump binary stream) is captured from the port and written to file.
+    args = [ssh_host(), "pg_dump", "-U", remote_db_user(), "-Fc", remote_db_name()]
 
     info("  → Streaming dump from #{ssh_host()}...")
 
+    file = File.open!(dump_path, [:write, :binary])
     parent = self()
     monitor_pid = spawn_link(fn -> monitor_dump_progress(dump_path, parent) end)
     start_time = System.monotonic_time(:second)
 
-    port = Port.open({:spawn, "sh -c \"#{cmd}\""}, [:binary, :exit_status, :stderr_to_stdout])
-    result = collect_ssh_output(port)
+    port =
+      Port.open(
+        {:spawn_executable, System.find_executable("ssh")},
+        [:binary, :exit_status, {:args, args}]
+      )
+
+    result = collect_ssh_output(port, file)
+    File.close(file)
 
     send(monitor_pid, :stop)
     elapsed = System.monotonic_time(:second) - start_time
@@ -325,11 +340,12 @@ defmodule Mix.Tasks.Db.PullProduction do
     end
   end
 
-  # SSH pipes pg_dump stdout directly to file; stderr/errors come through as port data
-  defp collect_ssh_output(port) do
+  # Collects pg_dump binary stream from SSH stdout into a file, waits for exit status
+  defp collect_ssh_output(port, file) do
     receive do
-      {^port, {:data, _data}} ->
-        collect_ssh_output(port)
+      {^port, {:data, data}} ->
+        IO.binwrite(file, data)
+        collect_ssh_output(port, file)
 
       {^port, {:exit_status, 0}} ->
         :ok
@@ -442,22 +458,24 @@ defmodule Mix.Tasks.Db.PullProduction do
   end
 
   defp drop_local_database do
-    # Use DROP DATABASE WITH (FORCE) to atomically terminate all connections and drop
-    # This avoids race conditions with apps that reconnect between terminate and drop
+    # Use dropdb --force to atomically terminate all connections and drop
+    # Using the dropdb executable with argv avoids SQL identifier quoting issues
     args = [
+      "--if-exists",
+      "--force",
       "-h",
       local_host(),
       "-p",
       local_port(),
       "-U",
       local_user(),
-      "-d",
-      "postgres",
-      "-c",
-      "DROP DATABASE IF EXISTS #{local_db()} WITH (FORCE)"
+      local_db()
     ]
 
-    case System.cmd("psql", args, env: [{"PGPASSWORD", local_password()}], stderr_to_stdout: true) do
+    case System.cmd("dropdb", args,
+           env: [{"PGPASSWORD", local_password()}],
+           stderr_to_stdout: true
+         ) do
       {_output, 0} ->
         info("  ✓ Dropped existing database")
         :ok
@@ -506,26 +524,37 @@ defmodule Mix.Tasks.Db.PullProduction do
     dump_size = File.stat!(dump_path).size
     info("  → Restoring #{format_size(dump_size)} dump...")
 
-    parallel_arg = if opts[:parallel], do: "-j #{opts[:parallel]}", else: ""
+    base_args = [
+      "-h",
+      local_host(),
+      "-p",
+      local_port(),
+      "-U",
+      local_user(),
+      "-d",
+      local_db(),
+      "--no-owner",
+      "--no-acl",
+      "--verbose",
+      dump_path
+    ]
 
-    # Use --verbose to get table-by-table progress
-    cmd = """
-    PGPASSWORD='#{local_password()}' pg_restore \
-      -h #{local_host()} \
-      -p #{local_port()} \
-      -U #{local_user()} \
-      -d #{local_db()} \
-      --no-owner \
-      --no-acl \
-      --verbose \
-      #{parallel_arg} \
-      '#{dump_path}' \
-      2>&1
-    """
+    parallel_args = if opts[:parallel], do: ["-j", to_string(opts[:parallel])], else: []
+    args = base_args ++ parallel_args
 
     start_time = System.monotonic_time(:second)
 
-    port = Port.open({:spawn, "sh -c \"#{cmd}\""}, [:binary, :exit_status, :stderr_to_stdout])
+    port =
+      Port.open(
+        {:spawn_executable, System.find_executable("pg_restore")},
+        [
+          :binary,
+          :exit_status,
+          :stderr_to_stdout,
+          {:args, args},
+          {:env, [{"PGPASSWORD", local_password()}]}
+        ]
+      )
 
     result = collect_restore_output(port, [])
 

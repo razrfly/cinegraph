@@ -58,6 +58,8 @@ defmodule Cinegraph.Predictions.PredictionCache do
   @doc """
   Check if cache exists for a decade and profile.
   """
+  def cache_exists?(_decade, nil), do: false
+
   def cache_exists?(decade, profile_id) do
     Repo.exists?(
       from pc in __MODULE__,
