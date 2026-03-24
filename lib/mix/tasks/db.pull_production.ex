@@ -304,6 +304,10 @@ defmodule Mix.Tasks.Db.PullProduction do
 
     # Stream pg_dump stdout over SSH into a local file using argv (no shell interpolation).
     # SSH stdout (the pg_dump binary stream) is captured from the port and written to file.
+    ssh_executable =
+      System.find_executable("ssh") ||
+        raise "ssh not found in PATH — cannot connect to #{ssh_host()}"
+
     args = [ssh_host(), "pg_dump", "-U", remote_db_user(), "-Fc", remote_db_name()]
 
     info("  → Streaming dump from #{ssh_host()}...")
@@ -313,14 +317,15 @@ defmodule Mix.Tasks.Db.PullProduction do
     monitor_pid = spawn_link(fn -> monitor_dump_progress(dump_path, parent) end)
     start_time = System.monotonic_time(:second)
 
-    port =
-      Port.open(
-        {:spawn_executable, System.find_executable("ssh")},
-        [:binary, :exit_status, {:args, args}]
-      )
+    result =
+      try do
+        port =
+          Port.open({:spawn_executable, ssh_executable}, [:binary, :exit_status, {:args, args}])
 
-    result = collect_ssh_output(port, file)
-    File.close(file)
+        collect_ssh_output(port, file)
+      after
+        File.close(file)
+      end
 
     send(monitor_pid, :stop)
     elapsed = System.monotonic_time(:second) - start_time
@@ -340,12 +345,19 @@ defmodule Mix.Tasks.Db.PullProduction do
     end
   end
 
-  # Collects pg_dump binary stream from SSH stdout into a file, waits for exit status
+  # Collects pg_dump binary stream from SSH stdout into a file, waits for exit status.
+  # Returns {:error, reason, 1} if a disk write fails so the caller can clean up.
   defp collect_ssh_output(port, file) do
     receive do
       {^port, {:data, data}} ->
-        IO.binwrite(file, data)
-        collect_ssh_output(port, file)
+        case IO.binwrite(file, data) do
+          :ok ->
+            collect_ssh_output(port, file)
+
+          {:error, reason} ->
+            Port.close(port)
+            {:error, "write failed: #{inspect(reason)}", 1}
+        end
 
       {^port, {:exit_status, 0}} ->
         :ok
@@ -542,11 +554,15 @@ defmodule Mix.Tasks.Db.PullProduction do
     parallel_args = if opts[:parallel], do: ["-j", to_string(opts[:parallel])], else: []
     args = base_args ++ parallel_args
 
+    pg_restore =
+      System.find_executable("pg_restore") ||
+        raise "pg_restore not found in PATH — install via: brew install libpq"
+
     start_time = System.monotonic_time(:second)
 
     port =
       Port.open(
-        {:spawn_executable, System.find_executable("pg_restore")},
+        {:spawn_executable, pg_restore},
         [
           :binary,
           :exit_status,
