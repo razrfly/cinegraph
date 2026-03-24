@@ -65,7 +65,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       algorithm_info: %{
         profile_used: profile.name,
         weights_used: weights,
-        criteria_count: 5,
+        criteria_count: 6,
         decade: "#{decade}s"
       }
     }

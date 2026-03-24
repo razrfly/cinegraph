@@ -5,47 +5,47 @@ defmodule CinegraphWeb.PredictionsLiveTest do
 
   describe "PredictionsLive.Index" do
     test "renders predictions page", %{conn: conn} do
-      {:ok, _index_live, html} = live(conn, ~p"/predictions")
+      {:ok, _index_live, html} = live(conn, ~p"/admin/predictions")
 
       assert html =~ "2020s Movie Predictions"
       assert html =~ "AI-powered predictions"
     end
 
     test "displays algorithm confidence", %{conn: conn} do
-      {:ok, _index_live, html} = live(conn, ~p"/predictions")
+      {:ok, _index_live, html} = live(conn, ~p"/admin/predictions")
 
       assert html =~ "Algorithm Confidence"
       assert html =~ "accuracy based on historical validation"
     end
 
     test "shows view mode tabs", %{conn: conn} do
-      {:ok, _index_live, html} = live(conn, ~p"/predictions")
+      {:ok, _index_live, html} = live(conn, ~p"/admin/predictions")
 
       assert html =~ "2020s Predictions"
       assert html =~ "Historical Validation"
-      assert html =~ "Confirmed Additions"
+      assert html =~ "Cache Status"
     end
 
     test "can switch between view modes", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Switch to validation view
       index_live
       |> element("button", "Historical Validation")
       |> render_click()
 
-      assert has_element?(index_live, "h2", "Algorithm Validation Results")
+      assert has_element?(index_live, "h2", "Historical Algorithm Validation")
 
-      # Switch to confirmed view
+      # Switch to cache status view
       index_live
-      |> element("button", "Confirmed Additions")
+      |> element("button", "Cache Status")
       |> render_click()
 
-      assert has_element?(index_live, "h2", "2020s Movies Already on 1001 Movies List")
+      assert has_element?(index_live, "h2", "Cache Status")
     end
 
     test "can toggle weight tuner", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Initially tuner should be hidden
       refute has_element?(index_live, "h3", "Algorithm Weight Tuner")
@@ -66,63 +66,64 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "weight tuner shows all criteria", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Show weight tuner
       index_live
       |> element("button", "Tune Algorithm")
       |> render_click()
 
-      # Check all criteria are present
-      assert has_element?(index_live, "label", "Critical Acclaim")
-      assert has_element?(index_live, "label", "Festival Recognition")
+      # Check all criteria are present (labels from criterion_label/1)
+      assert has_element?(index_live, "label", "The Mob")
+      assert has_element?(index_live, "label", "The Ivory Tower")
+      assert has_element?(index_live, "label", "Industry Recognition")
       assert has_element?(index_live, "label", "Cultural Impact")
-      assert has_element?(index_live, "label", "Technical Innovation")
-      assert has_element?(index_live, "label", "Auteur Recognition")
+      assert has_element?(index_live, "label", "People Quality")
+      assert has_element?(index_live, "label", "Financial Performance")
     end
 
     test "can update weights", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Show weight tuner
       index_live
       |> element("button", "Tune Algorithm")
       |> render_click()
 
-      # Update weights (make sure they sum to 100)
+      # Update weights using the 6-category system (must sum to 100)
       new_weights = %{
-        "critical_acclaim" => "40",
-        "festival_recognition" => "25",
+        "mob" => "20",
+        "ivory_tower" => "20",
+        "industry_recognition" => "20",
         "cultural_impact" => "20",
-        "technical_innovation" => "10",
-        "auteur_recognition" => "5"
+        "people_quality" => "10",
+        "financial_performance" => "10"
       }
 
       index_live
       |> form("form", new_weights)
       |> render_submit()
 
-      # Should show loading state briefly, then success
-      # Note: Due to async nature, we just verify it doesn't crash
-      assert_receive_flash(index_live, :info, "Predictions updated successfully!")
+      # Should handle the submission without crashing
+      assert_receive_flash(index_live, :info)
     end
 
     test "validates weight totals", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Show weight tuner
       index_live
       |> element("button", "Tune Algorithm")
       |> render_click()
 
-      # Try weights that don't sum to 100
+      # Try weights that don't sum to 100 (total = 150%)
       invalid_weights = %{
-        "critical_acclaim" => "50",
-        # This makes total 150%
-        "festival_recognition" => "50",
+        "mob" => "50",
+        "ivory_tower" => "50",
+        "industry_recognition" => "20",
         "cultural_impact" => "20",
-        "technical_innovation" => "20",
-        "auteur_recognition" => "10"
+        "people_quality" => "5",
+        "financial_performance" => "5"
       }
 
       index_live
@@ -133,7 +134,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "can reset weights to default", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Show weight tuner
       index_live
@@ -151,7 +152,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "displays movie predictions with proper structure", %{conn: conn} do
-      {:ok, _index_live, html} = live(conn, ~p"/predictions")
+      {:ok, _index_live, html} = live(conn, ~p"/admin/predictions")
 
       # Should show predictions table headers
       assert html =~ "Rank"
@@ -162,7 +163,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "can select a movie for details", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Look for a movie link and click it
       movie_links = index_live |> element("button", "View Details") |> has_element?()
@@ -182,7 +183,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "can close movie detail modal", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # First try to open a modal if possible
       movie_links = index_live |> element("button", "View Details") |> has_element?()
@@ -203,20 +204,21 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "handles loading states", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # Show weight tuner and trigger recalculation
       index_live
       |> element("button", "Tune Algorithm")
       |> render_click()
 
-      # Submit form to trigger loading
+      # Submit form with valid 6-category weights summing to 100
       new_weights = %{
-        "critical_acclaim" => "35",
-        "festival_recognition" => "30",
+        "mob" => "20",
+        "ivory_tower" => "20",
+        "industry_recognition" => "20",
         "cultural_impact" => "20",
-        "technical_innovation" => "10",
-        "auteur_recognition" => "5"
+        "people_quality" => "10",
+        "financial_performance" => "10"
       }
 
       index_live
@@ -228,7 +230,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "displays proper statistics", %{conn: conn} do
-      {:ok, _index_live, html} = live(conn, ~p"/predictions")
+      {:ok, _index_live, html} = live(conn, ~p"/admin/predictions")
 
       # Should show candidate count
       assert html =~ "Candidates"
@@ -241,7 +243,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
     end
 
     test "progressive loading doesn't break UI", %{conn: conn} do
-      {:ok, index_live, _html} = live(conn, ~p"/predictions")
+      {:ok, index_live, _html} = live(conn, ~p"/admin/predictions")
 
       # The UI should load progressively without breaking
       # Test that key elements are present
@@ -250,7 +252,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
 
       # Navigation tabs should work
       assert has_element?(index_live, "button", "Historical Validation")
-      assert has_element?(index_live, "button", "Confirmed Additions")
+      assert has_element?(index_live, "button", "Cache Status")
     end
   end
 

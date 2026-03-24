@@ -51,3 +51,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Disable basic auth on admin routes so LiveView tests can hit them directly
+config :cinegraph, :admin_auth_disabled, true
