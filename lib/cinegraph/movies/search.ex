@@ -11,6 +11,7 @@ defmodule Cinegraph.Movies.Search do
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.Query.{Params, CustomFilters, CustomSorting}
+  alias Cinegraph.Metrics.ScoringService
 
   @doc """
   Search movies with validated parameters.
@@ -41,6 +42,7 @@ defmodule Cinegraph.Movies.Search do
         rating rating_asc rating_desc
         popularity popularity_asc popularity_desc
         discovery_score discovery_score_asc discovery_score_desc
+        score score_asc score_desc
         mob mob_asc mob_desc
         ivory_tower ivory_tower_asc ivory_tower_desc
         popular_opinion popular_opinion_asc popular_opinion_desc
@@ -49,10 +51,21 @@ defmodule Cinegraph.Movies.Search do
         people_quality people_quality_asc people_quality_desc
       )
 
+      # Resolve preset weights for score-cache sorts
+      preset_weights =
+        if needs_custom_sort and
+             validated_params.sort in ~w(score score_asc score_desc) and
+             not is_nil(validated_params.preset) do
+          case ScoringService.get_profile_by_slug(validated_params.preset) do
+            nil -> nil
+            profile -> profile.category_weights
+          end
+        end
+
       # Apply custom sorting if needed
       sorted_query =
         if needs_custom_sort do
-          CustomSorting.apply(filtered_query, validated_params.sort)
+          CustomSorting.apply(filtered_query, validated_params.sort, preset_weights)
         else
           filtered_query
         end

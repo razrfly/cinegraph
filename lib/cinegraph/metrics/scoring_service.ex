@@ -23,6 +23,16 @@ defmodule Cinegraph.Metrics.ScoringService do
   end
 
   @doc """
+  Gets a weight profile by URL slug (e.g. "critics_choice" → "Critics Choice").
+  """
+  def get_profile_by_slug(slug) when is_binary(slug) do
+    slug
+    |> String.split("_")
+    |> Enum.map_join(" ", &String.capitalize/1)
+    |> get_profile()
+  end
+
+  @doc """
   Gets all active weight profiles from the database.
   """
   def get_all_profiles do
@@ -61,8 +71,8 @@ defmodule Cinegraph.Metrics.ScoringService do
       name: "Fallback",
       description: "Emergency fallback profile",
       category_weights: %{
-        "mob" => 0.15,
-        "ivory_tower" => 0.15,
+        "mob" => 0.10,
+        "ivory_tower" => 0.10,
         "industry_recognition" => 0.20,
         "cultural_impact" => 0.20,
         "people_quality" => 0.20,

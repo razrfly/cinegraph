@@ -49,10 +49,11 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   # it has a legacy shim that splits `popular_opinion` 50/50 → mob + ivory_tower.
 
   @default_weights %{
-    mob: 0.25,
-    ivory_tower: 0.25,
-    industry_recognition: 0.25,
-    people_quality: 0.25
+    mob: 0.20,
+    ivory_tower: 0.20,
+    industry_recognition: 0.20,
+    cultural_impact: 0.20,
+    people_quality: 0.20
   }
 
   @doc """

@@ -61,6 +61,10 @@ defmodule Cinegraph.Movies.Query.Params do
     field :industry_recognition_min, :float
     field :cultural_impact_min, :float
     field :people_quality_min, :float
+
+    # Preset scoring
+    field :preset, :string
+    field :disparity, :string
   end
 
   @valid_sorts ~w(
@@ -70,6 +74,7 @@ defmodule Cinegraph.Movies.Query.Params do
     rating rating_asc rating_desc
     popularity popularity_asc popularity_desc
     discovery_score discovery_score_asc discovery_score_desc
+    score score_asc score_desc
     mob mob_asc mob_desc
     ivory_tower ivory_tower_asc ivory_tower_desc
     popular_opinion popular_opinion_asc popular_opinion_desc
@@ -117,7 +122,9 @@ defmodule Cinegraph.Movies.Query.Params do
       :popular_opinion_min,
       :industry_recognition_min,
       :cultural_impact_min,
-      :people_quality_min
+      :people_quality_min,
+      :preset,
+      :disparity
     ])
     |> validate_inclusion(:sort, @valid_sorts)
     |> validate_inclusion(:rating_preset, @valid_rating_presets, allow_nil: true)
@@ -246,7 +253,7 @@ defmodule Cinegraph.Movies.Query.Params do
   end
 
   defp normalize_blank_enums(params) do
-    enum_fields = ~w(rating_preset discovery_preset award_preset award_status people_role search)
+    enum_fields = ~w(rating_preset discovery_preset award_preset award_status people_role search preset disparity)
 
     Enum.reduce(enum_fields, params, fn f, acc ->
       case Map.get(acc, f) do
