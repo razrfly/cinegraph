@@ -154,7 +154,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     metrics = Metrics.get_movie_aggregates(id)
 
     # Preload score cache first — skip live calculation when cache is warm
-    movie = Repo.preload(movie, :score_cache)
+    movie = Repo.replica().preload(movie, :score_cache)
 
     {display_scores, disparity_data} =
       if movie.score_cache do

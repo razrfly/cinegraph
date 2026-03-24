@@ -56,7 +56,6 @@ defmodule Cinegraph.Movies.MovieScoreCache do
       :financial_performance_score,
       :overall_score,
       :score_confidence,
-      :unpredictability_score,
       :calculated_at,
       :calculation_version
     ])
