@@ -87,13 +87,13 @@ defmodule Cinegraph.Imports.ImportStats do
         [] -> %{movies_per_minute: 0.0, last_movie_count: 0, last_check_time: current_time}
       end
 
-    # Calculate rate
+    # Calculate rate — clamp to 0 since reltuples estimates can decrease
     time_diff = DateTime.diff(current_time, prev_stats.last_check_time, :second)
-    movies_diff = current_movie_count - prev_stats.last_movie_count
+    movies_diff = max(0, current_movie_count - prev_stats.last_movie_count)
 
     movies_per_minute =
       if time_diff > 0 do
-        Float.round(movies_diff / time_diff * 60, 1)
+        max(0.0, Float.round(movies_diff / time_diff * 60, 1))
       else
         prev_stats.movies_per_minute
       end
@@ -112,12 +112,18 @@ defmodule Cinegraph.Imports.ImportStats do
 
   # Use pg_class statistics estimate instead of a full sequential count.
   # With 895K+ rows, COUNT(*) takes 15s+ and times out the connection pool.
+  # Join pg_namespace to avoid ambiguous matches if multiple schemas have 'movies'.
   defp fast_movie_count do
     case Cinegraph.Repo.query(
-           "SELECT reltuples::bigint FROM pg_class WHERE relname = 'movies'",
+           """
+           SELECT c.reltuples::bigint
+           FROM pg_class c
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE c.relname = 'movies' AND n.nspname = 'public'
+           """,
            []
          ) do
-      {:ok, %{rows: [[count]]}} -> max(count, 0)
+      {:ok, %{rows: [[count] | _]}} -> max(count, 0)
       _ -> 0
     end
   end

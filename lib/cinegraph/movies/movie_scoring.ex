@@ -85,16 +85,28 @@ defmodule Cinegraph.Movies.MovieScoring do
           %{wins: 0, nominations: 0}
       end
 
-    # Get average person quality — deduplicated top-10 by score
+    # Get average person quality — role-weighted, deduplicated top-10
     person_query = """
-    SELECT AVG(max_score) as avg_quality
+    SELECT SUM(max_score * role_weight) / NULLIF(SUM(role_weight), 0) as avg_quality
     FROM (
-      SELECT mc.person_id, MAX(pm.score) as max_score
+      SELECT
+        mc.person_id,
+        MAX(pm.score) as max_score,
+        MAX(CASE mc.department
+          WHEN 'Directing'  THEN 3.0
+          WHEN 'Writing'    THEN 1.5
+          WHEN 'Production' THEN 1.0
+          ELSE
+            CASE WHEN mc.cast_order <= 3  THEN 2.0
+                 WHEN mc.cast_order <= 10 THEN 1.5
+                 ELSE 1.0
+            END
+        END) as role_weight
       FROM movie_credits mc
       JOIN person_metrics pm ON pm.person_id = mc.person_id
       WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
       GROUP BY mc.person_id
-      ORDER BY max_score DESC
+      ORDER BY max_score * role_weight DESC
       LIMIT 10
     ) top_talent
     """
@@ -314,20 +326,39 @@ defmodule Cinegraph.Movies.MovieScoring do
     - avg_top10: the average quality score of the top-10 unique people (0–100 scale)
     - unique_people: total unique people with a quality score
     - total_credits: total credit rows for this movie
-    - top_people: list of {name, job, score} for the top 10
+    - top_people: list of {name, job, score, role_weight} for the top 10 unique people
 
   Usage:
     iex> Cinegraph.Movies.MovieScoring.explain_people_quality(123)
   """
   def explain_people_quality(movie_id) do
     top_query = """
-    SELECT p.name, mc.job, MAX(pm.score) as max_score
+    SELECT MAX(p.name) as name, MAX(mc.job) as job, MAX(pm.score) as max_score,
+      MAX(CASE mc.department
+        WHEN 'Directing'  THEN 3.0
+        WHEN 'Writing'    THEN 1.5
+        WHEN 'Production' THEN 1.0
+        ELSE
+          CASE WHEN mc.cast_order <= 3  THEN 2.0
+               WHEN mc.cast_order <= 10 THEN 1.5
+               ELSE 1.0
+          END
+      END) as role_weight
     FROM movie_credits mc
     JOIN person_metrics pm ON pm.person_id = mc.person_id
     JOIN people p ON p.id = mc.person_id
     WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
-    GROUP BY p.name, mc.job, mc.person_id
-    ORDER BY max_score DESC
+    GROUP BY mc.person_id
+    ORDER BY MAX(pm.score) * MAX(CASE mc.department
+      WHEN 'Directing'  THEN 3.0
+      WHEN 'Writing'    THEN 1.5
+      WHEN 'Production' THEN 1.0
+      ELSE
+        CASE WHEN mc.cast_order <= 3  THEN 2.0
+             WHEN mc.cast_order <= 10 THEN 1.5
+             ELSE 1.0
+        END
+      END) DESC
     LIMIT 10
     """
 
@@ -342,8 +373,8 @@ defmodule Cinegraph.Movies.MovieScoring do
     top_people =
       case Repo.query(top_query, [movie_id]) do
         {:ok, %{rows: rows}} ->
-          Enum.map(rows, fn [name, job, score] ->
-            {name, job, normalize_number(score)}
+          Enum.map(rows, fn [name, job, score, weight] ->
+            {name, job, normalize_number(score), normalize_number(weight)}
           end)
 
         _ ->
@@ -360,8 +391,14 @@ defmodule Cinegraph.Movies.MovieScoring do
       if top_people == [] do
         0.0
       else
-        scores = Enum.map(top_people, fn {_, _, score} -> score || 0.0 end)
-        Enum.sum(scores) / length(scores)
+        {weighted_sum, weight_sum} =
+          Enum.reduce(top_people, {0.0, 0.0}, fn {_, _, score, weight}, {ws, wt} ->
+            s = score || 0.0
+            w = weight || 1.0
+            {ws + s * w, wt + w}
+          end)
+
+        if weight_sum > 0, do: weighted_sum / weight_sum, else: 0.0
       end
 
     %{

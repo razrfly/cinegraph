@@ -368,7 +368,7 @@ defmodule Cinegraph.Metrics.ScoringService do
   end
 
   defp join_person_quality_data(query) do
-    # Layer 1: deduplicate — max score per (movie, person)
+    # Layer 1: dedup — max score + role weight per (movie, person)
     deduped =
       from(mc in "movie_credits",
         join: pm in "person_metrics",
@@ -377,33 +377,50 @@ defmodule Cinegraph.Metrics.ScoringService do
         select: %{
           movie_id: mc.movie_id,
           person_id: mc.person_id,
-          max_score: max(pm.score)
+          max_score: max(pm.score),
+          role_weight:
+            max(
+              fragment(
+                "CASE ? WHEN 'Directing' THEN 3.0 WHEN 'Writing' THEN 1.5 WHEN 'Production' THEN 1.0 ELSE CASE WHEN ? <= 3 THEN 2.0 WHEN ? <= 10 THEN 1.5 ELSE 1.0 END END",
+                mc.department,
+                mc.cast_order,
+                mc.cast_order
+              )
+            )
         }
       )
 
-    # Layer 2: rank within each movie (best person = rank 1)
+    # Layer 2: rank by weighted score within each movie
     ranked =
       from(d in subquery(deduped),
         select: %{
           movie_id: d.movie_id,
           max_score: d.max_score,
+          role_weight: d.role_weight,
           rn:
             fragment(
-              "ROW_NUMBER() OVER (PARTITION BY ? ORDER BY ? DESC)",
+              "ROW_NUMBER() OVER (PARTITION BY ? ORDER BY ? * ? DESC)",
               d.movie_id,
-              d.max_score
+              d.max_score,
+              d.role_weight
             )
         }
       )
 
-    # Layer 3: take top-10 per movie, aggregate
+    # Layer 3: top-10, weighted average
     aggregated =
       from(r in subquery(ranked),
         where: r.rn <= 10,
         group_by: r.movie_id,
         select: %{
           movie_id: r.movie_id,
-          avg_person_quality: avg(r.max_score),
+          avg_person_quality:
+            fragment(
+              "SUM(? * ?) / NULLIF(SUM(?), 0)",
+              r.max_score,
+              r.role_weight,
+              r.role_weight
+            ),
           total_quality_people: count(r.movie_id)
         }
       )
