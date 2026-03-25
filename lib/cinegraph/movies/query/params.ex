@@ -58,8 +58,8 @@ defmodule Cinegraph.Movies.Query.Params do
 
     # Metric thresholds (for advanced users)
     field :festival_recognition_min, :float
-    field :cultural_impact_min, :float
-    field :people_quality_min, :float
+    field :time_machine_min, :float
+    field :auteurs_min, :float
 
     # Preset scoring
     field :preset, :string
@@ -75,10 +75,10 @@ defmodule Cinegraph.Movies.Query.Params do
     discovery_score discovery_score_asc discovery_score_desc
     score score_asc score_desc
     mob mob_asc mob_desc
-    ivory_tower ivory_tower_asc ivory_tower_desc
+    critics critics_asc critics_desc
     festival_recognition festival_recognition_asc festival_recognition_desc
-    cultural_impact cultural_impact_asc cultural_impact_desc
-    people_quality people_quality_asc people_quality_desc
+    time_machine time_machine_asc time_machine_desc
+    auteurs auteurs_asc auteurs_desc
     cinegraph_editorial cinegraph_editorial_asc cinegraph_editorial_desc
     critics_choice critics_choice_asc critics_choice_desc
     crowd_pleaser crowd_pleaser_asc crowd_pleaser_desc
@@ -123,8 +123,8 @@ defmodule Cinegraph.Movies.Query.Params do
       :people_ids,
       :people_role,
       :festival_recognition_min,
-      :cultural_impact_min,
-      :people_quality_min,
+      :time_machine_min,
+      :auteurs_min,
       :preset,
       :disparity
     ])

@@ -364,8 +364,13 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
           distinct: true
       )
 
-    jobs = Enum.map(movie_ids, &MovieScoreCacheWorker.new(%{"movie_id" => &1}))
-    Oban.insert_all(jobs)
+    movie_ids
+    |> Stream.chunk_every(500)
+    |> Enum.each(fn chunk ->
+      jobs = Enum.map(chunk, &MovieScoreCacheWorker.new(%{"movie_id" => &1}))
+      Oban.insert_all(jobs)
+    end)
+
     Logger.info("Enqueued movie cache refresh for #{length(movie_ids)} movies")
   end
 

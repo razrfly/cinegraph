@@ -4,7 +4,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
   The 6 criteria with default weights:
   1. The Mob (17.5%) - Audience ratings: IMDb, TMDb, RT Audience Score
-  2. Ivory Tower (17.5%) - Critic ratings: Metacritic, RT Tomatometer
+  2. The Critics (17.5%) - Critic ratings: Metacritic, RT Tomatometer
   3. Festival Recognition (30%)
   4. Cultural Impact (20%)
   5. Technical Innovation (10%)
@@ -13,7 +13,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   NOTE: This module uses its own criterion vocabulary (festival_recognition,
   technical_innovation, auteur_recognition). The production scoring system
   (`Cinegraph.Metrics.ScoringService`) uses the same `festival_recognition` key
-  as well as `people_quality` and `financial_performance`. These are two
+  as well as `auteurs` and `box_office`. These are two
   independent scoring subsystems: this one drives the predictions algorithm for
   future 1001 Movies additions; the other drives the discovery and disparity UIs.
   """
@@ -25,7 +25,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
   @default_weights %{
     mob: 0.175,
-    ivory_tower: 0.175,
+    critics: 0.175,
     festival_recognition: 0.30,
     cultural_impact: 0.20,
     technical_innovation: 0.10,
@@ -36,16 +36,16 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     %{
       name: "default",
       description:
-        "Balanced — festival 30%, mob/ivory 17.5% each, cultural 20%, technical 10%, auteur 5%",
+        "Balanced — festival 30%, mob/critics 17.5% each, cultural 20%, technical 10%, auteur 5%",
       weights: @default_weights
     },
     %{
       name: "festival-heavy",
       description:
-        "Festival-centric — festival 50%, mob/ivory 10% each, cultural 15%, technical 10%, auteur 5%",
+        "Festival-centric — festival 50%, mob/critics 10% each, cultural 15%, technical 10%, auteur 5%",
       weights: %{
         mob: 0.10,
-        ivory_tower: 0.10,
+        critics: 0.10,
         festival_recognition: 0.50,
         cultural_impact: 0.15,
         technical_innovation: 0.10,
@@ -55,10 +55,10 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     %{
       name: "audience-first",
       description:
-        "Audience-driven — mob 35%, festival 20%, cultural 25%, ivory 10%, technical/auteur 5% each",
+        "Audience-driven — mob 35%, festival 20%, cultural 25%, critics 10%, technical/auteur 5% each",
       weights: %{
         mob: 0.35,
-        ivory_tower: 0.10,
+        critics: 0.10,
         festival_recognition: 0.20,
         cultural_impact: 0.25,
         technical_innovation: 0.05,
@@ -68,10 +68,10 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     %{
       name: "critics-choice",
       description:
-        "Critic-weighted — ivory 35%, festival 30%, cultural 15%, mob 10%, technical/auteur 5% each",
+        "Critic-weighted — critics 35%, festival 30%, cultural 15%, mob 10%, technical/auteur 5% each",
       weights: %{
         mob: 0.10,
-        ivory_tower: 0.35,
+        critics: 0.35,
         festival_recognition: 0.30,
         cultural_impact: 0.15,
         technical_innovation: 0.05,
@@ -81,10 +81,10 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     %{
       name: "auteur",
       description:
-        "Director-focused — auteur 25%, festival 25%, mob/ivory/cultural 15% each, technical 5%",
+        "Director-focused — auteur 25%, festival 25%, mob/critics/cultural 15% each, technical 5%",
       weights: %{
         mob: 0.15,
-        ivory_tower: 0.15,
+        critics: 0.15,
         festival_recognition: 0.25,
         cultural_impact: 0.15,
         technical_innovation: 0.05,
@@ -95,7 +95,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
   @doc """
   Get the default weights for the 6 criteria
-  (mob, ivory_tower, festival_recognition, cultural_impact, technical_innovation, auteur_recognition).
+  (mob, critics, festival_recognition, cultural_impact, technical_innovation, auteur_recognition).
   """
   def get_default_weights, do: @default_weights
 
@@ -163,7 +163,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   def calculate_movie_score(movie, weights \\ @default_weights) do
     scores = %{
       mob: score_mob(movie) || 0.0,
-      ivory_tower: score_ivory_tower(movie) || 0.0,
+      critics: score_critics(movie) || 0.0,
       festival_recognition: score_festival_recognition(movie) || 0.0,
       cultural_impact: score_cultural_impact(movie) || 0.0,
       technical_innovation: score_technical_innovation(movie) || 0.0,
@@ -203,10 +203,10 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   end
 
   @doc """
-  Score based on ivory tower (critic ratings: Metacritic, RT Tomatometer).
+  Score based on critics (critic ratings: Metacritic, RT Tomatometer).
   Returns 0-100 score.
   """
-  def score_ivory_tower(movie) do
+  def score_critics(movie) do
     query =
       from em in "external_metrics",
         where: em.movie_id == ^movie.id,
@@ -215,7 +215,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
             (em.source == "rotten_tomatoes" and em.metric_type == "tomatometer"),
         select: [em.source, em.metric_type, em.value]
 
-    score_ivory_tower_from_metrics(Repo.all(query))
+    score_critics_from_metrics(Repo.all(query))
   end
 
   @doc """
@@ -643,7 +643,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Calculate individual scores, ensuring they're all 0-100 range
     scores = %{
       mob: min(score_mob_from_metrics(external_metrics) || 0.0, 100.0),
-      ivory_tower: min(score_ivory_tower_from_metrics(external_metrics) || 0.0, 100.0),
+      critics: min(score_critics_from_metrics(external_metrics) || 0.0, 100.0),
       festival_recognition:
         min(score_festival_recognition_from_batch(festival_nominations) || 0.0, 100.0),
       cultural_impact:
@@ -697,7 +697,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     end
   end
 
-  defp score_ivory_tower_from_metrics(metrics) do
+  defp score_critics_from_metrics(metrics) do
     normalized_scores =
       metrics
       |> Enum.filter(fn [source, metric_type, _value] ->

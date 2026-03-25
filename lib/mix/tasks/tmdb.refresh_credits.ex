@@ -9,10 +9,15 @@ defmodule Mix.Tasks.Tmdb.RefreshCredits do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} =
+    {opts, _, invalid} =
       OptionParser.parse(args,
         strict: [list: :string, dry_run: :boolean]
       )
+
+    if invalid != [] do
+      Mix.shell().error("Unknown options: #{Enum.map_join(invalid, ", ", &elem(&1, 0))}")
+      Mix.raise("Invalid options provided")
+    end
 
     list_key = opts[:list] || Mix.raise("--list <source_key> is required")
     dry_run = opts[:dry_run] || false
@@ -26,6 +31,11 @@ defmodule Mix.Tasks.Tmdb.RefreshCredits do
       Mix.shell().info("  Real run will trigger global DataRepairWorker (covers all movies)")
     else
       Mix.shell().info("#{count} films on '#{list_key}' missing director credits")
+
+      Mix.shell().info(
+        "WARNING: DataRepairWorker runs globally — it will process ALL movies, not just '#{list_key}'"
+      )
+
       Mix.shell().info("Triggering global missing_director_credits repair...")
 
       case %{"repair_type" => "missing_director_credits"}

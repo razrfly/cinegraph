@@ -75,11 +75,11 @@ defmodule CinegraphWeb.PredictionsLiveTest do
 
       # Check all criteria are present (labels from criterion_label/1)
       assert has_element?(index_live, "label", "The Mob")
-      assert has_element?(index_live, "label", "The Ivory Tower")
-      assert has_element?(index_live, "label", "Industry Recognition")
-      assert has_element?(index_live, "label", "Cultural Impact")
-      assert has_element?(index_live, "label", "People Quality")
-      assert has_element?(index_live, "label", "Financial Performance")
+      assert has_element?(index_live, "label", "The Critics")
+      assert has_element?(index_live, "label", "The Insiders")
+      assert has_element?(index_live, "label", "The Time Machine")
+      assert has_element?(index_live, "label", "The Auteurs")
+      assert has_element?(index_live, "label", "The Box Office")
     end
 
     test "can update weights", %{conn: conn} do
@@ -93,11 +93,11 @@ defmodule CinegraphWeb.PredictionsLiveTest do
       # Update weights using the 6-category system (must sum to 100)
       new_weights = %{
         "mob" => "20",
-        "ivory_tower" => "20",
+        "critics" => "20",
         "festival_recognition" => "20",
-        "cultural_impact" => "20",
-        "people_quality" => "10",
-        "financial_performance" => "10"
+        "time_machine" => "20",
+        "auteurs" => "10",
+        "box_office" => "10"
       }
 
       index_live
@@ -119,11 +119,11 @@ defmodule CinegraphWeb.PredictionsLiveTest do
       # Try weights that don't sum to 100 (total = 150%)
       invalid_weights = %{
         "mob" => "50",
-        "ivory_tower" => "50",
+        "critics" => "50",
         "festival_recognition" => "20",
-        "cultural_impact" => "20",
-        "people_quality" => "5",
-        "financial_performance" => "5"
+        "time_machine" => "20",
+        "auteurs" => "5",
+        "box_office" => "5"
       }
 
       index_live
@@ -214,11 +214,11 @@ defmodule CinegraphWeb.PredictionsLiveTest do
       # Submit form with valid 6-category weights summing to 100
       new_weights = %{
         "mob" => "20",
-        "ivory_tower" => "20",
+        "critics" => "20",
         "festival_recognition" => "20",
-        "cultural_impact" => "20",
-        "people_quality" => "10",
-        "financial_performance" => "10"
+        "time_machine" => "20",
+        "auteurs" => "10",
+        "box_office" => "10"
       }
 
       index_live

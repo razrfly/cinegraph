@@ -26,14 +26,19 @@ defmodule CinegraphWeb.Schema.MovieTypes do
   @desc "Cached 6-lens scores for a movie"
   object :lens_scores do
     field :mob, :float, description: "Audience score (IMDb, TMDb, RT Audience) — 0-10"
-    field :ivory_tower, :float, description: "Critics score (Metacritic, RT Tomatometer) — 0-10"
+    field :critics, :float, description: "Critics score (Metacritic, RT Tomatometer) — 0-10"
     field :festival_recognition, :float, description: "Festival & award recognition — 0-10"
-    field :cultural_impact, :float, description: "Canonical sources & cultural reach — 0-10"
-    field :people_quality, :float, description: "Cast & crew quality — 0-10"
-    field :financial_performance, :float, description: "Box office performance — 0-10"
+
+    field :industry_recognition, :float,
+      description: "Deprecated. Use festival_recognition instead.",
+      deprecate: "Use festival_recognition instead"
+
+    field :time_machine, :float, description: "Canonical sources & cultural reach — 0-10"
+    field :auteurs, :float, description: "Cast & crew quality — 0-10"
+    field :box_office, :float, description: "Box office performance — 0-10"
     field :overall, :float, description: "Weighted overall score — 0-10"
     field :confidence, :float, description: "Data confidence — 0-1"
-    field :disparity_score, :float, description: "Mob vs ivory_tower gap"
+    field :disparity_score, :float, description: "Mob vs critics gap"
 
     field :disparity_category, :string,
       description: "critics_darling | peoples_champion | perfect_harmony | polarizer"

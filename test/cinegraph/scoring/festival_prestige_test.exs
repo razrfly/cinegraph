@@ -85,6 +85,14 @@ defmodule Cinegraph.Scoring.FestivalPrestigeTest do
       # 50.0 win + 10 boost = 60, ceiling 100 → 60.0
       assert FestivalPrestige.score_nominations(nominations) == 60.0
     end
+
+    test "nil nom_score falls back to @tiers when db_win_score is provided" do
+      # db_win_score=50.0, db_nom_score=nil — nom should use @tiers default (80 for AMPAS), not nil
+      result = FestivalPrestige.score_nomination("AMPAS", "Best Picture", false, 50.0, nil)
+      assert is_number(result)
+      # Falls back to AMPAS nom tier (80) + 10 boost = 90
+      assert result == 90.0
+    end
   end
 
   describe "score_nominations/2 — algorithm regression" do

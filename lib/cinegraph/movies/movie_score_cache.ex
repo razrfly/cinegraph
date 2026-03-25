@@ -8,11 +8,11 @@ defmodule Cinegraph.Movies.MovieScoreCache do
 
     # 6 lens scores (0–10)
     field :mob_score, :float
-    field :ivory_tower_score, :float
+    field :critics_score, :float
     field :festival_recognition_score, :float
-    field :cultural_impact_score, :float
-    field :people_quality_score, :float
-    field :financial_performance_score, :float
+    field :time_machine_score, :float
+    field :auteurs_score, :float
+    field :box_office_score, :float
 
     # Derived
     field :overall_score, :float
@@ -33,11 +33,11 @@ defmodule Cinegraph.Movies.MovieScoreCache do
     |> cast(attrs, [
       :movie_id,
       :mob_score,
-      :ivory_tower_score,
+      :critics_score,
       :festival_recognition_score,
-      :cultural_impact_score,
-      :people_quality_score,
-      :financial_performance_score,
+      :time_machine_score,
+      :auteurs_score,
+      :box_office_score,
       :overall_score,
       :score_confidence,
       :disparity_score,
@@ -49,11 +49,11 @@ defmodule Cinegraph.Movies.MovieScoreCache do
     |> validate_required([
       :movie_id,
       :mob_score,
-      :ivory_tower_score,
+      :critics_score,
       :festival_recognition_score,
-      :cultural_impact_score,
-      :people_quality_score,
-      :financial_performance_score,
+      :time_machine_score,
+      :auteurs_score,
+      :box_office_score,
       :overall_score,
       :score_confidence,
       :calculated_at,

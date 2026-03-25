@@ -612,7 +612,8 @@ defmodule Cinegraph.Cultural do
   """
   def import_all_oscar_years(options \\ []) do
     # Oscars.org has ceremony pages from 1970 onwards
-    import_oscar_years(1970..2024, options)
+    current_year = Date.utc_today().year
+    import_oscar_years(1970..current_year, options)
   end
 
   defp fetch_or_create_ceremony(year) do

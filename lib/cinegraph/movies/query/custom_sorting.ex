@@ -42,7 +42,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in ~w(mob ivory_tower festival_recognition cultural_impact people_quality financial_performance) ->
+      field in ~w(mob critics festival_recognition time_machine auteurs box_office) ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->
@@ -199,7 +199,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
     ])
   end
 
-  defp apply_discovery_metric_sort(query, "ivory_tower", direction) do
+  defp apply_discovery_metric_sort(query, "critics", direction) do
     order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
     order_by(query, [m], [
@@ -252,7 +252,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
     ])
   end
 
-  defp apply_discovery_metric_sort(query, "cultural_impact", direction) do
+  defp apply_discovery_metric_sort(query, "time_machine", direction) do
     order_func = if direction == :desc, do: :desc, else: :asc
 
     order_by(query, [m], [
@@ -289,7 +289,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
     ])
   end
 
-  defp apply_discovery_metric_sort(query, "people_quality", direction) do
+  defp apply_discovery_metric_sort(query, "auteurs", direction) do
     order_func = if direction == :desc, do: :desc, else: :asc
 
     order_by(query, [m], [
@@ -308,12 +308,12 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
     ])
   end
 
-  defp apply_discovery_metric_sort(query, "financial_performance", direction) do
+  defp apply_discovery_metric_sort(query, "box_office", direction) do
     order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
     query
     |> maybe_join_score_cache()
-    |> order_by([score_cache: sc], [{^order_func, sc.financial_performance_score}])
+    |> order_by([score_cache: sc], [{^order_func, sc.box_office_score}])
   end
 
   defp apply_discovery_metric_sort(query, _, _), do: query
@@ -343,11 +343,11 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
   # Sorts by a weighted combination of the individual lens scores from the cache
   defp apply_score_cache_sort(query, direction, weights) when is_map(weights) do
     mob = weights["mob"] || 0.0
-    ivory = weights["ivory_tower"] || 0.0
+    critics = weights["critics"] || 0.0
     industry = weights["festival_recognition"] || 0.0
-    cultural = weights["cultural_impact"] || 0.0
-    people = weights["people_quality"] || 0.0
-    financial = weights["financial_performance"] || 0.0
+    time_machine = weights["time_machine"] || 0.0
+    auteurs = weights["auteurs"] || 0.0
+    box_office = weights["box_office"] || 0.0
 
     order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
@@ -361,16 +361,16 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
             sc,
             ^mob,
             sc.mob_score,
-            ^ivory,
-            sc.ivory_tower_score,
+            ^critics,
+            sc.critics_score,
             ^industry,
             sc.festival_recognition_score,
-            ^cultural,
-            sc.cultural_impact_score,
-            ^people,
-            sc.people_quality_score,
-            ^financial,
-            sc.financial_performance_score
+            ^time_machine,
+            sc.time_machine_score,
+            ^auteurs,
+            sc.auteurs_score,
+            ^box_office,
+            sc.box_office_score
           )
       })
       |> order_by([score_cache: sc], [
@@ -380,16 +380,16 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
            sc,
            ^mob,
            sc.mob_score,
-           ^ivory,
-           sc.ivory_tower_score,
+           ^critics,
+           sc.critics_score,
            ^industry,
            sc.festival_recognition_score,
-           ^cultural,
-           sc.cultural_impact_score,
-           ^people,
-           sc.people_quality_score,
-           ^financial,
-           sc.financial_performance_score
+           ^time_machine,
+           sc.time_machine_score,
+           ^auteurs,
+           sc.auteurs_score,
+           ^box_office,
+           sc.box_office_score
          )}
       ])
     else
@@ -402,16 +402,16 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
             sc,
             ^mob,
             sc.mob_score,
-            ^ivory,
-            sc.ivory_tower_score,
+            ^critics,
+            sc.critics_score,
             ^industry,
             sc.festival_recognition_score,
-            ^cultural,
-            sc.cultural_impact_score,
-            ^people,
-            sc.people_quality_score,
-            ^financial,
-            sc.financial_performance_score
+            ^time_machine,
+            sc.time_machine_score,
+            ^auteurs,
+            sc.auteurs_score,
+            ^box_office,
+            sc.box_office_score
           )
       })
       |> order_by([score_cache: sc], [
@@ -421,16 +421,16 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
            sc,
            ^mob,
            sc.mob_score,
-           ^ivory,
-           sc.ivory_tower_score,
+           ^critics,
+           sc.critics_score,
            ^industry,
            sc.festival_recognition_score,
-           ^cultural,
-           sc.cultural_impact_score,
-           ^people,
-           sc.people_quality_score,
-           ^financial,
-           sc.financial_performance_score
+           ^time_machine,
+           sc.time_machine_score,
+           ^auteurs,
+           sc.auteurs_score,
+           ^box_office,
+           sc.box_office_score
          )}
       ])
     end

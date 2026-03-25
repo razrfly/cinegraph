@@ -53,11 +53,11 @@ defmodule Cinegraph.Movies.Search do
           discovery_score discovery_score_asc discovery_score_desc
           score score_asc score_desc
           mob mob_asc mob_desc
-          ivory_tower ivory_tower_asc ivory_tower_desc
+          critics critics_asc critics_desc
           festival_recognition festival_recognition_asc festival_recognition_desc
-          cultural_impact cultural_impact_asc cultural_impact_desc
-          people_quality people_quality_asc people_quality_desc
-          financial_performance financial_performance_asc financial_performance_desc
+          time_machine time_machine_asc time_machine_desc
+          auteurs auteurs_asc auteurs_desc
+          box_office box_office_asc box_office_desc
         ) or validated_params.sort in @preset_sort_variants
 
       # Resolve preset weights for score-cache sorts
@@ -204,7 +204,7 @@ defmodule Cinegraph.Movies.Search do
           sort
       end
 
-    base in ~w(discovery_score mob ivory_tower festival_recognition cultural_impact people_quality financial_performance)
+    base in ~w(discovery_score mob critics festival_recognition time_machine auteurs box_office)
   end
 
   defp list_genres do
@@ -267,15 +267,11 @@ defmodule Cinegraph.Movies.Search do
       %{id: "rating", value: "rating", label: "Rating (Highest)"},
       %{id: "popularity", value: "popularity", label: "Popularity"},
       %{id: "mob", value: "mob", label: "The Mob (Audience)"},
-      %{id: "ivory_tower", value: "ivory_tower", label: "The Ivory Tower (Critics)"},
+      %{id: "critics", value: "critics", label: "The Critics"},
       %{id: "festival_recognition", value: "festival_recognition", label: "Industry Recognition"},
-      %{id: "cultural_impact", value: "cultural_impact", label: "Cultural Impact"},
-      %{id: "people_quality", value: "people_quality", label: "People Quality"},
-      %{
-        id: "financial_performance",
-        value: "financial_performance",
-        label: "Financial Performance"
-      }
+      %{id: "time_machine", value: "time_machine", label: "The Time Machine"},
+      %{id: "auteurs", value: "auteurs", label: "The Auteurs"},
+      %{id: "box_office", value: "box_office", label: "The Box Office"}
     ]
   end
 

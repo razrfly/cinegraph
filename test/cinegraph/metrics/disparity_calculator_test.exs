@@ -12,18 +12,18 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
   end
 
   describe "classify_disparity/3" do
-    test "critics_darling when ivory_tower high and mob low" do
-      # ivory > 7.5, mob < 5.5, disparity > 2.0
+    test "critics_darling when critics high and mob low" do
+      # critics > 7.5, mob < 5.5, disparity > 2.0
       assert DisparityCalculator.classify_disparity(4.0, 8.5, 4.5) == "critics_darling"
     end
 
-    test "peoples_champion when mob high and ivory_tower low" do
-      # mob > 7.5, ivory < 5.5, disparity > 2.0
+    test "peoples_champion when mob high and critics low" do
+      # mob > 7.5, critics < 5.5, disparity > 2.0
       assert DisparityCalculator.classify_disparity(8.5, 4.0, 4.5) == "peoples_champion"
     end
 
     test "perfect_harmony when both high and disparity tiny" do
-      # mob > 7.5, ivory > 7.5, disparity < 0.5
+      # mob > 7.5, critics > 7.5, disparity < 0.5
       assert DisparityCalculator.classify_disparity(8.0, 8.2, 0.2) == "perfect_harmony"
     end
 
@@ -41,11 +41,11 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
     test "all equal scores returns 0.0" do
       components = %{
         mob: 5.0,
-        ivory_tower: 5.0,
+        critics: 5.0,
         festival_recognition: 5.0,
-        cultural_impact: 5.0,
-        people_quality: 5.0,
-        financial_performance: 5.0
+        time_machine: 5.0,
+        auteurs: 5.0,
+        box_office: 5.0
       }
 
       assert DisparityCalculator.calculate_unpredictability(components) == 0.0
@@ -54,11 +54,11 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
     test "alternating 0/10 returns ~5.0 stddev" do
       components = %{
         mob: 0.0,
-        ivory_tower: 10.0,
+        critics: 10.0,
         festival_recognition: 0.0,
-        cultural_impact: 10.0,
-        people_quality: 0.0,
-        financial_performance: 10.0
+        time_machine: 10.0,
+        auteurs: 0.0,
+        box_office: 10.0
       }
 
       result = DisparityCalculator.calculate_unpredictability(components)
@@ -71,11 +71,11 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
       scores = %{
         components: %{
           mob: 0.0,
-          ivory_tower: 0.0,
+          critics: 0.0,
           festival_recognition: 0.0,
-          cultural_impact: 0.0,
-          people_quality: 0.0,
-          financial_performance: 0.0
+          time_machine: 0.0,
+          auteurs: 0.0,
+          box_office: 0.0
         }
       }
 
@@ -89,11 +89,11 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
       scores = %{
         components: %{
           mob: 4.0,
-          ivory_tower: 8.5,
+          critics: 8.5,
           festival_recognition: 7.0,
-          cultural_impact: 6.0,
-          people_quality: 5.0,
-          financial_performance: 3.0
+          time_machine: 6.0,
+          auteurs: 5.0,
+          box_office: 3.0
         }
       }
 

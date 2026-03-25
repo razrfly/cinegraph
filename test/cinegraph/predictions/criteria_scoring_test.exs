@@ -11,7 +11,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
 
       assert %{
                mob: mob,
-               ivory_tower: ivory_tower,
+               critics: critics,
                festival_recognition: festival_recognition,
                cultural_impact: cultural_impact,
                technical_innovation: technical_innovation,
@@ -20,7 +20,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
 
       # All weights should be numbers between 0 and 1
       assert is_number(mob) and mob >= 0 and mob <= 1
-      assert is_number(ivory_tower) and ivory_tower >= 0 and ivory_tower <= 1
+      assert is_number(critics) and critics >= 0 and critics <= 1
 
       assert is_number(festival_recognition) and festival_recognition >= 0 and
                festival_recognition <= 1
@@ -50,7 +50,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
 
     test "all named profiles have the 6 required criteria keys" do
       required_keys =
-        ~w(mob ivory_tower festival_recognition cultural_impact technical_innovation auteur_recognition)a
+        ~w(mob critics festival_recognition cultural_impact technical_innovation auteur_recognition)a
 
       for profile <- CriteriaScoring.get_named_profiles() do
         for key <- required_keys do
@@ -102,16 +102,16 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
         assert likelihood <= 100.0
 
         # CriteriaScoring uses its own 6-criterion predictions vocabulary
-        # (mob, ivory_tower, festival_recognition, cultural_impact,
+        # (mob, critics, festival_recognition, cultural_impact,
         #  technical_innovation, auteur_recognition) — separate from the
         # production ScoringConfiguration which uses festival_recognition,
-        # people_quality, financial_performance.
+        # auteurs, box_office.
         assert map_size(criteria_scores) == 6
 
         expected_criteria =
           MapSet.new([
             :mob,
-            :ivory_tower,
+            :critics,
             :festival_recognition,
             :cultural_impact,
             :technical_innovation,
@@ -151,7 +151,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
       if movie do
         custom_weights = %{
           mob: 0.20,
-          ivory_tower: 0.20,
+          critics: 0.20,
           festival_recognition: 0.30,
           cultural_impact: 0.20,
           technical_innovation: 0.05,
@@ -246,11 +246,11 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
       end
     end
 
-    test "score_ivory_tower/1 returns valid scores" do
+    test "score_critics/1 returns valid scores" do
       movie = Repo.all(Movie) |> List.first()
 
       if movie do
-        score = CriteriaScoring.score_ivory_tower(movie)
+        score = CriteriaScoring.score_critics(movie)
         assert is_number(score)
         assert score >= 0.0
         assert score <= 100.0
@@ -329,7 +329,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
 
       # Individual functions should handle nil gracefully
       assert is_number(CriteriaScoring.score_mob(movie))
-      assert is_number(CriteriaScoring.score_ivory_tower(movie))
+      assert is_number(CriteriaScoring.score_critics(movie))
       assert is_number(CriteriaScoring.score_festival_recognition(movie))
       assert is_number(CriteriaScoring.score_cultural_impact(movie))
       assert is_number(CriteriaScoring.score_technical_innovation(movie))

@@ -294,10 +294,10 @@ defmodule CinegraphWeb.LiveViewHelpers do
   Returns the {emoji, display_name} tuple for a given lens atom.
   """
   def lens_display_name(:mob), do: {"🔥", "The Mob"}
-  def lens_display_name(:ivory_tower), do: {"🎭", "The Ivory Tower"}
-  def lens_display_name(:festival_recognition), do: {"🏆", "The Inner Circle"}
-  def lens_display_name(:cultural_impact), do: {"⏳", "The Time Machine"}
-  def lens_display_name(:people_quality), do: {"🎬", "The Auteurs"}
-  def lens_display_name(:financial_performance), do: {"💵", "The Box Office"}
+  def lens_display_name(:critics), do: {"🎭", "The Critics"}
+  def lens_display_name(:festival_recognition), do: {"🏆", "The Insiders"}
+  def lens_display_name(:time_machine), do: {"⏳", "The Time Machine"}
+  def lens_display_name(:auteurs), do: {"🎬", "The Auteurs"}
+  def lens_display_name(:box_office), do: {"💵", "The Box Office"}
   def lens_display_name(_), do: {"", "Unknown"}
 end

@@ -5,7 +5,7 @@ defmodule Cinegraph.Movies.MovieScoring do
   """
 
   alias Cinegraph.Repo
-  alias Cinegraph.Scoring.FestivalPrestige
+  alias Cinegraph.Scoring.{FestivalPrestige, Lenses}
   alias Cinegraph.Metrics.ScoringService
 
   # Helper to normalize DB numerics to floats
@@ -21,11 +21,11 @@ defmodule Cinegraph.Movies.MovieScoring do
 
   Uses the standard 6-category scoring system:
   - The Mob (audience ratings from IMDb, TMDb)
-  - The Ivory Tower (critics scores from Metacritic and RT Tomatometer)
+  - The Critics (critics scores from Metacritic and RT Tomatometer)
   - Festival Recognition (festival wins and nominations)
-  - Cultural Impact (canonical sources and popularity)
-  - People Quality (quality scores of cast and crew)
-  - Financial Performance (revenue and budget data)
+  - The Time Machine (canonical sources and popularity)
+  - The Auteurs (quality scores of cast and crew)
+  - The Box Office (revenue and budget data)
   """
   def calculate_movie_scores(movie) do
     # Get external metrics for this movie
@@ -126,35 +126,35 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     # Calculate component scores (0-10 scale)
     mob = calculate_mob_score(metrics)
-    ivory_tower = calculate_ivory_tower_score(metrics)
+    critics = calculate_critics_score(metrics)
     festival_recognition = calculate_festival_recognition(festival_data)
-    cultural_impact = calculate_cultural_impact(movie, metrics)
+    time_machine = calculate_time_machine_score(movie, metrics)
     # Convert from 0-100 to 0-10
-    people_quality_score = person_quality / 10.0
-    # Calculate financial performance score
-    financial_performance = calculate_financial_performance(metrics)
+    auteurs_score = person_quality / 10.0
+    # Calculate box office score
+    box_office = calculate_box_office_score(metrics)
 
     # Calculate overall score using Cinegraph Editorial weights
-    weights = get_editorial_weights()
+    weights = get_editorial_weights(ScoringService.get_profile("Cinegraph Editorial"))
 
     overall =
       mob * weights.mob +
-        ivory_tower * weights.ivory_tower +
+        critics * weights.critics +
         festival_recognition * weights.festival_recognition +
-        cultural_impact * weights.cultural_impact +
-        people_quality_score * weights.people_quality +
-        financial_performance * weights.financial_performance
+        time_machine * weights.time_machine +
+        auteurs_score * weights.auteurs +
+        box_office * weights.box_office
 
     %{
       overall_score: Float.round(overall, 1),
       score_confidence: calculate_score_confidence(metrics),
       components: %{
         mob: Float.round(mob, 1),
-        ivory_tower: Float.round(ivory_tower, 1),
+        critics: Float.round(critics, 1),
         festival_recognition: Float.round(festival_recognition, 1),
-        cultural_impact: Float.round(cultural_impact, 1),
-        people_quality: Float.round(people_quality_score, 1),
-        financial_performance: Float.round(financial_performance, 1)
+        time_machine: Float.round(time_machine, 1),
+        auteurs: Float.round(auteurs_score, 1),
+        box_office: Float.round(box_office, 1)
       },
       raw_metrics: metrics
     }
@@ -174,10 +174,10 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate ivory tower score (critics): RT Tomatometer + Metacritic, null-aware averaging.
+  Calculate critics score: RT Tomatometer + Metacritic, null-aware averaging.
   Returns a 0–10 score (normalizes from 0–100 sources).
   """
-  def calculate_ivory_tower_score(metrics) do
+  def calculate_critics_score(metrics) do
     rt = Map.get(metrics, :rt_tomatometer)
     mc = Map.get(metrics, :metacritic)
 
@@ -204,21 +204,12 @@ defmodule Cinegraph.Movies.MovieScoring do
     present / 4.0
   end
 
-  defp get_editorial_weights do
-    case ScoringService.get_profile("Cinegraph Editorial") do
-      nil ->
-        %{
-          mob: 0.05,
-          ivory_tower: 0.25,
-          festival_recognition: 0.20,
-          cultural_impact: 0.30,
-          people_quality: 0.15,
-          financial_performance: 0.05
-        }
+  defp get_editorial_weights(nil) do
+    Lenses.default_atom_weights()
+  end
 
-      profile ->
-        ScoringService.profile_to_discovery_weights(profile)
-    end
+  defp get_editorial_weights(profile) do
+    ScoringService.profile_to_discovery_weights(profile)
   end
 
   @doc """
@@ -229,9 +220,9 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate cultural impact based on canonical sources and popularity.
+  Calculate time machine score based on canonical sources and popularity.
   """
-  def calculate_cultural_impact(movie, metrics) do
+  def calculate_time_machine_score(movie, metrics) do
     # Check canonical sources
     canonical_count =
       if movie.canonical_sources && map_size(movie.canonical_sources) > 0 do
@@ -256,12 +247,12 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate financial performance based on revenue and budget.
+  Calculate box office score based on revenue and budget.
   Returns a score from 0-10 based on:
   - Revenue magnitude (logarithmic scale to 1B)
   - ROI when both budget and revenue are available
   """
-  def calculate_financial_performance(metrics) do
+  def calculate_box_office_score(metrics) do
     budget = Map.get(metrics, :budget, 0) || 0
     revenue = Map.get(metrics, :revenue, 0) || 0
 

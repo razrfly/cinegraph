@@ -111,11 +111,11 @@ defmodule CinegraphWeb.PredictionsLive.Index do
               name: "Balanced",
               category_weights: %{
                 "mob" => 0.10,
-                "ivory_tower" => 0.10,
+                "critics" => 0.10,
                 "festival_recognition" => 0.20,
-                "cultural_impact" => 0.20,
-                "people_quality" => 0.20,
-                "financial_performance" => 0.20
+                "time_machine" => 0.20,
+                "auteurs" => 0.20,
+                "box_office" => 0.20
               }
             }
 
@@ -269,11 +269,11 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
       new_weights = %{
         mob: parse_param.(params["mob"]),
-        ivory_tower: parse_param.(params["ivory_tower"]),
+        critics: parse_param.(params["critics"]),
         festival_recognition: parse_param.(params["festival_recognition"]),
-        cultural_impact: parse_param.(params["cultural_impact"]),
-        people_quality: parse_param.(params["people_quality"]),
-        financial_performance: parse_param.(params["financial_performance"])
+        time_machine: parse_param.(params["time_machine"]),
+        auteurs: parse_param.(params["auteurs"]),
+        box_office: parse_param.(params["box_office"])
       }
 
       # Validate weights sum to approximately 1.0
@@ -479,11 +479,11 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   defp format_likelihood(percentage), do: {"#{percentage}%", "text-gray-600"}
 
   defp criterion_label(:mob), do: "The Mob"
-  defp criterion_label(:ivory_tower), do: "The Ivory Tower"
-  defp criterion_label(:festival_recognition), do: "Industry Recognition"
-  defp criterion_label(:cultural_impact), do: "Cultural Impact"
-  defp criterion_label(:people_quality), do: "People Quality"
-  defp criterion_label(:financial_performance), do: "Financial Performance"
+  defp criterion_label(:critics), do: "The Critics"
+  defp criterion_label(:festival_recognition), do: "The Insiders"
+  defp criterion_label(:time_machine), do: "The Time Machine"
+  defp criterion_label(:auteurs), do: "The Auteurs"
+  defp criterion_label(:box_office), do: "The Box Office"
   defp criterion_label(other), do: to_string(other)
 
   defp accuracy_color(percentage) when percentage >= 90, do: "text-green-600"

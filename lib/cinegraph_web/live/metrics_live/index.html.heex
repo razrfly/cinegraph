@@ -322,7 +322,7 @@
               <td class="px-4 py-2 text-sm font-mono">wins * 0.2</td>
               <td class="px-4 py-2 text-center">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                  Industry Recognition
+                  Festival Recognition
                 </span>
               </td>
               <td class="px-4 py-2 text-center text-sm font-medium">Major</td>
@@ -334,7 +334,7 @@
               <td class="px-4 py-2 text-sm font-mono">noms * 0.05</td>
               <td class="px-4 py-2 text-center">
                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                  Industry Recognition
+                  Festival Recognition
                 </span>
               </td>
               <td class="px-4 py-2 text-center text-sm font-medium">Minor</td>
@@ -420,7 +420,7 @@
         </div>
 
         <div class="border border-yellow-200 rounded-lg p-4">
-          <h3 class="font-semibold text-yellow-900 mb-2">🏆 Industry Recognition</h3>
+          <h3 class="font-semibold text-yellow-900 mb-2">🏆 Festival Recognition</h3>
           <p class="text-sm text-gray-600 mb-2">Weighted sum of awards:</p>
           <ul class="space-y-1 text-sm">
             <li class="flex justify-between">
@@ -544,7 +544,7 @@
             </tr>
             <tr>
               <td class="px-4 py-2 text-sm font-medium text-gray-900">
-                The Ivory Tower<br />
+                The Critics<br />
                 <span class="text-xs text-gray-500">(RT, Metacritic)</span>
               </td>
               <%= for profile <- @weight_profiles do %>
@@ -553,12 +553,12 @@
                     <div class="w-20 bg-gray-200 rounded-full h-2 mr-2">
                       <div
                         class="bg-purple-600 h-2 rounded-full"
-                        style={"width: #{min(100, get_profile_weight_actual(profile, "ivory_tower"))}%"}
+                        style={"width: #{min(100, get_profile_weight_actual(profile, "critics"))}%"}
                       >
                       </div>
                     </div>
                     <span class="text-sm font-medium">
-                      {get_profile_weight_actual(profile, "ivory_tower")}%
+                      {get_profile_weight_actual(profile, "critics")}%
                     </span>
                   </div>
                 </td>
@@ -567,7 +567,7 @@
 
             <tr>
               <td class="px-4 py-2 text-sm font-medium text-gray-900">
-                Industry Recognition<br />
+                Festival Recognition<br />
                 <span class="text-xs text-gray-500">(awards)</span>
               </td>
               <%= for profile <- @weight_profiles do %>
@@ -916,9 +916,9 @@
                   </div>
                   <div class="text-xs text-gray-500">
                     Mob: {Float.round((movie.components["mob"] || 0) * 100, 0)}% |
-                    IT: {Float.round((movie.components["ivory_tower"] || 0) * 100, 0)}% |
+                    Crit: {Float.round((movie.components["critics"] || 0) * 100, 0)}% |
                     Ind: {Float.round((movie.components["festival_recognition"] || 0) * 100, 0)}% |
-                    Cult: {Float.round((movie.components["cultural_impact"] || 0) * 100, 0)}%
+                    Time: {Float.round((movie.components["time_machine"] || 0) * 100, 0)}%
                   </div>
                 </div>
               </div>

@@ -122,6 +122,10 @@ defmodule Mix.Tasks.Festivals.Backfill do
         {q + 1, f}
       else
         case Cinegraph.Cultural.import_festival_year(festival_key, year) do
+          {:ok, %{status: :already_queued}} ->
+            Mix.shell().info("  ⏭️  Already queued #{label} #{year}")
+            {q, f}
+
           {:ok, _} ->
             Mix.shell().info("  ✅ Queued #{label} #{year}")
             {q + 1, f}

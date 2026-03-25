@@ -380,24 +380,24 @@
                       👥 {to_percentage(movie.score_components[:mob])}%
                     </span>
                   <% end %>
-                  <%= if movie.score_components[:ivory_tower] && has_meaningful_score?(movie.score_components[:ivory_tower]) do %>
+                  <%= if movie.score_components[:critics] && has_meaningful_score?(movie.score_components[:critics]) do %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                      🎓 {to_percentage(movie.score_components[:ivory_tower])}%
+                      🎭 {to_percentage(movie.score_components[:critics])}%
                     </span>
                   <% end %>
-                  <%= if movie.score_components.festival_recognition && has_meaningful_score?(movie.score_components.festival_recognition) do %>
+                  <%= if movie.score_components[:festival_recognition] && has_meaningful_score?(movie.score_components[:festival_recognition]) do %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-200">
-                      🌟 {to_percentage(movie.score_components.festival_recognition)}%
+                      🌟 {to_percentage(movie.score_components[:festival_recognition])}%
                     </span>
                   <% end %>
-                  <%= if movie.score_components.cultural_impact && has_meaningful_score?(movie.score_components.cultural_impact) do %>
+                  <%= if movie.score_components[:time_machine] && has_meaningful_score?(movie.score_components[:time_machine]) do %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                      📚 {to_percentage(movie.score_components.cultural_impact)}%
+                      ⏳ {to_percentage(movie.score_components[:time_machine])}%
                     </span>
                   <% end %>
-                  <%= if movie.score_components.people_quality && has_meaningful_score?(movie.score_components.people_quality) do %>
+                  <%= if movie.score_components[:auteurs] && has_meaningful_score?(movie.score_components[:auteurs]) do %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200">
-                      👥 {to_percentage(movie.score_components.people_quality)}%
+                      🎬 {to_percentage(movie.score_components[:auteurs])}%
                     </span>
                   <% end %>
                 </div>
@@ -417,7 +417,7 @@
                 <% end %>
                 
 <!-- Show if it has awards -->
-                <%= if movie.score_components && movie.score_components.festival_recognition && award_worthy_score?(movie.score_components.festival_recognition) do %>
+                <%= if movie.score_components && movie.score_components[:festival_recognition] && award_worthy_score?(movie.score_components[:festival_recognition]) do %>
                   <span class="inline-flex items-center text-amber-600">
                     🏆 Award Winner
                   </span>

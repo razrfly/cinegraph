@@ -23,7 +23,7 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     field :source_field, :string
 
     # Category mapping
-    # 'mob', 'ivory_tower', 'festival_recognition', 'financial_performance', 'cultural_impact', 'people_quality'
+    # Valid categories defined in Cinegraph.Scoring.Lenses
     field :category, :string
     # e.g., 'critic_rating', 'audience_rating', 'major_award'
     field :subcategory, :string
@@ -69,14 +69,7 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> unique_constraint(:code)
-    |> validate_inclusion(:category, [
-      "mob",
-      "ivory_tower",
-      "festival_recognition",
-      "financial_performance",
-      "cultural_impact",
-      "people_quality"
-    ])
+    |> validate_inclusion(:category, Cinegraph.Scoring.Lenses.all_strings())
     |> validate_inclusion(:normalization_type, [
       "linear",
       "logarithmic",

@@ -121,11 +121,11 @@ defmodule Cinegraph.Movies.Filters do
       "mob_asc" ->
         sort_by_metric_dimension(query, :mob, :asc)
 
-      "ivory_tower" ->
-        sort_by_metric_dimension(query, :ivory_tower, :desc)
+      "critics" ->
+        sort_by_metric_dimension(query, :critics, :desc)
 
-      "ivory_tower_asc" ->
-        sort_by_metric_dimension(query, :ivory_tower, :asc)
+      "critics_asc" ->
+        sort_by_metric_dimension(query, :critics, :asc)
 
       "festival_recognition" ->
         sort_by_metric_dimension(query, :festival_recognition, :desc)
@@ -133,23 +133,23 @@ defmodule Cinegraph.Movies.Filters do
       "festival_recognition_asc" ->
         sort_by_metric_dimension(query, :festival_recognition, :asc)
 
-      "cultural_impact" ->
-        sort_by_metric_dimension(query, :cultural_impact, :desc)
+      "time_machine" ->
+        sort_by_metric_dimension(query, :time_machine, :desc)
 
-      "cultural_impact_asc" ->
-        sort_by_metric_dimension(query, :cultural_impact, :asc)
+      "time_machine_asc" ->
+        sort_by_metric_dimension(query, :time_machine, :asc)
 
-      "people_quality" ->
-        sort_by_metric_dimension(query, :people_quality, :desc)
+      "auteurs" ->
+        sort_by_metric_dimension(query, :auteurs, :desc)
 
-      "people_quality_asc" ->
-        sort_by_metric_dimension(query, :people_quality, :asc)
+      "auteurs_asc" ->
+        sort_by_metric_dimension(query, :auteurs, :asc)
 
-      "financial_performance" ->
-        sort_by_metric_dimension(query, :financial_performance, :desc)
+      "box_office" ->
+        sort_by_metric_dimension(query, :box_office, :desc)
 
-      "financial_performance_asc" ->
-        sort_by_metric_dimension(query, :financial_performance, :asc)
+      "box_office_asc" ->
+        sort_by_metric_dimension(query, :box_office, :asc)
 
       # Default
       _ ->
@@ -169,7 +169,7 @@ defmodule Cinegraph.Movies.Filters do
         |> maybe_join_score_cache()
         |> order_by([m, score_cache: sc], [{^order_func, sc.mob_score}])
 
-      {:ivory_tower, dir} when dir in [:desc, :asc] ->
+      {:critics, dir} when dir in [:desc, :asc] ->
         order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
         order_by(query, [m], [
@@ -199,148 +199,117 @@ defmodule Cinegraph.Movies.Filters do
            )}
         ])
 
-      {:festival_recognition, :desc} ->
-        order_by(query, [m],
-          desc:
-            fragment(
-              """
-              COALESCE((
-                SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
-                FROM (
-                  SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
-                         COUNT(*) as nominations
-                  FROM festival_nominations
-                  WHERE movie_id = ?
-                ) f
-              ), 0)
-              """,
-              m.id
-            )
-        )
-
-      {:festival_recognition, :asc} ->
-        order_by(query, [m],
-          asc:
-            fragment(
-              """
-              COALESCE((
-                SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
-                FROM (
-                  SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
-                         COUNT(*) as nominations
-                  FROM festival_nominations
-                  WHERE movie_id = ?
-                ) f
-              ), 0)
-              """,
-              m.id
-            )
-        )
-
-      {:cultural_impact, :desc} ->
-        order_by(query, [m],
-          desc:
-            fragment(
-              """
-              COALESCE(
-                LEAST(1.0, 
-                  COALESCE(
-                    (SELECT COUNT(*) * 0.1
-                     FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
-                    0
-                  ) + 
-                  COALESCE(
-                    (SELECT CASE 
-                      WHEN value IS NULL OR value = 0 THEN 0
-                      ELSE LN(value + 1) / LN(1001)
-                    END
-                    FROM external_metrics 
-                    WHERE movie_id = ? 
-                      AND source = 'tmdb' 
-                      AND metric_type = 'popularity_score' 
-                    LIMIT 1), 
-                    0
-                  )
-                ), 
-                0
-              )
-              """,
-              m.canonical_sources,
-              m.id
-            )
-        )
-
-      {:cultural_impact, :asc} ->
-        order_by(query, [m],
-          asc:
-            fragment(
-              """
-              COALESCE(
-                LEAST(1.0, 
-                  COALESCE(
-                    (SELECT COUNT(*) * 0.1
-                     FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
-                    0
-                  ) + 
-                  COALESCE(
-                    (SELECT CASE 
-                      WHEN value IS NULL OR value = 0 THEN 0
-                      ELSE LN(value + 1) / LN(1001)
-                    END
-                    FROM external_metrics 
-                    WHERE movie_id = ? 
-                      AND source = 'tmdb' 
-                      AND metric_type = 'popularity_score' 
-                    LIMIT 1), 
-                    0
-                  )
-                ), 
-                0
-              )
-              """,
-              m.canonical_sources,
-              m.id
-            )
-        )
-
-      {:people_quality, :desc} ->
-        order_by(query, [m],
-          desc:
-            fragment(
-              """
-              COALESCE((
-                SELECT AVG(DISTINCT pm.score) / 100.0
-                FROM person_metrics pm
-                JOIN movie_credits mc ON pm.person_id = mc.person_id
-                WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
-              ), 0)
-              """,
-              m.id
-            )
-        )
-
-      {:people_quality, :asc} ->
-        order_by(query, [m],
-          asc:
-            fragment(
-              """
-              COALESCE((
-                SELECT AVG(DISTINCT pm.score) / 100.0
-                FROM person_metrics pm
-                JOIN movie_credits mc ON pm.person_id = mc.person_id
-                WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
-              ), 0)
-              """,
-              m.id
-            )
-        )
-
-      {:financial_performance, dir} when dir in [:desc, :asc] ->
+      {:festival_recognition, dir} when dir in [:desc, :asc] ->
         order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
 
         query
         |> maybe_join_score_cache()
-        |> order_by([m, score_cache: sc], [{^order_func, sc.financial_performance_score}])
+        |> order_by([m, score_cache: sc], [{^order_func, sc.festival_recognition_score}])
+
+      {:time_machine, :desc} ->
+        order_by(query, [m],
+          desc:
+            fragment(
+              """
+              COALESCE(
+                LEAST(1.0, 
+                  COALESCE(
+                    (SELECT COUNT(*) * 0.1
+                     FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
+                    0
+                  ) + 
+                  COALESCE(
+                    (SELECT CASE 
+                      WHEN value IS NULL OR value = 0 THEN 0
+                      ELSE LN(value + 1) / LN(1001)
+                    END
+                    FROM external_metrics 
+                    WHERE movie_id = ? 
+                      AND source = 'tmdb' 
+                      AND metric_type = 'popularity_score' 
+                    LIMIT 1), 
+                    0
+                  )
+                ), 
+                0
+              )
+              """,
+              m.canonical_sources,
+              m.id
+            )
+        )
+
+      {:time_machine, :asc} ->
+        order_by(query, [m],
+          asc:
+            fragment(
+              """
+              COALESCE(
+                LEAST(1.0, 
+                  COALESCE(
+                    (SELECT COUNT(*) * 0.1
+                     FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 
+                    0
+                  ) + 
+                  COALESCE(
+                    (SELECT CASE 
+                      WHEN value IS NULL OR value = 0 THEN 0
+                      ELSE LN(value + 1) / LN(1001)
+                    END
+                    FROM external_metrics 
+                    WHERE movie_id = ? 
+                      AND source = 'tmdb' 
+                      AND metric_type = 'popularity_score' 
+                    LIMIT 1), 
+                    0
+                  )
+                ), 
+                0
+              )
+              """,
+              m.canonical_sources,
+              m.id
+            )
+        )
+
+      {:auteurs, :desc} ->
+        order_by(query, [m],
+          desc:
+            fragment(
+              """
+              COALESCE((
+                SELECT AVG(DISTINCT pm.score) / 100.0
+                FROM person_metrics pm
+                JOIN movie_credits mc ON pm.person_id = mc.person_id
+                WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+              ), 0)
+              """,
+              m.id
+            )
+        )
+
+      {:auteurs, :asc} ->
+        order_by(query, [m],
+          asc:
+            fragment(
+              """
+              COALESCE((
+                SELECT AVG(DISTINCT pm.score) / 100.0
+                FROM person_metrics pm
+                JOIN movie_credits mc ON pm.person_id = mc.person_id
+                WHERE mc.movie_id = ? AND pm.metric_type = 'quality_score'
+              ), 0)
+              """,
+              m.id
+            )
+        )
+
+      {:box_office, dir} when dir in [:desc, :asc] ->
+        order_func = if dir == :desc, do: :desc_nulls_last, else: :asc_nulls_last
+
+        query
+        |> maybe_join_score_cache()
+        |> order_by([m, score_cache: sc], [{^order_func, sc.box_office_score}])
     end
   end
 
@@ -1092,8 +1061,8 @@ defmodule Cinegraph.Movies.Filters do
     # Keep legacy support for numeric thresholds
     |> filter_by_metric_dimension(params["mob_min"], :mob)
     |> filter_by_metric_dimension(params["festival_recognition_min"], :festival_recognition)
-    |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
-    |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
+    |> filter_by_metric_dimension(params["time_machine_min"], :time_machine)
+    |> filter_by_metric_dimension(params["auteurs_min"], :auteurs)
   end
 
   # Conditional wrappers to avoid function calls when not needed
@@ -1257,29 +1226,17 @@ defmodule Cinegraph.Movies.Filters do
           |> where([score_cache: sc], not is_nil(sc.mob_score) and sc.mob_score >= ^min_val)
 
         :festival_recognition ->
-          # Filter by industry recognition (awards)
-          where(
-            query,
-            [m],
-            fragment(
-              """
-              COALESCE((
-                SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
-                FROM (
-                  SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
-                         COUNT(*) as nominations
-                  FROM festival_nominations
-                  WHERE movie_id = ?
-                ) f
-              ), 0) >= ?
-              """,
-              m.id,
-              ^min_val
-            )
+          # Filter by cached festival recognition score (prestige-weighted)
+          query
+          |> maybe_join_score_cache()
+          |> where(
+            [score_cache: sc],
+            not is_nil(sc.festival_recognition_score) and
+              sc.festival_recognition_score >= ^min_val
           )
 
-        :cultural_impact ->
-          # Filter by cultural impact (canonical lists + popularity)
+        :time_machine ->
+          # Filter by time machine score (canonical lists + popularity)
           where(
             query,
             [m],
@@ -1314,8 +1271,8 @@ defmodule Cinegraph.Movies.Filters do
             )
           )
 
-        :people_quality ->
-          # Filter by people quality score
+        :auteurs ->
+          # Filter by auteurs score
           where(
             query,
             [m],

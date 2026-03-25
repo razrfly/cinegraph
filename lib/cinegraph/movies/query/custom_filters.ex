@@ -526,35 +526,30 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_metric_thresholds(query, params) do
     query
     |> filter_by_metric(:festival_recognition, params.festival_recognition_min)
-    |> filter_by_metric(:cultural_impact, params.cultural_impact_min)
-    |> filter_by_metric(:people_quality, params.people_quality_min)
+    |> filter_by_metric(:time_machine, params.time_machine_min)
+    |> filter_by_metric(:auteurs, params.auteurs_min)
   end
 
   defp filter_by_metric(query, _dimension, nil), do: query
 
   defp filter_by_metric(query, :festival_recognition, min_value) do
-    where(
-      query,
-      [m],
-      fragment(
-        """
-        COALESCE((
-          SELECT LEAST(1.0, (COALESCE(f.wins, 0) * 0.2 + COALESCE(f.nominations, 0) * 0.05))
-          FROM (
-            SELECT COUNT(CASE WHEN won = true THEN 1 END) as wins,
-                   COUNT(*) as nominations
-            FROM festival_nominations
-            WHERE movie_id = ?
-          ) f
-        ), 0) >= ?
-        """,
-        m.id,
-        ^min_value
+    if has_named_binding?(query, :score_cache) do
+      where(
+        query,
+        [score_cache: sc],
+        not is_nil(sc.festival_recognition_score) and sc.festival_recognition_score >= ^min_value
       )
-    )
+    else
+      query
+      |> join(:left, [m], sc in "movie_score_caches", on: sc.movie_id == m.id, as: :score_cache)
+      |> where(
+        [score_cache: sc],
+        not is_nil(sc.festival_recognition_score) and sc.festival_recognition_score >= ^min_value
+      )
+    end
   end
 
-  defp filter_by_metric(query, :cultural_impact, min_value) do
+  defp filter_by_metric(query, :time_machine, min_value) do
     where(
       query,
       [m],
@@ -590,7 +585,7 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     )
   end
 
-  defp filter_by_metric(query, :people_quality, min_value) do
+  defp filter_by_metric(query, :auteurs, min_value) do
     where(
       query,
       [m],

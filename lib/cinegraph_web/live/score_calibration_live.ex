@@ -1051,11 +1051,11 @@ defmodule CinegraphWeb.ScoreCalibrationLive do
   defp format_category_abbrev(category) do
     case category do
       "mob" -> "Mob"
-      "ivory_tower" -> "IT"
-      "festival_recognition" -> "Ind"
-      "cultural_impact" -> "Cult"
-      "people_quality" -> "Ppl"
-      "financial_performance" -> "Fin"
+      "critics" -> "Crit"
+      "festival_recognition" -> "Fest"
+      "time_machine" -> "Time"
+      "auteurs" -> "Aut"
+      "box_office" -> "Box"
       _ -> String.slice(category, 0..2)
     end
   end

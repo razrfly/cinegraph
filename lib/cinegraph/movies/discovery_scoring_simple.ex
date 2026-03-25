@@ -28,18 +28,18 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
     ScoringService.apply_scoring(query, profile, options)
   end
 
-  # New-style weight map with mob/ivory_tower — delegate to ScoringService
+  # New-style weight map with mob/critics — delegate to ScoringService
   def apply_scoring(query, weights, options)
       when is_map(weights) and is_map_key(weights, :mob) do
     synthetic_profile = %Cinegraph.Metrics.MetricWeightProfile{
       name: "Custom",
       category_weights: %{
         "mob" => Map.get(weights, :mob, 0.1),
-        "ivory_tower" => Map.get(weights, :ivory_tower, 0.1),
+        "critics" => Map.get(weights, :critics, 0.1),
         "festival_recognition" => Map.get(weights, :festival_recognition, 0.2),
-        "cultural_impact" => Map.get(weights, :cultural_impact, 0.2),
-        "people_quality" => Map.get(weights, :people_quality, 0.2),
-        "financial_performance" => Map.get(weights, :financial_performance, 0.2)
+        "time_machine" => Map.get(weights, :time_machine, 0.2),
+        "auteurs" => Map.get(weights, :auteurs, 0.2),
+        "box_office" => Map.get(weights, :box_office, 0.2)
       },
       weights: %{},
       active: true,

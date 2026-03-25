@@ -61,7 +61,7 @@ defmodule Cinegraph.Predictions.IntegrationTest do
       # Valid CriteriaScoring weights (has :festival_recognition) are passed through unchanged
       valid_weights = %{
         mob: 0.20,
-        ivory_tower: 0.20,
+        critics: 0.20,
         festival_recognition: 0.30,
         cultural_impact: 0.20,
         technical_innovation: 0.05,
@@ -83,7 +83,7 @@ defmodule Cinegraph.Predictions.IntegrationTest do
 
       # Test individual scoring functions don't crash
       assert is_number(CriteriaScoring.score_mob(movie_data))
-      assert is_number(CriteriaScoring.score_ivory_tower(movie_data))
+      assert is_number(CriteriaScoring.score_critics(movie_data))
       assert is_number(CriteriaScoring.score_festival_recognition(movie_data))
       assert is_number(CriteriaScoring.score_cultural_impact(movie_data))
       assert is_number(CriteriaScoring.score_technical_innovation(movie_data))

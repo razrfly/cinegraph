@@ -545,11 +545,11 @@ defmodule CinegraphWeb.MovieLive.Show do
 
     %{
       mob: c.mob,
-      ivory_tower: c.ivory_tower,
+      critics: c.critics,
       festival_recognition: c.festival_recognition,
-      cultural_impact: c.cultural_impact,
-      people_quality: c.people_quality,
-      financial_performance: c.financial_performance,
+      time_machine: c.time_machine,
+      auteurs: c.auteurs,
+      box_office: c.box_office,
       overall: score_data.overall_score
     }
   end
@@ -557,11 +557,11 @@ defmodule CinegraphWeb.MovieLive.Show do
   defp build_display_scores(cache, _score_data) do
     %{
       mob: cache.mob_score || 0.0,
-      ivory_tower: cache.ivory_tower_score || 0.0,
+      critics: cache.critics_score || 0.0,
       festival_recognition: cache.festival_recognition_score || 0.0,
-      cultural_impact: cache.cultural_impact_score || 0.0,
-      people_quality: cache.people_quality_score || 0.0,
-      financial_performance: cache.financial_performance_score || 0.0,
+      time_machine: cache.time_machine_score || 0.0,
+      auteurs: cache.auteurs_score || 0.0,
+      box_office: cache.box_office_score || 0.0,
       overall: cache.overall_score || 0.0
     }
   end
