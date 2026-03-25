@@ -129,7 +129,7 @@ defmodule Mix.Tasks.Predictions.Backtest do
 
     ═══════════════════════════════════════════════
     BACKTEST — #{profile_name}
-    Scoring: CriteriaScoring (festival 30% · mob/ivory 17.5% · cultural 20% · technical 10% · auteur 5%)
+    Scoring: CriteriaScoring (festival 40% · mob/critics 17.5% · cultural 20% · auteur 5%)
     ═══════════════════════════════════════════════
     Overall Accuracy: #{overall_accuracy}%  #{icon} #{if overall_accuracy >= threshold, do: "TARGET MET", else: "BELOW TARGET"}
 

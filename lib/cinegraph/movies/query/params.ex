@@ -283,7 +283,7 @@ defmodule Cinegraph.Movies.Query.Params do
                         runtime_min runtime_max festival_id award_category_id
                         award_year_from award_year_to genres countries festivals)
 
-    float_fields = ~w(rating_min festival_recognition_min cultural_impact_min people_quality_min)
+    float_fields = ~w(rating_min festival_recognition_min time_machine_min auteurs_min)
 
     params
     |> parse_integers(numeric_fields)

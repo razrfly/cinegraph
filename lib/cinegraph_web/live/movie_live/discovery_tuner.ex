@@ -9,21 +9,16 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   alias Cinegraph.Movies
   alias Cinegraph.Movies.DiscoveryScoringSimple, as: DiscoveryScoring
   alias Cinegraph.Metrics.ScoringService
+  alias Cinegraph.Scoring.Lenses
+
+  @lens_strings Lenses.all_strings()
 
   @impl true
   def mount(_params, _session, socket) do
     # Load presets from database
     presets = DiscoveryScoring.get_presets()
 
-    weights =
-      Map.get(presets, :balanced, %{
-        mob: 0.10,
-        critics: 0.10,
-        festival_recognition: 0.20,
-        time_machine: 0.20,
-        auteurs: 0.20,
-        box_office: 0.20
-      })
+    weights = Map.get(presets, :balanced, Lenses.default_atom_weights())
 
     # Store the current profile for database lookups
     current_profile =
@@ -53,14 +48,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     weights =
       Enum.reduce(params, %{}, fn
         {key, value}, acc
-        when key in [
-               "mob",
-               "critics",
-               "festival_recognition",
-               "time_machine",
-               "auteurs",
-               "box_office"
-             ] ->
+        when key in @lens_strings ->
           dimension = String.to_atom(key)
 
           parsed_value =

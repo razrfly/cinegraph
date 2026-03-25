@@ -242,7 +242,7 @@ Enum.each(weight_profiles, fn profile ->
         Map.get(profile_weights, metric, 0.0) > 0
       end)
 
-    if length(defined_box_office) > 0 do
+    if Enum.any?(defined_box_office) do
       IO.puts(
         "INFO: #{profile.name} has box office metric weights defined but box_office category weight is 0:"
       )

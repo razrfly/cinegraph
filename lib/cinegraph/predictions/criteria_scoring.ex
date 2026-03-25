@@ -1,17 +1,16 @@
 defmodule Cinegraph.Predictions.CriteriaScoring do
   @moduledoc """
-  Implements the 6-criteria scoring system for predicting 1001 Movies list additions.
+  Implements the 5-criteria scoring system for predicting 1001 Movies list additions.
 
-  The 6 criteria with default weights:
-  1. The Mob (17.5%) - Audience ratings: IMDb, TMDb, RT Audience Score
+  The 5 criteria with default weights:
+  1. The Mob (17.5%) - Audience ratings: IMDb, TMDb
   2. The Critics (17.5%) - Critic ratings: Metacritic, RT Tomatometer
-  3. Festival Recognition (30%)
+  3. Festival Recognition (40%) - includes technical craft nominations
   4. Cultural Impact (20%)
-  5. Technical Innovation (10%)
-  6. Auteur Recognition (5%)
+  5. Auteur Recognition (5%)
 
-  NOTE: This module uses its own criterion vocabulary (festival_recognition,
-  technical_innovation, auteur_recognition). The production scoring system
+  NOTE: This module uses its own 5-criterion vocabulary (festival_recognition,
+  cultural_impact, auteur_recognition). The production scoring system
   (`Cinegraph.Metrics.ScoringService`) uses the same `festival_recognition` key
   as well as `auteurs` and `box_office`. These are two
   independent scoring subsystems: this one drives the predictions algorithm for
@@ -23,79 +22,79 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Scoring.FestivalPrestige
 
+  # Intentionally distinct from Cinegraph.Scoring.Lenses.all/0 — this system uses
+  # cultural_impact and auteur_recognition instead of time_machine, box_office, and auteurs.
+  @scoring_criteria ~w(mob critics festival_recognition cultural_impact auteur_recognition)a
+
   @default_weights %{
     mob: 0.175,
     critics: 0.175,
-    festival_recognition: 0.30,
+    festival_recognition: 0.40,
     cultural_impact: 0.20,
-    technical_innovation: 0.10,
     auteur_recognition: 0.05
   }
 
   @named_profiles [
     %{
       name: "default",
-      description:
-        "Balanced — festival 30%, mob/critics 17.5% each, cultural 20%, technical 10%, auteur 5%",
+      description: "Balanced — festival 40%, mob/critics 17.5% each, cultural 20%, auteur 5%",
       weights: @default_weights
     },
     %{
       name: "festival-heavy",
       description:
-        "Festival-centric — festival 50%, mob/critics 10% each, cultural 15%, technical 10%, auteur 5%",
+        "Festival-centric — festival 60%, mob/critics 10% each, cultural 15%, auteur 5%",
       weights: %{
         mob: 0.10,
         critics: 0.10,
-        festival_recognition: 0.50,
+        festival_recognition: 0.60,
         cultural_impact: 0.15,
-        technical_innovation: 0.10,
         auteur_recognition: 0.05
       }
     },
     %{
       name: "audience-first",
       description:
-        "Audience-driven — mob 35%, festival 20%, cultural 25%, critics 10%, technical/auteur 5% each",
+        "Audience-driven — mob 35%, festival 25%, cultural 25%, critics 10%, auteur 5%",
       weights: %{
         mob: 0.35,
         critics: 0.10,
-        festival_recognition: 0.20,
+        festival_recognition: 0.25,
         cultural_impact: 0.25,
-        technical_innovation: 0.05,
         auteur_recognition: 0.05
       }
     },
     %{
       name: "critics-choice",
       description:
-        "Critic-weighted — critics 35%, festival 30%, cultural 15%, mob 10%, technical/auteur 5% each",
+        "Critic-weighted — critics 35%, festival 35%, cultural 15%, mob 10%, auteur 5%",
       weights: %{
         mob: 0.10,
         critics: 0.35,
-        festival_recognition: 0.30,
+        festival_recognition: 0.35,
         cultural_impact: 0.15,
-        technical_innovation: 0.05,
         auteur_recognition: 0.05
       }
     },
     %{
       name: "auteur",
-      description:
-        "Director-focused — auteur 25%, festival 25%, mob/critics/cultural 15% each, technical 5%",
+      description: "Director-focused — auteur 25%, festival 30%, mob/critics/cultural 15% each",
       weights: %{
         mob: 0.15,
         critics: 0.15,
-        festival_recognition: 0.25,
+        festival_recognition: 0.30,
         cultural_impact: 0.15,
-        technical_innovation: 0.05,
         auteur_recognition: 0.25
       }
     }
   ]
 
+  @doc "Returns the 6 prediction criteria atoms (distinct from Cinegraph.Scoring.Lenses)."
+  def scoring_criteria, do: @scoring_criteria
+
   @doc """
-  Get the default weights for the 6 criteria
-  (mob, critics, festival_recognition, cultural_impact, technical_innovation, auteur_recognition).
+  Get the default weights for the 5 criteria
+  (mob, critics, festival_recognition, cultural_impact, auteur_recognition).
   """
   def get_default_weights, do: @default_weights
 
@@ -162,11 +161,10 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   """
   def calculate_movie_score(movie, weights \\ @default_weights) do
     scores = %{
-      mob: score_mob(movie) || 0.0,
-      critics: score_critics(movie) || 0.0,
+      mob: score_mob(movie),
+      critics: score_critics(movie),
       festival_recognition: score_festival_recognition(movie) || 0.0,
       cultural_impact: score_cultural_impact(movie) || 0.0,
-      technical_innovation: score_technical_innovation(movie) || 0.0,
       auteur_recognition: score_auteur_recognition(movie) || 0.0
     }
 
@@ -266,86 +264,31 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     budget = get_in(tmdb_data, ["budget"]) || 0
     revenue = get_in(tmdb_data, ["revenue"]) || 0
 
-    # Base cultural impact score
-    base_score = 0.0
-
-    # Box office performance (0-40 points)
+    # Box office performance (0-25 points)
     roi_score =
       if budget > 0 and revenue > 0 do
         roi = revenue / budget
 
         cond do
-          # 10x return = excellent
-          roi >= 10.0 -> 40.0
-          # 5x return = very good
-          roi >= 5.0 -> 30.0
-          # 2x return = good
-          roi >= 2.0 -> 20.0
-          # Break even = poor
-          roi >= 1.0 -> 10.0
-          # Loss = no points
+          roi >= 10.0 -> 25.0
+          roi >= 5.0 -> 18.0
+          roi >= 2.0 -> 12.0
+          roi >= 1.0 -> 6.0
           true -> 0.0
         end
       else
         0.0
       end
 
-    # Critical mass indicator (0-30 points) - high rating + high vote count
-    popularity_score =
-      case get_imdb_popularity(movie) do
-        {rating, votes} when rating >= 7.5 and votes >= 100_000 -> 30.0
-        {rating, votes} when rating >= 7.0 and votes >= 50_000 -> 20.0
-        {rating, votes} when rating >= 6.5 and votes >= 25_000 -> 10.0
-        _ -> 0.0
-      end
+    # Era-aware IMDb critical mass (0-25 points)
+    popularity_score = imdb_popularity_score(get_imdb_popularity(movie), movie)
 
-    # Genre diversity bonus (0-15 points) - certain genres get cultural impact boost
-    genre_score = score_genre_cultural_impact(movie)
+    # Canonical list presence (0-50 points) — primary signal, especially for pre-1960 films
+    sources = Map.get(movie, :canonical_sources)
+    canonical_count = if sources, do: map_size(sources), else: 0
+    canonical_score = min(canonical_count * 10.0, 50.0)
 
-    # International recognition (0-15 points) - non-English films get bonus for crossing over
-    international_score = score_international_impact(movie)
-
-    base_score + roi_score + popularity_score + genre_score + international_score
-  end
-
-  @doc """
-  Score based on technical innovation (cinematography, sound, editing, VFX nominations/wins
-  at major festivals). Returns 0-100 score. Signal is real — backed by festival_nominations
-  category name matching. Not a placeholder.
-  """
-  def score_technical_innovation(movie) do
-    # Look for technical category nominations/wins
-    query =
-      from fnom in "festival_nominations",
-        join: fc in "festival_categories",
-        on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies",
-        on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations",
-        on: fcer.organization_id == fo.id,
-        where: fnom.movie_id == ^movie.id,
-        where:
-          fragment(
-            "LOWER(?) LIKE ANY(ARRAY['%cinematography%', '%sound%', '%editing%', '%visual%', '%technical%'])",
-            fc.name
-          ),
-        select: [fo.abbreviation, fc.name, fnom.won]
-
-    technical_nominations = Repo.all(query)
-
-    base_score =
-      if length(technical_nominations) > 0 do
-        # Score technical nominations
-        Enum.reduce(technical_nominations, 0.0, fn [_festival, _category, won], acc ->
-          points = if won, do: 20.0, else: 10.0
-          acc + points
-        end)
-      else
-        0.0
-      end
-
-    # Cap at 100
-    min(base_score, 100.0)
+    min(roi_score + popularity_score + canonical_score, 100.0)
   end
 
   @doc """
@@ -387,8 +330,8 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         existing_1001_count >= 3 -> 80.0
         # Emerging auteur
         existing_1001_count >= 1 -> 60.0
-        # New director
-        true -> 20.0
+        # Unknown director — no quality signal
+        true -> 0.0
       end
     end
   end
@@ -491,30 +434,6 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
       end)
 
     {rating, votes}
-  end
-
-  defp score_genre_cultural_impact(movie) do
-    genres = get_in(movie.tmdb_data || %{}, ["genres"]) || []
-    # 0 genres = 0, 4+ genres = 15 pts (cap at 15)
-    Float.round(min(length(genres) / 4.0 * 15.0, 15.0), 1)
-  end
-
-  defp score_international_impact(movie) do
-    original_language = get_in(movie.tmdb_data || %{}, ["original_language"]) || "en"
-
-    if original_language != "en" do
-      nom_count =
-        Repo.one(
-          from fnom in "festival_nominations",
-            where: fnom.movie_id == ^movie.id,
-            select: count()
-        ) || 0
-
-      # 8 base pts for non-English + up to 7 more from festival presence (cap at 15)
-      Float.round(min(8.0 + min(nom_count * 1.5, 7.0), 15.0), 1)
-    else
-      0.0
-    end
   end
 
   # Batch loading functions for performance optimization
@@ -629,6 +548,9 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     end)
   end
 
+  defp cap100(nil), do: nil
+  defp cap100(score), do: min(score, 100.0)
+
   defp calculate_movie_score_from_batch(
          movie,
          weights,
@@ -640,20 +562,22 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Use default weights if nil is passed
     actual_weights = weights || @default_weights
 
+    # Fold technical nominations into festival nominations (same prestige scoring pipeline)
+    expanded_technical =
+      Enum.map(technical_nominations, fn [festival, category, won] ->
+        [festival, category, won, nil, nil, nil]
+      end)
+
+    all_nominations = festival_nominations ++ expanded_technical
+
     # Calculate individual scores, ensuring they're all 0-100 range
     scores = %{
-      mob: min(score_mob_from_metrics(external_metrics) || 0.0, 100.0),
-      critics: min(score_critics_from_metrics(external_metrics) || 0.0, 100.0),
+      mob: cap100(score_mob_from_metrics(external_metrics)),
+      critics: cap100(score_critics_from_metrics(external_metrics)),
       festival_recognition:
-        min(score_festival_recognition_from_batch(festival_nominations) || 0.0, 100.0),
+        min(score_festival_recognition_from_batch(all_nominations) || 0.0, 100.0),
       cultural_impact:
-        min(
-          score_cultural_impact_from_batch(movie, external_metrics, length(festival_nominations)) ||
-            0.0,
-          100.0
-        ),
-      technical_innovation:
-        min(score_technical_innovation_from_batch(technical_nominations) || 0.0, 100.0),
+        min(score_cultural_impact_from_batch(movie, external_metrics) || 0.0, 100.0),
       auteur_recognition:
         min(score_auteur_recognition_from_batch(director_1001_count) || 0.0, 100.0)
     }
@@ -693,7 +617,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     if length(normalized_scores) > 0 do
       min(Enum.sum(normalized_scores) / length(normalized_scores), 100.0)
     else
-      0.0
+      nil
     end
   end
 
@@ -712,7 +636,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     if length(normalized_scores) > 0 do
       min(Enum.sum(normalized_scores) / length(normalized_scores), 100.0)
     else
-      0.0
+      nil
     end
   end
 
@@ -740,74 +664,37 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     end
   end
 
-  defp score_cultural_impact_from_batch(movie, metrics, festival_nominations_count \\ 0) do
+  defp score_cultural_impact_from_batch(movie, metrics) do
     # Extract box office and budget from TMDb data
     tmdb_data = movie.tmdb_data || %{}
     budget = get_in(tmdb_data, ["budget"]) || 0
     revenue = get_in(tmdb_data, ["revenue"]) || 0
 
-    # Box office performance (0-40 points)
+    # Box office performance (0-25 points)
     roi_score =
       if budget > 0 and revenue > 0 do
         roi = revenue / budget
 
         cond do
-          # 10x return = excellent
-          roi >= 10.0 -> 40.0
-          # 5x return = very good
-          roi >= 5.0 -> 30.0
-          # 2x return = good
-          roi >= 2.0 -> 20.0
-          # Break even = poor
-          roi >= 1.0 -> 10.0
-          # Loss = no points
+          roi >= 10.0 -> 25.0
+          roi >= 5.0 -> 18.0
+          roi >= 2.0 -> 12.0
+          roi >= 1.0 -> 6.0
           true -> 0.0
         end
       else
         0.0
       end
 
-    # Critical mass indicator (0-30 points) - high rating + high vote count
-    popularity_score =
-      case get_imdb_popularity_from_batch(metrics) do
-        {rating, votes} when rating >= 7.5 and votes >= 100_000 -> 30.0
-        {rating, votes} when rating >= 7.0 and votes >= 50_000 -> 20.0
-        {rating, votes} when rating >= 6.5 and votes >= 25_000 -> 10.0
-        _ -> 0.0
-      end
+    # Era-aware IMDb critical mass (0-25 points)
+    popularity_score = imdb_popularity_score(get_imdb_popularity_from_batch(metrics), movie)
 
-    # Genre diversity bonus (0-15 points) - 0 genres = 0, 4+ genres = 15 pts
-    genres = get_in(movie.tmdb_data || %{}, ["genres"]) || []
-    genre_score = Float.round(min(length(genres) / 4.0 * 15.0, 15.0), 1)
+    # Canonical list presence (0-50 points) — primary signal, especially for pre-1960 films
+    sources = Map.get(movie, :canonical_sources)
+    canonical_count = if sources, do: map_size(sources), else: 0
+    canonical_score = min(canonical_count * 10.0, 50.0)
 
-    # International recognition (0-15 points) - non-English films get bonus for crossing over
-    original_language = get_in(movie.tmdb_data || %{}, ["original_language"]) || "en"
-
-    international_score =
-      if original_language != "en" do
-        Float.round(min(8.0 + min(festival_nominations_count * 1.5, 7.0), 15.0), 1)
-      else
-        0.0
-      end
-
-    # Sum all scores and cap at 100
-    min(roi_score + popularity_score + genre_score + international_score, 100.0)
-  end
-
-  defp score_technical_innovation_from_batch(nominations) do
-    base_score =
-      if length(nominations) > 0 do
-        # Score technical nominations
-        Enum.reduce(nominations, 0.0, fn [_festival, _category, won], acc ->
-          points = if won, do: 20.0, else: 10.0
-          acc + points
-        end)
-      else
-        0.0
-      end
-
-    # Cap at 100
-    min(base_score, 100.0)
+    min(roi_score + popularity_score + canonical_score, 100.0)
   end
 
   defp score_auteur_recognition_from_batch(director_1001_count) do
@@ -819,8 +706,34 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
       director_1001_count >= 3 -> 80.0
       # Emerging auteur
       director_1001_count >= 1 -> 60.0
-      # New director
-      true -> 20.0
+      # Unknown director — no quality signal
+      true -> 0.0
+    end
+  end
+
+  defp imdb_popularity_score({rating, votes}, movie) do
+    release_year =
+      case movie do
+        %{release_date: %Date{year: y}} -> y
+        _ -> 2000
+      end
+
+    # Tiered scaling: older films accumulate fewer votes by nature
+    # pre-1940 (silent/early sound era) = 5×, 1940–1959 = 3×, modern = 1×
+    vote_scale =
+      cond do
+        release_year < 1940 -> 5.0
+        release_year < 1960 -> 3.0
+        true -> 1.0
+      end
+
+    scaled_votes = round(votes * vote_scale)
+
+    cond do
+      rating >= 7.5 and scaled_votes >= 100_000 -> 25.0
+      rating >= 7.0 and scaled_votes >= 50_000 -> 17.0
+      rating >= 6.5 and scaled_votes >= 25_000 -> 8.0
+      true -> 0.0
     end
   end
 

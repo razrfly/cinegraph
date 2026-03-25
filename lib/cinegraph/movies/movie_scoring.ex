@@ -138,8 +138,8 @@ defmodule Cinegraph.Movies.MovieScoring do
     weights = get_editorial_weights(ScoringService.get_profile("Cinegraph Editorial"))
 
     overall =
-      mob * weights.mob +
-        critics * weights.critics +
+      (mob || 0.0) * weights.mob +
+        (critics || 0.0) * weights.critics +
         festival_recognition * weights.festival_recognition +
         time_machine * weights.time_machine +
         auteurs_score * weights.auteurs +
@@ -149,8 +149,8 @@ defmodule Cinegraph.Movies.MovieScoring do
       overall_score: Float.round(overall, 1),
       score_confidence: calculate_score_confidence(metrics),
       components: %{
-        mob: Float.round(mob, 1),
-        critics: Float.round(critics, 1),
+        mob: mob && Float.round(mob, 1),
+        critics: critics && Float.round(critics, 1),
         festival_recognition: Float.round(festival_recognition, 1),
         time_machine: Float.round(time_machine, 1),
         auteurs: Float.round(auteurs_score, 1),
@@ -170,7 +170,7 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     sources = [imdb, tmdb] |> Enum.reject(&is_nil/1) |> Enum.filter(&(&1 > 0))
 
-    if sources == [], do: 0.0, else: Enum.sum(sources) / length(sources)
+    if sources == [], do: nil, else: Enum.sum(sources) / length(sources)
   end
 
   @doc """
@@ -186,7 +186,7 @@ defmodule Cinegraph.Movies.MovieScoring do
       |> Enum.reject(fn {v, _} -> is_nil(v) or v == 0 end)
       |> Enum.map(fn {v, scale} -> v / scale * 10.0 end)
 
-    if sources == [], do: 0.0, else: Enum.sum(sources) / length(sources)
+    if sources == [], do: nil, else: Enum.sum(sources) / length(sources)
   end
 
   @doc """
@@ -327,7 +327,7 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Explains the people_quality score for a movie.
+  Explains the auteurs score for a movie.
 
   Returns a map with:
     - avg_top10: the average quality score of the top-10 unique people (0–100 scale)
@@ -336,9 +336,9 @@ defmodule Cinegraph.Movies.MovieScoring do
     - top_people: list of {name, job, score, role_weight} for the top 10 unique people
 
   Usage:
-    iex> Cinegraph.Movies.MovieScoring.explain_people_quality(123)
+    iex> Cinegraph.Movies.MovieScoring.explain_auteurs_score(123)
   """
-  def explain_people_quality(movie_id) do
+  def explain_auteurs_score(movie_id) do
     top_query = """
     SELECT MAX(p.name) as name, MAX(mc.job) as job, MAX(pm.score) as max_score,
       MAX(CASE mc.department

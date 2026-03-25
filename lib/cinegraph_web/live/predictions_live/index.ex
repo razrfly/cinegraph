@@ -109,14 +109,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
           PredictionsCache.get_default_profile() ||
             %Cinegraph.Metrics.MetricWeightProfile{
               name: "Balanced",
-              category_weights: %{
-                "mob" => 0.10,
-                "critics" => 0.10,
-                "festival_recognition" => 0.20,
-                "time_machine" => 0.20,
-                "auteurs" => 0.20,
-                "box_office" => 0.20
-              }
+              category_weights: Cinegraph.Scoring.Lenses.default_weights()
             }
 
         # Try to get cached results if available
@@ -513,8 +506,14 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         get_in(sample, ["prediction", "criteria_scores"]) ||
         %{}
 
-    Map.has_key?(criteria, :financial_success) or
-      Map.has_key?(criteria, "financial_success")
+    Map.has_key?(criteria, :technical_innovation) or
+      Map.has_key?(criteria, "technical_innovation") or
+      Map.has_key?(criteria, :ivory_tower) or
+      Map.has_key?(criteria, "ivory_tower") or
+      Map.has_key?(criteria, :cultural_impact) or
+      Map.has_key?(criteria, "cultural_impact") or
+      Map.has_key?(criteria, :people_quality) or
+      Map.has_key?(criteria, "people_quality")
   end
 
   defp stale_cache?(_), do: false
