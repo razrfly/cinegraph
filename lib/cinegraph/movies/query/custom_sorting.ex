@@ -20,6 +20,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
 
   import Ecto.Query
   alias Cinegraph.Movies.DiscoveryCommon
+  alias Cinegraph.Scoring.Lenses
 
   def apply(query, sort, preset_weights \\ nil) do
     # Parse sort parameter to extract field and direction
@@ -42,7 +43,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in ~w(mob critics festival_recognition time_machine auteurs box_office) ->
+      field in Lenses.all_strings() ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->

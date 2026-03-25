@@ -1,16 +1,16 @@
 defmodule Mix.Tasks.Cinegraph.AuditPeopleScores do
   @moduledoc """
-  Audits people_quality scores for a hardcoded set of ground-truth movies.
+  Audits auteurs scores for a hardcoded set of ground-truth movies.
 
   Usage:
     mix cinegraph.audit_people_scores
 
-  Prints a table with the people_quality score for each movie and flags
+  Prints a table with the auteurs score for each movie and flags
   any known-high film that scores below 7.0.
   """
   use Mix.Task
 
-  @shortdoc "Audit people_quality scores for ground-truth movies"
+  @shortdoc "Audit auteurs scores for ground-truth movies"
 
   # {tmdb_id, expected_title, min_acceptable_score}
   @ground_truth [
@@ -57,7 +57,7 @@ defmodule Mix.Tasks.Cinegraph.AuditPeopleScores do
           IO.puts("  #{title} (tmdb:#{tmdb_id}) — NOT IN DATABASE")
 
         movie ->
-          info = MovieScoring.explain_people_quality(movie.id)
+          info = MovieScoring.explain_auteurs_score(movie.id)
           score_10 = info.avg_top10 / 10.0
 
           top_names =

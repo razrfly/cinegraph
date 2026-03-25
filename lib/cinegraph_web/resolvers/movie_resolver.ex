@@ -121,6 +121,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
             mob: cache.mob_score,
             critics: cache.critics_score,
             festival_recognition: cache.festival_recognition_score,
+            industry_recognition: cache.festival_recognition_score,
             time_machine: cache.time_machine_score,
             auteurs: cache.auteurs_score,
             box_office: cache.box_office_score,

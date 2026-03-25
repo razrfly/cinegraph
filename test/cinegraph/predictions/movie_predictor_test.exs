@@ -22,12 +22,12 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
       # Check algorithm info structure
       assert %{
                weights_used: weights,
-               criteria_count: 6,
+               criteria_count: 5,
                decade: "2020s"
              } = algorithm_info
 
       assert is_map(weights)
-      assert map_size(weights) == 6
+      assert map_size(weights) == 5
     end
 
     test "predictions are properly sorted by likelihood descending" do
@@ -57,9 +57,8 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
       custom_weights = %{
         mob: 0.25,
         critics: 0.25,
-        festival_recognition: 0.30,
+        festival_recognition: 0.35,
         cultural_impact: 0.15,
-        technical_innovation: 0.05,
         auteur_recognition: 0.00
       }
 

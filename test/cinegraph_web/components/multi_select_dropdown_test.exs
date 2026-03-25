@@ -16,6 +16,7 @@ defmodule CinegraphWeb.Components.MultiSelectDropdownTest do
       html =
         render_component(&multi_select_dropdown/1, %{
           id: "test-dropdown",
+          name: "test-dropdown",
           options: options,
           selected: selected,
           label_field: :name,
@@ -58,6 +59,7 @@ defmodule CinegraphWeb.Components.MultiSelectDropdownTest do
       html =
         render_component(&multi_select_dropdown/1, %{
           id: "test-dropdown",
+          name: "test-dropdown",
           options: options,
           selected: [],
           label_field: :name,
@@ -77,6 +79,7 @@ defmodule CinegraphWeb.Components.MultiSelectDropdownTest do
       html =
         render_component(&multi_select_dropdown/1, %{
           id: "test-dropdown",
+          name: "test-dropdown",
           options: [],
           selected: [],
           label_field: :name,
@@ -103,6 +106,7 @@ defmodule CinegraphWeb.Components.MultiSelectDropdownTest do
       html =
         render_component(&multi_select_dropdown/1, %{
           id: "test-dropdown",
+          name: "test-dropdown",
           options: options,
           selected: [1, 4],
           label_field: :name,

@@ -14,7 +14,6 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
                critics: critics,
                festival_recognition: festival_recognition,
                cultural_impact: cultural_impact,
-               technical_innovation: technical_innovation,
                auteur_recognition: auteur_recognition
              } = weights
 
@@ -26,9 +25,6 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
                festival_recognition <= 1
 
       assert is_number(cultural_impact) and cultural_impact >= 0 and cultural_impact <= 1
-
-      assert is_number(technical_innovation) and technical_innovation >= 0 and
-               technical_innovation <= 1
 
       assert is_number(auteur_recognition) and auteur_recognition >= 0 and auteur_recognition <= 1
 
@@ -48,9 +44,9 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
       end
     end
 
-    test "all named profiles have the 6 required criteria keys" do
+    test "all named profiles have the 5 required criteria keys" do
       required_keys =
-        ~w(mob critics festival_recognition cultural_impact technical_innovation auteur_recognition)a
+        ~w(mob critics festival_recognition cultural_impact auteur_recognition)a
 
       for profile <- CriteriaScoring.get_named_profiles() do
         for key <- required_keys do
@@ -63,7 +59,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
     test "get_profile/1 returns correct profile by name" do
       profile = CriteriaScoring.get_profile("festival-heavy")
       assert profile.name == "festival-heavy"
-      assert profile.weights.festival_recognition == 0.50
+      assert profile.weights.festival_recognition == 0.60
     end
 
     test "get_profile/1 returns nil for unknown name" do
@@ -101,12 +97,11 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
         assert likelihood >= 0.0
         assert likelihood <= 100.0
 
-        # CriteriaScoring uses its own 6-criterion predictions vocabulary
-        # (mob, critics, festival_recognition, cultural_impact,
-        #  technical_innovation, auteur_recognition) — separate from the
-        # production ScoringConfiguration which uses festival_recognition,
-        # auteurs, box_office.
-        assert map_size(criteria_scores) == 6
+        # CriteriaScoring uses its own 5-criterion predictions vocabulary
+        # (mob, critics, festival_recognition, cultural_impact, auteur_recognition)
+        # — separate from the production ScoringConfiguration which uses
+        # festival_recognition, auteurs, box_office.
+        assert map_size(criteria_scores) == 5
 
         expected_criteria =
           MapSet.new([
@@ -114,19 +109,22 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
             :critics,
             :festival_recognition,
             :cultural_impact,
-            :technical_innovation,
             :auteur_recognition
           ])
 
         assert MapSet.new(Map.keys(criteria_scores)) == expected_criteria
 
         for {_criterion, score} <- criteria_scores do
-          assert is_number(score)
-          assert score >= 0.0
-          assert score <= 100.0
+          # mob and critics may be nil when no source data (nil = no data, not zero)
+          assert is_nil(score) or is_number(score)
+
+          if is_number(score) do
+            assert score >= 0.0
+            assert score <= 100.0
+          end
         end
 
-        assert length(breakdown) == 6
+        assert length(breakdown) == 5
 
         for breakdown_item <- breakdown do
           assert %{
@@ -152,9 +150,8 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
         custom_weights = %{
           mob: 0.20,
           critics: 0.20,
-          festival_recognition: 0.30,
+          festival_recognition: 0.35,
           cultural_impact: 0.20,
-          technical_innovation: 0.05,
           auteur_recognition: 0.05
         }
 
@@ -240,9 +237,12 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
 
       if movie do
         score = CriteriaScoring.score_mob(movie)
-        assert is_number(score)
-        assert score >= 0.0
-        assert score <= 100.0
+        assert is_nil(score) or is_number(score)
+
+        if is_number(score) do
+          assert score >= 0.0
+          assert score <= 100.0
+        end
       end
     end
 
@@ -251,9 +251,12 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
 
       if movie do
         score = CriteriaScoring.score_critics(movie)
-        assert is_number(score)
-        assert score >= 0.0
-        assert score <= 100.0
+        assert is_nil(score) or is_number(score)
+
+        if is_number(score) do
+          assert score >= 0.0
+          assert score <= 100.0
+        end
       end
     end
 
@@ -275,17 +278,6 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
         score = CriteriaScoring.score_cultural_impact(movie)
         assert is_number(score)
         assert score >= 0.0
-      end
-    end
-
-    test "score_technical_innovation/1 returns valid scores" do
-      movie = Repo.all(Movie) |> List.first()
-
-      if movie do
-        score = CriteriaScoring.score_technical_innovation(movie)
-        assert is_number(score)
-        assert score >= 0.0
-        assert score <= 100.0
       end
     end
 
@@ -328,11 +320,15 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
       }
 
       # Individual functions should handle nil gracefully
-      assert is_number(CriteriaScoring.score_mob(movie))
-      assert is_number(CriteriaScoring.score_critics(movie))
+      # mob and critics return nil when no source data (nil ≠ zero for ML purposes)
+      assert is_nil(CriteriaScoring.score_mob(movie)) or
+               is_number(CriteriaScoring.score_mob(movie))
+
+      assert is_nil(CriteriaScoring.score_critics(movie)) or
+               is_number(CriteriaScoring.score_critics(movie))
+
       assert is_number(CriteriaScoring.score_festival_recognition(movie))
       assert is_number(CriteriaScoring.score_cultural_impact(movie))
-      assert is_number(CriteriaScoring.score_technical_innovation(movie))
       assert is_number(CriteriaScoring.score_auteur_recognition(movie))
     end
   end

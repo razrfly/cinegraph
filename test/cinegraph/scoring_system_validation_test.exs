@@ -485,11 +485,10 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       assert Map.has_key?(score_data, :components)
       assert map_size(score_data.components) == 6
 
-      # All components have values
+      # All components have values (some may be nil when no rating data exists)
       for {_category, score} <- score_data.components do
-        assert is_float(score) or is_integer(score)
-        assert score >= 0
-        assert score <= 10
+        assert is_nil(score) or is_float(score) or is_integer(score)
+        if score, do: assert(score >= 0 and score <= 10)
       end
     end
 
