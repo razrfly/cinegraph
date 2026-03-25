@@ -364,7 +364,10 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
     suggestions =
       if validation.decade >= 2000 do
-        ["Modern era films may benefit from 'audience-first' or 'critics-choice' profiles" | suggestions]
+        [
+          "Modern era films may benefit from 'audience-first' or 'critics-choice' profiles"
+          | suggestions
+        ]
       else
         suggestions
       end

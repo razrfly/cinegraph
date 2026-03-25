@@ -36,7 +36,7 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       category_weights: %{
         "mob" => Map.get(weights, :mob, 0.1),
         "ivory_tower" => Map.get(weights, :ivory_tower, 0.1),
-        "industry_recognition" => Map.get(weights, :industry_recognition, 0.2),
+        "festival_recognition" => Map.get(weights, :festival_recognition, 0.2),
         "cultural_impact" => Map.get(weights, :cultural_impact, 0.2),
         "people_quality" => Map.get(weights, :people_quality, 0.2),
         "financial_performance" => Map.get(weights, :financial_performance, 0.2)

@@ -9,7 +9,7 @@ defmodule Cinegraph.Movies.MovieScoreCache do
     # 6 lens scores (0–10)
     field :mob_score, :float
     field :ivory_tower_score, :float
-    field :industry_recognition_score, :float
+    field :festival_recognition_score, :float
     field :cultural_impact_score, :float
     field :people_quality_score, :float
     field :financial_performance_score, :float
@@ -34,7 +34,7 @@ defmodule Cinegraph.Movies.MovieScoreCache do
       :movie_id,
       :mob_score,
       :ivory_tower_score,
-      :industry_recognition_score,
+      :festival_recognition_score,
       :cultural_impact_score,
       :people_quality_score,
       :financial_performance_score,
@@ -50,7 +50,7 @@ defmodule Cinegraph.Movies.MovieScoreCache do
       :movie_id,
       :mob_score,
       :ivory_tower_score,
-      :industry_recognition_score,
+      :festival_recognition_score,
       :cultural_impact_score,
       :people_quality_score,
       :financial_performance_score,

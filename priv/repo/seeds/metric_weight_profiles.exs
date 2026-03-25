@@ -46,7 +46,7 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.05,
       "ivory_tower" => 0.25,
-      "industry_recognition" => 0.20,
+      "festival_recognition" => 0.20,
       "financial_performance" => 0.05,
       "cultural_impact" => 0.30,
       "people_quality" => 0.15
@@ -84,7 +84,7 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.10,
       "ivory_tower" => 0.50,
-      "industry_recognition" => 0.20,
+      "festival_recognition" => 0.20,
       "financial_performance" => 0.00,
       "cultural_impact" => 0.20,
       "people_quality" => 0.00
@@ -115,7 +115,7 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.60,
       "ivory_tower" => 0.00,
-      "industry_recognition" => 0.00,
+      "festival_recognition" => 0.00,
       "financial_performance" => 0.25,
       "cultural_impact" => 0.15,
       "people_quality" => 0.00
@@ -147,7 +147,7 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.00,
       "ivory_tower" => 0.30,
-      "industry_recognition" => 0.60,
+      "festival_recognition" => 0.60,
       "financial_performance" => 0.00,
       "cultural_impact" => 0.10,
       "people_quality" => 0.00
@@ -181,7 +181,7 @@ weight_profiles = [
     category_weights: %{
       "mob" => 0.20,
       "ivory_tower" => 0.10,
-      "industry_recognition" => 0.00,
+      "festival_recognition" => 0.00,
       "financial_performance" => 0.00,
       "cultural_impact" => 0.40,
       "people_quality" => 0.30
@@ -203,7 +203,7 @@ Enum.each(weight_profiles, fn profile ->
     Map.take(weights, [
       "mob",
       "ivory_tower",
-      "industry_recognition",
+      "festival_recognition",
       "financial_performance",
       "cultural_impact",
       "people_quality"
@@ -216,14 +216,14 @@ Enum.each(weight_profiles, fn profile ->
       IO.puts("WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (> 1.01)")
 
       IO.puts(
-        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, industry_recognition=#{weights["industry_recognition"]}, cultural_impact=#{weights["cultural_impact"]}, people_quality=#{weights["people_quality"]}, financial_performance=#{weights["financial_performance"]}"
+        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, festival_recognition=#{weights["festival_recognition"]}, cultural_impact=#{weights["cultural_impact"]}, people_quality=#{weights["people_quality"]}, financial_performance=#{weights["financial_performance"]}"
       )
 
     sum < 0.99 ->
       IO.puts("WARNING: #{profile.name} category weights sum to #{Float.round(sum, 4)} (< 0.99)")
 
       IO.puts(
-        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, industry_recognition=#{weights["industry_recognition"]}, cultural_impact=#{weights["cultural_impact"]}, people_quality=#{weights["people_quality"]}, financial_performance=#{weights["financial_performance"]}"
+        "  Breakdown: mob=#{weights["mob"]}, ivory_tower=#{weights["ivory_tower"]}, festival_recognition=#{weights["festival_recognition"]}, cultural_impact=#{weights["cultural_impact"]}, people_quality=#{weights["people_quality"]}, financial_performance=#{weights["financial_performance"]}"
       )
 
     true ->

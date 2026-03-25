@@ -19,7 +19,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
       Map.get(presets, :balanced, %{
         mob: 0.10,
         ivory_tower: 0.10,
-        industry_recognition: 0.20,
+        festival_recognition: 0.20,
         cultural_impact: 0.20,
         people_quality: 0.20,
         financial_performance: 0.20
@@ -56,7 +56,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
         when key in [
                "mob",
                "ivory_tower",
-               "industry_recognition",
+               "festival_recognition",
                "cultural_impact",
                "people_quality",
                "financial_performance"
@@ -462,7 +462,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
 
   defp humanize_dimension(:mob), do: "The Mob"
   defp humanize_dimension(:ivory_tower), do: "The Ivory Tower"
-  defp humanize_dimension(:industry_recognition), do: "Industry Recognition"
+  defp humanize_dimension(:festival_recognition), do: "Industry Recognition"
   defp humanize_dimension(:cultural_impact), do: "Cultural Impact"
   defp humanize_dimension(:people_quality), do: "People Quality"
   defp humanize_dimension(:financial_performance), do: "Financial Performance"
@@ -470,7 +470,7 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
 
   defp dimension_description(:mob), do: "Audience ratings (IMDb, TMDb)"
   defp dimension_description(:ivory_tower), do: "Critics scores (RT Tomatometer, Metacritic)"
-  defp dimension_description(:industry_recognition), do: "Festival awards and nominations"
+  defp dimension_description(:festival_recognition), do: "Festival awards and nominations"
   defp dimension_description(:cultural_impact), do: "Canonical lists and popularity metrics"
   defp dimension_description(:people_quality), do: "Quality of directors, actors, and crew"
 

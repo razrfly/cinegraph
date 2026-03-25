@@ -49,7 +49,8 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
     end
 
     test "all named profiles have the 6 required criteria keys" do
-      required_keys = ~w(mob ivory_tower festival_recognition cultural_impact technical_innovation auteur_recognition)a
+      required_keys =
+        ~w(mob ivory_tower festival_recognition cultural_impact technical_innovation auteur_recognition)a
 
       for profile <- CriteriaScoring.get_named_profiles() do
         for key <- required_keys do
@@ -103,7 +104,7 @@ defmodule Cinegraph.Predictions.CriteriaScoringTest do
         # CriteriaScoring uses its own 6-criterion predictions vocabulary
         # (mob, ivory_tower, festival_recognition, cultural_impact,
         #  technical_innovation, auteur_recognition) — separate from the
-        # production ScoringConfiguration which uses industry_recognition,
+        # production ScoringConfiguration which uses festival_recognition,
         # people_quality, financial_performance.
         assert map_size(criteria_scores) == 6
 

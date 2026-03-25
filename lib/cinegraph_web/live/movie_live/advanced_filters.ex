@@ -243,7 +243,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "actor_ids",
       "person_ids",
       "mob_min",
-      "industry_recognition_min",
+      "festival_recognition_min",
       "cultural_impact_min"
     ]
 
@@ -300,7 +300,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "actor_ids",
       "person_ids",
       "mob_min",
-      "industry_recognition_min",
+      "festival_recognition_min",
       "cultural_impact_min"
     ]
 
@@ -348,7 +348,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "actor_ids" -> "Actors"
       "person_ids" -> "People"
       "mob_min" -> "Mob Score"
-      "industry_recognition_min" -> "Industry Recognition"
+      "festival_recognition_min" -> "Industry Recognition"
       "cultural_impact_min" -> "Cultural Impact"
       _ -> key |> String.replace("_", " ") |> String.capitalize()
     end

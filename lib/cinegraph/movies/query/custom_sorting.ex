@@ -42,7 +42,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in ~w(mob ivory_tower industry_recognition cultural_impact people_quality financial_performance) ->
+      field in ~w(mob ivory_tower festival_recognition cultural_impact people_quality financial_performance) ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->
@@ -230,7 +230,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
     ])
   end
 
-  defp apply_discovery_metric_sort(query, "industry_recognition", direction) do
+  defp apply_discovery_metric_sort(query, "festival_recognition", direction) do
     order_func = if direction == :desc, do: :desc, else: :asc
 
     order_by(query, [m], [
@@ -344,7 +344,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
   defp apply_score_cache_sort(query, direction, weights) when is_map(weights) do
     mob = weights["mob"] || 0.0
     ivory = weights["ivory_tower"] || 0.0
-    industry = weights["industry_recognition"] || 0.0
+    industry = weights["festival_recognition"] || 0.0
     cultural = weights["cultural_impact"] || 0.0
     people = weights["people_quality"] || 0.0
     financial = weights["financial_performance"] || 0.0
@@ -364,7 +364,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
             ^ivory,
             sc.ivory_tower_score,
             ^industry,
-            sc.industry_recognition_score,
+            sc.festival_recognition_score,
             ^cultural,
             sc.cultural_impact_score,
             ^people,
@@ -383,7 +383,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
            ^ivory,
            sc.ivory_tower_score,
            ^industry,
-           sc.industry_recognition_score,
+           sc.festival_recognition_score,
            ^cultural,
            sc.cultural_impact_score,
            ^people,
@@ -405,7 +405,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
             ^ivory,
             sc.ivory_tower_score,
             ^industry,
-            sc.industry_recognition_score,
+            sc.festival_recognition_score,
             ^cultural,
             sc.cultural_impact_score,
             ^people,
@@ -424,7 +424,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
            ^ivory,
            sc.ivory_tower_score,
            ^industry,
-           sc.industry_recognition_score,
+           sc.festival_recognition_score,
            ^cultural,
            sc.cultural_impact_score,
            ^people,

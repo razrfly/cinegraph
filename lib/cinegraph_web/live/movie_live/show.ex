@@ -12,6 +12,7 @@ defmodule CinegraphWeb.MovieLive.Show do
   alias Cinegraph.Movies.MovieCollaborations
   alias Cinegraph.Metrics.DisparityCalculator
   alias Cinegraph.Repo
+  alias Cinegraph.Workers.MovieScoreCacheWorker
 
   require Logger
 
@@ -153,11 +154,13 @@ defmodule CinegraphWeb.MovieLive.Show do
     # Load aggregated metrics for backward compatibility
     metrics = Metrics.get_movie_aggregates(id)
 
-    # Preload score cache first — skip live calculation when cache is warm
+    # Preload score cache first — skip live calculation when cache is warm and current
     movie = Repo.replica().preload(movie, :score_cache)
 
+    current_version = MovieScoreCacheWorker.current_version()
+
     {display_scores, disparity_data} =
-      if movie.score_cache do
+      if movie.score_cache && movie.score_cache.calculation_version == current_version do
         ds = build_display_scores(movie.score_cache, nil)
 
         dd = %{
@@ -167,6 +170,11 @@ defmodule CinegraphWeb.MovieLive.Show do
 
         {ds, dd}
       else
+        # Stale or missing — enqueue background refresh if cache exists but is stale
+        if movie.score_cache do
+          MovieScoreCacheWorker.new(%{"movie_id" => movie.id}) |> Oban.insert()
+        end
+
         score_data = MovieScoring.calculate_movie_scores(movie)
         {build_display_scores(nil, score_data), DisparityCalculator.calculate_all(score_data)}
       end
@@ -538,7 +546,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     %{
       mob: c.mob,
       ivory_tower: c.ivory_tower,
-      industry_recognition: c.industry_recognition,
+      festival_recognition: c.festival_recognition,
       cultural_impact: c.cultural_impact,
       people_quality: c.people_quality,
       financial_performance: c.financial_performance,
@@ -550,7 +558,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     %{
       mob: cache.mob_score || 0.0,
       ivory_tower: cache.ivory_tower_score || 0.0,
-      industry_recognition: cache.industry_recognition_score || 0.0,
+      festival_recognition: cache.festival_recognition_score || 0.0,
       cultural_impact: cache.cultural_impact_score || 0.0,
       people_quality: cache.people_quality_score || 0.0,
       financial_performance: cache.financial_performance_score || 0.0,

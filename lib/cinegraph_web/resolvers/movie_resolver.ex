@@ -120,7 +120,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
           %{
             mob: cache.mob_score,
             ivory_tower: cache.ivory_tower_score,
-            industry_recognition: cache.industry_recognition_score,
+            festival_recognition: cache.festival_recognition_score,
             cultural_impact: cache.cultural_impact_score,
             people_quality: cache.people_quality_score,
             financial_performance: cache.financial_performance_score,

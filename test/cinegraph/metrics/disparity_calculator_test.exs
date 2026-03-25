@@ -42,7 +42,7 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
       components = %{
         mob: 5.0,
         ivory_tower: 5.0,
-        industry_recognition: 5.0,
+        festival_recognition: 5.0,
         cultural_impact: 5.0,
         people_quality: 5.0,
         financial_performance: 5.0
@@ -55,7 +55,7 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
       components = %{
         mob: 0.0,
         ivory_tower: 10.0,
-        industry_recognition: 0.0,
+        festival_recognition: 0.0,
         cultural_impact: 10.0,
         people_quality: 0.0,
         financial_performance: 10.0
@@ -72,7 +72,7 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
         components: %{
           mob: 0.0,
           ivory_tower: 0.0,
-          industry_recognition: 0.0,
+          festival_recognition: 0.0,
           cultural_impact: 0.0,
           people_quality: 0.0,
           financial_performance: 0.0
@@ -90,7 +90,7 @@ defmodule Cinegraph.Metrics.DisparityCalculatorTest do
         components: %{
           mob: 4.0,
           ivory_tower: 8.5,
-          industry_recognition: 7.0,
+          festival_recognition: 7.0,
           cultural_impact: 6.0,
           people_quality: 5.0,
           financial_performance: 3.0

@@ -27,7 +27,7 @@ defmodule CinegraphWeb.Schema.MovieTypes do
   object :lens_scores do
     field :mob, :float, description: "Audience score (IMDb, TMDb, RT Audience) — 0-10"
     field :ivory_tower, :float, description: "Critics score (Metacritic, RT Tomatometer) — 0-10"
-    field :industry_recognition, :float, description: "Festival & award recognition — 0-10"
+    field :festival_recognition, :float, description: "Festival & award recognition — 0-10"
     field :cultural_impact, :float, description: "Canonical sources & cultural reach — 0-10"
     field :people_quality, :float, description: "Cast & crew quality — 0-10"
     field :financial_performance, :float, description: "Box office performance — 0-10"

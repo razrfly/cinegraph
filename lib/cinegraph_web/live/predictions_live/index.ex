@@ -112,7 +112,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
               category_weights: %{
                 "mob" => 0.10,
                 "ivory_tower" => 0.10,
-                "industry_recognition" => 0.20,
+                "festival_recognition" => 0.20,
                 "cultural_impact" => 0.20,
                 "people_quality" => 0.20,
                 "financial_performance" => 0.20
@@ -270,7 +270,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       new_weights = %{
         mob: parse_param.(params["mob"]),
         ivory_tower: parse_param.(params["ivory_tower"]),
-        industry_recognition: parse_param.(params["industry_recognition"]),
+        festival_recognition: parse_param.(params["festival_recognition"]),
         cultural_impact: parse_param.(params["cultural_impact"]),
         people_quality: parse_param.(params["people_quality"]),
         financial_performance: parse_param.(params["financial_performance"])
@@ -480,7 +480,7 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   defp criterion_label(:mob), do: "The Mob"
   defp criterion_label(:ivory_tower), do: "The Ivory Tower"
-  defp criterion_label(:industry_recognition), do: "Industry Recognition"
+  defp criterion_label(:festival_recognition), do: "Industry Recognition"
   defp criterion_label(:cultural_impact), do: "Cultural Impact"
   defp criterion_label(:people_quality), do: "People Quality"
   defp criterion_label(:financial_performance), do: "Financial Performance"

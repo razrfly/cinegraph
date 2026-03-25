@@ -11,7 +11,9 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
     Metrics.DisparityCalculator
   }
 
-  @calculation_version "1"
+  @calculation_version "4"
+
+  def current_version, do: @calculation_version
 
   @impl true
   def perform(%Oban.Job{args: %{"movie_id" => movie_id}}) do
@@ -23,7 +25,7 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
       movie_id: movie_id,
       mob_score: scores.components.mob,
       ivory_tower_score: scores.components.ivory_tower,
-      industry_recognition_score: scores.components.industry_recognition,
+      festival_recognition_score: scores.components.festival_recognition,
       cultural_impact_score: scores.components.cultural_impact,
       people_quality_score: scores.components.people_quality,
       financial_performance_score: scores.components.financial_performance,
@@ -40,15 +42,19 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
     |> MovieScoreCache.changeset(attrs)
     |> Repo.insert(
       on_conflict:
-        {:replace, ~w[mob_score ivory_tower_score industry_recognition_score cultural_impact_score
+        {:replace, ~w[mob_score ivory_tower_score festival_recognition_score cultural_impact_score
             people_quality_score financial_performance_score overall_score score_confidence
             disparity_score disparity_category unpredictability_score
             calculated_at calculation_version updated_at]a},
       conflict_target: :movie_id
     )
     |> case do
-      {:ok, _} -> :ok
-      {:error, cs} -> {:error, inspect(cs.errors)}
+      {:ok, _} ->
+        Cinegraph.Movies.Cache.invalidate_search_results()
+        :ok
+
+      {:error, cs} ->
+        {:error, inspect(cs.errors)}
     end
   end
 

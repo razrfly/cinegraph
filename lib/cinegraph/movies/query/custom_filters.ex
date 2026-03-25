@@ -525,14 +525,14 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   # Metric threshold filters
   defp filter_by_metric_thresholds(query, params) do
     query
-    |> filter_by_metric(:industry_recognition, params.industry_recognition_min)
+    |> filter_by_metric(:festival_recognition, params.festival_recognition_min)
     |> filter_by_metric(:cultural_impact, params.cultural_impact_min)
     |> filter_by_metric(:people_quality, params.people_quality_min)
   end
 
   defp filter_by_metric(query, _dimension, nil), do: query
 
-  defp filter_by_metric(query, :industry_recognition, min_value) do
+  defp filter_by_metric(query, :festival_recognition, min_value) do
     where(
       query,
       [m],

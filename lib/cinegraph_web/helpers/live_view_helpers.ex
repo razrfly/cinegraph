@@ -295,7 +295,7 @@ defmodule CinegraphWeb.LiveViewHelpers do
   """
   def lens_display_name(:mob), do: {"🔥", "The Mob"}
   def lens_display_name(:ivory_tower), do: {"🎭", "The Ivory Tower"}
-  def lens_display_name(:industry_recognition), do: {"🏆", "The Inner Circle"}
+  def lens_display_name(:festival_recognition), do: {"🏆", "The Inner Circle"}
   def lens_display_name(:cultural_impact), do: {"⏳", "The Time Machine"}
   def lens_display_name(:people_quality), do: {"🎬", "The Auteurs"}
   def lens_display_name(:financial_performance), do: {"💵", "The Box Office"}

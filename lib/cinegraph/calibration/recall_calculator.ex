@@ -196,7 +196,7 @@ defmodule Cinegraph.Calibration.RecallCalculator do
       lenses = [
         {:mob, "Mob (Audience)"},
         {:ivory_tower, "Ivory Tower (Critics)"},
-        {:industry_recognition, "Industry Recognition"},
+        {:festival_recognition, "Industry Recognition"},
         {:cultural_impact, "Cultural Impact"},
         {:people_quality, "People Quality"},
         {:financial_performance, "Financial Performance"}

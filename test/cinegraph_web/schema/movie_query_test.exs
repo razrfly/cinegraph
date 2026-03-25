@@ -201,7 +201,7 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
           movie_id: movie.id,
           mob_score: 7.5,
           ivory_tower_score: 8.2,
-          industry_recognition_score: 6.0,
+          festival_recognition_score: 6.0,
           cultural_impact_score: 5.5,
           people_quality_score: 7.0,
           financial_performance_score: 4.0,

@@ -42,7 +42,7 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   @default_weights %{
     mob: 0.20,
     ivory_tower: 0.20,
-    industry_recognition: 0.20,
+    festival_recognition: 0.20,
     cultural_impact: 0.20,
     people_quality: 0.20,
     financial_performance: 0.0
@@ -57,28 +57,28 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
       crowd_pleaser: %{
         mob: 0.5,
         ivory_tower: 0.0,
-        industry_recognition: 0.1,
+        festival_recognition: 0.1,
         cultural_impact: 0.2,
         people_quality: 0.2
       },
       critics_choice: %{
         mob: 0.25,
         ivory_tower: 0.25,
-        industry_recognition: 0.2,
+        festival_recognition: 0.2,
         cultural_impact: 0.1,
         people_quality: 0.2
       },
       award_winner: %{
         mob: 0.125,
         ivory_tower: 0.125,
-        industry_recognition: 0.5,
+        festival_recognition: 0.5,
         cultural_impact: 0.1,
         people_quality: 0.15
       },
       cult_classic: %{
         mob: 0.125,
         ivory_tower: 0.125,
-        industry_recognition: 0.1,
+        festival_recognition: 0.1,
         cultural_impact: 0.5,
         people_quality: 0.15
       }

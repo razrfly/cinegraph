@@ -270,7 +270,7 @@ defmodule CinegraphWeb.MovieLive.Index do
       %{value: "popularity", label: "🔥 Popularity", group: "Ratings"},
       %{value: "mob", label: "👥 The Mob", group: "By Lens"},
       %{value: "ivory_tower", label: "🎭 The Ivory Tower", group: "By Lens"},
-      %{value: "industry_recognition", label: "🏆 Industry Recognition", group: "By Lens"},
+      %{value: "festival_recognition", label: "🏆 Industry Recognition", group: "By Lens"},
       %{value: "cultural_impact", label: "⏳ Cultural Impact", group: "By Lens"},
       %{value: "people_quality", label: "🎬 People Quality", group: "By Lens"}
     ]

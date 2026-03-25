@@ -23,7 +23,7 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     field :source_field, :string
 
     # Category mapping
-    # 'mob', 'ivory_tower', 'industry_recognition', 'financial_performance', 'cultural_impact', 'people_quality'
+    # 'mob', 'ivory_tower', 'festival_recognition', 'financial_performance', 'cultural_impact', 'people_quality'
     field :category, :string
     # e.g., 'critic_rating', 'audience_rating', 'major_award'
     field :subcategory, :string
@@ -72,7 +72,7 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     |> validate_inclusion(:category, [
       "mob",
       "ivory_tower",
-      "industry_recognition",
+      "festival_recognition",
       "financial_performance",
       "cultural_impact",
       "people_quality"

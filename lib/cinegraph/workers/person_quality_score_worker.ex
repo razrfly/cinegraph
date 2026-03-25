@@ -12,7 +12,11 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
     # Prevent duplicate jobs within 1 hour
     unique: [period: 3600]
 
+  import Ecto.Query
+
   alias Cinegraph.Metrics.PersonQualityScore
+  alias Cinegraph.Repo
+  alias Cinegraph.Workers.MovieScoreCacheWorker
   require Logger
 
   @impl Oban.Worker
@@ -24,6 +28,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
         case PersonQualityScore.store_person_score(person_id, score, components) do
           {:ok, _metric} ->
             Logger.info("Universal PQS calculated and stored for person #{person_id}: #{score}")
+            enqueue_movie_cache_refresh_for_people([person_id])
             :ok
 
           {:error, reason} ->
@@ -46,6 +51,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
     case PersonQualityScore.calculate_all_person_scores(min_credits) do
       {:ok, %{total: total, successful: successful}} ->
         Logger.info("Universal PQS batch complete: #{successful}/#{total} people processed")
+        MovieScoreCacheWorker.queue_all()
         :ok
 
       {:error, reason} ->
@@ -89,6 +95,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
       "Daily incremental PQS complete: #{successful}/#{length(person_ids)} people processed"
     )
 
+    enqueue_movie_cache_refresh_for_people(person_ids)
     :ok
   end
 
@@ -103,6 +110,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
     case PersonQualityScore.calculate_all_person_scores(min_credits) do
       {:ok, %{total: total, successful: successful}} ->
         Logger.info("Weekly full PQS complete: #{successful}/#{total} people processed")
+        MovieScoreCacheWorker.queue_all()
         :ok
 
       {:error, reason} ->
@@ -122,6 +130,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
     case PersonQualityScore.calculate_all_person_scores(min_credits) do
       {:ok, %{total: total, successful: successful}} ->
         Logger.info("Monthly deep PQS complete: #{successful}/#{total} people processed")
+        MovieScoreCacheWorker.queue_all()
         :ok
 
       {:error, reason} ->
@@ -166,6 +175,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
       "Stale cleanup PQS complete: #{successful}/#{length(person_ids)} people processed"
     )
 
+    enqueue_movie_cache_refresh_for_people(person_ids)
     :ok
   end
 
@@ -197,6 +207,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
       "Credit changes PQS batch complete: #{successful}/#{length(person_ids)} people processed"
     )
 
+    enqueue_movie_cache_refresh_for_people(person_ids)
     :ok
   end
 
@@ -233,6 +244,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
       "Festival import PQS batch complete: #{successful}/#{length(person_ids)} people processed"
     )
 
+    enqueue_movie_cache_refresh_for_people(person_ids)
     :ok
   end
 
@@ -269,6 +281,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
       "External metrics PQS batch complete: #{successful}/#{length(person_ids)} people processed"
     )
 
+    enqueue_movie_cache_refresh_for_movies(movie_ids)
     :ok
   end
 
@@ -291,6 +304,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
           "Emergency PQS recalculation complete: #{successful}/#{total} people processed"
         )
 
+        MovieScoreCacheWorker.queue_all()
         :ok
 
       {:error, reason} ->
@@ -334,10 +348,29 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
 
     # You could also add this to Oban's cron configuration
     # in config.exs for automatic weekly recalculation:
-    # 
+    #
     # config :cinegraph, Oban,
     #   crontab: [
     #     {"0 0 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker, args: %{batch: "all_people", min_credits: 5}}
     #   ]
+  end
+
+  defp enqueue_movie_cache_refresh_for_people(person_ids) do
+    movie_ids =
+      Repo.all(
+        from mc in "movie_credits",
+          where: mc.person_id in ^person_ids,
+          select: mc.movie_id,
+          distinct: true
+      )
+
+    jobs = Enum.map(movie_ids, &MovieScoreCacheWorker.new(%{"movie_id" => &1}))
+    Oban.insert_all(jobs)
+    Logger.info("Enqueued movie cache refresh for #{length(movie_ids)} movies")
+  end
+
+  defp enqueue_movie_cache_refresh_for_movies(movie_ids) do
+    jobs = Enum.map(movie_ids, &MovieScoreCacheWorker.new(%{"movie_id" => &1}))
+    Oban.insert_all(jobs)
   end
 end
