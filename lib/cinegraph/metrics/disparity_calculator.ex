@@ -43,7 +43,7 @@ defmodule Cinegraph.Metrics.DisparityCalculator do
   def calculate_unpredictability(%{
         mob: mob,
         ivory_tower: ivory,
-        industry_recognition: industry,
+        festival_recognition: industry,
         cultural_impact: cultural,
         people_quality: people,
         financial_performance: financial

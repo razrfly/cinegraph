@@ -13,7 +13,7 @@ defmodule Cinegraph.Metrics.ScoringService do
   @default_category_weights %{
     "mob" => 0.10,
     "ivory_tower" => 0.10,
-    "industry_recognition" => 0.20,
+    "festival_recognition" => 0.20,
     "cultural_impact" => 0.20,
     "people_quality" => 0.20,
     "financial_performance" => 0.20
@@ -99,11 +99,11 @@ defmodule Cinegraph.Metrics.ScoringService do
       mob: get_category_weight(profile, "mob", @default_category_weights["mob"]),
       ivory_tower:
         get_category_weight(profile, "ivory_tower", @default_category_weights["ivory_tower"]),
-      industry_recognition:
+      festival_recognition:
         get_category_weight(
           profile,
-          "industry_recognition",
-          @default_category_weights["industry_recognition"]
+          "festival_recognition",
+          @default_category_weights["festival_recognition"]
         ),
       cultural_impact:
         get_category_weight(
@@ -136,11 +136,11 @@ defmodule Cinegraph.Metrics.ScoringService do
       category_weights: %{
         "mob" => Map.get(weights, :mob, @default_category_weights["mob"]),
         "ivory_tower" => Map.get(weights, :ivory_tower, @default_category_weights["ivory_tower"]),
-        "industry_recognition" =>
+        "festival_recognition" =>
           Map.get(
             weights,
-            :industry_recognition,
-            @default_category_weights["industry_recognition"]
+            :festival_recognition,
+            @default_category_weights["festival_recognition"]
           ),
         "financial_performance" =>
           Map.get(
@@ -246,7 +246,7 @@ defmodule Cinegraph.Metrics.ScoringService do
   defp build_metric_weights_from_discovery(weights) do
     mob_weight = Map.get(weights, :mob, 0.2)
     ivory_weight = Map.get(weights, :ivory_tower, 0.2)
-    award_weight = Map.get(weights, :industry_recognition, 0.2)
+    award_weight = Map.get(weights, :festival_recognition, 0.2)
     cultural_weight = Map.get(weights, :cultural_impact, 0.2)
 
     %{
@@ -280,7 +280,7 @@ defmodule Cinegraph.Metrics.ScoringService do
       %{
         mob: 0.10,
         ivory_tower: 0.10,
-        industry_recognition: 0.20,
+        festival_recognition: 0.20,
         cultural_impact: 0.20,
         people_quality: 0.20,
         financial_performance: 0.20
@@ -352,12 +352,47 @@ defmodule Cinegraph.Metrics.ScoringService do
 
   defp join_festival_data(query) do
     festival_subquery =
-      from(f in "festival_nominations",
-        group_by: f.movie_id,
+      from(fnom in "festival_nominations",
+        join: fc in "festival_categories",
+        on: fnom.category_id == fc.id,
+        join: fcer in "festival_ceremonies",
+        on: fnom.ceremony_id == fcer.id,
+        join: fo in "festival_organizations",
+        on: fcer.organization_id == fo.id,
+        group_by: fnom.movie_id,
         select: %{
-          movie_id: f.movie_id,
-          wins: count(fragment("CASE WHEN ? = true THEN 1 END", f.won)),
-          nominations: count(f.id)
+          movie_id: fnom.movie_id,
+          prestige_score:
+            fragment(
+              """
+              LEAST(10.0, SUM(
+                CASE ?
+                  WHEN 'AMPAS'  THEN (CASE WHEN ? THEN 10.0 ELSE 8.0 END)
+                  WHEN 'CFF'    THEN (CASE WHEN ? THEN 9.5  ELSE 7.5 END)
+                  WHEN 'VIFF'   THEN (CASE WHEN ? THEN 9.0  ELSE 7.0 END)
+                  WHEN 'BIFF'   THEN (CASE WHEN ? THEN 9.0  ELSE 7.0 END)
+                  WHEN 'BAFTA'  THEN (CASE WHEN ? THEN 8.5  ELSE 6.5 END)
+                  WHEN 'HFPA'   THEN (CASE WHEN ? THEN 8.0  ELSE 6.0 END)
+                  WHEN 'SFF'    THEN (CASE WHEN ? THEN 7.5  ELSE 6.0 END)
+                  WHEN 'CCA'    THEN (CASE WHEN ? THEN 7.0  ELSE 5.0 END)
+                  ELSE               (CASE WHEN ? THEN 5.0  ELSE 3.0 END)
+                END +
+                CASE WHEN LOWER(?) LIKE ANY(ARRAY['%picture%','%film%','%director%'])
+                     THEN 1.0 ELSE 0.0 END
+              ))
+              """,
+              fo.abbreviation,
+              fnom.won,
+              fnom.won,
+              fnom.won,
+              fnom.won,
+              fnom.won,
+              fnom.won,
+              fnom.won,
+              fnom.won,
+              fnom.won,
+              fc.name
+            )
         }
       )
 
@@ -484,7 +519,7 @@ defmodule Cinegraph.Metrics.ScoringService do
               WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
               ELSE 0.0
             END +
-            ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
+            ? * COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0) +
             ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
             ? * COALESCE(CASE
@@ -509,9 +544,8 @@ defmodule Cinegraph.Metrics.ScoringService do
             rt.value,
             mc.value,
             mc.value,
-            ^weights.industry_recognition,
-            f.wins,
-            f.nominations,
+            ^weights.festival_recognition,
+            f.prestige_score,
             ^weights.cultural_impact,
             m.canonical_sources,
             pop.value,
@@ -580,11 +614,10 @@ defmodule Cinegraph.Metrics.ScoringService do
               mc.value,
               mc.value
             ),
-          industry_recognition:
+          festival_recognition:
             fragment(
-              "COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0)",
-              f.wins,
-              f.nominations
+              "COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0)",
+              f.prestige_score
             ),
           cultural_impact:
             fragment(
@@ -659,7 +692,7 @@ defmodule Cinegraph.Metrics.ScoringService do
               WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
               ELSE 0.0
             END +
-            ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
+            ? * COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0) +
             ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
             ? * COALESCE(CASE
@@ -684,9 +717,8 @@ defmodule Cinegraph.Metrics.ScoringService do
             rt.value,
             mc.value,
             mc.value,
-            ^weights.industry_recognition,
-            f.wins,
-            f.nominations,
+            ^weights.festival_recognition,
+            f.prestige_score,
             ^weights.cultural_impact,
             m.canonical_sources,
             pop.value,
@@ -724,11 +756,10 @@ defmodule Cinegraph.Metrics.ScoringService do
               mc.value,
               mc.value
             ),
-          industry_recognition:
+          festival_recognition:
             fragment(
-              "COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0)",
-              f.wins,
-              f.nominations
+              "COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0)",
+              f.prestige_score
             ),
           cultural_impact:
             fragment(
@@ -803,7 +834,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
             ELSE 0.0
           END +
-          ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
+          ? * COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0) +
           ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
           ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
           ? * COALESCE(CASE
@@ -828,9 +859,8 @@ defmodule Cinegraph.Metrics.ScoringService do
           rt.value,
           mc.value,
           mc.value,
-          ^weights.industry_recognition,
-          f.wins,
-          f.nominations,
+          ^weights.festival_recognition,
+          f.prestige_score,
           ^weights.cultural_impact,
           m.canonical_sources,
           pop.value,
@@ -883,7 +913,7 @@ defmodule Cinegraph.Metrics.ScoringService do
             WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
             ELSE 0.0
           END +
-          ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
+          ? * COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0) +
           ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
           ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
           ? * COALESCE(CASE
@@ -908,9 +938,8 @@ defmodule Cinegraph.Metrics.ScoringService do
           rt.value,
           mc.value,
           mc.value,
-          ^weights.industry_recognition,
-          f.wins,
-          f.nominations,
+          ^weights.festival_recognition,
+          f.prestige_score,
           ^weights.cultural_impact,
           m.canonical_sources,
           pop.value,
@@ -968,7 +997,7 @@ defmodule Cinegraph.Metrics.ScoringService do
               WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
               ELSE 0.0
             END +
-            ? * COALESCE(LEAST(1.0, (COALESCE(MAX(?), 0) * 0.2 + COALESCE(MAX(?), 0) * 0.05)), 0) +
+            ? * COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0) +
             ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
             ? * COALESCE(CASE
@@ -993,9 +1022,8 @@ defmodule Cinegraph.Metrics.ScoringService do
             rt.value,
             mc.value,
             mc.value,
-            ^weights.industry_recognition,
-            f.wins,
-            f.nominations,
+            ^weights.festival_recognition,
+            f.prestige_score,
             ^weights.cultural_impact,
             m.canonical_sources,
             pop.value,
@@ -1048,7 +1076,7 @@ defmodule Cinegraph.Metrics.ScoringService do
               WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
               ELSE 0.0
             END +
-            ? * COALESCE(LEAST(1.0, (COALESCE(?, 0) * 0.2 + COALESCE(?, 0) * 0.05)), 0) +
+            ? * COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0) +
             ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
             ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
             ? * COALESCE(CASE
@@ -1073,9 +1101,8 @@ defmodule Cinegraph.Metrics.ScoringService do
             rt.value,
             mc.value,
             mc.value,
-            ^weights.industry_recognition,
-            f.wins,
-            f.nominations,
+            ^weights.festival_recognition,
+            f.prestige_score,
             ^weights.cultural_impact,
             m.canonical_sources,
             pop.value,

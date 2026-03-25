@@ -16,7 +16,7 @@ defmodule Mix.Tasks.ImportOscars do
 
     * `--year` - Import a single year
     * `--years` - Import a range of years (format: START-END)
-    * `--all` - Import all available years (2016-2024)
+    * `--all` - Import all available years (1970-2024)
     * `--skip-enrichment` - Skip OMDb enrichment queue
     * `--dry-run` - Show what would be imported without making changes
     
@@ -137,11 +137,11 @@ defmodule Mix.Tasks.ImportOscars do
 
   defp import_all_years(options, dry_run) do
     Mix.shell().info(
-      "#{if dry_run, do: "[DRY RUN] ", else: ""}Importing all available Oscar years (2016-2024)..."
+      "#{if dry_run, do: "[DRY RUN] ", else: ""}Importing all available Oscar years (1970-2024)..."
     )
 
     if dry_run do
-      Enum.each(2016..2024, &show_year_preview/1)
+      Enum.each(1970..2024, &show_year_preview/1)
     else
       case Cinegraph.Cultural.import_all_oscar_years(options) do
         {:ok, %{job_count: count, status: :queued}} ->

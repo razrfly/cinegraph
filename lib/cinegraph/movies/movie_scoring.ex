@@ -5,6 +5,8 @@ defmodule Cinegraph.Movies.MovieScoring do
   """
 
   alias Cinegraph.Repo
+  alias Cinegraph.Scoring.FestivalPrestige
+  alias Cinegraph.Metrics.ScoringService
 
   # Helper to normalize DB numerics to floats
   def normalize_number(nil), do: nil
@@ -18,9 +20,9 @@ defmodule Cinegraph.Movies.MovieScoring do
   festival data, person quality, and financial performance.
 
   Uses the standard 6-category scoring system:
-  - The Mob (audience ratings from IMDb, TMDb, and RT Audience Score)
+  - The Mob (audience ratings from IMDb, TMDb)
   - The Ivory Tower (critics scores from Metacritic and RT Tomatometer)
-  - Industry Recognition (festival wins and nominations)
+  - Festival Recognition (festival wins and nominations)
   - Cultural Impact (canonical sources and popularity)
   - People Quality (quality scores of cast and crew)
   - Financial Performance (revenue and budget data)
@@ -35,7 +37,6 @@ defmodule Cinegraph.Movies.MovieScoring do
       MAX(CASE WHEN source = 'tmdb' AND metric_type = 'rating_votes' THEN value END) as tmdb_votes,
       MAX(CASE WHEN source = 'metacritic' AND metric_type = 'metascore' THEN value END) as metacritic,
       MAX(CASE WHEN source = 'rotten_tomatoes' AND metric_type = 'tomatometer' THEN value END) as rt_tomatometer,
-      MAX(CASE WHEN source = 'rotten_tomatoes' AND metric_type = 'audience_score' THEN value END) as rt_audience,
       MAX(CASE WHEN source = 'tmdb' AND metric_type = 'popularity_score' THEN value END) as popularity,
       MAX(CASE WHEN source = 'tmdb' AND metric_type = 'budget' THEN value END) as budget,
       MAX(CASE WHEN source = 'tmdb' AND metric_type = 'revenue_worldwide' THEN value END) as revenue
@@ -54,7 +55,6 @@ defmodule Cinegraph.Movies.MovieScoring do
               :tmdb_votes,
               :metacritic,
               :rt_tomatometer,
-              :rt_audience,
               :popularity,
               :budget,
               :revenue
@@ -67,22 +67,20 @@ defmodule Cinegraph.Movies.MovieScoring do
           %{}
       end
 
-    # Get festival data
+    # Get festival data (win_score/nom_score enable DB-backed prestige tiers)
     festival_query = """
-    SELECT
-      COUNT(CASE WHEN won = true THEN 1 END) as wins,
-      COUNT(*) as nominations
-    FROM festival_nominations
-    WHERE movie_id = $1
+    SELECT fo.abbreviation, fc.name, fnom.won, fo.win_score, fo.nom_score
+    FROM festival_nominations fnom
+    JOIN festival_categories fc ON fnom.category_id = fc.id
+    JOIN festival_ceremonies fcer ON fnom.ceremony_id = fcer.id
+    JOIN festival_organizations fo ON fcer.organization_id = fo.id
+    WHERE fnom.movie_id = $1
     """
 
     festival_data =
       case Repo.query(festival_query, [movie.id]) do
-        {:ok, %{rows: [[wins, nominations]]}} ->
-          %{wins: normalize_number(wins) || 0, nominations: normalize_number(nominations) || 0}
-
-        _ ->
-          %{wins: 0, nominations: 0}
+        {:ok, %{rows: rows}} -> rows
+        _ -> []
       end
 
     # Get average person quality — role-weighted, deduplicated top-10
@@ -106,7 +104,16 @@ defmodule Cinegraph.Movies.MovieScoring do
       JOIN person_metrics pm ON pm.person_id = mc.person_id
       WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
       GROUP BY mc.person_id
-      ORDER BY max_score * role_weight DESC
+      ORDER BY MAX(pm.score) * MAX(CASE mc.department
+          WHEN 'Directing'  THEN 3.0
+          WHEN 'Writing'    THEN 1.5
+          WHEN 'Production' THEN 1.0
+          ELSE
+            CASE WHEN mc.cast_order <= 3  THEN 2.0
+                 WHEN mc.cast_order <= 10 THEN 1.5
+                 ELSE 1.0
+            END
+        END) DESC
       LIMIT 10
     ) top_talent
     """
@@ -120,21 +127,23 @@ defmodule Cinegraph.Movies.MovieScoring do
     # Calculate component scores (0-10 scale)
     mob = calculate_mob_score(metrics)
     ivory_tower = calculate_ivory_tower_score(metrics)
-    industry_recognition = calculate_industry_recognition(festival_data)
+    festival_recognition = calculate_festival_recognition(festival_data)
     cultural_impact = calculate_cultural_impact(movie, metrics)
     # Convert from 0-100 to 0-10
     people_quality_score = person_quality / 10.0
     # Calculate financial performance score
     financial_performance = calculate_financial_performance(metrics)
 
-    # Calculate overall score (mob + ivory_tower each weight 0.10, others 0.20)
+    # Calculate overall score using Cinegraph Editorial weights
+    weights = get_editorial_weights()
+
     overall =
-      mob * 0.10 +
-        ivory_tower * 0.10 +
-        industry_recognition * 0.20 +
-        cultural_impact * 0.20 +
-        people_quality_score * 0.20 +
-        financial_performance * 0.20
+      mob * weights.mob +
+        ivory_tower * weights.ivory_tower +
+        festival_recognition * weights.festival_recognition +
+        cultural_impact * weights.cultural_impact +
+        people_quality_score * weights.people_quality +
+        financial_performance * weights.financial_performance
 
     %{
       overall_score: Float.round(overall, 1),
@@ -142,7 +151,7 @@ defmodule Cinegraph.Movies.MovieScoring do
       components: %{
         mob: Float.round(mob, 1),
         ivory_tower: Float.round(ivory_tower, 1),
-        industry_recognition: Float.round(industry_recognition, 1),
+        festival_recognition: Float.round(festival_recognition, 1),
         cultural_impact: Float.round(cultural_impact, 1),
         people_quality: Float.round(people_quality_score, 1),
         financial_performance: Float.round(financial_performance, 1)
@@ -152,20 +161,14 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate mob score (audience): IMDb + TMDb + RT Audience ratings, null-aware averaging.
+  Calculate mob score (audience): IMDb + TMDb ratings, null-aware averaging.
   Returns a 0–10 score.
   """
   def calculate_mob_score(metrics) do
     imdb = Map.get(metrics, :imdb_rating)
     tmdb = Map.get(metrics, :tmdb_rating)
 
-    rta =
-      case Map.get(metrics, :rt_audience) do
-        v when is_number(v) and v > 0 -> v / 10.0
-        _ -> nil
-      end
-
-    sources = [imdb, tmdb, rta] |> Enum.reject(&is_nil/1) |> Enum.filter(&(&1 > 0))
+    sources = [imdb, tmdb] |> Enum.reject(&is_nil/1) |> Enum.filter(&(&1 > 0))
 
     if sources == [], do: 0.0, else: Enum.sum(sources) / length(sources)
   end
@@ -187,10 +190,10 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
-  Calculate score confidence: fraction of the 5 core rating sources present (0.0–1.0).
+  Calculate score confidence: fraction of the 4 core rating sources present (0.0–1.0).
   """
   def calculate_score_confidence(metrics) do
-    keys = [:imdb_rating, :tmdb_rating, :rt_tomatometer, :metacritic, :rt_audience]
+    keys = [:imdb_rating, :tmdb_rating, :rt_tomatometer, :metacritic]
 
     present =
       Enum.count(keys, fn k ->
@@ -198,18 +201,31 @@ defmodule Cinegraph.Movies.MovieScoring do
         not is_nil(v) and v != 0
       end)
 
-    present / 5.0
+    present / 4.0
+  end
+
+  defp get_editorial_weights do
+    case ScoringService.get_profile("Cinegraph Editorial") do
+      nil ->
+        %{
+          mob: 0.05,
+          ivory_tower: 0.25,
+          festival_recognition: 0.20,
+          cultural_impact: 0.30,
+          people_quality: 0.15,
+          financial_performance: 0.05
+        }
+
+      profile ->
+        ScoringService.profile_to_discovery_weights(profile)
+    end
   end
 
   @doc """
-  Calculate industry recognition based on festival wins and nominations.
+  Calculate festival recognition based on festival wins and nominations.
   """
-  def calculate_industry_recognition(festival_data) do
-    wins = Map.get(festival_data, :wins, 0)
-    nominations = Map.get(festival_data, :nominations, 0)
-
-    # Score based on wins and nominations (capped at 10)
-    min(10.0, wins * 2.0 + nominations * 0.5)
+  def calculate_festival_recognition(nomination_rows) do
+    FestivalPrestige.score_nominations(nomination_rows, 10.0)
   end
 
   @doc """
@@ -349,7 +365,16 @@ defmodule Cinegraph.Movies.MovieScoring do
     JOIN people p ON p.id = mc.person_id
     WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
     GROUP BY mc.person_id
-    ORDER BY max_score * role_weight DESC
+    ORDER BY MAX(pm.score) * MAX(CASE mc.department
+        WHEN 'Directing'  THEN 3.0
+        WHEN 'Writing'    THEN 1.5
+        WHEN 'Production' THEN 1.0
+        ELSE
+          CASE WHEN mc.cast_order <= 3  THEN 2.0
+               WHEN mc.cast_order <= 10 THEN 1.5
+               ELSE 1.0
+          END
+      END) DESC
     LIMIT 10
     """
 

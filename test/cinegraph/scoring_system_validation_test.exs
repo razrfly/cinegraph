@@ -2,7 +2,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
   @moduledoc """
   Phase 4 Validation Tests for the unified 6-category scoring system.
 
-  Categories: mob, ivory_tower, industry_recognition, cultural_impact,
+  Categories: mob, ivory_tower, festival_recognition, cultural_impact,
   people_quality, financial_performance.
 
   Tests all 7 success criteria:
@@ -35,7 +35,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         category_weights: %{
           "mob" => 0.20,
           "ivory_tower" => 0.20,
-          "industry_recognition" => 0.20,
+          "festival_recognition" => 0.20,
           "cultural_impact" => 0.20,
           "people_quality" => 0.10,
           "financial_performance" => 0.10
@@ -51,7 +51,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         category_weights: %{
           "mob" => 0.10,
           "ivory_tower" => 0.40,
-          "industry_recognition" => 0.30,
+          "festival_recognition" => 0.30,
           "cultural_impact" => 0.10,
           "people_quality" => 0.05,
           "financial_performance" => 0.05
@@ -67,7 +67,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         category_weights: %{
           "mob" => 0.45,
           "ivory_tower" => 0.10,
-          "industry_recognition" => 0.05,
+          "festival_recognition" => 0.05,
           "cultural_impact" => 0.15,
           "people_quality" => 0.05,
           "financial_performance" => 0.20
@@ -83,7 +83,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         category_weights: %{
           "mob" => 0.10,
           "ivory_tower" => 0.25,
-          "industry_recognition" => 0.45,
+          "festival_recognition" => 0.45,
           "cultural_impact" => 0.10,
           "people_quality" => 0.05,
           "financial_performance" => 0.05
@@ -99,7 +99,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         category_weights: %{
           "mob" => 0.15,
           "ivory_tower" => 0.15,
-          "industry_recognition" => 0.05,
+          "festival_recognition" => 0.05,
           "cultural_impact" => 0.35,
           "people_quality" => 0.25,
           "financial_performance" => 0.05
@@ -170,7 +170,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
       assert Map.has_key?(score_data.components, :mob)
       assert Map.has_key?(score_data.components, :ivory_tower)
-      assert Map.has_key?(score_data.components, :industry_recognition)
+      assert Map.has_key?(score_data.components, :festival_recognition)
       assert Map.has_key?(score_data.components, :cultural_impact)
       assert Map.has_key?(score_data.components, :people_quality)
       assert Map.has_key?(score_data.components, :financial_performance)
@@ -181,7 +181,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
       assert Map.has_key?(weights, :mob)
       assert Map.has_key?(weights, :ivory_tower)
-      assert Map.has_key?(weights, :industry_recognition)
+      assert Map.has_key?(weights, :festival_recognition)
       assert Map.has_key?(weights, :cultural_impact)
       assert Map.has_key?(weights, :people_quality)
       assert Map.has_key?(weights, :financial_performance)
@@ -221,7 +221,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       categories = [
         :mob,
         :ivory_tower,
-        :industry_recognition,
+        :festival_recognition,
         :cultural_impact,
         :people_quality,
         :financial_performance
@@ -231,7 +231,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       descriptions = %{
         mob: "Audience ratings (IMDb, TMDb)",
         ivory_tower: "Critics scores (RT Tomatometer, Metacritic)",
-        industry_recognition: "Festival awards and nominations",
+        festival_recognition: "Festival awards and nominations",
         cultural_impact: "Canonical lists and popularity metrics",
         people_quality: "Quality of directors, actors, and crew",
         financial_performance: "Box office revenue and budget performance"
@@ -286,7 +286,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         category_weights: %{
           "mob" => 0.15,
           "ivory_tower" => 0.15,
-          "industry_recognition" => 0.25,
+          "festival_recognition" => 0.25,
           "cultural_impact" => 0.20,
           "people_quality" => 0.15,
           "financial_performance" => 0.10
@@ -320,7 +320,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         valid_categories = [
           "mob",
           "ivory_tower",
-          "industry_recognition",
+          "festival_recognition",
           "cultural_impact",
           "people_quality",
           "financial_performance"
@@ -344,7 +344,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         new_weights = %{
           "mob" => 0.15,
           "ivory_tower" => 0.15,
-          "industry_recognition" => 0.25,
+          "festival_recognition" => 0.25,
           "cultural_impact" => 0.20,
           "people_quality" => 0.15,
           "financial_performance" => 0.10

@@ -601,18 +601,18 @@ defmodule Cinegraph.Cultural do
   end
 
   @doc """
-  Import all available Oscar years (2016-2024).
-  Note: Oscars.org has data from 2016 onwards in the current format.
+  Import all available Oscar years (1970-2024).
+  Note: Oscars.org has ceremony pages from 1970 onwards.
 
   ## Examples
 
       iex> Cinegraph.Cultural.import_all_oscar_years()
-      %{2016 => {:ok, %{...}}, 2017 => {:ok, %{...}}, ...}
-      
+      %{1970 => {:ok, %{...}}, 1971 => {:ok, %{...}}, ...}
+
   """
   def import_all_oscar_years(options \\ []) do
-    # Oscars.org has data from 2016 onwards in the current format
-    import_oscar_years(2016..2024, options)
+    # Oscars.org has ceremony pages from 1970 onwards
+    import_oscar_years(1970..2024, options)
   end
 
   defp fetch_or_create_ceremony(year) do

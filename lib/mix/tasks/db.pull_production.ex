@@ -340,7 +340,11 @@ defmodule Mix.Tasks.Db.PullProduction do
       {:error, reason, code} ->
         IO.write("\r\e[K")
         File.rm(dump_path)
-        error("  ✗ pg_dump via SSH failed (exit #{code})#{if reason != "", do: ": #{reason}", else: ""}")
+
+        error(
+          "  ✗ pg_dump via SSH failed (exit #{code})#{if reason != "", do: ": #{reason}", else: ""}"
+        )
+
         {:error, "pg_dump via SSH failed"}
     end
   end

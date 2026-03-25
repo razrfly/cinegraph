@@ -9,7 +9,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
         category_weights: %{
           "mob" => 0.10,
           "ivory_tower" => 0.10,
-          "industry_recognition" => 0.20,
+          "festival_recognition" => 0.20,
           "cultural_impact" => 0.20,
           "people_quality" => 0.20,
           "financial_performance" => 0.20
@@ -20,7 +20,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       assert result.mob == 0.10
       assert result.ivory_tower == 0.10
-      assert result.industry_recognition == 0.20
+      assert result.festival_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
       assert result.financial_performance == 0.20
@@ -36,7 +36,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       assert result.mob == 0.10
       assert result.ivory_tower == 0.10
-      assert result.industry_recognition == 0.20
+      assert result.festival_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
       assert result.financial_performance == 0.20
@@ -52,7 +52,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       assert result.mob == 0.10
       assert result.ivory_tower == 0.10
-      assert result.industry_recognition == 0.20
+      assert result.festival_recognition == 0.20
       assert result.cultural_impact == 0.20
       assert result.people_quality == 0.20
       assert result.financial_performance == 0.20
@@ -64,7 +64,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
         category_weights: %{
           "mob" => 0.00,
           "ivory_tower" => 0.00,
-          "industry_recognition" => 0.50,
+          "festival_recognition" => 0.50,
           "cultural_impact" => 0.30,
           "people_quality" => 0.10,
           "financial_performance" => 0.10
@@ -75,7 +75,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       assert result.mob == 0.00
       assert result.ivory_tower == 0.00
-      assert result.industry_recognition == 0.50
+      assert result.festival_recognition == 0.50
       assert result.cultural_impact == 0.30
       assert result.people_quality == 0.10
       assert result.financial_performance == 0.10
@@ -87,7 +87,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
         category_weights: %{
           "mob" => 1.00,
           "ivory_tower" => 0.00,
-          "industry_recognition" => 0.00,
+          "festival_recognition" => 0.00,
           "cultural_impact" => 0.00,
           "people_quality" => 0.00,
           "financial_performance" => 0.00
@@ -98,7 +98,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
 
       assert result.mob == 1.00
       assert result.ivory_tower == 0.00
-      assert result.industry_recognition == 0.00
+      assert result.festival_recognition == 0.00
       assert result.cultural_impact == 0.00
       assert result.people_quality == 0.00
       assert result.financial_performance == 0.00
@@ -110,7 +110,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       weights = %{
         mob: 0.15,
         ivory_tower: 0.15,
-        industry_recognition: 0.25,
+        festival_recognition: 0.25,
         cultural_impact: 0.20,
         people_quality: 0.15,
         financial_performance: 0.10
@@ -121,7 +121,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.name == "Custom Test"
       assert result.category_weights["mob"] == 0.15
       assert result.category_weights["ivory_tower"] == 0.15
-      assert result.category_weights["industry_recognition"] == 0.25
+      assert result.category_weights["festival_recognition"] == 0.25
       assert result.category_weights["cultural_impact"] == 0.20
       assert result.category_weights["people_quality"] == 0.15
       assert result.category_weights["financial_performance"] == 0.10
@@ -131,7 +131,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       weights = %{
         mob: 0.30,
         ivory_tower: 0.20,
-        industry_recognition: 0.50
+        festival_recognition: 0.50
       }
 
       result = ScoringService.discovery_weights_to_profile(weights, "Partial Weights")
@@ -139,7 +139,7 @@ defmodule Cinegraph.Metrics.ScoringServiceTest do
       assert result.name == "Partial Weights"
       assert result.category_weights["mob"] == 0.30
       assert result.category_weights["ivory_tower"] == 0.20
-      assert result.category_weights["industry_recognition"] == 0.50
+      assert result.category_weights["festival_recognition"] == 0.50
       assert result.category_weights["cultural_impact"] == 0.20
       assert result.category_weights["people_quality"] == 0.20
       assert result.category_weights["financial_performance"] == 0.20

@@ -13,6 +13,9 @@ defmodule Cinegraph.Festivals.FestivalOrganization do
     field :founded_year, :integer
     field :website, :string
     field :metadata, :map, default: %{}
+    field :win_score, :float
+    field :nom_score, :float
+    field :prestige_tier, :integer
 
     has_many :ceremonies, Cinegraph.Festivals.FestivalCeremony, foreign_key: :organization_id
     has_many :categories, Cinegraph.Festivals.FestivalCategory, foreign_key: :organization_id
@@ -23,7 +26,18 @@ defmodule Cinegraph.Festivals.FestivalOrganization do
   @doc false
   def changeset(organization, attrs) do
     organization
-    |> cast(attrs, [:name, :slug, :abbreviation, :country, :founded_year, :website, :metadata])
+    |> cast(attrs, [
+      :name,
+      :slug,
+      :abbreviation,
+      :country,
+      :founded_year,
+      :website,
+      :metadata,
+      :win_score,
+      :nom_score,
+      :prestige_tier
+    ])
     |> validate_required([:name])
     |> maybe_generate_slug()
     |> unique_constraint(:name)

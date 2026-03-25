@@ -11,9 +11,9 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   6. Auteur Recognition (5%)
 
   NOTE: This module uses its own criterion vocabulary (festival_recognition,
-  technical_innovation, auteur_recognition) which is intentionally different from
-  the production `Cinegraph.Metrics.ScoringService` / `ScoringConfiguration` system
-  (industry_recognition, people_quality, financial_performance). These are two
+  technical_innovation, auteur_recognition). The production scoring system
+  (`Cinegraph.Metrics.ScoringService`) uses the same `festival_recognition` key
+  as well as `people_quality` and `financial_performance`. These are two
   independent scoring subsystems: this one drives the predictions algorithm for
   future 1001 Movies additions; the other drives the discovery and disparity UIs.
   """
@@ -21,6 +21,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   import Ecto.Query
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Scoring.FestivalPrestige
 
   @default_weights %{
     mob: 0.175,
@@ -34,28 +35,61 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   @named_profiles [
     %{
       name: "default",
-      description: "Balanced — festival 30%, mob/ivory 17.5% each, cultural 20%, technical 10%, auteur 5%",
+      description:
+        "Balanced — festival 30%, mob/ivory 17.5% each, cultural 20%, technical 10%, auteur 5%",
       weights: @default_weights
     },
     %{
       name: "festival-heavy",
-      description: "Festival-centric — festival 50%, mob/ivory 10% each, cultural 15%, technical 10%, auteur 5%",
-      weights: %{mob: 0.10, ivory_tower: 0.10, festival_recognition: 0.50, cultural_impact: 0.15, technical_innovation: 0.10, auteur_recognition: 0.05}
+      description:
+        "Festival-centric — festival 50%, mob/ivory 10% each, cultural 15%, technical 10%, auteur 5%",
+      weights: %{
+        mob: 0.10,
+        ivory_tower: 0.10,
+        festival_recognition: 0.50,
+        cultural_impact: 0.15,
+        technical_innovation: 0.10,
+        auteur_recognition: 0.05
+      }
     },
     %{
       name: "audience-first",
-      description: "Audience-driven — mob 35%, festival 20%, cultural 25%, ivory 10%, technical/auteur 5% each",
-      weights: %{mob: 0.35, ivory_tower: 0.10, festival_recognition: 0.20, cultural_impact: 0.25, technical_innovation: 0.05, auteur_recognition: 0.05}
+      description:
+        "Audience-driven — mob 35%, festival 20%, cultural 25%, ivory 10%, technical/auteur 5% each",
+      weights: %{
+        mob: 0.35,
+        ivory_tower: 0.10,
+        festival_recognition: 0.20,
+        cultural_impact: 0.25,
+        technical_innovation: 0.05,
+        auteur_recognition: 0.05
+      }
     },
     %{
       name: "critics-choice",
-      description: "Critic-weighted — ivory 35%, festival 30%, cultural 15%, mob 10%, technical/auteur 5% each",
-      weights: %{mob: 0.10, ivory_tower: 0.35, festival_recognition: 0.30, cultural_impact: 0.15, technical_innovation: 0.05, auteur_recognition: 0.05}
+      description:
+        "Critic-weighted — ivory 35%, festival 30%, cultural 15%, mob 10%, technical/auteur 5% each",
+      weights: %{
+        mob: 0.10,
+        ivory_tower: 0.35,
+        festival_recognition: 0.30,
+        cultural_impact: 0.15,
+        technical_innovation: 0.05,
+        auteur_recognition: 0.05
+      }
     },
     %{
       name: "auteur",
-      description: "Director-focused — auteur 25%, festival 25%, mob/ivory/cultural 15% each, technical 5%",
-      weights: %{mob: 0.15, ivory_tower: 0.15, festival_recognition: 0.25, cultural_impact: 0.15, technical_innovation: 0.05, auteur_recognition: 0.25}
+      description:
+        "Director-focused — auteur 25%, festival 25%, mob/ivory/cultural 15% each, technical 5%",
+      weights: %{
+        mob: 0.15,
+        ivory_tower: 0.15,
+        festival_recognition: 0.25,
+        cultural_impact: 0.15,
+        technical_innovation: 0.05,
+        auteur_recognition: 0.25
+      }
     }
   ]
 
@@ -162,8 +196,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         where: em.movie_id == ^movie.id,
         where:
           (em.source == "imdb" and em.metric_type == "rating_average") or
-            (em.source == "tmdb" and em.metric_type == "rating_average") or
-            (em.source == "rotten_tomatoes" and em.metric_type == "audience_score"),
+            (em.source == "tmdb" and em.metric_type == "rating_average"),
         select: [em.source, em.metric_type, em.value]
 
     score_mob_from_metrics(Repo.all(query))
@@ -199,7 +232,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         join: fo in "festival_organizations",
         on: fcer.organization_id == fo.id,
         where: fnom.movie_id == ^movie.id,
-        select: [fo.abbreviation, fc.name, fnom.won, fcer.year]
+        select: [fo.abbreviation, fc.name, fnom.won, fcer.year, fo.win_score, fo.nom_score]
 
     nominations = Repo.all(query)
 
@@ -208,16 +241,18 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     else
       # Score each nomination and take the highest
       scores =
-        Enum.map(nominations, fn [festival, category, won, year] ->
+        Enum.map(nominations, fn [festival, category, won, year, win_score, nom_score] ->
           score_festival_nomination(%{
             festival: festival,
             category: category,
             won: won,
-            year: year
+            year: year,
+            win_score: win_score,
+            nom_score: nom_score
           })
         end)
 
-      Enum.max(scores, fn -> 0.0 end)
+      min(Enum.sum(scores), 100.0)
     end
   end
 
@@ -425,32 +460,14 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
   defp normalize_rating_score(_, _, value), do: value || 0.0
 
-  defp score_festival_nomination(%{festival: festival, won: won, category: category}) do
-    base_score =
-      case festival do
-        # Oscars
-        "AMPAS" -> if won, do: 100.0, else: 80.0
-        # Cannes
-        "CANNES" -> if won, do: 95.0, else: 75.0
-        # Venice
-        "VIFF" -> if won, do: 90.0, else: 70.0
-        # Berlin  
-        "BIFF" -> if won, do: 90.0, else: 70.0
-        # Sundance
-        "SUNDANCE" -> if won, do: 75.0, else: 60.0
-        # Other festivals
-        _ -> if won, do: 50.0, else: 30.0
-      end
-
-    # Boost for prestigious categories
-    category_boost =
-      if String.contains?(String.downcase(category), ["picture", "film", "director"]) do
-        10.0
-      else
-        0.0
-      end
-
-    base_score + category_boost
+  defp score_festival_nomination(%{festival: festival, category: category, won: won} = attrs) do
+    FestivalPrestige.score_nomination(
+      festival,
+      category,
+      won,
+      Map.get(attrs, :win_score),
+      Map.get(attrs, :nom_score)
+    )
   end
 
   defp get_imdb_popularity(movie) do
@@ -524,11 +541,19 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         join: fo in "festival_organizations",
         on: fcer.organization_id == fo.id,
         where: fnom.movie_id in ^movie_ids,
-        select: [fnom.movie_id, fo.abbreviation, fc.name, fnom.won, fcer.year]
+        select: [
+          fnom.movie_id,
+          fo.abbreviation,
+          fc.name,
+          fnom.won,
+          fcer.year,
+          fo.win_score,
+          fo.nom_score
+        ]
 
     Repo.all(query)
-    |> Enum.group_by(&hd/1, fn [_movie_id, festival, category, won, year] ->
-      [festival, category, won, year]
+    |> Enum.group_by(&hd/1, fn [_movie_id, festival, category, won, year, win_score, nom_score] ->
+      [festival, category, won, year, win_score, nom_score]
     end)
   end
 
@@ -658,8 +683,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
       metrics
       |> Enum.filter(fn [source, metric_type, _value] ->
         (source == "imdb" and metric_type == "rating_average") or
-          (source == "tmdb" and metric_type == "rating_average") or
-          (source == "rotten_tomatoes" and metric_type == "audience_score")
+          (source == "tmdb" and metric_type == "rating_average")
       end)
       |> Enum.map(fn [source, metric_type, value] ->
         normalize_rating_score(source, metric_type, value || 0.0)
@@ -698,23 +722,21 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     else
       # Score each nomination and take the highest, cap at 100
       scores =
-        Enum.map(nominations, fn [festival, category, won, year] ->
+        Enum.map(nominations, fn [festival, category, won, year, win_score, nom_score] ->
           min(
             score_festival_nomination(%{
               festival: festival,
               category: category,
               won: won,
-              year: year
+              year: year,
+              win_score: win_score,
+              nom_score: nom_score
             }),
             100.0
           )
         end)
 
-      if length(scores) > 0 do
-        Enum.max(scores)
-      else
-        0.0
-      end
+      min(Enum.sum(scores), 100.0)
     end
   end
 

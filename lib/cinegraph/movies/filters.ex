@@ -127,11 +127,11 @@ defmodule Cinegraph.Movies.Filters do
       "ivory_tower_asc" ->
         sort_by_metric_dimension(query, :ivory_tower, :asc)
 
-      "industry_recognition" ->
-        sort_by_metric_dimension(query, :industry_recognition, :desc)
+      "festival_recognition" ->
+        sort_by_metric_dimension(query, :festival_recognition, :desc)
 
-      "industry_recognition_asc" ->
-        sort_by_metric_dimension(query, :industry_recognition, :asc)
+      "festival_recognition_asc" ->
+        sort_by_metric_dimension(query, :festival_recognition, :asc)
 
       "cultural_impact" ->
         sort_by_metric_dimension(query, :cultural_impact, :desc)
@@ -199,7 +199,7 @@ defmodule Cinegraph.Movies.Filters do
            )}
         ])
 
-      {:industry_recognition, :desc} ->
+      {:festival_recognition, :desc} ->
         order_by(query, [m],
           desc:
             fragment(
@@ -218,7 +218,7 @@ defmodule Cinegraph.Movies.Filters do
             )
         )
 
-      {:industry_recognition, :asc} ->
+      {:festival_recognition, :asc} ->
         order_by(query, [m],
           asc:
             fragment(
@@ -1091,7 +1091,7 @@ defmodule Cinegraph.Movies.Filters do
     |> maybe_apply_award_preset(params["award_preset"])
     # Keep legacy support for numeric thresholds
     |> filter_by_metric_dimension(params["mob_min"], :mob)
-    |> filter_by_metric_dimension(params["industry_recognition_min"], :industry_recognition)
+    |> filter_by_metric_dimension(params["festival_recognition_min"], :festival_recognition)
     |> filter_by_metric_dimension(params["cultural_impact_min"], :cultural_impact)
     |> filter_by_metric_dimension(params["people_quality_min"], :people_quality)
   end
@@ -1256,7 +1256,7 @@ defmodule Cinegraph.Movies.Filters do
           |> maybe_join_score_cache()
           |> where([score_cache: sc], not is_nil(sc.mob_score) and sc.mob_score >= ^min_val)
 
-        :industry_recognition ->
+        :festival_recognition ->
           # Filter by industry recognition (awards)
           where(
             query,

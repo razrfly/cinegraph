@@ -385,9 +385,9 @@
                       🎓 {to_percentage(movie.score_components[:ivory_tower])}%
                     </span>
                   <% end %>
-                  <%= if movie.score_components.industry_recognition && has_meaningful_score?(movie.score_components.industry_recognition) do %>
+                  <%= if movie.score_components.festival_recognition && has_meaningful_score?(movie.score_components.festival_recognition) do %>
                     <span class="inline-flex items-center px-2 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-200">
-                      🌟 {to_percentage(movie.score_components.industry_recognition)}%
+                      🌟 {to_percentage(movie.score_components.festival_recognition)}%
                     </span>
                   <% end %>
                   <%= if movie.score_components.cultural_impact && has_meaningful_score?(movie.score_components.cultural_impact) do %>
@@ -417,7 +417,7 @@
                 <% end %>
                 
 <!-- Show if it has awards -->
-                <%= if movie.score_components && movie.score_components.industry_recognition && award_worthy_score?(movie.score_components.industry_recognition) do %>
+                <%= if movie.score_components && movie.score_components.festival_recognition && award_worthy_score?(movie.score_components.festival_recognition) do %>
                   <span class="inline-flex items-center text-amber-600">
                     🏆 Award Winner
                   </span>

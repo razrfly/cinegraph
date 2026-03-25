@@ -12,7 +12,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
   @normalization_methods ~w(none bayesian percentile zscore)
   @missing_data_strategies ~w(neutral exclude average penalize)
 
-  @categories ~w(mob ivory_tower industry_recognition cultural_impact people_quality financial_performance)
+  @categories ~w(mob ivory_tower festival_recognition cultural_impact people_quality financial_performance)
 
   schema "calibration_scoring_configurations" do
     field :version, :integer
@@ -26,7 +26,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       default: %{
         "mob" => 0.10,
         "ivory_tower" => 0.10,
-        "industry_recognition" => 0.20,
+        "festival_recognition" => 0.20,
         "cultural_impact" => 0.20,
         "people_quality" => 0.20,
         "financial_performance" => 0.20
@@ -41,7 +41,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       default: %{
         "mob" => "neutral",
         "ivory_tower" => "neutral",
-        "industry_recognition" => "exclude",
+        "festival_recognition" => "exclude",
         "cultural_impact" => "neutral",
         "people_quality" => "average",
         "financial_performance" => "exclude"
@@ -209,7 +209,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       category_weights: %{
         "mob" => 0.10,
         "ivory_tower" => 0.10,
-        "industry_recognition" => 0.20,
+        "festival_recognition" => 0.20,
         "cultural_impact" => 0.20,
         "people_quality" => 0.20,
         "financial_performance" => 0.20
@@ -218,7 +218,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       missing_data_strategies: %{
         "mob" => "neutral",
         "ivory_tower" => "neutral",
-        "industry_recognition" => "exclude",
+        "festival_recognition" => "exclude",
         "cultural_impact" => "neutral",
         "people_quality" => "average",
         "financial_performance" => "exclude"
@@ -238,7 +238,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       category_weights: %{
         "mob" => 0.20,
         "ivory_tower" => 0.20,
-        "industry_recognition" => 0.15,
+        "festival_recognition" => 0.15,
         "cultural_impact" => 0.25,
         "people_quality" => 0.15,
         "financial_performance" => 0.05
@@ -251,7 +251,7 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       missing_data_strategies: %{
         "mob" => "neutral",
         "ivory_tower" => "neutral",
-        "industry_recognition" => "exclude",
+        "festival_recognition" => "exclude",
         "cultural_impact" => "neutral",
         "people_quality" => "average",
         "financial_performance" => "exclude"

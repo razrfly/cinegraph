@@ -94,7 +94,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
       new_weights = %{
         "mob" => "20",
         "ivory_tower" => "20",
-        "industry_recognition" => "20",
+        "festival_recognition" => "20",
         "cultural_impact" => "20",
         "people_quality" => "10",
         "financial_performance" => "10"
@@ -120,7 +120,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
       invalid_weights = %{
         "mob" => "50",
         "ivory_tower" => "50",
-        "industry_recognition" => "20",
+        "festival_recognition" => "20",
         "cultural_impact" => "20",
         "people_quality" => "5",
         "financial_performance" => "5"
@@ -215,7 +215,7 @@ defmodule CinegraphWeb.PredictionsLiveTest do
       new_weights = %{
         "mob" => "20",
         "ivory_tower" => "20",
-        "industry_recognition" => "20",
+        "festival_recognition" => "20",
         "cultural_impact" => "20",
         "people_quality" => "10",
         "financial_performance" => "10"

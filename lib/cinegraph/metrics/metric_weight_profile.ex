@@ -24,7 +24,7 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
     # Using the standard 6-lens scoring system:
     # - mob: Audience ratings (IMDb, TMDb, RT Audience)
     # - ivory_tower: Critics scores (RT Tomatometer, Metacritic)
-    # - industry_recognition: Festival wins and nominations
+    # - festival_recognition: Festival wins and nominations
     # - financial_performance: Revenue and budget performance
     # - cultural_impact: Canonical sources and cultural reach
     # - people_quality: Quality scores of cast and crew
@@ -32,7 +32,7 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
       default: %{
         "mob" => 0.10,
         "ivory_tower" => 0.10,
-        "industry_recognition" => 0.20,
+        "festival_recognition" => 0.20,
         "financial_performance" => 0.20,
         "cultural_impact" => 0.20,
         "people_quality" => 0.20
@@ -80,7 +80,7 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
         valid_categories = [
           "mob",
           "ivory_tower",
-          "industry_recognition",
+          "festival_recognition",
           "financial_performance",
           "cultural_impact",
           "people_quality"

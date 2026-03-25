@@ -690,7 +690,7 @@ defmodule Cinegraph.Calibration do
     components = [
       {mob, Map.get(weights, "mob", 0.1), "mob"},
       {ivory_tower, Map.get(weights, "ivory_tower", 0.1), "ivory_tower"},
-      {awards, Map.get(weights, "industry_recognition", 0.2), "industry_recognition"},
+      {awards, Map.get(weights, "festival_recognition", 0.2), "festival_recognition"},
       {cultural, Map.get(weights, "cultural_impact", 0.2), "cultural_impact"},
       {people, Map.get(weights, "people_quality", 0.2), "people_quality"},
       {financial, Map.get(weights, "financial_performance", 0.2), "financial_performance"}

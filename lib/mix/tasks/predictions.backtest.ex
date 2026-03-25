@@ -70,7 +70,9 @@ defmodule Mix.Tasks.Predictions.Backtest do
 
     {results, overall_accuracy} =
       if decade_filter do
-        result = Cinegraph.Predictions.HistoricalValidator.validate_decade(decade_filter, profile_name)
+        result =
+          Cinegraph.Predictions.HistoricalValidator.validate_decade(decade_filter, profile_name)
+
         {[result], result.accuracy_percentage}
       else
         validation = Cinegraph.Predictions.HistoricalValidator.validate_all_decades(profile_name)

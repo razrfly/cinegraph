@@ -1274,6 +1274,32 @@ Enum.each(festival_orgs, fn attrs ->
   end
 end)
 
+# Set prestige scores on festival organizations (maps current @tiers to DB columns)
+prestige_scores = [
+  {"AMPAS", 100.0, 80.0, 1},
+  {"CFF", 95.0, 75.0, 2},
+  {"VIFF", 90.0, 70.0, 3},
+  {"BIFF", 90.0, 70.0, 3},
+  {"BAFTA", 85.0, 65.0, 4},
+  {"HFPA", 80.0, 60.0, 5},
+  {"SFF", 75.0, 60.0, 6},
+  {"CCA", 70.0, 50.0, 7}
+]
+
+Enum.each(prestige_scores, fn {abbrev, win, nom, tier} ->
+  case Cinegraph.Repo.get_by(Cinegraph.Festivals.FestivalOrganization, abbreviation: abbrev) do
+    nil ->
+      Logger.warning("  ⚠️  Organization #{abbrev} not found for prestige scores")
+
+    org ->
+      org
+      |> Ecto.Changeset.change(win_score: win, nom_score: nom, prestige_tier: tier)
+      |> Cinegraph.Repo.update()
+
+      Logger.info("  ✅ Set prestige scores for #{abbrev}")
+  end
+end)
+
 # Seed metric definitions and weight profiles for discovery system
 Logger.info("Seeding metric definitions...")
 
