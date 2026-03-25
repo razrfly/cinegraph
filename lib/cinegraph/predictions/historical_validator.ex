@@ -7,8 +7,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   import Ecto.Query
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
-  alias Cinegraph.Metrics.ScoringService
-  alias Cinegraph.Metrics.MetricWeightProfile
+  alias Cinegraph.Predictions.CriteriaScoring
 
   @doc """
   Dynamically get all decades that have movies in the 1001 Movies list.
@@ -38,7 +37,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   Uses database-driven weight profiles.
   """
   def validate_all_decades(profile_or_weights \\ nil) do
-    profile = get_weight_profile(profile_or_weights)
+    weights = get_criteria_weights(profile_or_weights)
     decades = get_all_decades()
 
     # Include ALL decades with data, including 2020s if they have confirmed additions
@@ -47,7 +46,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
     decade_results =
       Enum.map(all_decades_with_data, fn decade ->
-        validate_decade(decade, profile)
+        validate_decade(decade, weights)
       end)
 
     overall_accuracy = calculate_overall_accuracy(decade_results)
@@ -62,8 +61,8 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     %{
       decade_results: decade_results,
       overall_accuracy: overall_accuracy,
-      profile_used: profile.name,
-      weights_used: ScoringService.profile_to_discovery_weights(profile),
+      profile_used: "CriteriaScoring",
+      weights_used: weights,
       decades_analyzed: length(all_decades_with_data),
       decade_range: "#{min_decade}s-#{max_decade}s"
     }
@@ -73,28 +72,28 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   Backtest algorithm against a specific decade using database scoring.
   """
   def validate_decade(decade, profile_or_weights \\ nil) do
-    profile = get_weight_profile(profile_or_weights)
+    weights = get_criteria_weights(profile_or_weights)
 
     # Get all movies from the decade that are on 1001 Movies list
     actual_1001_movies = get_decade_1001_movies(decade)
 
-    # Get all movies from the decade (limited sample for performance)
+    # Get all movies from the decade
     all_decade_query = get_decade_movies_query(decade)
+    all_decade_movies = Repo.all(all_decade_query, timeout: :timer.seconds(120))
 
-    # Apply scoring to all decade movies
-    # Use extended timeout (120s) for this complex query with many JOINs
-    scored_query = ScoringService.apply_scoring(all_decade_query, profile, %{min_score: nil})
-    all_decade_movies = Repo.all(scored_query, timeout: :timer.seconds(120))
+    # Score all decade movies with CriteriaScoring
+    scored = CriteriaScoring.batch_score_movies(all_decade_movies, weights)
 
     # Sort by score and take top N where N = number of actual 1001 movies
     total_1001_in_decade = length(actual_1001_movies)
     actual_1001_ids = MapSet.new(actual_1001_movies, & &1.id)
 
-    # Take top predictions
+    # Take top predictions, extracting the movie struct from scored results
     top_predictions =
-      all_decade_movies
-      |> Enum.sort_by(& &1.discovery_score, :desc)
+      scored
+      |> Enum.sort_by(& &1.prediction.total_score, :desc)
       |> Enum.take(total_1001_in_decade)
+      |> Enum.map(& &1.movie)
 
     # Calculate accuracy
     correctly_predicted =
@@ -124,7 +123,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
       false_positive_count: length(false_positive_ids),
       # Sample for display
       top_predictions: Enum.take(top_predictions, 10),
-      profile_used: profile.name
+      profile_used: "CriteriaScoring"
     }
   end
 
@@ -132,7 +131,6 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   Get validation statistics by decade range (e.g., early cinema, golden age, modern).
   """
   def validate_by_era(profile_or_weights \\ nil) do
-    profile = get_weight_profile(profile_or_weights)
     decades = get_all_decades() |> Enum.filter(&(&1 < 2020))
 
     eras = %{
@@ -143,7 +141,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     }
 
     Enum.map(eras, fn {era_name, era_decades} ->
-      results = Enum.map(era_decades, &validate_decade(&1, profile))
+      results = Enum.map(era_decades, &validate_decade(&1, profile_or_weights))
 
       total_correct = Enum.sum(Enum.map(results, & &1.correctly_predicted))
       total_movies = Enum.sum(Enum.map(results, & &1.total_1001_movies))
@@ -182,30 +180,27 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   end
 
   @doc """
-  Calculate optimal weights by testing different profiles against historical data.
-  Now includes all decades (including 2020s) for comprehensive comparison.
+  Compare all named CriteriaScoring weight profiles against historical data.
+  Returns best-performing profile and per-decade winners.
   """
   def compare_profiles do
-    # Get all available profiles from database
-    profiles = ScoringService.get_all_profiles()
-    # Include ALL decades for full comparison
+    profiles = CriteriaScoring.get_named_profiles()
     decades = get_all_decades()
 
     results =
       Enum.map(profiles, fn profile ->
-        validation = validate_all_decades(profile)
+        validation = validate_all_decades(profile.weights)
 
         %{
           profile_name: profile.name,
           description: profile.description,
           overall_accuracy: validation.overall_accuracy,
           decade_results: validation.decade_results,
-          weights_used: validation.weights_used
+          weights_used: profile.weights
         }
       end)
       |> Enum.sort_by(& &1.overall_accuracy, :desc)
 
-    # Calculate per-decade winners
     decade_winners = calculate_decade_winners(results)
 
     case results do
@@ -230,19 +225,17 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   end
 
   @doc """
-  Compare all profiles and return detailed comparison data for UI display.
-  Includes caching for performance.
+  Compare all named CriteriaScoring profiles with detailed decade-by-decade breakdown.
   """
   def get_comprehensive_comparison do
-    # This will be cached by PredictionsCache
-    profiles = ScoringService.get_all_profiles()
+    profiles = CriteriaScoring.get_named_profiles()
     decades = get_all_decades()
 
     comparison_data =
       Enum.map(profiles, fn profile ->
         decade_accuracies =
           Enum.map(decades, fn decade ->
-            result = validate_decade(decade, profile)
+            result = validate_decade(decade, profile.weights)
             {decade, result.accuracy_percentage}
           end)
           |> Map.new()
@@ -267,34 +260,18 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
   # Private functions
 
-  defp get_weight_profile(nil), do: ScoringService.get_default_profile()
+  defp get_criteria_weights(nil), do: CriteriaScoring.get_default_weights()
 
-  defp get_weight_profile(%MetricWeightProfile{} = profile), do: profile
+  defp get_criteria_weights(name) when is_binary(name),
+    do: CriteriaScoring.get_profile_weights(name)
 
-  defp get_weight_profile(profile_name) when is_binary(profile_name) do
-    ScoringService.get_profile(profile_name) || ScoringService.get_default_profile()
+  defp get_criteria_weights(weights) when is_map(weights) do
+    if Map.has_key?(weights, :festival_recognition),
+      do: weights,
+      else: CriteriaScoring.get_default_weights()
   end
 
-  defp get_weight_profile(weights) when is_map(weights) do
-    # Convert custom weights to a profile
-    %MetricWeightProfile{
-      name: "Custom Validation",
-      description: "Custom weights for validation",
-      category_weights: convert_weights_to_categories(weights),
-      active: true
-    }
-  end
-
-  defp convert_weights_to_categories(weights) do
-    %{
-      "mob" => Map.get(weights, :mob, 0.125),
-      "ivory_tower" => Map.get(weights, :ivory_tower, 0.125),
-      "industry_recognition" => Map.get(weights, :industry_recognition, 0.25),
-      "cultural_impact" => Map.get(weights, :cultural_impact, 0.25),
-      "people_quality" => Map.get(weights, :people_quality, 0.25),
-      "financial_performance" => Map.get(weights, :financial_performance, 0.0)
-    }
-  end
+  defp get_criteria_weights(_), do: CriteriaScoring.get_default_weights()
 
   defp get_decade_1001_movies(decade) do
     start_year = decade
@@ -328,9 +305,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
           m.release_date,
           ^end_year
         ),
-      where: m.import_status == "full",
-      # Limit for performance
-      limit: 1000
+      where: m.import_status == "full"
   end
 
   defp calculate_overall_accuracy(decade_results) do
@@ -389,7 +364,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
     suggestions =
       if validation.decade >= 2000 do
-        ["Modern era films may benefit from 'Balanced' or 'Crowd Pleaser' profiles" | suggestions]
+        ["Modern era films may benefit from 'audience-first' or 'critics-choice' profiles" | suggestions]
       else
         suggestions
       end

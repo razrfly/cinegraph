@@ -57,15 +57,16 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
       custom_weights = %{
         mob: 0.25,
         ivory_tower: 0.25,
-        industry_recognition: 0.20,
+        festival_recognition: 0.30,
         cultural_impact: 0.15,
-        people_quality: 0.10,
-        financial_performance: 0.05
+        technical_innovation: 0.05,
+        auteur_recognition: 0.00
       }
 
       result = MoviePredictor.predict_2020s_movies(10, custom_weights)
 
-      assert is_map(result.algorithm_info.weights_used)
+      # Custom CriteriaScoring weights should be passed through unchanged
+      assert result.algorithm_info.weights_used == custom_weights
     end
 
     test "predictions have valid likelihood percentages" do
@@ -156,18 +157,12 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
 
   describe "error handling" do
     test "handles invalid weights gracefully" do
-      invalid_weights = %{
-        mob: "invalid",
-        ivory_tower: 0.20,
-        industry_recognition: 0.20,
-        cultural_impact: 0.20,
-        people_quality: 0.10,
-        financial_performance: 0.10
-      }
+      # Weights without :festival_recognition key fall back to CriteriaScoring defaults
+      invalid_weights = %{mob: 0.50, ivory_tower: 0.50}
 
-      # Should not crash, may return empty results or use defaults
       result = MoviePredictor.predict_2020s_movies(10, invalid_weights)
       assert is_map(result)
+      assert result.algorithm_info.weights_used == CriteriaScoring.get_default_weights()
     end
 
     test "handles extremely large limits" do

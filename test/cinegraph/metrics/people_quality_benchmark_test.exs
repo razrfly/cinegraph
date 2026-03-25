@@ -19,7 +19,8 @@ defmodule Cinegraph.Metrics.PeopleQualityBenchmarkTest do
     {10430, "Rashomon", 7.5},
     {129, "Spirited Away", 7.0},
     {843, "In the Mood for Love", 7.0},
-    {11517, "Persona", 7.5}
+    {11517, "Persona", 7.5},
+    {12100, "La Dolce Vita", 7.5}
   ]
 
   for {tmdb_id, title, min_score} <- @ground_truth do

@@ -971,7 +971,7 @@ mix pqs.status
 Cinegraph.Workers.MovieScoreCacheWorker.queue_all()
 ```
 
-The weekly PQS scheduler (`PqsScheduler`) runs automatically. Manual rebuild is needed after formula changes.
+Manual rebuild is needed after formula changes or major data imports. No automatic scheduler is currently wired.
 
 ### Objectivity Principles
 
