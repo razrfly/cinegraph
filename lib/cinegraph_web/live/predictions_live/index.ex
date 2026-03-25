@@ -510,8 +510,6 @@ defmodule CinegraphWeb.PredictionsLive.Index do
       Map.has_key?(criteria, "technical_innovation") or
       Map.has_key?(criteria, :ivory_tower) or
       Map.has_key?(criteria, "ivory_tower") or
-      Map.has_key?(criteria, :cultural_impact) or
-      Map.has_key?(criteria, "cultural_impact") or
       Map.has_key?(criteria, :people_quality) or
       Map.has_key?(criteria, "people_quality")
   end

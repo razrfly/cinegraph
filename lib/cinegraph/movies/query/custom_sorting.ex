@@ -22,6 +22,8 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
   alias Cinegraph.Movies.DiscoveryCommon
   alias Cinegraph.Scoring.Lenses
 
+  @all_lens_strings Lenses.all_strings()
+
   def apply(query, sort, preset_weights \\ nil) do
     # Parse sort parameter to extract field and direction
     {field, direction} = parse_sort(sort)
@@ -43,7 +45,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
       field in ["rating", "popularity"] ->
         apply_simple_metric_sort(query, field, direction)
 
-      field in Lenses.all_strings() ->
+      field in @all_lens_strings ->
         apply_discovery_metric_sort(query, field, direction)
 
       true ->

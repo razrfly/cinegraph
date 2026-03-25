@@ -89,7 +89,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     }
   ]
 
-  @doc "Returns the 6 prediction criteria atoms (distinct from Cinegraph.Scoring.Lenses)."
+  @doc "Returns the 5 prediction criteria atoms (distinct from Cinegraph.Scoring.Lenses)."
   def scoring_criteria, do: @scoring_criteria
 
   @doc """
@@ -556,19 +556,13 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
          weights,
          external_metrics,
          festival_nominations,
-         technical_nominations,
+         _technical_nominations,
          director_1001_count
        ) do
     # Use default weights if nil is passed
     actual_weights = weights || @default_weights
 
-    # Fold technical nominations into festival nominations (same prestige scoring pipeline)
-    expanded_technical =
-      Enum.map(technical_nominations, fn [festival, category, won] ->
-        [festival, category, won, nil, nil, nil]
-      end)
-
-    all_nominations = festival_nominations ++ expanded_technical
+    all_nominations = festival_nominations
 
     # Calculate individual scores, ensuring they're all 0-100 range
     scores = %{

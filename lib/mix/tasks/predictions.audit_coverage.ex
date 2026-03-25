@@ -77,8 +77,8 @@ defmodule Mix.Tasks.Predictions.AuditCoverage do
   end
 
   defp fetch_decade_coverage(decade) do
-    start_date = "#{decade}-01-01"
-    end_date = "#{decade + 9}-12-31"
+    {:ok, start_date} = Date.new(decade, 1, 1)
+    {:ok, end_date} = Date.new(decade + 9, 12, 31)
 
     sql = """
     SELECT

@@ -14,7 +14,8 @@ IO.puts("   ✅ Test data (#{length(test_data)} items) chunked into #{length(chu
 
 IO.puts("\n3. 🎯 Validating Scoring Logic...")
 default_weights = %{
-  critical_acclaim: 0.35,
+  mob: 0.175,
+  critics: 0.175,
   festival_recognition: 0.40,
   cultural_impact: 0.20,
   auteur_recognition: 0.05
