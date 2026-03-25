@@ -39,12 +39,12 @@ defmodule Mix.Tasks.Cinegraph.AuditPeopleScores do
     alias Cinegraph.Movies.MovieScoring
     alias Cinegraph.Movies.Movie
 
-    IO.puts("\nPeople Quality Score Audit")
+    IO.puts("\nAuteurs Score Audit")
     IO.puts(String.duplicate("─", 80))
 
     IO.puts(
       String.pad_trailing("Movie", 35) <>
-        String.pad_leading("pq_score", 10) <>
+        String.pad_leading("auteurs_score", 13) <>
         String.pad_leading("min", 8) <>
         "  top cast"
     )

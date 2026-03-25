@@ -24,6 +24,7 @@ defmodule Cinegraph.Repo.Migrations.SeedFestivalPrestigeScores do
     execute("""
       UPDATE festival_organizations
       SET win_score = NULL, nom_score = NULL, prestige_tier = NULL
+      WHERE abbreviation IN ('AMPAS','CFF','VIFF','BIFF','BAFTA','HFPA','SFF','CCA')
     """)
   end
 end
