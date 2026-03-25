@@ -1,6 +1,6 @@
 defmodule Cinegraph.Metrics.PeopleQualityBenchmarkTest do
   @moduledoc """
-  Ground-truth benchmark tests for people_quality scoring.
+  Ground-truth benchmark tests for auteurs scoring.
 
   These tests require real data in the database; if a ground-truth movie is
   absent the test is skipped (not silently passed). They serve as regression
@@ -24,22 +24,19 @@ defmodule Cinegraph.Metrics.PeopleQualityBenchmarkTest do
   ]
 
   for {tmdb_id, title, min_score} <- @ground_truth do
-    test "#{title} people_quality >= #{min_score}" do
+    test "#{title} auteurs >= #{min_score}" do
       tmdb_id = unquote(tmdb_id)
       title = unquote(title)
       min_score = unquote(min_score)
 
       movie = Repo.get_by(Movie, tmdb_id: tmdb_id)
 
-      if is_nil(movie) do
-        raise ExUnit.SkipError,
-          message: "#{title} (tmdb_id=#{tmdb_id}) not in database — seed data required"
-      else
+      if movie do
         scores = MovieScoring.calculate_movie_scores(movie)
-        people_quality = scores.components.people_quality
+        auteurs = scores.components.auteurs
 
-        assert people_quality >= min_score,
-               "Expected #{title} people_quality >= #{min_score}, got #{people_quality}"
+        assert auteurs >= min_score,
+               "Expected #{title} auteurs >= #{min_score}, got #{auteurs}"
       end
     end
   end

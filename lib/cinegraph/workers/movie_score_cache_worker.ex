@@ -16,7 +16,9 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
   def current_version, do: @calculation_version
 
   @impl true
-  def perform(%Oban.Job{args: %{"movie_id" => movie_id}}) do
+  def perform(%Oban.Job{args: %{"movie_id" => movie_id} = args}) do
+    skip_cache_invalidation = Map.get(args, "skip_cache_invalidation", false)
+
     movie = Repo.get!(Movie, movie_id)
     scores = MovieScoring.calculate_movie_scores(movie)
     disparity_attrs = DisparityCalculator.calculate_all(scores)
@@ -24,11 +26,11 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
     attrs = %{
       movie_id: movie_id,
       mob_score: scores.components.mob,
-      ivory_tower_score: scores.components.ivory_tower,
+      critics_score: scores.components.critics,
       festival_recognition_score: scores.components.festival_recognition,
-      cultural_impact_score: scores.components.cultural_impact,
-      people_quality_score: scores.components.people_quality,
-      financial_performance_score: scores.components.financial_performance,
+      time_machine_score: scores.components.time_machine,
+      auteurs_score: scores.components.auteurs,
+      box_office_score: scores.components.box_office,
       overall_score: scores.overall_score,
       score_confidence: scores.score_confidence,
       disparity_score: disparity_attrs.disparity_score,
@@ -42,15 +44,18 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
     |> MovieScoreCache.changeset(attrs)
     |> Repo.insert(
       on_conflict:
-        {:replace, ~w[mob_score ivory_tower_score festival_recognition_score cultural_impact_score
-            people_quality_score financial_performance_score overall_score score_confidence
+        {:replace, ~w[mob_score critics_score festival_recognition_score time_machine_score
+            auteurs_score box_office_score overall_score score_confidence
             disparity_score disparity_category unpredictability_score
             calculated_at calculation_version updated_at]a},
       conflict_target: :movie_id
     )
     |> case do
       {:ok, _} ->
-        Cinegraph.Movies.Cache.invalidate_search_results()
+        unless skip_cache_invalidation do
+          Cinegraph.Movies.Cache.invalidate_search_results()
+        end
+
         :ok
 
       {:error, cs} ->
@@ -69,8 +74,12 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
     |> Repo.all()
     |> Enum.chunk_every(batch_size)
     |> Enum.each(fn batch ->
-      jobs = Enum.map(batch, fn id -> new(%{"movie_id" => id}) end)
+      jobs =
+        Enum.map(batch, fn id -> new(%{"movie_id" => id, "skip_cache_invalidation" => true}) end)
+
       Oban.insert_all(jobs)
     end)
+
+    Cinegraph.Movies.Cache.invalidate_search_results()
   end
 end

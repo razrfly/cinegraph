@@ -56,7 +56,7 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
     test "handles custom weights correctly" do
       custom_weights = %{
         mob: 0.25,
-        ivory_tower: 0.25,
+        critics: 0.25,
         festival_recognition: 0.30,
         cultural_impact: 0.15,
         technical_innovation: 0.05,
@@ -158,7 +158,7 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
   describe "error handling" do
     test "handles invalid weights gracefully" do
       # Weights without :festival_recognition key fall back to CriteriaScoring defaults
-      invalid_weights = %{mob: 0.50, ivory_tower: 0.50}
+      invalid_weights = %{mob: 0.50, critics: 0.50}
 
       result = MoviePredictor.predict_2020s_movies(10, invalid_weights)
       assert is_map(result)

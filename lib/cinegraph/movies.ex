@@ -60,18 +60,18 @@ defmodule Cinegraph.Movies do
       "mob",
       "mob_asc",
       "mob_desc",
-      "ivory_tower",
-      "ivory_tower_asc",
-      "ivory_tower_desc",
+      "critics",
+      "critics_asc",
+      "critics_desc",
       "festival_recognition",
       "festival_recognition_asc",
       "festival_recognition_desc",
-      "cultural_impact",
-      "cultural_impact_asc",
-      "cultural_impact_desc",
-      "people_quality",
-      "people_quality_asc",
-      "people_quality_desc"
+      "time_machine",
+      "time_machine_asc",
+      "time_machine_desc",
+      "auteurs",
+      "auteurs_asc",
+      "auteurs_desc"
     ]
   end
 

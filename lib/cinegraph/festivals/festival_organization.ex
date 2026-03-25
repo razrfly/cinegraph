@@ -39,6 +39,9 @@ defmodule Cinegraph.Festivals.FestivalOrganization do
       :prestige_tier
     ])
     |> validate_required([:name])
+    |> validate_number(:win_score, greater_than_or_equal_to: 0)
+    |> validate_number(:nom_score, greater_than_or_equal_to: 0)
+    |> validate_number(:prestige_tier, greater_than_or_equal_to: 0)
     |> maybe_generate_slug()
     |> unique_constraint(:name)
     |> unique_constraint(:abbreviation)

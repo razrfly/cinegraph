@@ -35,10 +35,9 @@ defmodule Cinegraph.Scoring.FestivalPrestige do
         db_win_score \\ nil,
         db_nom_score \\ nil
       ) do
-    {win_score, nom_score} =
-      if is_number(db_win_score),
-        do: {db_win_score, db_nom_score},
-        else: Map.get(@tiers, festival_abbrev, @default_tier)
+    {default_win, default_nom} = Map.get(@tiers, festival_abbrev, @default_tier)
+    win_score = if is_number(db_win_score), do: db_win_score, else: default_win
+    nom_score = if is_number(db_nom_score), do: db_nom_score, else: default_nom
 
     base = if won, do: win_score, else: nom_score
 

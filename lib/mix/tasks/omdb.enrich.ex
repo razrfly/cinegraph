@@ -9,10 +9,15 @@ defmodule Mix.Tasks.Omdb.Enrich do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} =
+    {opts, _, invalid} =
       OptionParser.parse(args,
         strict: [list: :string, force: :boolean, null_only: :boolean, dry_run: :boolean]
       )
+
+    if invalid != [] do
+      Mix.shell().error("Unknown options: #{Enum.map_join(invalid, ", ", &elem(&1, 0))}")
+      Mix.raise("Invalid options provided")
+    end
 
     list_key = opts[:list] || Mix.raise("--list <source_key> is required")
     force = opts[:force] || false
@@ -51,13 +56,12 @@ defmodule Mix.Tasks.Omdb.Enrich do
   defp queue_jobs(movie_ids, force) do
     extra = if force, do: %{"force" => true}, else: %{}
 
-    Enum.reduce(movie_ids, 0, fn id, count ->
-      job = OMDbEnrichmentWorker.new(Map.merge(%{"movie_id" => id}, extra))
+    jobs =
+      Enum.map(movie_ids, fn id ->
+        OMDbEnrichmentWorker.new(Map.merge(%{"movie_id" => id}, extra))
+      end)
 
-      case Oban.insert(job) do
-        {:ok, _} -> count + 1
-        {:error, _} -> count
-      end
-    end)
+    {:ok, results} = Oban.insert_all(jobs)
+    length(results)
   end
 end

@@ -18,11 +18,11 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
     weights =
       Map.get(presets, :balanced, %{
         mob: 0.10,
-        ivory_tower: 0.10,
+        critics: 0.10,
         festival_recognition: 0.20,
-        cultural_impact: 0.20,
-        people_quality: 0.20,
-        financial_performance: 0.20
+        time_machine: 0.20,
+        auteurs: 0.20,
+        box_office: 0.20
       })
 
     # Store the current profile for database lookups
@@ -55,11 +55,11 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
         {key, value}, acc
         when key in [
                "mob",
-               "ivory_tower",
+               "critics",
                "festival_recognition",
-               "cultural_impact",
-               "people_quality",
-               "financial_performance"
+               "time_machine",
+               "auteurs",
+               "box_office"
              ] ->
           dimension = String.to_atom(key)
 
@@ -325,22 +325,20 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
                   <strong>The Mob:</strong> Audience ratings (IMDb, TMDb)
                 </li>
                 <li>
-                  <strong>The Ivory Tower:</strong> Critics scores (RT Tomatometer, Metacritic)
+                  <strong>The Critics:</strong> Critics scores (RT Tomatometer, Metacritic)
                 </li>
                 <li>
-                  <strong>Industry Recognition:</strong> Festival awards and Oscar nominations/wins
+                  <strong>The Insiders:</strong> Festival awards and Oscar nominations/wins
                 </li>
                 <li>
-                  <strong>Cultural Impact:</strong>
+                  <strong>The Time Machine:</strong>
                   Presence in canonical film lists and popularity metrics
                 </li>
                 <li>
-                  <strong>People Quality:</strong>
-                  Quality scores of directors, actors, and crew members
+                  <strong>The Auteurs:</strong> Quality scores of directors, actors, and crew members
                 </li>
                 <li>
-                  <strong>Financial Performance:</strong>
-                  Box office revenue and budget performance metrics
+                  <strong>The Box Office:</strong> Box office revenue and budget performance metrics
                 </li>
               </ul>
               <p class="mt-2">
@@ -461,20 +459,20 @@ defmodule CinegraphWeb.MovieLive.DiscoveryTuner do
   defp humanize_preset(preset), do: Phoenix.Naming.humanize(preset)
 
   defp humanize_dimension(:mob), do: "The Mob"
-  defp humanize_dimension(:ivory_tower), do: "The Ivory Tower"
-  defp humanize_dimension(:festival_recognition), do: "Industry Recognition"
-  defp humanize_dimension(:cultural_impact), do: "Cultural Impact"
-  defp humanize_dimension(:people_quality), do: "People Quality"
-  defp humanize_dimension(:financial_performance), do: "Financial Performance"
+  defp humanize_dimension(:critics), do: "The Critics"
+  defp humanize_dimension(:festival_recognition), do: "The Insiders"
+  defp humanize_dimension(:time_machine), do: "The Time Machine"
+  defp humanize_dimension(:auteurs), do: "The Auteurs"
+  defp humanize_dimension(:box_office), do: "The Box Office"
   defp humanize_dimension(dimension), do: Phoenix.Naming.humanize(dimension)
 
   defp dimension_description(:mob), do: "Audience ratings (IMDb, TMDb)"
-  defp dimension_description(:ivory_tower), do: "Critics scores (RT Tomatometer, Metacritic)"
+  defp dimension_description(:critics), do: "Critics scores (RT Tomatometer, Metacritic)"
   defp dimension_description(:festival_recognition), do: "Festival awards and nominations"
-  defp dimension_description(:cultural_impact), do: "Canonical lists and popularity metrics"
-  defp dimension_description(:people_quality), do: "Quality of directors, actors, and crew"
+  defp dimension_description(:time_machine), do: "Canonical lists and popularity metrics"
+  defp dimension_description(:auteurs), do: "Quality of directors, actors, and crew"
 
-  defp dimension_description(:financial_performance),
+  defp dimension_description(:box_office),
     do: "Box office revenue and budget performance"
 
   defp dimension_description(_), do: ""

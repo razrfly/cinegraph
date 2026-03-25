@@ -9,6 +9,8 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Cinegraph.Scoring.Lenses
+
   @primary_key {:id, :id, autogenerate: true}
   @foreign_key_type :id
 
@@ -21,22 +23,8 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
     # Example: {"imdb_rating" => 1.0, "oscar_wins" => 2.0, "revenue_worldwide" => 0.8}
 
     # Category multipliers (applied after individual weights)
-    # Using the standard 6-lens scoring system:
-    # - mob: Audience ratings (IMDb, TMDb, RT Audience)
-    # - ivory_tower: Critics scores (RT Tomatometer, Metacritic)
-    # - festival_recognition: Festival wins and nominations
-    # - financial_performance: Revenue and budget performance
-    # - cultural_impact: Canonical sources and cultural reach
-    # - people_quality: Quality scores of cast and crew
-    field :category_weights, :map,
-      default: %{
-        "mob" => 0.10,
-        "ivory_tower" => 0.10,
-        "festival_recognition" => 0.20,
-        "financial_performance" => 0.20,
-        "cultural_impact" => 0.20,
-        "people_quality" => 0.20
-      }
+    # Valid categories and defaults defined in Cinegraph.Scoring.Lenses
+    field :category_weights, :map, default: Lenses.default_weights()
 
     # Usage tracking
     field :usage_count, :integer, default: 0
@@ -77,14 +65,7 @@ defmodule Cinegraph.Metrics.MetricWeightProfile do
         changeset
 
       weights ->
-        valid_categories = [
-          "mob",
-          "ivory_tower",
-          "festival_recognition",
-          "financial_performance",
-          "cultural_impact",
-          "people_quality"
-        ]
+        valid_categories = Lenses.all_strings()
 
         cond do
           not Enum.all?(Map.keys(weights), &(&1 in valid_categories)) ->

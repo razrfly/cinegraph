@@ -195,11 +195,11 @@ defmodule Cinegraph.Calibration.RecallCalculator do
 
       lenses = [
         {:mob, "Mob (Audience)"},
-        {:ivory_tower, "Ivory Tower (Critics)"},
-        {:festival_recognition, "Industry Recognition"},
-        {:cultural_impact, "Cultural Impact"},
-        {:people_quality, "People Quality"},
-        {:financial_performance, "Financial Performance"}
+        {:critics, "The Critics"},
+        {:festival_recognition, "Festival Recognition"},
+        {:time_machine, "The Time Machine"},
+        {:auteurs, "The Auteurs"},
+        {:box_office, "The Box Office"}
       ]
 
       Enum.map(lenses, fn {lens, label} ->

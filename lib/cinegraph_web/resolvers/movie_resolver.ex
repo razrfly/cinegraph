@@ -119,11 +119,11 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
         if cache do
           %{
             mob: cache.mob_score,
-            ivory_tower: cache.ivory_tower_score,
+            critics: cache.critics_score,
             festival_recognition: cache.festival_recognition_score,
-            cultural_impact: cache.cultural_impact_score,
-            people_quality: cache.people_quality_score,
-            financial_performance: cache.financial_performance_score,
+            time_machine: cache.time_machine_score,
+            auteurs: cache.auteurs_score,
+            box_office: cache.box_office_score,
             overall: cache.overall_score,
             confidence: cache.score_confidence,
             disparity_score: cache.disparity_score,

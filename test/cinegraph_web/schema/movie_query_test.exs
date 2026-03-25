@@ -178,7 +178,7 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
         movie(tmdbId: #{movie.tmdb_id}) {
           lensScores {
             mob
-            ivoryTower
+            critics
             overall
             disparityCategory
           }
@@ -200,11 +200,11 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
         |> Cinegraph.Movies.MovieScoreCache.changeset(%{
           movie_id: movie.id,
           mob_score: 7.5,
-          ivory_tower_score: 8.2,
+          critics_score: 8.2,
           festival_recognition_score: 6.0,
-          cultural_impact_score: 5.5,
-          people_quality_score: 7.0,
-          financial_performance_score: 4.0,
+          time_machine_score: 5.5,
+          auteurs_score: 7.0,
+          box_office_score: 4.0,
           overall_score: 6.8,
           score_confidence: 0.85,
           disparity_score: 0.7,
@@ -220,7 +220,7 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
         movie(tmdbId: #{movie.tmdb_id}) {
           lensScores {
             mob
-            ivoryTower
+            critics
             overall
             confidence
             disparityCategory
@@ -232,7 +232,7 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
       assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
       scores = result["lensScores"]
       assert scores["mob"] == 7.5
-      assert scores["ivoryTower"] == 8.2
+      assert scores["critics"] == 8.2
       assert scores["overall"] == 6.8
       assert scores["confidence"] == 0.85
       assert scores["disparityCategory"] == "critics_darling"

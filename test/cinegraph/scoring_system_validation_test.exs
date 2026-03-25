@@ -2,8 +2,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
   @moduledoc """
   Phase 4 Validation Tests for the unified 6-category scoring system.
 
-  Categories: mob, ivory_tower, festival_recognition, cultural_impact,
-  people_quality, financial_performance.
+  Categories: mob, critics, festival_recognition, time_machine, auteurs, box_office.
 
   Tests all 7 success criteria:
   1. Consistency - Same movie has same score across all contexts
@@ -31,14 +30,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       %{
         name: "Balanced",
         description:
-          "Balanced scoring: mob 20%, ivory tower 20%, industry recognition 20%, cultural impact 20%, people quality 10%, financial performance 10%",
+          "Balanced scoring: mob 20%, critics 20%, festival recognition 20%, time machine 20%, auteurs 10%, box office 10%",
         category_weights: %{
           "mob" => 0.20,
-          "ivory_tower" => 0.20,
+          "critics" => 0.20,
           "festival_recognition" => 0.20,
-          "cultural_impact" => 0.20,
-          "people_quality" => 0.10,
-          "financial_performance" => 0.10
+          "time_machine" => 0.20,
+          "auteurs" => 0.10,
+          "box_office" => 0.10
         },
         weights: %{},
         active: true,
@@ -47,14 +46,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       %{
         name: "Critics Choice",
         description:
-          "Critics choice: ivory tower 40%, industry recognition 30%, mob 10%, cultural impact 10%, people quality 5%, financial performance 5%",
+          "Critics choice: critics 40%, festival recognition 30%, mob 10%, time machine 10%, auteurs 5%, box office 5%",
         category_weights: %{
           "mob" => 0.10,
-          "ivory_tower" => 0.40,
+          "critics" => 0.40,
           "festival_recognition" => 0.30,
-          "cultural_impact" => 0.10,
-          "people_quality" => 0.05,
-          "financial_performance" => 0.05
+          "time_machine" => 0.10,
+          "auteurs" => 0.05,
+          "box_office" => 0.05
         },
         weights: %{},
         active: true,
@@ -63,14 +62,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       %{
         name: "Crowd Pleaser",
         description:
-          "Crowd pleaser: mob 45%, financial performance 20%, cultural impact 15%, ivory tower 10%, people quality 5%, industry recognition 5%",
+          "Crowd pleaser: mob 45%, box office 20%, time machine 15%, critics 10%, auteurs 5%, festival recognition 5%",
         category_weights: %{
           "mob" => 0.45,
-          "ivory_tower" => 0.10,
+          "critics" => 0.10,
           "festival_recognition" => 0.05,
-          "cultural_impact" => 0.15,
-          "people_quality" => 0.05,
-          "financial_performance" => 0.20
+          "time_machine" => 0.15,
+          "auteurs" => 0.05,
+          "box_office" => 0.20
         },
         weights: %{},
         active: true,
@@ -79,14 +78,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       %{
         name: "Award Season",
         description:
-          "Award season: industry recognition 45%, ivory tower 25%, mob 10%, cultural impact 10%, people quality 5%, financial performance 5%",
+          "Award season: festival recognition 45%, critics 25%, mob 10%, time machine 10%, auteurs 5%, box office 5%",
         category_weights: %{
           "mob" => 0.10,
-          "ivory_tower" => 0.25,
+          "critics" => 0.25,
           "festival_recognition" => 0.45,
-          "cultural_impact" => 0.10,
-          "people_quality" => 0.05,
-          "financial_performance" => 0.05
+          "time_machine" => 0.10,
+          "auteurs" => 0.05,
+          "box_office" => 0.05
         },
         weights: %{},
         active: true,
@@ -95,14 +94,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       %{
         name: "Hidden Gems",
         description:
-          "Hidden gems: cultural impact 35%, people quality 25%, mob 15%, ivory tower 15%, industry recognition 5%, financial performance 5%",
+          "Hidden gems: time machine 35%, auteurs 25%, mob 15%, critics 15%, festival recognition 5%, box office 5%",
         category_weights: %{
           "mob" => 0.15,
-          "ivory_tower" => 0.15,
+          "critics" => 0.15,
           "festival_recognition" => 0.05,
-          "cultural_impact" => 0.35,
-          "people_quality" => 0.25,
-          "financial_performance" => 0.05
+          "time_machine" => 0.35,
+          "auteurs" => 0.25,
+          "box_office" => 0.05
         },
         weights: %{},
         active: true,
@@ -169,22 +168,22 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       score_data = MovieScoring.calculate_movie_scores(movie)
 
       assert Map.has_key?(score_data.components, :mob)
-      assert Map.has_key?(score_data.components, :ivory_tower)
+      assert Map.has_key?(score_data.components, :critics)
       assert Map.has_key?(score_data.components, :festival_recognition)
-      assert Map.has_key?(score_data.components, :cultural_impact)
-      assert Map.has_key?(score_data.components, :people_quality)
-      assert Map.has_key?(score_data.components, :financial_performance)
+      assert Map.has_key?(score_data.components, :time_machine)
+      assert Map.has_key?(score_data.components, :auteurs)
+      assert Map.has_key?(score_data.components, :box_office)
 
       # ScoringService categories
       profile = ScoringService.get_default_profile()
       weights = ScoringService.profile_to_discovery_weights(profile)
 
       assert Map.has_key?(weights, :mob)
-      assert Map.has_key?(weights, :ivory_tower)
+      assert Map.has_key?(weights, :critics)
       assert Map.has_key?(weights, :festival_recognition)
-      assert Map.has_key?(weights, :cultural_impact)
-      assert Map.has_key?(weights, :people_quality)
-      assert Map.has_key?(weights, :financial_performance)
+      assert Map.has_key?(weights, :time_machine)
+      assert Map.has_key?(weights, :auteurs)
+      assert Map.has_key?(weights, :box_office)
     end
 
     test "category names are consistent between systems" do
@@ -199,7 +198,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       scoring_service_categories =
         ScoringService.profile_to_discovery_weights(profile) |> Map.keys()
 
-      # Convert to strings for easier comparison (financial_performance vs financial_success is expected difference)
+      # Convert to strings for easier comparison
       movie_scoring_names = Enum.map(movie_scoring_categories, &to_string/1) |> Enum.sort()
 
       scoring_service_names =
@@ -220,21 +219,21 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       # Check that descriptions exist for all categories
       categories = [
         :mob,
-        :ivory_tower,
+        :critics,
         :festival_recognition,
-        :cultural_impact,
-        :people_quality,
-        :financial_performance
+        :time_machine,
+        :auteurs,
+        :box_office
       ]
 
       # These descriptions should be defined in DiscoveryTuner
       descriptions = %{
         mob: "Audience ratings (IMDb, TMDb)",
-        ivory_tower: "Critics scores (RT Tomatometer, Metacritic)",
+        critics: "Critics scores (RT Tomatometer, Metacritic)",
         festival_recognition: "Festival awards and nominations",
-        cultural_impact: "Canonical lists and popularity metrics",
-        people_quality: "Quality of directors, actors, and crew",
-        financial_performance: "Box office revenue and budget performance"
+        time_machine: "Canonical lists and popularity metrics",
+        auteurs: "Quality of directors, actors, and crew",
+        box_office: "Box office revenue and budget performance"
       }
 
       for category <- categories do
@@ -285,11 +284,11 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         description: "Test profile for validation",
         category_weights: %{
           "mob" => 0.15,
-          "ivory_tower" => 0.15,
+          "critics" => 0.15,
           "festival_recognition" => 0.25,
-          "cultural_impact" => 0.20,
-          "people_quality" => 0.15,
-          "financial_performance" => 0.10
+          "time_machine" => 0.20,
+          "auteurs" => 0.15,
+          "box_office" => 0.10
         },
         weights: %{},
         active: true,
@@ -305,7 +304,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
       assert retrieved
       assert retrieved.category_weights["mob"] == 0.15
-      assert retrieved.category_weights["ivory_tower"] == 0.15
+      assert retrieved.category_weights["critics"] == 0.15
 
       # Cleanup
       Repo.delete(created)
@@ -319,11 +318,11 @@ defmodule Cinegraph.ScoringSystemValidationTest do
 
         valid_categories = [
           "mob",
-          "ivory_tower",
+          "critics",
           "festival_recognition",
-          "cultural_impact",
-          "people_quality",
-          "financial_performance"
+          "time_machine",
+          "auteurs",
+          "box_office"
         ]
 
         for category <- Map.keys(weights) do
@@ -343,11 +342,11 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         # Update weights
         new_weights = %{
           "mob" => 0.15,
-          "ivory_tower" => 0.15,
+          "critics" => 0.15,
           "festival_recognition" => 0.25,
-          "cultural_impact" => 0.20,
-          "people_quality" => 0.15,
-          "financial_performance" => 0.10
+          "time_machine" => 0.20,
+          "auteurs" => 0.15,
+          "box_office" => 0.10
         }
 
         changeset =
@@ -435,14 +434,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
       # Should have component scores (even if 0)
       assert is_map(score_data.components)
       assert Map.has_key?(score_data.components, :mob)
-      assert Map.has_key?(score_data.components, :ivory_tower)
+      assert Map.has_key?(score_data.components, :critics)
 
       # Verify ScoringService queries database
       profile = ScoringService.get_profile("Balanced")
       assert profile
 
       assert (profile.category_weights["mob"] || 0) +
-               (profile.category_weights["ivory_tower"] || 0) > 0
+               (profile.category_weights["critics"] || 0) > 0
     end
 
     test "no hard-coded weight values in scoring calculations" do
@@ -465,14 +464,14 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         revenue: 500_000_000
       }
 
-      score = MovieScoring.calculate_financial_performance(metrics)
+      score = MovieScoring.calculate_box_office_score(metrics)
 
       # Score should be > 0 when we have data
       assert score > 0
       assert score <= 10
 
       # Should be 0 when no data
-      empty_score = MovieScoring.calculate_financial_performance(%{})
+      empty_score = MovieScoring.calculate_box_office_score(%{})
       assert empty_score == 0.0
     end
   end

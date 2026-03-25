@@ -680,20 +680,20 @@ defmodule Cinegraph.Calibration do
 
     # Get component scores
     mob = get_mob_score(movie.id)
-    ivory_tower = get_ivory_tower_score(movie.id)
+    critics = get_critics_score(movie.id)
     awards = get_awards_score(movie.id)
-    cultural = get_cultural_score(movie.id)
-    people = get_people_score(movie.id)
-    financial = get_financial_score(movie.id)
+    time_machine = get_cultural_score(movie.id)
+    auteurs = get_people_score(movie.id)
+    box_office = get_financial_score(movie.id)
 
     # Apply weights and missing data strategies
     components = [
       {mob, Map.get(weights, "mob", 0.1), "mob"},
-      {ivory_tower, Map.get(weights, "ivory_tower", 0.1), "ivory_tower"},
+      {critics, Map.get(weights, "critics", 0.1), "critics"},
       {awards, Map.get(weights, "festival_recognition", 0.2), "festival_recognition"},
-      {cultural, Map.get(weights, "cultural_impact", 0.2), "cultural_impact"},
-      {people, Map.get(weights, "people_quality", 0.2), "people_quality"},
-      {financial, Map.get(weights, "financial_performance", 0.2), "financial_performance"}
+      {time_machine, Map.get(weights, "time_machine", 0.2), "time_machine"},
+      {auteurs, Map.get(weights, "auteurs", 0.2), "auteurs"},
+      {box_office, Map.get(weights, "box_office", 0.2), "box_office"}
     ]
 
     strategies = Map.get(config, :missing_data_strategies) || %{}
@@ -744,7 +744,7 @@ defmodule Cinegraph.Calibration do
     end
   end
 
-  defp get_ivory_tower_score(movie_id) do
+  defp get_critics_score(movie_id) do
     query = """
     SELECT AVG(CASE
       WHEN source = 'rotten_tomatoes' AND metric_type = 'tomatometer' THEN value / 10.0

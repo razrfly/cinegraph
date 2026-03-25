@@ -16,8 +16,8 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
   ### Weight Distribution
   Weights should sum to 1.0. Adjust to change what matters most:
   - Higher `recency` = favor newer films
-  - Higher `mob`/`ivory_tower` = favor well-rated films
-  - Higher `cultural_impact` = favor popular/canonical films
+  - Higher `mob`/`critics` = favor well-rated films
+  - Higher `time_machine` = favor popular/canonical films
   """
 
   # =============================================================================
@@ -41,11 +41,11 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
 
   @default_weights %{
     mob: 0.20,
-    ivory_tower: 0.20,
+    critics: 0.20,
     festival_recognition: 0.20,
-    cultural_impact: 0.20,
-    people_quality: 0.20,
-    financial_performance: 0.0
+    time_machine: 0.20,
+    auteurs: 0.20,
+    box_office: 0.0
   }
 
   @doc """
@@ -56,31 +56,31 @@ defmodule Cinegraph.Movies.DiscoveryCommon do
       balanced: @default_weights,
       crowd_pleaser: %{
         mob: 0.5,
-        ivory_tower: 0.0,
+        critics: 0.0,
         festival_recognition: 0.1,
-        cultural_impact: 0.2,
-        people_quality: 0.2
+        time_machine: 0.2,
+        auteurs: 0.2
       },
       critics_choice: %{
         mob: 0.25,
-        ivory_tower: 0.25,
+        critics: 0.25,
         festival_recognition: 0.2,
-        cultural_impact: 0.1,
-        people_quality: 0.2
+        time_machine: 0.1,
+        auteurs: 0.2
       },
       award_winner: %{
         mob: 0.125,
-        ivory_tower: 0.125,
+        critics: 0.125,
         festival_recognition: 0.5,
-        cultural_impact: 0.1,
-        people_quality: 0.15
+        time_machine: 0.1,
+        auteurs: 0.15
       },
       cult_classic: %{
         mob: 0.125,
-        ivory_tower: 0.125,
+        critics: 0.125,
         festival_recognition: 0.1,
-        cultural_impact: 0.5,
-        people_quality: 0.15
+        time_machine: 0.5,
+        auteurs: 0.15
       }
     }
   end

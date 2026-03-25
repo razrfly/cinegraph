@@ -9,10 +9,12 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Cinegraph.Scoring.Lenses
+
   @normalization_methods ~w(none bayesian percentile zscore)
   @missing_data_strategies ~w(neutral exclude average penalize)
 
-  @categories ~w(mob ivory_tower festival_recognition cultural_impact people_quality financial_performance)
+  @categories Lenses.all_strings()
 
   schema "calibration_scoring_configurations" do
     field :version, :integer
@@ -22,30 +24,14 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
     field :is_draft, :boolean, default: true
 
     # Category weights (must sum to 1.0)
-    field :category_weights, :map,
-      default: %{
-        "mob" => 0.10,
-        "ivory_tower" => 0.10,
-        "festival_recognition" => 0.20,
-        "cultural_impact" => 0.20,
-        "people_quality" => 0.20,
-        "financial_performance" => 0.20
-      }
+    field :category_weights, :map, default: Lenses.default_weights()
 
     # Global normalization
     field :normalization_method, :string, default: "none"
     field :normalization_settings, :map, default: %{}
 
     # Per-category missing data handling
-    field :missing_data_strategies, :map,
-      default: %{
-        "mob" => "neutral",
-        "ivory_tower" => "neutral",
-        "festival_recognition" => "exclude",
-        "cultural_impact" => "neutral",
-        "people_quality" => "average",
-        "financial_performance" => "exclude"
-      }
+    field :missing_data_strategies, :map, default: Lenses.default_missing_data_strategies()
 
     field :deployed_at, :utc_datetime
 
@@ -206,23 +192,9 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       description: "Initial balanced configuration with equal weights",
       is_active: true,
       is_draft: false,
-      category_weights: %{
-        "mob" => 0.10,
-        "ivory_tower" => 0.10,
-        "festival_recognition" => 0.20,
-        "cultural_impact" => 0.20,
-        "people_quality" => 0.20,
-        "financial_performance" => 0.20
-      },
+      category_weights: Lenses.default_weights(),
       normalization_method: "none",
-      missing_data_strategies: %{
-        "mob" => "neutral",
-        "ivory_tower" => "neutral",
-        "festival_recognition" => "exclude",
-        "cultural_impact" => "neutral",
-        "people_quality" => "average",
-        "financial_performance" => "exclude"
-      }
+      missing_data_strategies: Lenses.default_missing_data_strategies()
     }
   end
 
@@ -237,25 +209,18 @@ defmodule Cinegraph.Calibration.ScoringConfiguration do
       is_draft: true,
       category_weights: %{
         "mob" => 0.20,
-        "ivory_tower" => 0.20,
+        "critics" => 0.20,
         "festival_recognition" => 0.15,
-        "cultural_impact" => 0.25,
-        "people_quality" => 0.15,
-        "financial_performance" => 0.05
+        "time_machine" => 0.25,
+        "auteurs" => 0.15,
+        "box_office" => 0.05
       },
       normalization_method: "bayesian",
       normalization_settings: %{
         "prior_mean" => 6.5,
         "min_votes" => 500
       },
-      missing_data_strategies: %{
-        "mob" => "neutral",
-        "ivory_tower" => "neutral",
-        "festival_recognition" => "exclude",
-        "cultural_impact" => "neutral",
-        "people_quality" => "average",
-        "financial_performance" => "exclude"
-      }
+      missing_data_strategies: Lenses.default_missing_data_strategies()
     }
   end
 end

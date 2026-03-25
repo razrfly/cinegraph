@@ -244,7 +244,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "person_ids",
       "mob_min",
       "festival_recognition_min",
-      "cultural_impact_min"
+      "time_machine_min"
     ]
 
     # Check new simplified filters
@@ -301,7 +301,7 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "person_ids",
       "mob_min",
       "festival_recognition_min",
-      "cultural_impact_min"
+      "time_machine_min"
     ]
 
     # Get active new filters
@@ -348,8 +348,8 @@ defmodule CinegraphWeb.MovieLive.AdvancedFilters do
       "actor_ids" -> "Actors"
       "person_ids" -> "People"
       "mob_min" -> "Mob Score"
-      "festival_recognition_min" -> "Industry Recognition"
-      "cultural_impact_min" -> "Cultural Impact"
+      "festival_recognition_min" -> "The Insiders"
+      "time_machine_min" -> "The Time Machine"
       _ -> key |> String.replace("_", " ") |> String.capitalize()
     end
   end
