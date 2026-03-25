@@ -1,0 +1,9 @@
+.venv/
+data/
+mlruns/
+*/results/*.pkl
+*/results/*.parquet
+*/results/*.png
+*/results/metrics.json
+__pycache__/
+*.pyc

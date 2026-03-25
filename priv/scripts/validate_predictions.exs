@@ -30,7 +30,7 @@ end
 
 IO.puts("\n4. ⚖️  Validating Weight Handling...")
 for {criterion, weight} <- default_weights do
-  percentage = round(weight * 100)
+  percentage = Float.round(weight * 100, 1)
   IO.puts("   ✅ #{criterion}: #{percentage}%")
 end
 

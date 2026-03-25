@@ -390,28 +390,9 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
               # Skip entries with invalid movie_id
               if movie_id do
-                # Get the total score and calculate likelihood percentage
+                # Use the stored likelihood_percentage computed by CriteriaScoring.convert_to_likelihood
                 total_score = Map.get(score_data, "total_score", Map.get(score_data, "score", 0))
-
-                # Calculate likelihood percentage from score (0-100 scale)
-                # Scores typically range from 0-100, with 50+ being strong candidates
-                likelihood =
-                  cond do
-                    total_score >= 90 -> 95
-                    total_score >= 80 -> 90
-                    total_score >= 70 -> 85
-                    total_score >= 60 -> 80
-                    total_score >= 50 -> 75
-                    total_score >= 45 -> 70
-                    total_score >= 40 -> 65
-                    total_score >= 35 -> 60
-                    total_score >= 30 -> 55
-                    total_score >= 25 -> 50
-                    total_score >= 20 -> 45
-                    total_score >= 15 -> 40
-                    total_score >= 10 -> 35
-                    true -> round(total_score * 3)
-                  end
+                likelihood = Map.get(score_data, "score", Map.get(score_data, "likelihood_percentage", 0))
 
                 # Extract year from release_date for compatibility with MoviePredictor
                 year =

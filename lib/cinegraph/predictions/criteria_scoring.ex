@@ -133,9 +133,6 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Batch load festival nominations
     festival_nominations = batch_load_festival_nominations(movie_ids)
 
-    # Batch load technical nominations
-    technical_nominations = batch_load_technical_nominations(movie_ids)
-
     # Batch load director info
     director_info = batch_load_director_info(movie_ids)
 
@@ -147,7 +144,6 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
           weights,
           external_metrics[movie.id] || [],
           festival_nominations[movie.id] || [],
-          technical_nominations[movie.id] || [],
           director_info[movie.id] || 0
         )
 
@@ -476,29 +472,6 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     end)
   end
 
-  defp batch_load_technical_nominations(movie_ids) do
-    query =
-      from fnom in "festival_nominations",
-        join: fc in "festival_categories",
-        on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies",
-        on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations",
-        on: fcer.organization_id == fo.id,
-        where: fnom.movie_id in ^movie_ids,
-        where:
-          fragment(
-            "LOWER(?) LIKE ANY(ARRAY['%cinematography%', '%sound%', '%editing%', '%visual%', '%technical%'])",
-            fc.name
-          ),
-        select: [fnom.movie_id, fo.abbreviation, fc.name, fnom.won]
-
-    Repo.all(query)
-    |> Enum.group_by(&hd/1, fn [_movie_id, festival, category, won] ->
-      [festival, category, won]
-    end)
-  end
-
   defp batch_load_director_info(movie_ids) do
     # First get all directors for these movies
     directors_query =
@@ -556,7 +529,6 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
          weights,
          external_metrics,
          festival_nominations,
-         _technical_nominations,
          director_1001_count
        ) do
     # Use default weights if nil is passed

@@ -125,11 +125,17 @@ defmodule Mix.Tasks.Predictions.Backtest do
   defp print_backtest(results, overall_accuracy, profile_name, threshold) do
     icon = status_icon(overall_accuracy, threshold)
 
+    scoring_desc =
+      case Cinegraph.Predictions.CriteriaScoring.get_profile(profile_name) do
+        %{description: desc} -> desc
+        nil -> "CriteriaScoring (#{profile_name})"
+      end
+
     Mix.shell().info("""
 
     ═══════════════════════════════════════════════
     BACKTEST — #{profile_name}
-    Scoring: CriteriaScoring (festival 40% · mob 17.5% · critics 17.5% · cultural 20% · auteur 5%)
+    Scoring: #{scoring_desc}
     ═══════════════════════════════════════════════
     Overall Accuracy: #{overall_accuracy}%  #{icon} #{if overall_accuracy >= threshold, do: "TARGET MET", else: "BELOW TARGET"}
 
