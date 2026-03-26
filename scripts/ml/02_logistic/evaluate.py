@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import shap
+from sklearn.base import clone
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, cross_val_predict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -39,7 +40,10 @@ def cross_val_p_at_k(model, X, y, k=1001, n_splits=10):
     Denominator = k, so directly comparable to 48% baseline (P@1001 over all positives).
     """
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
-    oof_proba = cross_val_predict(model, X, y, cv=cv, method="predict_proba", n_jobs=-1)
+    cloned = clone(model)
+    if hasattr(cloned, "n_jobs"):
+        cloned.set_params(n_jobs=1)
+    oof_proba = cross_val_predict(cloned, X, y, cv=cv, method="predict_proba", n_jobs=-1)
     oof_scores = oof_proba[:, 1]
     return precision_at_k(y, oof_scores, k)
 
@@ -90,8 +94,12 @@ if __name__ == "__main__":
     df_v1, X_v1, y_v1, _ = load_and_prepare(FEATURES_V1_CLEAN)
     df_v2, X_v2, y_v2, _ = load_and_prepare(FEATURES_V2_CLEAN)
 
-    _, test_idx_v1 = holdout_split(X_v1, y_v1)
-    _, test_idx_v2 = holdout_split(X_v2, y_v2)
+    # Refit on train slice for unbiased holdout evaluation
+    train_idx_v1, test_idx_v1 = holdout_split(X_v1, y_v1)
+    train_idx_v2, test_idx_v2 = holdout_split(X_v2, y_v2)
+
+    model_lr_v1.fit(X_v1[train_idx_v1], y_v1[train_idx_v1])
+    model_lr_v2.fit(X_v2[train_idx_v2], y_v2[train_idx_v2])
 
     X_test_v1, y_test_v1 = X_v1[test_idx_v1], y_v1[test_idx_v1]
     X_test_v2, y_test_v2 = X_v2[test_idx_v2], y_v2[test_idx_v2]
@@ -126,9 +134,9 @@ if __name__ == "__main__":
     xgb_v1c_path = XGB_RESULTS_DIR / "model_v1_clean.pkl"
     xgb_metrics = []
     if xgb_v1c_path.exists():
-        from shared.constants import FEATURES_V1_CLEAN as XGB_FEATS
         model_xgb_v1c = load_model(xgb_v1c_path)
-        _, xgb_test_idx = holdout_split(X_v1, y_v1)
+        xgb_train_idx, xgb_test_idx = holdout_split(X_v1, y_v1)
+        model_xgb_v1c.fit(X_v1[xgb_train_idx], y_v1[xgb_train_idx])
         xgb_scores_ho = model_xgb_v1c.predict_proba(X_v1[xgb_test_idx])[:, 1]
         xgb_cv_p1001 = cross_val_p_at_k(model_xgb_v1c, X_v1, y_v1)
         xgb_metrics = [(

@@ -1,4 +1,8 @@
-"""Train XGBoost models (V1: lens scores only, V1 clean: no leakage, V2: all features, V2 clean: no leakage)."""
+"""Train XGBoost V3 (tabular only) and V4 (tabular + 32 embedding PCs).
+
+V3 fills the Step 2 gap — its CV AUC was measured but P@1001 was not.
+V4 adds 32 MiniLM PCA components to V3's 20 tabular features.
+"""
 
 import sys
 from pathlib import Path
@@ -9,7 +13,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from xgboost import XGBClassifier
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from shared.constants import FEATURES_V1, FEATURES_V1_CLEAN, FEATURES_V2, FEATURES_V2_CLEAN, LABEL
+from shared.constants import FEATURES_V3, FEATURES_V4, LABEL
 from shared.data_loader import load_and_prepare
 from shared.mlflow_utils import start_run
 
@@ -26,7 +30,7 @@ XGB_PARAMS = dict(
     eval_metric="auc",
     enable_categorical=False,
     random_state=42,
-    n_jobs=1,  # single-threaded per estimator; cross_val_score uses n_jobs=-1 for outer folds
+    n_jobs=-1,
 )
 
 
@@ -36,7 +40,7 @@ def train_model(features, label, model_path):
     n_positive = y.sum()
     n_negative = len(y) - n_positive
     scale_pos_weight = n_negative / n_positive
-    print(f"\nLabel balance: {n_positive} positive / {n_negative} negative  (spw={scale_pos_weight:.2f})")
+    print(f"\n  Label balance: {n_positive} positive / {n_negative} negative  (spw={scale_pos_weight:.2f})")
 
     params = {**XGB_PARAMS, "scale_pos_weight": scale_pos_weight, "features": ",".join(feat_names)}
 
@@ -45,13 +49,11 @@ def train_model(features, label, model_path):
 
         cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
         cv_scores = cross_val_score(clf, X, y, cv=cv, scoring="roc_auc", n_jobs=-1)
-        print(f"10-fold CV AUC: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+        print(f"  10-fold CV AUC: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
-        # Final model on full dataset — restore full parallelism for the fit
-        clf.set_params(n_jobs=-1)
         clf.fit(X, y)
         joblib.dump(clf, model_path)
-        print(f"Saved model → {model_path}")
+        print(f"  Saved model → {model_path}")
 
         import mlflow
         mlflow.log_metric("cv_auc_mean", cv_scores.mean())
@@ -61,14 +63,8 @@ def train_model(features, label, model_path):
 
 
 if __name__ == "__main__":
-    print("=== Training V1 (lens scores only, includes leaky cultural_impact_score) ===")
-    train_model(FEATURES_V1, LABEL, RESULTS_DIR / "model_v1.pkl")
+    print(f"=== Training XGBoost V3 ({len(FEATURES_V3)} tabular features) ===")
+    train_model(FEATURES_V3, LABEL, RESULTS_DIR / "model_xgb_v3.pkl")
 
-    print("\n=== Training V1 Clean (lens scores only, cultural_impact_score removed) ===")
-    train_model(FEATURES_V1_CLEAN, LABEL, RESULTS_DIR / "model_v1_clean.pkl")
-
-    print("\n=== Training V2 (all features) ===")
-    train_model(FEATURES_V2, LABEL, RESULTS_DIR / "model_v2.pkl")
-
-    print("\n=== Training V2 Clean (all features, cultural_impact_score removed) ===")
-    train_model(FEATURES_V2_CLEAN, LABEL, RESULTS_DIR / "model_v2_clean.pkl")
+    print(f"\n=== Training XGBoost V4 ({len(FEATURES_V4)} features: tabular + 32 embedding PCs) ===")
+    train_model(FEATURES_V4, LABEL, RESULTS_DIR / "model_xgb_v4.pkl")

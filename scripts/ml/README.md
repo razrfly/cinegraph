@@ -60,4 +60,5 @@ mlflow ui
 | < 50% | insufficient |
 | 50–65% | marginal |
 | 65–80% | good |
+| 80–90% | very good |
 | ≥ 90% | strong |

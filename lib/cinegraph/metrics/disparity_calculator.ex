@@ -55,7 +55,11 @@ defmodule Cinegraph.Metrics.DisparityCalculator do
   @doc """
   Given the output of MovieScoring.calculate_movie_scores/1,
   returns %{disparity_score, disparity_category, unpredictability_score}.
-  Returns nil disparity values when both mob and critics scores are 0 (no data).
+
+  Returns `{nil, nil}` for disparity/category when:
+  - `mob` is nil (no audience ratings)
+  - `critics` is nil (no critic ratings)
+  - both `mob` and `critics` are 0.0 (scores present but no data)
   """
   def calculate_all(%{components: c}) do
     mob = c.mob

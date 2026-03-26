@@ -46,10 +46,29 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
     decade_results =
       Enum.map(all_decades_with_data, fn decade ->
-        validate_decade(decade, weights)
+        try do
+          validate_decade(decade, weights)
+        rescue
+          e ->
+            %{
+              decade: decade,
+              error: Exception.message(e),
+              correctly_predicted: 0,
+              total_1001_movies: 0,
+              total_decade_movies: 0,
+              accuracy_percentage: 0.0
+            }
+        end
       end)
 
-    overall_accuracy = calculate_overall_accuracy(decade_results)
+    valid_results = Enum.reject(decade_results, &Map.has_key?(&1, :error))
+    total_1001 = Enum.sum(Enum.map(valid_results, & &1.total_1001_movies))
+    total_correct = Enum.sum(Enum.map(valid_results, & &1.correctly_predicted))
+
+    overall_accuracy =
+      if total_1001 > 0,
+        do: Float.round(total_correct / total_1001 * 100, 1),
+        else: 0.0
 
     # Calculate the actual range dynamically
     min_decade =
@@ -63,7 +82,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
       overall_accuracy: overall_accuracy,
       profile_used: "CriteriaScoring",
       weights_used: weights,
-      decades_analyzed: length(all_decades_with_data),
+      decades_analyzed: length(valid_results),
       decade_range: "#{min_decade}s-#{max_decade}s"
     }
   end

@@ -132,6 +132,12 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
     cache_validation_result(profile, validation_result)
     cache_profile_comparison(profile_comparison)
 
+    Phoenix.PubSub.broadcast(
+      Cinegraph.PubSub,
+      "predictions:cache_updated",
+      {:predictions_cache_updated, profile}
+    )
+
     :ok
   end
 

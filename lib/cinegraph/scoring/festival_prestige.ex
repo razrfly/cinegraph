@@ -8,6 +8,10 @@ defmodule Cinegraph.Scoring.FestivalPrestige do
   passing `ceiling: 10.0` naturally scales the result.
   """
 
+  # Only the festivals below are known to meaningfully predict 1001 Movies inclusion.
+  # @default_tier {0.0, 0.0} intentionally gives unknown/unsupported festivals a zero
+  # score so they cannot inflate predictions through volume. To score a new festival,
+  # add its abbreviation to @tiers or populate its win_score/nom_score in the DB.
   @tiers %{
     "AMPAS" => {100.0, 80.0},
     "CFF" => {95.0, 75.0},

@@ -77,17 +77,22 @@ defmodule Cinegraph.Workers.PredictionsWorker do
 
     profile = Repo.get!(MetricWeightProfile, profile_id)
 
-    # Calculate validation for just this decade
-    validation_result = HistoricalValidator.validate_decade(decade, profile)
+    try do
+      # Calculate validation for just this decade
+      validation_result = HistoricalValidator.validate_decade(decade, profile)
 
-    # Store in a temporary table or cache for later aggregation
-    # For now, we'll store in Cachex with a specific key
-    cache_key = "validation:#{profile_id}:#{decade}"
-    Cachex.put(:predictions_cache, cache_key, validation_result, ttl: :timer.hours(1))
+      # Store in a temporary table or cache for later aggregation
+      # For now, we'll store in Cachex with a specific key
+      cache_key = "validation:#{profile_id}:#{decade}"
+      Cachex.put(:predictions_cache, cache_key, validation_result, ttl: :timer.hours(1))
 
-    Logger.info(
-      "Cached validation for decade #{decade}, accuracy: #{validation_result.accuracy_percentage}%"
-    )
+      Logger.info(
+        "Cached validation for decade #{decade}, accuracy: #{validation_result.accuracy_percentage}%"
+      )
+    rescue
+      e ->
+        Logger.error("Validation timeout for #{decade}s: #{Exception.message(e)}")
+    end
 
     :ok
   end
@@ -267,6 +272,13 @@ defmodule Cinegraph.Workers.PredictionsWorker do
     end
 
     Logger.info("Successfully calculated and cached profile comparison")
+
+    Phoenix.PubSub.broadcast(
+      Cinegraph.PubSub,
+      "predictions:cache_updated",
+      {:predictions_cache_updated, default_profile}
+    )
+
     :ok
   end
 

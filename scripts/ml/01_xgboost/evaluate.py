@@ -8,10 +8,11 @@ import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import shap
+from sklearn.base import clone
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, cross_val_predict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from shared.constants import FEATURES_V1, FEATURES_V1_CLEAN, FEATURES_V2, LABEL
+from shared.constants import FEATURES_V1, FEATURES_V1_CLEAN, FEATURES_V2, FEATURES_V2_CLEAN, LABEL
 from shared.data_loader import load_and_prepare
 from shared.evaluator import auc_roc, precision_at_k, per_decade_accuracy, report
 from shared.mlflow_utils import start_run, TRACKING_URI
@@ -39,7 +40,12 @@ def cross_val_p_at_k(model, X, y, k=1001, n_splits=10):
     directly comparable to the 48% baseline (P@1001 over all 1,256 positives).
     """
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
-    oof_proba = cross_val_predict(model, X, y, cv=cv, method="predict_proba", n_jobs=-1)
+    # Clone and force n_jobs=1 on the estimator to avoid nested parallelism;
+    # cross_val_predict's own n_jobs=-1 handles outer-fold parallelism.
+    cloned = clone(model)
+    if hasattr(cloned, "n_jobs"):
+        cloned.set_params(n_jobs=1)
+    oof_proba = cross_val_predict(cloned, X, y, cv=cv, method="predict_proba", n_jobs=-1)
     oof_scores = oof_proba[:, 1]
     return precision_at_k(y, oof_scores, k)
 
@@ -93,26 +99,38 @@ if __name__ == "__main__":
     model_v1 = load_model(RESULTS_DIR / "model_v1.pkl")
     model_v1_clean = load_model(RESULTS_DIR / "model_v1_clean.pkl")
     model_v2 = load_model(RESULTS_DIR / "model_v2.pkl")
+    model_v2_clean = load_model(RESULTS_DIR / "model_v2_clean.pkl")
 
     df_v1, X_v1, y_v1, _ = load_and_prepare(FEATURES_V1)
     df_v1c, X_v1c, y_v1c, _ = load_and_prepare(FEATURES_V1_CLEAN)
     df_v2, X_v2, y_v2, _ = load_and_prepare(FEATURES_V2)
+    df_v2c, X_v2c, y_v2c, _ = load_and_prepare(FEATURES_V2_CLEAN)
 
-    # Holdout split for unbiased evaluation
-    _, test_idx_v1 = holdout_split(X_v1, y_v1)
-    _, test_idx_v1c = holdout_split(X_v1c, y_v1c)
-    _, test_idx_v2 = holdout_split(X_v2, y_v2)
+    # Holdout split — refit each model on the train slice so holdout metrics are unbiased
+    # (saved models were trained on full data; refitting here gives a proper train/test split)
+    train_idx_v1, test_idx_v1 = holdout_split(X_v1, y_v1)
+    train_idx_v1c, test_idx_v1c = holdout_split(X_v1c, y_v1c)
+    train_idx_v2, test_idx_v2 = holdout_split(X_v2, y_v2)
+    train_idx_v2c, test_idx_v2c = holdout_split(X_v2c, y_v2c)
+
+    model_v1.fit(X_v1[train_idx_v1], y_v1[train_idx_v1])
+    model_v1_clean.fit(X_v1c[train_idx_v1c], y_v1c[train_idx_v1c])
+    model_v2.fit(X_v2[train_idx_v2], y_v2[train_idx_v2])
+    model_v2_clean.fit(X_v2c[train_idx_v2c], y_v2c[train_idx_v2c])
 
     X_test_v1, y_test_v1 = X_v1[test_idx_v1], y_v1[test_idx_v1]
     X_test_v1c, y_test_v1c = X_v1c[test_idx_v1c], y_v1c[test_idx_v1c]
     X_test_v2, y_test_v2 = X_v2[test_idx_v2], y_v2[test_idx_v2]
+    X_test_v2c, y_test_v2c = X_v2c[test_idx_v2c], y_v2c[test_idx_v2c]
     df_test_v1 = df_v1.iloc[test_idx_v1].reset_index(drop=True)
     df_test_v1c = df_v1c.iloc[test_idx_v1c].reset_index(drop=True)
     df_test_v2 = df_v2.iloc[test_idx_v2].reset_index(drop=True)
+    df_test_v2c = df_v2c.iloc[test_idx_v2c].reset_index(drop=True)
 
     scores_test_v1 = model_v1.predict_proba(X_test_v1)[:, 1]
     scores_test_v1c = model_v1_clean.predict_proba(X_test_v1c)[:, 1]
     scores_test_v2 = model_v2.predict_proba(X_test_v2)[:, 1]
+    scores_test_v2c = model_v2_clean.predict_proba(X_test_v2c)[:, 1]
 
     mlflow.set_tracking_uri(TRACKING_URI)
     mlflow.set_experiment("cinegraph-1001-xgboost")
@@ -127,6 +145,9 @@ if __name__ == "__main__":
         report(df_test_v2, scores_test_v2, y_test_v2, "xgb_v2", {"features": "v2", "split": "holdout_20pct"})
         plot_shap_summary(model_v2, X_test_v2, FEATURES_V2, RESULTS_DIR / "shap_summary.png")
         mlflow.log_artifact(str(RESULTS_DIR / "shap_summary.png"))
+
+    with mlflow.start_run(run_name="evaluate_v2_clean"):
+        report(df_test_v2c, scores_test_v2c, y_test_v2c, "xgb_v2_clean", {"features": "v2_clean", "split": "holdout_20pct"})
 
     plot_score_distribution(scores_test_v1, scores_test_v2, y_test_v2, RESULTS_DIR / "score_distribution.png")
 
@@ -144,6 +165,10 @@ if __name__ == "__main__":
     cv_p1001_v2 = cross_val_p_at_k(model_v2, X_v2, y_v2)
     print(f"    V2 CV P@1001: {cv_p1001_v2:.4f}")
 
+    print("  V2 clean...")
+    cv_p1001_v2c = cross_val_p_at_k(model_v2_clean, X_v2c, y_v2c)
+    print(f"    V2 clean CV P@1001: {cv_p1001_v2c:.4f}")
+
     print_comparison_table([
         (
             "XGBoost V1 (leaky)",
@@ -158,6 +183,13 @@ if __name__ == "__main__":
             auc_roc(y_test_v1c, scores_test_v1c),
             cv_p1001_v1c,
             precision_at_k(y_test_v1c, scores_test_v1c, 1001),
+        ),
+        (
+            "XGBoost V2 clean",
+            None,
+            auc_roc(y_test_v2c, scores_test_v2c),
+            cv_p1001_v2c,
+            precision_at_k(y_test_v2c, scores_test_v2c, 1001),
         ),
         (
             "XGBoost V2 (leaky)",

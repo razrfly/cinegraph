@@ -38,7 +38,7 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         where: m.release_date <= ^end_date,
         where: m.import_status == "full",
         order_by: [desc: fragment("COALESCE((? ->> 'vote_count')::numeric, 0)", m.tmdb_data)],
-        limit: 1000
+        limit: 5000
 
     all_decade_movies = Repo.all(all_movies_query, timeout: :timer.seconds(120))
     scored = CriteriaScoring.batch_score_movies(all_decade_movies, weights)
