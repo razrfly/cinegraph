@@ -56,7 +56,7 @@ movie_director_avg_rating AS (
     GROUP BY mc.movie_id
 ),
 movie_director_names AS (
-    SELECT mc.movie_id, STRING_AGG(p.name, ' ') AS director_names
+    SELECT mc.movie_id, STRING_AGG(p.name, ' ' ORDER BY p.name, p.id) AS director_names
     FROM movie_credits mc
     JOIN people p ON p.id = mc.person_id
     WHERE mc.credit_type = 'crew' AND mc.job = 'Director'

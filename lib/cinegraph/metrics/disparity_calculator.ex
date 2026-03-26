@@ -59,7 +59,8 @@ defmodule Cinegraph.Metrics.DisparityCalculator do
   Returns `{nil, nil}` for disparity/category when:
   - `mob` is nil (no audience ratings)
   - `critics` is nil (no critic ratings)
-  - both `mob` and `critics` are 0.0 (scores present but no data)
+  - both `mob` and `critics` are 0.0 (defensive sentinel: ScoringService returns 0.0
+    when a lens has no underlying data, even though the key is present in `components`)
   """
   def calculate_all(%{components: c}) do
     mob = c.mob

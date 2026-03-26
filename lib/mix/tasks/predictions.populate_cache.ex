@@ -30,7 +30,8 @@ defmodule Mix.Tasks.Predictions.PopulateCache do
       OptionParser.parse(args,
         strict: [
           profile: :string,
-          all_profiles: :boolean
+          all_profiles: :boolean,
+          sync: :boolean
         ]
       )
 

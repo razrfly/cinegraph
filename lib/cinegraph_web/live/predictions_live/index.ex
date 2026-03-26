@@ -358,16 +358,29 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   @impl true
   def handle_event("refresh_cache", _params, socket) do
-    Cinegraph.Workers.ComprehensivePredictionsCalculator.queue_default_profile()
+    profile = socket.assigns[:current_profile]
 
-    {:noreply,
-     socket
-     |> put_flash(
-       :info,
-       "Cache refresh started! This will take a few minutes to complete in the background."
-     )
-     |> assign(:cache_refreshing, true)
-     |> assign(:cache_building, true)}
+    result =
+      if profile do
+        Cinegraph.Workers.ComprehensivePredictionsCalculator.queue_profile(profile.id)
+      else
+        Cinegraph.Workers.ComprehensivePredictionsCalculator.queue_default_profile()
+      end
+
+    case result do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           "Cache refresh started! This will take a few minutes to complete in the background."
+         )
+         |> assign(:cache_refreshing, true)
+         |> assign(:cache_building, true)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to queue cache refresh: #{inspect(reason)}")}
+    end
   end
 
   @impl true
@@ -456,36 +469,45 @@ defmodule CinegraphWeb.PredictionsLive.Index do
   end
 
   @impl true
-  def handle_info({:predictions_cache_updated, _profile}, socket) do
-    default_profile = PredictionsCache.get_default_profile()
+  def handle_info({:predictions_cache_updated, updated_profile}, socket) do
+    # Only reload when the update matches the profile currently being viewed.
+    # Ignore updates for other profiles to avoid overwriting the user's current view.
+    current_profile = socket.assigns[:current_profile]
 
-    predictions_result =
-      PredictionsCache.get_predictions(100, default_profile) ||
-        %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+    if current_profile && updated_profile &&
+         current_profile.id != updated_profile.id do
+      {:noreply, socket}
+    else
+      profile = current_profile || PredictionsCache.get_default_profile()
 
-    validation_result =
-      PredictionsCache.get_validation(default_profile) ||
-        %{overall_accuracy: 0, decade_results: []}
+      predictions_result =
+        PredictionsCache.get_predictions(100, profile) ||
+          %{predictions: [], total_candidates: 0, algorithm_info: %{}}
 
-    cache_status = PredictionsCache.get_cache_status(default_profile)
+      validation_result =
+        PredictionsCache.get_validation(profile) ||
+          %{overall_accuracy: 0, decade_results: []}
 
-    confirmed_count =
-      if predictions_result.predictions == [] do
-        0
-      else
-        PredictionsCache.get_confirmed_additions_count(predictions_result)
-      end
+      cache_status = PredictionsCache.get_cache_status(profile)
 
-    {:noreply,
-     socket
-     |> assign(:predictions_result, predictions_result)
-     |> assign(:validation_result, validation_result)
-     |> assign(:cache_status, cache_status)
-     |> assign(:confirmed_count, confirmed_count)
-     |> assign(:cache_empty, predictions_result.predictions == [])
-     |> assign(:cache_refreshing, false)
-     |> assign(:cache_building, false)
-     |> put_flash(:info, "Predictions cache updated!")}
+      confirmed_count =
+        if predictions_result.predictions == [] do
+          0
+        else
+          PredictionsCache.get_confirmed_additions_count(predictions_result)
+        end
+
+      {:noreply,
+       socket
+       |> assign(:predictions_result, predictions_result)
+       |> assign(:validation_result, validation_result)
+       |> assign(:cache_status, cache_status)
+       |> assign(:confirmed_count, confirmed_count)
+       |> assign(:cache_empty, predictions_result.predictions == [])
+       |> assign(:cache_refreshing, false)
+       |> assign(:cache_building, false)
+       |> put_flash(:info, "Predictions cache updated!")}
+    end
   end
 
   defp format_status(:already_added), do: {"✅ Added", "text-green-600"}

@@ -14,23 +14,38 @@ EMBED_RICH_RAW_PATH = Path(__file__).parent.parent / "data" / "embeddings_rich_r
 CURRENT_YEAR = datetime.date.today().year
 
 
-def load_and_prepare(features: List[str]) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, List[str]]:
+def load_and_prepare(
+    features: List[str],
+    reference_year: int = CURRENT_YEAR,
+) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, List[str]]:
     """
     Load movies.parquet, derive engineered features, return (df, X, y, features).
 
     NaN values are preserved for lens scores — XGBoost handles missing natively.
+
+    Args:
+        features: list of feature column names to use.
+        reference_year: year used to compute `years_since_release`. Pass an explicit
+            value (e.g. the training cutoff year) to make experiments reproducible
+            across calendar years. Defaults to the current year.
     """
     df = pd.read_parquet(DATA_PATH)
 
     # Auto-load embeddings when emb_pc_* features are requested
     if any(f.startswith("emb_pc_") for f in features):
         emb = pd.read_parquet(EMBED_PATH)
+        if emb["movie_id"].duplicated().any():
+            raise ValueError("embeddings_pca32.parquet contains duplicate movie_id rows")
         df = df.merge(emb, on="movie_id", how="left")
     if any(f.startswith("emb_rpc_") for f in features):
         emb = pd.read_parquet(EMBED_RICH_PCA_PATH)
+        if emb["movie_id"].duplicated().any():
+            raise ValueError("embeddings_rich_pca128.parquet contains duplicate movie_id rows")
         df = df.merge(emb, on="movie_id", how="left")
     if any(f.startswith("emb_raw_") for f in features):
         emb = pd.read_parquet(EMBED_RICH_RAW_PATH)
+        if emb["movie_id"].duplicated().any():
+            raise ValueError("embeddings_rich_raw384.parquet contains duplicate movie_id rows")
         df = df.merge(emb, on="movie_id", how="left")
 
     # Derived features
@@ -38,7 +53,7 @@ def load_and_prepare(features: List[str]) -> Tuple[pd.DataFrame, np.ndarray, np.
     df["decade"] = (df["release_year"] // 10) * 10
     df["has_festival_data"] = (df["festival_recognition_score"].notna()).astype(int)
     df["has_critic_data"] = (df["ivory_tower_score"].notna()).astype(int)
-    df["years_since_release"] = CURRENT_YEAR - df["release_year"]
+    df["years_since_release"] = reference_year - df["release_year"]
 
     # V3 derived features
     df["has_imdb_votes"] = (df["imdb_votes"].fillna(0) > 0).astype(int)

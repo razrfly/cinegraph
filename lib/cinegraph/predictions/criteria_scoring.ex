@@ -3,10 +3,10 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   Implements the 5-criteria scoring system for predicting 1001 Movies list additions.
 
   The 5 criteria with default weights:
-  1. The Mob (17.5%) - Audience ratings: IMDb, TMDb
-  2. The Critics (17.5%) - Critic ratings: Metacritic, RT Tomatometer
-  3. Festival Recognition (40%) - includes technical craft nominations
-  4. Cultural Impact (20%)
+  1. The Mob (30%) - Audience ratings: IMDb, TMDb
+  2. The Critics (20%) - Critic ratings: Metacritic, RT Tomatometer
+  3. Festival Recognition (30%) - includes technical craft nominations
+  4. Cultural Impact (15%)
   5. Auteur Recognition (5%)
 
   NOTE: This module uses its own 5-criterion vocabulary (festival_recognition,

@@ -158,15 +158,21 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
     Logger.info("Queued comprehensive predictions calculation for #{length(profiles)} profiles")
   end
 
-  # Queue calculation for the default profile
+  # Queue calculation for the default profile; returns Oban.insert result
   def queue_default_profile do
     profile = ScoringService.get_default_profile()
+    queue_profile(profile.id)
+  end
 
-    %{profile_id: profile.id}
-    |> new()
-    |> Oban.insert()
+  # Queue calculation for a specific profile by id
+  def queue_profile(profile_id) do
+    result =
+      %{profile_id: profile_id}
+      |> new()
+      |> Oban.insert()
 
-    Logger.info("Queued comprehensive predictions calculation for default profile")
+    Logger.info("Queued comprehensive predictions calculation for profile #{profile_id}")
+    result
   end
 
   # Private helpers

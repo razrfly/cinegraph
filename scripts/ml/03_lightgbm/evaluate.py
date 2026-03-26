@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import shap
+from sklearn.base import clone
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, cross_val_predict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -36,7 +37,10 @@ def holdout_split(X, y):
 def cross_val_p_at_k(model, X, y, k=1001, n_splits=10):
     """Compute P@k using cross-validated predictions on the full dataset."""
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
-    oof_proba = cross_val_predict(model, X, y, cv=cv, method="predict_proba", n_jobs=-1)
+    cloned = clone(model)
+    if hasattr(cloned, "n_jobs"):
+        cloned.set_params(n_jobs=1)
+    oof_proba = cross_val_predict(cloned, X, y, cv=cv, method="predict_proba", n_jobs=-1)
     return precision_at_k(y, oof_proba[:, 1], k)
 
 
@@ -81,7 +85,7 @@ def print_comparison_table(metrics):
     print(f"\n{sep}")
     print(header)
     print("-" * len(header))
-    print(f"{'Baseline (hand)':32} {'N/A':>8} {'N/A':>8} {'N/A':>10} {BASELINE_ACCURACY:>10.4f}")
+    print(f"{'Baseline (hand)':32} {'N/A':>8} {'N/A':>8} {BASELINE_ACCURACY:>10.4f} {'N/A':>10}")
     for name, cv_auc, ho_auc, cv_p1001, ho_p1001 in metrics:
         cv_auc_s = f"{cv_auc:.4f}" if cv_auc is not None else "N/A"
         ho_auc_s = f"{ho_auc:.4f}" if ho_auc is not None else "N/A"
@@ -102,10 +106,15 @@ if __name__ == "__main__":
     df_v2c, X_v2c, y_v2c, _ = load_and_prepare(FEATURES_V2_CLEAN)
     df_v3, X_v3, y_v3, _ = load_and_prepare(FEATURES_V3)
 
-    # Holdout splits
-    _, test_idx_v1c = holdout_split(X_v1c, y_v1c)
-    _, test_idx_v2c = holdout_split(X_v2c, y_v2c)
-    _, test_idx_v3 = holdout_split(X_v3, y_v3)
+    # Refit on train slice for unbiased holdout evaluation
+    # (saved models were trained on full data; refitting gives a proper train/test split)
+    train_idx_v1c, test_idx_v1c = holdout_split(X_v1c, y_v1c)
+    train_idx_v2c, test_idx_v2c = holdout_split(X_v2c, y_v2c)
+    train_idx_v3, test_idx_v3 = holdout_split(X_v3, y_v3)
+
+    model_v1c.fit(X_v1c[train_idx_v1c], y_v1c[train_idx_v1c])
+    model_v2c.fit(X_v2c[train_idx_v2c], y_v2c[train_idx_v2c])
+    model_lgbm.fit(X_v3[train_idx_v3], y_v3[train_idx_v3])
 
     X_test_v1c, y_test_v1c = X_v1c[test_idx_v1c], y_v1c[test_idx_v1c]
     X_test_v2c, y_test_v2c = X_v2c[test_idx_v2c], y_v2c[test_idx_v2c]

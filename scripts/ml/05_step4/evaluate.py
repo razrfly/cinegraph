@@ -56,7 +56,10 @@ def holdout_split(X, y):
 def cross_val_p_at_k(model, X, y, k=1001, n_splits=10):
     """P@k via cross-validated predict_proba (XGBoost)."""
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
-    oof_proba = cross_val_predict(model, X, y, cv=cv, method="predict_proba", n_jobs=-1)
+    cloned = clone(model)
+    if hasattr(cloned, "n_jobs"):
+        cloned.set_params(n_jobs=1)
+    oof_proba = cross_val_predict(cloned, X, y, cv=cv, method="predict_proba", n_jobs=-1)
     return precision_at_k(y, oof_proba[:, 1], k)
 
 
@@ -174,9 +177,12 @@ if __name__ == "__main__":
         ("LightGBM V5 spw=200", model_lgbm_200, X_v5_64,  y_v5_64),
     ]
 
+    # Refit each model on its train slice for unbiased holdout evaluation
+    # (saved models were trained on full data; refitting gives a proper train/test split)
     ho_aucs = {}
     for name, model, X, y in configs:
-        _, test_idx = holdout_split(X, y)
+        train_idx, test_idx = holdout_split(X, y)
+        model.fit(X[train_idx], y[train_idx])
         X_test, y_test = X[test_idx], y[test_idx]
         scores = model.predict_proba(X_test)[:, 1]
         ho_auc = auc_roc(y_test, scores)
