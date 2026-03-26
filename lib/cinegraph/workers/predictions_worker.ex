@@ -89,6 +89,8 @@ defmodule Cinegraph.Workers.PredictionsWorker do
       Logger.info(
         "Cached validation for decade #{decade}, accuracy: #{validation_result.accuracy_percentage}%"
       )
+
+      :ok
     rescue
       e ->
         reason = Exception.message(e)

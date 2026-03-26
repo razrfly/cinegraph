@@ -15,7 +15,6 @@ defmodule Mix.Tasks.Predictions.PopulateCache do
 
     * `--profile` - weight profile name (default: default profile from DB)
     * `--all-profiles` - calculate for all profiles
-    * `--sync` - run synchronously via Oban.Testing instead of queuing (default)
 
   """
   use Mix.Task
@@ -30,8 +29,7 @@ defmodule Mix.Tasks.Predictions.PopulateCache do
       OptionParser.parse(args,
         strict: [
           profile: :string,
-          all_profiles: :boolean,
-          sync: :boolean
+          all_profiles: :boolean
         ]
       )
 

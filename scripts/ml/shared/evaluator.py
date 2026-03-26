@@ -16,8 +16,7 @@ def precision_at_k(y_true: np.ndarray, y_scores: np.ndarray, k: int) -> float:
         raise ValueError(f"k must be positive, got {k}")
     if len(y_true) != len(y_scores):
         raise ValueError(f"y_true and y_scores must have the same length ({len(y_true)} vs {len(y_scores)})")
-    if k > len(y_true):
-        raise ValueError(f"k={k} exceeds dataset size {len(y_true)}; use a smaller k or CV P@k on the full dataset")
+    k = min(k, len(y_true))
     top_k_idx = np.argsort(y_scores)[::-1][:k]
     return y_true[top_k_idx].sum() / k
 
@@ -46,8 +45,9 @@ def per_decade_accuracy(df: pd.DataFrame, y_scores: np.ndarray, label_col: str =
 def report(df: pd.DataFrame, y_scores: np.ndarray, y_true: np.ndarray, name: str, params: dict) -> None:
     """Print evaluation table and log metrics to MLflow if a run is active."""
     auc = auc_roc(y_true, y_scores)
-    p500 = precision_at_k(y_true, y_scores, 500)
-    p1001 = precision_at_k(y_true, y_scores, 1001)
+    # Clamp k to the actual holdout size — holdout sets are smaller than the full dataset
+    p500 = precision_at_k(y_true, y_scores, min(500, len(y_true)))
+    p1001 = precision_at_k(y_true, y_scores, min(1001, len(y_true)))
     decade_acc = per_decade_accuracy(df, y_scores)
 
     print(f"\n{'='*50}")
