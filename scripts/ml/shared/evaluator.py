@@ -12,8 +12,13 @@ def auc_roc(y_true: np.ndarray, y_scores: np.ndarray) -> float:
 
 
 def precision_at_k(y_true: np.ndarray, y_scores: np.ndarray, k: int) -> float:
-    top_k_idx = np.argsort(y_scores)[::-1][:k]
-    return y_true[top_k_idx].sum() / k
+    if k <= 0:
+        raise ValueError(f"k must be positive, got {k}")
+    if len(y_true) != len(y_scores):
+        raise ValueError(f"y_true and y_scores must have the same length ({len(y_true)} vs {len(y_scores)})")
+    actual_k = min(k, len(y_true))
+    top_k_idx = np.argsort(y_scores)[::-1][:actual_k]
+    return y_true[top_k_idx].sum() / actual_k
 
 
 def per_decade_accuracy(df: pd.DataFrame, y_scores: np.ndarray, label_col: str = "is_on_1001_list") -> Dict[int, float]:

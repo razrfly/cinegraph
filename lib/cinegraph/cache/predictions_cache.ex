@@ -390,9 +390,11 @@ defmodule Cinegraph.Cache.PredictionsCache do
 
               # Skip entries with invalid movie_id
               if movie_id do
-                # Use the stored likelihood_percentage computed by CriteriaScoring.convert_to_likelihood
+                # PredictionsWorker stores likelihood_percentage under the "score" key
+                # (see predictions_worker.ex: "score" => pred.prediction.likelihood_percentage).
+                # Try "likelihood_percentage" first for forward compatibility, fall back to "score".
                 total_score = Map.get(score_data, "total_score", Map.get(score_data, "score", 0))
-                likelihood = Map.get(score_data, "score", Map.get(score_data, "likelihood_percentage", 0))
+                likelihood = Map.get(score_data, "likelihood_percentage", Map.get(score_data, "score", 0))
 
                 # Extract year from release_date for compatibility with MoviePredictor
                 year =

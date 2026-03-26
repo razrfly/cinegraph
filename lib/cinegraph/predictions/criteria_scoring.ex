@@ -27,17 +27,17 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   @scoring_criteria ~w(mob critics festival_recognition cultural_impact auteur_recognition)a
 
   @default_weights %{
-    mob: 0.175,
-    critics: 0.175,
-    festival_recognition: 0.40,
-    cultural_impact: 0.20,
+    mob: 0.30,
+    critics: 0.20,
+    festival_recognition: 0.30,
+    cultural_impact: 0.15,
     auteur_recognition: 0.05
   }
 
   @named_profiles [
     %{
       name: "default",
-      description: "Balanced — festival 40%, mob/critics 17.5% each, cultural 20%, auteur 5%",
+      description: "Balanced — mob 30%, festival 30%, critics 20%, cultural 15%, auteur 5%",
       weights: @default_weights
     },
     %{
@@ -190,7 +190,8 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
         where: em.movie_id == ^movie.id,
         where:
           (em.source == "imdb" and em.metric_type == "rating_average") or
-            (em.source == "tmdb" and em.metric_type == "rating_average"),
+            (em.source == "tmdb" and em.metric_type == "rating_average") or
+            (em.source == "imdb" and em.metric_type == "rating_votes"),
         select: [em.source, em.metric_type, em.value]
 
     score_mob_from_metrics(Repo.all(query))
@@ -569,7 +570,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   end
 
   defp score_mob_from_metrics(metrics) do
-    normalized_scores =
+    rating_scores =
       metrics
       |> Enum.filter(fn [source, metric_type, _value] ->
         (source == "imdb" and metric_type == "rating_average") or
@@ -580,8 +581,18 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
       end)
       |> Enum.filter(&(&1 > 0))
 
-    if length(normalized_scores) > 0 do
-      min(Enum.sum(normalized_scores) / length(normalized_scores), 100.0)
+    imdb_votes =
+      Enum.find_value(metrics, 0.0, fn
+        ["imdb", "rating_votes", value] -> value || 0.0
+        _ -> nil
+      end) || 0.0
+
+    if length(rating_scores) > 0 do
+      avg_rating = Enum.sum(rating_scores) / length(rating_scores)
+      rating_component = avg_rating * 0.70
+      # log(1 + 100_000) ≈ 11.51 → 30 pts at 100K votes, ~14 at 1K, 0 at 0
+      vote_component = min(:math.log(1 + imdb_votes) / :math.log(1 + 100_000) * 30.0, 30.0)
+      min(rating_component + vote_component, 100.0)
     else
       nil
     end

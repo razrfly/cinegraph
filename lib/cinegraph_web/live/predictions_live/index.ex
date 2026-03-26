@@ -9,6 +9,10 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Cinegraph.PubSub, "predictions:cache_updated")
+    end
+
     # Load initial data with error handling and caching
     try do
       default_profile = PredictionsCache.get_default_profile()
@@ -354,22 +358,16 @@ defmodule CinegraphWeb.PredictionsLive.Index do
 
   @impl true
   def handle_event("refresh_cache", _params, socket) do
-    # Queue background job to refresh cache
-    case Cinegraph.Workers.PredictionsOrchestrator.orchestrate_default_profile() do
-      {:ok, _job} ->
-        {:noreply,
-         socket
-         |> put_flash(
-           :info,
-           "Cache refresh started! This will take a few minutes to complete in the background."
-         )
-         |> assign(:cache_refreshing, true)}
+    Cinegraph.Workers.ComprehensivePredictionsCalculator.queue_default_profile()
 
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Failed to start cache refresh: #{inspect(reason)}")}
-    end
+    {:noreply,
+     socket
+     |> put_flash(
+       :info,
+       "Cache refresh started! This will take a few minutes to complete in the background."
+     )
+     |> assign(:cache_refreshing, true)
+     |> assign(:cache_building, true)}
   end
 
   @impl true
@@ -455,6 +453,39 @@ defmodule CinegraphWeb.PredictionsLive.Index do
            s
          end)}
     end
+  end
+
+  @impl true
+  def handle_info({:predictions_cache_updated, _profile}, socket) do
+    default_profile = PredictionsCache.get_default_profile()
+
+    predictions_result =
+      PredictionsCache.get_predictions(100, default_profile) ||
+        %{predictions: [], total_candidates: 0, algorithm_info: %{}}
+
+    validation_result =
+      PredictionsCache.get_validation(default_profile) ||
+        %{overall_accuracy: 0, decade_results: []}
+
+    cache_status = PredictionsCache.get_cache_status(default_profile)
+
+    confirmed_count =
+      if predictions_result.predictions == [] do
+        0
+      else
+        PredictionsCache.get_confirmed_additions_count(predictions_result)
+      end
+
+    {:noreply,
+     socket
+     |> assign(:predictions_result, predictions_result)
+     |> assign(:validation_result, validation_result)
+     |> assign(:cache_status, cache_status)
+     |> assign(:confirmed_count, confirmed_count)
+     |> assign(:cache_empty, predictions_result.predictions == [])
+     |> assign(:cache_refreshing, false)
+     |> assign(:cache_building, false)
+     |> put_flash(:info, "Predictions cache updated!")}
   end
 
   defp format_status(:already_added), do: {"✅ Added", "text-green-600"}
