@@ -25,13 +25,18 @@ defmodule Mix.Tasks.Predictions.PopulateCache do
   def run(args) do
     Mix.Task.run("app.start")
 
-    {opts, _, _} =
+    {opts, _, invalid} =
       OptionParser.parse(args,
         strict: [
           profile: :string,
           all_profiles: :boolean
         ]
       )
+
+    if invalid != [] do
+      flags = Enum.map_join(invalid, ", ", fn {flag, _} -> flag end)
+      Mix.raise("Unknown option(s): #{flags}")
+    end
 
     alias Cinegraph.Workers.ComprehensivePredictionsCalculator
     alias Cinegraph.Metrics.ScoringService

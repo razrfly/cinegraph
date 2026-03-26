@@ -45,9 +45,8 @@ def per_decade_accuracy(df: pd.DataFrame, y_scores: np.ndarray, label_col: str =
 def report(df: pd.DataFrame, y_scores: np.ndarray, y_true: np.ndarray, name: str, params: dict) -> None:
     """Print evaluation table and log metrics to MLflow if a run is active."""
     auc = auc_roc(y_true, y_scores)
-    # Clamp k to the actual holdout size — holdout sets are smaller than the full dataset
-    p500 = precision_at_k(y_true, y_scores, min(500, len(y_true)))
-    p1001 = precision_at_k(y_true, y_scores, min(1001, len(y_true)))
+    p500 = precision_at_k(y_true, y_scores, 500)
+    p1001 = precision_at_k(y_true, y_scores, 1001)
     decade_acc = per_decade_accuracy(df, y_scores)
 
     print(f"\n{'='*50}")
