@@ -2,7 +2,7 @@
 
 import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,12 +11,11 @@ DATA_PATH = Path(__file__).parent.parent / "data" / "movies.parquet"
 EMBED_PATH = Path(__file__).parent.parent / "data" / "embeddings_pca32.parquet"
 EMBED_RICH_PCA_PATH = Path(__file__).parent.parent / "data" / "embeddings_rich_pca128.parquet"
 EMBED_RICH_RAW_PATH = Path(__file__).parent.parent / "data" / "embeddings_rich_raw384.parquet"
-CURRENT_YEAR = datetime.date.today().year
 
 
 def load_and_prepare(
     features: List[str],
-    reference_year: int = None,
+    reference_year: Optional[int] = None,
 ) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, List[str]]:
     """
     Load movies.parquet, derive engineered features, return (df, X, y, features).
