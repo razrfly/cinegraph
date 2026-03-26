@@ -41,8 +41,11 @@ def cross_val_p_at_k(model, X, y, k=1001, n_splits=10):
     """
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
     cloned = clone(model)
-    if hasattr(cloned, "n_jobs"):
-        cloned.set_params(n_jobs=1)
+    # Handle both flat estimators and nested pipelines: set any n_jobs param to 1
+    # to avoid nested parallelism with cross_val_predict's own n_jobs=-1.
+    n_jobs_params = {k: 1 for k in cloned.get_params() if k == "n_jobs" or k.endswith("__n_jobs")}
+    if n_jobs_params:
+        cloned.set_params(**n_jobs_params)
     oof_proba = cross_val_predict(cloned, X, y, cv=cv, method="predict_proba", n_jobs=-1)
     oof_scores = oof_proba[:, 1]
     return precision_at_k(y, oof_scores, k)

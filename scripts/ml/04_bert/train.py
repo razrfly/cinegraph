@@ -30,7 +30,7 @@ XGB_PARAMS = dict(
     eval_metric="auc",
     enable_categorical=False,
     random_state=42,
-    n_jobs=-1,
+    n_jobs=1,  # single-threaded per estimator; cross_val_score uses n_jobs=-1 for outer folds
 )
 
 
@@ -51,6 +51,8 @@ def train_model(features, label, model_path):
         cv_scores = cross_val_score(clf, X, y, cv=cv, scoring="roc_auc", n_jobs=-1)
         print(f"  10-fold CV AUC: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
+        # Restore full parallelism for the final fit on the complete dataset
+        clf.set_params(n_jobs=-1)
         clf.fit(X, y)
         joblib.dump(clf, model_path)
         print(f"  Saved model → {model_path}")

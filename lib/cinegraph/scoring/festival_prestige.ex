@@ -11,7 +11,8 @@ defmodule Cinegraph.Scoring.FestivalPrestige do
   # Only the festivals below are known to meaningfully predict 1001 Movies inclusion.
   # @default_tier {0.0, 0.0} intentionally gives unknown/unsupported festivals a zero
   # score so they cannot inflate predictions through volume. To score a new festival,
-  # add its abbreviation to @tiers or populate its win_score/nom_score in the DB.
+  # populate its win_score/nom_score via /admin/festival-events (or seeds.exs). DB
+  # scores always take precedence over @tiers; add to @tiers only as a last resort.
   @tiers %{
     "AMPAS" => {100.0, 80.0},
     "CFF" => {95.0, 75.0},

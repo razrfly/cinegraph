@@ -91,10 +91,10 @@ defmodule Cinegraph.Workers.PredictionsWorker do
       )
     rescue
       e ->
-        Logger.error("Validation timeout for #{decade}s: #{Exception.message(e)}")
+        reason = Exception.message(e)
+        Logger.error("Validation failed for #{decade}s: #{reason}")
+        {:error, reason}
     end
-
-    :ok
   end
 
   def perform(%Oban.Job{args: %{"action" => "aggregate_validation", "profile_id" => profile_id}}) do

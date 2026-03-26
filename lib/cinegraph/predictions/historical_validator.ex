@@ -45,23 +45,18 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     all_decades_with_data = decades
 
     decade_results =
-      Enum.map(all_decades_with_data, fn decade ->
+      Enum.flat_map(all_decades_with_data, fn decade ->
         try do
-          validate_decade(decade, weights)
+          [validate_decade(decade, weights)]
         rescue
           e ->
-            %{
-              decade: decade,
-              error: Exception.message(e),
-              correctly_predicted: 0,
-              total_1001_movies: 0,
-              total_decade_movies: 0,
-              accuracy_percentage: 0.0
-            }
+            require Logger
+            Logger.warning("HistoricalValidator: skipping #{decade}s — #{Exception.message(e)}")
+            []
         end
       end)
 
-    valid_results = Enum.reject(decade_results, &Map.has_key?(&1, :error))
+    valid_results = decade_results
     total_1001 = Enum.sum(Enum.map(valid_results, & &1.total_1001_movies))
     total_correct = Enum.sum(Enum.map(valid_results, & &1.correctly_predicted))
 

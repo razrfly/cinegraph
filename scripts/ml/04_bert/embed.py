@@ -4,6 +4,12 @@ Reads: data/movies.parquet  (title, tagline, overview columns)
 Writes:
   data/pca_model.pkl              (sklearn PCA object for inspection/reuse)
   data/embeddings_pca32.parquet   (movie_id + emb_pc_0..emb_pc_31, float32)
+
+NOTE: PCA is fitted on the full dataset here (global fit). This introduces a minor
+form of information leakage when these embeddings are used in held-out evaluation
+because the test set influenced the PCA projection directions. For a fully leak-free
+setup, PCA should be fitted inside each cross-validation fold. The 05_step4 experiment
+uses raw 384-dim embeddings (emb_raw_*) which avoid this issue entirely.
 """
 
 import sys
