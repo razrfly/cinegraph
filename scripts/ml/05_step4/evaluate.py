@@ -177,14 +177,15 @@ if __name__ == "__main__":
         ("LightGBM V5 spw=200", model_lgbm_200, X_v5_64,  y_v5_64),
     ]
 
-    # Refit each model on its train slice for unbiased holdout evaluation
-    # (saved models were trained on full data; refitting gives a proper train/test split)
+    # Refit a clone of each model on its train slice for unbiased holdout evaluation.
+    # Clone so best_model_map and shap_best.png still reference the full-data model.
     ho_aucs = {}
     for name, model, X, y in configs:
         train_idx, test_idx = holdout_split(X, y)
-        model.fit(X[train_idx], y[train_idx])
+        ho_model = clone(model)
+        ho_model.fit(X[train_idx], y[train_idx])
         X_test, y_test = X[test_idx], y[test_idx]
-        scores = model.predict_proba(X_test)[:, 1]
+        scores = ho_model.predict_proba(X_test)[:, 1]
         ho_auc = auc_roc(y_test, scores)
         ho_aucs[name] = ho_auc
         print(f"  {name}: HO AUC={ho_auc:.4f}")

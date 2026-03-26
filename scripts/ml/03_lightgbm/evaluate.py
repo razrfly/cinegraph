@@ -152,20 +152,20 @@ if __name__ == "__main__":
             None,
             auc_roc(y_test_v1c, scores_v1c),
             cv_p_v1c,
-            precision_at_k(y_test_v1c, scores_v1c, 1001),
+            precision_at_k(y_test_v1c, scores_v1c, min(1001, len(y_test_v1c))),
         ),
         (
             "XGBoost V2 clean",
             None,
             auc_roc(y_test_v2c, scores_v2c),
             cv_p_v2c,
-            precision_at_k(y_test_v2c, scores_v2c, 1001),
+            precision_at_k(y_test_v2c, scores_v2c, min(1001, len(y_test_v2c))),
         ),
         (
             "LightGBM V3",
             None,
             auc_roc(y_test_v3, scores_v3),
             cv_p_v3,
-            precision_at_k(y_test_v3, scores_v3, 1001),
+            precision_at_k(y_test_v3, scores_v3, min(1001, len(y_test_v3))),
         ),
     ])

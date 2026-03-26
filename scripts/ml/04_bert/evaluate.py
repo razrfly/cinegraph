@@ -137,20 +137,20 @@ if __name__ == "__main__":
             None,
             auc_roc(y_test_v2c, scores_v2c),
             cv_p1001_v2c,
-            precision_at_k(y_test_v2c, scores_v2c, 1001),
+            precision_at_k(y_test_v2c, scores_v2c, min(1001, len(y_test_v2c))),
         ),
         (
             "XGBoost V3 (tabular only)",
             None,
             auc_roc(y_test_v3, scores_v3),
             cv_p1001_v3,
-            precision_at_k(y_test_v3, scores_v3, 1001),
+            precision_at_k(y_test_v3, scores_v3, min(1001, len(y_test_v3))),
         ),
         (
             "XGBoost V4 (tabular + embeddings)",
             None,
             auc_roc(y_test_v4, scores_v4),
             cv_p1001_v4,
-            precision_at_k(y_test_v4, scores_v4, 1001),
+            precision_at_k(y_test_v4, scores_v4, min(1001, len(y_test_v4))),
         ),
     ])

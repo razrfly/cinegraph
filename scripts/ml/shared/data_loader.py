@@ -16,7 +16,7 @@ CURRENT_YEAR = datetime.date.today().year
 
 def load_and_prepare(
     features: List[str],
-    reference_year: int = CURRENT_YEAR,
+    reference_year: int = None,
 ) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, List[str]]:
     """
     Load movies.parquet, derive engineered features, return (df, X, y, features).
@@ -53,6 +53,8 @@ def load_and_prepare(
     df["decade"] = (df["release_year"] // 10) * 10
     df["has_festival_data"] = (df["festival_recognition_score"].notna()).astype(int)
     df["has_critic_data"] = (df["ivory_tower_score"].notna()).astype(int)
+    if reference_year is None:
+        reference_year = datetime.date.today().year
     df["years_since_release"] = reference_year - df["release_year"]
 
     # V3 derived features

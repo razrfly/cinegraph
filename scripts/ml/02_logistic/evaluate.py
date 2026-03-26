@@ -142,11 +142,12 @@ if __name__ == "__main__":
         model_xgb_v1c.fit(X_v1[xgb_train_idx], y_v1[xgb_train_idx])
         xgb_scores_ho = model_xgb_v1c.predict_proba(X_v1[xgb_test_idx])[:, 1]
         xgb_cv_p1001 = cross_val_p_at_k(model_xgb_v1c, X_v1, y_v1)
+        xgb_ho = y_v1[xgb_test_idx]
         xgb_metrics = [(
             "XGBoost V1 clean",
-            auc_roc(y_v1[xgb_test_idx], xgb_scores_ho),
+            auc_roc(xgb_ho, xgb_scores_ho),
             xgb_cv_p1001,
-            precision_at_k(y_v1[xgb_test_idx], xgb_scores_ho, 1001),
+            precision_at_k(xgb_ho, xgb_scores_ho, min(1001, len(xgb_ho))),
         )]
 
     print_comparison_table(xgb_metrics + [
@@ -154,12 +155,12 @@ if __name__ == "__main__":
             "LR V1 clean",
             auc_roc(y_test_v1, scores_test_v1),
             cv_p1001_v1,
-            precision_at_k(y_test_v1, scores_test_v1, 1001),
+            precision_at_k(y_test_v1, scores_test_v1, min(1001, len(y_test_v1))),
         ),
         (
             "LR V2 clean",
             auc_roc(y_test_v2, scores_test_v2),
             cv_p1001_v2,
-            precision_at_k(y_test_v2, scores_test_v2, 1001),
+            precision_at_k(y_test_v2, scores_test_v2, min(1001, len(y_test_v2))),
         ),
     ])
