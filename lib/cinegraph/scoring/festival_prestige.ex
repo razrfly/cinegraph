@@ -18,7 +18,7 @@ defmodule Cinegraph.Scoring.FestivalPrestige do
     "SFF" => {75.0, 60.0},
     "CCA" => {70.0, 50.0}
   }
-  @default_tier {50.0, 30.0}
+  @default_tier {0.0, 0.0}
   @category_boost 10.0
   @major_categories ["picture", "film", "director"]
 

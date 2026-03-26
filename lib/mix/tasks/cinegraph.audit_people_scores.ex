@@ -44,7 +44,7 @@ defmodule Mix.Tasks.Cinegraph.AuditPeopleScores do
 
     IO.puts(
       String.pad_trailing("Movie", 35) <>
-        String.pad_leading("auteurs_score", 13) <>
+        String.pad_leading("auteurs_score", 14) <>
         String.pad_leading("min", 8) <>
         "  top cast"
     )
@@ -71,7 +71,7 @@ defmodule Mix.Tasks.Cinegraph.AuditPeopleScores do
           IO.puts(
             flag <>
               String.pad_trailing(title, 33) <>
-              String.pad_leading(format_score(score_10), 8) <>
+              String.pad_leading(format_score(score_10), 14) <>
               String.pad_leading("≥#{min_score}", 8) <>
               "  #{top_names}"
           )

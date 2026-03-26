@@ -210,7 +210,7 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-orange-400 rounded-full"
-                    style={"width: #{display_scores.mob * 10}%"}
+                    style={"width: #{(display_scores.mob || 0) * 10}%"}
                   >
                   </div>
                 </div>
@@ -249,7 +249,7 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-purple-600 rounded-full"
-                    style={"width: #{display_scores.critics * 10}%"}
+                    style={"width: #{(display_scores.critics || 0) * 10}%"}
                   >
                   </div>
                 </div>
@@ -289,7 +289,7 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-yellow-500 rounded-full"
-                    style={"width: #{display_scores.festival_recognition * 10}%"}
+                    style={"width: #{(display_scores.festival_recognition || 0) * 10}%"}
                   >
                   </div>
                 </div>
@@ -329,7 +329,7 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-teal-400 rounded-full"
-                    style={"width: #{display_scores.time_machine * 10}%"}
+                    style={"width: #{(display_scores.time_machine || 0) * 10}%"}
                   >
                   </div>
                 </div>
@@ -369,7 +369,7 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-amber-400 rounded-full"
-                    style={"width: #{display_scores.auteurs * 10}%"}
+                    style={"width: #{(display_scores.auteurs || 0) * 10}%"}
                   >
                   </div>
                 </div>
@@ -409,7 +409,7 @@
                 <div class="w-16 h-2 bg-white/20 rounded-full mr-2">
                   <div
                     class="h-2 bg-green-400 rounded-full"
-                    style={"width: #{display_scores.box_office * 10}%"}
+                    style={"width: #{(display_scores.box_office || 0) * 10}%"}
                   >
                   </div>
                 </div>

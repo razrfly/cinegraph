@@ -29,14 +29,16 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     start_date = Date.new!(decade, 1, 1)
     end_date = Date.new!(decade + 9, 12, 31)
 
-    # Get movies from the decade
-    # Display cap only (not used for backtesting/validation — see HistoricalValidator)
+    # Get the most engagement-signaled movies from the decade.
+    # order_by ensures notable films are fetched first; limit keeps worker time bounded.
+    # (HistoricalValidator runs unbounded for backtest accuracy — this function is UI-only.)
     all_movies_query =
       from m in Movie,
         where: m.release_date >= ^start_date,
         where: m.release_date <= ^end_date,
         where: m.import_status == "full",
-        limit: 300
+        order_by: [desc: fragment("COALESCE((? ->> 'vote_count')::numeric, 0)", m.tmdb_data)],
+        limit: 1000
 
     all_decade_movies = Repo.all(all_movies_query, timeout: :timer.seconds(120))
     scored = CriteriaScoring.batch_score_movies(all_decade_movies, weights)

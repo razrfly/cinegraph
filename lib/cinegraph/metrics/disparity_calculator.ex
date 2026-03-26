@@ -49,7 +49,7 @@ defmodule Cinegraph.Metrics.DisparityCalculator do
         box_office: box_office
       }) do
     scores = [mob, critics, festival_recognition, time_machine, auteurs, box_office]
-    population_stddev(scores)
+    population_stddev(Enum.reject(scores, &is_nil/1))
   end
 
   @doc """
@@ -62,7 +62,7 @@ defmodule Cinegraph.Metrics.DisparityCalculator do
     critics = c.critics
 
     {disparity, category} =
-      if mob == 0.0 and critics == 0.0 do
+      if is_nil(mob) or is_nil(critics) or (mob == 0.0 and critics == 0.0) do
         {nil, nil}
       else
         d = calculate_disparity(mob, critics)
