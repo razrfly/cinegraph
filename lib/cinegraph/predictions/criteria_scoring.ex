@@ -144,7 +144,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
           weights,
           external_metrics[movie.id] || [],
           festival_nominations[movie.id] || [],
-          director_info[movie.id] || 0
+          director_info[movie.id] || {0, nil}
         )
 
       %{movie: movie, prediction: prediction}
@@ -194,7 +194,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
             (em.source == "imdb" and em.metric_type == "rating_votes"),
         select: [em.source, em.metric_type, em.value]
 
-    score_mob_from_metrics(Repo.all(query))
+    score_mob_from_metrics(Repo.all(query), movie_release_year(movie))
   end
 
   @doc """
@@ -280,10 +280,10 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Era-aware IMDb critical mass (0-25 points)
     popularity_score = imdb_popularity_score(get_imdb_popularity(movie), movie)
 
-    # Canonical list presence (0-50 points) — primary signal, especially for pre-1960 films
+    # Canonical list presence (0-70 points, log-scaled) — primary signal, especially for pre-1960 films
     sources = Map.get(movie, :canonical_sources)
     canonical_count = if sources, do: map_size(sources), else: 0
-    canonical_score = min(canonical_count * 10.0, 50.0)
+    canonical_score = min(:math.log(1 + canonical_count) / :math.log(1 + 10) * 70.0, 70.0)
 
     min(roi_score + popularity_score + canonical_score, 100.0)
   end
@@ -435,28 +435,38 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
   # Batch loading functions for performance optimization
 
-  defp batch_load_external_metrics(movie_ids) do
-    query =
-      from em in "external_metrics",
-        where: em.movie_id in ^movie_ids,
-        select: [em.movie_id, em.source, em.metric_type, em.value]
+  # Runs query_fn on 500-ID chunks to avoid large IN-clause timeouts on big decades.
+  defp batch_by_chunks(movie_ids, query_fn, chunk_size \\ 500) do
+    movie_ids
+    |> Enum.chunk_every(chunk_size)
+    |> Enum.reduce(%{}, fn chunk_ids, acc ->
+      Map.merge(acc, query_fn.(chunk_ids))
+    end)
+  end
 
-    Repo.all(query)
-    |> Enum.group_by(&hd/1, fn [_movie_id, source, metric_type, value] ->
-      [source, metric_type, value]
+  defp batch_load_external_metrics(movie_ids) do
+    batch_by_chunks(movie_ids, fn chunk_ids ->
+      from(em in "external_metrics",
+        where: em.movie_id in ^chunk_ids,
+        select: [em.movie_id, em.source, em.metric_type, em.value]
+      )
+      |> Repo.all(timeout: :timer.seconds(30))
+      |> Enum.group_by(&hd/1, fn [_movie_id, source, metric_type, value] ->
+        [source, metric_type, value]
+      end)
     end)
   end
 
   defp batch_load_festival_nominations(movie_ids) do
-    query =
-      from fnom in "festival_nominations",
+    batch_by_chunks(movie_ids, fn chunk_ids ->
+      from(fnom in "festival_nominations",
         join: fc in "festival_categories",
         on: fnom.category_id == fc.id,
         join: fcer in "festival_ceremonies",
         on: fnom.ceremony_id == fcer.id,
         join: fo in "festival_organizations",
         on: fcer.organization_id == fo.id,
-        where: fnom.movie_id in ^movie_ids,
+        where: fnom.movie_id in ^chunk_ids,
         select: [
           fnom.movie_id,
           fo.abbreviation,
@@ -466,60 +476,110 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
           fo.win_score,
           fo.nom_score
         ]
-
-    Repo.all(query)
-    |> Enum.group_by(&hd/1, fn [_movie_id, festival, category, won, year, win_score, nom_score] ->
-      [festival, category, won, year, win_score, nom_score]
+      )
+      |> Repo.all(timeout: :timer.seconds(30))
+      |> Enum.group_by(&hd/1, fn [_movie_id, festival, category, won, year, win_score, nom_score] ->
+        [festival, category, won, year, win_score, nom_score]
+      end)
     end)
   end
 
   defp batch_load_director_info(movie_ids) do
-    # First get all directors for these movies
-    directors_query =
-      from mc in "movie_credits",
-        where: mc.movie_id in ^movie_ids,
-        where: mc.credit_type == "crew",
-        where: mc.department == "Directing",
-        select: [mc.movie_id, mc.person_id]
-
+    # Step 1: chunk the movie_credits lookup by movie_id
     director_map =
-      Repo.all(directors_query)
-      |> Enum.group_by(&hd/1, fn [_movie_id, person_id] -> person_id end)
+      batch_by_chunks(movie_ids, fn chunk_ids ->
+        from(mc in "movie_credits",
+          where: mc.movie_id in ^chunk_ids,
+          where: mc.credit_type == "crew",
+          where: mc.department == "Directing",
+          select: [mc.movie_id, mc.person_id]
+        )
+        |> Repo.all(timeout: :timer.seconds(30))
+        |> Enum.group_by(&hd/1, fn [_movie_id, person_id] -> person_id end)
+      end)
 
-    # Get 1001 movie counts for all directors
-    all_director_ids =
-      director_map
-      |> Map.values()
-      |> List.flatten()
-      |> Enum.uniq()
+    # Step 2: count 1001-list appearances per director (runs once on unique person_ids)
+    all_director_ids = director_map |> Map.values() |> List.flatten() |> Enum.uniq()
 
     director_1001_counts =
       if length(all_director_ids) > 0 do
-        existing_1001_query =
-          from m in Movie,
-            join: mc in "movie_credits",
-            on: m.id == mc.movie_id,
-            where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
-            where: mc.person_id in ^all_director_ids,
-            where: mc.credit_type == "crew",
-            where: mc.department == "Directing",
-            group_by: mc.person_id,
-            select: {mc.person_id, count()}
-
-        Repo.all(existing_1001_query) |> Map.new()
+        from(m in Movie,
+          join: mc in "movie_credits",
+          on: m.id == mc.movie_id,
+          where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+          where: mc.person_id in ^all_director_ids,
+          where: mc.credit_type == "crew",
+          where: mc.department == "Directing",
+          group_by: mc.person_id,
+          select: {mc.person_id, count()}
+        )
+        |> Repo.all()
+        |> Map.new()
       else
         %{}
       end
 
-    # Return director info per movie
+    # Step 2b: avg IMDB rating per director across their full filmography (chunked)
+    director_avg_ratings =
+      if length(all_director_ids) > 0 do
+        all_director_ids
+        |> Enum.chunk_every(500)
+        |> Enum.reduce(%{}, fn chunk_ids, acc ->
+          rows =
+            from(mc in "movie_credits",
+              join: em in "external_metrics",
+              on: em.movie_id == mc.movie_id,
+              where: em.source == "imdb",
+              where: em.metric_type == "rating_average",
+              where: mc.person_id in ^chunk_ids,
+              where: mc.credit_type == "crew",
+              where: mc.department == "Directing",
+              group_by: mc.person_id,
+              select: {mc.person_id, avg(em.value)}
+            )
+            |> Repo.all(timeout: :timer.seconds(30))
+            |> Map.new(fn {id, avg_val} ->
+              avg =
+                case avg_val do
+                  nil -> nil
+                  %Decimal{} = d -> d |> Decimal.to_float() |> Float.round(2)
+                  f when is_float(f) -> Float.round(f, 2)
+                  i when is_integer(i) -> Float.round(i * 1.0, 2)
+                end
+
+              {id, avg}
+            end)
+
+          Map.merge(acc, rows)
+        end)
+      else
+        %{}
+      end
+
+    # Step 3: combine into {movie_id => {total_1001_count, director_avg_imdb_rating}}
     Map.new(director_map, fn {movie_id, director_ids} ->
       total_1001_count =
         director_ids
         |> Enum.map(&Map.get(director_1001_counts, &1, 0))
         |> Enum.sum()
 
-      {movie_id, total_1001_count}
+      avg_imdb =
+        director_ids
+        |> Enum.map(&Map.get(director_avg_ratings, &1))
+        |> Enum.reject(&is_nil/1)
+        |> then(fn ratings ->
+          if length(ratings) > 0, do: Enum.sum(ratings) / length(ratings), else: nil
+        end)
+
+      {movie_id, {total_1001_count, avg_imdb}}
     end)
+  end
+
+  defp movie_release_year(movie) do
+    case movie do
+      %{release_date: %Date{year: y}} -> y
+      _ -> 2000
+    end
   end
 
   defp cap100(nil), do: nil
@@ -539,7 +599,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
     # Calculate individual scores, ensuring they're all 0-100 range
     scores = %{
-      mob: cap100(score_mob_from_metrics(external_metrics)),
+      mob: cap100(score_mob_from_metrics(external_metrics, movie_release_year(movie))),
       critics: cap100(score_critics_from_metrics(external_metrics)),
       festival_recognition:
         min(score_festival_recognition_from_batch(all_nominations) || 0.0, 100.0),
@@ -569,7 +629,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     }
   end
 
-  defp score_mob_from_metrics(metrics) do
+  defp score_mob_from_metrics(metrics, release_year) do
     rating_scores =
       metrics
       |> Enum.filter(fn [source, metric_type, _value] ->
@@ -590,8 +650,17 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     if length(rating_scores) > 0 do
       avg_rating = Enum.sum(rating_scores) / length(rating_scores)
       rating_component = avg_rating * 0.70
-      # log(1 + 100_000) ≈ 11.51 → 30 pts at 100K votes, ~14 at 1K, 0 at 0
-      vote_component = min(:math.log(1 + imdb_votes) / :math.log(1 + 100_000) * 30.0, 30.0)
+      # Decade-aware vote scaling: older films accumulate fewer votes by nature
+      vote_scale =
+        cond do
+          release_year < 1940 -> 5.0
+          release_year < 1960 -> 3.0
+          true -> 1.0
+        end
+
+      scaled_votes = imdb_votes * vote_scale
+      # log(1 + 100_000) ≈ 11.51 → 30 pts at 100K scaled votes
+      vote_component = min(:math.log(1 + scaled_votes) / :math.log(1 + 100_000) * 30.0, 30.0)
       min(rating_component + vote_component, 100.0)
     else
       nil
@@ -666,26 +735,36 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     # Era-aware IMDb critical mass (0-25 points)
     popularity_score = imdb_popularity_score(get_imdb_popularity_from_batch(metrics), movie)
 
-    # Canonical list presence (0-50 points) — primary signal, especially for pre-1960 films
+    # Canonical list presence (0-70 points, log-scaled) — primary signal, especially for pre-1960 films
     sources = Map.get(movie, :canonical_sources)
     canonical_count = if sources, do: map_size(sources), else: 0
-    canonical_score = min(canonical_count * 10.0, 50.0)
+    canonical_score = min(:math.log(1 + canonical_count) / :math.log(1 + 10) * 70.0, 70.0)
 
     min(roi_score + popularity_score + canonical_score, 100.0)
   end
 
-  defp score_auteur_recognition_from_batch(director_1001_count) do
-    # Score based on director's 1001 Movies presence
+  # No IMDB data — fall back to 1001-count signal at half weight
+  defp score_auteur_recognition_from_batch({director_1001_count, nil}) do
     cond do
-      # Established auteur
-      director_1001_count >= 5 -> 100.0
-      # Recognized auteur
-      director_1001_count >= 3 -> 80.0
-      # Emerging auteur
-      director_1001_count >= 1 -> 60.0
-      # Unknown director — no quality signal
+      director_1001_count >= 5 -> 50.0
+      director_1001_count >= 3 -> 40.0
+      director_1001_count >= 1 -> 30.0
       true -> 0.0
     end
+  end
+
+  defp score_auteur_recognition_from_batch({director_1001_count, avg_imdb}) do
+    # Continuous score: floor at 5.0, ceiling at 9.0
+    rating_score = max(0.0, (avg_imdb - 5.0) / (9.0 - 5.0) * 100.0) |> min(100.0)
+    # Bonus for 1001-list films (validates the auteur signal)
+    count_bonus = min(director_1001_count * 8.0, 40.0)
+    min(rating_score * 0.65 + count_bonus, 100.0)
+  end
+
+  # Backwards-compat for non-batch path (receives integer directly)
+  defp score_auteur_recognition_from_batch(director_1001_count)
+       when is_integer(director_1001_count) do
+    score_auteur_recognition_from_batch({director_1001_count, nil})
   end
 
   defp imdb_popularity_score({rating, votes}, movie) do
