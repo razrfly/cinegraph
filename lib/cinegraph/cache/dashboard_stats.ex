@@ -919,24 +919,28 @@ defmodule Cinegraph.Cache.DashboardStats do
   defp compute_directors_with_pqs_count do
     Repo.one(
       from pm in Cinegraph.Metrics.PersonMetric,
-        join: p in Person,
-        on: pm.person_id == p.id,
-        join: c in Credit,
-        on: c.person_id == p.id,
-        where: c.job == "Director",
-        select: count(p.id, :distinct)
+        as: :pm,
+        where:
+          exists(
+            from c in Credit,
+              where: c.person_id == parent_as(:pm).person_id and c.job == "Director",
+              select: 1
+          ),
+        select: count(pm.person_id, :distinct)
     ) || 0
   end
 
   defp compute_actors_with_pqs_count do
     Repo.one(
       from pm in Cinegraph.Metrics.PersonMetric,
-        join: p in Person,
-        on: pm.person_id == p.id,
-        join: c in Credit,
-        on: c.person_id == p.id,
-        where: c.department == "Acting",
-        select: count(p.id, :distinct)
+        as: :pm,
+        where:
+          exists(
+            from c in Credit,
+              where: c.person_id == parent_as(:pm).person_id and c.department == "Acting",
+              select: 1
+          ),
+        select: count(pm.person_id, :distinct)
     ) || 0
   end
 
