@@ -503,18 +503,25 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
 
     director_1001_counts =
       if length(all_director_ids) > 0 do
-        from(m in Movie,
-          join: mc in "movie_credits",
-          on: m.id == mc.movie_id,
-          where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
-          where: mc.person_id in ^all_director_ids,
-          where: mc.credit_type == "crew",
-          where: mc.department == "Directing",
-          group_by: mc.person_id,
-          select: {mc.person_id, count()}
-        )
-        |> Repo.all()
-        |> Map.new()
+        all_director_ids
+        |> Enum.chunk_every(500)
+        |> Enum.reduce(%{}, fn chunk_ids, acc ->
+          rows =
+            from(m in Movie,
+              join: mc in "movie_credits",
+              on: m.id == mc.movie_id,
+              where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+              where: mc.person_id in ^chunk_ids,
+              where: mc.credit_type == "crew",
+              where: mc.department == "Directing",
+              group_by: mc.person_id,
+              select: {mc.person_id, count()}
+            )
+            |> Repo.all(timeout: :timer.seconds(30))
+            |> Map.new()
+
+          Map.merge(acc, rows)
+        end)
       else
         %{}
       end
@@ -650,15 +657,7 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     if length(rating_scores) > 0 do
       avg_rating = Enum.sum(rating_scores) / length(rating_scores)
       rating_component = avg_rating * 0.70
-      # Decade-aware vote scaling: older films accumulate fewer votes by nature
-      vote_scale =
-        cond do
-          release_year < 1940 -> 5.0
-          release_year < 1960 -> 3.0
-          true -> 1.0
-        end
-
-      scaled_votes = imdb_votes * vote_scale
+      scaled_votes = imdb_votes * vote_scale_for_year(release_year)
       # log(1 + 100_000) ≈ 11.51 → 30 pts at 100K scaled votes
       vote_component = min(:math.log(1 + scaled_votes) / :math.log(1 + 100_000) * 30.0, 30.0)
       min(rating_component + vote_component, 100.0)
@@ -767,23 +766,17 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
     score_auteur_recognition_from_batch({director_1001_count, nil})
   end
 
+  defp vote_scale_for_year(release_year) do
+    cond do
+      release_year < 1940 -> 5.0
+      release_year < 1960 -> 3.0
+      true -> 1.0
+    end
+  end
+
   defp imdb_popularity_score({rating, votes}, movie) do
-    release_year =
-      case movie do
-        %{release_date: %Date{year: y}} -> y
-        _ -> 2000
-      end
-
-    # Tiered scaling: older films accumulate fewer votes by nature
-    # pre-1940 (silent/early sound era) = 5×, 1940–1959 = 3×, modern = 1×
-    vote_scale =
-      cond do
-        release_year < 1940 -> 5.0
-        release_year < 1960 -> 3.0
-        true -> 1.0
-      end
-
-    scaled_votes = round(votes * vote_scale)
+    release_year = movie_release_year(movie)
+    scaled_votes = round(votes * vote_scale_for_year(release_year))
 
     cond do
       rating >= 7.5 and scaled_votes >= 100_000 -> 25.0

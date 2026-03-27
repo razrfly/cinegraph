@@ -24,7 +24,7 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
   @crawlbase_api_url "https://api.crawlbase.com/"
   @default_timeout 60_000
   @default_recv_timeout 60_000
-  @default_page_wait 2000
+  @default_page_wait 5000
 
   @impl true
   def fetch(url, opts \\ []) do
@@ -76,6 +76,22 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
         Logger.warning("Crawlbase rate limited, retry after #{retry_after}s")
         {:error, {:rate_limit, retry_after}}
 
+      # Crawlbase returns 520 when it successfully rendered the page but the origin server
+      # returned a non-200 status (e.g. IMDb's AWS WAF challenge returns 202, but Crawlbase's
+      # headless browser solves it and renders the full page). In this case, check the
+      # pc_status response header: if it's 200, the render succeeded and the body is real HTML.
+      {:ok, %HTTPoison.Response{status_code: 520, body: response_body, headers: resp_headers}}
+      when byte_size(response_body) > 0 ->
+        case extract_pc_status_header(resp_headers) do
+          200 ->
+            Logger.info("Crawlbase 520 with pc_status:200 — treating as success (WAF bypass)")
+            handle_success_response(response_body, mode, start_time)
+
+          pc_status ->
+            Logger.warning("Crawlbase 520 with pc_status:#{inspect(pc_status)} — real error")
+            handle_error_response(520, response_body, url)
+        end
+
       {:ok, %HTTPoison.Response{status_code: status, body: response_body}} ->
         handle_error_response(status, response_body, url)
 
@@ -94,8 +110,7 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
 
     query_params = %{
       "token" => token,
-      "url" => url,
-      "format" => "json"
+      "url" => url
     }
 
     query_params =
@@ -160,6 +175,19 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
 
     Logger.warning("Crawlbase error (#{status}) for #{url}: #{message}")
     {:error, {:crawlbase_error, status, message}}
+  end
+
+  defp extract_pc_status_header(headers) do
+    case Enum.find(headers, fn {key, _} -> String.downcase(key) == "pc_status" end) do
+      {_, value} ->
+        case Integer.parse(value) do
+          {status, _} -> status
+          :error -> nil
+        end
+
+      nil ->
+        nil
+    end
   end
 
   defp extract_retry_after(headers) do
