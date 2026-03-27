@@ -25,8 +25,8 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
 
     attrs = %{
       movie_id: movie_id,
-      mob_score: scores.components.mob,
-      critics_score: scores.components.critics,
+      mob_score: scores.components.mob || 0.0,
+      critics_score: scores.components.critics || 0.0,
       festival_recognition_score: scores.components.festival_recognition,
       time_machine_score: scores.components.time_machine,
       auteurs_score: scores.components.auteurs,
