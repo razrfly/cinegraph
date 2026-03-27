@@ -7,8 +7,9 @@ defmodule Cinegraph.Imports.ImportStats do
   require Logger
 
   @table_name :import_stats
-  # Update stats every 5 seconds
-  @update_interval 5_000
+  # Update stats every 30 seconds — oban_jobs is large; scanning it too frequently
+  # causes connection pool timeouts. Job counts are dashboard stats, not real-time.
+  @update_interval 30_000
 
   # Client API
 
@@ -131,26 +132,26 @@ defmodule Cinegraph.Imports.ImportStats do
   defp calculate_active_jobs do
     import Ecto.Query
 
+    queues = ["tmdb", "omdb", "collaboration", "scraping", "metrics", "maintenance"]
+
+    counts =
+      Cinegraph.Repo.all(
+        from(j in Oban.Job,
+          where: j.queue in ^queues and j.state in ["available", "executing"],
+          group_by: j.queue,
+          select: {j.queue, count(j.id)}
+        )
+      )
+      |> Map.new()
+
     %{
-      tmdb: count_jobs_in_queue("tmdb"),
-      omdb: count_jobs_in_queue("omdb"),
-      collaboration: count_jobs_in_queue("collaboration"),
-      scraping: count_jobs_in_queue("scraping"),
-      metrics: count_jobs_in_queue("metrics"),
-      maintenance: count_jobs_in_queue("maintenance")
+      tmdb: Map.get(counts, "tmdb", 0),
+      omdb: Map.get(counts, "omdb", 0),
+      collaboration: Map.get(counts, "collaboration", 0),
+      scraping: Map.get(counts, "scraping", 0),
+      metrics: Map.get(counts, "metrics", 0),
+      maintenance: Map.get(counts, "maintenance", 0)
     }
-  end
-
-  defp count_jobs_in_queue(queue_name) do
-    import Ecto.Query
-
-    Cinegraph.Repo.aggregate(
-      from(j in Oban.Job,
-        where: j.queue == ^queue_name and j.state in ["available", "executing"]
-      ),
-      :count,
-      :id
-    )
   end
 
   defp calculate_queue_stats do
