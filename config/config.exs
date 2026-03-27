@@ -16,7 +16,9 @@ config :cinegraph,
   # Scraping adapter chains per source — tried in order until one succeeds
   scraping_strategies: %{
     oscars: [:crawlbase],
-    imdb: [:crawlbase, :direct],
+    # Direct always fails for IMDb (AWS WAF returns 202). Crawlbase-only means
+    # failures surface as real Crawlbase errors, not the misleading "HTTP 202".
+    imdb: [:crawlbase],
     default: [:direct]
   }
 
