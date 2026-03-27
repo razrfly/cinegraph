@@ -9,8 +9,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   alias Cinegraph.Events
   alias Cinegraph.Events.FestivalEvent
   alias Cinegraph.Metrics.ApiTracker
-
-  @timeout 30_000
+  alias Cinegraph.Scrapers.Http.Client, as: HttpClient
 
   @doc """
   Fetch festival data for a specific festival and year.
@@ -39,7 +38,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
 
           # Track the festival scraping operation
           ApiTracker.track_lookup("festival_scraper", "fetch_#{festival_key}", "#{year}", fn ->
-            case fetch_html_direct(url) do
+            case HttpClient.fetch(url, :imdb) do
               {:ok, html} ->
                 parse_festival_html(html, year, festival_config)
 
@@ -102,7 +101,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     Logger.info("Fetching available years for event #{event_id} from: #{url}")
 
     ApiTracker.track_lookup("festival_scraper", "fetch_years", event_id, fn ->
-      case fetch_html_direct(url) do
+      case HttpClient.fetch(url, :imdb) do
         {:ok, html} ->
           extract_available_years(html, event_id)
 
@@ -166,34 +165,6 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
       # No URL can be built
       true ->
         nil
-    end
-  end
-
-  defp fetch_html_direct(url) do
-    headers = [
-      {"User-Agent",
-       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"},
-      {"Accept-Language", "en-US,en;q=0.9"},
-      {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
-    ]
-
-    options = [
-      timeout: @timeout,
-      recv_timeout: @timeout,
-      follow_redirect: true,
-      max_redirect: 5
-    ]
-
-    case HTTPoison.get(url, headers, options) do
-      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
-        Logger.info("Successfully fetched HTML (#{byte_size(body)} bytes)")
-        {:ok, body}
-
-      {:ok, %HTTPoison.Response{status_code: status_code}} ->
-        {:error, "HTTP #{status_code}"}
-
-      {:error, %HTTPoison.Error{reason: reason}} ->
-        {:error, reason}
     end
   end
 
