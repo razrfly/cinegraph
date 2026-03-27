@@ -322,17 +322,6 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
       where: m.import_status == "full"
   end
 
-  defp calculate_overall_accuracy(decade_results) do
-    total_movies = Enum.sum(Enum.map(decade_results, & &1.total_1001_movies))
-    total_correct = Enum.sum(Enum.map(decade_results, & &1.correctly_predicted))
-
-    if total_movies > 0 do
-      Float.round(total_correct / total_movies * 100, 1)
-    else
-      0.0
-    end
-  end
-
   defp generate_improvement_suggestions(validation) do
     suggestions = []
 

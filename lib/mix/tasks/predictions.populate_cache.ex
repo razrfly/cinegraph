@@ -72,12 +72,7 @@ defmodule Mix.Tasks.Predictions.PopulateCache do
 
     job = %Oban.Job{args: %{"profile_id" => profile.id}}
 
-    case ComprehensivePredictionsCalculator.perform(job) do
-      :ok ->
-        Mix.shell().info("  ✓ #{profile.name} — cache populated successfully")
-
-      {:error, reason} ->
-        Mix.shell().error("  ✗ #{profile.name} — failed: #{inspect(reason)}")
-    end
+    ComprehensivePredictionsCalculator.perform(job)
+    Mix.shell().info("  ✓ #{profile.name} — cache populated successfully")
   end
 end
