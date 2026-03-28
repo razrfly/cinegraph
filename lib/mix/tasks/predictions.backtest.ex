@@ -72,8 +72,16 @@ defmodule Mix.Tasks.Predictions.Backtest do
             )
 
           string_weights ->
-            # Convert string keys back to atoms for HistoricalValidator compatibility
-            Map.new(string_weights, fn {k, v} -> {String.to_existing_atom(k), v} end)
+            # Convert string keys back to atoms, keeping only known scoring criteria
+            allowed =
+              MapSet.new(
+                Cinegraph.Predictions.CriteriaScoring.scoring_criteria(),
+                &Atom.to_string/1
+              )
+
+            string_weights
+            |> Enum.filter(fn {k, _v} -> MapSet.member?(allowed, k) end)
+            |> Map.new(fn {k, v} -> {String.to_existing_atom(k), v} end)
         end
       else
         profile_name

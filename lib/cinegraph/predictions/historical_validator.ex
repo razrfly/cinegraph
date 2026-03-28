@@ -88,8 +88,8 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   def validate_decade(decade, profile_or_weights \\ nil, source_key \\ "1001_movies") do
     weights = get_criteria_weights(profile_or_weights)
 
-    # Get all movies from the decade that are on 1001 Movies list
-    actual_1001_movies = get_decade_1001_movies(decade)
+    # Get all movies from the decade that are on the target list
+    actual_1001_movies = get_decade_1001_movies(decade, source_key)
 
     # Get all movies from the decade
     all_decade_query = get_decade_movies_query(decade)
@@ -152,7 +152,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   @doc """
   Get validation statistics by decade range (e.g., early cinema, golden age, modern).
   """
-  def validate_by_era(profile_or_weights \\ nil) do
+  def validate_by_era(profile_or_weights \\ nil, source_key \\ "1001_movies") do
     decades = get_all_decades() |> Enum.filter(&(&1 < 2020))
 
     eras = %{
@@ -163,7 +163,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     }
 
     Enum.map(eras, fn {era_name, era_decades} ->
-      results = Enum.map(era_decades, &validate_decade(&1, profile_or_weights))
+      results = Enum.map(era_decades, &validate_decade(&1, profile_or_weights, source_key))
 
       total_correct = Enum.sum(Enum.map(results, & &1.correctly_predicted))
       total_movies = Enum.sum(Enum.map(results, & &1.total_1001_movies))
@@ -295,7 +295,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
   defp get_criteria_weights(_), do: CriteriaScoring.get_default_weights()
 
-  defp get_decade_1001_movies(decade) do
+  defp get_decade_1001_movies(decade, source_key) do
     start_year = decade
     end_year = decade + 9
 
@@ -309,7 +309,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
             m.release_date,
             ^end_year
           ),
-        where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+        where: fragment("? \\? ?", m.canonical_sources, ^source_key),
         where: m.import_status == "full"
 
     Repo.all(query)

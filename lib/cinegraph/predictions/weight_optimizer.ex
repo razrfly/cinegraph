@@ -21,7 +21,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
   require Logger
 
-  @criteria ~w(mob critics festival_recognition cultural_impact auteur_recognition)a
+  @criteria CriteriaScoring.scoring_criteria()
 
   # Default weights for baseline comparison
   @default_weights CriteriaScoring.get_default_weights()
@@ -226,17 +226,20 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   # --- Private helpers ---
 
   defp build_feature_matrix_for_decades(source_key, decades, sample_ratio) do
-    {x_all, y_all} =
+    {x_reversed, y_reversed} =
       Enum.reduce(decades, {[], []}, fn decade, {xs, ys} ->
         try do
           {decade_x, decade_y} = extract_decade_features(source_key, decade)
-          {xs ++ decade_x, ys ++ decade_y}
+          {[decade_x | xs], [decade_y | ys]}
         rescue
           e ->
             Logger.warning("WeightOptimizer: skipping #{decade}s — #{Exception.message(e)}")
             {xs, ys}
         end
       end)
+
+    x_all = x_reversed |> Enum.reverse() |> Enum.concat()
+    y_all = y_reversed |> Enum.reverse() |> Enum.concat()
 
     positives = Enum.zip(x_all, y_all) |> Enum.filter(fn {_, y} -> y == 1 end)
     negatives = Enum.zip(x_all, y_all) |> Enum.filter(fn {_, y} -> y == 0 end)
@@ -264,44 +267,35 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     scored = CriteriaScoring.batch_score_movies(movies_for_scoring, @default_weights)
 
     # Zip originals back in so labels use real canonical_sources
-    Enum.zip(movies, scored)
-    |> Enum.reduce({[], []}, fn {original_movie, %{prediction: prediction}}, {xs, ys} ->
-      scores = prediction.criteria_scores
+    {xs, ys} =
+      Enum.zip(movies, scored)
+      |> Enum.reduce({[], []}, fn {original_movie, %{prediction: prediction}}, {xs, ys} ->
+        scores = prediction.criteria_scores
 
-      feature_row = [
-        (scores[:mob] || 0.0) / 100.0,
-        (scores[:critics] || 0.0) / 100.0,
-        (scores[:festival_recognition] || 0.0) / 100.0,
-        (scores[:cultural_impact] || 0.0) / 100.0,
-        (scores[:auteur_recognition] || 0.0) / 100.0
-      ]
+        feature_row =
+          Enum.map(@criteria, fn crit -> (Map.get(scores, crit, 0.0) || 0.0) / 100.0 end)
 
-      label =
-        case original_movie.canonical_sources do
-          %{^source_key => _} -> 1
-          _ -> 0
-        end
+        label =
+          case original_movie.canonical_sources do
+            %{^source_key => _} -> 1
+            _ -> 0
+          end
 
-      {xs ++ [feature_row], ys ++ [label]}
-    end)
+        {[feature_row | xs], [label | ys]}
+      end)
+
+    {Enum.reverse(xs), Enum.reverse(ys)}
   end
 
   defp get_decade_movies_query(decade) do
     import Ecto.Query
     alias Cinegraph.Movies.Movie
 
-    start_year = decade
-    end_year = decade + 9
+    start_date = Date.new!(decade, 1, 1)
+    end_date = Date.new!(decade + 9, 12, 31)
 
     from m in Movie,
-      where:
-        fragment(
-          "EXTRACT(YEAR FROM ?) >= ? AND EXTRACT(YEAR FROM ?) <= ?",
-          m.release_date,
-          ^start_year,
-          m.release_date,
-          ^end_year
-        ),
+      where: m.release_date >= ^start_date and m.release_date <= ^end_date,
       where: m.import_status == "full",
       select: %Movie{
         id: m.id,
