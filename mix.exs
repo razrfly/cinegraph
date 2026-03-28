@@ -73,7 +73,9 @@ defmodule Cinegraph.MixProject do
       {:sitemapper, "~> 0.10"},
       {:absinthe, "~> 1.7"},
       {:absinthe_plug, "~> 1.5"},
-      {:dataloader, "~> 2.0"}
+      {:dataloader, "~> 2.0"},
+      {:nx, "~> 0.9"},
+      {:scholar, "~> 0.3"}
     ]
   end
 

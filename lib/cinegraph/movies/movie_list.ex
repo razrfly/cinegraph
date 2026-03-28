@@ -36,6 +36,9 @@ defmodule Cinegraph.Movies.MovieList do
     # Metadata
     field :metadata, :map, default: %{}
 
+    # ML-trained weights (nil until mix predictions.train --save is run)
+    field :trained_weights, :map, default: nil
+
     # Display fields (for public-facing pages)
     field :slug, :string
     field :short_name, :string
