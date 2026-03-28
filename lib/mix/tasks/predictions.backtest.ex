@@ -72,16 +72,26 @@ defmodule Mix.Tasks.Predictions.Backtest do
             )
 
           string_weights ->
-            # Convert string keys back to atoms, keeping only known scoring criteria
             allowed =
               MapSet.new(
                 Cinegraph.Predictions.CriteriaScoring.scoring_criteria(),
                 &Atom.to_string/1
               )
 
-            string_weights
-            |> Enum.filter(fn {k, _v} -> MapSet.member?(allowed, k) end)
-            |> Map.new(fn {k, v} -> {String.to_existing_atom(k), v} end)
+            present = MapSet.new(Map.keys(string_weights))
+
+            unless MapSet.equal?(present, allowed) do
+              missing = MapSet.difference(allowed, present) |> MapSet.to_list()
+              extra = MapSet.difference(present, allowed) |> MapSet.to_list()
+
+              Mix.raise(
+                "Trained weights for #{list_key} do not match expected criteria. " <>
+                  "Missing: #{inspect(missing)}, Extra: #{inspect(extra)}. " <>
+                  "Re-run: mix predictions.train --list-key #{list_key} --save"
+              )
+            end
+
+            Map.new(string_weights, fn {k, v} -> {String.to_existing_atom(k), v} end)
         end
       else
         profile_name

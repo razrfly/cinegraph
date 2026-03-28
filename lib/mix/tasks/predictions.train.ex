@@ -66,7 +66,7 @@ defmodule Mix.Tasks.Predictions.Train do
       rescue
         e ->
           Mix.shell().error("Training failed: #{Exception.message(e)}")
-          System.halt(1)
+          exit({:shutdown, 1})
       end
 
     if json? do

@@ -96,7 +96,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   def build_feature_matrix(source_key, sample_ratio \\ 5) do
     build_feature_matrix_for_decades(
       source_key,
-      HistoricalValidator.get_all_decades(),
+      HistoricalValidator.get_all_decades(source_key),
       sample_ratio
     )
   end
@@ -122,7 +122,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   Returns {mean_accuracy, cv_by_decade}.
   """
   def decade_cross_validate(source_key, weights) do
-    decades = HistoricalValidator.get_all_decades()
+    decades = HistoricalValidator.get_all_decades(source_key)
 
     cv_results =
       Enum.flat_map(decades, fn decade ->
@@ -152,7 +152,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   other decades, then evaluates on the held-out decade. Returns {mean_accuracy, cv_by_decade}.
   """
   def true_loocv(source_key, sample_ratio \\ 5) do
-    decades = HistoricalValidator.get_all_decades()
+    decades = HistoricalValidator.get_all_decades(source_key)
 
     cv_results =
       Enum.flat_map(decades, fn test_decade ->
@@ -241,7 +241,15 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     x_all = x_reversed |> Enum.reverse() |> Enum.concat()
     y_all = y_reversed |> Enum.reverse() |> Enum.concat()
 
+    if x_all == [] do
+      raise "no training data found for source_key=#{inspect(source_key)} — check that the list exists and has movies with import_status=\"full\""
+    end
+
     positives = Enum.zip(x_all, y_all) |> Enum.filter(fn {_, y} -> y == 1 end)
+
+    if positives == [] do
+      raise "no positive labels found for source_key=#{inspect(source_key)} — none of the scored movies are members of this list"
+    end
     negatives = Enum.zip(x_all, y_all) |> Enum.filter(fn {_, y} -> y == 0 end)
 
     n_pos = length(positives)
