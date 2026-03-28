@@ -39,23 +39,38 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     * `:baseline_accuracy` - overall accuracy with default weights
     * `:trained_accuracy` - leave-one-decade-out CV accuracy with new weights
     * `:cv_by_decade` - [%{decade: 1930, accuracy: 42.1}, ...]
+    * `:timings` - %{data_load_ms: int, model_fit_ms: int, loocv_ms: int, baseline_cv_ms: int}
   """
   def train(source_key, opts \\ []) do
     sample_ratio = Keyword.get(opts, :sample_ratio, 5)
+    decades = HistoricalValidator.get_all_decades(source_key)
 
-    Logger.info("WeightOptimizer: building feature matrix for #{source_key}")
-    {x_list, y_list} = build_feature_matrix(source_key, sample_ratio)
+    # Phase 1: parallel DB — load all decades once
+    Logger.info("WeightOptimizer: loading #{length(decades)} decades in parallel")
+    {decade_data, load_ms} = timed(fn -> load_decade_data_parallel(source_key, decades) end)
+
+    # Phase 2: assemble full feature matrix from cache
+    {x_list, y_list} = assemble_and_undersample(decade_data, decades, sample_ratio)
 
     n_pos = Enum.count(y_list, &(&1 == 1))
     n_neg = Enum.count(y_list, &(&1 == 0))
     Logger.info("WeightOptimizer: #{n_pos} positives, #{n_neg} negatives")
 
+    # Phase 3: EXLA-accelerated model fit
     Logger.info("WeightOptimizer: fitting logistic regression")
-    weights = fit_model(x_list, y_list)
+    {weights, fit_ms} = timed(fn -> fit_model(x_list, y_list) end)
 
+    # Phase 4: parallel LOOCV — no DB for training folds, DB only for validation
     Logger.info("WeightOptimizer: running true leave-one-decade-out cross-validation")
-    {trained_accuracy, cv_by_decade} = true_loocv(source_key, sample_ratio)
-    {baseline_accuracy, _} = decade_cross_validate(source_key, @default_weights)
+
+    {{trained_accuracy, cv_by_decade}, loocv_ms} =
+      timed(fn -> true_loocv_from_cache(source_key, decade_data, decades, sample_ratio) end)
+
+    # Phase 5: parallel baseline CV
+    Logger.info("WeightOptimizer: running baseline cross-validation")
+
+    {{baseline_accuracy, _}, baseline_cv_ms} =
+      timed(fn -> decade_cross_validate(source_key, @default_weights) end)
 
     feature_importance =
       weights
@@ -68,7 +83,13 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
       trained_accuracy: trained_accuracy,
       cv_by_decade: cv_by_decade,
       n_positives: n_pos,
-      n_negatives: n_neg
+      n_negatives: n_neg,
+      timings: %{
+        data_load_ms: load_ms,
+        model_fit_ms: fit_ms,
+        loocv_ms: loocv_ms,
+        baseline_cv_ms: baseline_cv_ms
+      }
     }
 
     if Keyword.get(opts, :save, false) do
@@ -94,11 +115,9 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   and the corresponding 0/1 label.
   """
   def build_feature_matrix(source_key, sample_ratio \\ 5) do
-    build_feature_matrix_for_decades(
-      source_key,
-      HistoricalValidator.get_all_decades(source_key),
-      sample_ratio
-    )
+    decades = HistoricalValidator.get_all_decades(source_key)
+    decade_data = load_decade_data_parallel(source_key, decades)
+    assemble_and_undersample(decade_data, decades, sample_ratio)
   end
 
   @doc """
@@ -125,26 +144,31 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     decades = HistoricalValidator.get_all_decades(source_key)
 
     cv_results =
-      Enum.flat_map(decades, fn decade ->
-        try do
-          result = HistoricalValidator.validate_decade(decade, weights, source_key)
-          [%{decade: decade, accuracy: result.accuracy_percentage}]
-        rescue
-          e ->
-            Logger.warning("WeightOptimizer CV: skipping #{decade}s — #{Exception.message(e)}")
-            []
-        end
+      Task.async_stream(
+        decades,
+        fn decade ->
+          try do
+            result = HistoricalValidator.validate_decade(decade, weights, source_key)
+            {:ok, %{decade: decade, accuracy: result.accuracy_percentage}}
+          rescue
+            e ->
+              Logger.warning("WeightOptimizer CV: skipping #{decade}s — #{Exception.message(e)}")
+              :skip
+          end
+        end,
+        max_concurrency: System.schedulers_online(),
+        timeout: :timer.minutes(5),
+        ordered: false
+      )
+      |> Enum.flat_map(fn
+        {:ok, {:ok, entry}} -> [entry]
+        {:ok, :skip} -> []
+        {:exit, reason} ->
+          Logger.warning("WeightOptimizer CV: task exited — #{inspect(reason)}")
+          []
       end)
 
-    mean =
-      if cv_results == [] do
-        0.0
-      else
-        sum = Enum.sum(Enum.map(cv_results, & &1.accuracy))
-        Float.round(sum / length(cv_results), 1)
-      end
-
-    {mean, cv_results}
+    {compute_mean_accuracy(cv_results), cv_results}
   end
 
   @doc """
@@ -153,45 +177,8 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   """
   def true_loocv(source_key, sample_ratio \\ 5) do
     decades = HistoricalValidator.get_all_decades(source_key)
-
-    cv_results =
-      Enum.flat_map(decades, fn test_decade ->
-        try do
-          train_decades = Enum.reject(decades, &(&1 == test_decade))
-
-          {x_train, y_train} =
-            build_feature_matrix_for_decades(source_key, train_decades, sample_ratio)
-
-          if length(y_train) < 10 do
-            Logger.warning(
-              "WeightOptimizer LOOCV: too few samples for #{test_decade}s fold, skipping"
-            )
-
-            []
-          else
-            fold_weights = fit_model(x_train, y_train)
-            result = HistoricalValidator.validate_decade(test_decade, fold_weights, source_key)
-            [%{decade: test_decade, accuracy: result.accuracy_percentage}]
-          end
-        rescue
-          e ->
-            Logger.warning(
-              "WeightOptimizer LOOCV: skipping #{test_decade}s — #{Exception.message(e)}"
-            )
-
-            []
-        end
-      end)
-
-    mean =
-      if cv_results == [] do
-        0.0
-      else
-        sum = Enum.sum(Enum.map(cv_results, & &1.accuracy))
-        Float.round(sum / length(cv_results), 1)
-      end
-
-    {mean, cv_results}
+    decade_data = load_decade_data_parallel(source_key, decades)
+    true_loocv_from_cache(source_key, decade_data, decades, sample_ratio)
   end
 
   @doc """
@@ -225,16 +212,33 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
   # --- Private helpers ---
 
-  defp build_feature_matrix_for_decades(source_key, decades, sample_ratio) do
+  defp load_decade_data_parallel(source_key, decades) do
+    Task.async_stream(
+      decades,
+      fn d -> {d, extract_decade_features(source_key, d)} end,
+      max_concurrency: min(length(decades), 8),
+      timeout: :timer.minutes(5),
+      ordered: false
+    )
+    |> Enum.reduce(%{}, fn
+      {:ok, {d, data}}, acc ->
+        Map.put(acc, d, data)
+
+      {:exit, reason}, acc ->
+        Logger.warning("WeightOptimizer: decade load task exited — #{inspect(reason)}")
+        acc
+    end)
+  end
+
+  defp assemble_and_undersample(decade_data, decades, sample_ratio) do
     {x_reversed, y_reversed} =
       Enum.reduce(decades, {[], []}, fn decade, {xs, ys} ->
-        try do
-          {decade_x, decade_y} = extract_decade_features(source_key, decade)
-          {[decade_x | xs], [decade_y | ys]}
-        rescue
-          e ->
-            Logger.warning("WeightOptimizer: skipping #{decade}s — #{Exception.message(e)}")
+        case Map.get(decade_data, decade) do
+          nil ->
             {xs, ys}
+
+          {decade_x, decade_y} ->
+            {[decade_x | xs], [decade_y | ys]}
         end
       end)
 
@@ -242,14 +246,19 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     y_all = y_reversed |> Enum.reverse() |> Enum.concat()
 
     if x_all == [] do
-      raise "no training data found for source_key=#{inspect(source_key)} — check that the list exists and has movies with import_status=\"full\""
+      raise "no training data found for decades #{inspect(decades)} — check that the list exists and has movies with import_status=\"full\""
     end
 
+    undersample(x_all, y_all, sample_ratio)
+  end
+
+  defp undersample(x_all, y_all, sample_ratio) do
     positives = Enum.zip(x_all, y_all) |> Enum.filter(fn {_, y} -> y == 1 end)
 
     if positives == [] do
-      raise "no positive labels found for source_key=#{inspect(source_key)} — none of the scored movies are members of this list"
+      raise "no positive labels found — none of the scored movies are members of this list"
     end
+
     negatives = Enum.zip(x_all, y_all) |> Enum.filter(fn {_, y} -> y == 0 end)
 
     n_pos = length(positives)
@@ -258,6 +267,64 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
     combined = Enum.shuffle(positives ++ kept_negatives)
     {Enum.map(combined, &elem(&1, 0)), Enum.map(combined, &elem(&1, 1))}
+  end
+
+  defp true_loocv_from_cache(source_key, decade_data, decades, sample_ratio) do
+    cv_results =
+      Task.async_stream(
+        decades,
+        fn test_decade ->
+          try do
+            train_decades = Enum.reject(decades, &(&1 == test_decade))
+            {x_train, y_train} = assemble_and_undersample(decade_data, train_decades, sample_ratio)
+
+            if length(y_train) < 10 do
+              Logger.warning(
+                "WeightOptimizer LOOCV: too few samples for #{test_decade}s fold, skipping"
+              )
+
+              :skip
+            else
+              fold_weights = fit_model(x_train, y_train)
+              result = HistoricalValidator.validate_decade(test_decade, fold_weights, source_key)
+              {:ok, %{decade: test_decade, accuracy: result.accuracy_percentage}}
+            end
+          rescue
+            e ->
+              Logger.warning(
+                "WeightOptimizer LOOCV: skipping #{test_decade}s — #{Exception.message(e)}"
+              )
+
+              :skip
+          end
+        end,
+        max_concurrency: System.schedulers_online(),
+        timeout: :timer.minutes(5),
+        ordered: false
+      )
+      |> Enum.flat_map(fn
+        {:ok, {:ok, entry}} -> [entry]
+        {:ok, :skip} -> []
+        {:exit, reason} ->
+          Logger.warning("WeightOptimizer LOOCV: task exited — #{inspect(reason)}")
+          []
+      end)
+
+    {compute_mean_accuracy(cv_results), cv_results}
+  end
+
+  defp compute_mean_accuracy([]), do: 0.0
+
+  defp compute_mean_accuracy(cv_results) do
+    sum = Enum.sum(Enum.map(cv_results, & &1.accuracy))
+    Float.round(sum / length(cv_results), 1)
+  end
+
+  defp timed(fun) do
+    start = System.monotonic_time(:millisecond)
+    result = fun.()
+    elapsed = System.monotonic_time(:millisecond) - start
+    {result, elapsed}
   end
 
   defp extract_decade_features(source_key, decade) do
@@ -272,6 +339,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
       Enum.map(movies, fn m ->
         Map.update(m, :canonical_sources, %{}, &Map.delete(&1, source_key))
       end)
+
     scored = CriteriaScoring.batch_score_movies(movies_for_scoring, @default_weights)
 
     # Zip originals back in so labels use real canonical_sources
