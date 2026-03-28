@@ -70,6 +70,8 @@ defmodule Mix.Tasks.Predictions.Train do
       end
 
     if json? do
+      timings = Map.get(result, :timings, %{})
+
       output = %{
         "task" => "predictions.train",
         "list_key" => list_key,
@@ -85,7 +87,13 @@ defmodule Mix.Tasks.Predictions.Train do
         "feature_importance" =>
           Enum.map(result.feature_importance, fn {k, v} ->
             %{"criterion" => Atom.to_string(k), "weight" => v}
-          end)
+          end),
+        "timings" => %{
+          "data_load_ms" => Map.get(timings, :data_load_ms),
+          "model_fit_ms" => Map.get(timings, :model_fit_ms),
+          "loocv_ms" => Map.get(timings, :loocv_ms),
+          "baseline_cv_ms" => Map.get(timings, :baseline_cv_ms)
+        }
       }
 
       IO.puts(Jason.encode!(output, pretty: true))
@@ -129,6 +137,28 @@ defmodule Mix.Tasks.Predictions.Train do
       Mix.shell().info("Weights saved to DB.")
     else
       Mix.shell().info("Run with --save to persist weights to database.")
+    end
+
+    case Map.get(result, :timings) do
+      nil ->
+        :ok
+
+      t ->
+        total_ms =
+          Map.values(t) |> Enum.sum()
+
+        total_s = Float.round(total_ms / 1000, 1)
+
+        Mix.shell().info("""
+
+        ⏱  Timing Breakdown:
+           Data load (parallel):  #{t.data_load_ms}ms
+           Model fit (EXLA):      #{t.model_fit_ms}ms
+           LOOCV (parallel):      #{t.loocv_ms}ms
+           Baseline CV:           #{t.baseline_cv_ms}ms
+           ──────────────────────────────
+           Total:                 #{total_s}s
+        """)
     end
   end
 
