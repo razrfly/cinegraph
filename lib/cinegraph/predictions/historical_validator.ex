@@ -326,7 +326,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
         id: m.id,
         release_date: m.release_date,
         tmdb_data: fragment(
-          "jsonb_build_object('budget', ?->>'budget', 'revenue', ?->>'revenue')",
+          "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
           m.tmdb_data,
           m.tmdb_data
         ),

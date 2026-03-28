@@ -13,8 +13,7 @@ config :cinegraph, Cinegraph.Repo,
   database: "cinegraph_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 20,
-  ownership_timeout: :timer.minutes(10)
+  pool_size: 20
 
 # Read replica configuration for development
 # Points to same database as primary for simplicity
