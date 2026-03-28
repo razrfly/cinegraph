@@ -319,7 +319,13 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
           m.release_date,
           ^end_year
         ),
-      where: m.import_status == "full"
+      where: m.import_status == "full",
+      select: %Movie{
+        id: m.id,
+        release_date: m.release_date,
+        tmdb_data: m.tmdb_data,
+        canonical_sources: m.canonical_sources
+      }
   end
 
   defp generate_improvement_suggestions(validation) do
