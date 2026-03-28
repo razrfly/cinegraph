@@ -11,6 +11,8 @@ defmodule Mix.Tasks.Predictions.Backtest do
       mix predictions.backtest --decade 1960
       mix predictions.backtest --profile "Critics Choice"
       mix predictions.backtest --json
+      mix predictions.backtest --use-trained
+      mix predictions.backtest --list-key "1001_movies" --use-trained
 
   ## Options
 
@@ -18,6 +20,8 @@ defmodule Mix.Tasks.Predictions.Backtest do
     * `--decade` - backtest a single decade (e.g. 1960 for 1960s)
     * `--profile` - CriteriaScoring weight profile name (default: "default")
       Available: "default", "festival-heavy", "audience-first", "critics-choice", "auteur"
+    * `--use-trained` - use ML-trained weights from DB instead of a named profile
+    * `--list-key` - source_key to load trained weights from (default: "1001_movies")
     * `--json` - output raw JSON instead of formatted table
     * `--limit N` - (parsed but currently a no-op; pool cap removed in Phase 2)
     * `--threshold` - accuracy target percentage (default: 70.0)
@@ -42,6 +46,8 @@ defmodule Mix.Tasks.Predictions.Backtest do
           all: :boolean,
           decade: :integer,
           profile: :string,
+          use_trained: :boolean,
+          list_key: :string,
           json: :boolean,
           limit: :integer,
           threshold: :float
@@ -49,10 +55,29 @@ defmodule Mix.Tasks.Predictions.Backtest do
       )
 
     decade_filter = Keyword.get(opts, :decade)
+    use_trained? = Keyword.get(opts, :use_trained, false)
+    list_key = Keyword.get(opts, :list_key, "1001_movies")
     profile_name = Keyword.get(opts, :profile, "default")
     json? = Keyword.get(opts, :json, false)
     limit = Keyword.get(opts, :limit)
     threshold = Keyword.get(opts, :threshold, 70.0)
+
+    # Resolve weights: trained DB weights take precedence over named profile
+    weights_or_profile =
+      if use_trained? do
+        case Cinegraph.Movies.MovieLists.get_trained_weights(list_key) do
+          nil ->
+            Mix.raise(
+              "No trained weights found for #{list_key}. Run: mix predictions.train --list-key #{list_key} --save"
+            )
+
+          string_weights ->
+            # Convert string keys back to atoms for HistoricalValidator compatibility
+            Map.new(string_weights, fn {k, v} -> {String.to_existing_atom(k), v} end)
+        end
+      else
+        profile_name
+      end
 
     if limit && !json? do
       Mix.shell().info("Note: --limit is currently a no-op (pool cap was removed in Phase 2)")
@@ -71,11 +96,20 @@ defmodule Mix.Tasks.Predictions.Backtest do
     {results, overall_accuracy} =
       if decade_filter do
         result =
-          Cinegraph.Predictions.HistoricalValidator.validate_decade(decade_filter, profile_name)
+          Cinegraph.Predictions.HistoricalValidator.validate_decade(
+            decade_filter,
+            weights_or_profile,
+            list_key
+          )
 
         {[result], result.accuracy_percentage}
       else
-        validation = Cinegraph.Predictions.HistoricalValidator.validate_all_decades(profile_name)
+        validation =
+          Cinegraph.Predictions.HistoricalValidator.validate_all_decades(
+            weights_or_profile,
+            list_key
+          )
+
         {validation.decade_results, validation.overall_accuracy}
       end
 
@@ -89,10 +123,12 @@ defmodule Mix.Tasks.Predictions.Backtest do
           "#{hd(results).decade}s"
         end
 
+      display_profile = if use_trained?, do: "trained:#{list_key}", else: profile_name
+
       output = %{
         "task" => "predictions.backtest",
         "timestamp" => format_timestamp(),
-        "profile" => profile_name,
+        "profile" => display_profile,
         "overall_accuracy" => overall_accuracy,
         "decades_analyzed" => length(results),
         "decade_range" => decade_range,
@@ -114,7 +150,8 @@ defmodule Mix.Tasks.Predictions.Backtest do
 
       IO.puts(Jason.encode!(output, pretty: true))
     else
-      print_backtest(results, overall_accuracy, profile_name, threshold)
+      display_profile = if use_trained?, do: "trained:#{list_key}", else: profile_name
+      print_backtest(results, overall_accuracy, display_profile, threshold)
     end
 
     if overall_accuracy < threshold do

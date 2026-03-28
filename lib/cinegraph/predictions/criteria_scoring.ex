@@ -120,6 +120,15 @@ defmodule Cinegraph.Predictions.CriteriaScoring do
   end
 
   @doc """
+  Load ML-trained weights from movie_lists DB for a given source_key.
+  Returns nil if no trained weights have been saved yet.
+  Keys are strings (as stored in JSONB).
+  """
+  def get_trained_weights(source_key) do
+    Cinegraph.Movies.MovieLists.get_trained_weights(source_key)
+  end
+
+  @doc """
   Batch score multiple movies efficiently to avoid N+1 query problems.
   Returns list of %{movie: movie, prediction: prediction} maps.
   """

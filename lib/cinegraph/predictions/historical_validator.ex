@@ -36,7 +36,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   Backtest algorithm against all available historical decades.
   Uses database-driven weight profiles.
   """
-  def validate_all_decades(profile_or_weights \\ nil) do
+  def validate_all_decades(profile_or_weights \\ nil, source_key \\ "1001_movies") do
     weights = get_criteria_weights(profile_or_weights)
     decades = get_all_decades()
 
@@ -47,7 +47,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     decade_results =
       Enum.flat_map(all_decades_with_data, fn decade ->
         try do
-          [validate_decade(decade, weights)]
+          [validate_decade(decade, weights, source_key)]
         rescue
           e ->
             require Logger
@@ -85,7 +85,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   @doc """
   Backtest algorithm against a specific decade using database scoring.
   """
-  def validate_decade(decade, profile_or_weights \\ nil) do
+  def validate_decade(decade, profile_or_weights \\ nil, source_key \\ "1001_movies") do
     weights = get_criteria_weights(profile_or_weights)
 
     # Get all movies from the decade that are on 1001 Movies list
@@ -95,8 +95,16 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     all_decade_query = get_decade_movies_query(decade)
     all_decade_movies = Repo.all(all_decade_query, timeout: :timer.seconds(120))
 
+    # Strip the target list's key from canonical_sources before scoring to prevent
+    # data leakage: a movie already on the target list would otherwise get extra points
+    # from score_cultural_impact's canonical_count, encoding the label as a feature.
+    movies_for_scoring =
+      Enum.map(all_decade_movies, fn m ->
+        Map.update(m, :canonical_sources, %{}, &Map.delete(&1, source_key))
+      end)
+
     # Score all decade movies with CriteriaScoring
-    scored = CriteriaScoring.batch_score_movies(all_decade_movies, weights)
+    scored = CriteriaScoring.batch_score_movies(movies_for_scoring, weights)
 
     # Sort by score and take top N where N = number of actual 1001 movies
     total_1001_in_decade = length(actual_1001_movies)
@@ -301,7 +309,8 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
             m.release_date,
             ^end_year
           ),
-        where: fragment("? \\? ?", m.canonical_sources, "1001_movies")
+        where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+        where: m.import_status == "full"
 
     Repo.all(query)
   end

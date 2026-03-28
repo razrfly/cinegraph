@@ -448,4 +448,32 @@ defmodule Cinegraph.Movies.MovieLists do
   @doc false
   @deprecated "Use seed_default_lists/0 instead"
   def migrate_hardcoded_lists, do: seed_default_lists()
+
+  @doc """
+  Persist ML-trained weights for a list. Weights are a map with string keys
+  (e.g. %{"mob" => 0.24, "critics" => 0.19, ...}).
+  Returns {:ok, movie_list} or {:error, changeset}.
+  """
+  def save_trained_weights(source_key, weights_map) when is_binary(source_key) do
+    case get_by_source_key(source_key) do
+      nil ->
+        {:error, "List not found: #{source_key}"}
+
+      %MovieList{} = list ->
+        list
+        |> Ecto.Changeset.change(trained_weights: weights_map)
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Return the trained_weights map for a list, or nil if not yet trained.
+  Keys are strings (as stored in JSONB).
+  """
+  def get_trained_weights(source_key) when is_binary(source_key) do
+    case get_by_source_key(source_key) do
+      nil -> nil
+      %MovieList{trained_weights: weights} -> weights
+    end
+  end
 end
