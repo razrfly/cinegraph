@@ -57,8 +57,9 @@ defmodule Cinegraph.Imports.ImportStats do
        }}
     )
 
-    # Schedule periodic updates
-    Process.send_after(self(), :update_stats, @update_interval)
+    # Kick off an immediate refresh so stats are populated right away,
+    # then handle_info/2 will reschedule at @update_interval.
+    send(self(), :update_stats)
 
     {:ok, %{}}
   end

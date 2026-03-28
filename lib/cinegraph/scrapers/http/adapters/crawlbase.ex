@@ -22,8 +22,10 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
   require Logger
 
   @crawlbase_api_url "https://api.crawlbase.com/"
-  @default_timeout 60_000
-  @default_recv_timeout 60_000
+  # Crawlbase JS rendering takes 60-120s for heavy pages (IMDb uses AWS WAF + React SSR).
+  # Must exceed that or the request times out before we get the rendered HTML.
+  @default_timeout 150_000
+  @default_recv_timeout 150_000
   @default_page_wait 5000
 
   @impl true

@@ -11,7 +11,6 @@ defmodule Cinegraph.Repo.Migrations.DropInvalidObanArgsIndex do
   end
 
   def down do
-    # Not restoring the invalid index
-    :ok
+    raise "irreversible migration: cannot restore dropped invalid oban args index"
   end
 end
