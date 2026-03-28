@@ -322,6 +322,10 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
           []
       end)
 
+    if cv_results == [] do
+      raise "WeightOptimizer LOOCV: all folds failed or were skipped for source_key=#{inspect(source_key)} — check that movies exist with import_status=\"full\""
+    end
+
     {compute_mean_accuracy(cv_results), cv_results}
   end
 
@@ -389,7 +393,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
         id: m.id,
         release_date: m.release_date,
         tmdb_data: fragment(
-          "jsonb_build_object('budget', ?->>'budget', 'revenue', ?->>'revenue')",
+          "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
           m.tmdb_data,
           m.tmdb_data
         ),
