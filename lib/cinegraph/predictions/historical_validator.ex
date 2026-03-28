@@ -10,12 +10,12 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   alias Cinegraph.Predictions.CriteriaScoring
 
   @doc """
-  Dynamically get all decades that have movies in the 1001 Movies list.
+  Dynamically get all decades that have movies in the given list.
   """
-  def get_all_decades do
+  def get_all_decades(source_key \\ "1001_movies") do
     query =
       from m in Movie,
-        where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+        where: fragment("? \\? ?", m.canonical_sources, ^source_key),
         where: not is_nil(m.release_date),
         select: fragment("FLOOR(EXTRACT(YEAR FROM ?) / 10) * 10", m.release_date),
         distinct: true,
@@ -38,7 +38,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   """
   def validate_all_decades(profile_or_weights \\ nil, source_key \\ "1001_movies") do
     weights = get_criteria_weights(profile_or_weights)
-    decades = get_all_decades()
+    decades = get_all_decades(source_key)
 
     # Include ALL decades with data, including 2020s if they have confirmed additions
     # This gives us a complete picture of how well our algorithm works
@@ -153,7 +153,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   Get validation statistics by decade range (e.g., early cinema, golden age, modern).
   """
   def validate_by_era(profile_or_weights \\ nil, source_key \\ "1001_movies") do
-    decades = get_all_decades() |> Enum.filter(&(&1 < 2020))
+    decades = get_all_decades(source_key) |> Enum.filter(&(&1 < 2020))
 
     eras = %{
       "Early Cinema (1920s-1940s)" => Enum.filter(decades, &(&1 >= 1920 and &1 <= 1940)),
@@ -189,8 +189,8 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   @doc """
   Get detailed miss analysis for a specific decade.
   """
-  def analyze_decade_misses(decade, profile_or_weights \\ nil) do
-    validation = validate_decade(decade, profile_or_weights)
+  def analyze_decade_misses(decade, profile_or_weights \\ nil, source_key \\ "1001_movies") do
+    validation = validate_decade(decade, profile_or_weights, source_key)
 
     %{
       decade: decade,
@@ -296,19 +296,12 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   defp get_criteria_weights(_), do: CriteriaScoring.get_default_weights()
 
   defp get_decade_1001_movies(decade, source_key) do
-    start_year = decade
-    end_year = decade + 9
+    start_date = Date.new!(decade, 1, 1)
+    end_date = Date.new!(decade + 9, 12, 31)
 
     query =
       from m in Movie,
-        where:
-          fragment(
-            "EXTRACT(YEAR FROM ?) >= ? AND EXTRACT(YEAR FROM ?) <= ?",
-            m.release_date,
-            ^start_year,
-            m.release_date,
-            ^end_year
-          ),
+        where: m.release_date >= ^start_date and m.release_date <= ^end_date,
         where: fragment("? \\? ?", m.canonical_sources, ^source_key),
         where: m.import_status == "full"
 
