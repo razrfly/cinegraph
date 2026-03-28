@@ -452,7 +452,11 @@ defmodule Cinegraph.Movies.MovieLists do
   @doc """
   Persist ML-trained weights for a list. Weights are a map with string keys
   (e.g. %{"mob" => 0.24, "critics" => 0.19, ...}).
-  Returns {:ok, movie_list} or {:error, changeset}.
+
+  Returns:
+    * `{:ok, movie_list}` on success
+    * `{:error, {:not_found, source_key}}` if no list exists for the given source_key
+    * `{:error, changeset}` if the database update fails
   """
   def save_trained_weights(source_key, weights_map) when is_binary(source_key) do
     case get_by_source_key(source_key) do
