@@ -54,3 +54,6 @@ config :phoenix_live_view,
 
 # Disable basic auth on admin routes so LiveView tests can hit them directly
 config :cinegraph, :admin_auth_disabled, true
+
+# Use pure-Elixir backend in tests — EXLA requires native XLA artifacts not present in CI
+config :nx, default_backend: Nx.BinaryBackend
