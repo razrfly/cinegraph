@@ -1129,6 +1129,31 @@ defmodule Cinegraph.Movies do
     |> Repo.replica().all()
   end
 
+  @doc """
+  Returns a slim Ecto query for all fully-imported movies in a given decade.
+  Projects only the fields needed by the prediction pipeline: id, release_date,
+  canonical_sources, and a tmdb_data JSONB object containing budget and revenue.
+  """
+  def decade_movies_query(decade) do
+    start_date = Date.new!(decade, 1, 1)
+    end_date = Date.new!(decade + 9, 12, 31)
+
+    from m in Movie,
+      where: m.release_date >= ^start_date and m.release_date <= ^end_date,
+      where: m.import_status == "full",
+      select: %Movie{
+        id: m.id,
+        release_date: m.release_date,
+        tmdb_data:
+          fragment(
+            "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
+            m.tmdb_data,
+            m.tmdb_data
+          ),
+        canonical_sources: m.canonical_sources
+      }
+  end
+
   # Helper to escape SQL LIKE wildcards
   defp escape_like_wildcards(str) do
     str

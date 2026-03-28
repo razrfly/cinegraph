@@ -323,7 +323,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
       end)
 
     if cv_results == [] do
-      raise "WeightOptimizer LOOCV: all folds failed or were skipped for source_key=#{inspect(source_key)} — check that movies exist with import_status=\"full\""
+      raise "WeightOptimizer LOOCV: no successful folds for source_key=#{inspect(source_key)} — all folds failed or were skipped"
     end
 
     {compute_mean_accuracy(cv_results), cv_results}
@@ -379,25 +379,5 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     {Enum.reverse(xs), Enum.reverse(ys)}
   end
 
-  defp get_decade_movies_query(decade) do
-    import Ecto.Query
-    alias Cinegraph.Movies.Movie
-
-    start_date = Date.new!(decade, 1, 1)
-    end_date = Date.new!(decade + 9, 12, 31)
-
-    from m in Movie,
-      where: m.release_date >= ^start_date and m.release_date <= ^end_date,
-      where: m.import_status == "full",
-      select: %Movie{
-        id: m.id,
-        release_date: m.release_date,
-        tmdb_data: fragment(
-          "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
-          m.tmdb_data,
-          m.tmdb_data
-        ),
-        canonical_sources: m.canonical_sources
-      }
-  end
+  defp get_decade_movies_query(decade), do: Cinegraph.Movies.decade_movies_query(decade)
 end

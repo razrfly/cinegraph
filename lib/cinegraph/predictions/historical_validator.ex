@@ -308,31 +308,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     Repo.all(query)
   end
 
-  defp get_decade_movies_query(decade) do
-    start_year = decade
-    end_year = decade + 9
-
-    from m in Movie,
-      where:
-        fragment(
-          "EXTRACT(YEAR FROM ?) >= ? AND EXTRACT(YEAR FROM ?) <= ?",
-          m.release_date,
-          ^start_year,
-          m.release_date,
-          ^end_year
-        ),
-      where: m.import_status == "full",
-      select: %Movie{
-        id: m.id,
-        release_date: m.release_date,
-        tmdb_data: fragment(
-          "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
-          m.tmdb_data,
-          m.tmdb_data
-        ),
-        canonical_sources: m.canonical_sources
-      }
-  end
+  defp get_decade_movies_query(decade), do: Cinegraph.Movies.decade_movies_query(decade)
 
   defp generate_improvement_suggestions(validation) do
     suggestions = []
