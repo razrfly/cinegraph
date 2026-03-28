@@ -74,8 +74,8 @@ defmodule Cinegraph.MixProject do
       {:absinthe, "~> 1.7"},
       {:absinthe_plug, "~> 1.5"},
       {:dataloader, "~> 2.0"},
-      {:nx, "~> 0.9"},
-      {:scholar, "~> 0.3"}
+      {:nx, "~> 0.11"},
+      {:scholar, "~> 0.4"}
     ]
   end
 

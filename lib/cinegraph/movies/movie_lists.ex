@@ -457,7 +457,7 @@ defmodule Cinegraph.Movies.MovieLists do
   def save_trained_weights(source_key, weights_map) when is_binary(source_key) do
     case get_by_source_key(source_key) do
       nil ->
-        {:error, "List not found: #{source_key}"}
+        {:error, :not_found}
 
       %MovieList{} = list ->
         list

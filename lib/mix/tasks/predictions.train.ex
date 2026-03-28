@@ -58,10 +58,16 @@ defmodule Mix.Tasks.Predictions.Train do
     end
 
     result =
-      Cinegraph.Predictions.WeightOptimizer.train(list_key,
-        sample_ratio: sample_ratio,
-        save: save?
-      )
+      try do
+        Cinegraph.Predictions.WeightOptimizer.train(list_key,
+          sample_ratio: sample_ratio,
+          save: save?
+        )
+      rescue
+        e ->
+          Mix.shell().error("Training failed: #{Exception.message(e)}")
+          System.halt(1)
+      end
 
     if json? do
       output = %{
