@@ -2,6 +2,10 @@ import Config
 
 # Configure your database
 # Using local Postgres.app
+# Use EXLA backend for Nx — routes tensor ops through Apple Accelerate (BLAS/AMX)
+# on Apple Silicon, giving 10-50× speedup over pure-Elixir BinaryBackend
+config :nx, default_backend: EXLA.Backend
+
 config :cinegraph, Cinegraph.Repo,
   username: "postgres",
   password: "postgres",
@@ -9,7 +13,8 @@ config :cinegraph, Cinegraph.Repo,
   database: "cinegraph_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 20
+  pool_size: 20,
+  ownership_timeout: :timer.minutes(10)
 
 # Read replica configuration for development
 # Points to same database as primary for simplicity

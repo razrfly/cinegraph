@@ -138,10 +138,6 @@ config :cinegraph, Oban,
     # }
   ]
 
-# Use EXLA backend for Nx — routes tensor ops through Apple Accelerate (BLAS/AMX)
-# on Apple Silicon, giving 10-50× speedup over pure-Elixir BinaryBackend
-config :nx, default_backend: EXLA.Backend
-
 # Import movie import configuration
 import_config "import.exs"
 

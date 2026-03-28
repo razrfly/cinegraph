@@ -142,6 +142,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   """
   def decade_cross_validate(source_key, weights) do
     decades = HistoricalValidator.get_all_decades(source_key)
+    pool_size = Cinegraph.Repo.config()[:pool_size] || 10
 
     cv_results =
       Task.async_stream(
@@ -156,8 +157,9 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
               :skip
           end
         end,
-        max_concurrency: System.schedulers_online(),
+        max_concurrency: max(1, min(length(decades), min(pool_size, 4))),
         timeout: :timer.minutes(5),
+        on_timeout: :kill_task,
         ordered: false
       )
       |> Enum.flat_map(fn
@@ -167,6 +169,10 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
           Logger.warning("WeightOptimizer CV: task exited — #{inspect(reason)}")
           []
       end)
+
+    if cv_results == [] do
+      raise "WeightOptimizer CV: all folds failed or were skipped for source_key=#{source_key} — check that movies exist with import_status=\"full\""
+    end
 
     {compute_mean_accuracy(cv_results), cv_results}
   end
@@ -213,11 +219,14 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   # --- Private helpers ---
 
   defp load_decade_data_parallel(source_key, decades) do
+    pool_size = Cinegraph.Repo.config()[:pool_size] || 10
+
     Task.async_stream(
       decades,
       fn d -> {d, extract_decade_features(source_key, d)} end,
-      max_concurrency: min(length(decades), 8),
+      max_concurrency: max(1, min(length(decades), min(pool_size, 8))),
       timeout: :timer.minutes(5),
+      on_timeout: :kill_task,
       ordered: false
     )
     |> Enum.reduce(%{}, fn
@@ -270,6 +279,8 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   end
 
   defp true_loocv_from_cache(source_key, decade_data, decades, sample_ratio) do
+    pool_size = Cinegraph.Repo.config()[:pool_size] || 10
+
     cv_results =
       Task.async_stream(
         decades,
@@ -298,8 +309,9 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
               :skip
           end
         end,
-        max_concurrency: System.schedulers_online(),
+        max_concurrency: max(1, min(length(decades), min(pool_size, 4))),
         timeout: :timer.minutes(5),
+        on_timeout: :kill_task,
         ordered: false
       )
       |> Enum.flat_map(fn
@@ -376,7 +388,11 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
       select: %Movie{
         id: m.id,
         release_date: m.release_date,
-        tmdb_data: m.tmdb_data,
+        tmdb_data: fragment(
+          "jsonb_build_object('budget', ?->>'budget', 'revenue', ?->>'revenue')",
+          m.tmdb_data,
+          m.tmdb_data
+        ),
         canonical_sources: m.canonical_sources
       }
   end
