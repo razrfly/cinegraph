@@ -216,6 +216,116 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     |> Map.new()
   end
 
+  @doc """
+  Random weight sweep: loads decade data once, then evaluates `n_samples` random
+  weight vectors entirely in memory (no DB calls per vector). Includes all named
+  profiles in the search. Returns results sorted by overall accuracy descending.
+
+  ## Options
+    * `:save` - persist the best weights to DB
+    * `:top` - how many results to return (default: 20)
+
+  ## Example
+
+      WeightOptimizer.sweep("1001_movies", 1000)
+      # => [%{weights: %{...}, accuracy: 51.2, rank: 1}, ...]
+
+  """
+  def sweep(source_key, n_samples \\ 500, opts \\ []) do
+    decades = HistoricalValidator.get_all_decades(source_key)
+    Logger.info("WeightOptimizer.sweep: loading #{length(decades)} decades")
+    {decade_data, load_ms} = timed(fn -> load_decade_data_parallel(source_key, decades) end)
+    Logger.info("WeightOptimizer.sweep: data loaded in #{load_ms}ms, evaluating #{n_samples} weight vectors")
+
+    # Named profiles always included
+    named_vectors =
+      CriteriaScoring.get_named_profiles()
+      |> Enum.map(fn p ->
+        vec = Enum.map(@criteria, &Map.get(p.weights, &1, 0.0))
+        {vec, p.name}
+      end)
+
+    # Random vectors on the probability simplex
+    random_vectors =
+      for _ <- 1..n_samples do
+        {random_simplex_point(length(@criteria)), nil}
+      end
+
+    n_criteria = length(@criteria)
+
+    {results, eval_ms} =
+      timed(fn ->
+        (named_vectors ++ random_vectors)
+        |> Enum.map(fn {vec, label} ->
+          acc = fast_evaluate(vec, decade_data, decades, n_criteria)
+          weight_map = @criteria |> Enum.zip(vec) |> Map.new()
+          %{weights: weight_map, accuracy: acc, label: label}
+        end)
+        |> Enum.sort_by(& &1.accuracy, :desc)
+      end)
+
+    Logger.info("WeightOptimizer.sweep: #{length(results)} vectors evaluated in #{eval_ms}ms")
+
+    top = Keyword.get(opts, :top, 20)
+    top_results = Enum.take(results, top) |> Enum.with_index(1) |> Enum.map(fn {r, i} -> Map.put(r, :rank, i) end)
+
+    if Keyword.get(opts, :save, false) and top_results != [] do
+      best = hd(top_results)
+      string_weights = Map.new(best.weights, fn {k, v} -> {Atom.to_string(k), v} end)
+      case MovieLists.save_trained_weights(source_key, string_weights) do
+        {:ok, _} -> Logger.info("WeightOptimizer.sweep: saved best weights (#{best.accuracy}%) for #{source_key}")
+        {:error, reason} -> Logger.error("WeightOptimizer.sweep: failed to save — #{inspect(reason)}")
+      end
+    end
+
+    top_results
+  end
+
+  # Evaluate a weight vector against all cached decade data entirely in memory.
+  # Accuracy = total_correct / total_positives across all decades (weighted by decade size).
+  defp fast_evaluate(weight_vec, decade_data, decades, n_criteria) do
+    {total_correct, total_pos} =
+      Enum.reduce(decades, {0, 0}, fn decade, {tc, tp} ->
+        case Map.get(decade_data, decade) do
+          nil ->
+            {tc, tp}
+
+          {xs, ys} ->
+            n_pos = Enum.count(ys, &(&1 == 1))
+
+            if n_pos == 0 do
+              {tc, tp}
+            else
+              correct =
+                Enum.zip(xs, ys)
+                |> Enum.map(fn {features, label} ->
+                  score =
+                    0..(n_criteria - 1)
+                    |> Enum.reduce(0.0, fn i, acc ->
+                      acc + Enum.at(features, i) * Enum.at(weight_vec, i)
+                    end)
+
+                  {score, label}
+                end)
+                |> Enum.sort_by(&elem(&1, 0), :desc)
+                |> Enum.take(n_pos)
+                |> Enum.count(fn {_, y} -> y == 1 end)
+
+              {tc + correct, tp + n_pos}
+            end
+        end
+      end)
+
+    if total_pos == 0, do: 0.0, else: Float.round(total_correct / total_pos * 100, 1)
+  end
+
+  # Sample a uniform random point on the (n-1)-simplex via the exponential method.
+  defp random_simplex_point(n) do
+    raw = for _ <- 1..n, do: :math.log(1.0 / :rand.uniform())
+    total = Enum.sum(raw)
+    Enum.map(raw, &(&1 / total))
+  end
+
   # --- Private helpers ---
 
   defp load_decade_data_parallel(source_key, decades) do
