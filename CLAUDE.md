@@ -100,6 +100,7 @@ Legacy modules (`canonical_lists.ex`, `list_slugs.ex`) are thin wrappers that de
 - Use Oban for background jobs, not manual async tasks
 - Prefer Ecto queries over raw SQL
 - LiveView components handle their own state
+- Before modifying the prediction/scoring system, read the **Prediction Integrity** section in README.md
 
 ## Performance Considerations
 - Large LiveView files (>300 lines) should be refactored

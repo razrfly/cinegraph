@@ -50,6 +50,38 @@ To ensure our algorithm captures true cultural relevance:
 
 ---
 
+## Prediction Integrity: Anti-Self-Deception Protocol
+
+Before working on the CRI scoring algorithm, weight optimizer, or backtesting system, read this section. See [issue #717](https://github.com/razrfly/cinegraph/issues/717) for full rationale.
+
+### Rule 1: Pre-register hypotheses
+Before running `mix predictions.train` or `mix predictions.sweep`, write down:
+- Which features you expect to matter most and **why** (causal story required)
+- What accuracy range you expect
+- What result would convince you the model is **not** working
+
+Do this before looking at results. Never rationalize a result you didn't predict.
+
+### Rule 2: Sacred holdout
+Do not use post-2015 movies during development iteration. Run the final trained model on the holdout set **exactly once**. If it fails, you overfitted during development — do not re-run with tweaks.
+
+### Rule 3: Beat dumb baselines
+Every model must beat all of these before claiming it works:
+- **Random**: Random movie selection
+- **Single-feature**: Best single criterion in isolation (e.g. `festival_recognition` alone)
+- **Naive popularity**: Top N by IMDb rating, no model
+
+If the full multi-feature model doesn't meaningfully beat a 1-feature baseline, use the simpler model.
+
+### Reporting standard
+Never report accuracy without also reporting:
+- Dumb baseline accuracy (random + best single-feature)
+- Improvement delta over baseline
+- Per-regime breakdown (pre-1980 / 1980–2015 / post-2015)
+- Top 5 worst misses (false negatives by confidence) with a note on whether the failure is structural or noise
+
+---
+
 ## 🌟 Key Features
 
 - **Elixir Phoenix backend** with PostgreSQL
