@@ -120,18 +120,22 @@ defmodule Mix.Tasks.Predictions.Sweep do
       Mix.shell().info("  #{rank_str}  #{acc_str}  #{weight_cols}#{label}")
     end)
 
-    best = hd(results)
+    case results do
+      [best | _] ->
+        Mix.shell().info("""
 
-    Mix.shell().info("""
+        Best: #{best.accuracy}% accuracy
+        #{format_weights(best.weights)}
+        """)
 
-    Best: #{best.accuracy}% accuracy
-    #{format_weights(best.weights)}
-    """)
+        if saved? do
+          Mix.shell().info("Best weights saved to DB for #{list_key}.")
+        else
+          Mix.shell().info("Run with --save to persist best weights.")
+        end
 
-    if saved? do
-      Mix.shell().info("Best weights saved to DB for #{list_key}.")
-    else
-      Mix.shell().info("Run with --save to persist best weights.")
+      [] ->
+        Mix.shell().info("No results to display.")
     end
   end
 

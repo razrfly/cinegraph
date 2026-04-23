@@ -321,7 +321,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
   # Sample a uniform random point on the (n-1)-simplex via the exponential method.
   defp random_simplex_point(n) do
-    raw = for _ <- 1..n, do: :math.log(1.0 / :rand.uniform())
+    raw = for _ <- 1..n, do: -:math.log(:rand.uniform_real())
     total = Enum.sum(raw)
     Enum.map(raw, &(&1 / total))
   end
