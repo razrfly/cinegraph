@@ -564,14 +564,17 @@ defmodule Mix.Tasks.Db.PullProduction do
 
     start_time = System.monotonic_time(:second)
 
+    # Set PGPASSWORD via process env rather than Port :env option.
+    # :erlang.open_port rejects {:env, ...} for :spawn_executable on this OTP version.
+    System.put_env("PGPASSWORD", local_password())
+
     port =
       Port.open(
         {:spawn_executable, pg_restore},
         [
           :binary,
           :exit_status,
-          {:args, args},
-          {:env, [{"PGPASSWORD", local_password()}]}
+          {:args, args}
         ]
       )
 

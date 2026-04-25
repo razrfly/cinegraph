@@ -3,6 +3,11 @@ import Config
 # Only in tests, remove the complexity from the password hashing algorithm
 config :bcrypt_elixir, :log_rounds, 1
 
+# Skip background GenServers (ImportStats, DashboardStats, AwardImportStats,
+# FestivalInferenceMonitor) in tests — their timer-driven Repo queries run
+# outside the test sandbox and crash the connection pool.
+config :cinegraph, :start_background_children, false
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
@@ -14,7 +19,10 @@ config :cinegraph, Cinegraph.Repo,
   hostname: "localhost",
   database: "cinegraph_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  # 10 is plenty in sandbox mode where each test owns one connection.
+  # The previous default (schedulers * 2) exhausted Postgres' default 100-conn cap
+  # when both primary + replica pools were created.
+  pool_size: 10
 
 # Read replica configuration for tests
 # Points to same database as primary - uses sandbox for isolation
@@ -24,7 +32,10 @@ config :cinegraph, Cinegraph.Repo.Replica,
   hostname: "localhost",
   database: "cinegraph_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  # 10 is plenty in sandbox mode where each test owns one connection.
+  # The previous default (schedulers * 2) exhausted Postgres' default 100-conn cap
+  # when both primary + replica pools were created.
+  pool_size: 10
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.

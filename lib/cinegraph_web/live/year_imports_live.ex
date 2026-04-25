@@ -256,6 +256,11 @@ defmodule CinegraphWeb.YearImportsLive do
   def render(assigns) do
     ~H"""
     <div class="max-w-7xl mx-auto px-4 py-8">
+      <div class="mb-4">
+        <.link navigate={~p"/admin/health"} class="text-sm text-zinc-500 hover:text-zinc-900">
+          ← Back to /admin/health
+        </.link>
+      </div>
       <!-- Header -->
       <div class="mb-8">
         <div class="flex items-center justify-between">

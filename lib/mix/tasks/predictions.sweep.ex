@@ -98,7 +98,7 @@ defmodule Mix.Tasks.Predictions.Sweep do
 
     Mix.shell().info(
       "  Rank  Accuracy  " <>
-        (criteria |> Enum.map(&(String.pad_trailing(short_name(&1), 8))) |> Enum.join("  ")) <>
+        (criteria |> Enum.map(&String.pad_trailing(short_name(&1), 8)) |> Enum.join("  ")) <>
         "  Label"
     )
 
@@ -145,6 +145,7 @@ defmodule Mix.Tasks.Predictions.Sweep do
     |> Enum.map(fn {k, v} ->
       pct = Float.round(v * 100, 1)
       bar = String.duplicate("█", round(v * 30))
+
       "  #{String.pad_trailing(Atom.to_string(k), 22)} #{String.pad_leading("#{pct}%", 6)}  #{bar}"
     end)
     |> Enum.join("\n")

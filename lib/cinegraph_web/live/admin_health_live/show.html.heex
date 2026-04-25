@@ -1,0 +1,177 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="mb-6">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900">Cinegraph Health</h1>
+        <p class="mt-1 text-sm text-gray-600">
+          Homeostasis view — drift, activity, queue state. Mirrors <code class="bg-zinc-100 px-1 rounded">mix cinegraph.health</code>.
+        </p>
+      </div>
+      <nav class="text-sm text-zinc-500 space-x-3">
+        <.link navigate={~p"/admin/year-imports"} class="hover:text-zinc-900">Year imports</.link>
+        <span class="text-zinc-300">·</span>
+        <.link navigate={~p"/admin/award-imports"} class="hover:text-zinc-900">
+          Award imports
+        </.link>
+        <span class="text-zinc-300">·</span>
+        <.link navigate={~p"/admin/oban"} class="hover:text-zinc-900">Oban</.link>
+      </nav>
+    </div>
+  </div>
+
+  <div :if={@loading_error != []} class="rounded-lg border border-red-200 bg-red-50 p-4 mb-6">
+    <p class="text-sm font-semibold text-red-800">Some data could not be loaded:</p>
+    <ul class="text-xs text-red-700 mt-1 list-disc list-inside">
+      <li :for={msg <- @loading_error}>{msg}</li>
+    </ul>
+  </div>
+
+  <%= case @verdict do %>
+    <% {:error, _} -> %>
+      <.hero_band status={:unknown} generated_at={@loaded_at}>
+        <:controls>
+          <button
+            phx-click="refresh"
+            class="text-sm font-medium px-3 py-1 rounded border border-current"
+          >
+            Refresh now
+          </button>
+        </:controls>
+      </.hero_band>
+    <% verdict -> %>
+      <.hero_band
+        status={verdict.status}
+        worst_check={verdict.worst_check}
+        generated_at={verdict.generated_at}
+      >
+        <:controls>
+          <button
+            phx-click="refresh"
+            class="text-sm font-medium px-3 py-1 rounded border border-current hover:bg-white/50"
+          >
+            Refresh now
+          </button>
+        </:controls>
+      </.hero_band>
+  <% end %>
+
+  <section class="mb-6">
+    <h2 class="text-sm uppercase tracking-wide text-zinc-500 font-semibold mb-3">Today</h2>
+    <%= case @activity_today do %>
+      <% {:error, msg} -> %>
+        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+          Activity unavailable: {msg}
+        </div>
+      <% activity -> %>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <.stat_tile
+            label="Movies+"
+            count={activity.movies_added}
+            sparkline={sparkline_for(:movies_added, @activity_recent)}
+            tone={:blue}
+          />
+          <.stat_tile
+            label="OMDb fetches"
+            count={activity.omdb_fetches}
+            sparkline={sparkline_for(:omdb_fetches, @activity_recent)}
+            tone={:green}
+          />
+          <.stat_tile
+            label="Ceremonies updated"
+            count={activity.ceremonies_updated}
+            sparkline={sparkline_for(:ceremonies_updated, @activity_recent)}
+            tone={:amber}
+          />
+          <.stat_tile
+            label="People+"
+            count={activity.people_added}
+            sparkline={sparkline_for(:people_added, @activity_recent)}
+            tone={:purple}
+          />
+        </div>
+        <p class="mt-3 text-xs text-zinc-500">
+          Date: {Date.to_iso8601(activity.date)} · Jobs completed today: {activity.jobs_completed}
+          <span :if={activity.jobs_failed > 0} class="text-red-700 font-medium ml-2">
+            · {activity.jobs_failed} failed
+          </span>
+        </p>
+    <% end %>
+  </section>
+
+  <section class="mt-10 mb-6">
+    <h2 class="text-sm uppercase tracking-wide text-zinc-500 font-semibold mb-3">Domain drift</h2>
+    <%= case @verdict do %>
+      <% {:error, msg} -> %>
+        <div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+          Drift unavailable: {msg}
+        </div>
+      <% verdict -> %>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <% people_props = domain_card_props(verdict, :people) %>
+          <.drift_card
+            domain={:people}
+            title="People"
+            status={people_props.status}
+            headline={people_props.headline}
+            signals={people_props.signals}
+          />
+          <% movies_props = domain_card_props(verdict, :movies) %>
+          <.drift_card
+            domain={:movies}
+            title="Movies"
+            status={movies_props.status}
+            headline={movies_props.headline}
+            signals={movies_props.signals}
+          />
+          <% festivals_props = domain_card_props(verdict, :festivals) %>
+          <.drift_card
+            domain={:festivals}
+            title="Festivals"
+            status={festivals_props.status}
+            headline={festivals_props.headline}
+            signals={festivals_props.signals}
+          />
+          <% ratings_props = domain_card_props(verdict, :ratings) %>
+          <.drift_card
+            domain={:ratings}
+            title="Ratings"
+            status={ratings_props.status}
+            headline={ratings_props.headline}
+            signals={ratings_props.signals}
+          />
+        </div>
+    <% end %>
+  </section>
+
+  <section class="mt-10 mb-6">
+    <.queue_strip snapshot={@queues} />
+  </section>
+
+  <section class="mb-10">
+    <.trend_chart history={@history} />
+  </section>
+
+  <.drift_drawer
+    :if={@drawer_domain}
+    domain={@drawer_domain}
+    title={drawer_title(@drawer_domain)}
+    checks={@drawer_checks}
+  >
+    <:actions>
+      <.link
+        :if={@drawer_domain == :movies}
+        navigate={~p"/admin/year-imports"}
+        class="text-sm font-medium text-blue-700 hover:text-blue-900 underline"
+      >
+        Trigger backfill (Year imports) →
+      </.link>
+      <.link
+        :if={@drawer_domain == :festivals}
+        navigate={~p"/admin/award-imports"}
+        class="text-sm font-medium text-blue-700 hover:text-blue-900 underline"
+      >
+        Resync ceremony (Award imports) →
+      </.link>
+    </:actions>
+  </.drift_drawer>
+</div>

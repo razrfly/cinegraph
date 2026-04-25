@@ -22,6 +22,43 @@ config :cinegraph,
     default: [:direct]
   }
 
+# Health/drift thresholds (#722). Tuples are `{green_max, amber_max}`.
+# Float values compared against `affected_pct`; integer values against
+# `affected_count`. Values above amber_max are :red.
+config :cinegraph, :health,
+  thresholds: %{
+    default: {1.0, 10.0},
+    people: %{
+      missing_profile_path: {2.0, 8.0},
+      # genuinely sparse on TMDb
+      missing_biography: {30.0, 60.0},
+      missing_known_for_department: {2.0, 10.0},
+      stale_record: {20.0, 50.0},
+      zero_credits: {1.0, 5.0},
+      person_required_nomination_missing_person: {2.0, 10.0},
+      pqs_stale: {10.0, 30.0}
+    },
+    movies: %{
+      year_gap: {1.0, 5.0},
+      missing_omdb: {5.0, 15.0},
+      stale_omdb: {30.0, 60.0},
+      missing_imdb_id: {2.0, 10.0}
+    },
+    festivals: %{
+      # absolute counts not pcts
+      nominations_below_floor: {0, 2},
+      missing_categories: {0, 1},
+      # corruption — any → red
+      nominations_missing_movie: {0, 0},
+      person_required_missing_person: {2.0, 10.0}
+    },
+    ratings: %{
+      omdb_null_backlog: {5.0, 15.0},
+      omdb_stale: {30.0, 60.0},
+      rt_metacritic_gap: {30.0, 50.0}
+    }
+  }
+
 # Configures the endpoint
 config :cinegraph, CinegraphWeb.Endpoint,
   url: [host: "localhost"],
@@ -118,7 +155,9 @@ config :cinegraph, Oban,
        # Queues more movies if pending jobs fall below threshold (stateless approach)
        {"*/15 * * * *", Cinegraph.Workers.ScheduledBackfillWorker},
        # Daily OMDb gap fill + stale refresh at 3 AM UTC
-       {"0 3 * * *", Cinegraph.Workers.RatingsRefreshWorker}
+       {"0 3 * * *", Cinegraph.Workers.RatingsRefreshWorker},
+       # Daily completeness snapshot at 5:05 AM UTC (after the 4 AM TMDb sync settles) — #722
+       {"5 5 * * *", Cinegraph.Workers.CompletenessSnapshotWorker}
      ]}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format
