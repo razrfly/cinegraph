@@ -163,8 +163,12 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
         ordered: false
       )
       |> Enum.flat_map(fn
-        {:ok, {:ok, entry}} -> [entry]
-        {:ok, :skip} -> []
+        {:ok, {:ok, entry}} ->
+          [entry]
+
+        {:ok, :skip} ->
+          []
+
         {:exit, reason} ->
           Logger.warning("WeightOptimizer CV: task exited — #{inspect(reason)}")
           []
@@ -235,7 +239,10 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     decades = HistoricalValidator.get_all_decades(source_key)
     Logger.info("WeightOptimizer.sweep: loading #{length(decades)} decades")
     {decade_data, load_ms} = timed(fn -> load_decade_data_parallel(source_key, decades) end)
-    Logger.info("WeightOptimizer.sweep: data loaded in #{load_ms}ms, evaluating #{n_samples} weight vectors")
+
+    Logger.info(
+      "WeightOptimizer.sweep: data loaded in #{load_ms}ms, evaluating #{n_samples} weight vectors"
+    )
 
     # Named profiles always included
     named_vectors =
@@ -267,14 +274,24 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     Logger.info("WeightOptimizer.sweep: #{length(results)} vectors evaluated in #{eval_ms}ms")
 
     top = Keyword.get(opts, :top, 20)
-    top_results = Enum.take(results, top) |> Enum.with_index(1) |> Enum.map(fn {r, i} -> Map.put(r, :rank, i) end)
+
+    top_results =
+      Enum.take(results, top)
+      |> Enum.with_index(1)
+      |> Enum.map(fn {r, i} -> Map.put(r, :rank, i) end)
 
     if Keyword.get(opts, :save, false) and top_results != [] do
       best = hd(top_results)
       string_weights = Map.new(best.weights, fn {k, v} -> {Atom.to_string(k), v} end)
+
       case MovieLists.save_trained_weights(source_key, string_weights) do
-        {:ok, _} -> Logger.info("WeightOptimizer.sweep: saved best weights (#{best.accuracy}%) for #{source_key}")
-        {:error, reason} -> Logger.error("WeightOptimizer.sweep: failed to save — #{inspect(reason)}")
+        {:ok, _} ->
+          Logger.info(
+            "WeightOptimizer.sweep: saved best weights (#{best.accuracy}%) for #{source_key}"
+          )
+
+        {:error, reason} ->
+          Logger.error("WeightOptimizer.sweep: failed to save — #{inspect(reason)}")
       end
     end
 
@@ -397,7 +414,9 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
         fn test_decade ->
           try do
             train_decades = Enum.reject(decades, &(&1 == test_decade))
-            {x_train, y_train} = assemble_and_undersample(decade_data, train_decades, sample_ratio)
+
+            {x_train, y_train} =
+              assemble_and_undersample(decade_data, train_decades, sample_ratio)
 
             if length(y_train) < 10 do
               Logger.warning(
@@ -425,8 +444,12 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
         ordered: false
       )
       |> Enum.flat_map(fn
-        {:ok, {:ok, entry}} -> [entry]
-        {:ok, :skip} -> []
+        {:ok, {:ok, entry}} ->
+          [entry]
+
+        {:ok, :skip} ->
+          []
+
         {:exit, reason} ->
           Logger.warning("WeightOptimizer LOOCV: task exited — #{inspect(reason)}")
           []

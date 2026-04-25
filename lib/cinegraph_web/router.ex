@@ -171,6 +171,9 @@ defmodule CinegraphWeb.Router do
     # Database metrics reset (protected by admin auth)
     post "/metrics/reset", HealthController, :reset
 
+    # Homeostasis dashboard (#723) — replaces the import-era trio
+    live "/health", AdminHealthLive.Show, :show
+
     # Import dashboard
     live "/imports", ImportDashboardLive, :index
     # Year-by-year TMDb import management

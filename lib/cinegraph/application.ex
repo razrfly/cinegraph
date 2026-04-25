@@ -7,40 +7,36 @@ defmodule Cinegraph.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      CinegraphWeb.Telemetry,
-      Cinegraph.Repo,
-      # Read replica for PlanetScale - offloads read queries from primary
-      # Only started if configured (production with DATABASE_REPLICA_ENABLED=true)
-      replica_child_spec(),
-      {DNSCluster, query: Application.get_env(:cinegraph, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Cinegraph.PubSub},
-      # Start the Finch HTTP client for sending emails
-      {Finch, name: Cinegraph.Finch},
-      # Start Oban
-      {Oban, Application.fetch_env!(:cinegraph, Oban)},
-      # Start Cachex for performance caching
-      Supervisor.child_spec({Cachex, name: :predictions_cache}, id: :predictions_cache),
-      # Start Cachex for movies page caching (Phase 1 optimization)
-      Supervisor.child_spec(
-        {Cachex, name: :movies_cache, limit: 10_000, stats: true},
-        id: :movies_cache
-      ),
-      # Start Rate Limiter
-      Cinegraph.RateLimiter,
-      # Start Import Stats
-      Cinegraph.Imports.ImportStats,
-      # Start Dashboard Stats Cache (Issue #421)
-      Cinegraph.Cache.DashboardStats,
-      # Start Award Import Stats Cache (Issue #446)
-      Cinegraph.Cache.AwardImportStats,
-      # Start Festival Inference Monitor (Issue #286)
-      Cinegraph.ObanPlugins.FestivalInferenceMonitor,
-      # Start a worker by calling: Cinegraph.Worker.start_link(arg)
-      # {Cinegraph.Worker, arg},
-      # Start to serve requests, typically the last entry
-      CinegraphWeb.Endpoint
-    ]
+    children =
+      [
+        CinegraphWeb.Telemetry,
+        Cinegraph.Repo,
+        # Read replica for PlanetScale - offloads read queries from primary
+        # Only started if configured (production with DATABASE_REPLICA_ENABLED=true)
+        replica_child_spec(),
+        {DNSCluster, query: Application.get_env(:cinegraph, :dns_cluster_query) || :ignore},
+        {Phoenix.PubSub, name: Cinegraph.PubSub},
+        # Start the Finch HTTP client for sending emails
+        {Finch, name: Cinegraph.Finch},
+        # Start Oban
+        {Oban, Application.fetch_env!(:cinegraph, Oban)},
+        # Start Cachex for performance caching
+        Supervisor.child_spec({Cachex, name: :predictions_cache}, id: :predictions_cache),
+        # Start Cachex for movies page caching (Phase 1 optimization)
+        Supervisor.child_spec(
+          {Cachex, name: :movies_cache, limit: 10_000, stats: true},
+          id: :movies_cache
+        ),
+        # Start Cachex for health/drift dashboards (#722)
+        Supervisor.child_spec({Cachex, name: :health_cache}, id: :health_cache),
+        # Start Rate Limiter
+        Cinegraph.RateLimiter
+      ] ++
+        background_children() ++
+        [
+          # Start to serve requests, typically the last entry
+          CinegraphWeb.Endpoint
+        ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -76,6 +72,24 @@ defmodule Cinegraph.Application do
   def config_change(changed, _new, removed) do
     CinegraphWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  # Background children that hammer the DB on a timer — skip in :test env
+  # since their queries run outside the per-test sandbox and crash the
+  # connection pool. Re-add to the supervision tree only in :dev / :prod.
+  # Controlled by `:cinegraph, :start_background_children` (default `true`;
+  # `config/test.exs` sets it to `false`).
+  defp background_children do
+    if Application.get_env(:cinegraph, :start_background_children, true) do
+      [
+        Cinegraph.Imports.ImportStats,
+        Cinegraph.Cache.DashboardStats,
+        Cinegraph.Cache.AwardImportStats,
+        Cinegraph.ObanPlugins.FestivalInferenceMonitor
+      ]
+    else
+      []
+    end
   end
 
   # Returns child spec for replica repo if configured, otherwise a no-op
