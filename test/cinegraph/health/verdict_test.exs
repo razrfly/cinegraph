@@ -1,6 +1,9 @@
 defmodule Cinegraph.Health.VerdictTest do
   # Pure-logic tests — no DB, no DataCase needed.
-  use ExUnit.Case, async: true
+  # async: false because several tests mutate Application.put_env/2 for
+  # :cinegraph, :health thresholds. Running concurrently would leak
+  # thresholds across tests.
+  use ExUnit.Case, async: false
 
   alias Cinegraph.Health.Verdict
 

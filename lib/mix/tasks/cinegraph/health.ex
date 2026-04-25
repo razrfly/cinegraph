@@ -23,7 +23,20 @@ defmodule Mix.Tasks.Cinegraph.Health do
       OptionParser.parse(args, strict: [json: :boolean, domain: :string])
 
     json? = Keyword.get(opts, :json, false)
-    only_domain = opts |> Keyword.get(:domain) |> normalize_domain()
+    raw_domain = Keyword.get(opts, :domain)
+
+    only_domain =
+      case normalize_domain(raw_domain) do
+        {:ok, d} ->
+          d
+
+        :none ->
+          nil
+
+        {:error, msg} ->
+          Mix.shell().error("✗ #{msg}")
+          System.halt(1)
+      end
 
     verdict = Facade.compute_full_verdict()
 
@@ -31,7 +44,7 @@ defmodule Mix.Tasks.Cinegraph.Health do
       if only_domain do
         case Map.get(verdict.domains, only_domain) do
           nil ->
-            Mix.shell().error("✗ unknown domain '#{only_domain}'")
+            Mix.shell().error("✗ unknown domain '#{raw_domain}'")
             System.halt(1)
 
           domain_data ->
@@ -50,16 +63,15 @@ defmodule Mix.Tasks.Cinegraph.Health do
     end
   end
 
-  defp normalize_domain(nil), do: nil
+  defp normalize_domain(nil), do: :none
+  defp normalize_domain("people"), do: {:ok, :people}
+  defp normalize_domain("movies"), do: {:ok, :movies}
+  defp normalize_domain("festivals"), do: {:ok, :festivals}
+  defp normalize_domain("ratings"), do: {:ok, :ratings}
 
-  defp normalize_domain(s) do
-    case s do
-      "people" -> :people
-      "movies" -> :movies
-      "festivals" -> :festivals
-      "ratings" -> :ratings
-      _ -> nil
-    end
+  defp normalize_domain(other) do
+    {:error,
+     "invalid domain: #{inspect(other)}. valid domains: people, movies, festivals, ratings"}
   end
 
   defp serialize(verdict) do

@@ -41,6 +41,7 @@ defmodule Cinegraph.Health.Completeness do
         movies.with_omdb_pct,
         movies.with_imdb_id_pct,
         people.with_profile_pct,
+        people.with_biography_pct,
         people.with_known_for_pct,
         festivals.with_movie_pct
       ]
@@ -59,7 +60,15 @@ defmodule Cinegraph.Health.Completeness do
   Computes a snapshot and persists it (upsert by `captured_on` UTC date).
   """
   def run_and_persist do
-    snapshot = run()
+    persist(run())
+  end
+
+  @doc """
+  Persists a pre-computed snapshot (returned by `run/0`). Lets callers that
+  need both the snapshot and the persisted log (e.g. `mix
+  cinegraph.completeness --write`) avoid recomputing.
+  """
+  def persist(snapshot) do
     today = Date.utc_today()
     payload = serializable(snapshot)
 
@@ -75,8 +84,13 @@ defmodule Cinegraph.Health.Completeness do
   @doc """
   The most recent `days` entries from `completeness_log`, oldest first
   (for plotting).
+
+  Accepts `:bypass_cache` for symmetry with other Health surfaces; this
+  function reads directly from `completeness_log` and does not cache, so
+  the option is currently a no-op kept to make `Refresh now` callers
+  forward consistently.
   """
-  def history(days \\ 30) do
+  def history(days \\ 30, _opts \\ []) do
     since = Date.add(Date.utc_today(), -(days - 1))
 
     from(c in CompletenessLog,
@@ -88,15 +102,15 @@ defmodule Cinegraph.Health.Completeness do
   end
 
   defp movies_completeness do
-    sql = """
-    SELECT
-      count(*)::bigint AS total,
-      count(*) FILTER (WHERE omdb_data IS NOT NULL)::bigint AS with_omdb,
-      count(*) FILTER (WHERE imdb_id IS NOT NULL AND imdb_id <> '')::bigint AS with_imdb_id
-    FROM movies
-    """
-
-    [[total, with_omdb, with_imdb]] = run_replica_query(sql).rows
+    %{total: total, with_omdb: with_omdb, with_imdb_id: with_imdb} =
+      from(m in "movies",
+        select: %{
+          total: count(m.id),
+          with_omdb: filter(count(m.id), not is_nil(m.omdb_data)),
+          with_imdb_id: filter(count(m.id), not is_nil(m.imdb_id) and m.imdb_id != "")
+        }
+      )
+      |> Repo.replica().one()
 
     %{
       total: total,
@@ -108,16 +122,21 @@ defmodule Cinegraph.Health.Completeness do
   end
 
   defp people_completeness do
-    sql = """
-    SELECT
-      count(*)::bigint AS total,
-      count(*) FILTER (WHERE profile_path IS NOT NULL)::bigint AS with_profile,
-      count(*) FILTER (WHERE biography IS NOT NULL AND biography <> '')::bigint AS with_biography,
-      count(*) FILTER (WHERE known_for_department IS NOT NULL)::bigint AS with_known_for
-    FROM people
-    """
-
-    [[total, with_profile, with_bio, with_known]] = run_replica_query(sql).rows
+    %{
+      total: total,
+      with_profile: with_profile,
+      with_biography: with_bio,
+      with_known_for: with_known
+    } =
+      from(p in "people",
+        select: %{
+          total: count(p.id),
+          with_profile: filter(count(p.id), not is_nil(p.profile_path)),
+          with_biography: filter(count(p.id), not is_nil(p.biography) and p.biography != ""),
+          with_known_for: filter(count(p.id), not is_nil(p.known_for_department))
+        }
+      )
+      |> Repo.replica().one()
 
     %{
       total: total,
@@ -131,14 +150,17 @@ defmodule Cinegraph.Health.Completeness do
   end
 
   defp festivals_completeness do
-    sql = """
-    SELECT
-      (SELECT count(*) FROM festival_ceremonies)::bigint AS ceremonies,
-      (SELECT count(*) FROM festival_nominations)::bigint AS nominations,
-      (SELECT count(*) FROM festival_nominations WHERE movie_id IS NOT NULL)::bigint AS with_movie
-    """
+    ceremonies =
+      Repo.replica().one(from(c in "festival_ceremonies", select: count(c.id))) || 0
 
-    [[ceremonies, nominations, with_movie]] = run_replica_query(sql).rows
+    %{nominations: nominations, with_movie: with_movie} =
+      from(n in "festival_nominations",
+        select: %{
+          nominations: count(n.id),
+          with_movie: filter(count(n.id), not is_nil(n.movie_id))
+        }
+      )
+      |> Repo.replica().one()
 
     %{
       ceremonies: ceremonies,
@@ -146,8 +168,6 @@ defmodule Cinegraph.Health.Completeness do
       with_movie_pct: pct(with_movie, nominations)
     }
   end
-
-  defp run_replica_query(sql), do: Ecto.Adapters.SQL.query!(Repo.replica(), sql, [])
 
   defp pct(_count, 0), do: 0.0
 

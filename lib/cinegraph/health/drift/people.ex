@@ -37,10 +37,11 @@ defmodule Cinegraph.Health.Drift.People do
   def missing_profile_path(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
-    Drift.cached({:people, :missing_profile_path}, @cache_ttl, fn ->
+    Drift.cached({:people, :missing_profile_path, limit}, @cache_ttl, fn ->
       total = total_people()
-      affected = count_where("profile_path IS NULL")
-      examples = examples_where("profile_path IS NULL", "profile_path IS NULL", limit)
+      query = from(p in "people", where: is_nil(p.profile_path))
+      affected = count_query(query)
+      examples = examples_for(query, "profile_path IS NULL", limit)
       Drift.result(:people, :missing_profile_path, total, affected, examples)
     end)
   end
@@ -49,11 +50,11 @@ defmodule Cinegraph.Health.Drift.People do
   def missing_biography(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
-    Drift.cached({:people, :missing_biography}, @cache_ttl, fn ->
+    Drift.cached({:people, :missing_biography, limit}, @cache_ttl, fn ->
       total = total_people()
-      pred = "(biography IS NULL OR biography = '')"
-      affected = count_where(pred)
-      examples = examples_where(pred, "biography missing or blank", limit)
+      query = from(p in "people", where: is_nil(p.biography) or p.biography == "")
+      affected = count_query(query)
+      examples = examples_for(query, "biography missing or blank", limit)
       Drift.result(:people, :missing_biography, total, affected, examples)
     end)
   end
@@ -62,11 +63,11 @@ defmodule Cinegraph.Health.Drift.People do
   def missing_known_for_department(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
-    Drift.cached({:people, :missing_known_for_department}, @cache_ttl, fn ->
+    Drift.cached({:people, :missing_known_for_department, limit}, @cache_ttl, fn ->
       total = total_people()
-      pred = "known_for_department IS NULL"
-      affected = count_where(pred)
-      examples = examples_where(pred, "known_for_department IS NULL", limit)
+      query = from(p in "people", where: is_nil(p.known_for_department))
+      affected = count_query(query)
+      examples = examples_for(query, "known_for_department IS NULL", limit)
       Drift.result(:people, :missing_known_for_department, total, affected, examples)
     end)
   end
@@ -295,25 +296,17 @@ defmodule Cinegraph.Health.Drift.People do
     end)
   end
 
-  defp count_where(predicate) do
-    sql = "SELECT count(*)::bigint FROM people WHERE #{predicate}"
-
-    case Ecto.Adapters.SQL.query!(Repo.replica(), sql, []) do
-      %{rows: [[count]]} -> count
-      _ -> 0
-    end
+  # Counts rows matched by a pre-built Ecto query (parameterized — no
+  # string interpolation of predicates).
+  defp count_query(query) do
+    Repo.replica().one(from(p in subquery(query), select: count())) || 0
   end
 
-  defp examples_where(predicate, reason, limit) do
-    sql = "SELECT id, name FROM people WHERE #{predicate} ORDER BY id DESC LIMIT $1"
-
-    case Ecto.Adapters.SQL.query!(Repo.replica(), sql, [limit]) do
-      %{rows: rows} ->
-        Enum.map(rows, fn [id, name] -> %{id: id, name: name, reason: reason} end)
-
-      _ ->
-        []
-    end
+  # Selects up to `limit` examples from a pre-built Ecto query.
+  defp examples_for(query, reason, limit) do
+    from(p in query, select: %{id: p.id, name: p.name}, order_by: [desc: p.id], limit: ^limit)
+    |> Repo.replica().all()
+    |> Enum.map(&Map.put(&1, :reason, reason))
   end
 
   defp scalar(sql, params \\ []) do

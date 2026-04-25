@@ -3,7 +3,7 @@ defmodule Cinegraph.Health.ActivityTest do
 
   alias Cinegraph.Health.Activity
 
-  describe "today/0 + for_date/1" do
+  describe "today/1 + for_date/2" do
     test "returns the contract shape" do
       activity = Activity.today(bypass_cache: true)
 

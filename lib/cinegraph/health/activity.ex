@@ -52,13 +52,17 @@ defmodule Cinegraph.Health.Activity do
   @doc """
   Counters per day for the last `days` UTC dates (most recent first).
   Used for sparklines.
+
+  Accepts `:bypass_cache` (forwarded to each per-date computation) so the
+  LiveView's "Refresh now" can rebuild sparklines without serving stale
+  cached data.
   """
-  def recent(days \\ 7) when is_integer(days) and days > 0 do
+  def recent(days \\ 7, opts \\ []) when is_integer(days) and days > 0 do
     today = Date.utc_today()
 
     Enum.map(0..(days - 1), fn offset ->
       date = Date.add(today, -offset)
-      for_date(date)
+      for_date(date, opts)
     end)
   end
 
@@ -68,23 +72,43 @@ defmodule Cinegraph.Health.Activity do
 
     %{
       date: date,
-      movies_added: count_inserted_in("movies", day_start, day_end),
-      people_added: count_inserted_in("people", day_start, day_end),
-      ceremonies_updated: count_updated_in("festival_ceremonies", day_start, day_end),
+      movies_added: count_movies_inserted(day_start, day_end),
+      people_added: count_people_inserted(day_start, day_end),
+      ceremonies_updated: count_ceremonies_updated(day_start, day_end),
       omdb_fetches: count_omdb_fetches_in(day_start, day_end),
       jobs_completed: ObanReader.count_completed_in(day_start, day_end),
       jobs_failed: ObanReader.count_failed_in(day_start, day_end)
     }
   end
 
-  defp count_inserted_in(table, start_dt, end_dt) do
-    sql = "SELECT count(*)::bigint FROM #{table} WHERE inserted_at >= $1 AND inserted_at < $2"
-    do_count(sql, [start_dt, end_dt])
+  # Ecto queries (parameterized, no string interpolation of values or sources).
+  # Replica failures raise via Repo.replica().one and are caught by the
+  # LiveView's safe/1 wrapper.
+  defp count_movies_inserted(start_dt, end_dt) do
+    from(m in "movies",
+      where: m.inserted_at >= ^start_dt and m.inserted_at < ^end_dt,
+      select: count(m.id)
+    )
+    |> Repo.replica().one()
+    |> Kernel.||(0)
   end
 
-  defp count_updated_in(table, start_dt, end_dt) do
-    sql = "SELECT count(*)::bigint FROM #{table} WHERE updated_at >= $1 AND updated_at < $2"
-    do_count(sql, [start_dt, end_dt])
+  defp count_people_inserted(start_dt, end_dt) do
+    from(p in "people",
+      where: p.inserted_at >= ^start_dt and p.inserted_at < ^end_dt,
+      select: count(p.id)
+    )
+    |> Repo.replica().one()
+    |> Kernel.||(0)
+  end
+
+  defp count_ceremonies_updated(start_dt, end_dt) do
+    from(c in "festival_ceremonies",
+      where: c.updated_at >= ^start_dt and c.updated_at < ^end_dt,
+      select: count(c.id)
+    )
+    |> Repo.replica().one()
+    |> Kernel.||(0)
   end
 
   defp count_omdb_fetches_in(start_dt, end_dt) do
@@ -94,12 +118,5 @@ defmodule Cinegraph.Health.Activity do
     )
     |> Repo.replica().one()
     |> Kernel.||(0)
-  end
-
-  defp do_count(sql, params) do
-    case Repo.replica().query(sql, params) do
-      {:ok, %{rows: [[count]]}} -> count
-      _ -> 0
-    end
   end
 end

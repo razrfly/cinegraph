@@ -11,7 +11,7 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorkerTest do
   end
 
   describe "Oban worker config" do
-    test "uses :tmdb queue, max_attempts 3, person_id-keyed uniqueness" do
+    test "uses :tmdb queue and max_attempts 3" do
       # The Oban worker macro adds these via @meta — the easiest check is to
       # build a Changeset and inspect its changes.
       changeset = PersonTmdbRefreshWorker.new(%{"person_id" => 42})
