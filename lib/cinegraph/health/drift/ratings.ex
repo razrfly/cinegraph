@@ -14,6 +14,7 @@ defmodule Cinegraph.Health.Drift.Ratings do
   catalog-wide drift signal. The denominator difference is intentional.
   """
 
+  import Ecto.Query
   alias Cinegraph.Health.Drift
   alias Cinegraph.Repo
 
@@ -58,64 +59,43 @@ defmodule Cinegraph.Health.Drift.Ratings do
     limit = Keyword.get(opts, :limit, @example_limit)
 
     Drift.cached({:ratings, :rt_metacritic_gap, limit}, @cache_ttl, fn ->
-      total =
-        scalar("""
-        SELECT count(*)::bigint FROM movies
-        WHERE canonical_sources != '{}'::jsonb
-        """)
-
-      affected =
-        scalar("""
-        SELECT count(*)::bigint FROM movies m
-        WHERE m.canonical_sources != '{}'::jsonb
-        AND NOT EXISTS (
-          SELECT 1 FROM external_metrics em
-          WHERE em.movie_id = m.id AND em.source = 'rotten_tomatoes' AND em.metric_type = 'tomatometer'
+      canonical_base =
+        from(m in "movies",
+          where: fragment("? != '{}'::jsonb", m.canonical_sources)
         )
-        AND NOT EXISTS (
-          SELECT 1 FROM external_metrics em
-          WHERE em.movie_id = m.id AND em.source = 'metacritic' AND em.metric_type = 'metascore'
-        )
-        """)
 
-      sql_examples = """
-      SELECT m.id, m.title, m.release_date FROM movies m
-      WHERE m.canonical_sources != '{}'::jsonb
-      AND NOT EXISTS (
-        SELECT 1 FROM external_metrics em
-        WHERE em.movie_id = m.id AND em.source = 'rotten_tomatoes' AND em.metric_type = 'tomatometer'
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM external_metrics em
-        WHERE em.movie_id = m.id AND em.source = 'metacritic' AND em.metric_type = 'metascore'
-      )
-      ORDER BY m.id DESC LIMIT $1
-      """
+      missing_both_base =
+        from(m in canonical_base,
+          where:
+            fragment(
+              "NOT EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'rotten_tomatoes' AND em.metric_type = 'tomatometer')",
+              m.id
+            ) and
+              fragment(
+                "NOT EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'metacritic' AND em.metric_type = 'metascore')",
+                m.id
+              )
+        )
+
+      total = Repo.replica().one(from(m in canonical_base, select: count(m.id))) || 0
+      affected = Repo.replica().one(from(m in missing_both_base, select: count(m.id))) || 0
 
       examples =
-        case Ecto.Adapters.SQL.query!(Repo.replica(), sql_examples, [limit]) do
-          %{rows: rows} ->
-            Enum.map(rows, fn [id, title, rd] ->
-              %{
-                id: id,
-                title: title,
-                release_date: rd,
-                reason: "no Rotten Tomatoes or Metacritic rating (canonical-list scope)"
-              }
-            end)
-
-          _ ->
-            []
-        end
+        from(m in missing_both_base,
+          select: %{id: m.id, title: m.title, release_date: m.release_date},
+          order_by: [desc: m.id],
+          limit: ^limit
+        )
+        |> Repo.replica().all()
+        |> Enum.map(
+          &Map.put(
+            &1,
+            :reason,
+            "no Rotten Tomatoes or Metacritic rating (canonical-list scope)"
+          )
+        )
 
       Drift.result(:ratings, :rt_metacritic_gap, total, affected, examples)
     end)
-  end
-
-  defp scalar(sql, params \\ []) do
-    case Ecto.Adapters.SQL.query!(Repo.replica(), sql, params) do
-      %{rows: [[v]]} -> v
-      _ -> 0
-    end
   end
 end

@@ -48,8 +48,7 @@ defmodule Cinegraph.Health.Drift.PeopleTest do
         insert_person!(%{tmdb_id: 102, name: "Canonical HasBio", biography: "Hello"})
         |> tap(&insert_credit!(&1, canonical_movie))
 
-      # Should NOT count: in canonical list, blank biography (treated as missing)
-      # — this one SHOULD count actually (biography == "")
+      # Should count: blank biography (biography == "") is treated as missing
       blank = insert_person!(%{tmdb_id: 103, name: "Canonical Blank", biography: ""})
       insert_credit!(blank, canonical_movie)
 
