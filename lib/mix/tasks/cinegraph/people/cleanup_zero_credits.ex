@@ -29,8 +29,19 @@ defmodule Mix.Tasks.Cinegraph.People.CleanupZeroCredits do
   def run(args) do
     Mix.Task.run("app.start")
 
-    {opts, _, _} =
+    {opts, extra_args, invalid} =
       OptionParser.parse(args, strict: [phase: :string, dry_run: :boolean, limit: :integer])
+
+    cond do
+      invalid != [] ->
+        Mix.raise("Invalid option(s): #{inspect(invalid)}")
+
+      extra_args != [] ->
+        Mix.raise("Unexpected positional argument(s): #{inspect(extra_args)}")
+
+      true ->
+        :ok
+    end
 
     phase = Keyword.get(opts, :phase, "enqueue")
     runtime_opts = Keyword.take(opts, [:dry_run, :limit])
