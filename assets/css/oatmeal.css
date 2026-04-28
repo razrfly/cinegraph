@@ -1,0 +1,8 @@
+/* Oatmeal (mist_instrument) marketing theme — standalone Tailwind build.
+ * Intentionally minimal: only Tailwind utilities, no app.css.
+ * Keeps the Oatmeal theme fully isolated from the main app styles.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

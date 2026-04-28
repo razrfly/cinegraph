@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-cg-bg">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Cinegraph · Neutral Theme</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='2' width='20' height='20' rx='4' fill='%2316140f'/%3E%3Cpath d='M7 12 L11 8 L15 14 L17 11' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='7' cy='12' r='1.4' fill='%23fff'/%3E%3Ccircle cx='11' cy='8' r='1.4' fill='%23fff'/%3E%3Ccircle cx='15' cy='14' r='1.4' fill='%23fff'/%3E%3Ccircle cx='17' cy='11' r='1.4' fill='%23fff'/%3E%3C/svg%3E"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/cinegraph_neutral.css"} />
+    <style>
+      /* System-font stack — matches the design source verbatim */
+      html, body {
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont,
+                     "Segoe UI", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+    </style>
+  </head>
+  <body class="bg-cg-bg text-cg-ink antialiased">
+    <NeutralComponents.n_top_nav active="Movies" />
+
+    <main class="max-w-[1440px] mx-auto px-8 pt-6 pb-16">
+      <%!-- ───────────── 1. DISCOVER HERO ───────────── --%>
+      <section class="mb-9">
+        <div class="flex items-baseline justify-between mb-[14px]">
+          <div>
+            <h1 class="text-[28px] font-semibold tracking-[-.018em] text-cg-ink leading-[1.15]">
+              Discover.
+            </h1>
+            <div class="text-[13.5px] text-cg-ink3 mt-1">
+              Films, people, lists & data — all canonically sourced.
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <NeutralComponents.n_btn variant="ghost" size="md" icon="◌">
+              Random film
+            </NeutralComponents.n_btn>
+            <NeutralComponents.n_btn variant="secondary" size="md">
+              Browse all
+            </NeutralComponents.n_btn>
+          </div>
+        </div>
+        <NeutralComponents.n_search_hero genres={@genres} />
+      </section>
+
+      <%!-- ───────────── 2. INSIGHT STRIP ───────────── --%>
+      <section class="mb-9">
+        <div class="grid grid-cols-4 gap-3">
+          <NeutralComponents.n_insight_tile
+            label="Avg. cultural relevance"
+            value={@insights.cri.current}
+            delta={trunc(@insights.cri.delta)}
+            sub={@insights.cri.sub}
+            spark_seed={2}
+          />
+          <NeutralComponents.n_insight_tile
+            label="Awards events tracked"
+            value={@insights.awards.current}
+            delta={@insights.awards.delta}
+            sub={@insights.awards.sub}
+            spark_seed={5}
+          />
+          <NeutralComponents.n_insight_tile
+            label="People in graph"
+            value={@insights.people.current}
+            delta={@insights.people.delta}
+            sub={@insights.people.sub}
+            spark_seed={3}
+          />
+          <NeutralComponents.n_insight_tile
+            label="Canon lists synced"
+            value={@insights.canon.current}
+            delta={@insights.canon.delta}
+            sub={@insights.canon.sub}
+            spark_seed={7}
+          />
+        </div>
+      </section>
+
+      <%!-- ───────────── 3. TRENDING THIS WEEK ───────────── --%>
+      <section class="mb-[42px]">
+        <NeutralComponents.n_section_header
+          title="Trending this week"
+          subtitle="Ranked by combined critical, audience and cultural movement."
+        >
+          <:action>
+            <div class="flex gap-[10px] items-center">
+              <NeutralComponents.n_tabs
+                tabs={["This week", "This month", "All time"]}
+                value="This week"
+              />
+              <NeutralComponents.n_link_action>See all</NeutralComponents.n_link_action>
+            </div>
+          </:action>
+        </NeutralComponents.n_section_header>
+        <div class="grid grid-cols-6 gap-[18px]">
+          <NeutralComponents.n_film_card
+            :for={{film, i} <- Enum.with_index(Enum.take(@films, 6))}
+            film={film}
+            rank={i + 1}
+          />
+        </div>
+      </section>
+
+      <%!-- ───────────── 4. PEOPLE + UPDATES ROW ───────────── --%>
+      <section class="grid grid-cols-[1.1fr_1fr] gap-8 mb-[42px]">
+        <div>
+          <NeutralComponents.n_section_header
+            title="Popular people"
+            subtitle="Cast, directors, and cinematographers gaining attention."
+          >
+            <:action>
+              <NeutralComponents.n_link_action>See all</NeutralComponents.n_link_action>
+            </:action>
+          </NeutralComponents.n_section_header>
+          <div class="bg-cg-surface border border-cg-border rounded-lg p-1">
+            <NeutralComponents.n_person_card
+              :for={{person, i} <- Enum.with_index(Enum.take(@people, 7))}
+              person={person}
+              rank={i + 1}
+            />
+          </div>
+        </div>
+        <div>
+          <NeutralComponents.n_section_header
+            title="Recently updated"
+            subtitle="Awards, releases, and data ingestions in the last 48h."
+          >
+            <:action>
+              <NeutralComponents.n_link_action>Activity log</NeutralComponents.n_link_action>
+            </:action>
+          </NeutralComponents.n_section_header>
+          <div class="bg-cg-surface border border-cg-border rounded-lg pt-1 px-[18px] pb-2">
+            <NeutralComponents.n_update_row :for={u <- @updates} update={u} />
+          </div>
+        </div>
+      </section>
+
+      <%!-- ───────────── 5. COLLECTIONS ───────────── --%>
+      <section class="mb-[42px]">
+        <NeutralComponents.n_section_header
+          title="Collections & curated lists"
+          subtitle="Canonical and editorial lists tracked across the graph."
+        >
+          <:action>
+            <NeutralComponents.n_link_action>Browse 312 lists</NeutralComponents.n_link_action>
+          </:action>
+        </NeutralComponents.n_section_header>
+        <div class="grid grid-cols-4 gap-[14px]">
+          <NeutralComponents.n_list_card
+            :for={list <- Enum.take(@lists, 4)}
+            list={list}
+            films={Enum.slice(@films, rem(String.length(list.id), 8), 4)}
+          />
+        </div>
+      </section>
+
+      <%!-- ───────────── 6. GRAPH CALLOUT ───────────── --%>
+      <section class="mb-[42px] bg-cg-surface border border-cg-border rounded-[10px] px-[26px] py-6">
+        <div class="grid grid-cols-[1.05fr_1fr] gap-8 items-center">
+          <div>
+            <div class="flex items-center gap-2 mb-[10px]">
+              <NeutralComponents.n_pill tone="ink" size="xs">BETA</NeutralComponents.n_pill>
+              <NeutralComponents.n_eyebrow>Data Explorer · GraphQL</NeutralComponents.n_eyebrow>
+            </div>
+            <h3 class="text-2xl font-semibold tracking-[-.02em] text-cg-ink leading-[1.2]">
+              Trace the connections behind any film.
+            </h3>
+            <p class="text-sm text-cg-ink3 mt-2 leading-[1.55] max-w-[480px]">
+              Query 48,923 people across 16,420 films and 312 canonical lists. Walk filmographies,
+              collaborations, and influence — visually or via API.
+            </p>
+            <div class="flex gap-[10px] mt-4">
+              <NeutralComponents.n_btn variant="primary" size="md">
+                Open data explorer →
+              </NeutralComponents.n_btn>
+              <NeutralComponents.n_btn variant="secondary" size="md">
+                View GraphQL schema
+              </NeutralComponents.n_btn>
+            </div>
+            <div class="flex gap-[18px] mt-[18px] text-[11.5px] text-cg-mute">
+              <span><b class="text-cg-ink2 tabular-nums">16,420</b> films</span>
+              <span><b class="text-cg-ink2 tabular-nums">48,923</b> people</span>
+              <span><b class="text-cg-ink2 tabular-nums">2.1M</b> credits</span>
+              <span><b class="text-cg-ink2 tabular-nums">312</b> lists</span>
+            </div>
+          </div>
+          <div>
+            <NeutralComponents.n_graph_preview graph={@graph} height={300} />
+          </div>
+        </div>
+      </section>
+
+      <%!-- ───────────── 7. FOOTER ───────────── --%>
+      <footer class="pt-6 border-t border-cg-border flex justify-between items-center text-[12px] text-cg-mute">
+        <div class="flex items-center gap-[14px]">
+          <NeutralComponents.n_brand size={15} />
+          <span>· Cultural relevance, measured.</span>
+        </div>
+        <div class="flex gap-[18px]">
+          <a href="#" class="text-cg-ink3 no-underline">Methodology</a>
+          <a href="#" class="text-cg-ink3 no-underline">API</a>
+          <a href="#" class="text-cg-ink3 no-underline">Sources</a>
+          <a href="#" class="text-cg-ink3 no-underline">About</a>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>
