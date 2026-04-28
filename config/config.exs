@@ -157,7 +157,14 @@ config :cinegraph, Oban,
        # Daily OMDb gap fill + stale refresh at 3 AM UTC
        {"0 3 * * *", Cinegraph.Workers.RatingsRefreshWorker},
        # Daily completeness snapshot at 5:05 AM UTC (after the 4 AM TMDb sync settles) — #722
-       {"5 5 * * *", Cinegraph.Workers.CompletenessSnapshotWorker}
+       {"5 5 * * *", Cinegraph.Workers.CompletenessSnapshotWorker},
+       # Homeostasis sweepers (#735 Phase 3.1, #739 Phase A) — autonomously
+       # drain the dashboard's drift backlogs. Capped per-run; idempotent.
+       # Biography refresh: TMDb-rate-limited, capped at 5,000/day.
+       {"30 5 * * *", Cinegraph.Workers.BiographyRefreshSweeper},
+       # Festival person-resolver: capped at 2,000/day, runs after biographies
+       # so resolver lookups can use newly-populated person rows.
+       {"0 6 * * *", Cinegraph.Workers.FestivalPersonResolverSweeper}
      ]}
     # PQS scheduling (temporarily disabled for basic functionality)
     # TODO: Fix cron job configuration format
