@@ -20,7 +20,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Queues do
   @impl Mix.Task
   def run(args) do
     {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean])
-    Mix.Task.run("app.start")
+    # See prod/health.ex: skip app.start to keep stdout clean for jq.
 
     expr = ~s|IO.puts(Jason.encode!(Cinegraph.Health.Queues.snapshot(bypass_cache: true)))|
 

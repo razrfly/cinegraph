@@ -1,17 +1,19 @@
 defmodule Cinegraph.ProdRpc do
   @moduledoc """
-  Helpers for `mix cinegraph.prod.*` tasks (#739 Phase C). Wraps the
-  `ssh + bin/cinegraph eval` recipe and returns parsed JSON results so dev
-  terminals can read live prod numbers without a DB pull.
+  Helpers for `mix cinegraph.prod.*` tasks (#739 Phase C). Wraps
+  `kamal app exec` so dev terminals can read live prod numbers without
+  a DB pull or manual SSH.
+
+  Cinegraph deploys via Kamal (see `config/deploy.yml`); the release binary
+  lives at `/app/bin/cinegraph` inside the running Docker container, not on
+  the host filesystem. Running maintenance commands therefore goes through
+  `kamal app exec` rather than direct `ssh + bin/cinegraph eval`.
 
   ## Configuration
 
-    * `REMOTE_SSH_HOST` — host to ssh into. Default `"192.168.1.205"` (matches
-      `mix db.pull_production`). Override for staging or a different prod box.
-    * `REMOTE_APP_BIN` — full path to the release binary on the remote host,
-      e.g. `"/home/cinegraph/cinegraph/bin/cinegraph"`. **Required** — no
-      default, because the path depends on deploy layout. Set in your shell
-      rc / `.env`.
+  Reads the canonical Kamal config (`config/deploy.yml`) — no env vars
+  required. Just have the `kamal` CLI on PATH (it's installed via mise in
+  this project; see `mix.exs` / `mise.toml`).
 
   ## Example
 
@@ -21,19 +23,17 @@ defmodule Cinegraph.ProdRpc do
   See `MAINTENANCE.md` for end-to-end recipes.
   """
 
-  @ssh_opts ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
-
   @typedoc "Reasons `eval_json/1` and `eval_raw/1` may fail."
   @type error_reason ::
-          :app_bin_not_set
-          | {:ssh_failed, exit_code :: integer(), output :: binary()}
+          :kamal_not_found
+          | {:kamal_failed, exit_code :: integer(), output :: binary()}
           | {:eval_failed, output :: binary()}
           | {:json_parse_failed, raw_output :: binary(), error :: term()}
 
   @doc """
-  Run `expression` on the prod node, expect it to write a JSON document to
-  stdout (typically via `IO.puts(Jason.encode!(...))`), and return the parsed
-  Elixir term.
+  Run `expression` in the prod container, expect it to write a JSON document
+  to stdout (typically via `IO.puts(Jason.encode!(...))`), and return the
+  parsed Elixir term.
 
   Returns `{:ok, decoded}` on success; `{:error, reason}` on any failure.
   """
@@ -45,14 +45,14 @@ defmodule Cinegraph.ProdRpc do
   end
 
   @doc """
-  Run `expression` on the prod node and return raw stdout. Use `eval_json/1`
-  unless you need the unparsed output.
+  Run `expression` in the prod container and return raw stdout. Use
+  `eval_json/1` unless you need the unparsed output.
   """
   @spec eval_raw(binary()) :: {:ok, binary()} | {:error, error_reason()}
   def eval_raw(expression) when is_binary(expression) do
-    with {:ok, bin} <- app_bin(),
-         {:ok, args} <- build_args(bin, expression) do
-      run_ssh(args)
+    with {:ok, kamal_path} <- locate_kamal(),
+         args = build_kamal_args(expression) do
+      run_kamal(kamal_path, args)
     end
   end
 
@@ -72,8 +72,8 @@ defmodule Cinegraph.ProdRpc do
   end
 
   @doc """
-  Format and print an error from `eval_json/1` / `eval_raw/1` to stderr-
-  equivalent (Mix.shell().error). Exits non-zero so CI/scripts can detect.
+  Format and print an error to stderr-equivalent and halt non-zero so
+  CI/scripts can detect.
   """
   @spec print_error(error_reason()) :: no_return()
   def print_error(reason) do
@@ -84,24 +84,57 @@ defmodule Cinegraph.ProdRpc do
   # ===== private =====
 
   @doc false
-  def app_bin do
-    case System.get_env("REMOTE_APP_BIN") do
-      nil -> {:error, :app_bin_not_set}
-      "" -> {:error, :app_bin_not_set}
+  def locate_kamal do
+    case System.find_executable("kamal") do
+      nil -> {:error, :kamal_not_found}
       path -> {:ok, path}
     end
   end
 
   @doc false
-  def build_args(app_bin, expression) when is_binary(app_bin) and is_binary(expression) do
-    # The release binary expects: <bin> eval "<expression>"
-    # We pass it as a single shell-string to ssh because ssh joins remote args
-    # with spaces. Wrapping the expression in single quotes is unsafe (single
-    # quotes in the expression would break it); instead, we'll let the user's
-    # expressions use double-quote-safe syntax (sigils, escaped strings) and
-    # wrap with double quotes here.
-    remote_command = ~s|#{app_bin} eval #{quote_expression(expression)}|
-    {:ok, @ssh_opts ++ [host(), remote_command]}
+  def build_kamal_args(expression) when is_binary(expression) do
+    # `kamal app exec --reuse --quiet --primary --env PHX_SERVER=false "<cmd>"`
+    # runs <cmd> inside the already-running cinegraph container. The container
+    # shell sees:
+    #
+    #   bin/cinegraph eval '<wrapped_expression>'
+    #
+    # `bin/cinegraph eval` boots a fresh BEAM in the container with no
+    # supervision tree started. Health/Facade calls reach for
+    # `Cinegraph.Health.TaskSupervisor` which only exists once the app is
+    # supervised, so we prepend `Application.ensure_all_started(:cinegraph)`.
+    # The PHX_SERVER=false override stops the eval'd BEAM from binding port
+    # 4000 (already held by the live BEAM in the same container).
+    # Silence prod-side logging *before* starting the app, otherwise Repo.Metrics,
+    # DashboardStats, MoviesCacheWarmer, etc. flood stdout with INFO/WARNING
+    # lines that mix with the JSON we want to parse.
+    wrapped =
+      ":logger.set_primary_config(:level, :critical); " <>
+        "Application.ensure_all_started(:cinegraph); " <>
+        expression
+    quoted_expr = single_quote(wrapped)
+    # The full pipeline: System.cmd → kamal → SSHKit → ssh → remote-shell →
+    # docker exec → container-shell. Splitting `sh -c 'cmd'` across multiple
+    # System.cmd args gets dropped (kamal only forwards the first positional).
+    # Passing the whole thing as ONE arg lets the remote shell parse the
+    # quotes, then docker exec correctly invokes `sh -c "..."` in the
+    # container. Outer double quotes survive ssh; inner single quotes survive
+    # the container shell wrap.
+    # `unset PHX_SERVER` (rather than =false): runtime.exs checks for the
+    # var's *presence*, not value. The container starts with PHX_SERVER=true;
+    # we have to clear it entirely or the endpoint will try to bind port 4000
+    # (already held by the live BEAM in this container) and the whole
+    # supervision tree will roll back with :eaddrinuse.
+    shell_command = ~s|sh -c "unset PHX_SERVER; bin/cinegraph eval #{quoted_expr}"|
+
+    [
+      "app",
+      "exec",
+      "--reuse",
+      "--quiet",
+      "--primary",
+      shell_command
+    ]
   end
 
   @doc false
@@ -109,68 +142,72 @@ defmodule Cinegraph.ProdRpc do
     trimmed = String.trim(raw)
 
     case Jason.decode(trimmed) do
-      {:ok, decoded} ->
-        {:ok, decoded}
-
-      {:error, error} ->
-        {:error, {:json_parse_failed, raw, error}}
+      {:ok, decoded} -> {:ok, decoded}
+      {:error, error} -> {:error, {:json_parse_failed, raw, error}}
     end
   end
 
-  defp host, do: System.get_env("REMOTE_SSH_HOST", "192.168.1.205")
-
-  # Wrap the eval expression as a double-quoted shell string. The expression
-  # will pass through ssh → remote shell → `cinegraph eval "..."`. Escape
-  # double quotes and backslashes so the remote shell sees the original.
-  defp quote_expression(expression) do
-    escaped =
-      expression
-      |> String.replace("\\", "\\\\")
-      |> String.replace("\"", "\\\"")
-      |> String.replace("$", "\\$")
-      |> String.replace("`", "\\`")
-
-    ~s|"#{escaped}"|
+  # POSIX-safe single-quote wrapping: 'foo' or 'foo'\''bar' for embedded quotes.
+  defp single_quote(s) do
+    "'" <> String.replace(s, "'", "'\\''") <> "'"
   end
 
-  defp run_ssh(args) do
-    case System.cmd("ssh", args, stderr_to_stdout: true) do
-      {output, 0} -> {:ok, output}
+  defp run_kamal(path, args) do
+    # `kamal app exec --quiet` still emits some logging on stderr; capture
+    # both, then strip kamal's prefix lines from stdout if present. The
+    # actual eval output (our JSON) is the part we care about.
+    case System.cmd(path, args, stderr_to_stdout: false) do
+      {output, 0} -> {:ok, strip_kamal_noise(output)}
       {output, code} -> classify_failure(output, code)
     end
   end
 
-  # SSH itself returned non-zero. Distinguish ssh-layer errors from
-  # eval-runtime errors by sniffing output.
+  # `kamal app exec` prefixes lines with INFO/console banners even with -q.
+  # The eval output is whatever stays after we drop those. Also handle the
+  # case where kamal returns the raw output cleanly (which is what `--quiet`
+  # is supposed to do — keep the strip logic defensive).
+  defp strip_kamal_noise(output) do
+    output
+    |> String.split("\n")
+    |> Enum.reject(fn line ->
+      String.starts_with?(line, "INFO ") or
+        String.starts_with?(line, "Running") or
+        String.starts_with?(line, "Finished ") or
+        String.starts_with?(line, "Launched ") or
+        String.starts_with?(line, "App Host:")
+    end)
+    |> Enum.join("\n")
+    |> String.trim()
+  end
+
   defp classify_failure(output, exit_code) do
     cond do
       String.contains?(output, "Permission denied") or
         String.contains?(output, "Could not resolve hostname") or
           String.contains?(output, "Connection refused") or
-            String.contains?(output, "Connection timed out") ->
-        {:error, {:ssh_failed, exit_code, output}}
+            String.contains?(output, "Connection timed out") or
+              String.contains?(output, "No such container") ->
+        {:error, {:kamal_failed, exit_code, output}}
 
       true ->
         {:error, {:eval_failed, output}}
     end
   end
 
-  defp format_error(:app_bin_not_set) do
+  defp format_error(:kamal_not_found) do
     """
-    REMOTE_APP_BIN is not set. This is the path to the cinegraph release binary on the prod host, e.g.:
-
-        export REMOTE_APP_BIN=/home/cinegraph/cinegraph/bin/cinegraph
-
-    Set it in your shell rc or .env. See MAINTENANCE.md for details.
+    kamal CLI not found on PATH. Cinegraph deploys with Kamal — install it via
+    mise (already pinned in this project's mise.toml) or the kamal docs:
+    https://kamal-deploy.org/docs/installation/
     """
   end
 
-  defp format_error({:ssh_failed, code, output}) do
-    "SSH to #{host()} failed (exit #{code}):\n#{String.trim(output)}"
+  defp format_error({:kamal_failed, code, output}) do
+    "kamal app exec failed (exit #{code}):\n#{String.trim(output)}"
   end
 
   defp format_error({:eval_failed, output}) do
-    "Eval on #{host()} failed:\n#{String.trim(output)}"
+    "Eval inside prod container failed:\n#{String.trim(output)}"
   end
 
   defp format_error({:json_parse_failed, raw, _err}) do
