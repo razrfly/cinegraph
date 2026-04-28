@@ -87,7 +87,7 @@ defmodule Cinegraph.Maintenance.ResolvePersons do
                 ":limit must be a positive integer or nil, got: #{inspect(other)}"
       end
 
-    ids = Repo.replica().all(capped)
+    ids = Repo.all(capped)
     found = length(ids)
     dry_run? = Keyword.get(opts, :dry_run, false)
 
