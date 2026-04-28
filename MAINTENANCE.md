@@ -81,7 +81,7 @@ than the daily caps allow.
 
 ## Reading prod stats from dev
 
-#739 Phase C ships ergonomic mix tasks that do the SSH + eval + parse for you.
+\#739 Phase C ships ergonomic mix tasks that do the SSH + eval + parse for you.
 Set `REMOTE_APP_BIN` once (in your shell rc or `.env`):
 
 ```sh

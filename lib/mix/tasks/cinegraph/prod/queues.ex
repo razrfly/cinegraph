@@ -22,7 +22,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Queues do
     {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean])
     Mix.Task.run("app.start")
 
-    expr = ~s|IO.puts(Jason.encode!(Cinegraph.Health.Queues.snapshot()))|
+    expr = ~s|IO.puts(Jason.encode!(Cinegraph.Health.Queues.snapshot(bypass_cache: true)))|
 
     case ProdRpc.eval_json(expr) do
       {:ok, snapshot} -> ProdRpc.print(snapshot, opts)

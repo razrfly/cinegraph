@@ -21,7 +21,12 @@ defmodule Mix.Tasks.Cinegraph.Prod.Completeness do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean, history: :integer])
+    {opts, _, invalid} = OptionParser.parse(args, strict: [json: :boolean, history: :integer])
+
+    if invalid != [] do
+      Mix.raise("Invalid arguments: #{inspect(invalid)}")
+    end
+
     Mix.Task.run("app.start")
 
     expr =

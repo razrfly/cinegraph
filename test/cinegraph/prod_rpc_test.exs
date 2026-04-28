@@ -8,8 +8,17 @@ defmodule Cinegraph.ProdRpcTest do
 
   describe "app_bin/0" do
     test "returns {:error, :app_bin_not_set} when env var unset" do
+      original = System.get_env("REMOTE_APP_BIN")
       System.delete_env("REMOTE_APP_BIN")
-      assert ProdRpc.app_bin() == {:error, :app_bin_not_set}
+
+      try do
+        assert ProdRpc.app_bin() == {:error, :app_bin_not_set}
+      after
+        case original do
+          nil -> System.delete_env("REMOTE_APP_BIN")
+          val -> System.put_env("REMOTE_APP_BIN", val)
+        end
+      end
     end
 
     test "returns {:error, :app_bin_not_set} when env var empty" do
