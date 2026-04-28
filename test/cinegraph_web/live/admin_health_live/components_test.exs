@@ -100,6 +100,50 @@ defmodule CinegraphWeb.AdminHealthLive.ComponentsTest do
       assert html =~ "View details"
       assert html =~ ~s(phx-value-domain="people")
     end
+
+    test "renders the unknown-count warning line when unknown_count > 0" do
+      html =
+        render_component(&drift_card/1,
+          domain: :people,
+          title: "PEOPLE",
+          status: :red,
+          headline: "profile-photo coverage unavailable — see drawer",
+          signals: [],
+          unknown_count: 3
+        )
+
+      assert html =~ "3 checks unavailable"
+      assert html =~ "profile-photo coverage unavailable"
+    end
+
+    test "omits the unknown-count warning line when unknown_count is 0" do
+      html =
+        render_component(&drift_card/1,
+          domain: :people,
+          title: "PEOPLE",
+          status: :green,
+          headline: "all clear",
+          signals: [],
+          unknown_count: 0
+        )
+
+      refute html =~ "unavailable"
+    end
+
+    test "warning line uses singular 'check' when unknown_count == 1" do
+      html =
+        render_component(&drift_card/1,
+          domain: :movies,
+          title: "MOVIES",
+          status: :unknown,
+          headline: "TMDb gap data unavailable — see drawer",
+          signals: [],
+          unknown_count: 1
+        )
+
+      assert html =~ "1 check unavailable"
+      refute html =~ "1 checks"
+    end
   end
 
   describe "queue_strip/1" do

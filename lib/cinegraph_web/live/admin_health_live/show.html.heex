@@ -114,6 +114,7 @@
             status={people_props.status}
             headline={people_props.headline}
             signals={people_props.signals}
+            unknown_count={people_props.unknown_count}
           />
           <% movies_props = domain_card_props(verdict, :movies) %>
           <.drift_card
@@ -122,6 +123,7 @@
             status={movies_props.status}
             headline={movies_props.headline}
             signals={movies_props.signals}
+            unknown_count={movies_props.unknown_count}
           />
           <% festivals_props = domain_card_props(verdict, :festivals) %>
           <.drift_card
@@ -130,6 +132,7 @@
             status={festivals_props.status}
             headline={festivals_props.headline}
             signals={festivals_props.signals}
+            unknown_count={festivals_props.unknown_count}
           />
           <% ratings_props = domain_card_props(verdict, :ratings) %>
           <.drift_card
@@ -138,6 +141,7 @@
             status={ratings_props.status}
             headline={ratings_props.headline}
             signals={ratings_props.signals}
+            unknown_count={ratings_props.unknown_count}
           />
         </div>
     <% end %>

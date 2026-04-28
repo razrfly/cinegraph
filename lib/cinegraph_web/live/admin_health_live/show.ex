@@ -186,14 +186,21 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
         case Map.get(domains, domain) do
           %{status: status, checks: checks} ->
             top = top_signals(checks, 3)
-            %{status: status, signals: top, headline: headline_for(domain, checks)}
+            unknown_count = Enum.count(checks, fn c -> c.blocked_reason != nil end)
+
+            %{
+              status: status,
+              signals: top,
+              headline: headline_for(domain, checks),
+              unknown_count: unknown_count
+            }
 
           _ ->
-            %{status: :unknown, signals: [], headline: "no data"}
+            %{status: :unknown, signals: [], headline: "no data", unknown_count: 0}
         end
 
       _ ->
-        %{status: :unknown, signals: [], headline: "no data"}
+        %{status: :unknown, signals: [], headline: "no data", unknown_count: 0}
     end
   end
 
@@ -218,35 +225,48 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
     check_atom |> Atom.to_string() |> String.replace("_", " ")
   end
 
+  # Each clause requires `blocked_reason: nil` on the source check, so
+  # crashed/uncached checks fall through to an explicit "unavailable" string
+  # instead of degrading to a green-looking literal. Pairs with the
+  # `unknown_count` warning line on the card.
   defp headline_for(:people, checks) do
     case Enum.find(checks, &(&1.check == :missing_profile_path)) do
-      %{affected_pct: pct} -> "#{Float.round(100.0 - pct, 1)}% of people have a profile photo"
-      _ -> "TMDb coverage"
+      %{blocked_reason: nil, affected_pct: pct} ->
+        "#{Float.round(100.0 - pct, 1)}% of people have a profile photo"
+
+      _ ->
+        "profile-photo coverage unavailable — see drawer"
     end
   end
 
   defp headline_for(:movies, checks) do
     case Enum.find(checks, &(&1.check == :year_gap)) do
-      %{total_population: total, affected_count: missing} when total > 0 ->
+      %{blocked_reason: nil, total_population: total, affected_count: missing} when total > 0 ->
         "#{format_int(total - missing)} / #{format_int(total)} vs TMDb"
 
       _ ->
-        "TMDb gap"
+        "TMDb gap data unavailable — see drawer"
     end
   end
 
   defp headline_for(:festivals, checks) do
-    below = Enum.find(checks, &(&1.check == :nominations_below_floor))
-    total = if below, do: below.total_population, else: 0
-    affected = if below, do: below.affected_count, else: 0
-    healthy = max(total - affected, 0)
-    "#{healthy} / #{total} ceremonies fully synced"
+    case Enum.find(checks, &(&1.check == :nominations_below_floor)) do
+      %{blocked_reason: nil, total_population: total, affected_count: affected} ->
+        healthy = max(total - affected, 0)
+        "#{healthy} / #{total} ceremonies fully synced"
+
+      _ ->
+        "ceremony floor data unavailable — see drawer"
+    end
   end
 
   defp headline_for(:ratings, checks) do
     case Enum.find(checks, &(&1.check == :omdb_null_backlog)) do
-      %{affected_pct: pct} -> "#{Float.round(100.0 - pct, 1)}% OMDb coverage"
-      _ -> "Ratings coverage"
+      %{blocked_reason: nil, affected_pct: pct} ->
+        "#{Float.round(100.0 - pct, 1)}% OMDb coverage"
+
+      _ ->
+        "OMDb coverage unavailable — see drawer"
     end
   end
 
