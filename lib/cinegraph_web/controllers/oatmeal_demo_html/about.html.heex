@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-mist-100">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>About — Oatmeal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+  </head>
+  <body class="bg-mist-100 text-mist-950 antialiased font-sans">
+    <header class="sticky top-0 z-10 bg-mist-100">
+      <nav class="mx-auto flex h-[5.25rem] max-w-7xl items-center gap-4 px-6 lg:px-10">
+        <div class="flex flex-1 gap-8 max-lg:hidden">
+          <a href={~p"/oatmeal-demo/pricing"} class="text-sm/7 font-medium text-mist-950">
+            Pricing
+          </a>
+          <a href={~p"/oatmeal-demo/about"} class="text-sm/7 font-medium text-mist-950">About</a>
+          <a href="#" class="text-sm/7 font-medium text-mist-950">Docs</a>
+        </div>
+        <div class="flex items-center">
+          <a href={~p"/oatmeal-demo"} class="font-display text-2xl text-mist-950 italic">Oatmeal</a>
+        </div>
+        <div class="flex flex-1 items-center justify-end gap-4">
+          <a
+            href="#"
+            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-3 py-1 text-sm/7 font-medium text-mist-950 hover:bg-mist-950/10 max-sm:hidden"
+          >
+            Log in
+          </a>
+          <a
+            href="#"
+            class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 px-3 py-1 text-sm/7 font-medium text-mist-100 hover:bg-mist-800"
+          >
+            Get started
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <main class="isolate overflow-clip">
+      <%!-- HERO with photo --%>
+      <section class="py-16">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-center">
+          <div class="flex flex-col gap-6">
+            <div class="text-sm/7 font-semibold text-mist-700">About Oatmeal</div>
+            <h1 class="font-display text-5xl/[3.5rem] tracking-tight text-balance text-mist-950 italic sm:text-[5rem]/[5rem]">
+              We're building the inbox the world deserves.
+            </h1>
+            <div class="text-lg/8 text-mist-700">
+              <p>
+                Oatmeal started in 2024 with a simple idea: customer support is a relationship, not a
+                ticket. We're a remote-first team of 47 spread across 14 time zones, and we genuinely
+                hope our software outlives us.
+              </p>
+            </div>
+          </div>
+          <div class="relative">
+            <div class="relative overflow-hidden rounded-lg bg-gradient-to-b from-[#9aaab8] to-[#5e6e80] aspect-[4/3]">
+              <div class="wallpaper-noise absolute inset-0 opacity-30 mix-blend-overlay"></div>
+              <img
+                src="https://assets.tailwindplus.com/screenshots/1.webp"
+                alt=""
+                class="absolute inset-0 h-full w-full object-cover opacity-95 mix-blend-luminosity"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <%!-- VALUES --%>
+      <section class="py-16">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 flex flex-col gap-10 sm:gap-16">
+          <div class="flex max-w-2xl flex-col gap-6">
+            <div class="text-sm/7 font-semibold text-mist-700">What we believe</div>
+            <h2 class="font-display text-3xl/9 tracking-tight text-pretty text-mist-950 italic sm:text-[3rem]/[3rem]">
+              Three things we hold to, even when it costs us.
+            </h2>
+          </div>
+          <div class="grid grid-cols-1 gap-x-8 gap-y-12 lg:grid-cols-3">
+            <div :for={
+              v <- [
+                %{
+                  title: "Replies are conversations.",
+                  body:
+                    "Templates are fine. Templates as default replies aren't. We design for the human at both ends and bias toward the customer being read, not handled."
+                },
+                %{
+                  title: "Ship slow if you have to.",
+                  body:
+                    "We've turned down two acquisitions. We've also missed a launch by six months because the empty state wasn't right. Both decisions came from the same place."
+                },
+                %{
+                  title: "Earn the seat.",
+                  body:
+                    "Most teams don't need another tool. If we can't show you a clear win in the first week, we'd rather you not buy. Conviction over conversion."
+                }
+              ]
+            }>
+              <h3 class="font-display text-2xl text-mist-950 italic">{v.title}</h3>
+              <p class="mt-3 text-base/7 text-mist-700">{v.body}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <%!-- TEAM --%>
+      <section class="py-16">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 flex flex-col gap-10 sm:gap-16">
+          <div class="flex max-w-2xl flex-col gap-6">
+            <div class="text-sm/7 font-semibold text-mist-700">The team</div>
+            <h2 class="font-display text-3xl/9 tracking-tight text-pretty text-mist-950 italic sm:text-[3rem]/[3rem]">
+              People who've actually answered tickets.
+            </h2>
+          </div>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-12 sm:grid-cols-3 lg:grid-cols-4">
+            <div :for={
+              t <- [
+                %{name: "Maya Park", role: "CEO & Cofounder", avatar: "10"},
+                %{name: "Theo Adesanya", role: "CTO & Cofounder", avatar: "13"},
+                %{name: "Jules Ren", role: "Head of Design", avatar: "11"},
+                %{name: "Priya Iyer", role: "Engineering Lead", avatar: "15"},
+                %{name: "Aisha Bello", role: "Head of Customer", avatar: "12"},
+                %{name: "Sam Greene", role: "Engineering", avatar: "14"},
+                %{name: "Lin Chen", role: "Design", avatar: "10"},
+                %{name: "Kofi Mensah", role: "Operations", avatar: "13"}
+              ]
+            }>
+              <div class="flex aspect-square overflow-hidden rounded-md outline outline-1 -outline-offset-1 outline-black/5">
+                <img
+                  src={"https://assets.tailwindplus.com/avatars/#{t.avatar}.webp?size=400"}
+                  alt=""
+                  class="h-full w-full object-cover bg-white/75"
+                />
+              </div>
+              <div class="mt-3">
+                <p class="text-base/7 font-semibold text-mist-950">{t.name}</p>
+                <p class="text-sm/6 text-mist-700">{t.role}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <%!-- LARGE QUOTE --%>
+      <section class="py-16">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-5xl lg:px-10 flex flex-col gap-10 text-center">
+          <p class="font-display text-3xl/[1.2] tracking-tight text-balance text-mist-950 italic sm:text-[3rem]/[3.5rem]">
+            "We use Oatmeal because they treat support like a craft. The team behind it argues
+            about word choice in microcopy. That's the kind of obsessive detail you can feel as a
+            customer."
+          </p>
+          <div class="flex items-center justify-center gap-4">
+            <img
+              src="https://assets.tailwindplus.com/avatars/12.webp?size=160"
+              alt=""
+              class="h-12 w-12 rounded-full bg-white/75"
+            />
+            <div class="text-left">
+              <p class="font-semibold text-mist-950">John Walters</p>
+              <p class="text-sm text-mist-700">CPO at Orbital</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <%!-- CTA --%>
+      <section class="py-16">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 flex flex-col gap-10">
+          <div class="flex flex-col gap-6">
+            <h2 class="font-display text-3xl/9 tracking-tight text-pretty text-mist-950 italic sm:text-[3rem]/[3rem]">
+              Want to see how we run support ourselves?
+            </h2>
+            <p class="text-base/7 text-mist-600 max-w-3xl">
+              We answer tickets in our own product. If you'd like a tour through the actual inbox the
+              support team uses every day, book a demo and we'll walk you through it.
+            </p>
+          </div>
+          <div class="flex items-center gap-4">
+            <a
+              href={~p"/oatmeal-demo"}
+              class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 px-4 py-2 text-sm/7 font-medium text-mist-100 hover:bg-mist-800"
+            >
+              ← Back to home
+            </a>
+            <a
+              href={~p"/oatmeal-demo/pricing"}
+              class="inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm/7 font-medium text-mist-950 hover:bg-mist-950/10"
+            >
+              See pricing →
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pt-16">
+      <div class="bg-mist-950/[0.025] py-10 text-mist-700">
+        <div class="mx-auto w-full max-w-7xl px-6 lg:px-10 text-center text-sm/7">
+          &copy; {Date.utc_today().year} Oatmeal, Inc. — demo page on Cinegraph
+        </div>
+      </div>
+    </footer>
+
+    <style>
+      .wallpaper-noise {
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'250'%20height%3D'250'%20viewBox%3D'0%200%20100%20100'%3E%3Cfilter%20id%3D'n'%3E%3CfeTurbulence%20type%3D'turbulence'%20baseFrequency%3D'1.4'%20numOctaves%3D'1'%20seed%3D'2'%20stitchTiles%3D'stitch'%20result%3D'n'%2F%3E%3CfeColorMatrix%20type%3D'saturate'%20values%3D'0'%20in%3D'n'%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20filter%3D'url(%23n)'%2F%3E%3C%2Fsvg%3E");
+      }
+    </style>
+  </body>
+</html>

@@ -42,7 +42,9 @@ config :cinegraph, CinegraphWeb.Endpoint,
   secret_key_base: "d8PzNPmOkFG4kbW6NAMznQkZmUKHIQYvcEuYuuOXyvXyheXiHj+tCoNJtawKebV3",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:cinegraph, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:cinegraph, ~w(--watch)]}
+    tailwind: {Tailwind, :install_and_run, [:cinegraph, ~w(--watch)]},
+    tailwind_cinegraph_neutral: {Tailwind, :install_and_run, [:cinegraph_neutral, ~w(--watch)]},
+    tailwind_oatmeal: {Tailwind, :install_and_run, [:oatmeal, ~w(--watch)]}
   ]
 
 # ## SSL Support

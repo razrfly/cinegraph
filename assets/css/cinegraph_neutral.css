@@ -1,0 +1,8 @@
+/* Cinegraph Neutral theme — standalone Tailwind build.
+ * Intentionally no app.css imports — keeps the design system fully isolated
+ * from the main app stylesheet so existing pages render unchanged.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

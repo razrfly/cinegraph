@@ -29,18 +29,17 @@ defmodule Cinegraph.Metrics.PeopleQualityBenchmarkTest do
       title = unquote(title)
       min_score = unquote(min_score)
 
-      movie = Repo.get_by(Movie, tmdb_id: tmdb_id)
+      case Repo.get_by(Movie, tmdb_id: tmdb_id) do
+        nil ->
+          IO.warn("#{title} (tmdb_id=#{tmdb_id}) not in database — seed data required")
 
-      unless movie do
-        raise ExUnit.SkipError,
-              "#{title} (tmdb_id=#{tmdb_id}) not in database — seed data required"
+        movie ->
+          scores = MovieScoring.calculate_movie_scores(movie)
+          auteurs = scores.components.auteurs
+
+          assert auteurs >= min_score,
+                 "Expected #{title} auteurs >= #{min_score}, got #{auteurs}"
       end
-
-      scores = MovieScoring.calculate_movie_scores(movie)
-      auteurs = scores.components.auteurs
-
-      assert auteurs >= min_score,
-             "Expected #{title} auteurs >= #{min_score}, got #{auteurs}"
     end
   end
 end

@@ -39,6 +39,17 @@ defmodule CinegraphWeb.Router do
 
     get "/", PageController, :coming_soon
 
+    # Phase 1 design preview — sandbox route for the Cinegraph Neutral design system.
+    # See issue #750. Removable; uses an isolated stylesheet at /assets/cinegraph_neutral.css.
+    get "/design-preview", DesignPreviewController, :show
+
+    # Phase 1 boilerplate — Oatmeal (mist_instrument) Tailwind kit smoke test.
+    # See issue #750. Removable; uses isolated stylesheet at /assets/oatmeal.css.
+    get "/oatmeal-demo", OatmealDemoController, :home
+    get "/oatmeal-demo/about", OatmealDemoController, :about
+    get "/oatmeal-demo/pricing", OatmealDemoController, :pricing
+    get "/oatmeal-demo/404", OatmealDemoController, :error_404
+
     # Sitemap routes (no authentication required)
     get "/sitemap.xml", SitemapController, :index
     get "/sitemaps/:filename", SitemapController, :show
