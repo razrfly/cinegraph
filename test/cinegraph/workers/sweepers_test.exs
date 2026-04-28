@@ -10,6 +10,7 @@ defmodule Cinegraph.Workers.SweepersTest do
   alias Cinegraph.Workers.{
     BiographyRefreshSweeper,
     FestivalPersonResolverSweeper,
+    FestivalSyncSweeper,
     ImdbIdRepairSweeper,
     OmdbBackfillSweeper,
     ProfileDataRefreshSweeper,
@@ -63,6 +64,21 @@ defmodule Cinegraph.Workers.SweepersTest do
     test "returns :ok with zero found on empty DB" do
       assert {:ok, %{found: 0, deleted: 0, failed: 0, dry_run: false, phase: :delete}} =
                ZeroCreditsCleanupDeleteSweeper.perform(%Oban.Job{})
+    end
+  end
+
+  describe "FestivalSyncSweeper.perform/1 (#745 Phase 2)" do
+    test "returns :ok with empty stats on empty DB" do
+      assert {:ok,
+              %{
+                events: 0,
+                discoveries_enqueued: 0,
+                discoveries_already_queued: 0,
+                imports_enqueued: 0,
+                imports_already_queued: 0,
+                failed: 0,
+                dry_run: false
+              }} = FestivalSyncSweeper.perform(%Oban.Job{})
     end
   end
 end

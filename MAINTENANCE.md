@@ -79,6 +79,7 @@ All backfills run automatically via `Oban.Plugins.Cron` (`config/config.exs`):
 | `0 7 * * *` | `ImdbIdRepairSweeper` | movies missing `imdb_id` | 5,000/day |
 | `0 4 * * 0` | `ZeroCreditsCleanupSweeper` | enqueue refetch for orphan people | 200/run |
 | `0 4 * * 1` | `ZeroCreditsCleanupDeleteSweeper` | hard-delete still-orphaned rows | 200/run |
+| `0 2 * * *` | `FestivalSyncSweeper` | discover + import new festival ceremonies (#745 Phase 2) | (uncapped — ~15 events/day) |
 | `0 3 * * *` | `PersonQualityScoreWorker` (`daily_incremental`) | PQS daily delta | (worker-paged) |
 | `0 2 * * SUN` | `PersonQualityScoreWorker` (`weekly_full`) | PQS weekly full recalc | (worker-paged) |
 | `0 1 1-7 * SUN` | `PersonQualityScoreWorker` (`monthly_deep`) | PQS monthly deep recalc | (worker-paged) |
@@ -102,6 +103,7 @@ The `Cinegraph.Maintenance.*` modules behind each sweeper also have:
 | OMDb null backfill | `mix cinegraph.movies.backfill_omdb` |
 | IMDb-id repair | `mix cinegraph.movies.repair_imdb_ids` |
 | Zero-credits cleanup | `mix cinegraph.people.cleanup_zero_credits [--phase enqueue\|delete]` |
+| Festival sync (discover + import) | `mix cinegraph.festivals.sync` |
 
 All accept `--dry-run` (count only) and `--limit N` (cap enqueues).
 
