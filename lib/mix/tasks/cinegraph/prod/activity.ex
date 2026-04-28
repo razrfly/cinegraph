@@ -21,7 +21,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Activity do
   @impl Mix.Task
   def run(args) do
     {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean, days: :integer])
-    Mix.Task.run("app.start")
+    # See prod/health.ex: skip app.start to keep stdout clean for jq.
 
     days =
       case Keyword.get(opts, :days, 7) do

@@ -27,7 +27,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Completeness do
       Mix.raise("Invalid arguments: #{inspect(invalid)}")
     end
 
-    Mix.Task.run("app.start")
+    # See note in prod/health.ex: skip app.start to keep stdout clean for jq.
 
     expr =
       case Keyword.get(opts, :history) do

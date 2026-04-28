@@ -20,7 +20,10 @@ defmodule Mix.Tasks.Cinegraph.Prod.Health do
   @impl Mix.Task
   def run(args) do
     {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean])
-    Mix.Task.run("app.start")
+    # Intentionally NOT calling Mix.Task.run("app.start") — this task only
+    # uses System.cmd + Jason (no DB, no supervision tree). Skipping app.start
+    # avoids ~20+ lines of dev-side log noise that would otherwise mix with
+    # the JSON output meant for piping into jq.
 
     expr = ~s|IO.puts(Jason.encode!(Cinegraph.Health.Facade.compute_full_verdict()))|
 
