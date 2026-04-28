@@ -105,11 +105,16 @@ The `Cinegraph.Maintenance.*` modules behind each sweeper also have:
 | IMDb-id repair | `mix cinegraph.movies.repair_imdb_ids` |
 | Zero-credits cleanup | `mix cinegraph.people.cleanup_zero_credits [--phase enqueue\|delete]` |
 | Festival sync (discover + import) | `mix cinegraph.festivals.sync` |
+
+The sweeper tasks above (festival resolver, biography/profile refresh, OMDb backfill, IMDb-id repair, zero-credits cleanup, festival sync) accept `--dry-run` (count only) and `--limit N` (cap enqueues).
+
+The tasks below take their own positional args / flags as shown — `--dry-run` and `--limit` do **not** apply.
+
+| Targeted task | Mix wrapper |
+|---|---|
 | Per-id TMDb refresh (drawer button equivalent) | `mix cinegraph.refresh.person <id> [<id>...]` |
 | Per-id OMDb refresh (drawer button equivalent) | `mix cinegraph.refresh.omdb <movie_id> [...]` |
 | 30-day completeness chart data | `mix cinegraph.completeness --history 30` |
-
-All accept `--dry-run` (count only) and `--limit N` (cap enqueues).
 
 ## Reading prod stats from dev
 

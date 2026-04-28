@@ -30,6 +30,10 @@ defmodule Mix.Tasks.Cinegraph.Completeness do
     write? = Keyword.get(opts, :write, false)
     history = Keyword.get(opts, :history)
 
+    if is_integer(history) and write? do
+      Mix.raise("--history and --write are mutually exclusive")
+    end
+
     cond do
       is_integer(history) and history > 0 ->
         run_history(history, json?)
