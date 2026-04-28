@@ -158,6 +158,12 @@ config :cinegraph, Oban,
        {"0 3 * * *", Cinegraph.Workers.RatingsRefreshWorker},
        # Daily completeness snapshot at 5:05 AM UTC (after the 4 AM TMDb sync settles) — #722
        {"5 5 * * *", Cinegraph.Workers.CompletenessSnapshotWorker},
+       # Health-cache warmer (#745 Phase 3.3) — keeps `:health_cache` warm
+       # so `/admin/health` cold-paint stays sub-second. Drift checks have a
+       # 5-min Cachex TTL; warm every 4 min so rows are recomputed before
+       # they expire. Plus a one-shot warm fires from `Cinegraph.Application`
+       # on app boot (so the very first request after deploy is also fast).
+       {"*/4 * * * *", Cinegraph.Workers.HealthCacheWarmer},
        # Daily festival sync (#745 Phase 2) — discovers new ceremony years
        # for active festivals + enqueues imports for any year not yet in
        # the DB. Runs at 02:00 UTC, before all other homeostasis sweepers,
