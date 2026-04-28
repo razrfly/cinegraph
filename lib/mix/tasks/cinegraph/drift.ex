@@ -36,21 +36,59 @@ defmodule Mix.Tasks.Cinegraph.Drift do
 
     case domain do
       "people" ->
-        run_domain(:people, &Cinegraph.Health.Drift.People.all/1, runner_opts, json?)
+        runner_opts |> validate_opts!(:people) |> run_people(json?)
 
       "movies" ->
-        run_domain(:movies, &Cinegraph.Health.Drift.Movies.all/1, runner_opts, json?)
+        runner_opts |> validate_opts!(:movies) |> run_movies(json?)
 
       "festivals" ->
-        run_domain(:festivals, &Cinegraph.Health.Drift.Festivals.all/1, runner_opts, json?)
+        runner_opts |> validate_opts!(:festivals) |> run_festivals(json?)
 
       "ratings" ->
-        run_domain(:ratings, &Cinegraph.Health.Drift.Ratings.all/1, runner_opts, json?)
+        runner_opts |> validate_opts!(:ratings) |> run_ratings(json?)
 
       other ->
         usage_error("unknown domain '#{other}' — try people|movies|festivals|ratings")
     end
   end
+
+  # Per-domain option whitelists. `--limit` is universal; `--year` is movies-only;
+  # `--org` is festivals-only. Reject unknown flags up front so users aren't
+  # silently surprised by ignored options.
+  @domain_options %{
+    people: [:limit],
+    movies: [:limit, :year],
+    festivals: [:limit, :org],
+    ratings: [:limit]
+  }
+
+  defp validate_opts!(opts, domain) do
+    allowed = Map.fetch!(@domain_options, domain)
+    unknown = Keyword.keys(opts) -- allowed
+
+    case unknown do
+      [] ->
+        opts
+
+      keys ->
+        flags = keys |> Enum.map(&"--#{&1}") |> Enum.join(", ")
+        allowed_flags = allowed |> Enum.map(&"--#{&1}") |> Enum.join(", ")
+
+        usage_error("domain '#{domain}' does not support #{flags}; allowed: #{allowed_flags}")
+    end
+  end
+
+  defp run_people(opts, json?),
+    do: run_domain(:people, &Cinegraph.Health.Drift.People.all/1, opts, json?)
+
+  defp run_movies(opts, json?),
+    do: run_domain(:movies, &Cinegraph.Health.Drift.Movies.all/1, opts, json?)
+
+  defp run_festivals(opts, json?),
+    do: run_domain(:festivals, &Cinegraph.Health.Drift.Festivals.all/1, opts, json?)
+
+  defp run_ratings(opts, json?),
+    do: run_domain(:ratings, &Cinegraph.Health.Drift.Ratings.all/1, opts, json?)
 
   defp run_domain(domain, runner, opts, json?) do
     results = runner.(opts)
@@ -147,7 +185,10 @@ defmodule Mix.Tasks.Cinegraph.Drift do
   defp usage_error(msg) do
     Mix.shell().error("✗ #{msg}")
     Mix.shell().info("\nUsage:")
-    Mix.shell().info("  mix cinegraph.drift people [--json] [--limit N]")
+    Mix.shell().info("  mix cinegraph.drift people    [--json] [--limit N]")
+    Mix.shell().info("  mix cinegraph.drift movies    [--json] [--limit N] [--year YYYY]")
+    Mix.shell().info("  mix cinegraph.drift festivals [--json] [--limit N] [--org SLUG]")
+    Mix.shell().info("  mix cinegraph.drift ratings   [--json] [--limit N]")
     System.halt(1)
   end
 end

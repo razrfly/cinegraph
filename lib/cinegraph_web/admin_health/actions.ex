@@ -59,11 +59,16 @@ defmodule CinegraphWeb.AdminHealth.Actions do
         end
       end)
 
-    case errors do
-      [] ->
+    case {errors, ok_count} do
+      {[], _} ->
         {:ok, ok_count}
 
-      _ ->
+      {_, 0} ->
+        Logger.error("AdminHealth.Actions enqueue total failure: #{length(errors)} errors, 0 ok")
+
+        {:error, errors}
+
+      {_, _} ->
         Logger.warning(
           "AdminHealth.Actions enqueue partial failure: #{ok_count} ok, #{length(errors)} errors"
         )

@@ -51,7 +51,7 @@ defmodule Mix.Tasks.Cinegraph.Activity do
       String.pad_trailing("date", 12) <>
         String.pad_leading("movies+", 10) <>
         String.pad_leading("people+", 10) <>
-        String.pad_leading("ceremons", 10) <>
+        String.pad_leading("ceremonies", 10) <>
         String.pad_leading("OMDb", 8) <>
         String.pad_leading("jobs✓", 12) <>
         String.pad_leading("jobs✗", 8)

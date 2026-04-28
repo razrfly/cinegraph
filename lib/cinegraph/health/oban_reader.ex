@@ -26,7 +26,21 @@ defmodule Cinegraph.Health.ObanReader do
     )
     |> Repo.replica().all()
     |> Enum.reduce(%{}, fn {queue, state, count}, acc ->
-      queue_atom = String.to_atom(queue)
+      # Use to_existing_atom so an unexpected queue string in the DB can't
+      # silently grow the atom table. Configured queues become atoms at boot
+      # via Application config, so any miss here is a real anomaly worth
+      # surfacing.
+      queue_atom =
+        try do
+          String.to_existing_atom(queue)
+        rescue
+          ArgumentError ->
+            raise ArgumentError,
+                  "oban_jobs row references queue #{inspect(queue)} that is not configured " <>
+                    "for this app (no matching atom). Update :cinegraph, Oban[:queues] or " <>
+                    "investigate the orphan job."
+        end
+
       Map.update(acc, queue_atom, %{state => count}, &Map.put(&1, state, count))
     end)
   end

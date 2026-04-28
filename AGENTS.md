@@ -66,7 +66,7 @@ mix import_movies --pages 5 # Import movies from TMDb
 - `CRAWLBASE_JS_API_KEY` - Crawlbase JS-rendered scraping
 
 ## Project Structure
-```
+```text
 lib/
 ├── cinegraph/        # Business logic contexts
 ├── cinegraph_web/    # Web layer

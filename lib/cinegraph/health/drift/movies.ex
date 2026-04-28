@@ -48,7 +48,9 @@ defmodule Cinegraph.Health.Drift.Movies do
 
   defp global_year_gap(_opts) do
     Drift.cached({:movies, :year_gap}, @cache_ttl, fn ->
-      case GapAnalysis.get_export_stats(skip_download: true) do
+      # Strictly cache-only — never initiate a TMDb download from the
+      # health/read path (the dashboard polls every 30s).
+      case GapAnalysis.get_cached_export_stats() do
         {:ok, %{export_total: tmdb_total, our_total: our_total, missing_count: missing}} ->
           examples = [
             %{
@@ -124,7 +126,7 @@ defmodule Cinegraph.Health.Drift.Movies do
   def missing_omdb(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
-    Drift.cached({:movies, :missing_omdb}, @cache_ttl, fn ->
+    Drift.cached({:movies, :missing_omdb, limit}, @cache_ttl, fn ->
       total = total_movies()
 
       affected =
@@ -165,7 +167,7 @@ defmodule Cinegraph.Health.Drift.Movies do
   def stale_omdb(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
-    Drift.cached({:movies, :stale_omdb}, @cache_ttl, fn ->
+    Drift.cached({:movies, :stale_omdb, limit}, @cache_ttl, fn ->
       cutoff = DateTime.utc_now() |> DateTime.add(-@stale_omdb_days * 86_400, :second)
 
       total =
@@ -218,7 +220,7 @@ defmodule Cinegraph.Health.Drift.Movies do
   def missing_imdb_id(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
-    Drift.cached({:movies, :missing_imdb_id}, @cache_ttl, fn ->
+    Drift.cached({:movies, :missing_imdb_id, limit}, @cache_ttl, fn ->
       total = total_movies()
 
       affected =

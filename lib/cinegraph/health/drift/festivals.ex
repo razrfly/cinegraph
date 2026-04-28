@@ -87,8 +87,9 @@ defmodule Cinegraph.Health.Drift.Festivals do
             organization_id: org_id,
             year: year,
             nominations: noms,
-            org_median: med && Decimal.to_float(Decimal.new(to_string(med))),
-            reason: "noms #{noms} < #{@floor_factor} × org median (#{med})"
+            org_median: med && Decimal.to_float(med),
+            reason:
+              "noms #{noms} < #{@floor_factor} × org median (#{med && Decimal.to_string(med)})"
           }
         end)
 

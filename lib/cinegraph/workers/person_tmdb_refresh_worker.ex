@@ -15,7 +15,8 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorker do
     max_attempts: 3,
     unique: [fields: [:args], keys: [:person_id], period: 3600]
 
-  alias Cinegraph.{Movies, People}
+  alias Cinegraph.{Movies, Repo}
+  alias Cinegraph.Movies.Person
 
   require Logger
 
@@ -23,7 +24,11 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorker do
   def perform(%Oban.Job{args: %{"person_id" => person_id}}) do
     Logger.info("PersonTmdbRefreshWorker refreshing person #{person_id}")
 
-    case People.get_person(person_id) do
+    # Read from the *primary* repo here. `People.get_person/1` hits the read
+    # replica, which can briefly miss freshly-inserted rows due to replica
+    # lag — that would falsely cancel the job. Reading from the primary
+    # avoids the false negative.
+    case Repo.get(Person, person_id) do
       nil ->
         Logger.warning("PersonTmdbRefreshWorker: person #{person_id} not found, skipping")
         # Don't retry — the row is gone

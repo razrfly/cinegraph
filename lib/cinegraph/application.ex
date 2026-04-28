@@ -29,6 +29,9 @@ defmodule Cinegraph.Application do
         ),
         # Start Cachex for health/drift dashboards (#722)
         Supervisor.child_spec({Cachex, name: :health_cache}, id: :health_cache),
+        # Task supervisor for health/drift parallel reads — keeps unsupervised
+        # Task.async out of the LiveView process tree (#722).
+        {Task.Supervisor, name: Cinegraph.Health.TaskSupervisor},
         # Start Rate Limiter
         Cinegraph.RateLimiter
       ] ++

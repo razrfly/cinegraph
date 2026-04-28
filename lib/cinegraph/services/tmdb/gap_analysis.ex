@@ -244,6 +244,44 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
   end
 
   @doc """
+  Cache-only variant of `get_export_stats/1`.
+
+  Returns `{:error, :file_not_found}` if no cached export exists rather than
+  triggering a download. Suitable for read-only health/observability paths
+  (e.g. `/admin/health`) that must never initiate a remote fetch.
+  """
+  @spec get_cached_export_stats(keyword()) :: {:ok, map()} | {:error, term()}
+  def get_cached_export_stats(opts \\ []) do
+    opts = Keyword.put(opts, :skip_download, true)
+
+    with {:ok, export_path} <- ensure_export(opts),
+         {:ok, export_ids} <- load_export_ids(export_path, opts),
+         {:ok, our_ids} <- load_our_ids() do
+      export_total = MapSet.size(export_ids)
+      our_total = MapSet.size(our_ids)
+      overlap = MapSet.intersection(our_ids, export_ids) |> MapSet.size()
+      missing_count = export_total - overlap
+
+      coverage_percent =
+        if export_total > 0 do
+          Float.round(overlap / export_total * 100, 2)
+        else
+          0.0
+        end
+
+      {:ok,
+       %{
+         export_total: export_total,
+         our_total: our_total,
+         missing_count: missing_count,
+         coverage_percent: coverage_percent,
+         export_date: extract_date_from_path(export_path),
+         export_path: export_path
+       }}
+    end
+  end
+
+  @doc """
   Updates the stored baseline from TMDb export.
 
   Call this periodically (e.g., daily) to keep progress tracking accurate.

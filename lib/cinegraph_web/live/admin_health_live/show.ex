@@ -11,6 +11,8 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
 
   alias Cinegraph.Health.{Activity, Completeness, Facade, Queues}
 
+  require Logger
+
   @refresh_interval 30_000
 
   @impl true
@@ -80,17 +82,33 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   end
 
   defp do_queue_refresh(:people, ids, socket) do
-    {:ok, n} = CinegraphWeb.AdminHealth.Actions.queue_person_tmdb_refresh(ids)
-    {:noreply, put_flash(socket, :info, "Queued #{n} TMDb refresh job(s)")}
+    flash_queue_result(
+      socket,
+      CinegraphWeb.AdminHealth.Actions.queue_person_tmdb_refresh(ids),
+      "TMDb"
+    )
   end
 
   defp do_queue_refresh(:ratings, ids, socket) do
-    {:ok, n} = CinegraphWeb.AdminHealth.Actions.queue_omdb_refresh(ids)
-    {:noreply, put_flash(socket, :info, "Queued #{n} OMDb refresh job(s)")}
+    flash_queue_result(
+      socket,
+      CinegraphWeb.AdminHealth.Actions.queue_omdb_refresh(ids),
+      "OMDb"
+    )
   end
 
   defp do_queue_refresh(_, _, socket) do
     {:noreply, put_flash(socket, :error, "Unknown domain for refresh action")}
+  end
+
+  defp flash_queue_result(socket, {:ok, n}, label) do
+    {:noreply, put_flash(socket, :info, "Queued #{n} #{label} refresh job(s)")}
+  end
+
+  defp flash_queue_result(socket, {:error, reason}, label) do
+    Logger.error("AdminHealthLive #{label} refresh enqueue failed: #{inspect(reason)}")
+
+    {:noreply, put_flash(socket, :error, "Failed to queue #{label} refresh: #{inspect(reason)}")}
   end
 
   defp parse_ids(ids) when is_integer(ids), do: [ids]
@@ -116,9 +134,9 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
 
     verdict = safe(fn -> Facade.compute_full_verdict(bypass_cache: force?) end)
     activity_today = safe(fn -> Activity.today(bypass_cache: force?) end)
-    activity_recent = safe(fn -> Activity.recent(7) end)
+    activity_recent = safe(fn -> Activity.recent(7, bypass_cache: force?) end)
     queues = safe(fn -> Queues.snapshot(bypass_cache: force?) end)
-    history = safe(fn -> Completeness.history(30) end)
+    history = safe(fn -> Completeness.history(30, bypass_cache: force?) end)
 
     socket
     |> assign(:verdict, verdict)

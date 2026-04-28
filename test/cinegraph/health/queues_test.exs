@@ -61,7 +61,7 @@ defmodule Cinegraph.Health.QueuesTest do
       insert_oban_job(queue: "omdb", state: "cancelled", completed_at: minutes_ago(5))
 
       snapshot = Queues.snapshot(bypass_cache: true)
-      assert snapshot.total_failures_last_hour >= 2
+      assert snapshot.total_failures_last_hour == 2
     end
   end
 

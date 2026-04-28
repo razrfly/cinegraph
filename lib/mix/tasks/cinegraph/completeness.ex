@@ -25,7 +25,7 @@ defmodule Mix.Tasks.Cinegraph.Completeness do
     snapshot = Completeness.run()
 
     if write? do
-      case Completeness.run_and_persist() do
+      case Completeness.persist(snapshot) do
         {:ok, log} ->
           unless json? do
             Mix.shell().info("✓ Persisted snapshot for #{Date.to_iso8601(log.captured_on)}")

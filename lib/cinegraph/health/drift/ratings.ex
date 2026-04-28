@@ -47,7 +47,7 @@ defmodule Cinegraph.Health.Drift.Ratings do
   def rt_metacritic_gap(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
-    Drift.cached({:ratings, :rt_metacritic_gap}, @cache_ttl, fn ->
+    Drift.cached({:ratings, :rt_metacritic_gap, limit}, @cache_ttl, fn ->
       total = scalar("SELECT count(*)::bigint FROM movies")
 
       affected =

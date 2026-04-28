@@ -566,19 +566,32 @@ defmodule Mix.Tasks.Db.PullProduction do
 
     # Set PGPASSWORD via process env rather than Port :env option.
     # :erlang.open_port rejects {:env, ...} for :spawn_executable on this OTP version.
-    System.put_env("PGPASSWORD", local_password())
+    # Wrap in try/after so we always restore the prior PGPASSWORD value (or
+    # delete it if it was unset) — leaking the production password into the
+    # session env after a successful import would be a credential hazard.
+    prior_pgpassword = System.get_env("PGPASSWORD")
 
-    port =
-      Port.open(
-        {:spawn_executable, pg_restore},
-        [
-          :binary,
-          :exit_status,
-          {:args, args}
-        ]
-      )
+    result =
+      try do
+        System.put_env("PGPASSWORD", local_password())
 
-    result = collect_restore_output(port, [])
+        port =
+          Port.open(
+            {:spawn_executable, pg_restore},
+            [
+              :binary,
+              :exit_status,
+              {:args, args}
+            ]
+          )
+
+        collect_restore_output(port, [])
+      after
+        case prior_pgpassword do
+          nil -> System.delete_env("PGPASSWORD")
+          val -> System.put_env("PGPASSWORD", val)
+        end
+      end
 
     elapsed = System.monotonic_time(:second) - start_time
 
