@@ -1406,9 +1406,13 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   defp add_movie_context_boost(query, nil), do: query
 
   defp add_movie_context_boost(query, movie) do
+    # Postgres requires DISTINCT ON's first ORDER BY expression to match the
+    # DISTINCT ON column (`p.id` from `build_enhanced_credit_query/2`), so
+    # `p.id` leads. `find_best_person_match/3` re-sorts by confidence anyway,
+    # so the secondary popularity tie-break is informational only.
     from [p, c] in query,
       where: c.movie_id == ^movie.id,
-      order_by: [desc: p.popularity]
+      order_by: [asc: p.id, desc: p.popularity]
   end
 
   # Map award categories to relevant professional roles

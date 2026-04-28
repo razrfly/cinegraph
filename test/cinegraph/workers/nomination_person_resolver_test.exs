@@ -1,14 +1,10 @@
 defmodule Cinegraph.Workers.NominationPersonResolverTest do
   use Cinegraph.DataCase, async: false
+  use Oban.Testing, repo: Cinegraph.Repo
 
-  alias Cinegraph.Festivals.{
-    FestivalCategory,
-    FestivalCeremony,
-    FestivalNomination,
-    FestivalOrganization
-  }
+  import Cinegraph.FestivalFixtures
 
-  alias Cinegraph.Movies.{Credit, Movie, Person}
+  alias Cinegraph.Festivals.FestivalNomination
   alias Cinegraph.Repo
   alias Cinegraph.Workers.NominationPersonResolver
 
@@ -49,83 +45,5 @@ defmodule Cinegraph.Workers.NominationPersonResolverTest do
 
       assert Repo.get!(FestivalNomination, nom.id).person_id == nil
     end
-  end
-
-  # Small helper — mimics Oban.Testing.perform_job/2 for projects that don't
-  # use it in `data_case`. Builds a job struct and dispatches.
-  defp perform_job(worker_module, args) do
-    job = %Oban.Job{args: args, attempt: 1, max_attempts: 3}
-    worker_module.perform(job)
-  end
-
-  defp plant_nomination!(opts \\ []) do
-    nominee_name = Keyword.get(opts, :nominee_name, "Cillian Murphy")
-    person_imdb_ids = Keyword.get(opts, :person_imdb_ids, [])
-
-    person =
-      %Person{}
-      |> Person.changeset(%{
-        tmdb_id: System.unique_integer([:positive]),
-        name: "Cillian Murphy"
-      })
-      |> Repo.insert!()
-
-    movie =
-      %Movie{}
-      |> Movie.changeset(%{
-        tmdb_id: System.unique_integer([:positive]),
-        title: "Movie #{System.unique_integer([:positive])}"
-      })
-      |> Repo.insert!()
-
-    %Credit{}
-    |> Credit.changeset(%{
-      movie_id: movie.id,
-      person_id: person.id,
-      credit_type: "cast",
-      character: "Self",
-      credit_id: "credit-#{System.unique_integer([:positive])}"
-    })
-    |> Repo.insert!()
-
-    org =
-      %FestivalOrganization{}
-      |> FestivalOrganization.changeset(%{
-        name: "Test Org #{System.unique_integer([:positive])}"
-      })
-      |> Repo.insert!()
-
-    category =
-      %FestivalCategory{}
-      |> FestivalCategory.changeset(%{
-        organization_id: org.id,
-        name: "Best Test #{System.unique_integer([:positive])}",
-        tracks_person: true
-      })
-      |> Repo.insert!()
-
-    ceremony =
-      %FestivalCeremony{
-        organization_id: org.id,
-        year: 2024,
-        name: "#{org.name} 2024",
-        data_source: "test"
-      }
-      |> Repo.insert!()
-
-    nom =
-      %FestivalNomination{}
-      |> FestivalNomination.changeset(%{
-        ceremony_id: ceremony.id,
-        category_id: category.id,
-        movie_id: movie.id,
-        details: %{
-          "nominee_names" => nominee_name,
-          "person_imdb_ids" => person_imdb_ids
-        }
-      })
-      |> Repo.insert!()
-
-    %{nom: nom, person: person, movie: movie}
   end
 end
