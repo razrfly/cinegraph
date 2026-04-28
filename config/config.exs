@@ -158,30 +158,42 @@ config :cinegraph, Oban,
        {"0 3 * * *", Cinegraph.Workers.RatingsRefreshWorker},
        # Daily completeness snapshot at 5:05 AM UTC (after the 4 AM TMDb sync settles) — #722
        {"5 5 * * *", Cinegraph.Workers.CompletenessSnapshotWorker},
-       # Homeostasis sweepers (#735 Phase 3.1, #739 Phase A) — autonomously
-       # drain the dashboard's drift backlogs. Capped per-run; idempotent.
-       # Biography refresh: TMDb-rate-limited, capped at 5,000/day.
+       # Homeostasis sweepers (#735 Phase 3.1, #739 Phase A, #745 Phase 1) —
+       # autonomously drain the dashboard's drift backlogs. Capped per-run;
+       # idempotent (workers are uniqueness-keyed).
+       #
+       # Biography refresh: 5,000/day on :tmdb queue.
        {"30 5 * * *", Cinegraph.Workers.BiographyRefreshSweeper},
-       # Festival person-resolver: capped at 2,000/day, runs after biographies
-       # so resolver lookups can use newly-populated person rows.
-       {"0 6 * * *", Cinegraph.Workers.FestivalPersonResolverSweeper}
+       # Profile-data refresh (profile_path + known_for_department): 3,000/day
+       # on :tmdb. 5 min after bio sweeper so PersonTmdbRefreshWorker's 1-hour
+       # unique constraint dedupes overlapping enqueues.
+       {"35 5 * * *", Cinegraph.Workers.ProfileDataRefreshSweeper},
+       # Festival person-resolver: 2,000/day on :maintenance.
+       {"0 6 * * *", Cinegraph.Workers.FestivalPersonResolverSweeper},
+       # OMDb null backfill: 5,000/day on :omdb. Canonical-list movies first.
+       {"30 6 * * *", Cinegraph.Workers.OmdbBackfillSweeper},
+       # IMDb-id repair via TMDb fetches: 5,000/day on :tmdb.
+       {"0 7 * * *", Cinegraph.Workers.ImdbIdRepairSweeper},
+       # Zero-credits cleanup — two phases. Sunday 04:00 enqueues TMDb
+       # refetches for orphan people; Monday 04:00 deletes those that
+       # remained orphaned (gives the refetches 24h to land).
+       {"0 4 * * 0", Cinegraph.Workers.ZeroCreditsCleanupSweeper},
+       {"0 4 * * 1", Cinegraph.Workers.ZeroCreditsCleanupDeleteSweeper},
+       # PQS staleness recurring recalc (#745 Phase 1.4) — re-enabled.
+       # Each entry is a separate cron-fire of `PersonQualityScoreWorker`
+       # with a different batch shape; the worker has dedicated clauses
+       # for each.
+       {"0 3 * * *", Cinegraph.Workers.PersonQualityScoreWorker,
+        args: %{"batch" => "daily_incremental", "trigger" => "daily_scheduled", "min_credits" => 1}},
+       {"0 2 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
+        args: %{"batch" => "weekly_full", "trigger" => "weekly_scheduled", "min_credits" => 5}},
+       {"0 1 1-7 * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
+        args: %{"batch" => "monthly_deep", "trigger" => "monthly_scheduled", "min_credits" => 1}},
+       {"0 */6 * * *", Cinegraph.Workers.PersonQualityScoreWorker,
+        args: %{"batch" => "health_check", "trigger" => "health_scheduled"}},
+       {"0 */12 * * *", Cinegraph.Workers.PersonQualityScoreWorker,
+        args: %{"batch" => "stale_cleanup", "trigger" => "stale_scheduled", "max_age_days" => 7}}
      ]}
-    # PQS scheduling (temporarily disabled for basic functionality)
-    # TODO: Fix cron job configuration format
-    # {Oban.Plugins.Cron,
-    #   crontab: [
-    #     # Daily incremental PQS update at 3 AM
-    #     {"0 3 * * *", Cinegraph.Workers.PersonQualityScoreWorker, batch: "daily_incremental", trigger: "daily_scheduled", min_credits: 1},
-    #     # Weekly full recalculation at 2 AM Sunday
-    #     {"0 2 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker, batch: "weekly_full", trigger: "weekly_scheduled", min_credits: 5},
-    #     # Monthly deep recalculation at 1 AM first Sunday of month
-    #     {"0 1 1-7 * SUN", Cinegraph.Workers.PersonQualityScoreWorker, batch: "monthly_deep", trigger: "monthly_scheduled", min_credits: 1},
-    #     # Health check every 6 hours
-    #     {"0 */6 * * *", Cinegraph.Workers.PersonQualityScoreWorker, batch: "health_check", trigger: "health_scheduled"},
-    #     # Stale cleanup every 12 hours
-    #     {"0 */12 * * *", Cinegraph.Workers.PersonQualityScoreWorker, batch: "stale_cleanup", trigger: "stale_scheduled", max_age_days: 7}
-    #   ]
-    # }
   ]
 
 # Import movie import configuration

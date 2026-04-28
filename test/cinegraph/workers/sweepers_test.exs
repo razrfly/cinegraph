@@ -7,7 +7,15 @@ defmodule Cinegraph.Workers.SweepersTest do
   """
   use Cinegraph.DataCase, async: false
 
-  alias Cinegraph.Workers.{BiographyRefreshSweeper, FestivalPersonResolverSweeper}
+  alias Cinegraph.Workers.{
+    BiographyRefreshSweeper,
+    FestivalPersonResolverSweeper,
+    ImdbIdRepairSweeper,
+    OmdbBackfillSweeper,
+    ProfileDataRefreshSweeper,
+    ZeroCreditsCleanupDeleteSweeper,
+    ZeroCreditsCleanupSweeper
+  }
 
   describe "FestivalPersonResolverSweeper.perform/1" do
     test "returns :ok with zero found on empty DB" do
@@ -20,6 +28,41 @@ defmodule Cinegraph.Workers.SweepersTest do
     test "returns :ok with zero found on empty DB" do
       assert {:ok, %{found: 0, enqueued: 0, failed: 0, dry_run: false}} =
                BiographyRefreshSweeper.perform(%Oban.Job{})
+    end
+  end
+
+  describe "OmdbBackfillSweeper.perform/1 (#745 Phase 1.1)" do
+    test "returns :ok with zero found on empty DB" do
+      assert {:ok, %{found: 0, enqueued: 0, failed: 0, dry_run: false}} =
+               OmdbBackfillSweeper.perform(%Oban.Job{})
+    end
+  end
+
+  describe "ImdbIdRepairSweeper.perform/1 (#745 Phase 1.2)" do
+    test "returns :ok with zero found on empty DB" do
+      assert {:ok, %{found: 0, enqueued: 0, failed: 0, dry_run: false}} =
+               ImdbIdRepairSweeper.perform(%Oban.Job{})
+    end
+  end
+
+  describe "ProfileDataRefreshSweeper.perform/1 (#745 Phase 1.3 + 1.6)" do
+    test "returns :ok with zero found on empty DB" do
+      assert {:ok, %{found: 0, enqueued: 0, failed: 0, dry_run: false}} =
+               ProfileDataRefreshSweeper.perform(%Oban.Job{})
+    end
+  end
+
+  describe "ZeroCreditsCleanupSweeper.perform/1 (#745 Phase 1.5 phase 1)" do
+    test "returns :ok with zero found on empty DB" do
+      assert {:ok, %{found: 0, enqueued: 0, failed: 0, dry_run: false, phase: :enqueue}} =
+               ZeroCreditsCleanupSweeper.perform(%Oban.Job{})
+    end
+  end
+
+  describe "ZeroCreditsCleanupDeleteSweeper.perform/1 (#745 Phase 1.5 phase 2)" do
+    test "returns :ok with zero found on empty DB" do
+      assert {:ok, %{found: 0, deleted: 0, failed: 0, dry_run: false, phase: :delete}} =
+               ZeroCreditsCleanupDeleteSweeper.perform(%Oban.Job{})
     end
   end
 end

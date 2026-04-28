@@ -93,18 +93,17 @@ defmodule Cinegraph.ProdRpc do
 
   @doc false
   def build_kamal_args(expression) when is_binary(expression) do
-    # `kamal app exec --reuse --quiet --primary --env PHX_SERVER=false "<cmd>"`
-    # runs <cmd> inside the already-running cinegraph container. The container
-    # shell sees:
+    # `kamal app exec --reuse --quiet --primary "<cmd>"` runs <cmd> inside the
+    # already-running cinegraph container. The container shell sees:
     #
-    #   bin/cinegraph eval '<wrapped_expression>'
+    #   sh -c "unset PHX_SERVER; bin/cinegraph eval '<wrapped_expression>'"
     #
     # `bin/cinegraph eval` boots a fresh BEAM in the container with no
     # supervision tree started. Health/Facade calls reach for
     # `Cinegraph.Health.TaskSupervisor` which only exists once the app is
     # supervised, so we prepend `Application.ensure_all_started(:cinegraph)`.
-    # The PHX_SERVER=false override stops the eval'd BEAM from binding port
-    # 4000 (already held by the live BEAM in the same container).
+    # We `unset PHX_SERVER` (see comment near `shell_command` below) to keep
+    # the eval'd BEAM from binding port 4000.
     # Silence prod-side logging *before* starting the app, otherwise Repo.Metrics,
     # DashboardStats, MoviesCacheWarmer, etc. flood stdout with INFO/WARNING
     # lines that mix with the JSON we want to parse.
@@ -112,6 +111,7 @@ defmodule Cinegraph.ProdRpc do
       ":logger.set_primary_config(:level, :critical); " <>
         "Application.ensure_all_started(:cinegraph); " <>
         expression
+
     quoted_expr = single_quote(wrapped)
     # The full pipeline: System.cmd → kamal → SSHKit → ssh → remote-shell →
     # docker exec → container-shell. Splitting `sh -c 'cmd'` across multiple
@@ -120,12 +120,20 @@ defmodule Cinegraph.ProdRpc do
     # quotes, then docker exec correctly invokes `sh -c "..."` in the
     # container. Outer double quotes survive ssh; inner single quotes survive
     # the container shell wrap.
+    #
+    # The remote shell parses the *outer* double-quoted region, where `"`,
+    # `\`, `$`, and `` ` `` are still special. `single_quote/1` only handles
+    # the inner POSIX single-quoting; we must additionally escape the outer
+    # specials so an expression like `IO.puts("hi")` doesn't break out of
+    # the outer `"..."` and reach the container shell as `IO.puts(hi)`.
+    #
     # `unset PHX_SERVER` (rather than =false): runtime.exs checks for the
     # var's *presence*, not value. The container starts with PHX_SERVER=true;
     # we have to clear it entirely or the endpoint will try to bind port 4000
     # (already held by the live BEAM in this container) and the whole
     # supervision tree will roll back with :eaddrinuse.
-    shell_command = ~s|sh -c "unset PHX_SERVER; bin/cinegraph eval #{quoted_expr}"|
+    escaped_for_outer = escape_for_double_quoted(quoted_expr)
+    shell_command = ~s|sh -c "unset PHX_SERVER; bin/cinegraph eval #{escaped_for_outer}"|
 
     [
       "app",
@@ -152,11 +160,26 @@ defmodule Cinegraph.ProdRpc do
     "'" <> String.replace(s, "'", "'\\''") <> "'"
   end
 
+  # Escape a string for safe interpolation inside a double-quoted POSIX shell
+  # context. Inside `"..."`, the chars `\`, `"`, `$`, and `` ` `` retain
+  # special meaning; everything else is literal. Order matters — escape `\`
+  # first so escapes added for the other chars aren't double-escaped.
+  defp escape_for_double_quoted(s) do
+    s
+    |> String.replace("\\", "\\\\")
+    |> String.replace("\"", "\\\"")
+    |> String.replace("$", "\\$")
+    |> String.replace("`", "\\`")
+  end
+
   defp run_kamal(path, args) do
-    # `kamal app exec --quiet` still emits some logging on stderr; capture
-    # both, then strip kamal's prefix lines from stdout if present. The
-    # actual eval output (our JSON) is the part we care about.
-    case System.cmd(path, args, stderr_to_stdout: false) do
+    # `kamal app exec --quiet` still emits some logging on stderr, and
+    # infrastructure errors from SSHKit/ssh ("Permission denied", "No such
+    # container", ...) only ever go to stderr. We need them in `output` so
+    # `classify_failure/2` can match them — otherwise every failure looks
+    # like an empty `{:eval_failed, ""}`. `strip_kamal_noise/1` filters
+    # banner lines from the merged stream.
+    case System.cmd(path, args, stderr_to_stdout: true) do
       {output, 0} -> {:ok, strip_kamal_noise(output)}
       {output, code} -> classify_failure(output, code)
     end
@@ -184,9 +207,9 @@ defmodule Cinegraph.ProdRpc do
     cond do
       String.contains?(output, "Permission denied") or
         String.contains?(output, "Could not resolve hostname") or
-          String.contains?(output, "Connection refused") or
-            String.contains?(output, "Connection timed out") or
-              String.contains?(output, "No such container") ->
+        String.contains?(output, "Connection refused") or
+        String.contains?(output, "Connection timed out") or
+          String.contains?(output, "No such container") ->
         {:error, {:kamal_failed, exit_code, output}}
 
       true ->

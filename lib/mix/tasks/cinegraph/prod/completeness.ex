@@ -1,9 +1,9 @@
 defmodule Mix.Tasks.Cinegraph.Prod.Completeness do
   @moduledoc """
-  Read the production catalog completeness snapshot over SSH (#739 Phase C).
-  Calls `Cinegraph.Health.Completeness.run/0` (default) or
-  `Cinegraph.Health.Completeness.history(N)` (with `--history N`) on the
-  prod node and prints the result locally.
+  Read the production catalog completeness snapshot via `kamal app exec`
+  (#739 Phase C). Calls `Cinegraph.Health.Completeness.run/0` (default) or
+  `Cinegraph.Health.Completeness.history(N)` (with `--history N`) inside
+  the running prod container and prints the result locally.
 
   ## Usage
 
@@ -11,7 +11,8 @@ defmodule Mix.Tasks.Cinegraph.Prod.Completeness do
       mix cinegraph.prod.completeness --history 30   # 30-day series
       mix cinegraph.prod.completeness --json         # single-line JSON for jq
 
-  Requires `REMOTE_APP_BIN` env var. See MAINTENANCE.md.
+  Requires the `kamal` CLI on PATH (installed via mise in this project).
+  See MAINTENANCE.md.
   """
   use Mix.Task
 

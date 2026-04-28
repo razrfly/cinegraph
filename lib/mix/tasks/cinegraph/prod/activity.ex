@@ -1,8 +1,8 @@
 defmodule Mix.Tasks.Cinegraph.Prod.Activity do
   @moduledoc """
-  Read the production "today's activity" / N-day sparkline data over SSH
-  (#739 Phase C). Calls `Cinegraph.Health.Activity.recent/1` on the prod
-  node and prints the result locally.
+  Read the production "today's activity" / N-day sparkline data via
+  `kamal app exec` (#739 Phase C). Calls `Cinegraph.Health.Activity.recent/1`
+  inside the running prod container and prints the result locally.
 
   ## Usage
 
@@ -10,7 +10,8 @@ defmodule Mix.Tasks.Cinegraph.Prod.Activity do
       mix cinegraph.prod.activity --days 30    # 30 days
       mix cinegraph.prod.activity --json       # single-line JSON for piping
 
-  Requires `REMOTE_APP_BIN` env var. See MAINTENANCE.md.
+  Requires the `kamal` CLI on PATH (installed via mise in this project).
+  See MAINTENANCE.md.
   """
   use Mix.Task
 
