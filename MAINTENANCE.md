@@ -81,31 +81,40 @@ than the daily caps allow.
 
 ## Reading prod stats from dev
 
-> Status: ⚠ partially implemented (see #739 Phase C). Today, you have two
-> options:
-
-**Option A — pull the DB and run mix tasks locally (slow, drift):**
+#739 Phase C ships ergonomic mix tasks that do the SSH + eval + parse for you.
+Set `REMOTE_APP_BIN` once (in your shell rc or `.env`):
 
 ```sh
-mix db.pull_production
-mix cinegraph.health
+export REMOTE_APP_BIN=/path/to/cinegraph/bin/cinegraph
 ```
 
-**Option B — RPC into prod for live numbers (no DB pull):**
+Then any of:
 
 ```sh
-# Health verdict
-ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(Cinegraph.Health.Facade.compute_full_verdict(), pretty: true))\""
+mix cinegraph.prod.health                  # /admin/health verdict, pretty JSON
+mix cinegraph.prod.health --json | jq .status
 
-# Completeness snapshot
-ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(Cinegraph.Health.Completeness.run(), pretty: true))\""
+mix cinegraph.prod.completeness            # one snapshot
+mix cinegraph.prod.completeness --history 30   # 30-day series
 
-# Queue snapshot
-ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(Cinegraph.Health.Queues.snapshot(), pretty: true))\""
+mix cinegraph.prod.queues                  # Oban queue state
+
+mix cinegraph.prod.activity                # 7 days
+mix cinegraph.prod.activity --days 30
 ```
 
-A future `mix cinegraph.prod.health` wrapper will turn these into one-liners
-(see #739 Phase C).
+All four wrap `Cinegraph.ProdRpc.eval_json/1`, which uses the same SSH recipe
+documented above — they're shortcuts, not a separate channel.
+
+If you need to read something that doesn't have a `mix cinegraph.prod.*`
+wrapper yet, fall back to the raw recipe:
+
+```sh
+ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(<expression>, pretty: true))\""
+```
+
+Or add a new `mix cinegraph.prod.<thing>` task following the existing pattern
+(`lib/mix/tasks/cinegraph/prod/*.ex`) — they're ~25 lines each.
 
 ## Conventions
 
