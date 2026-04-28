@@ -25,7 +25,8 @@ defmodule Cinegraph.Maintenance.ResolvePersonsTest do
 
     test "scopes by :org abbreviation" do
       # Plant two noms under different orgs (plant_nomination! creates a new org each call)
-      %{nom: nom_a, org: org_a} = plant_nomination!(nominee_name: "Person A", person_name: "Person A")
+      %{nom: nom_a, org: org_a} =
+        plant_nomination!(nominee_name: "Person A", person_name: "Person A")
 
       _nom_b = plant_nomination!(nominee_name: "Person B", person_name: "Person B")
 

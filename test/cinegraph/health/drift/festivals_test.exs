@@ -1,7 +1,13 @@
 defmodule Cinegraph.Health.Drift.FestivalsTest do
   use Cinegraph.DataCase, async: false
 
-  alias Cinegraph.Festivals.{FestivalCategory, FestivalCeremony, FestivalNomination, FestivalOrganization}
+  alias Cinegraph.Festivals.{
+    FestivalCategory,
+    FestivalCeremony,
+    FestivalNomination,
+    FestivalOrganization
+  }
+
   alias Cinegraph.Health.Drift
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Repo

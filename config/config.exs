@@ -196,7 +196,11 @@ config :cinegraph, Oban,
        # with a different batch shape; the worker has dedicated clauses
        # for each.
        {"0 3 * * *", Cinegraph.Workers.PersonQualityScoreWorker,
-        args: %{"batch" => "daily_incremental", "trigger" => "daily_scheduled", "min_credits" => 1}},
+        args: %{
+          "batch" => "daily_incremental",
+          "trigger" => "daily_scheduled",
+          "min_credits" => 1
+        }},
        {"0 2 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
         args: %{"batch" => "weekly_full", "trigger" => "weekly_scheduled", "min_credits" => 5}},
        {"0 1 1-7 * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
