@@ -51,10 +51,11 @@ defmodule Mix.Tasks.Cinegraph.People.RefreshBiographies do
     capped =
       case Keyword.get(opts, :limit) do
         nil -> base
-        n when is_integer(n) -> from(q in base, limit: ^n)
+        n when is_integer(n) and n > 0 -> from(q in base, limit: ^n)
+        n when is_integer(n) and n <= 0 -> Mix.raise("--limit must be a positive integer")
       end
 
-    ids = Repo.all(capped)
+    ids = Repo.replica().all(capped)
     Mix.shell().info("Found #{length(ids)} people to refresh")
 
     if Keyword.get(opts, :dry_run, false) do
