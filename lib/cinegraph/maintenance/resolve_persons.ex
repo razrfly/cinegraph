@@ -42,7 +42,13 @@ defmodule Cinegraph.Maintenance.ResolvePersons do
 
   @doc "Run the backfill. See module docs for options."
   @spec run(keyword()) ::
-          {:ok, %{found: non_neg_integer(), enqueued: non_neg_integer(), failed: non_neg_integer(), dry_run: boolean()}}
+          {:ok,
+           %{
+             found: non_neg_integer(),
+             enqueued: non_neg_integer(),
+             failed: non_neg_integer(),
+             dry_run: boolean()
+           }}
   def run(opts \\ []) when is_list(opts) do
     base =
       from n in FestivalNomination,
@@ -53,19 +59,32 @@ defmodule Cinegraph.Maintenance.ResolvePersons do
         join: org in FestivalOrganization,
         on: cer.organization_id == org.id,
         where: c.tracks_person == true and is_nil(n.person_id),
+        order_by: [asc: n.id],
         select: n.id
 
     scoped =
       case Keyword.get(opts, :org) do
-        nil -> base
-        abbr when is_binary(abbr) -> from [n, c, cer, org] in base, where: org.abbreviation == ^abbr
+        nil ->
+          base
+
+        abbr when is_binary(abbr) ->
+          from [n, c, cer, org] in base, where: org.abbreviation == ^abbr
+
+        other ->
+          raise ArgumentError, ":org must be nil or a binary, got: #{inspect(other)}"
       end
 
     capped =
       case Keyword.get(opts, :limit) do
-        nil -> scoped
-        n when is_integer(n) and n > 0 -> from(q in scoped, limit: ^n)
-        n when is_integer(n) and n <= 0 -> raise ArgumentError, ":limit must be a positive integer, got: #{n}"
+        nil ->
+          scoped
+
+        n when is_integer(n) and n > 0 ->
+          from(q in scoped, limit: ^n)
+
+        other ->
+          raise ArgumentError,
+                ":limit must be a positive integer or nil, got: #{inspect(other)}"
       end
 
     ids = Repo.all(capped)
