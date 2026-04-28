@@ -19,7 +19,12 @@ defmodule Mix.Tasks.Cinegraph.Movies.BackfillOmdb do
   def run(args) do
     Mix.Task.run("app.start")
 
-    {opts, _, _} = OptionParser.parse(args, strict: [dry_run: :boolean, limit: :integer])
+    {opts, _, invalid} =
+      OptionParser.parse(args, strict: [dry_run: :boolean, limit: :integer])
+
+    if invalid != [] do
+      Mix.raise("Invalid option(s): #{inspect(invalid)}")
+    end
 
     {:ok, %{found: found, enqueued: enqueued, failed: failed, dry_run: dry_run?}} =
       BackfillOmdb.run(opts)

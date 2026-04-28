@@ -28,8 +28,6 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
   import Ecto.Query
   require Logger
 
-  @insert_chunk_size 500
-
   @spec run(keyword()) ::
           {:ok,
            %{
@@ -77,34 +75,37 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
       Logger.info("BackfillOmdb: dry-run found #{found} movies to enrich")
       {:ok, %{found: found, enqueued: 0, failed: 0, dry_run: true}}
     else
-      {enqueued, failed} = enqueue_in_chunks(ids)
+      {enqueued, failed} = enqueue_each(ids)
       Logger.info("BackfillOmdb: enqueued #{enqueued} jobs on :omdb (#{failed} failed)")
       {:ok, %{found: found, enqueued: enqueued, failed: failed, dry_run: false}}
     end
   end
 
-  defp enqueue_in_chunks(ids) do
-    ids
-    |> Enum.chunk_every(@insert_chunk_size)
-    |> Enum.reduce({0, 0}, fn chunk, {ok, err} ->
-      jobs = Enum.map(chunk, &OMDbEnrichmentWorker.new(%{"movie_id" => &1}))
+  # Per-job inserts so the worker's :unique config is honoured —
+  # Oban.insert_all bypasses uniqueness on the default BasicEngine.
+  defp enqueue_each(ids) do
+    Enum.reduce(ids, {0, 0}, fn id, {ok, err} ->
+      job = OMDbEnrichmentWorker.new(%{"movie_id" => id})
 
       try do
-        case Oban.insert_all(jobs) do
-          results when is_list(results) ->
-            {ok + length(results), err}
+        case Oban.insert(job) do
+          {:ok, _} ->
+            {ok + 1, err}
 
-          other ->
-            Logger.error("Oban.insert_all returned unexpected value: #{inspect(other)}")
-            {ok, err + length(chunk)}
+          {:error, reason} ->
+            Logger.error(
+              "BackfillOmdb: failed to insert OMDb job for movie_id=#{id} error=#{inspect(reason)}"
+            )
+
+            {ok, err + 1}
         end
       rescue
         e ->
           Logger.error(
-            "Oban.insert_all failed for chunk of #{length(chunk)}: #{Exception.message(e)}"
+            "BackfillOmdb: exception inserting OMDb job for movie_id=#{id}: #{Exception.message(e)}"
           )
 
-          {ok, err + length(chunk)}
+          {ok, err + 1}
       end
     end)
   end

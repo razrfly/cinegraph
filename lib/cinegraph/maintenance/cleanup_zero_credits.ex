@@ -90,7 +90,11 @@ defmodule Cinegraph.Maintenance.CleanupZeroCredits do
       {:ok, %{found: found, enqueued: 0, failed: 0, dry_run: true, phase: :enqueue}}
     else
       {enqueued, failed} = enqueue_in_chunks(tmdb_ids)
-      Logger.info("CleanupZeroCredits[enqueue]: enqueued #{enqueued} TMDb refetches (#{failed} failed)")
+
+      Logger.info(
+        "CleanupZeroCredits[enqueue]: enqueued #{enqueued} TMDb refetches (#{failed} failed)"
+      )
+
       {:ok, %{found: found, enqueued: enqueued, failed: failed, dry_run: false, phase: :enqueue}}
     end
   end
@@ -181,28 +185,35 @@ defmodule Cinegraph.Maintenance.CleanupZeroCredits do
     Enum.reduce(rows, {0, 0}, fn person, {ok, err} ->
       try do
         Repo.transaction(fn ->
-          # Re-check inside the transaction in case credits arrived after the
-          # query above.
-          credits_count =
-            Repo.one(
-              from mc in "movie_credits",
-                where: mc.person_id == ^person.id,
-                select: count(mc.person_id)
+          # Single conditional delete: the WHERE clause re-evaluates at delete
+          # time, so a credit row inserted between the candidate-set query and
+          # this statement keeps the person row alive. Avoids the race where a
+          # separate count() + Repo.delete! could cascade-delete credits
+          # (movie_credits.person_id is on_delete: :delete_all).
+          delete_query =
+            from(p in Person,
+              where: p.id == ^person.id,
+              where:
+                not fragment(
+                  "EXISTS (SELECT 1 FROM movie_credits mc WHERE mc.person_id = ?)",
+                  p.id
+                )
             )
 
-          if credits_count == 0 do
-            Logger.warning(
-              "CleanupZeroCredits: deleting orphan person id=#{person.id} name=#{inspect(person.name)} tmdb_id=#{person.tmdb_id}"
-            )
+          case Repo.delete_all(delete_query) do
+            {1, _} ->
+              Logger.warning(
+                "CleanupZeroCredits: deleting orphan person id=#{person.id} name=#{inspect(person.name)} tmdb_id=#{person.tmdb_id}"
+              )
 
-            Repo.delete!(person)
-            :deleted
-          else
-            Logger.info(
-              "CleanupZeroCredits: skipping id=#{person.id} (#{credits_count} credits arrived after refetch)"
-            )
+              :deleted
 
-            :skipped
+            {0, _} ->
+              Logger.info(
+                "CleanupZeroCredits: skipping id=#{person.id} (credits arrived after refetch)"
+              )
+
+              :skipped
           end
         end)
         |> case do
