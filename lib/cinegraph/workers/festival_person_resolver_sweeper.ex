@@ -27,9 +27,9 @@ defmodule Cinegraph.Workers.FestivalPersonResolverSweeper do
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     case ResolvePersons.run(limit: @per_run_limit) do
-      {:ok, %{found: found, enqueued: enqueued} = stats} ->
+      {:ok, %{found: found, enqueued: enqueued, failed: failed} = stats} ->
         Logger.info(
-          "FestivalPersonResolverSweeper: found=#{found} enqueued=#{enqueued} (cap=#{@per_run_limit})"
+          "FestivalPersonResolverSweeper: found=#{found} enqueued=#{enqueued} failed=#{failed} (cap=#{@per_run_limit})"
         )
 
         {:ok, stats}

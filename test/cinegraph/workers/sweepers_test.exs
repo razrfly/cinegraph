@@ -11,14 +11,14 @@ defmodule Cinegraph.Workers.SweepersTest do
 
   describe "FestivalPersonResolverSweeper.perform/1" do
     test "returns :ok with zero found on empty DB" do
-      assert {:ok, %{found: 0, enqueued: 0}} =
+      assert {:ok, %{found: 0, enqueued: 0, failed: 0, dry_run: false}} =
                FestivalPersonResolverSweeper.perform(%Oban.Job{})
     end
   end
 
   describe "BiographyRefreshSweeper.perform/1" do
     test "returns :ok with zero found on empty DB" do
-      assert {:ok, %{found: 0, enqueued: 0}} =
+      assert {:ok, %{found: 0, enqueued: 0, failed: 0, dry_run: false}} =
                BiographyRefreshSweeper.perform(%Oban.Job{})
     end
   end

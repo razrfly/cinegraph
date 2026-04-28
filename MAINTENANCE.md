@@ -12,18 +12,26 @@ module docstrings.
 
 ## One-shot prod execution recipe
 
+Set these once per shell session (or export them in your shell rc):
+
 ```sh
-ssh 192.168.1.205 \
-  '/path/to/cinegraph/bin/cinegraph eval "Cinegraph.Maintenance.<Module>.run(<opts>)"'
+HOST="${REMOTE_SSH_HOST:-192.168.1.205}"
+APP_BIN="/path/to/cinegraph/bin/cinegraph"
+```
+
+Then every recipe below reads:
+
+```sh
+ssh "$HOST" "$APP_BIN eval \"Cinegraph.Maintenance.<Module>.run(<opts>)\""
 ```
 
 Replace `<Module>` and `<opts>` per task. Examples below.
 
-> **`192.168.1.205`** is the prod host — same one the `mix db.pull_production`
-> task SSHes to. Override with `REMOTE_SSH_HOST` env var if it changes.
+> **`HOST`** defaults to `192.168.1.205` — the prod host the
+> `mix db.pull_production` task SSHes to. Override with `REMOTE_SSH_HOST`.
 >
-> **`/path/to/cinegraph/bin/cinegraph`** is the release binary on the prod box.
-> The exact path depends on your deploy layout. If unknown, log in and run
+> **`APP_BIN`** is the release binary on the prod box. The exact path depends
+> on your deploy layout. If unknown, log in and run
 > `find / -name 'cinegraph' -path '*/bin/*' 2>/dev/null` once.
 
 ## Available commands
@@ -34,16 +42,13 @@ Drains `person_required_nomination_missing_person` (was 91.58% RED).
 
 ```sh
 # Full backfill — ~11k jobs, drains over hours on :maintenance queue
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "Cinegraph.Maintenance.ResolvePersons.run([])"'
+ssh "$HOST" "$APP_BIN eval \"Cinegraph.Maintenance.ResolvePersons.run([])\""
 
 # Dry-run (count only)
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "Cinegraph.Maintenance.ResolvePersons.run([dry_run: true])"'
+ssh "$HOST" "$APP_BIN eval \"Cinegraph.Maintenance.ResolvePersons.run([dry_run: true])\""
 
 # Scope to one organization
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "Cinegraph.Maintenance.ResolvePersons.run([org: \"AMPAS\", limit: 100])"'
+ssh "$HOST" "$APP_BIN eval \"Cinegraph.Maintenance.ResolvePersons.run([org: \\\"AMPAS\\\", limit: 100])\""
 ```
 
 Returns `{:ok, %{found: N, enqueued: M, failed: 0, dry_run: false}}`.
@@ -54,12 +59,10 @@ Drains `missing_biography` (currently 100% of ~23k canonical-list people).
 
 ```sh
 # Full backfill — ~23k jobs, TMDb-rate-limited
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "Cinegraph.Maintenance.RefreshBiographies.run([])"'
+ssh "$HOST" "$APP_BIN eval \"Cinegraph.Maintenance.RefreshBiographies.run([])\""
 
 # Smoke test (5 jobs)
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "Cinegraph.Maintenance.RefreshBiographies.run([limit: 5])"'
+ssh "$HOST" "$APP_BIN eval \"Cinegraph.Maintenance.RefreshBiographies.run([limit: 5])\""
 ```
 
 ## Autonomous cron-driven sweepers
@@ -92,16 +95,13 @@ mix cinegraph.health
 
 ```sh
 # Health verdict
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "IO.puts(Jason.encode!(Cinegraph.Health.Facade.compute_full_verdict(), pretty: true))"'
+ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(Cinegraph.Health.Facade.compute_full_verdict(), pretty: true))\""
 
 # Completeness snapshot
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "IO.puts(Jason.encode!(Cinegraph.Health.Completeness.run(), pretty: true))"'
+ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(Cinegraph.Health.Completeness.run(), pretty: true))\""
 
 # Queue snapshot
-ssh 192.168.1.205 '/path/to/cinegraph/bin/cinegraph eval \
-  "IO.puts(Jason.encode!(Cinegraph.Health.Queues.snapshot(), pretty: true))"'
+ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(Cinegraph.Health.Queues.snapshot(), pretty: true))\""
 ```
 
 A future `mix cinegraph.prod.health` wrapper will turn these into one-liners

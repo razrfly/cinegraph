@@ -32,7 +32,13 @@ defmodule Cinegraph.Maintenance.RefreshBiographies do
 
   @doc "Run the backfill. See module docs for options."
   @spec run(keyword()) ::
-          {:ok, %{found: non_neg_integer(), enqueued: non_neg_integer(), failed: non_neg_integer(), dry_run: boolean()}}
+          {:ok,
+           %{
+             found: non_neg_integer(),
+             enqueued: non_neg_integer(),
+             failed: non_neg_integer(),
+             dry_run: boolean()
+           }}
   def run(opts \\ []) when is_list(opts) do
     base =
       from p in "people",
@@ -45,13 +51,20 @@ defmodule Cinegraph.Maintenance.RefreshBiographies do
             fragment("? != '{}'::jsonb", m.canonical_sources) and
             not is_nil(p.tmdb_id),
         distinct: p.id,
+        order_by: [asc: p.id],
         select: p.id
 
     capped =
       case Keyword.get(opts, :limit) do
-        nil -> base
-        n when is_integer(n) and n > 0 -> from(q in base, limit: ^n)
-        n when is_integer(n) and n <= 0 -> raise ArgumentError, ":limit must be a positive integer, got: #{n}"
+        nil ->
+          base
+
+        n when is_integer(n) and n > 0 ->
+          from(q in base, limit: ^n)
+
+        other ->
+          raise ArgumentError,
+                ":limit must be a positive integer or nil, got: #{inspect(other)}"
       end
 
     ids = Repo.replica().all(capped)
