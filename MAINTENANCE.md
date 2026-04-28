@@ -67,17 +67,43 @@ ssh "$HOST" "$APP_BIN eval \"Cinegraph.Maintenance.RefreshBiographies.run([limit
 
 ## Autonomous cron-driven sweepers
 
-Both backfills also run automatically via `Oban.Plugins.Cron`
-(`config/config.exs`):
+All backfills run automatically via `Oban.Plugins.Cron` (`config/config.exs`):
 
-| Cron | Worker | Cap |
-|---|---|---|
-| `30 5 * * *` | `BiographyRefreshSweeper` | 5,000 jobs/run |
-| `0 6 * * *` | `FestivalPersonResolverSweeper` | 2,000 jobs/run |
-| `5 5 * * *` | `CompletenessSnapshotWorker` | (writes daily snapshot + verdict log line) |
+| Cron (UTC) | Worker | Drains | Cap |
+|---|---|---|---|
+| `5 5 * * *` | `CompletenessSnapshotWorker` | daily completeness snapshot + verdict log line | — |
+| `30 5 * * *` | `BiographyRefreshSweeper` | canonical-list biographies | 5,000/day |
+| `35 5 * * *` | `ProfileDataRefreshSweeper` | canonical-list `profile_path` + `known_for_department` | 3,000/day |
+| `0 6 * * *` | `FestivalPersonResolverSweeper` | nominations missing `person_id` | 2,000/day |
+| `30 6 * * *` | `OmdbBackfillSweeper` | movies missing OMDb (canonical first) | 5,000/day |
+| `0 7 * * *` | `ImdbIdRepairSweeper` | movies missing `imdb_id` | 5,000/day |
+| `0 4 * * 0` | `ZeroCreditsCleanupSweeper` | enqueue refetch for orphan people | 200/run |
+| `0 4 * * 1` | `ZeroCreditsCleanupDeleteSweeper` | hard-delete still-orphaned rows | 200/run |
+| `0 3 * * *` | `PersonQualityScoreWorker` (`daily_incremental`) | PQS daily delta | (worker-paged) |
+| `0 2 * * SUN` | `PersonQualityScoreWorker` (`weekly_full`) | PQS weekly full recalc | (worker-paged) |
+| `0 1 1-7 * SUN` | `PersonQualityScoreWorker` (`monthly_deep`) | PQS monthly deep recalc | (worker-paged) |
+| `0 */6 * * *` | `PersonQualityScoreWorker` (`health_check`) | PQS health check | — |
+| `0 */12 * * *` | `PersonQualityScoreWorker` (`stale_cleanup`) | PQS stale rows | — |
 
-You don't need to run the one-shots above unless you want to drain faster
-than the daily caps allow.
+You don't need to run the one-shot mix tasks unless you want to drain faster
+than the daily caps allow, or you want to debug a specific batch.
+
+## Available one-shot commands
+
+The `Cinegraph.Maintenance.*` modules behind each sweeper also have:
+- a `mix cinegraph.<thing>` wrapper for ad-hoc dev runs against the local DB
+- `bin/cinegraph eval "Cinegraph.Maintenance.<Thing>.run([])"` for one-shots against prod
+
+| Maintenance task | Mix wrapper |
+|---|---|
+| Festival person-resolver | `mix cinegraph.festivals.resolve_persons` |
+| Biography refresh | `mix cinegraph.people.refresh_biographies` |
+| Profile data refresh | `mix cinegraph.people.refresh_profile_data` |
+| OMDb null backfill | `mix cinegraph.movies.backfill_omdb` |
+| IMDb-id repair | `mix cinegraph.movies.repair_imdb_ids` |
+| Zero-credits cleanup | `mix cinegraph.people.cleanup_zero_credits [--phase enqueue\|delete]` |
+
+All accept `--dry-run` (count only) and `--limit N` (cap enqueues).
 
 ## Reading prod stats from dev
 

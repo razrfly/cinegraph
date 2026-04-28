@@ -1,15 +1,16 @@
 defmodule Mix.Tasks.Cinegraph.Prod.Queues do
   @moduledoc """
-  Read the production Oban queue snapshot over SSH (#739 Phase C). Calls
-  `Cinegraph.Health.Queues.snapshot/0` on the prod node and prints the
-  result locally.
+  Read the production Oban queue snapshot via `kamal app exec` (#739
+  Phase C). Calls `Cinegraph.Health.Queues.snapshot/0` inside the running
+  prod container and prints the result locally.
 
   ## Usage
 
       mix cinegraph.prod.queues           # pretty-printed JSON
       mix cinegraph.prod.queues --json    # single-line JSON for piping
 
-  Requires `REMOTE_APP_BIN` env var. See MAINTENANCE.md.
+  Requires the `kamal` CLI on PATH (installed via mise in this project).
+  See MAINTENANCE.md.
   """
   use Mix.Task
 
