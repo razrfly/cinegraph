@@ -145,6 +145,7 @@ defmodule CinegraphWeb.AdminHealthLive.Components do
   attr :status, :atom, required: true, values: [:green, :amber, :red, :unknown]
   attr :headline, :string, required: true
   attr :signals, :list, required: true
+  attr :unknown_count, :integer, default: 0
   attr :on_open, :string, default: "open_drawer"
 
   def drift_card(assigns) do
@@ -158,6 +159,9 @@ defmodule CinegraphWeb.AdminHealthLive.Components do
         <.verdict_pill status={@status} />
       </div>
       <p class="text-sm text-zinc-700 mb-3">{@headline}</p>
+      <p :if={@unknown_count > 0} class="text-xs text-amber-700 italic mb-2">
+        ⚠ {@unknown_count} {ngettext_check(@unknown_count)} unavailable — see drawer
+      </p>
       <ul class="text-sm space-y-1 flex-1">
         <li :for={signal <- @signals} class="flex items-center justify-between">
           <span class="text-zinc-600 truncate mr-2">{signal.label}</span>
@@ -503,6 +507,9 @@ defmodule CinegraphWeb.AdminHealthLive.Components do
   defp card_border(:amber), do: "border-amber-300"
   defp card_border(:red), do: "border-red-300"
   defp card_border(_), do: "border-zinc-200"
+
+  defp ngettext_check(1), do: "check"
+  defp ngettext_check(_), do: "checks"
 
   defp format_check_name(%{domain: d, check: c}),
     do: "#{d}/#{c}" |> String.replace("_", " ")

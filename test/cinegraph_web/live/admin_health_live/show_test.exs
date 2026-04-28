@@ -78,4 +78,65 @@ defmodule CinegraphWeb.AdminHealthLive.ShowTest do
       assert html =~ "/admin/award-imports"
     end
   end
+
+  describe "domain_card_props/2" do
+    alias CinegraphWeb.AdminHealthLive.Show
+
+    test "headline says 'unavailable' when source check has blocked_reason" do
+      verdict = %{
+        domains: %{
+          movies: %{
+            status: :red,
+            checks: [
+              %{
+                check: :year_gap,
+                status: :unknown,
+                total_population: 0,
+                affected_count: 0,
+                affected_pct: 0.0,
+                blocked_reason: "no cached export"
+              },
+              %{
+                check: :missing_omdb,
+                status: :red,
+                total_population: 100,
+                affected_count: 80,
+                affected_pct: 80.0,
+                blocked_reason: nil
+              }
+            ]
+          }
+        }
+      }
+
+      props = Show.domain_card_props(verdict, :movies)
+      assert props.headline =~ "unavailable"
+      assert props.unknown_count == 1
+    end
+
+    test "headline computes normally when source check is healthy" do
+      verdict = %{
+        domains: %{
+          movies: %{
+            status: :green,
+            checks: [
+              %{
+                check: :year_gap,
+                status: :green,
+                total_population: 1000,
+                affected_count: 0,
+                affected_pct: 0.0,
+                blocked_reason: nil
+              }
+            ]
+          }
+        }
+      }
+
+      props = Show.domain_card_props(verdict, :movies)
+      assert props.headline =~ "vs TMDb"
+      refute props.headline =~ "unavailable"
+      assert props.unknown_count == 0
+    end
+  end
 end
