@@ -87,9 +87,9 @@ defmodule Cinegraph.Health.Drift.Festivals do
             organization_id: org_id,
             year: year,
             nominations: noms,
-            org_median: med && Decimal.to_float(med),
+            org_median: med && med_to_float(med),
             reason:
-              "noms #{noms} < #{@floor_factor} × org median (#{med && Decimal.to_string(med)})"
+              "noms #{noms} < #{@floor_factor} × org median (#{med && med_to_string(med)})"
           }
         end)
 
@@ -225,4 +225,12 @@ defmodule Cinegraph.Health.Drift.Festivals do
 
   defp sql_org_clause(org_id, alias_),
     do: {"WHERE #{alias_}.organization_id = $1", [org_id]}
+
+  # `percentile_cont` returns Decimal when its input is numeric/decimal, but
+  # float when its input is a bigint (our case — count(id)). Tolerate both.
+  defp med_to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp med_to_float(n) when is_number(n), do: n / 1
+
+  defp med_to_string(%Decimal{} = d), do: Decimal.to_string(d)
+  defp med_to_string(n) when is_number(n), do: to_string(n)
 end

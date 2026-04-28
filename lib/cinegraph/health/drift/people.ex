@@ -297,9 +297,12 @@ defmodule Cinegraph.Health.Drift.People do
   end
 
   # Counts rows matched by a pre-built Ecto query (parameterized — no
-  # string interpolation of predicates).
+  # string interpolation of predicates). Counts directly against the source
+  # query's binding instead of wrapping in `subquery/1`, which would require
+  # the source to declare its own `:select` (schemaless `from(p in "people"...)`
+  # queries don't).
   defp count_query(query) do
-    Repo.replica().one(from(p in subquery(query), select: count())) || 0
+    query |> select([p], count(p.id)) |> Repo.replica().one() || 0
   end
 
   # Selects up to `limit` examples from a pre-built Ecto query.
