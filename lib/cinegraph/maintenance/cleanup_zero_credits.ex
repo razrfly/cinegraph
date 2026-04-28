@@ -184,42 +184,35 @@ defmodule Cinegraph.Maintenance.CleanupZeroCredits do
   defp delete_each(rows) do
     Enum.reduce(rows, {0, 0}, fn person, {ok, err} ->
       try do
-        Repo.transaction(fn ->
-          # Single conditional delete: the WHERE clause re-evaluates at delete
-          # time, so a credit row inserted between the candidate-set query and
-          # this statement keeps the person row alive. Avoids the race where a
-          # separate count() + Repo.delete! could cascade-delete credits
-          # (movie_credits.person_id is on_delete: :delete_all).
-          delete_query =
-            from(p in Person,
-              where: p.id == ^person.id,
-              where:
-                not fragment(
-                  "EXISTS (SELECT 1 FROM movie_credits mc WHERE mc.person_id = ?)",
-                  p.id
-                )
+        # Single conditional delete: the WHERE clause re-evaluates at delete
+        # time, so a credit row inserted between the candidate-set query and
+        # this statement keeps the person row alive. Avoids the race where a
+        # separate count() + Repo.delete! could cascade-delete credits
+        # (movie_credits.person_id is on_delete: :delete_all).
+        delete_query =
+          from(p in Person,
+            where: p.id == ^person.id,
+            where:
+              not fragment(
+                "EXISTS (SELECT 1 FROM movie_credits mc WHERE mc.person_id = ?)",
+                p.id
+              )
+          )
+
+        case Repo.delete_all(delete_query) do
+          {1, _} ->
+            Logger.warning(
+              "CleanupZeroCredits: deleting orphan person id=#{person.id} name=#{inspect(person.name)} tmdb_id=#{person.tmdb_id}"
             )
 
-          case Repo.delete_all(delete_query) do
-            {1, _} ->
-              Logger.warning(
-                "CleanupZeroCredits: deleting orphan person id=#{person.id} name=#{inspect(person.name)} tmdb_id=#{person.tmdb_id}"
-              )
+            {ok + 1, err}
 
-              :deleted
+          {0, _} ->
+            Logger.info(
+              "CleanupZeroCredits: skipping id=#{person.id} (credits arrived after refetch)"
+            )
 
-            {0, _} ->
-              Logger.info(
-                "CleanupZeroCredits: skipping id=#{person.id} (credits arrived after refetch)"
-              )
-
-              :skipped
-          end
-        end)
-        |> case do
-          {:ok, :deleted} -> {ok + 1, err}
-          {:ok, :skipped} -> {ok, err}
-          _ -> {ok, err + 1}
+            {ok, err}
         end
       rescue
         e ->

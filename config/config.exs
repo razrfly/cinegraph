@@ -158,6 +158,12 @@ config :cinegraph, Oban,
        {"0 3 * * *", Cinegraph.Workers.RatingsRefreshWorker},
        # Daily completeness snapshot at 5:05 AM UTC (after the 4 AM TMDb sync settles) — #722
        {"5 5 * * *", Cinegraph.Workers.CompletenessSnapshotWorker},
+       # Daily festival sync (#745 Phase 2) — discovers new ceremony years
+       # for active festivals + enqueues imports for any year not yet in
+       # the DB. Runs at 02:00 UTC, before all other homeostasis sweepers,
+       # so new nominations land before the daily person-resolver pass at
+       # 06:00 UTC.
+       {"0 2 * * *", Cinegraph.Workers.FestivalSyncSweeper},
        # Homeostasis sweepers (#735 Phase 3.1, #739 Phase A, #745 Phase 1) —
        # autonomously drain the dashboard's drift backlogs. Capped per-run;
        # idempotent (workers are uniqueness-keyed).
