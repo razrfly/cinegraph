@@ -22,7 +22,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   alias Cinegraph.Festivals
   alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
   alias Cinegraph.Workers.TMDbDetailsWorker
-  alias Cinegraph.Movies.{Movie, Person}
+  alias Cinegraph.Movies.{Credit, Movie, Person}
   alias Cinegraph.People.FestivalPersonInferrer
   alias Cinegraph.Services.TMDb.Extended, as: TMDbExtended
   alias Cinegraph.Services.TMDb.FallbackSearch
@@ -561,9 +561,15 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     nominee_name = nominee["name"] || nominee[:name]
     person_imdb_ids = nominee["person_imdb_ids"] || nominee[:person_imdb_ids] || []
 
-    # Try to find the person if this is a person category
+    # Try to find the person if this is a person category. Run the resolver
+    # whenever EITHER imdb ids OR a non-empty nominee name is available — the
+    # resolver's credit-based + TMDb-fallback phases work off `nominee_name`
+    # alone. (#730 Phase 1a — pre-fix this gate dropped the resolver entirely
+    # for ~11,470 nominations whose scrapers didn't populate person_imdb_ids.)
     person_id =
-      if category && category.tracks_person && person_imdb_ids != [] do
+      if category && category.tracks_person &&
+           (person_imdb_ids != [] or
+              (is_binary(nominee_name) and nominee_name != "")) do
         find_or_create_person(person_imdb_ids, nominee_name, category, movie)
       else
         nil
@@ -616,6 +622,39 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       end
     end
   end
+
+  @doc """
+  Public hook for backfill (#730 Phase 1a): re-runs the per-nomination
+  resolver against an existing `%FestivalNomination{}` and returns the
+  resolved `person_id` (or `nil`). Inputs are pulled from `nom.details`
+  exactly as `create_nomination/4` reads them for new noms.
+
+  Caller must preload `:category` and `:movie`.
+  """
+  def resolve_for_nomination(%FestivalNomination{
+        category: category,
+        movie: movie,
+        details: details
+      })
+      when not is_nil(category) and not is_nil(movie) do
+    nominee_name = (details && (details["nominee_names"] || details[:nominee_names])) || nil
+
+    person_imdb_ids =
+      (details && (details["person_imdb_ids"] || details[:person_imdb_ids])) || []
+
+    cond do
+      !category.tracks_person ->
+        nil
+
+      person_imdb_ids == [] and (is_nil(nominee_name) or nominee_name == "") ->
+        nil
+
+      true ->
+        find_or_create_person(person_imdb_ids, nominee_name, category, movie)
+    end
+  end
+
+  def resolve_for_nomination(_), do: nil
 
   defp find_or_create_person(person_imdb_ids, nominee_name, category, movie) do
     # Issue #236: Track person linking operations with comprehensive metrics
@@ -1354,16 +1393,22 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     length(roles[:departments]) > 0 or length(roles[:jobs]) > 0
   end
 
-  # Add movie context boost (prefer people who worked on the nominated movie)
+  # Restrict to people with credits on the nominated movie when available.
+  # (#730 Phase 1a) The original implementation used ORDER BY here so the
+  # search ranged over all ~375k people with the right `credit_type` and
+  # relied on Jaro similarity + the 0.10 gap-test to disambiguate. In
+  # practice, ambiguity routinely killed the match — e.g. "Cillian Murphy"
+  # (1.00) vs "Gillian Murphy" (0.95) failed the gap-test, so credit-based
+  # returned nil and the resolver fell to the TMDb fallback (or nil).
+  # Movie-context-as-hard-filter is far more reliable: a person nominated
+  # "for Movie X" almost always has a credit on Movie X. When no candidate
+  # exists, credit-based returns nil and the TMDb fallback still runs.
   defp add_movie_context_boost(query, nil), do: query
 
   defp add_movie_context_boost(query, movie) do
-    # Order by movie context: people from the same movie first, then others
     from [p, c] in query,
-      order_by: [
-        desc: fragment("CASE WHEN ? = ? THEN 1 ELSE 0 END", c.movie_id, ^movie.id),
-        desc: p.popularity
-      ]
+      where: c.movie_id == ^movie.id,
+      order_by: [desc: p.popularity]
   end
 
   # Map award categories to relevant professional roles
