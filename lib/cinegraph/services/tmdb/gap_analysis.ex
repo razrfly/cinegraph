@@ -209,30 +209,7 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
     with {:ok, export_path} <- ensure_export(Keyword.put_new(opts, :skip_download, true)),
          {:ok, export_ids} <- load_export_ids(export_path, opts),
          {:ok, our_ids} <- load_our_ids() do
-      export_total = MapSet.size(export_ids)
-      our_total = MapSet.size(our_ids)
-      overlap = MapSet.intersection(our_ids, export_ids) |> MapSet.size()
-      missing_count = export_total - overlap
-
-      coverage_percent =
-        if export_total > 0 do
-          Float.round(overlap / export_total * 100, 2)
-        else
-          0.0
-        end
-
-      # Extract date from export path
-      export_date = extract_date_from_path(export_path)
-
-      {:ok,
-       %{
-         export_total: export_total,
-         our_total: our_total,
-         missing_count: missing_count,
-         coverage_percent: coverage_percent,
-         export_date: export_date,
-         export_path: export_path
-       }}
+      {:ok, build_stats_map(export_ids, our_ids, export_path)}
     else
       {:error, :file_not_found} ->
         # No cached file, try downloading
@@ -257,28 +234,31 @@ defmodule Cinegraph.Services.TMDb.GapAnalysis do
     with {:ok, export_path} <- ensure_export(opts),
          {:ok, export_ids} <- load_export_ids(export_path, opts),
          {:ok, our_ids} <- load_our_ids() do
-      export_total = MapSet.size(export_ids)
-      our_total = MapSet.size(our_ids)
-      overlap = MapSet.intersection(our_ids, export_ids) |> MapSet.size()
-      missing_count = export_total - overlap
-
-      coverage_percent =
-        if export_total > 0 do
-          Float.round(overlap / export_total * 100, 2)
-        else
-          0.0
-        end
-
-      {:ok,
-       %{
-         export_total: export_total,
-         our_total: our_total,
-         missing_count: missing_count,
-         coverage_percent: coverage_percent,
-         export_date: extract_date_from_path(export_path),
-         export_path: export_path
-       }}
+      {:ok, build_stats_map(export_ids, our_ids, export_path)}
     end
+  end
+
+  defp build_stats_map(export_ids, our_ids, export_path) do
+    export_total = MapSet.size(export_ids)
+    our_total = MapSet.size(our_ids)
+    overlap = MapSet.intersection(our_ids, export_ids) |> MapSet.size()
+    missing_count = export_total - overlap
+
+    coverage_percent =
+      if export_total > 0 do
+        Float.round(overlap / export_total * 100, 2)
+      else
+        0.0
+      end
+
+    %{
+      export_total: export_total,
+      our_total: our_total,
+      missing_count: missing_count,
+      coverage_percent: coverage_percent,
+      export_date: extract_date_from_path(export_path),
+      export_path: export_path
+    }
   end
 
   @doc """

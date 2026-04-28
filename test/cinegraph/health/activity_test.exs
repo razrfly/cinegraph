@@ -22,7 +22,7 @@ defmodule Cinegraph.Health.ActivityTest do
       end)
     end
 
-    test "for_date/1 accepts a Date and returns counters for that date" do
+    test "for_date/2 accepts a Date and returns counters for that date" do
       yesterday = Date.add(Date.utc_today(), -1)
       activity = Activity.for_date(yesterday, bypass_cache: true)
       assert activity.date == yesterday

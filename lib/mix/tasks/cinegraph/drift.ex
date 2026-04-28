@@ -24,10 +24,12 @@ defmodule Mix.Tasks.Cinegraph.Drift do
   def run([domain | rest]) do
     Mix.Task.run("app.start")
 
-    {opts, _, _} =
+    {opts, _, invalid} =
       OptionParser.parse(rest,
         strict: [json: :boolean, limit: :integer, year: :integer, org: :string]
       )
+
+    reject_invalid_switches!(invalid)
 
     json? = Keyword.get(opts, :json, false)
 
@@ -50,6 +52,13 @@ defmodule Mix.Tasks.Cinegraph.Drift do
       other ->
         usage_error("unknown domain '#{other}' — try people|movies|festivals|ratings")
     end
+  end
+
+  defp reject_invalid_switches!([]), do: :ok
+
+  defp reject_invalid_switches!(invalid) do
+    flags = invalid |> Enum.map(fn {flag, _} -> flag end) |> Enum.join(", ")
+    usage_error("unknown flag(s): #{flags}")
   end
 
   # Per-domain option whitelists. `--limit` is universal; `--year` is movies-only;
