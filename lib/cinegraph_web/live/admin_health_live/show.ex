@@ -108,7 +108,12 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   defp flash_queue_result(socket, {:error, reason}, label) do
     Logger.error("AdminHealthLive #{label} refresh enqueue failed: #{inspect(reason)}")
 
-    {:noreply, put_flash(socket, :error, "Failed to queue #{label} refresh: #{inspect(reason)}")}
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       "Failed to queue #{label} refresh — an internal error occurred; see logs for details"
+     )}
   end
 
   defp parse_ids(ids) when is_integer(ids), do: [ids]
