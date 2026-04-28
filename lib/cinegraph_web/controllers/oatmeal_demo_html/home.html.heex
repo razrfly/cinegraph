@@ -131,7 +131,13 @@
                 <span class="h-3 w-px bg-mist-950/20 max-sm:hidden"></span>
                 <span class="inline-flex shrink-0 items-center gap-2 font-semibold text-mist-950">
                   Learn more
-                  <svg width="5" height="8" viewBox="0 0 5 8" fill="currentColor" aria-hidden="true">
+                  <svg
+                    width="5"
+                    height="8"
+                    viewBox="0 0 5 8"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
                     <path
                       fill-rule="evenodd"
                       clip-rule="evenodd"
@@ -248,7 +254,10 @@
                     </p>
                   </div>
                 </div>
-                <a href="#" class="inline-flex items-center gap-2 text-sm/7 font-medium text-mist-950">
+                <a
+                  href="#"
+                  class="inline-flex items-center gap-2 text-sm/7 font-medium text-mist-950"
+                >
                   See how it works
                   <svg width="13" height="7" viewBox="0 0 13 7" fill="none" aria-hidden="true">
                     <path
@@ -288,7 +297,10 @@
                     </p>
                   </div>
                 </div>
-                <a href="#" class="inline-flex items-center gap-2 text-sm/7 font-medium text-mist-950">
+                <a
+                  href="#"
+                  class="inline-flex items-center gap-2 text-sm/7 font-medium text-mist-950"
+                >
                   See how it works
                   <svg width="13" height="7" viewBox="0 0 13 7" fill="none" aria-hidden="true">
                     <path
@@ -309,8 +321,8 @@
         </div>
       </section>
 
-      <%!-- STATS --%>
-      <section class="py-16" id="stats">
+      <%!-- ABOUT / STATS --%>
+      <section class="py-16" id="about">
         <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 flex flex-col gap-10 sm:gap-16">
           <div class="flex max-w-2xl flex-col gap-6">
             <div class="flex flex-col gap-2">
@@ -321,7 +333,7 @@
             </div>
             <div class="text-base/7 text-mist-700 text-pretty">
               <p>
-                Oatmeal helps teams deliver personal, organized, and fast customer support across the world. From small startups to enterprise teams, we process millions of messages each month — using a massive network of low wage workers stationed around the globe.
+                Oatmeal helps teams deliver personal, organized, and fast customer support across the world. From small startups to enterprise teams, we process millions of messages each month with a global team of customer-support specialists.
               </p>
             </div>
           </div>
@@ -461,34 +473,37 @@
           <div class="divide-y divide-mist-950/10 border-y border-mist-950/10">
             <div
               :for={
-                f <- [
-                  %{
-                    q: "Do I need a credit card to start the free trial?",
-                    a:
-                      "Yes, but don't worry, you won't be charged until the trial period is over. We won't send you an email reminding you when this happens because we are really hoping you'll forget and we can keep charging you until your card expires."
-                  },
-                  %{
-                    q: "Can my whole team use the same inbox?",
-                    a:
-                      "Yes, the more the merrier! Oatmeal works best when your entire company has access. We will charge you per additional seat, but we won't tell you about this until you get your invoice."
-                  },
-                  %{
-                    q: "Is the AI agent actually a bunch of people in India?",
-                    a:
-                      "Not just India! We have people in lots of countries around the world pretending to be an AI, including some that are currently under sanctions, so we can't legally mention them here."
-                  },
-                  %{
-                    q: "Does Oatmeal replace my email client?",
-                    a:
-                      "Absolutely. The idea is that we transition you away from email entirely, so you become completely dependent on our service. Like a parasite living off a host."
-                  }
-                ]
+                {f, i} <-
+                  Enum.with_index([
+                    %{
+                      q: "Do I need a credit card to start the free trial?",
+                      a:
+                        "Yes, but don't worry, you won't be charged until the trial period is over. We won't send you an email reminding you when this happens because we are really hoping you'll forget and we can keep charging you until your card expires."
+                    },
+                    %{
+                      q: "Can my whole team use the same inbox?",
+                      a:
+                        "Yes, the more the merrier! Oatmeal works best when your entire company has access. We will charge you per additional seat, but we won't tell you about this until you get your invoice."
+                    },
+                    %{
+                      q: "Is the AI agent actually a bunch of people in India?",
+                      a:
+                        "Our AI is genuinely an AI — large language models tuned for support workflows, not a Mechanical Turk operation."
+                    },
+                    %{
+                      q: "Does Oatmeal replace my email client?",
+                      a:
+                        "Absolutely. The idea is that we transition you away from email entirely, so you become completely dependent on our service. Like a parasite living off a host."
+                    }
+                  ])
               }
               class="faq-item"
             >
               <button
                 type="button"
-                onclick="this.parentElement.classList.toggle('open')"
+                aria-expanded="false"
+                aria-controls={"faq-answer-#{i}"}
+                onclick="const item=this.parentElement;item.classList.toggle('open');const open=item.classList.contains('open');this.setAttribute('aria-expanded',open);item.querySelector('.faq-answer').setAttribute('aria-hidden',!open)"
                 class="flex w-full items-start justify-between gap-6 py-4 text-left text-base/7 text-mist-950"
               >
                 {f.q}
@@ -516,7 +531,11 @@
                   <path d="M12.5049 6.49512L0.504883 6.49512" stroke-linecap="round" />
                 </svg>
               </button>
-              <div class="faq-answer -mt-2 flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-mist-700">
+              <div
+                id={"faq-answer-#{i}"}
+                aria-hidden="true"
+                class="faq-answer -mt-2 flex flex-col gap-2 pr-12 pb-4 text-sm/7 text-mist-700"
+              >
                 <p>{f.a}</p>
               </div>
             </div>
@@ -707,7 +726,7 @@
             </div>
             <div class="flex max-w-3xl flex-col gap-4 text-pretty text-base/7 text-mist-600">
               <p>
-                Join hundreds of teams using Oatmeal to deliver faster, friendlier email support — using a massive network of low wage workers stationed around the globe.
+                Join hundreds of teams using Oatmeal to deliver faster, friendlier email support — backed by a global team of customer-support specialists.
               </p>
             </div>
           </div>
@@ -793,8 +812,20 @@
           <div class="flex items-center justify-between gap-10 text-sm/7">
             <div class="text-mist-600">&copy; {Date.utc_today().year} Oatmeal, Inc.</div>
             <div class="flex items-center gap-4 sm:gap-10">
-              <a href="https://x.com" target="_blank" rel="noopener" aria-label="X" class="text-mist-950">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="h-6 w-6">
+              <a
+                href="https://x.com"
+                target="_blank"
+                rel="noopener"
+                aria-label="X"
+                class="text-mist-950"
+              >
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  class="h-6 w-6"
+                >
                   <path d="M13.6833 10.6218L20.2401 3H18.6864L12.9931 9.61788L8.44583 3H3.20117L10.0775 13.0074L3.20117 21H4.75501L10.7673 14.0113L15.5695 21H20.8141L13.6833 10.6218ZM11.5551 13.0956L10.8584 12.0991L5.31488 4.16971H7.7015L12.1752 10.5689L12.8719 11.5655L18.6871 19.8835H16.3005L11.5551 13.0956Z" />
                 </svg>
               </a>
@@ -805,7 +836,13 @@
                 aria-label="GitHub"
                 class="text-mist-950"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="h-6 w-6">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  class="h-6 w-6"
+                >
                   <path
                     fill-rule="evenodd"
                     d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
@@ -820,7 +857,13 @@
                 aria-label="YouTube"
                 class="text-mist-950"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="h-6 w-6">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  class="h-6 w-6"
+                >
                   <path
                     fill-rule="evenodd"
                     d="M19.812 5.418c.861.23 1.538.907 1.768 1.768C21.998 8.746 22 12 22 12s0 3.255-.418 4.814a2.504 2.504 0 0 1-1.768 1.768c-1.56.419-7.814.419-7.814.419s-6.255 0-7.814-.419a2.505 2.505 0 0 1-1.768-1.768C2 15.255 2 12 2 12s0-3.255.417-4.814a2.507 2.507 0 0 1 1.768-1.768C5.744 5 11.998 5 11.998 5s6.255 0 7.814.418ZM15.194 12 10 15V9l5.194 3Z"

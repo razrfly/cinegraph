@@ -31,7 +31,8 @@ defmodule Cinegraph.Metrics.PeopleQualityBenchmarkTest do
 
       case Repo.get_by(Movie, tmdb_id: tmdb_id) do
         nil ->
-          IO.warn("#{title} (tmdb_id=#{tmdb_id}) not in database — seed data required")
+          raise ExUnit.SkipError,
+            message: "#{title} (tmdb_id=#{tmdb_id}) not in database — seed data required"
 
         movie ->
           scores = MovieScoring.calculate_movie_scores(movie)

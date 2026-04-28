@@ -15,6 +15,26 @@ defmodule CinegraphWeb.DesignPreviewController do
   def show(conn, _params) do
     conn
     |> put_root_layout(false)
+    |> assign_mock_data()
+    |> render(:show, layout: false)
+  end
+
+  @doc """
+  Phase 2.5 — Cinegraph Neutral V2, on Oatmeal foundation.
+
+  Same composition as `show/2`, but uses `NeutralV2Components` with the
+  `mist-*` palette + Instrument Serif italic display, loading
+  `priv/static/assets/oatmeal.css`.
+  """
+  def show_v2(conn, _params) do
+    conn
+    |> put_root_layout(false)
+    |> assign_mock_data()
+    |> render(:show_v2, layout: false)
+  end
+
+  defp assign_mock_data(conn) do
+    conn
     |> assign(:films, MockData.films())
     |> assign(:people, MockData.people())
     |> assign(:lists, MockData.lists())
@@ -22,6 +42,5 @@ defmodule CinegraphWeb.DesignPreviewController do
     |> assign(:updates, MockData.updates())
     |> assign(:insights, MockData.insights())
     |> assign(:genres, MockData.genres())
-    |> render(:show, layout: false)
   end
 end

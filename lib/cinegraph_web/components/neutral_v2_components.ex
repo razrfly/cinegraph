@@ -1,13 +1,16 @@
-defmodule CinegraphWeb.NeutralComponents do
+defmodule CinegraphWeb.NeutralV2Components do
   @moduledoc """
-  Cinegraph Neutral design system — Phoenix function components.
+  Cinegraph Neutral design system — V2, on Oatmeal foundation.
 
-  1:1 ports of the React components from
-  `tmp/cinegraph-design/cinegraph/project/cinegraph-components.jsx`.
+  Drop-in mirror of `CinegraphWeb.NeutralComponents` with the same prop
+  signatures and DOM logic, but the foundation tokens are swapped from the
+  bespoke `cg-*` palette to the Oatmeal kit's `mist-*` palette + Instrument
+  Serif italic display + Inter body. Resolves against the existing
+  `tailwind.oatmeal.config.js` build (`priv/static/assets/oatmeal.css`) — no
+  new build profile needed.
 
-  All components are prefixed `n_` to avoid collision with `CoreComponents`.
-  Tokens are exposed via the `cg.*` Tailwind color namespace defined in
-  `assets/tailwind.cinegraph_neutral.config.js`.
+  Same component prefix `n_` so a v2 template can be made by find-and-
+  replace `<NeutralComponents.n_*>` → `<NeutralV2Components.n_*>`.
   """
   use Phoenix.Component
 
@@ -40,12 +43,12 @@ defmodule CinegraphWeb.NeutralComponents do
   defp pill_size("md"), do: "px-3 py-[5px] text-[13px]"
   defp pill_size(_), do: "px-[9px] py-[3px] text-[11.5px]"
 
-  defp pill_tone("blue"), do: "bg-cg-blueSoft text-cg-blue border-transparent"
-  defp pill_tone("green"), do: "bg-cg-greenSoft text-cg-green border-transparent"
-  defp pill_tone("amber"), do: "bg-cg-amberSoft text-cg-amber border-transparent"
-  defp pill_tone("red"), do: "bg-cg-redSoft text-cg-red border-transparent"
-  defp pill_tone("ink"), do: "bg-cg-ink text-white border-transparent"
-  defp pill_tone(_), do: "bg-cg-surface2 text-cg-ink2 border-cg-border"
+  defp pill_tone("blue"), do: "bg-blue-50 text-blue-800 border-transparent"
+  defp pill_tone("green"), do: "bg-emerald-50 text-emerald-800 border-transparent"
+  defp pill_tone("amber"), do: "bg-amber-50 text-amber-800 border-transparent"
+  defp pill_tone("red"), do: "bg-rose-50 text-rose-800 border-transparent"
+  defp pill_tone("ink"), do: "bg-mist-950 text-mist-50 border-transparent"
+  defp pill_tone(_), do: "bg-mist-950/[0.025] text-mist-900 border-mist-950/10"
 
   @doc "Delta indicator — ▲/▼ with green/red, tabular numerals."
   attr :value, :integer, required: true
@@ -54,11 +57,11 @@ defmodule CinegraphWeb.NeutralComponents do
   def n_delta(assigns) do
     ~H"""
     <%= if @value == 0 do %>
-      <span class="text-cg-mute text-[11px] tabular-nums">—</span>
+      <span class="text-mist-500 text-[11px] tabular-nums">—</span>
     <% else %>
       <span class={[
         "inline-flex items-center gap-[3px] text-[11px] font-semibold tabular-nums",
-        if(@value > 0, do: "text-cg-green", else: "text-cg-red")
+        if(@value > 0, do: "text-emerald-700", else: "text-rose-700")
       ]}>
         <span class="text-[9px]">{if @value > 0, do: "▲", else: "▼"}</span>
         {abs(@value)}{@suffix}
@@ -73,13 +76,18 @@ defmodule CinegraphWeb.NeutralComponents do
 
   def n_eyebrow(assigns) do
     ~H"""
-    <div class={["text-[11px] font-semibold tracking-[.1em] uppercase text-cg-mute", @class]}>
+    <div class={["text-[11px] font-semibold tracking-[.1em] uppercase text-mist-500", @class]}>
       {render_slot(@inner_block)}
     </div>
     """
   end
 
-  @doc "Section header — title + subtitle + right-aligned action slot."
+  @doc """
+  Section header — title + subtitle + right-aligned action slot.
+
+  V2 difference: title is `font-display italic` (Instrument Serif italic)
+  for the editorial Oatmeal voice.
+  """
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
   attr :kicker, :string, default: nil
@@ -91,10 +99,10 @@ defmodule CinegraphWeb.NeutralComponents do
     <div class={["flex items-end justify-between gap-6 mb-[18px]", @class]}>
       <div>
         <.n_eyebrow :if={@kicker} class="mb-[6px]">{@kicker}</.n_eyebrow>
-        <h2 class="text-[22px] font-semibold tracking-[-.012em] text-cg-ink leading-[1.15]">
+        <h2 class="font-display italic text-[28px] tracking-[-.01em] text-mist-950 leading-[1.1]">
           {@title}
         </h2>
-        <div :if={@subtitle} class="text-[13.5px] text-cg-ink3 mt-1">
+        <div :if={@subtitle} class="text-[13.5px] text-mist-700 mt-2">
           {@subtitle}
         </div>
       </div>
@@ -114,7 +122,7 @@ defmodule CinegraphWeb.NeutralComponents do
     ~H"""
     <a
       href={@href}
-      class="inline-flex items-center gap-[6px] text-[12.5px] font-semibold text-cg-ink2 no-underline border-b border-cg-border2 pb-px"
+      class="inline-flex items-center gap-[6px] text-[12.5px] font-semibold text-mist-900 no-underline border-b border-mist-950/15 pb-px"
     >
       {render_slot(@inner_block)}<span class="text-[11px] opacity-70">{@icon}</span>
     </a>
@@ -150,13 +158,14 @@ defmodule CinegraphWeb.NeutralComponents do
   defp btn_size("lg"), do: "px-[18px] py-[11px] h-[42px] text-[13.5px]"
   defp btn_size(_), do: "px-[14px] py-2 h-9 text-[13px]"
 
-  defp btn_variant("primary"), do: "bg-cg-ink text-white border-cg-ink hover:bg-black"
+  defp btn_variant("primary"),
+    do: "bg-mist-950 text-mist-50 border-mist-950 hover:bg-mist-900"
 
   defp btn_variant("ghost"),
-    do: "bg-transparent text-cg-ink2 border-transparent hover:bg-cg-surface2"
+    do: "bg-transparent text-mist-900 border-transparent hover:bg-mist-950/[0.05]"
 
   defp btn_variant(_),
-    do: "bg-cg-surface text-cg-ink border-cg-border2 hover:bg-cg-surface2"
+    do: "bg-mist-50 text-mist-950 border-mist-950/15 hover:bg-mist-950/[0.025]"
 
   @doc "Brand mark — ink rounded square + 4-node graph SVG + Cinegraph wordmark."
   attr :size, :integer, default: 18
@@ -186,7 +195,7 @@ defmodule CinegraphWeb.NeutralComponents do
         <circle cx="17" cy="11" r="1.4" fill="#fff" />
       </svg>
       <span
-        class="font-semibold tracking-[-.018em] text-cg-ink"
+        class="font-semibold tracking-[-.018em] text-mist-950"
         style={"font-size: #{@size - 2}px"}
       >
         Cinegraph
@@ -195,21 +204,21 @@ defmodule CinegraphWeb.NeutralComponents do
     """
   end
 
-  @doc "Tabs — segmented switch on surface2."
+  @doc "Tabs — segmented switch on subtle surface."
   attr :tabs, :list, required: true
   attr :value, :string, required: true
 
   def n_tabs(assigns) do
     ~H"""
-    <div class="inline-flex p-[3px] bg-cg-surface2 border border-cg-border rounded-lg gap-[2px]">
+    <div class="inline-flex p-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-lg gap-[2px]">
       <button
         :for={t <- @tabs}
         type="button"
         class={[
           "px-3 py-[6px] text-[12.5px] border-0 rounded-[6px] cursor-pointer tracking-[-.005em]",
           if(t == @value,
-            do: "font-semibold text-cg-ink bg-cg-surface shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-            else: "font-medium text-cg-ink3 bg-transparent"
+            do: "font-semibold text-mist-950 bg-mist-50 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
+            else: "font-medium text-mist-700 bg-transparent"
           )
         ]}
       >
@@ -223,7 +232,13 @@ defmodule CinegraphWeb.NeutralComponents do
   # NAV / SEARCH
   # ──────────────────────────────────────────────────────────────────
 
-  @doc "Top navigation — sticky, blurred, brand + items + search + actions."
+  @doc """
+  Top navigation — sticky, blurred, brand + items + search + actions.
+
+  V2 difference: uses Oatmeal's responsive container rhythm
+  (`max-w-2xl` → `max-w-3xl` → `max-w-7xl`) so it works on mobile
+  out of the box.
+  """
   attr :active, :string, default: "Movies"
   attr :mobile, :boolean, default: false
 
@@ -240,89 +255,75 @@ defmodule CinegraphWeb.NeutralComponents do
     assigns = assign(assigns, :items, items)
 
     ~H"""
-    <%= if @mobile do %>
-      <header class="sticky top-0 z-[5] bg-cg-bg/[0.92] backdrop-blur-md border-b border-cg-border">
-        <div class="flex items-center justify-between px-4 py-3">
-          <.n_brand size={17} />
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="w-[34px] h-[34px] rounded-[7px] border border-cg-border bg-cg-surface grid place-items-center cursor-pointer"
-              aria-label="Search"
+    <header class="sticky top-0 z-[5] bg-mist-100/[0.92] backdrop-blur-md border-b border-mist-950/10">
+      <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 flex items-center gap-4 py-[14px]">
+        <.n_brand size={19} />
+        <nav class="flex gap-[2px] items-center max-md:hidden">
+          <a
+            :for={item <- @items}
+            href="#"
+            class={[
+              "inline-flex items-center gap-[6px] px-3 py-[7px] rounded-md text-[13.5px] no-underline tracking-[-.005em]",
+              if(item.id == @active,
+                do: "font-semibold text-mist-950 bg-mist-950/[0.025]",
+                else: "font-medium text-mist-700 bg-transparent"
+              )
+            ]}
+          >
+            {item.id}
+            <span
+              :if={item.badge}
+              class="text-[9px] font-bold px-[5px] py-[2px] bg-mist-950 text-mist-50 rounded-[3px] tracking-[.05em]"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <circle cx="7" cy="7" r="5" stroke="#2c2922" stroke-width="1.4" />
-                <path d="M11 11 L14 14" stroke="#2c2922" stroke-width="1.4" stroke-linecap="round" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="w-[34px] h-[34px] rounded-[7px] border border-cg-border bg-cg-surface grid place-items-center cursor-pointer"
-              aria-label="Menu"
-            >
-              <div class="flex flex-col gap-[3px]">
-                <span class="w-[14px] h-[1.6px] bg-cg-ink2"></span>
-                <span class="w-[14px] h-[1.6px] bg-cg-ink2"></span>
-                <span class="w-[14px] h-[1.6px] bg-cg-ink2"></span>
-              </div>
-            </button>
-          </div>
+              {item.badge}
+            </span>
+          </a>
+        </nav>
+        <div class="flex-1 max-w-[420px] ml-auto max-md:hidden">
+          <.n_search_input compact />
         </div>
-      </header>
-    <% else %>
-      <header class="sticky top-0 z-[5] bg-cg-bg/[0.92] backdrop-blur-md border-b border-cg-border">
-        <div class="flex items-center gap-9 px-8 py-[14px] max-w-[1440px] mx-auto">
-          <.n_brand size={19} />
-          <nav class="flex gap-[2px] items-center">
-            <a
-              :for={item <- @items}
-              href="#"
-              class={[
-                "inline-flex items-center gap-[6px] px-3 py-[7px] rounded-md text-[13.5px] no-underline tracking-[-.005em]",
-                if(item.id == @active,
-                  do: "font-semibold text-cg-ink bg-cg-surface2",
-                  else: "font-medium text-cg-ink3 bg-transparent"
-                )
-              ]}
-            >
-              {item.id}
-              <span
-                :if={item.badge}
-                class="text-[9px] font-bold px-[5px] py-[2px] bg-cg-ink text-white rounded-[3px] tracking-[.05em]"
-              >
-                {item.badge}
-              </span>
-            </a>
-          </nav>
-          <div class="flex-1 max-w-[420px] ml-auto">
-            <.n_search_input compact />
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="w-[34px] h-[34px] rounded-[7px] border border-cg-border bg-cg-surface grid place-items-center cursor-pointer"
-              aria-label="Theme"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M8 1.5 V3 M8 13 V14.5 M3.5 3.5 L4.5 4.5 M11.5 11.5 L12.5 12.5 M1.5 8 H3 M13 8 H14.5 M3.5 12.5 L4.5 11.5 M11.5 4.5 L12.5 3.5"
-                  stroke="#2c2922"
-                  stroke-width="1.4"
-                  stroke-linecap="round"
-                />
-                <circle cx="8" cy="8" r="2.5" stroke="#2c2922" stroke-width="1.4" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="h-[34px] px-3 rounded-[7px] border border-cg-border bg-cg-surface text-[12.5px] font-semibold text-cg-ink cursor-pointer"
-            >
-              Sign in
-            </button>
-          </div>
+        <div class="flex items-center gap-2 ml-auto md:ml-0">
+          <button
+            type="button"
+            class="w-[34px] h-[34px] rounded-[7px] border border-mist-950/10 bg-mist-50 grid place-items-center cursor-pointer max-md:hidden"
+            aria-label="Theme"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M8 1.5 V3 M8 13 V14.5 M3.5 3.5 L4.5 4.5 M11.5 11.5 L12.5 12.5 M1.5 8 H3 M13 8 H14.5 M3.5 12.5 L4.5 11.5 M11.5 4.5 L12.5 3.5"
+                stroke="currentColor"
+                class="text-mist-900"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
+              <circle cx="8" cy="8" r="2.5" stroke="currentColor" class="text-mist-900" stroke-width="1.4" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="w-[34px] h-[34px] rounded-[7px] border border-mist-950/10 bg-mist-50 grid place-items-center cursor-pointer md:hidden"
+            aria-label="Search"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <circle cx="7" cy="7" r="5" stroke="currentColor" class="text-mist-900" stroke-width="1.4" />
+              <path d="M11 11 L14 14" stroke="currentColor" class="text-mist-900" stroke-width="1.4" stroke-linecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="h-[34px] px-3 rounded-[7px] border border-mist-950/10 bg-mist-50 text-[12.5px] font-semibold text-mist-950 cursor-pointer max-sm:hidden"
+          >
+            Sign in
+          </button>
+          <a
+            href="#"
+            class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 px-3 py-1 text-sm/7 font-medium text-mist-100 hover:bg-mist-800"
+          >
+            Get started
+          </a>
         </div>
-      </header>
-    <% end %>
+      </div>
+    </header>
     """
   end
 
@@ -342,11 +343,11 @@ defmodule CinegraphWeb.NeutralComponents do
     ~H"""
     <div class="relative">
       <div class={[
-        "relative flex items-center bg-cg-surface rounded-lg transition-colors",
+        "relative flex items-center bg-mist-50 rounded-lg transition-colors",
         if(@compact, do: "h-9 px-3", else: "h-11 px-[14px]"),
         if(@focused,
-          do: "border border-cg-ink2 shadow-[0_0_0_3px_rgba(0,0,0,.04)]",
-          else: "border border-cg-border2"
+          do: "border border-mist-950 shadow-[0_0_0_3px_rgba(0,0,0,.04)]",
+          else: "border border-mist-950/15"
         )
       ]}>
         <svg
@@ -354,20 +355,20 @@ defmodule CinegraphWeb.NeutralComponents do
           height={if @compact, do: "13", else: "15"}
           viewBox="0 0 16 16"
           fill="none"
-          class="shrink-0"
+          class="shrink-0 text-mist-500"
         >
-          <circle cx="7" cy="7" r="5" stroke="#86806f" stroke-width="1.4" />
-          <path d="M11 11 L14 14" stroke="#86806f" stroke-width="1.4" stroke-linecap="round" />
+          <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4" />
+          <path d="M11 11 L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
         </svg>
         <input
           placeholder={@placeholder}
           class={[
-            "flex-1 ml-[9px] text-cg-ink bg-transparent border-0 outline-none min-w-0 font-[inherit]",
+            "flex-1 ml-[9px] text-mist-950 bg-transparent border-0 outline-none min-w-0 font-[inherit]",
             if(@compact, do: "text-[13px]", else: "text-[14.5px]")
           ]}
         />
         <div :if={!@compact} class="flex items-center gap-[6px] shrink-0">
-          <kbd class="font-mono text-[10.5px] font-semibold px-[6px] py-[3px] bg-cg-surface2 border border-cg-border rounded-[4px] text-cg-ink3">
+          <kbd class="font-mono text-[10.5px] font-semibold px-[6px] py-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-[4px] text-mist-700">
             ⌘K
           </kbd>
         </div>
@@ -386,38 +387,38 @@ defmodule CinegraphWeb.NeutralComponents do
     ~H"""
     <section class="pb-6">
       <.n_search_input focused />
-      <div class="flex items-center mt-[14px] border-b border-cg-border">
+      <div class="flex items-center mt-[14px] border-b border-mist-950/10 overflow-x-auto">
         <button
           :for={t <- @tabs}
           type="button"
           class={[
-            "py-[9px] px-[14px] text-[13px] bg-transparent border-0 cursor-pointer -mb-px tracking-[-.005em]",
+            "py-[9px] px-[14px] text-[13px] bg-transparent border-0 cursor-pointer -mb-px tracking-[-.005em] whitespace-nowrap",
             if(t == "Films",
-              do: "font-semibold text-cg-ink border-b-2 border-cg-ink",
-              else: "font-medium text-cg-ink3 border-b-2 border-transparent"
+              do: "font-semibold text-mist-950 border-b-2 border-mist-950",
+              else: "font-medium text-mist-700 border-b-2 border-transparent"
             )
           ]}
         >
           {t}<span
             :if={t == "Films"}
-            class="ml-[6px] text-[10.5px] font-medium text-cg-mute tabular-nums"
+            class="ml-[6px] text-[10.5px] font-medium text-mist-500 tabular-nums"
           >16,420</span>
           <span
             :if={t == "People"}
-            class="ml-[6px] text-[10.5px] font-medium text-cg-mute tabular-nums"
+            class="ml-[6px] text-[10.5px] font-medium text-mist-500 tabular-nums"
           >
             48,923
           </span>
           <span
             :if={t == "Lists"}
-            class="ml-[6px] text-[10.5px] font-medium text-cg-mute tabular-nums"
+            class="ml-[6px] text-[10.5px] font-medium text-mist-500 tabular-nums"
           >
             312
           </span>
         </button>
       </div>
       <div class="flex items-center gap-[6px] mt-[14px] overflow-x-auto pb-[2px]">
-        <span class="text-[11px] font-semibold text-cg-mute tracking-[.06em] uppercase shrink-0 mr-1">
+        <span class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase shrink-0 mr-1">
           GENRE
         </span>
         <button
@@ -426,14 +427,14 @@ defmodule CinegraphWeb.NeutralComponents do
           class={[
             "px-[11px] py-[5px] text-[12px] rounded-full cursor-pointer whitespace-nowrap shrink-0",
             if(g == "All",
-              do: "font-semibold text-white bg-cg-ink border border-cg-ink",
-              else: "font-medium text-cg-ink2 bg-cg-surface border border-cg-border"
+              do: "font-semibold text-mist-50 bg-mist-950 border border-mist-950",
+              else: "font-medium text-mist-900 bg-mist-50 border border-mist-950/10"
             )
           ]}
         >
           {g}
         </button>
-        <span class="w-px h-[18px] bg-cg-border mx-[6px] shrink-0"></span>
+        <span class="w-px h-[18px] bg-mist-950/10 mx-[6px] shrink-0"></span>
         <.n_pill tone="neutral" size="sm" class="shrink-0">1990–2025 ⌃</.n_pill>
         <.n_pill tone="neutral" size="sm" class="shrink-0">Any rating ⌃</.n_pill>
         <.n_pill tone="neutral" size="sm" class="shrink-0">+ Add filter</.n_pill>
@@ -453,16 +454,19 @@ defmodule CinegraphWeb.NeutralComponents do
   attr :compact, :boolean, default: false
 
   def n_film_card(assigns) do
-    poster = PosterSvg.poster(assigns.film)
+    poster = assigns.film[:poster_url] || PosterSvg.poster(assigns.film)
+    score = card_score(assigns.film)
+    href = assigns.film[:href] || "#"
 
-    score =
-      round((assigns.film.pop + assigns.film.crit + assigns.film.cult + assigns.film.ppl) / 4)
-
-    assigns = assigns |> assign(:poster, poster) |> assign(:score, score)
+    assigns =
+      assigns
+      |> assign(:poster, poster)
+      |> assign(:score, score)
+      |> assign(:href, href)
 
     ~H"""
-    <a href="#" class="block no-underline text-inherit">
-      <div class="relative aspect-[2/3] rounded-[6px] overflow-hidden bg-cg-bgAlt border border-cg-border">
+    <a href={@href} class="block no-underline text-inherit">
+      <div class="relative aspect-[2/3] rounded-[6px] overflow-hidden bg-mist-100 border border-mist-950/10">
         <img src={@poster} alt={@film.title} class="w-full h-full object-cover block" />
         <div
           :if={@rank}
@@ -471,29 +475,42 @@ defmodule CinegraphWeb.NeutralComponents do
           #{@rank}
         </div>
         <div
-          :if={@show_score}
-          class="absolute top-2 right-2 px-[7px] py-[3px] bg-white/[0.92] text-cg-ink text-[11px] font-bold rounded-[4px] tabular-nums tracking-[-.01em]"
+          :if={@show_score && @score}
+          class="absolute top-2 right-2 px-[7px] py-[3px] bg-white/[0.92] text-mist-950 text-[11px] font-bold rounded-[4px] tabular-nums tracking-[-.01em]"
         >
           {@score}
         </div>
       </div>
       <div class="pt-[10px]">
         <div class="flex items-baseline justify-between gap-2">
-          <div class="text-[13.5px] font-semibold text-cg-ink tracking-[-.005em] leading-[1.25] whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0">
+          <div class="text-[13.5px] font-semibold text-mist-950 tracking-[-.005em] leading-[1.25] whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0">
             {@film.title}
           </div>
-          <div class="text-[12px] text-cg-mute tabular-nums shrink-0">{@film.year}</div>
+          <div class="text-[12px] text-mist-500 tabular-nums shrink-0">{@film.year}</div>
         </div>
-        <div :if={!@compact} class="flex items-center gap-2 mt-[5px] text-[11.5px] text-cg-ink3">
+        <div
+          :if={!@compact && (@film[:dir] || Map.has_key?(@film, :delta))}
+          class="flex items-center gap-2 mt-[5px] text-[11.5px] text-mist-700"
+        >
           <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0">
-            {@film.dir}
+            {@film[:dir]}
           </span>
-          <.n_delta value={@film.delta} />
+          <.n_delta :if={Map.has_key?(@film, :delta)} value={@film.delta} />
         </div>
       </div>
     </a>
     """
   end
+
+  # Compute card score from explicit :score, else avg of the 4 dimension fields.
+  defp card_score(%{score: nil}), do: nil
+  defp card_score(%{score: s}), do: s
+
+  defp card_score(%{pop: pop, crit: crit, cult: cult, ppl: ppl})
+       when is_number(pop) and is_number(crit) and is_number(cult) and is_number(ppl),
+       do: round((pop + crit + cult + ppl) / 4)
+
+  defp card_score(_), do: nil
 
   @doc "Person card — rank + avatar + name + role + delta% + film count."
   attr :person, :map, required: true
@@ -506,34 +523,37 @@ defmodule CinegraphWeb.NeutralComponents do
     ~H"""
     <a
       href="#"
-      class="flex gap-3 items-center px-[14px] py-3 no-underline text-inherit rounded-lg transition-colors hover:bg-cg-surface2 relative"
+      class="flex gap-3 items-center px-[14px] py-3 no-underline text-inherit rounded-lg transition-colors hover:bg-mist-950/[0.025] relative"
     >
       <div
         :if={@rank}
-        class="w-[18px] text-[11px] text-cg-mute tabular-nums font-semibold text-right shrink-0"
+        class="w-[18px] text-[11px] text-mist-500 tabular-nums font-semibold text-right shrink-0"
       >
         {@rank}
       </div>
       <img
         src={@avatar}
         alt=""
-        class="w-[38px] h-[38px] rounded-full shrink-0 border border-cg-border"
+        class="w-[38px] h-[38px] rounded-full shrink-0 border border-mist-950/10"
       />
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-[7px]">
-          <div class="text-[13.5px] font-semibold text-cg-ink tracking-[-.005em] whitespace-nowrap overflow-hidden text-ellipsis">
+          <div class="text-[13.5px] font-semibold text-mist-950 tracking-[-.005em] whitespace-nowrap overflow-hidden text-ellipsis">
             {@person.name}
           </div>
-          <span :if={@person.trending} class="w-[5px] h-[5px] rounded-full bg-cg-green shrink-0">
+          <span
+            :if={@person.trending}
+            class="w-[5px] h-[5px] rounded-full bg-emerald-500 shrink-0"
+          >
           </span>
         </div>
-        <div class="text-[11.5px] text-cg-ink3 mt-[2px] whitespace-nowrap overflow-hidden text-ellipsis">
-          {@person.role}{if known = List.first(@person.known_for || []), do: " · #{known}", else: ""}
+        <div class="text-[11.5px] text-mist-700 mt-[2px] whitespace-nowrap overflow-hidden text-ellipsis">
+          {@person.role} · {hd(@person.known_for)}
         </div>
       </div>
       <div class="text-right shrink-0">
         <.n_delta value={@person.delta_pct} suffix="%" />
-        <div class="text-[10.5px] text-cg-mute tabular-nums mt-[2px]">{@person.films} films</div>
+        <div class="text-[10.5px] text-mist-500 tabular-nums mt-[2px]">{@person.films} films</div>
       </div>
     </a>
     """
@@ -550,9 +570,9 @@ defmodule CinegraphWeb.NeutralComponents do
     ~H"""
     <a
       href="#"
-      class="block no-underline text-inherit border border-cg-border rounded-lg overflow-hidden bg-cg-surface transition-shadow hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] relative"
+      class="block no-underline text-inherit border border-mist-950/10 rounded-lg overflow-hidden bg-mist-50 transition-shadow hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] relative"
     >
-      <div class="grid grid-cols-4 gap-px bg-cg-border aspect-[8/3]">
+      <div class="grid grid-cols-4 gap-px bg-mist-950/10 aspect-[8/3]">
         <img
           :for={{id, src} <- @posters}
           src={src}
@@ -564,16 +584,16 @@ defmodule CinegraphWeb.NeutralComponents do
       <div class="px-4 pt-[14px] pb-4">
         <div class="flex items-start justify-between gap-[10px]">
           <div class="flex-1 min-w-0">
-            <div class="text-[14px] font-semibold text-cg-ink leading-[1.3] tracking-[-.008em]">
+            <div class="text-[14px] font-semibold text-mist-950 leading-[1.3] tracking-[-.008em]">
               {@list.name}
             </div>
-            <div class="text-[11.5px] text-cg-ink3 mt-[3px]">{@list.curator}</div>
+            <div class="text-[11.5px] text-mist-700 mt-[3px]">{@list.curator}</div>
           </div>
           <.n_pill tone={@list.accent} size="xs">{@list.count}</.n_pill>
         </div>
-        <div class="flex items-center justify-between mt-[11px] text-[11px] text-cg-mute">
+        <div class="flex items-center justify-between mt-[11px] text-[11px] text-mist-500">
           <span>Updated {@list.updated}</span>
-          <span class="font-semibold text-cg-ink2">View →</span>
+          <span class="font-semibold text-mist-900">View →</span>
         </div>
       </div>
     </a>
@@ -604,23 +624,23 @@ defmodule CinegraphWeb.NeutralComponents do
       |> assign(:h, h)
 
     ~H"""
-    <div class="px-4 py-[14px] bg-cg-surface border border-cg-border rounded-lg">
-      <div class="text-[11px] font-semibold text-cg-mute tracking-[.04em] uppercase">
+    <div class="px-4 py-[14px] bg-mist-50 border border-mist-950/10 rounded-lg">
+      <div class="text-[11px] font-semibold text-mist-500 tracking-[.04em] uppercase">
         {@label}
       </div>
       <div class="flex items-end justify-between gap-[10px] mt-[6px]">
         <div>
-          <div class="text-[26px] font-semibold text-cg-ink tracking-[-.02em] tabular-nums leading-[1.05]">
+          <div class="text-[26px] font-semibold text-mist-950 tracking-[-.02em] tabular-nums leading-[1.05]">
             {@fmt_val}
           </div>
-          <div class="text-[11.5px] text-cg-ink3 mt-[3px]">{@sub}</div>
+          <div class="text-[11.5px] text-mist-700 mt-[3px]">{@sub}</div>
         </div>
         <div class="text-right shrink-0">
-          <svg width={@w} height={@h} class="block">
+          <svg width={@w} height={@h} class="block text-mist-700">
             <path
               d={@path}
               fill="none"
-              stroke="#5d584c"
+              stroke="currentColor"
               stroke-width="1.3"
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -682,12 +702,12 @@ defmodule CinegraphWeb.NeutralComponents do
     assigns = assigns |> assign(:tone, tone) |> assign(:label, label)
 
     ~H"""
-    <div class="grid grid-cols-[72px_1fr_auto] gap-[14px] py-3 border-b border-cg-divider items-baseline">
+    <div class="grid grid-cols-[72px_1fr_auto] gap-[14px] py-3 border-b border-mist-950/10 items-baseline">
       <.n_pill tone={@tone} size="xs" class="justify-self-start">{@label}</.n_pill>
-      <div class="text-[13.5px] text-cg-ink2 leading-[1.45] tracking-[-.003em]">
+      <div class="text-[13.5px] text-mist-900 leading-[1.45] tracking-[-.003em]">
         {@update.text}
       </div>
-      <div class="text-[11.5px] text-cg-mute tabular-nums whitespace-nowrap">{@update.ago} ago</div>
+      <div class="text-[11.5px] text-mist-500 tabular-nums whitespace-nowrap">{@update.ago} ago</div>
     </div>
     """
   end
@@ -709,10 +729,9 @@ defmodule CinegraphWeb.NeutralComponents do
     by_id = Map.new(nodes, fn n -> {n.id, n} end)
 
     edges_xy =
-      edges
-      |> Enum.map(fn {a, b} -> {by_id[a], by_id[b]} end)
-      |> Enum.filter(fn {na, nb} -> na && nb end)
-      |> Enum.map(fn {na, nb} ->
+      Enum.map(edges, fn {a, b} ->
+        na = by_id[a]
+        nb = by_id[b]
         {na.x * assigns.width, na.y * assigns.height, nb.x * assigns.width, nb.y * assigns.height}
       end)
 
@@ -728,7 +747,7 @@ defmodule CinegraphWeb.NeutralComponents do
 
     ~H"""
     <div
-      class="relative w-full bg-cg-surface2 border border-cg-border rounded-lg overflow-hidden"
+      class="relative w-full bg-mist-950/[0.025] border border-mist-950/10 rounded-lg overflow-hidden"
       style={"height: #{@height}px"}
     >
       <svg
@@ -739,18 +758,18 @@ defmodule CinegraphWeb.NeutralComponents do
         viewBox={"0 0 #{@width} #{@height}"}
       >
         <defs>
-          <pattern id="gp-dots" width="22" height="22" patternUnits="userSpaceOnUse">
-            <circle cx="1" cy="1" r=".7" fill="#b6b1a3" opacity=".55" />
+          <pattern id="gp-dots-v2" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r=".7" class="fill-mist-300" opacity=".55" />
           </pattern>
         </defs>
-        <rect width={@width} height={@height} fill="url(#gp-dots)" />
+        <rect width={@width} height={@height} fill="url(#gp-dots-v2)" />
         <line
           :for={{x1, y1, x2, y2} <- @edges_xy}
           x1={x1}
           y1={y1}
           x2={x2}
           y2={y2}
-          stroke="#5d584c"
+          class="stroke-mist-700"
           stroke-width="1"
           opacity=".35"
         />
@@ -761,13 +780,13 @@ defmodule CinegraphWeb.NeutralComponents do
               y={if n.big, do: -10, else: -6}
               width={if n.big, do: 20, else: 12}
               height={if n.big, do: 20, else: 12}
-              fill={if n.big, do: "#16140f", else: "#ffffff"}
+              fill={if n.big, do: "#16140f", else: "#fafaf9"}
               stroke="#16140f"
               stroke-width="1.4"
               rx="2"
             />
           <% else %>
-            <circle r={if n.big, do: 10, else: 6} fill="#ffffff" stroke="#16140f" stroke-width="1.4" />
+            <circle r={if n.big, do: 10, else: 6} fill="#fafaf9" stroke="#16140f" stroke-width="1.4" />
           <% end %>
           <text
             x={if n.big, do: 15, else: 11}
@@ -782,12 +801,12 @@ defmodule CinegraphWeb.NeutralComponents do
         </g>
       </svg>
       <div class="absolute top-[10px] left-3 flex items-center gap-[6px]">
-        <span class="w-2 h-2 bg-cg-ink"></span>
-        <span class="text-[10.5px] text-cg-ink3 font-medium">Films</span>
-        <span class="w-2 h-2 rounded-full border-[1.4px] border-cg-ink ml-2"></span>
-        <span class="text-[10.5px] text-cg-ink3 font-medium">People</span>
+        <span class="w-2 h-2 bg-mist-950"></span>
+        <span class="text-[10.5px] text-mist-700 font-medium">Films</span>
+        <span class="w-2 h-2 rounded-full border-[1.4px] border-mist-950 ml-2"></span>
+        <span class="text-[10.5px] text-mist-700 font-medium">People</span>
       </div>
-      <div class="absolute bottom-[10px] right-3 flex items-center gap-[6px] text-[10.5px] text-cg-mute tabular-nums">
+      <div class="absolute bottom-[10px] right-3 flex items-center gap-[6px] text-[10.5px] text-mist-500 tabular-nums">
         {length(@nodes_xy)} nodes · {length(@edges_xy)} edges · depth 2
       </div>
     </div>
