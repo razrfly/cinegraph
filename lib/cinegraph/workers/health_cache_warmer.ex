@@ -28,9 +28,7 @@ defmodule Cinegraph.Workers.HealthCacheWarmer do
     verdict = Facade.compute_full_verdict()
     elapsed_ms = System.monotonic_time(:millisecond) - started_at
 
-    Logger.info(
-      "HealthCacheWarmer: warmed in #{elapsed_ms}ms, status=#{verdict.status}"
-    )
+    Logger.info("HealthCacheWarmer: warmed in #{elapsed_ms}ms, status=#{verdict.status}")
 
     {:ok, %{warmed_in_ms: elapsed_ms, status: verdict.status}}
   end
