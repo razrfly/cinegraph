@@ -18,9 +18,20 @@ defmodule Mix.Tasks.Cinegraph.Festivals.ResolvePersons do
 
   @shortdoc "Backfill festival nominations missing person_id"
 
+  alias Cinegraph.Festivals.{
+    FestivalCategory,
+    FestivalCeremony,
+    FestivalNomination,
+    FestivalOrganization
+  }
+
   alias Cinegraph.Repo
   alias Cinegraph.Workers.NominationPersonResolver
   import Ecto.Query
+
+  # Postgres caps a single statement at 65 535 parameters; Oban jobs serialize
+  # to ~8+ params each, so 500 keeps us well under the limit even with overhead.
+  @insert_chunk_size 500
 
   @impl Mix.Task
   def run(args) do
@@ -32,21 +43,20 @@ defmodule Mix.Tasks.Cinegraph.Festivals.ResolvePersons do
       )
 
     base =
-      from(n in "festival_nominations",
-        join: c in "festival_categories",
+      from n in FestivalNomination,
+        join: c in FestivalCategory,
         on: n.category_id == c.id,
-        join: cer in "festival_ceremonies",
+        join: cer in FestivalCeremony,
         on: n.ceremony_id == cer.id,
-        join: org in "festival_organizations",
+        join: org in FestivalOrganization,
         on: cer.organization_id == org.id,
         where: c.tracks_person == true and is_nil(n.person_id),
         select: n.id
-      )
 
     scoped =
       case Keyword.get(opts, :org) do
         nil -> base
-        abbr -> from([n, c, cer, org] in base, where: org.abbreviation == ^abbr)
+        abbr -> from [n, c, cer, org] in base, where: org.abbreviation == ^abbr
       end
 
     capped =
@@ -62,11 +72,39 @@ defmodule Mix.Tasks.Cinegraph.Festivals.ResolvePersons do
     if Keyword.get(opts, :"dry-run", false) do
       Mix.shell().info("(dry-run — no jobs enqueued)")
     else
-      ids
-      |> Enum.map(&NominationPersonResolver.new(%{nomination_id: &1}))
-      |> Oban.insert_all()
+      {inserted, failed} = enqueue_in_chunks(ids)
 
-      Mix.shell().info("Enqueued #{length(ids)} jobs on queue :maintenance")
+      Mix.shell().info("Enqueued #{inserted} jobs on queue :maintenance")
+
+      if failed > 0 do
+        Mix.shell().error("#{failed} job(s) failed to enqueue — see logs above")
+      end
     end
+  end
+
+  defp enqueue_in_chunks(ids) do
+    ids
+    |> Enum.chunk_every(@insert_chunk_size)
+    |> Enum.reduce({0, 0}, fn chunk, {ok, err} ->
+      jobs = Enum.map(chunk, &NominationPersonResolver.new(%{nomination_id: &1}))
+
+      try do
+        case Oban.insert_all(jobs) do
+          results when is_list(results) ->
+            {ok + length(results), err}
+
+          other ->
+            Mix.shell().error("Oban.insert_all returned unexpected value: #{inspect(other)}")
+            {ok, err + length(chunk)}
+        end
+      rescue
+        e ->
+          Mix.shell().error(
+            "Oban.insert_all failed for chunk of #{length(chunk)}: #{Exception.message(e)}"
+          )
+
+          {ok, err + length(chunk)}
+      end
+    end)
   end
 end
