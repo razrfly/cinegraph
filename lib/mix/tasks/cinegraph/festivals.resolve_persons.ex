@@ -37,9 +37,11 @@ defmodule Mix.Tasks.Cinegraph.Festivals.ResolvePersons do
   def run(args) do
     Mix.Task.run("app.start")
 
+    # Note: OptionParser converts `--dry-run` to `:dry_run` (underscore) by
+    # default. Declare the key in strict with the same shape we read it.
     {opts, _, _} =
       OptionParser.parse(args,
-        strict: [org: :string, "dry-run": :boolean, limit: :integer]
+        strict: [org: :string, dry_run: :boolean, limit: :integer]
       )
 
     base =
@@ -69,7 +71,7 @@ defmodule Mix.Tasks.Cinegraph.Festivals.ResolvePersons do
 
     Mix.shell().info("Found #{length(ids)} nominations to resolve")
 
-    if Keyword.get(opts, :"dry-run", false) do
+    if Keyword.get(opts, :dry_run, false) do
       Mix.shell().info("(dry-run — no jobs enqueued)")
     else
       {inserted, failed} = enqueue_in_chunks(ids)
