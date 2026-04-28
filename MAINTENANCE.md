@@ -80,6 +80,7 @@ All backfills run automatically via `Oban.Plugins.Cron` (`config/config.exs`):
 | `0 4 * * 0` | `ZeroCreditsCleanupSweeper` | enqueue refetch for orphan people | 200/run |
 | `0 4 * * 1` | `ZeroCreditsCleanupDeleteSweeper` | hard-delete still-orphaned rows | 200/run |
 | `0 2 * * *` | `FestivalSyncSweeper` | discover + import new festival ceremonies (#745 Phase 2) | (uncapped — ~15 events/day) |
+| `*/4 * * * *` | `HealthCacheWarmer` | keep `:health_cache` warm so `/admin/health` cold-paint stays sub-second (#745 Phase 3.3) | — |
 | `0 3 * * *` | `PersonQualityScoreWorker` (`daily_incremental`) | PQS daily delta | (worker-paged) |
 | `0 2 * * SUN` | `PersonQualityScoreWorker` (`weekly_full`) | PQS weekly full recalc | (worker-paged) |
 | `0 1 1-7 * SUN` | `PersonQualityScoreWorker` (`monthly_deep`) | PQS monthly deep recalc | (worker-paged) |
@@ -104,6 +105,9 @@ The `Cinegraph.Maintenance.*` modules behind each sweeper also have:
 | IMDb-id repair | `mix cinegraph.movies.repair_imdb_ids` |
 | Zero-credits cleanup | `mix cinegraph.people.cleanup_zero_credits [--phase enqueue\|delete]` |
 | Festival sync (discover + import) | `mix cinegraph.festivals.sync` |
+| Per-id TMDb refresh (drawer button equivalent) | `mix cinegraph.refresh.person <id> [<id>...]` |
+| Per-id OMDb refresh (drawer button equivalent) | `mix cinegraph.refresh.omdb <movie_id> [...]` |
+| 30-day completeness chart data | `mix cinegraph.completeness --history 30` |
 
 All accept `--dry-run` (count only) and `--limit N` (cap enqueues).
 
