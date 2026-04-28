@@ -5,6 +5,16 @@ defmodule Cinegraph.Health.Drift.People do
   Each public function returns `Cinegraph.Health.Drift.result/5`. All
   reads use `Repo.replica()`. Cached in `:health_cache` (5 min for
   cheap checks, 15 min for `pqs_stale` which is expensive).
+
+  ## Population scoping
+
+  `missing_biography` is scoped to people with at least one credit on a
+  canonical-list movie (`movies.canonical_sources != '{}'`) — see #735
+  Phase 1.2. Other checks remain scoped to the full `people` table.
+  Bulk imports never populate biography for non-canonical cast/crew, so
+  reporting against the full 674k-row population produced a meaningless
+  100% RED. The canonical scope produces a tier-appropriate signal that
+  `mix cinegraph.people.refresh_biographies` can actually drain.
   """
 
   import Ecto.Query
@@ -46,15 +56,49 @@ defmodule Cinegraph.Health.Drift.People do
     end)
   end
 
-  @doc "People with `biography IS NULL OR biography = ''`."
+  @doc """
+  People missing `biography`, scoped to people with credits on canonical-list
+  movies (#735 Phase 1.2). The full `people` table is dominated by long-tail
+  TMDb cast/crew rows whose biographies are never fetched by bulk imports —
+  reporting 100% missing against that population is meaningless. The canonical
+  scope produces an actionable signal.
+  """
   def missing_biography(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
     Drift.cached({:people, :missing_biography, limit}, @cache_ttl, fn ->
-      total = total_people()
-      query = from(p in "people", where: is_nil(p.biography) or p.biography == "")
-      affected = count_query(query)
-      examples = examples_for(query, "biography missing or blank", limit)
+      total = total_canonical_people()
+
+      affected =
+        Repo.replica().one(
+          from p in "people",
+            join: mc in "movie_credits",
+            on: mc.person_id == p.id,
+            join: m in "movies",
+            on: m.id == mc.movie_id,
+            where:
+              (is_nil(p.biography) or p.biography == "") and
+                fragment("? != '{}'::jsonb", m.canonical_sources),
+            select: count(p.id, :distinct)
+        ) || 0
+
+      examples =
+        from(p in "people",
+          join: mc in "movie_credits",
+          on: mc.person_id == p.id,
+          join: m in "movies",
+          on: m.id == mc.movie_id,
+          where:
+            (is_nil(p.biography) or p.biography == "") and
+              fragment("? != '{}'::jsonb", m.canonical_sources),
+          distinct: p.id,
+          select: %{id: p.id, name: p.name},
+          order_by: [desc: p.id],
+          limit: ^limit
+        )
+        |> Repo.replica().all()
+        |> Enum.map(&Map.put(&1, :reason, "biography missing or blank (canonical-list scope)"))
+
       Drift.result(:people, :missing_biography, total, affected, examples)
     end)
   end
@@ -293,6 +337,24 @@ defmodule Cinegraph.Health.Drift.People do
   defp total_people do
     Drift.cached({:people, :total}, @cache_ttl, fn ->
       Repo.replica().one(from(p in "people", select: count(p.id))) || 0
+    end)
+  end
+
+  # Canonical-list-scoped denominator: people with at least one credit on a
+  # movie that appears in any active canonical list (e.g. 1001 Movies, IMDb
+  # Top 250). Used by checks whose population should not be the full 674k-row
+  # `people` table — see #735 Phase 1.2.
+  defp total_canonical_people do
+    Drift.cached({:people, :total_canonical}, @cache_ttl, fn ->
+      Repo.replica().one(
+        from p in "people",
+          join: mc in "movie_credits",
+          on: mc.person_id == p.id,
+          join: m in "movies",
+          on: m.id == mc.movie_id,
+          where: fragment("? != '{}'::jsonb", m.canonical_sources),
+          select: count(p.id, :distinct)
+      ) || 0
     end)
   end
 
