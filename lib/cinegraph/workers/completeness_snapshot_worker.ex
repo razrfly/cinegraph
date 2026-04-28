@@ -44,7 +44,7 @@ defmodule Cinegraph.Workers.CompletenessSnapshotWorker do
   rescue
     e ->
       Logger.warning(
-        "homeostasis snapshot verdict log failed:\n" <>
+        "homeostasis snapshot verdict log failed for captured_on=#{log.captured_on}:\n" <>
           Exception.format(:error, e, __STACKTRACE__)
       )
   end
