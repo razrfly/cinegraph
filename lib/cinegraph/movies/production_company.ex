@@ -47,4 +47,13 @@ defmodule Cinegraph.Movies.ProductionCompany do
     do: String.slice(str, 0, max)
 
   defp truncate(str, _max), do: str
+
+  @doc """
+  Builds the full TMDb URL for the company logo at the requested size.
+  Returns nil when the company has no logo_path stored.
+  """
+  def logo_url(struct_or_path, size \\ "w92")
+  def logo_url(%__MODULE__{logo_path: path}, size), do: logo_url(path, size)
+  def logo_url(nil, _size), do: nil
+  def logo_url(path, size) when is_binary(path), do: "https://image.tmdb.org/t/p/#{size}#{path}"
 end

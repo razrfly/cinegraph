@@ -3,8 +3,9 @@ defmodule CinegraphWeb.Schema do
 
   import_types(CinegraphWeb.Schema.MovieTypes)
   import_types(CinegraphWeb.Schema.PersonTypes)
+  import_types(CinegraphWeb.Schema.SearchTypes)
 
-  alias CinegraphWeb.Resolvers.{MovieResolver, PersonResolver}
+  alias CinegraphWeb.Resolvers.{MovieResolver, PersonResolver, SearchResolver}
   alias CinegraphWeb.Middleware.ApiAuth
 
   scalar :json, name: "JSON" do
@@ -66,6 +67,15 @@ defmodule CinegraphWeb.Schema do
 
       middleware(ApiAuth)
       resolve(&PersonResolver.person/3)
+    end
+
+    @desc "Unified typeahead across films, people, lists, and production companies"
+    field :global_search, :search_results do
+      arg(:q, non_null(:string))
+      arg(:limit, :integer, default_value: 5)
+
+      middleware(ApiAuth)
+      resolve(&SearchResolver.global_search/3)
     end
   end
 end

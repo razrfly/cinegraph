@@ -18,7 +18,11 @@
     </script>
   </head>
   <body class="bg-mist-100 text-mist-950 antialiased">
-    <CinegraphWeb.NeutralV2Components.n_top_nav active={assigns[:active_nav] || "Movies"} />
+    <CinegraphWeb.NeutralV2Components.n_top_nav active={assigns[:active_nav] || "Movies"}>
+      <:search>
+        {live_render(@conn, CinegraphWeb.GlobalSearchLive, id: "global-search-live")}
+      </:search>
+    </CinegraphWeb.NeutralV2Components.n_top_nav>
     {@inner_content}
   </body>
 </html>

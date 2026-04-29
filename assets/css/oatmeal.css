@@ -14,3 +14,12 @@
     html { scroll-behavior: auto; }
   }
 }
+
+@layer components {
+  /* Keyboard-driven highlight in the global search dropdown.
+     Set / cleared by assets/js/hooks/global_search.js. */
+  .global-search-highlight {
+    @apply bg-mist-50;
+    box-shadow: inset 2px 0 0 theme('colors.mist.950');
+  }
+}
