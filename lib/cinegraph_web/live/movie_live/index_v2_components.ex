@@ -208,13 +208,15 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   end
 
   defp to_card_shape(movie) do
+    genres = genres_of(movie)
+
     %{
       id: movie.id,
       title: movie.title,
       year: year_of(movie.release_date),
       dir: director_of(movie),
-      genre: primary_genre(movie),
-      genres: genres_of(movie),
+      genre: List.first(genres),
+      genres: genres,
       score: overall_score(movie),
       poster_url: tmdb_poster_url(movie.poster_path, "w500"),
       href: movie_href(movie)
@@ -238,7 +240,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   defp movie_href(%{id: id}), do: UrlHelpers.movie_href(nil, id)
 
   defp director_of(movie) do
-    Map.get(movie, :director) || person_name_from_loaded_assoc(movie, :directors)
+    case movie |> Map.get(:director) |> present_string() do
+      nil -> director_from_movie_credits(movie)
+      director -> director
+    end
   end
 
   defp genres_of(movie) do
@@ -247,8 +252,6 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
     |> Enum.map(&genre_name/1)
     |> Enum.reject(&is_nil/1)
   end
-
-  defp primary_genre(movie), do: movie |> genres_of() |> List.first()
 
   defp loaded_assoc(movie, assoc) do
     case Map.get(movie, assoc) do
@@ -259,15 +262,20 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
     end
   end
 
-  defp person_name_from_loaded_assoc(movie, assoc) do
+  defp director_from_movie_credits(movie) do
     movie
-    |> loaded_assoc(assoc)
+    |> loaded_assoc(:movie_credits)
     |> Enum.find_value(fn
-      %{person: %{name: name}} when is_binary(name) and name != "" -> name
-      %{name: name} when is_binary(name) and name != "" -> name
+      %{job: "Director", person: %{name: name}} -> present_string(name)
       _ -> nil
     end)
   end
+
+  defp present_string(value) when is_binary(value) do
+    if value == "", do: nil, else: value
+  end
+
+  defp present_string(_), do: nil
 
   defp genre_name(%{name: name}) when is_binary(name) and name != "", do: name
   defp genre_name(name) when is_binary(name) and name != "", do: name
