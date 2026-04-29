@@ -249,7 +249,9 @@ defmodule Cinegraph.Health.ObanReader do
     base =
       from(j in Oban.Job,
         where: j.state == "discarded" and j.discarded_at >= ^start_dt,
+        order_by: [asc: j.discarded_at, asc: j.id],
         select: %{
+          id: j.id,
           worker: j.worker,
           attempt: j.attempt,
           discarded_at: j.discarded_at,

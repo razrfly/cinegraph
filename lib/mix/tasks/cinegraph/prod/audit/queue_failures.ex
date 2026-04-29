@@ -59,24 +59,13 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.QueueFailures do
     parts =
       [
         "days: #{days}",
-        queue && ~s|queue: "#{escape_string(queue)}"|,
-        worker && ~s|worker: "#{escape_string(worker)}"|
+        queue && "queue: #{inspect(queue)}",
+        worker && "worker: #{inspect(worker)}"
       ]
       |> Enum.reject(&is_nil/1)
       |> Enum.join(", ")
 
     "[#{parts}]"
-  end
-
-  # Keep input simple — IMDb event IDs / queue names / worker module names
-  # don't legitimately contain quotes or backslashes, but reject anything
-  # that does so the eval expression stays safe.
-  defp escape_string(s) do
-    if String.contains?(s, ~s["]) or String.contains?(s, "\\") or String.contains?(s, "\n") do
-      Mix.raise("invalid characters in --queue/--worker value: #{inspect(s)}")
-    else
-      s
-    end
   end
 
   defp raise_invalid_options!([]), do: :ok

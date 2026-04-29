@@ -51,6 +51,9 @@ defmodule Cinegraph.Health.QueueFailures do
     queue = Keyword.get(opts, :queue)
     worker = Keyword.get(opts, :worker)
 
+    validate_positive_integer!(:days, days)
+    validate_positive_integer!(:top_n, top_n)
+
     if is_nil(queue) and is_nil(worker) do
       raise ArgumentError, "audit/1 requires :queue or :worker"
     end
@@ -201,6 +204,8 @@ defmodule Cinegraph.Health.QueueFailures do
     classified
     |> Enum.group_by(& &1.pattern)
     |> Enum.map(fn {pattern, rows} ->
+      rows = Enum.sort_by(rows, &row_sort_key/1)
+
       sample_workers =
         rows
         |> Enum.map(& &1.worker)
@@ -217,8 +222,24 @@ defmodule Cinegraph.Health.QueueFailures do
         sample_workers: sample_workers
       }
     end)
-    |> Enum.sort_by(& &1.count, :desc)
+    |> Enum.sort_by(fn r -> {-r.count, r.pattern} end)
     |> Enum.take(top_n)
+  end
+
+  defp validate_positive_integer!(_name, value) when is_integer(value) and value > 0, do: :ok
+
+  defp validate_positive_integer!(name, value) do
+    raise ArgumentError, "#{inspect(name)} must be a positive integer, got: #{inspect(value)}"
+  end
+
+  defp row_sort_key(row) do
+    discarded_at =
+      case Map.get(row, :discarded_at) do
+        %DateTime{} = dt -> DateTime.to_unix(dt, :microsecond)
+        _ -> 0
+      end
+
+    {discarded_at, Map.get(row, :id, 0), Map.get(row, :worker), Map.get(row, :last_error)}
   end
 
   defp pct(_, 0), do: 0.0
