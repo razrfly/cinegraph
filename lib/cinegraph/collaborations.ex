@@ -667,6 +667,50 @@ defmodule Cinegraph.Collaborations do
   end
 
   @doc """
+  Lists frequent collaborators for a person from the precomputed collaborations table.
+  """
+  def get_frequent_collaborators(%{id: person_id}), do: get_frequent_collaborators(person_id)
+
+  def get_frequent_collaborators(person_id) when is_binary(person_id) do
+    case Integer.parse(person_id) do
+      {id, ""} -> get_frequent_collaborators(id)
+      _ -> []
+    end
+  end
+
+  def get_frequent_collaborators(person_id) when is_integer(person_id) do
+    query =
+      from c in Collaboration,
+        join: p in Person,
+        on:
+          (c.person_a_id == ^person_id and p.id == c.person_b_id) or
+            (c.person_b_id == ^person_id and p.id == c.person_a_id),
+        where: c.collaboration_count >= 2,
+        order_by: [desc: c.collaboration_count, desc: c.latest_collaboration_date],
+        limit: 8,
+        select: %{
+          person: p,
+          collaboration_count: c.collaboration_count,
+          first_date: c.first_collaboration_date,
+          latest_date: c.latest_collaboration_date,
+          avg_rating: c.avg_movie_rating,
+          total_revenue: c.total_revenue
+        }
+
+    query
+    |> Repo.replica().all()
+    |> Enum.map(fn summary ->
+      Map.put(summary, :strength, collaboration_strength(summary.collaboration_count))
+    end)
+  end
+
+  def get_frequent_collaborators(_), do: []
+
+  defp collaboration_strength(count) when count >= 10, do: :very_strong
+  defp collaboration_strength(count) when count >= 5, do: :strong
+  defp collaboration_strength(_), do: :moderate
+
+  @doc """
   Finds directors who frequently work with specific actors.
   """
   def find_director_frequent_actors(director_id, opts \\ []) do

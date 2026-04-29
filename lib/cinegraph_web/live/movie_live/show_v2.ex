@@ -85,16 +85,17 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
            disparity_category: movie.score_cache.disparity_category
          }}
       else
-        if movie.score_cache do
-          MovieScoreCacheWorker.new(%{"movie_id" => movie.id}) |> Oban.insert()
-        end
+        MovieScoreCacheWorker.new(%{"movie_id" => movie.id}) |> Oban.insert()
 
         sd = MovieScoring.calculate_movie_scores(movie)
         {build_display_scores_from_data(sd), DisparityCalculator.calculate_all(sd)}
       end
 
     credits = Movies.get_movie_credits(movie.id)
-    cast = credits |> Enum.filter(&(&1.credit_type == "cast")) |> Enum.sort_by(&(&1.cast_order || 999))
+
+    cast =
+      credits |> Enum.filter(&(&1.credit_type == "cast")) |> Enum.sort_by(&(&1.cast_order || 999))
+
     crew = Enum.filter(credits, &(&1.credit_type == "crew"))
     directors = Enum.filter(crew, &(&1.job == "Director"))
 
@@ -187,6 +188,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   defp tmdb_url("/" <> _ = path, size), do: "https://image.tmdb.org/t/p/#{size}#{path}"
   defp tmdb_url(path, size), do: "https://image.tmdb.org/t/p/#{size}/#{path}"
 
+  defp movie_href(slug, _id) when is_binary(slug) and slug != "", do: "/movies-v2/#{slug}"
+  defp movie_href(_slug, id), do: "/movies/#{id}"
+
   defp year_of(%Date{year: y}), do: y
   defp year_of(_), do: nil
 
@@ -233,7 +237,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   defp truncate_words(text, n) when is_binary(text) do
     words = String.split(text)
-    if length(words) <= n, do: {text, false}, else: {words |> Enum.take(n) |> Enum.join(" "), true}
+
+    if length(words) <= n,
+      do: {text, false},
+      else: {words |> Enum.take(n) |> Enum.join(" "), true}
   end
 
   defp truncate_words(_, _), do: {"", false}
@@ -307,24 +314,28 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   defp render_nominations(_), do: []
 
   defp film_card_shape(movie) do
+    href = movie_href(movie.slug, movie.id)
+
     %{
       id: movie.id,
       title: movie.title,
       year: year_of(movie.release_date),
       score: nil,
       poster_url: tmdb_url(movie.poster_path, "w500"),
-      href: "/movies-v2/#{movie.slug}"
+      href: href
     }
   end
 
   defp related_card_shape(rel) do
+    href = movie_href(rel[:slug], rel.id)
+
     %{
       id: rel.id,
       title: rel.title,
       year: year_of(rel[:release_date]),
       score: nil,
       poster_url: tmdb_url(rel[:poster_path], "w500"),
-      href: "/movies-v2/#{rel[:slug] || rel.id}",
+      href: href,
       dir: rel[:connection_reason]
     }
   end
@@ -390,7 +401,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       <div
         :if={!@movie.backdrop_path}
         class="absolute inset-0 bg-gradient-to-br from-mist-900 to-mist-800"
-      ></div>
+      >
+      </div>
 
       <div class="relative mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-12 lg:pt-16 pb-12 lg:pb-16">
         <div class="flex flex-col lg:flex-row gap-8 lg:gap-10">
@@ -414,9 +426,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <div class="flex-1 min-w-0 text-white">
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
-              <span :if={@movie.runtime}> · {format_runtime(@movie.runtime)}</span>
-              <span :if={content_rating(@movie)}> · {content_rating(@movie)}</span>
-              <span :if={disparity_label(@disparity_data[:disparity_category])} class="ml-3 text-amber-300 font-display italic normal-case tracking-normal">
+              <span :if={@movie.runtime}> ·  {format_runtime(@movie.runtime)}</span>
+              <span :if={content_rating(@movie)}> ·  {content_rating(@movie)}</span>
+              <span
+                :if={disparity_label(@disparity_data[:disparity_category])}
+                class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
+              >
                 {disparity_label(@disparity_data[:disparity_category])}
               </span>
             </div>
@@ -435,19 +450,33 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             <%!-- Ratings strip — V1 hero_ratings_row inspired --%>
             <div class="mt-5 flex items-center gap-x-6 gap-y-2 flex-wrap text-white">
               <span :if={r = rating_value(@ratings, "imdb")} class="flex items-baseline gap-1.5">
-                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">IMDb</span>
+                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">
+                  IMDb
+                </span>
                 <span class="text-[15px] font-semibold tabular-nums">{Float.round(r.value, 1)}</span>
               </span>
               <span :if={r = rating_value(@ratings, "tmdb")} class="flex items-baseline gap-1.5">
-                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">TMDb</span>
+                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">
+                  TMDb
+                </span>
                 <span class="text-[15px] font-semibold tabular-nums">{Float.round(r.value, 1)}</span>
               </span>
-              <span :if={r = rating_value(@ratings, "rotten_tomatoes", "tomatometer")} class="flex items-baseline gap-1.5">
-                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">RT</span>
+              <span
+                :if={r = rating_value(@ratings, "rotten_tomatoes", "tomatometer")}
+                class="flex items-baseline gap-1.5"
+              >
+                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">
+                  RT
+                </span>
                 <span class="text-[15px] font-semibold tabular-nums">{round(r.value)}%</span>
               </span>
-              <span :if={r = rating_value(@ratings, "metacritic", "metascore")} class="flex items-baseline gap-1.5">
-                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">Meta</span>
+              <span
+                :if={r = rating_value(@ratings, "metacritic", "metascore")}
+                class="flex items-baseline gap-1.5"
+              >
+                <span class="text-[10.5px] font-semibold tracking-[.06em] uppercase text-white/60">
+                  Meta
+                </span>
                 <span class="text-[15px] font-semibold tabular-nums">{round(r.value)}</span>
               </span>
             </div>
@@ -474,7 +503,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
             <%!-- Directed by --%>
             <div :if={@directors != []} class="mt-5">
-              <div class="text-[10.5px] font-semibold text-white/60 tracking-[.06em] uppercase mb-1">Directed by</div>
+              <div class="text-[10.5px] font-semibold text-white/60 tracking-[.06em] uppercase mb-1">
+                Directed by
+              </div>
               <div class="flex flex-wrap gap-x-3 gap-y-1">
                 <a
                   :for={d <- @directors}
@@ -563,7 +594,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
           <NeutralV2Components.n_credit_row
-            :for={c <- (if @show_full_cast, do: @cast, else: Enum.take(@cast, 12))}
+            :for={c <- if @show_full_cast, do: @cast, else: Enum.take(@cast, 12)}
             credit={cast_credit_shape(c)}
           />
         </div>
@@ -574,7 +605,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
           Awards & recognition
           <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-            {count_award_wins(@festival_noms)} {pluralize_str(count_award_wins(@festival_noms), "win")} · {count_award_nominations(@festival_noms)} {pluralize_str(count_award_nominations(@festival_noms), "nomination")}
+            {count_award_wins(@festival_noms)} {pluralize_str(count_award_wins(@festival_noms), "win")} · {count_award_nominations(
+              @festival_noms
+            )} {pluralize_str(count_award_nominations(@festival_noms), "nomination")}
           </span>
         </h2>
         <div :if={a = omdb_awards(@movie)} class="mb-6 text-[13.5px] text-mist-700 italic">
@@ -609,7 +642,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           >
             <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
               {l.list_authority || "List"}
-              <span :if={l.list_year}> · {l.list_year}</span>
+              <span :if={l.list_year}> ·  {l.list_year}</span>
             </div>
             <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
               {l.list_name}
@@ -723,19 +756,31 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           Technical details
         </h2>
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-[13px]">
-          <div :if={format_money(Map.get(@movie, :budget))} class="flex justify-between border-b border-mist-950/10 pb-2">
+          <div
+            :if={format_money(Map.get(@movie, :budget))}
+            class="flex justify-between border-b border-mist-950/10 pb-2"
+          >
             <dt class="text-mist-500">Budget</dt>
             <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :budget))}</dd>
           </div>
-          <div :if={format_money(Map.get(@movie, :revenue))} class="flex justify-between border-b border-mist-950/10 pb-2">
+          <div
+            :if={format_money(Map.get(@movie, :revenue))}
+            class="flex justify-between border-b border-mist-950/10 pb-2"
+          >
             <dt class="text-mist-500">Revenue</dt>
             <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :revenue))}</dd>
           </div>
-          <div :if={@movie.original_language} class="flex justify-between border-b border-mist-950/10 pb-2">
+          <div
+            :if={@movie.original_language}
+            class="flex justify-between border-b border-mist-950/10 pb-2"
+          >
             <dt class="text-mist-500">Language</dt>
             <dd class="text-mist-950">{@movie.original_language}</dd>
           </div>
-          <div :if={@production_companies != []} class="flex justify-between border-b border-mist-950/10 pb-2">
+          <div
+            :if={@production_companies != []}
+            class="flex justify-between border-b border-mist-950/10 pb-2"
+          >
             <dt class="text-mist-500">Production</dt>
             <dd class="text-mist-950 text-right">
               {@production_companies
@@ -787,14 +832,22 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <ul class="space-y-2 list-disc pl-5">
             <li><b>The Mob</b> (10%) — audience consensus from IMDb &amp; TMDb user ratings.</li>
             <li><b>The Critics</b> (10%) — Rotten Tomatoes Tomatometer + Metacritic Metascore.</li>
-            <li><b>The Insiders</b> (20%) — festival wins &amp; nominations across Academy, Cannes, Venice, BAFTA, Sundance, etc.</li>
-            <li><b>Time Machine</b> (20%) — appearance on canonical lists (Criterion, AFI, BFI Sight &amp; Sound, etc.).</li>
+            <li>
+              <b>The Insiders</b>
+              (20%) — festival wins &amp; nominations across Academy, Cannes, Venice, BAFTA, Sundance, etc.
+            </li>
+            <li>
+              <b>Time Machine</b>
+              (20%) — appearance on canonical lists (Criterion, AFI, BFI Sight &amp; Sound, etc.).
+            </li>
             <li><b>The Auteurs</b> (20%) — quality scores of the director, cast, and crew.</li>
             <li><b>Box Office</b> (20%) — revenue (60%) + ROI ratio (40%).</li>
           </ul>
           <p>
-            The overall score is the weighted sum. Custom weights can be tuned in the
-            <a href={~p"/movies/discover"} class="underline decoration-mist-950/15 underline-offset-4">discovery tuner</a>.
+            The overall score is the weighted sum. Custom weights can be tuned in the <a
+              href={~p"/movies/discover"}
+              class="underline decoration-mist-950/15 underline-offset-4"
+            >discovery tuner</a>.
           </p>
         </div>
       </div>
