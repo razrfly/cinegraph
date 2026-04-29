@@ -142,6 +142,7 @@ defmodule Cinegraph.Health.YearDiscoveryTest do
       row = find_festival(result, "fest_inflight")
 
       assert row.retryable == 1
+      assert row.label == :retrying
     end
 
     test "ignores jobs outside the --days window" do

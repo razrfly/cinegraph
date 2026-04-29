@@ -21,7 +21,9 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.YearDiscovery do
 
   @impl Mix.Task
   def run(args) do
-    {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean, days: :integer])
+    {opts, _, invalid} = OptionParser.parse(args, strict: [json: :boolean, days: :integer])
+    raise_invalid_options!(invalid)
+
     # See prod/health.ex: skip app.start to keep stdout clean for jq.
 
     days =
@@ -36,5 +38,11 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.YearDiscovery do
       {:ok, audit} -> ProdRpc.print(audit, opts)
       {:error, reason} -> ProdRpc.print_error(reason)
     end
+  end
+
+  defp raise_invalid_options!([]), do: :ok
+
+  defp raise_invalid_options!(invalid) do
+    Mix.raise("invalid option(s): #{inspect(invalid)}")
   end
 end

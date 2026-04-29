@@ -25,7 +25,9 @@ defmodule Mix.Tasks.Cinegraph.Audit.YearDiscovery do
   def run(args) do
     Mix.Task.run("app.start")
 
-    {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean, days: :integer])
+    {opts, _, invalid} = OptionParser.parse(args, strict: [json: :boolean, days: :integer])
+    raise_invalid_options!(invalid)
+
     json? = Keyword.get(opts, :json, false)
 
     days =
@@ -43,6 +45,12 @@ defmodule Mix.Tasks.Cinegraph.Audit.YearDiscovery do
     else
       print_table(result)
     end
+  end
+
+  defp raise_invalid_options!([]), do: :ok
+
+  defp raise_invalid_options!(invalid) do
+    Mix.raise("invalid option(s): #{inspect(invalid)}")
   end
 
   defp print_table(%{generated_at: gen_at, window_days: days, summary: s, festivals: festivals}) do
