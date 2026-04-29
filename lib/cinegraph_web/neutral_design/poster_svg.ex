@@ -75,6 +75,10 @@ defmodule CinegraphWeb.NeutralDesign.PosterSvg do
     |> Enum.sum()
   end
 
+  defp seed_from_id(id) when is_integer(id), do: id
+
+  defp seed_from_id(_), do: 0
+
   # Matches the JS title-wrapping logic (lines longer than 12 chars wrap)
   defp wrap_title(title) do
     words = String.split(title, ~r/\s+/, trim: true)

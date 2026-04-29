@@ -454,7 +454,7 @@ defmodule CinegraphWeb.NeutralV2Components do
   attr :compact, :boolean, default: false
 
   def n_film_card(assigns) do
-    poster = assigns.film[:poster_url] || PosterSvg.poster(assigns.film)
+    poster = assigns.film[:poster_url] || maybe_generated_poster(assigns.film)
     score = card_score(assigns.film)
     href = assigns.film[:href] || "#"
 
@@ -467,7 +467,18 @@ defmodule CinegraphWeb.NeutralV2Components do
     ~H"""
     <a href={@href} class="block no-underline text-inherit">
       <div class="relative aspect-[2/3] rounded-[6px] overflow-hidden bg-mist-100 border border-mist-950/10">
-        <img src={@poster} alt={@film.title} class="w-full h-full object-cover block" />
+        <img
+          :if={@poster}
+          src={@poster}
+          alt={@film.title}
+          class="w-full h-full object-cover block"
+        />
+        <div
+          :if={!@poster}
+          class="w-full h-full grid place-items-center bg-gradient-to-br from-mist-200 to-mist-300 text-mist-700 font-display italic text-[14px] text-center px-3"
+        >
+          {@film.title}
+        </div>
         <div
           :if={@rank}
           class="absolute top-0 left-0 px-[10px] pl-2 py-[5px] bg-black/[0.78] text-white text-[11px] font-bold tracking-[.04em] rounded-br-[6px] tabular-nums"
@@ -501,6 +512,19 @@ defmodule CinegraphWeb.NeutralV2Components do
     </a>
     """
   end
+
+  # Generate an SVG placeholder ONLY when the film map has the rich mock-data
+  # shape (id + title + year + dir + genre). Real Movie structs from the DB
+  # don't have :dir/:genre, so we skip the generator and render a blank tile.
+  defp maybe_generated_poster(%{id: _, title: _, dir: dir, genre: _, year: _}) when is_binary(dir),
+    do: PosterSvg.poster(%{id: get_in_safe([:id]), title: "", dir: "", genre: [""], year: ""})
+  defp maybe_generated_poster(%{title: title, dir: dir, year: year, genre: genre, id: id})
+       when is_binary(title) and is_binary(dir) do
+    PosterSvg.poster(%{id: id, title: title, dir: dir, year: year, genre: genre})
+  end
+  defp maybe_generated_poster(_), do: nil
+
+  defp get_in_safe(_), do: nil
 
   # Compute card score from explicit :score, else avg of the 4 dimension fields.
   defp card_score(%{score: nil}), do: nil
@@ -812,4 +836,354 @@ defmodule CinegraphWeb.NeutralV2Components do
     </div>
     """
   end
+
+  # ──────────────────────────────────────────────────────────────────
+  # SHOW PAGE COMPONENTS (issue #757)
+  # ──────────────────────────────────────────────────────────────────
+
+  @doc """
+  Score panel — 6-lens horizontal bar chart + overall + disparity badge.
+
+  `:scores` is a map with lens keys (`:mob`, `:critics`, `:festival_recognition`,
+  `:time_machine`, `:auteurs`, `:box_office`) plus `:overall`. Values are 0–10.
+  """
+  attr :scores, :map, required: true
+  attr :weights, :map,
+    default: %{
+      mob: 10,
+      critics: 10,
+      festival_recognition: 20,
+      time_machine: 20,
+      auteurs: 20,
+      box_office: 20
+    }
+  attr :disparity_label, :string, default: nil
+  attr :disparity_summary, :string, default: nil
+
+  def n_score_panel(assigns) do
+    ~H"""
+    <div class="bg-mist-50 border border-mist-950/10 rounded-[10px] p-6 lg:p-8">
+      <div class="flex items-start justify-between gap-6 flex-wrap mb-6">
+        <div>
+          <.n_eyebrow>Cinegraph score</.n_eyebrow>
+          <div class="flex items-baseline gap-3 mt-1">
+            <div class="font-display italic text-[64px] tracking-[-.02em] text-mist-950 leading-none tabular-nums">
+              {format_score(@scores[:overall])}
+            </div>
+            <div class="text-[14px] text-mist-500 tabular-nums">/ 10</div>
+          </div>
+          <div :if={@disparity_label} class="mt-2 flex items-center gap-2 flex-wrap">
+            <span class="font-display italic text-[16px] text-mist-950">
+              {@disparity_label}
+            </span>
+            <span :if={@disparity_summary} class="text-[12.5px] text-mist-700">
+              — {@disparity_summary}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+        <.n_score_bar
+          label="The Mob"
+          sublabel="audience"
+          value={@scores[:mob]}
+          weight={@weights[:mob]}
+        />
+        <.n_score_bar
+          label="The Critics"
+          sublabel="reviews"
+          value={@scores[:critics]}
+          weight={@weights[:critics]}
+        />
+        <.n_score_bar
+          label="The Insiders"
+          sublabel="festivals"
+          value={@scores[:festival_recognition]}
+          weight={@weights[:festival_recognition]}
+        />
+        <.n_score_bar
+          label="Time Machine"
+          sublabel="canon lists"
+          value={@scores[:time_machine]}
+          weight={@weights[:time_machine]}
+        />
+        <.n_score_bar
+          label="The Auteurs"
+          sublabel="talent"
+          value={@scores[:auteurs]}
+          weight={@weights[:auteurs]}
+        />
+        <.n_score_bar
+          label="Box Office"
+          sublabel="revenue"
+          value={@scores[:box_office]}
+          weight={@weights[:box_office]}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  @doc "Single labeled lens bar — used inside `n_score_panel`."
+  attr :label, :string, required: true
+  attr :value, :any, required: true
+  attr :weight, :integer, default: nil
+  attr :sublabel, :string, default: nil
+
+  def n_score_bar(assigns) do
+    val = score_for_bar(assigns.value)
+    pct = score_pct(val)
+    assigns = assigns |> assign(:val, val) |> assign(:pct, pct)
+
+    ~H"""
+    <div>
+      <div class="flex items-baseline justify-between gap-2 mb-1">
+        <div class="flex items-baseline gap-2">
+          <span class="text-[13px] font-semibold text-mist-950 tracking-[-.005em]">{@label}</span>
+          <span :if={@sublabel} class="text-[11px] text-mist-500">{@sublabel}</span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span class="text-[14px] font-semibold text-mist-950 tabular-nums">
+            {format_score(@val)}
+          </span>
+          <span :if={@weight} class="text-[10px] text-mist-500 tabular-nums">{@weight}%</span>
+        </div>
+      </div>
+      <div class="h-[5px] w-full bg-mist-950/[0.05] rounded-full overflow-hidden">
+        <div class="h-full bg-mist-950" style={"width: #{@pct}%"}></div>
+      </div>
+    </div>
+    """
+  end
+
+  defp score_for_bar(nil), do: nil
+  defp score_for_bar(0), do: nil
+  defp score_for_bar(+0.0), do: nil
+  defp score_for_bar(v) when is_number(v), do: v
+  defp score_for_bar(_), do: nil
+
+  defp score_pct(nil), do: 0
+  defp score_pct(v) when is_number(v), do: round(min(max(v, 0), 10) * 10)
+
+  defp format_score(nil), do: "—"
+  defp format_score(0), do: "—"
+  defp format_score(+0.0), do: "—"
+
+  defp format_score(v) when is_float(v),
+    do: :erlang.float_to_binary(Float.round(v, 1), decimals: 1)
+
+  defp format_score(v) when is_integer(v), do: "#{v}.0"
+  defp format_score(v), do: to_string(v)
+
+  @doc """
+  Awards by org — a per-org card with winner stars and per-row category lines.
+
+  `:nominations` is a list of maps, each with `:category`, `:year`, `:won`,
+  optionally `:person_name`, `:film_title`, `:film_href`.
+  """
+  attr :org_name, :string, required: true
+  attr :total_wins, :integer, default: 0
+  attr :total_nominations, :integer, default: 0
+  attr :nominations, :list, required: true
+
+  def n_award_org_block(assigns) do
+    ~H"""
+    <section class="rounded-lg border border-mist-950/10 bg-mist-50 overflow-hidden">
+      <header class="flex items-baseline justify-between gap-4 px-5 py-4 border-b border-mist-950/10 bg-mist-950/[0.025]">
+        <h3 class="font-display italic text-[20px] tracking-[-.01em] text-mist-950 leading-tight">
+          {@org_name}
+        </h3>
+        <div class="flex items-baseline gap-3 text-[11.5px] text-mist-700 tabular-nums shrink-0">
+          <span :if={@total_wins > 0}>
+            <b class="text-mist-950 font-semibold">{@total_wins}</b> {pluralize(@total_wins, "win")}
+          </span>
+          <span :if={@total_nominations > 0}>
+            <b class="text-mist-950 font-semibold">{@total_nominations}</b>
+            {pluralize(@total_nominations, "nomination")}
+          </span>
+        </div>
+      </header>
+      <ul role="list" class="divide-y divide-mist-950/[0.05]">
+        <li :for={n <- @nominations} class="px-5 py-3 flex items-baseline gap-3">
+          <span :if={n[:won]} class="text-amber-600 text-[12px] shrink-0" aria-label="Winner">★</span>
+          <span :if={!n[:won]} class="w-[12px] shrink-0"></span>
+          <div class="flex-1 min-w-0 text-[13px] text-mist-950">
+            <span class="font-medium">{n.category}</span>
+            <span :if={n[:person_name]} class="text-mist-700"> — {n.person_name}</span>
+            <span
+              :if={n[:film_title]}
+              class="text-mist-700"
+            >
+              for
+              <a
+                :if={n[:film_href]}
+                href={n[:film_href]}
+                class="underline decoration-mist-950/15 underline-offset-2 hover:text-mist-950"
+              >{n.film_title}</a>
+              <span :if={!n[:film_href]}>{n.film_title}</span>
+            </span>
+          </div>
+          <div class="text-[11px] text-mist-500 tabular-nums shrink-0">
+            {n[:year]}
+            <span :if={n[:won]} class="text-amber-700 font-medium ml-1">winner</span>
+            <span :if={!n[:won]}> · nominated</span>
+          </div>
+        </li>
+      </ul>
+    </section>
+    """
+  end
+
+  defp pluralize(1, word), do: word
+  defp pluralize(_, word), do: word <> "s"
+
+  @doc """
+  Credit row — used for cast / crew / filmography lists.
+
+  `:credit` is a map with: `:avatar_url` or `:poster_url`, `:title` or `:name`,
+  optional `:role`, `:character`, `:job`, `:year`, `:score`, `:href`,
+  `:revenue`.
+  """
+  attr :credit, :map, required: true
+  attr :variant, :string, default: "cast"
+
+  def n_credit_row(assigns) do
+    ~H"""
+    <a
+      href={@credit[:href] || "#"}
+      class="flex items-center gap-3 px-3 py-2 -mx-3 rounded-md hover:bg-mist-950/[0.025] no-underline text-inherit"
+    >
+      <img
+        :if={@credit[:avatar_url]}
+        src={@credit.avatar_url}
+        alt=""
+        class="w-9 h-9 rounded-full shrink-0 border border-mist-950/10 object-cover bg-mist-100"
+      />
+      <img
+        :if={@credit[:poster_url] && !@credit[:avatar_url]}
+        src={@credit.poster_url}
+        alt=""
+        class="w-9 h-[54px] shrink-0 rounded-[3px] border border-mist-950/10 object-cover bg-mist-100"
+      />
+      <div :if={!@credit[:avatar_url] && !@credit[:poster_url]} class="w-9 h-9 rounded-full shrink-0 bg-mist-950/[0.05] grid place-items-center text-[10px] text-mist-500">
+        ?
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[13.5px] font-semibold text-mist-950 tracking-[-.005em] truncate">
+          {@credit[:name] || @credit[:title]}
+        </div>
+        <div class="text-[11.5px] text-mist-700 truncate">
+          <span :if={@credit[:character]}>{@credit.character}</span>
+          <span :if={@credit[:job]}>{@credit.job}</span>
+          <span :if={@credit[:role]}>{@credit.role}</span>
+        </div>
+      </div>
+      <div :if={@credit[:year] || @credit[:score]} class="flex items-center gap-3 shrink-0">
+        <span :if={@credit[:score]} class="text-[12px] font-bold text-mist-950 tabular-nums">
+          {format_score(@credit.score)}
+        </span>
+        <span :if={@credit[:year]} class="text-[11.5px] text-mist-500 tabular-nums">
+          {@credit.year}
+        </span>
+      </div>
+    </a>
+    """
+  end
+
+  @doc """
+  Collaboration card — avatar pair + film count + strength bar + year span + avg score.
+
+  `:collaboration` is a map with: `:person_a`, `:person_b`, `:films_together`,
+  `:strength` (atom :very_strong | :strong | :moderate), `:year_range` (string),
+  `:avg_score`, `:total_revenue`.
+  """
+  attr :collaboration, :map, required: true
+  attr :anchor_person_id, :integer, default: nil
+
+  def n_collaboration_card(assigns) do
+    c = assigns.collaboration
+
+    {strength_label, strength_pct, strength_classes} =
+      case c[:strength] do
+        :very_strong -> {"Very strong", 100, "bg-emerald-700"}
+        :strong -> {"Strong", 66, "bg-emerald-600"}
+        :moderate -> {"Moderate", 33, "bg-mist-700"}
+        _ -> {"Moderate", 33, "bg-mist-700"}
+      end
+
+    assigns =
+      assigns
+      |> assign(:c, c)
+      |> assign(:strength_label, strength_label)
+      |> assign(:strength_pct, strength_pct)
+      |> assign(:strength_classes, strength_classes)
+
+    ~H"""
+    <a
+      href={@c[:href] || "#"}
+      class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+    >
+      <div class="flex items-center gap-3 mb-3">
+        <div class="flex -space-x-3 shrink-0">
+          <img
+            :if={@c[:avatar_a]}
+            src={@c.avatar_a}
+            alt=""
+            class="w-10 h-10 rounded-full border-2 border-mist-50 object-cover bg-mist-100"
+          />
+          <img
+            :if={@c[:avatar_b]}
+            src={@c.avatar_b}
+            alt=""
+            class="w-10 h-10 rounded-full border-2 border-mist-50 object-cover bg-mist-100"
+          />
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-[13.5px] font-semibold text-mist-950 truncate">
+            {@c[:person_a]} <span class="text-mist-500">·</span> {@c[:person_b]}
+          </div>
+          <div class="text-[11.5px] text-mist-700">
+            <b class="text-mist-950 font-semibold tabular-nums">{@c[:films_together]}</b>
+            {pluralize(@c[:films_together] || 0, "film")} together
+            <span :if={@c[:year_range]} class="text-mist-500"> · {@c.year_range}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 mb-2">
+        <div class="h-[4px] flex-1 bg-mist-950/[0.05] rounded-full overflow-hidden">
+          <div class={["h-full", @strength_classes]} style={"width: #{@strength_pct}%"}></div>
+        </div>
+        <span class="text-[10.5px] text-mist-700 font-medium shrink-0">{@strength_label}</span>
+      </div>
+
+      <div :if={@c[:avg_score] || @c[:total_revenue]} class="flex items-center gap-4 text-[11px] text-mist-500 tabular-nums">
+        <span :if={@c[:avg_score]}>
+          avg <b class="text-mist-950 font-semibold">{format_score(@c.avg_score)}</b>
+        </span>
+        <span :if={@c[:total_revenue] && @c.total_revenue > 0}>
+          rev <b class="text-mist-950 font-semibold">${format_revenue(@c.total_revenue)}</b>
+        </span>
+      </div>
+    </a>
+    """
+  end
+
+  defp format_revenue(nil), do: "0"
+  defp format_revenue(0), do: "0"
+
+  defp format_revenue(n) when n >= 1_000_000_000 do
+    "#{:erlang.float_to_binary(n / 1_000_000_000, decimals: 1)}B"
+  end
+
+  defp format_revenue(n) when n >= 1_000_000 do
+    "#{:erlang.float_to_binary(n / 1_000_000, decimals: 1)}M"
+  end
+
+  defp format_revenue(n) when n >= 1_000 do
+    "#{:erlang.float_to_binary(n / 1_000, decimals: 1)}K"
+  end
+
+  defp format_revenue(n), do: to_string(n)
 end
