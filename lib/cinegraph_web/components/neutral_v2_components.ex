@@ -1032,7 +1032,9 @@ defmodule CinegraphWeb.NeutralV2Components do
           <span :if={!n[:won]} class="w-[12px] shrink-0"></span>
           <div class="flex-1 min-w-0 text-[13px] text-mist-950">
             <span class="font-medium">{n.category}</span>
-            <span :if={n[:person_name]} class="text-mist-700"> —     {n.person_name}</span>
+            <span :if={n[:person_name]} class="text-mist-700">
+              <span class="mx-1">—</span>{n.person_name}
+            </span>
             <span
               :if={n[:film_title]}
               class="text-mist-700"
@@ -1147,7 +1149,7 @@ defmodule CinegraphWeb.NeutralV2Components do
       |> assign(:strength_classes, strength_classes)
 
     ~H"""
-    <div class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow">
+    <div class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit">
       <div class="flex items-center gap-3 mb-3">
         <div class="flex -space-x-3 shrink-0">
           <img
@@ -1164,22 +1166,26 @@ defmodule CinegraphWeb.NeutralV2Components do
           />
         </div>
         <div class="flex-1 min-w-0">
+          <% person_a = @c[:person_a] %>
+          <% person_b = @c[:person_b] %>
           <div class="text-[13.5px] font-semibold text-mist-950 truncate">
             <.link
               :if={@c[:href]}
               navigate={@c.href}
               class="text-inherit underline decoration-mist-950/15 underline-offset-4 hover:decoration-mist-950/45"
             >
-              {@c[:person_a]} <span class="text-mist-500">·</span> {@c[:person_b]}
+              <span :if={person_a}>{person_a} <span class="text-mist-500 mx-1">·</span></span>{person_b}
             </.link>
             <span :if={!@c[:href]}>
-              {@c[:person_a]} <span class="text-mist-500">·</span> {@c[:person_b]}
+              <span :if={person_a}>{person_a} <span class="text-mist-500 mx-1">·</span></span>{person_b}
             </span>
           </div>
           <div class="text-[11.5px] text-mist-700">
             <b class="text-mist-950 font-semibold tabular-nums">{@c[:films_together]}</b>
             {pluralize(@c[:films_together] || 0, "film")} together
-            <span :if={@c[:year_range]} class="text-mist-500"> ·     {@c.year_range}</span>
+            <span :if={@c[:year_range]} class="text-mist-500">
+              <span class="mx-1">·</span>{@c.year_range}
+            </span>
           </div>
         </div>
       </div>

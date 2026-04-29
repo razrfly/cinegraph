@@ -36,4 +36,55 @@ defmodule CinegraphWeb.NeutralV2ComponentsTest do
       refute text =~ "—"
     end
   end
+
+  describe "n_collaboration_card/1" do
+    test "does not render a leading separator when person_a is missing" do
+      html =
+        render_component(&n_collaboration_card/1,
+          collaboration: %{
+            person_a: nil,
+            person_b: "Greta Gerwig",
+            films_together: 3,
+            strength: :strong
+          }
+        )
+
+      text = html |> Floki.parse_document!() |> Floki.text(sep: " ") |> String.trim()
+
+      assert text =~ "Greta Gerwig"
+      refute text =~ "· Greta Gerwig"
+    end
+
+    test "uses CSS spacing for optional year range separator" do
+      html =
+        render_component(&n_collaboration_card/1,
+          collaboration: %{
+            person_a: "Greta Gerwig",
+            person_b: "Noah Baumbach",
+            films_together: 4,
+            strength: :strong,
+            year_range: "2010-2024"
+          }
+        )
+
+      assert html =~ ~s(class="mx-1">·</span>2010-2024)
+      refute html =~ "·     2010-2024"
+    end
+
+    test "does not show card-level hover affordance on a non-interactive wrapper" do
+      html =
+        render_component(&n_collaboration_card/1,
+          collaboration: %{
+            person_a: "Greta Gerwig",
+            person_b: "Noah Baumbach",
+            films_together: 4,
+            strength: :strong,
+            href: "/collaborations/1"
+          }
+        )
+
+      refute html =~ "hover:shadow"
+      assert html =~ "hover:decoration"
+    end
+  end
 end
