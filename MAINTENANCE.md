@@ -163,8 +163,10 @@ SSH plumbing). All accept `--json` for piping to `jq`.
 | Task | Prod variant | Purpose |
 |---|---|---|
 | `mix cinegraph.audit.year_discovery [--days N]` | `mix cinegraph.prod.audit.year_discovery [--days N]` | YearDiscoveryWorker health per festival, classified by failure mode (#759, #766) |
+| `mix cinegraph.audit.imdb_event_id <ev> [--year YYYY]` | — | **Live IMDb fetch** for a single event ID; disambiguates `:source_unavailable` vs `:parser_breakage` vs `:bad_event_id` from the year-discovery audit. Documented exception to the pure-DB rule (see recipe below) (#772) |
+| `mix cinegraph.audit.queue_failures --queue X [--worker Y] [--days N]` | `mix cinegraph.prod.audit.queue_failures --queue X [--worker Y] [--days N]` | Generic discard analysis for an Oban queue/worker; groups by error pattern with sample text (#760, #772) |
 | `mix cinegraph.audit_people_scores` | — | Ground-truth auteurs score audit; flags ⚠️ failures after data imports / scoring formula changes |
-| `mix cinegraph.drift <people\|movies\|festivals\|ratings> [--limit N]` | — | Per-domain drift checks (`Cinegraph.Health.Drift.*`) |
+| `mix cinegraph.drift <people\|movies\|festivals\|ratings> [--limit N]` | `mix cinegraph.prod.drift <people\|movies\|festivals\|ratings> [--limit N]` *(new in #772)* | Per-domain drift checks (`Cinegraph.Health.Drift.*`) |
 | `mix cinegraph.status` | — | Combined activity + queue state + last-sync snapshot |
 | `mix cinegraph.queues` | `mix cinegraph.prod.queues` | Oban queue state (counts per queue × state, longest-running, failures last hour) |
 | `mix cinegraph.activity [--days N]` | `mix cinegraph.prod.activity [--days N]` | Movies/people/ceremonies added per UTC day, plus job completions and failures |
@@ -204,8 +206,16 @@ For any read-only operational query you'd otherwise write as a one-off
    `lib/mix/tasks/cinegraph/prod/health.ex` as a template.
 5. **Document** — add a row to the table above. README points at this file;
    do not duplicate the docs.
-6. **Pure DB only** — audits must be fast and side-effect-free. If you need
-   live API/scrape data, build a separate tool — never mix it into an audit.
+6. **Pure DB only — with one documented exception.** Audits must be fast
+   and side-effect-free; never mix live API/scrape data into a DB-backed
+   audit. The exception is single-target diagnostic tools (e.g.
+   `mix cinegraph.audit.imdb_event_id <ev>`) whose specific job is to
+   root-cause **why** a DB-backed audit classified a row a certain way.
+   Such tools live alongside other audits but are clearly marked in the
+   moduledoc and the catalog above as live-HTTP. They take a single
+   target as positional arg (not `--days`-style windowing), and they
+   have no prod variant (calling IMDb from a dev terminal works
+   identically anywhere).
 
 ## Conventions
 
