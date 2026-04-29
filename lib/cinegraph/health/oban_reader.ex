@@ -145,6 +145,93 @@ defmodule Cinegraph.Health.ObanReader do
   end
 
   @doc """
+  Per-`source_key` job summary for `worker` over the window
+  `[start_dt, end_dt)`. Pass `nil` for `end_dt` to mean "until now".
+  Used by worker-level audits (e.g. `Cinegraph.Health.YearDiscovery`).
+
+  Returns `%{source_key_string => %{
+    discarded: integer, completed: integer, retryable: integer,
+    last_error: String.t | nil,
+    last_failure_at: DateTime.t | nil,
+    attempts_used: integer
+  }}`.
+
+  Festivals with zero jobs in the window do not appear here — the caller
+  joins with the active-festivals list and fills in the gaps.
+  """
+  def jobs_summary_for_worker(worker, %DateTime{} = start_dt, end_dt \\ nil)
+      when is_binary(worker) do
+    # Retryable jobs are filtered by `attempted_at` (when last attempted)
+    # so they respect the same window as discarded/completed. A retryable
+    # job that hasn't been touched in months is a stuck-job anomaly and
+    # belongs to a separate signal, not a "last N days" audit.
+    rows =
+      from(j in Oban.Job,
+        where: j.worker == ^worker,
+        where:
+          (j.state == "discarded" and j.discarded_at >= ^start_dt) or
+            (j.state == "completed" and j.completed_at >= ^start_dt) or
+            (j.state == "retryable" and j.attempted_at >= ^start_dt),
+        select: %{
+          state: j.state,
+          source_key: fragment("?->>'source_key'", j.args),
+          attempt: j.attempt,
+          discarded_at: j.discarded_at,
+          completed_at: j.completed_at,
+          attempted_at: j.attempted_at,
+          # `errors` is a jsonb[]; index the last element and pull its `error` key.
+          # Empty arrays / non-failures yield nil.
+          last_error:
+            fragment(
+              "CASE WHEN array_length(?, 1) > 0 THEN ?[array_upper(?, 1)] ->> 'error' ELSE NULL END",
+              j.errors,
+              j.errors,
+              j.errors
+            )
+        }
+      )
+      |> Repo.replica().all()
+
+    rows =
+      if end_dt do
+        Enum.filter(rows, fn r ->
+          case r.state do
+            "discarded" -> DateTime.compare(r.discarded_at, end_dt) == :lt
+            "completed" -> DateTime.compare(r.completed_at, end_dt) == :lt
+            "retryable" -> DateTime.compare(r.attempted_at, end_dt) == :lt
+            _ -> true
+          end
+        end)
+      else
+        rows
+      end
+
+    rows
+    |> Enum.group_by(& &1.source_key)
+    |> Map.new(fn {source_key, group} ->
+      discarded = Enum.filter(group, &(&1.state == "discarded"))
+      completed_count = Enum.count(group, &(&1.state == "completed"))
+      retryable_count = Enum.count(group, &(&1.state == "retryable"))
+
+      latest_failure =
+        discarded
+        |> Enum.sort_by(& &1.discarded_at, {:desc, DateTime})
+        |> List.first()
+
+      summary = %{
+        discarded: length(discarded),
+        completed: completed_count,
+        retryable: retryable_count,
+        last_error: latest_failure && latest_failure.last_error,
+        last_failure_at: latest_failure && latest_failure.discarded_at,
+        attempts_used: (latest_failure && latest_failure.attempt) || 0
+      }
+
+      {source_key, summary}
+    end)
+  end
+
+  @doc """
   Returns the list of queue names configured for Oban (atoms).
   """
   def configured_queues do

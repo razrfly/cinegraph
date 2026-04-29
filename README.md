@@ -978,15 +978,7 @@ Top-10 people by weighted score are selected; the final value is a weighted aver
 
 ### Audit Workflow
 
-```bash
-# Run ground-truth audit (prints table, flags ⚠️ failures)
-mix cinegraph.audit_people_scores
-
-# Inspect a specific film's people_quality breakdown (IEx)
-Cinegraph.Movies.MovieScoring.explain_people_quality(movie_id)
-```
-
-Run the audit after any major data import, festival update, or scoring formula change. Ground-truth films are maintained in `lib/mix/tasks/cinegraph.audit_people_scores.ex`.
+Run `mix cinegraph.audit_people_scores` after any major data import, festival update, or scoring formula change. The full audit-task catalog (including the prod-runnable variants) lives in `MAINTENANCE.md` → "Audits & ad-hoc reports". To inspect a single film's `people_quality` breakdown, call `Cinegraph.Movies.MovieScoring.explain_people_quality(movie_id)` from IEx. Ground-truth films are maintained in `lib/mix/tasks/cinegraph.audit_people_scores.ex`.
 
 ### Periodic Maintenance
 
@@ -1046,7 +1038,7 @@ Cinegraph.Repo.query!("""
 mix pqs.batch 1
 # 5. Rebuild movie score cache (IEx)
 #    Cinegraph.Workers.MovieScoreCacheWorker.queue_all()
-# 6. Re-run audit
+# 6. Re-run audit (see MAINTENANCE.md for the full audit catalog)
 mix cinegraph.audit_people_scores
 ```
 

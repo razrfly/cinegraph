@@ -27,9 +27,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   require Logger
 
-  @dept_priority ~w(Directing Writing Camera Editing Sound Production Art)
-  @country_priority ~w(US GB FR DE JP KR IT ES CA AU IN BR MX)
-
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
@@ -37,9 +34,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
      |> assign(:active_nav, "Movies")
      |> assign(:show_score_modal, false)
      |> assign(:overview_expanded, false)
-     |> assign(:show_full_cast, false)
-     |> assign(:show_full_crew, false)
-     |> assign(:show_all_releases, false)}
+     |> assign(:show_full_cast, false)}
   end
 
   @impl true
@@ -71,12 +66,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   def handle_event("toggle_full_cast", _, socket),
     do: {:noreply, assign(socket, :show_full_cast, !socket.assigns.show_full_cast)}
-
-  def handle_event("toggle_full_crew", _, socket),
-    do: {:noreply, assign(socket, :show_full_crew, !socket.assigns.show_full_crew)}
-
-  def handle_event("toggle_all_releases", _, socket),
-    do: {:noreply, assign(socket, :show_all_releases, !socket.assigns.show_all_releases)}
 
   def handle_event("stop_propagation", _, socket), do: {:noreply, socket}
 
@@ -121,15 +110,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     release_dates = Movies.get_movie_release_dates(movie.id) || []
 
     key_collabs = MovieCollaborations.get_key_collaborations(cast, crew)
-
-    collab_timelines =
-      MovieCollaborations.get_collaboration_timelines(movie, key_collabs) || []
-
-    timeline_index =
-      collab_timelines
-      |> Enum.map(fn t -> {{t.person_a.id, t.person_b.id}, t.movies} end)
-      |> Map.new()
-
     related = MovieCollaborations.get_related_movies_by_collaboration(movie, cast, crew) || []
 
     director_other_films =
@@ -154,7 +134,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
        production_companies: production_companies,
        release_dates: release_dates,
        key_collabs: key_collabs,
-       timeline_index: timeline_index,
        related_movies: related,
        director_other_films: director_other_films
      }}
@@ -356,7 +335,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       score: nil,
       poster_url: tmdb_url(rel[:poster_path], "w500"),
       href: href,
-      reason: rel[:connection_reason]
+      dir: rel[:connection_reason]
     }
   end
 
@@ -369,51 +348,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     }
   end
 
-  defp crew_credit_shape(c) do
-    %{
-      name: c.person.name,
-      job: c.job,
-      avatar_url: tmdb_url(c.person.profile_path, "w185"),
-      href: "/people-v2/#{c.person.slug || c.person.id}"
-    }
-  end
-
-  defp prioritize_releases(releases) do
-    releases
-    |> Enum.group_by(& &1.country_code)
-    |> Enum.map(fn {country, recs} ->
-      earliest = Enum.min_by(recs, & &1.release_date, NaiveDateTime, fn -> nil end)
-      cert = Enum.find_value(recs, &(&1.certification not in [nil, ""] && &1.certification))
-
-      %{
-        country_code: country,
-        release_date: earliest && earliest.release_date,
-        certification: cert
-      }
-    end)
-    |> Enum.sort_by(fn r ->
-      case Enum.find_index(@country_priority, &(&1 == r.country_code)) do
-        nil -> {1, r.country_code}
-        i -> {0, i}
-      end
-    end)
-  end
-
-  defp crew_by_department(crew) do
-    crew
-    |> Enum.reject(&(&1.department in [nil, ""]))
-    |> Enum.group_by(& &1.department)
-    |> Enum.sort_by(fn {d, _} ->
-      case Enum.find_index(@dept_priority, &(&1 == d)) do
-        nil -> {1, d}
-        i -> {0, i}
-      end
-    end)
-  end
-
-  defp collab_shape(c, timeline_index) do
-    movies = Map.get(timeline_index, {c[:person_a].id, c[:person_b].id})
-
+  defp collab_shape(c) do
     %{
       person_a: c[:person_a].name,
       person_b: c[:person_b].name,
@@ -429,7 +364,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       year_range: c[:year_range],
       avg_score: c[:avg_movie_rating],
       total_revenue: c[:total_revenue],
-      movies: movies,
       href: nil
     }
   end
@@ -443,78 +377,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   defp omdb_awards(_), do: nil
 
-  defp top_org_names(noms) when is_list(noms) do
-    noms
-    |> Enum.map(& &1[:organization_name])
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.take(3)
-    |> Enum.join(" · ")
-  end
-
-  defp top_org_names(_), do: nil
-
-  defp top_canon_authorities(lists) when is_list(lists) do
-    lists
-    |> Enum.map(& &1.list_authority)
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.uniq()
-    |> Enum.take(2)
-    |> Enum.join(" · ")
-  end
-
-  defp top_canon_authorities(_), do: nil
-
-  defp top_festival_win(noms) when is_list(noms) do
-    Enum.find_value(noms, fn org ->
-      win =
-        Enum.find(org[:nominations] || [], fn n ->
-          n[:won] == true
-        end)
-
-      if win do
-        %{
-          org: org[:organization_name],
-          year: win[:ceremony_year],
-          category: win[:category_name] || win[:category]
-        }
-      end
-    end)
-  end
-
-  defp top_festival_win(_), do: nil
-
-  defp top_collab_pairing(key_collabs) do
-    pair =
-      List.first(key_collabs[:director_actor_reunions] || []) ||
-        List.first(key_collabs[:actor_partnerships] || [])
-
-    if pair, do: "#{pair.person_a.name} + #{pair.person_b.name}", else: nil
-  end
-
-  defp section_nav_items(assigns) do
-    has_collabs =
-      (assigns[:key_collabs][:director_actor_reunions] || []) != [] ||
-        (assigns[:key_collabs][:actor_partnerships] || []) != []
-
-    [
-      %{id: "score", label: "Score", present?: true},
-      %{id: "cast", label: "Cast", present?: assigns[:cast] != []},
-      %{id: "crew", label: "Crew", present?: assigns[:crew] != []},
-      %{id: "awards", label: "Awards", present?: assigns[:festival_noms] != []},
-      %{id: "lists", label: "Lists", present?: assigns[:canon_lists] != []},
-      %{id: "collaborations", label: "Collabs", present?: has_collabs},
-      %{
-        id: "director",
-        label: "Director",
-        present?: assigns[:director_other_films] != [] && assigns[:directors] != []
-      },
-      %{id: "similar", label: "Similar", present?: assigns[:related_movies] != []},
-      %{id: "media", label: "Media", present?: assigns[:videos] != []},
-      %{id: "releases", label: "Releases", present?: assigns[:release_dates] != []},
-      %{id: "details", label: "Details", present?: true}
-    ]
-  end
-
   # ─── Render ────────────────────────────────────────────────────────
 
   @impl true
@@ -523,8 +385,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     <%!-- HERO — modeled on V1: full-bleed backdrop with bottom-dark gradient,
          white text overlay. No mask-image, no fade-to-light tricks. The hero
          ends at a clean horizontal edge; mist-100 page bg starts immediately
-         below. Breadcrumb floats over the backdrop (top-left) so it doesn't
-         add a row between the sticky top nav and the hero. --%>
+         below. --%>
     <section class="relative bg-mist-950">
       <div :if={@movie.backdrop_path} class="absolute inset-0 overflow-hidden">
         <img
@@ -540,16 +401,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         :if={!@movie.backdrop_path}
         class="absolute inset-0 bg-gradient-to-br from-mist-900 to-mist-800"
       >
-      </div>
-
-      <%!-- BREADCRUMB — floats over the hero backdrop, top-left --%>
-      <div class="absolute top-3 left-0 right-0 z-10 mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
-        <a
-          href={~p"/movies-v2"}
-          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-sm text-[11.5px] text-white/85 hover:text-white hover:bg-black/40 no-underline"
-        >
-          ← All movies
-        </a>
       </div>
 
       <div class="relative mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-12 lg:pt-16 pb-12 lg:pb-16">
@@ -574,8 +425,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <div class="flex-1 min-w-0 text-white">
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
-              <span :if={@movie.runtime}> ·   {format_runtime(@movie.runtime)}</span>
-              <span :if={content_rating(@movie)}> ·   {content_rating(@movie)}</span>
+              <span :if={@movie.runtime}> ·  {format_runtime(@movie.runtime)}</span>
+              <span :if={content_rating(@movie)}> ·  {content_rating(@movie)}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -649,82 +500,19 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               </p>
             <% end %>
 
-            <%!-- Directed by + Starring — avatar pile + inline names --%>
-            <div :if={@directors != [] || @cast != []} class="mt-5 space-y-2.5">
-              <div :if={@directors != []} class="flex items-center gap-2.5 flex-wrap">
-                <span class="text-[10px] font-semibold text-white/55 tracking-[.06em] uppercase shrink-0">
-                  Directed by
-                </span>
-                <div class="flex -space-x-2 shrink-0">
-                  <a
-                    :for={d <- @directors}
-                    href={"/people-v2/#{d.person.slug || d.person.id}"}
-                    title={d.person.name}
-                    class="block no-underline"
-                  >
-                    <img
-                      :if={d.person.profile_path}
-                      src={tmdb_url(d.person.profile_path, "w185")}
-                      alt={d.person.name}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 object-cover bg-mist-800"
-                    />
-                    <div
-                      :if={!d.person.profile_path}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 bg-white/15 grid place-items-center text-[10px] text-white/70"
-                    >
-                      {String.first(d.person.name)}
-                    </div>
-                  </a>
-                </div>
-                <div class="text-[13.5px] text-white/85 min-w-0">
-                  <%= for {d, idx} <- Enum.with_index(@directors) do %>
-                    <%= if idx > 0, do: ", " %><a
-                      href={"/people-v2/#{d.person.slug || d.person.id}"}
-                      class="text-white/85 hover:text-white no-underline"
-                    >{d.person.name}</a>
-                  <% end %>
-                </div>
+            <%!-- Directed by --%>
+            <div :if={@directors != []} class="mt-5">
+              <div class="text-[10.5px] font-semibold text-white/60 tracking-[.06em] uppercase mb-1">
+                Directed by
               </div>
-
-              <% top_cast = Enum.take(@cast, 5) %>
-              <div :if={top_cast != []} class="flex items-center gap-2.5 flex-wrap">
-                <span class="text-[10px] font-semibold text-white/55 tracking-[.06em] uppercase shrink-0">
-                  Starring
-                </span>
-                <div class="flex -space-x-2 shrink-0">
-                  <a
-                    :for={c <- top_cast}
-                    href={"/people-v2/#{c.person.slug || c.person.id}"}
-                    title={c.person.name}
-                    class="block no-underline"
-                  >
-                    <img
-                      :if={c.person.profile_path}
-                      src={tmdb_url(c.person.profile_path, "w185")}
-                      alt={c.person.name}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 object-cover bg-mist-800"
-                    />
-                    <div
-                      :if={!c.person.profile_path}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 bg-white/15 grid place-items-center text-[10px] text-white/70"
-                    >
-                      {String.first(c.person.name)}
-                    </div>
-                  </a>
-                </div>
-                <div class="text-[13.5px] text-white/85 min-w-0">
-                  <%= for {c, idx} <- Enum.with_index(top_cast) do %>
-                    <%= if idx > 0, do: ", " %><a
-                      href={"/people-v2/#{c.person.slug || c.person.id}"}
-                      class="text-white/85 hover:text-white no-underline"
-                    >{c.person.name}</a>
-                  <% end %>
-                  <a
-                    :if={length(@cast) > 5}
-                    href="#cast"
-                    class="ml-1 text-blue-300 hover:text-blue-200 no-underline"
-                  >+{length(@cast) - 5} more</a>
-                </div>
+              <div class="flex flex-wrap gap-x-3 gap-y-1">
+                <a
+                  :for={d <- @directors}
+                  href={"/people-v2/#{d.person.slug || d.person.id}"}
+                  class="text-white hover:text-blue-300 font-medium text-[15px]"
+                >
+                  {d.person.name}
+                </a>
               </div>
             </div>
 
@@ -745,11 +533,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       </div>
     </section>
 
-    <main class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-12 lg:py-16">
-      <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_180px] lg:gap-12 lg:items-start">
-        <div class="space-y-12 lg:space-y-16 min-w-0">
+    <main class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-12 lg:py-16 space-y-12 lg:space-y-16">
       <%!-- CRI SCORE PANEL --%>
-      <section id="score">
+      <section>
         <NeutralV2Components.n_score_panel
           scores={@scores}
           disparity_label={disparity_label(@disparity_data[:disparity_category])}
@@ -772,100 +558,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         </div>
       </section>
 
-      <%!-- WHERE IT LIVES — 4-up summary card --%>
-      <% wins = count_award_wins(@festival_noms) %>
-      <% noms = count_award_nominations(@festival_noms) %>
-      <% canon_count = length(@canon_lists || []) %>
-      <% reunions = (@key_collabs || %{})[:total_reunions] || 0 %>
-      <% top_win = top_festival_win(@festival_noms) %>
-      <% top_pair = top_collab_pairing(@key_collabs || %{}) %>
-      <section
-        :if={wins + noms > 0 || canon_count > 0 || reunions > 0 || top_win}
-        class="-mt-4"
-      >
-        <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
-          Where it lives
-        </h2>
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <a
-            :if={wins + noms > 0}
-            href="#awards"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
-          >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Awards
-            </div>
-            <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
-              {wins} {pluralize_str(wins, "win")}
-            </div>
-            <div class="text-[12px] text-mist-700 tabular-nums mb-3">
-              {noms} {pluralize_str(noms, "nomination")}
-            </div>
-            <div :if={t = top_org_names(@festival_noms)} class="text-[11.5px] text-mist-500 truncate">
-              {t}
-            </div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
-
-          <a
-            :if={canon_count > 0}
-            href="#lists"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
-          >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Lists
-            </div>
-            <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
-              on {canon_count}
-            </div>
-            <div class="text-[12px] text-mist-700 mb-3">
-              canonical {pluralize_str(canon_count, "list")}
-            </div>
-            <div
-              :if={t = top_canon_authorities(@canon_lists)}
-              class="text-[11.5px] text-mist-500 truncate"
-            >
-              {t}
-            </div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
-
-          <a
-            :if={top_win}
-            href="#awards"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
-          >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Festivals
-            </div>
-            <div class="font-display italic text-[20px] text-mist-950 leading-tight mb-1">
-              {top_win.org}
-              <span :if={top_win.year} class="text-mist-500 tabular-nums">{top_win.year}</span>
-            </div>
-            <div :if={top_win.category} class="text-[12px] text-mist-700 mb-3 truncate">
-              {top_win.category}
-            </div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
-
-          <a
-            :if={reunions > 0}
-            href="#collaborations"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
-          >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Collaborations
-            </div>
-            <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
-              {reunions} {pluralize_str(reunions, "reunion")}
-            </div>
-            <div class="text-[12px] text-mist-700 mb-3">in this film</div>
-            <div :if={top_pair} class="text-[11.5px] text-mist-500 truncate">{top_pair}</div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
-        </div>
-      </section>
-
       <%!-- KEYWORDS --%>
       <section :if={@keywords != []}>
         <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
@@ -882,7 +574,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       </section>
 
       <%!-- CAST --%>
-      <section :if={@cast != []} id="cast">
+      <section :if={@cast != []}>
         <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
           <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
             Cast
@@ -904,48 +596,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             :for={c <- if @show_full_cast, do: @cast, else: Enum.take(@cast, 12)}
             credit={cast_credit_shape(c)}
           />
-        </div>
-      </section>
-
-      <%!-- CREW (grouped by department) --%>
-      <% crew_groups = crew_by_department(@crew) %>
-      <% visible_crew_groups =
-        if @show_full_crew, do: crew_groups, else: Enum.take(crew_groups, 3) %>
-      <section :if={crew_groups != []} id="crew">
-        <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
-            Crew
-            <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-              {length(@crew)}
-            </span>
-          </h2>
-          <button
-            :if={length(crew_groups) > 3}
-            type="button"
-            phx-click="toggle_full_crew"
-            class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
-          >
-            {if @show_full_crew,
-              do: "Show top 3 departments",
-              else: "Show all #{length(crew_groups)} departments"}
-          </button>
-        </div>
-        <div class="space-y-7">
-          <div :for={{dept, members} <- visible_crew_groups}>
-            <div class="font-display italic text-[15px] text-mist-500 tracking-[-.005em] mb-3">
-              {dept}
-              <span class="text-mist-500/60 text-[12px] font-sans not-italic tabular-nums ml-1">
-                {length(members)}
-              </span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
-              <NeutralV2Components.n_credit_row
-                :for={m <- members}
-                credit={crew_credit_shape(m)}
-                variant="crew"
-              />
-            </div>
-          </div>
         </div>
       </section>
 
@@ -991,7 +641,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           >
             <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
               {l.list_authority || "List"}
-              <span :if={l.list_year}> ·   {l.list_year}</span>
+              <span :if={l.list_year}> ·  {l.list_year}</span>
             </div>
             <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
               {l.list_name}
@@ -1025,11 +675,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <NeutralV2Components.n_collaboration_card
             :for={c <- @key_collabs[:director_actor_reunions] || []}
-            collaboration={collab_shape(c, @timeline_index)}
+            collaboration={collab_shape(c)}
           />
           <NeutralV2Components.n_collaboration_card
             :for={c <- @key_collabs[:actor_partnerships] || []}
-            collaboration={collab_shape(c, @timeline_index)}
+            collaboration={collab_shape(c)}
           />
         </div>
         <a
@@ -1041,7 +691,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       </section>
 
       <%!-- MORE FROM DIRECTOR --%>
-      <section :if={@director_other_films != [] && @directors != []} id="director">
+      <section :if={@director_other_films != [] && @directors != []}>
         <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
           More from {director_names(@directors)}
         </h2>
@@ -1054,7 +704,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       </section>
 
       <%!-- SIMILAR FILMS --%>
-      <section :if={@related_movies != []} id="similar">
+      <section :if={@related_movies != []}>
         <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
           Similar films
         </h2>
@@ -1067,7 +717,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       </section>
 
       <%!-- MEDIA --%>
-      <section :if={@videos != []} id="media">
+      <section :if={@videos != []}>
         <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
           Media
         </h2>
@@ -1099,53 +749,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         </div>
       </section>
 
-      <%!-- RELEASE DATES BY COUNTRY --%>
-      <% all_releases = prioritize_releases(@release_dates || []) %>
-      <% visible_releases = if @show_all_releases, do: all_releases, else: Enum.take(all_releases, 8) %>
-      <section :if={all_releases != []} id="releases">
-        <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
-            Release information
-            <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-              {length(all_releases)}
-            </span>
-          </h2>
-          <button
-            :if={length(all_releases) > 8}
-            type="button"
-            phx-click="toggle_all_releases"
-            class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
-          >
-            {if @show_all_releases, do: "Show top 8", else: "Show all #{length(all_releases)}"}
-          </button>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div
-            :for={r <- visible_releases}
-            class="bg-mist-50 border border-mist-950/10 rounded-lg p-4"
-          >
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
-              {r.country_code}
-            </div>
-            <div class="mt-1 text-[13px] text-mist-950 tabular-nums">
-              <%= if r.release_date do %>
-                {Calendar.strftime(r.release_date, "%Y-%m-%d")}
-              <% else %>
-                —
-              <% end %>
-            </div>
-            <span
-              :if={r.certification}
-              class="inline-block mt-2 px-2 py-[2px] rounded text-[10.5px] font-semibold bg-mist-100 text-mist-700 border border-mist-950/10"
-            >
-              {r.certification}
-            </span>
-          </div>
-        </div>
-      </section>
-
       <%!-- TECHNICAL DETAILS --%>
-      <section id="details">
+      <section>
         <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-6">
           Technical details
         </h2>
@@ -1191,11 +796,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           </div>
         </dl>
       </section>
-        </div>
-        <aside class="hidden lg:block">
-          <NeutralV2Components.n_section_nav sections={section_nav_items(assigns)} />
-        </aside>
-      </div>
     </main>
 
     <%!-- Score modal --%>

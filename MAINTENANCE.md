@@ -153,6 +153,60 @@ ssh "$HOST" "$APP_BIN eval \"IO.puts(Jason.encode!(<expression>, pretty: true))\
 Or add a new `mix cinegraph.prod.<thing>` task following the existing pattern
 (`lib/mix/tasks/cinegraph/prod/*.ex`) — they're ~25 lines each.
 
+## Audits & ad-hoc reports
+
+Read-only operational queries. Each has a local wrapper for the dev DB and,
+where useful, a `cinegraph.prod.*` mirror that runs the analyzer inside the
+running prod container via `Cinegraph.ProdRpc.eval_json/1` (no DB pull, no
+SSH plumbing). All accept `--json` for piping to `jq`.
+
+| Task | Prod variant | Purpose |
+|---|---|---|
+| `mix cinegraph.audit.year_discovery [--days N]` | `mix cinegraph.prod.audit.year_discovery [--days N]` | YearDiscoveryWorker health per festival, classified by failure mode (#759, #766) |
+| `mix cinegraph.audit_people_scores` | — | Ground-truth auteurs score audit; flags ⚠️ failures after data imports / scoring formula changes |
+| `mix cinegraph.drift <people\|movies\|festivals\|ratings> [--limit N]` | — | Per-domain drift checks (`Cinegraph.Health.Drift.*`) |
+| `mix cinegraph.status` | — | Combined activity + queue state + last-sync snapshot |
+| `mix cinegraph.queues` | `mix cinegraph.prod.queues` | Oban queue state (counts per queue × state, longest-running, failures last hour) |
+| `mix cinegraph.activity [--days N]` | `mix cinegraph.prod.activity [--days N]` | Movies/people/ceremonies added per UTC day, plus job completions and failures |
+| `mix cinegraph.completeness [--history N]` | `mix cinegraph.prod.completeness [--history N]` | Per-domain completeness % (movies / people / festivals / overall) |
+| `mix cinegraph.health` | `mix cinegraph.prod.health` | `/admin/health` verdict (red/yellow/green) and the underlying drift map |
+| `mix predictions.audit_festivals [--decade N]` | — | 1001 Movies with zero festival nominations, grouped by decade |
+| `mix predictions.audit_coverage [--decade N]` | — | Data-completeness audit by decade for prediction candidates |
+| `mix predictions.status` | — | Predictions accuracy + coverage snapshot |
+| `mix predictions.backtest` | — | Backtest prediction algorithm against historical decades |
+
+> **Mutating tasks documented elsewhere — do not run against prod for
+> verification.** `mix predictions.{train,sweep,populate_cache}` write
+> prediction state. `mix import_movies`, `mix import_canonical`,
+> `mix omdb.enrich`, `mix tmdb.refresh_credits`, and the
+> `cinegraph.{festivals,movies,people}.*` backfill tasks listed above
+> mutate the DB or enqueue Oban jobs; they're documented in their own
+> sections of this file. Use code inspection to confirm read-only-ness
+> before adding a task to the audit table above.
+
+## Adding a new audit
+
+For any read-only operational query you'd otherwise write as a one-off
+`mix run /tmp/foo.exs` script:
+
+1. **Analyzer module** — put the logic in `lib/cinegraph/health/<thing>.ex`.
+   Return a JSON-encodable map. Integrate with `Cinegraph.Health.Drift.result/5`
+   only if it's genuinely a drift check (i.e. consumed by the verdict facade).
+2. **Centralize Oban access** — if the analyzer reads `oban_jobs`, extend
+   `Cinegraph.Health.ObanReader` rather than querying directly. The "single
+   source of truth" comment at the top of that module is enforced by review.
+3. **Local task** — `lib/mix/tasks/cinegraph/audit/<name>.ex` with
+   `--days`/`--json` parsing, calling `Mix.Task.run("app.start")` first.
+   Pretty-print a table for the no-flag case so the output is human-friendly.
+4. **Prod task** — `lib/mix/tasks/cinegraph/prod/audit/<name>.ex` (~25 lines)
+   using `Cinegraph.ProdRpc.eval_json/1`. Do **not** call `Mix.Task.run("app.start")`
+   in prod tasks — it leaks logs into stdout that breaks `jq` piping. See
+   `lib/mix/tasks/cinegraph/prod/health.ex` as a template.
+5. **Document** — add a row to the table above. README points at this file;
+   do not duplicate the docs.
+6. **Pure DB only** — audits must be fast and side-effect-free. If you need
+   live API/scrape data, build a separate tool — never mix it into an audit.
+
 ## Conventions
 
 - Maintenance modules return `{:ok, %{found, enqueued, failed, dry_run}}` so

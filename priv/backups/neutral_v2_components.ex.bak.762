@@ -528,12 +528,6 @@ defmodule CinegraphWeb.NeutralV2Components do
           </span>
           <.n_delta :if={Map.has_key?(@film, :delta)} value={@film.delta} />
         </div>
-        <div
-          :if={!@compact && @film[:reason]}
-          class="mt-[5px] pl-2 border-l-2 border-mist-950/30 italic text-[11px] text-mist-500 truncate"
-        >
-          {@film.reason}
-        </div>
       </div>
     </a>
     """
@@ -1032,7 +1026,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <span :if={!n[:won]} class="w-[12px] shrink-0"></span>
           <div class="flex-1 min-w-0 text-[13px] text-mist-950">
             <span class="font-medium">{n.category}</span>
-            <span :if={n[:person_name]} class="text-mist-700"> —   {n.person_name}</span>
+            <span :if={n[:person_name]} class="text-mist-700"> —  {n.person_name}</span>
             <span
               :if={n[:film_title]}
               class="text-mist-700"
@@ -1173,7 +1167,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <div class="text-[11.5px] text-mist-700">
             <b class="text-mist-950 font-semibold tabular-nums">{@c[:films_together]}</b>
             {pluralize(@c[:films_together] || 0, "film")} together
-            <span :if={@c[:year_range]} class="text-mist-500"> ·   {@c.year_range}</span>
+            <span :if={@c[:year_range]} class="text-mist-500"> ·  {@c.year_range}</span>
           </div>
         </div>
       </div>
@@ -1196,31 +1190,6 @@ defmodule CinegraphWeb.NeutralV2Components do
           rev <b class="text-mist-950 font-semibold">${format_revenue(@c.total_revenue)}</b>
         </span>
       </div>
-
-      <div :if={@c[:movies] && @c.movies != []} class="mt-3 pt-3 border-t border-mist-950/10">
-        <div class="text-[10px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-2">
-          Films together
-        </div>
-        <div class="flex gap-2 overflow-x-auto">
-          <.link
-            :for={m <- @c.movies}
-            navigate={"/movies-v2/#{m.slug || m.id}"}
-            class="shrink-0 text-center no-underline text-inherit hover:opacity-75"
-            title={m.title}
-          >
-            <div class="w-14 h-20 bg-mist-100 border border-mist-950/10 rounded grid place-items-center text-[11px] text-mist-700 tabular-nums">
-              <%= if m.release_date do %>
-                {m.release_date.year}
-              <% else %>
-                —
-              <% end %>
-            </div>
-            <div :if={m.score} class="mt-1 text-[10.5px] font-semibold text-mist-950 tabular-nums">
-              {Float.round(m.score, 1)}
-            </div>
-          </.link>
-        </div>
-      </div>
     </a>
     """
   end
@@ -1241,43 +1210,4 @@ defmodule CinegraphWeb.NeutralV2Components do
   end
 
   defp format_revenue(n), do: to_string(n)
-
-  @doc """
-  Vertical right-rail "On this page" TOC. Each entry is a map with `:id`,
-  `:label`, `:present?`. Entries with `present?: false` are filtered out.
-
-  Designed to live inside a sidebar column. Sticks within its parent on scroll.
-  Active state is set by the `SectionNav` JS hook (IntersectionObserver on
-  `[id]` sections matching `data-section-id`).
-  """
-  attr :sections, :list, required: true
-
-  def n_section_nav(assigns) do
-    assigns = assign(assigns, :visible, Enum.filter(assigns.sections, & &1.present?))
-
-    ~H"""
-    <nav
-      :if={@visible != []}
-      id="section-nav"
-      phx-hook="SectionNav"
-      class="sticky top-[80px]"
-      aria-label="On this page"
-    >
-      <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-        On this page
-      </div>
-      <ul class="border-l border-mist-950/10">
-        <li :for={s <- @visible}>
-          <a
-            href={"##{s.id}"}
-            data-section-id={s.id}
-            class="block pl-3 py-[6px] -ml-px text-[13px] no-underline border-l-2 border-transparent text-mist-700 hover:text-mist-950 [&.active]:border-mist-950 [&.active]:text-mist-950 [&.active]:font-medium"
-          >
-            {s.label}
-          </a>
-        </li>
-      </ul>
-    </nav>
-    """
-  end
 end
