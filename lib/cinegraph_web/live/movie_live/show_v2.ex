@@ -22,6 +22,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   alias Cinegraph.Metrics.DisparityCalculator
   alias Cinegraph.Repo
   alias Cinegraph.Workers.MovieScoreCacheWorker
+  alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.NeutralV2Components
 
   require Logger
@@ -85,7 +86,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
            disparity_category: movie.score_cache.disparity_category
          }}
       else
-        MovieScoreCacheWorker.new(%{"movie_id" => movie.id}) |> Oban.insert()
+        MovieScoreCacheWorker.new(%{"movie_id" => movie.id}, unique: [period: 60])
+        |> Oban.insert()
 
         sd = MovieScoring.calculate_movie_scores(movie)
         {build_display_scores_from_data(sd), DisparityCalculator.calculate_all(sd)}
@@ -187,9 +189,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   defp tmdb_url("", _), do: nil
   defp tmdb_url("/" <> _ = path, size), do: "https://image.tmdb.org/t/p/#{size}#{path}"
   defp tmdb_url(path, size), do: "https://image.tmdb.org/t/p/#{size}/#{path}"
-
-  defp movie_href(slug, _id) when is_binary(slug) and slug != "", do: "/movies-v2/#{slug}"
-  defp movie_href(_slug, id), do: "/movies/#{id}"
 
   defp year_of(%Date{year: y}), do: y
   defp year_of(_), do: nil
@@ -314,7 +313,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   defp render_nominations(_), do: []
 
   defp film_card_shape(movie) do
-    href = movie_href(movie.slug, movie.id)
+    href = UrlHelpers.movie_href(movie.slug, movie.id)
 
     %{
       id: movie.id,
@@ -327,7 +326,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   end
 
   defp related_card_shape(rel) do
-    href = movie_href(rel[:slug], rel.id)
+    href = UrlHelpers.movie_href(rel[:slug], rel.id)
 
     %{
       id: rel.id,
