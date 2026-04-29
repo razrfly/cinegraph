@@ -52,6 +52,8 @@ defmodule CinegraphWeb.Router do
         root_layout: {CinegraphWeb.Layouts, :v2_root},
         layout: false do
         live "/movies-v2", MovieLive.IndexV2, :index
+        live "/movies-v2/:slug", MovieLive.ShowV2, :show
+        live "/people-v2/:slug_or_id", PersonLive.ShowV2, :show
       end
     end
 

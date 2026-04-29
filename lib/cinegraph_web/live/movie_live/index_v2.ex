@@ -172,7 +172,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   defp tmdb_poster_url(path, size), do: "https://image.tmdb.org/t/p/#{size}/#{path}"
 
   defp movie_href(%{slug: slug}) when is_binary(slug) and slug != "",
-    do: "/movies/#{slug}"
+    do: "/movies-v2/#{slug}"
 
   defp movie_href(%{id: id}), do: "/movies/#{id}"
 
