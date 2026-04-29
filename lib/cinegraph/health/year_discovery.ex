@@ -207,9 +207,12 @@ defmodule Cinegraph.Health.YearDiscovery do
         summary.discarded == 0 and summary.completed == 0 and summary.retryable == 0 ->
           :no_runs
 
-        summary.last_error == nil ->
-          # All runs in window succeeded.
+        summary.discarded == 0 and summary.retryable == 0 and summary.last_error == nil ->
+          # All non-empty runs in the window succeeded.
           :ok
+
+        summary.discarded == 0 and summary.retryable > 0 ->
+          :retrying
 
         true ->
           classify_error(summary.last_error)

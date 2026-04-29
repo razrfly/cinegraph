@@ -382,7 +382,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     releases
     |> Enum.group_by(& &1.country_code)
     |> Enum.map(fn {country, recs} ->
-      earliest = Enum.min_by(recs, & &1.release_date, NaiveDateTime, fn -> nil end)
+      earliest =
+        recs
+        |> Enum.reject(&is_nil(&1.release_date))
+        |> Enum.min_by(& &1.release_date, NaiveDateTime, fn -> nil end)
+
       cert = Enum.find_value(recs, &(&1.certification not in [nil, ""] && &1.certification))
 
       %{
@@ -574,8 +578,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <div class="flex-1 min-w-0 text-white">
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
-              <span :if={@movie.runtime}> ·   {format_runtime(@movie.runtime)}</span>
-              <span :if={content_rating(@movie)}> ·   {content_rating(@movie)}</span>
+              <span :if={@movie.runtime}> ·    {format_runtime(@movie.runtime)}</span>
+              <span :if={content_rating(@movie)}> ·    {content_rating(@movie)}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -678,7 +682,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 </div>
                 <div class="text-[13.5px] text-white/85 min-w-0">
                   <%= for {d, idx} <- Enum.with_index(@directors) do %>
-                    <%= if idx > 0, do: ", " %><a
+                    {if idx > 0, do: ", "}<a
                       href={"/people-v2/#{d.person.slug || d.person.id}"}
                       class="text-white/85 hover:text-white no-underline"
                     >{d.person.name}</a>
@@ -714,7 +718,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 </div>
                 <div class="text-[13.5px] text-white/85 min-w-0">
                   <%= for {c, idx} <- Enum.with_index(top_cast) do %>
-                    <%= if idx > 0, do: ", " %><a
+                    {if idx > 0, do: ", "}<a
                       href={"/people-v2/#{c.person.slug || c.person.id}"}
                       class="text-white/85 hover:text-white no-underline"
                     >{c.person.name}</a>
@@ -723,7 +727,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                     :if={length(@cast) > 5}
                     href="#cast"
                     class="ml-1 text-blue-300 hover:text-blue-200 no-underline"
-                  >+{length(@cast) - 5} more</a>
+                  >
+                    +{length(@cast) - 5} more
+                  </a>
                 </div>
               </div>
             </div>
@@ -748,449 +754,457 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     <main class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-12 lg:py-16">
       <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_180px] lg:gap-12 lg:items-start">
         <div class="space-y-12 lg:space-y-16 min-w-0">
-      <%!-- CRI SCORE PANEL --%>
-      <section id="score">
-        <NeutralV2Components.n_score_panel
-          scores={@scores}
-          disparity_label={disparity_label(@disparity_data[:disparity_category])}
-          disparity_summary={disparity_summary(@disparity_data, @scores)}
-        />
-        <div class="mt-3 flex items-center gap-3 flex-wrap">
-          <button
-            type="button"
-            phx-click="show_score_modal"
-            class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
-          >
-            How is this score calculated?
-          </button>
-          <a
-            href={~p"/movies/discover"}
-            class="text-[12.5px] font-semibold text-mist-700 underline decoration-mist-950/10 underline-offset-4"
-          >
-            Tune weights →
-          </a>
-        </div>
-      </section>
+          <%!-- CRI SCORE PANEL --%>
+          <section id="score">
+            <NeutralV2Components.n_score_panel
+              scores={@scores}
+              disparity_label={disparity_label(@disparity_data[:disparity_category])}
+              disparity_summary={disparity_summary(@disparity_data, @scores)}
+            />
+            <div class="mt-3 flex items-center gap-3 flex-wrap">
+              <button
+                type="button"
+                phx-click="show_score_modal"
+                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+              >
+                How is this score calculated?
+              </button>
+              <a
+                href={~p"/movies/discover"}
+                class="text-[12.5px] font-semibold text-mist-700 underline decoration-mist-950/10 underline-offset-4"
+              >
+                Tune weights →
+              </a>
+            </div>
+          </section>
 
-      <%!-- WHERE IT LIVES — 4-up summary card --%>
-      <% wins = count_award_wins(@festival_noms) %>
-      <% noms = count_award_nominations(@festival_noms) %>
-      <% canon_count = length(@canon_lists || []) %>
-      <% reunions = (@key_collabs || %{})[:total_reunions] || 0 %>
-      <% top_win = top_festival_win(@festival_noms) %>
-      <% top_pair = top_collab_pairing(@key_collabs || %{}) %>
-      <section
-        :if={wins + noms > 0 || canon_count > 0 || reunions > 0 || top_win}
-        class="-mt-4"
-      >
-        <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
-          Where it lives
-        </h2>
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <a
-            :if={wins + noms > 0}
-            href="#awards"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+          <%!-- WHERE IT LIVES — 4-up summary card --%>
+          <% wins = count_award_wins(@festival_noms) %>
+          <% noms = count_award_nominations(@festival_noms) %>
+          <% canon_count = length(@canon_lists || []) %>
+          <% reunions = (@key_collabs || %{})[:total_reunions] || 0 %>
+          <% top_win = top_festival_win(@festival_noms) %>
+          <% top_pair = top_collab_pairing(@key_collabs || %{}) %>
+          <section
+            :if={wins + noms > 0 || canon_count > 0 || reunions > 0 || top_win}
+            class="-mt-4"
           >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Awards
-            </div>
-            <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
-              {wins} {pluralize_str(wins, "win")}
-            </div>
-            <div class="text-[12px] text-mist-700 tabular-nums mb-3">
-              {noms} {pluralize_str(noms, "nomination")}
-            </div>
-            <div :if={t = top_org_names(@festival_noms)} class="text-[11.5px] text-mist-500 truncate">
-              {t}
-            </div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
+            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
+              Where it lives
+            </h2>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <a
+                :if={wins + noms > 0}
+                href="#awards"
+                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+              >
+                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                  Awards
+                </div>
+                <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
+                  {wins} {pluralize_str(wins, "win")}
+                </div>
+                <div class="text-[12px] text-mist-700 tabular-nums mb-3">
+                  {noms} {pluralize_str(noms, "nomination")}
+                </div>
+                <div
+                  :if={t = top_org_names(@festival_noms)}
+                  class="text-[11.5px] text-mist-500 truncate"
+                >
+                  {t}
+                </div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+              </a>
 
-          <a
-            :if={canon_count > 0}
-            href="#lists"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
-          >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Lists
-            </div>
-            <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
-              on {canon_count}
-            </div>
-            <div class="text-[12px] text-mist-700 mb-3">
-              canonical {pluralize_str(canon_count, "list")}
-            </div>
-            <div
-              :if={t = top_canon_authorities(@canon_lists)}
-              class="text-[11.5px] text-mist-500 truncate"
-            >
-              {t}
-            </div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
+              <a
+                :if={canon_count > 0}
+                href="#lists"
+                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+              >
+                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                  Lists
+                </div>
+                <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
+                  on {canon_count}
+                </div>
+                <div class="text-[12px] text-mist-700 mb-3">
+                  canonical {pluralize_str(canon_count, "list")}
+                </div>
+                <div
+                  :if={t = top_canon_authorities(@canon_lists)}
+                  class="text-[11.5px] text-mist-500 truncate"
+                >
+                  {t}
+                </div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+              </a>
 
-          <a
-            :if={top_win}
-            href="#awards"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
-          >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Festivals
-            </div>
-            <div class="font-display italic text-[20px] text-mist-950 leading-tight mb-1">
-              {top_win.org}
-              <span :if={top_win.year} class="text-mist-500 tabular-nums">{top_win.year}</span>
-            </div>
-            <div :if={top_win.category} class="text-[12px] text-mist-700 mb-3 truncate">
-              {top_win.category}
-            </div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
+              <a
+                :if={top_win}
+                href="#awards"
+                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+              >
+                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                  Festivals
+                </div>
+                <div class="font-display italic text-[20px] text-mist-950 leading-tight mb-1">
+                  {top_win.org}
+                  <span :if={top_win.year} class="text-mist-500 tabular-nums">{top_win.year}</span>
+                </div>
+                <div :if={top_win.category} class="text-[12px] text-mist-700 mb-3 truncate">
+                  {top_win.category}
+                </div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+              </a>
 
-          <a
-            :if={reunions > 0}
-            href="#collaborations"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
-          >
-            <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-              Collaborations
+              <a
+                :if={reunions > 0}
+                href="#collaborations"
+                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+              >
+                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                  Collaborations
+                </div>
+                <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
+                  {reunions} {pluralize_str(reunions, "reunion")}
+                </div>
+                <div class="text-[12px] text-mist-700 mb-3">in this film</div>
+                <div :if={top_pair} class="text-[11.5px] text-mist-500 truncate">{top_pair}</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+              </a>
             </div>
-            <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
-              {reunions} {pluralize_str(reunions, "reunion")}
-            </div>
-            <div class="text-[12px] text-mist-700 mb-3">in this film</div>
-            <div :if={top_pair} class="text-[11.5px] text-mist-500 truncate">{top_pair}</div>
-            <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
-          </a>
-        </div>
-      </section>
+          </section>
 
-      <%!-- KEYWORDS --%>
-      <section :if={@keywords != []}>
-        <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
-          Themes & keywords
-        </h2>
-        <div class="flex flex-wrap gap-2">
-          <span
-            :for={kw <- @keywords}
-            class="inline-flex items-center px-3 py-1 rounded-full bg-mist-950/[0.025] border border-mist-950/10 text-[13px] text-mist-700"
-          >
-            {kw.name}
-          </span>
-        </div>
-      </section>
-
-      <%!-- CAST --%>
-      <section :if={@cast != []} id="cast">
-        <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
-            Cast
-            <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-              {length(@cast)}
-            </span>
-          </h2>
-          <button
-            :if={length(@cast) > 12}
-            type="button"
-            phx-click="toggle_full_cast"
-            class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
-          >
-            {if @show_full_cast, do: "Show top 12 only", else: "Show all #{length(@cast)}"}
-          </button>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
-          <NeutralV2Components.n_credit_row
-            :for={c <- if @show_full_cast, do: @cast, else: Enum.take(@cast, 12)}
-            credit={cast_credit_shape(c)}
-          />
-        </div>
-      </section>
-
-      <%!-- CREW (grouped by department) --%>
-      <% crew_groups = crew_by_department(@crew) %>
-      <% visible_crew_groups =
-        if @show_full_crew, do: crew_groups, else: Enum.take(crew_groups, 3) %>
-      <section :if={crew_groups != []} id="crew">
-        <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
-            Crew
-            <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-              {length(@crew)}
-            </span>
-          </h2>
-          <button
-            :if={length(crew_groups) > 3}
-            type="button"
-            phx-click="toggle_full_crew"
-            class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
-          >
-            {if @show_full_crew,
-              do: "Show top 3 departments",
-              else: "Show all #{length(crew_groups)} departments"}
-          </button>
-        </div>
-        <div class="space-y-7">
-          <div :for={{dept, members} <- visible_crew_groups}>
-            <div class="font-display italic text-[15px] text-mist-500 tracking-[-.005em] mb-3">
-              {dept}
-              <span class="text-mist-500/60 text-[12px] font-sans not-italic tabular-nums ml-1">
-                {length(members)}
+          <%!-- KEYWORDS --%>
+          <section :if={@keywords != []}>
+            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
+              Themes & keywords
+            </h2>
+            <div class="flex flex-wrap gap-2">
+              <span
+                :for={kw <- @keywords}
+                class="inline-flex items-center px-3 py-1 rounded-full bg-mist-950/[0.025] border border-mist-950/10 text-[13px] text-mist-700"
+              >
+                {kw.name}
               </span>
+            </div>
+          </section>
+
+          <%!-- CAST --%>
+          <section :if={@cast != []} id="cast">
+            <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
+              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+                Cast
+                <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                  {length(@cast)}
+                </span>
+              </h2>
+              <button
+                :if={length(@cast) > 12}
+                type="button"
+                phx-click="toggle_full_cast"
+                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+              >
+                {if @show_full_cast, do: "Show top 12 only", else: "Show all #{length(@cast)}"}
+              </button>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
               <NeutralV2Components.n_credit_row
-                :for={m <- members}
-                credit={crew_credit_shape(m)}
-                variant="crew"
+                :for={c <- if @show_full_cast, do: @cast, else: Enum.take(@cast, 12)}
+                credit={cast_credit_shape(c)}
               />
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <%!-- AWARDS BY ORG --%>
-      <section :if={@festival_noms != [] && is_list(@festival_noms)} id="awards">
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
-          Awards & recognition
-          <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-            {count_award_wins(@festival_noms)} {pluralize_str(count_award_wins(@festival_noms), "win")} · {count_award_nominations(
-              @festival_noms
-            )} {pluralize_str(count_award_nominations(@festival_noms), "nomination")}
-          </span>
-        </h2>
-        <div :if={a = omdb_awards(@movie)} class="mb-6 text-[13.5px] text-mist-700 italic">
-          {a}
-        </div>
-        <div class="space-y-4">
-          <NeutralV2Components.n_award_org_block
-            :for={
-              org <-
-                Enum.sort_by(
-                  @festival_noms,
-                  &(-Enum.count(&1[:nominations] || [], fn n -> n[:won] end))
-                )
-            }
-            org_name={org[:organization_name] || "Awards"}
-            total_wins={Enum.count(org[:nominations] || [], & &1[:won])}
-            total_nominations={org[:total_nominations] || length(org[:nominations] || [])}
-            nominations={render_nominations(org[:nominations] || [])}
-          />
-        </div>
-      </section>
-
-      <%!-- CANONICAL LISTS --%>
-      <section :if={@canon_lists != []} id="lists">
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
-          On canonical lists
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <div
-            :for={l <- @canon_lists}
-            class="bg-mist-50 border border-mist-950/10 rounded-lg p-5"
-          >
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
-              {l.list_authority || "List"}
-              <span :if={l.list_year}> ·   {l.list_year}</span>
+          <%!-- CREW (grouped by department) --%>
+          <% crew_groups = crew_by_department(@crew) %>
+          <% visible_crew_groups =
+            if @show_full_crew, do: crew_groups, else: Enum.take(crew_groups, 3) %>
+          <section :if={crew_groups != []} id="crew">
+            <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
+              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+                Crew
+                <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                  {length(@crew)}
+                </span>
+              </h2>
+              <button
+                :if={length(crew_groups) > 3}
+                type="button"
+                phx-click="toggle_full_crew"
+                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+              >
+                {if @show_full_crew,
+                  do: "Show top 3 departments",
+                  else: "Show all #{length(crew_groups)} departments"}
+              </button>
             </div>
-            <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
-              {l.list_name}
-            </div>
-            <div class="mt-3 flex items-baseline gap-3 text-[12px] text-mist-700 tabular-nums">
-              <span :if={l.rank}>
-                <b class="text-mist-950 font-semibold">#{l.rank}</b>
-              </span>
-              <span :if={l.prestige_score}>
-                prestige <b class="text-mist-950 font-semibold">{l.prestige_score}</b>
-              </span>
-              <span :if={l[:award_category]} class="text-mist-500">
-                {l.award_category}
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <%!-- NOTABLE COLLABORATIONS --%>
-      <section
-        :if={
-          (@key_collabs[:director_actor_reunions] || []) != [] ||
-            (@key_collabs[:actor_partnerships] || []) != []
-        }
-        id="collaborations"
-      >
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
-          Notable collaborations
-        </h2>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <NeutralV2Components.n_collaboration_card
-            :for={c <- @key_collabs[:director_actor_reunions] || []}
-            collaboration={collab_shape(c, @timeline_index)}
-          />
-          <NeutralV2Components.n_collaboration_card
-            :for={c <- @key_collabs[:actor_partnerships] || []}
-            collaboration={collab_shape(c, @timeline_index)}
-          />
-        </div>
-        <a
-          href={~p"/six-degrees"}
-          class="mt-4 inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
-        >
-          Explore the full collaboration network →
-        </a>
-      </section>
-
-      <%!-- MORE FROM DIRECTOR --%>
-      <section :if={@director_other_films != [] && @directors != []} id="director">
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
-          More from {director_names(@directors)}
-        </h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[18px]">
-          <NeutralV2Components.n_film_card
-            :for={m <- @director_other_films}
-            film={film_card_shape(m)}
-          />
-        </div>
-      </section>
-
-      <%!-- SIMILAR FILMS --%>
-      <section :if={@related_movies != []} id="similar">
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
-          Similar films
-        </h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-[18px]">
-          <NeutralV2Components.n_film_card
-            :for={r <- Enum.take(@related_movies, 12)}
-            film={related_card_shape(r)}
-          />
-        </div>
-      </section>
-
-      <%!-- MEDIA --%>
-      <section :if={@videos != []} id="media">
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
-          Media
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px]">
-          <a
-            :for={v <- Enum.take(@videos, 9)}
-            href={"https://www.youtube.com/watch?v=#{v.key}"}
-            target="_blank"
-            rel="noopener"
-            class="block bg-mist-50 border border-mist-950/10 rounded-lg overflow-hidden hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow no-underline text-inherit"
-          >
-            <div class="relative aspect-video bg-mist-200">
-              <img
-                src={"https://img.youtube.com/vi/#{v.key}/hqdefault.jpg"}
-                alt={v.name}
-                class="absolute inset-0 w-full h-full object-cover"
-              />
-              <div class="absolute inset-0 grid place-items-center">
-                <div class="w-12 h-12 rounded-full bg-black/60 grid place-items-center text-white text-[20px]">
-                  ▶
+            <div class="space-y-7">
+              <div :for={{dept, members} <- visible_crew_groups}>
+                <div class="font-display italic text-[15px] text-mist-500 tracking-[-.005em] mb-3">
+                  {dept}
+                  <span class="text-mist-500/60 text-[12px] font-sans not-italic tabular-nums ml-1">
+                    {length(members)}
+                  </span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
+                  <NeutralV2Components.n_credit_row
+                    :for={m <- members}
+                    credit={crew_credit_shape(m)}
+                    variant="crew"
+                  />
                 </div>
               </div>
             </div>
-            <div class="px-4 py-3">
-              <div class="text-[13px] font-semibold text-mist-950 truncate">{v.name}</div>
-              <div class="text-[11.5px] text-mist-500">{v.type}</div>
-            </div>
-          </a>
-        </div>
-      </section>
+          </section>
 
-      <%!-- RELEASE DATES BY COUNTRY --%>
-      <% all_releases = prioritize_releases(@release_dates || []) %>
-      <% visible_releases = if @show_all_releases, do: all_releases, else: Enum.take(all_releases, 8) %>
-      <section :if={all_releases != []} id="releases">
-        <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
-            Release information
-            <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-              {length(all_releases)}
-            </span>
-          </h2>
-          <button
-            :if={length(all_releases) > 8}
-            type="button"
-            phx-click="toggle_all_releases"
-            class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
-          >
-            {if @show_all_releases, do: "Show top 8", else: "Show all #{length(all_releases)}"}
-          </button>
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          <div
-            :for={r <- visible_releases}
-            class="bg-mist-50 border border-mist-950/10 rounded-lg p-4"
-          >
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
-              {r.country_code}
+          <%!-- AWARDS BY ORG --%>
+          <section :if={@festival_noms != [] && is_list(@festival_noms)} id="awards">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+              Awards & recognition
+              <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                {count_award_wins(@festival_noms)} {pluralize_str(
+                  count_award_wins(@festival_noms),
+                  "win"
+                )} · {count_award_nominations(@festival_noms)} {pluralize_str(
+                  count_award_nominations(@festival_noms),
+                  "nomination"
+                )}
+              </span>
+            </h2>
+            <div :if={a = omdb_awards(@movie)} class="mb-6 text-[13.5px] text-mist-700 italic">
+              {a}
             </div>
-            <div class="mt-1 text-[13px] text-mist-950 tabular-nums">
-              <%= if r.release_date do %>
-                {Calendar.strftime(r.release_date, "%Y-%m-%d")}
-              <% else %>
-                —
-              <% end %>
+            <div class="space-y-4">
+              <NeutralV2Components.n_award_org_block
+                :for={
+                  org <-
+                    Enum.sort_by(
+                      @festival_noms,
+                      &(-Enum.count(&1[:nominations] || [], fn n -> n[:won] end))
+                    )
+                }
+                org_name={org[:organization_name] || "Awards"}
+                total_wins={Enum.count(org[:nominations] || [], & &1[:won])}
+                total_nominations={org[:total_nominations] || length(org[:nominations] || [])}
+                nominations={render_nominations(org[:nominations] || [])}
+              />
             </div>
-            <span
-              :if={r.certification}
-              class="inline-block mt-2 px-2 py-[2px] rounded text-[10.5px] font-semibold bg-mist-100 text-mist-700 border border-mist-950/10"
+          </section>
+
+          <%!-- CANONICAL LISTS --%>
+          <section :if={@canon_lists != []} id="lists">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+              On canonical lists
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div
+                :for={l <- @canon_lists}
+                class="bg-mist-50 border border-mist-950/10 rounded-lg p-5"
+              >
+                <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+                  {l.list_authority || "List"}
+                  <span :if={l.list_year}> ·    {l.list_year}</span>
+                </div>
+                <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
+                  {l.list_name}
+                </div>
+                <div class="mt-3 flex items-baseline gap-3 text-[12px] text-mist-700 tabular-nums">
+                  <span :if={l.rank}>
+                    <b class="text-mist-950 font-semibold">#{l.rank}</b>
+                  </span>
+                  <span :if={l.prestige_score}>
+                    prestige <b class="text-mist-950 font-semibold">{l.prestige_score}</b>
+                  </span>
+                  <span :if={l[:award_category]} class="text-mist-500">
+                    {l.award_category}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <%!-- NOTABLE COLLABORATIONS --%>
+          <section
+            :if={
+              (@key_collabs[:director_actor_reunions] || []) != [] ||
+                (@key_collabs[:actor_partnerships] || []) != []
+            }
+            id="collaborations"
+          >
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+              Notable collaborations
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <NeutralV2Components.n_collaboration_card
+                :for={c <- @key_collabs[:director_actor_reunions] || []}
+                collaboration={collab_shape(c, @timeline_index)}
+              />
+              <NeutralV2Components.n_collaboration_card
+                :for={c <- @key_collabs[:actor_partnerships] || []}
+                collaboration={collab_shape(c, @timeline_index)}
+              />
+            </div>
+            <a
+              href={~p"/six-degrees"}
+              class="mt-4 inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
             >
-              {r.certification}
-            </span>
-          </div>
-        </div>
-      </section>
+              Explore the full collaboration network →
+            </a>
+          </section>
 
-      <%!-- TECHNICAL DETAILS --%>
-      <section id="details">
-        <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-6">
-          Technical details
-        </h2>
-        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-[13px]">
-          <div
-            :if={format_money(Map.get(@movie, :budget))}
-            class="flex justify-between border-b border-mist-950/10 pb-2"
-          >
-            <dt class="text-mist-500">Budget</dt>
-            <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :budget))}</dd>
-          </div>
-          <div
-            :if={format_money(Map.get(@movie, :revenue))}
-            class="flex justify-between border-b border-mist-950/10 pb-2"
-          >
-            <dt class="text-mist-500">Revenue</dt>
-            <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :revenue))}</dd>
-          </div>
-          <div
-            :if={@movie.original_language}
-            class="flex justify-between border-b border-mist-950/10 pb-2"
-          >
-            <dt class="text-mist-500">Language</dt>
-            <dd class="text-mist-950">{@movie.original_language}</dd>
-          </div>
-          <div
-            :if={@production_companies != []}
-            class="flex justify-between border-b border-mist-950/10 pb-2"
-          >
-            <dt class="text-mist-500">Production</dt>
-            <dd class="text-mist-950 text-right">
-              {@production_companies
-              |> Enum.take(2)
-              |> Enum.map(&production_company_name/1)
-              |> Enum.join(" · ")}
-            </dd>
-          </div>
-          <div class="flex justify-between border-b border-mist-950/10 pb-2">
-            <dt class="text-mist-500">TMDb / IMDb</dt>
-            <dd class="text-mist-950 tabular-nums">
-              {@movie.tmdb_id}<span :if={@movie.imdb_id}> · {@movie.imdb_id}</span>
-            </dd>
-          </div>
-        </dl>
-      </section>
+          <%!-- MORE FROM DIRECTOR --%>
+          <section :if={@director_other_films != [] && @directors != []} id="director">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+              More from {director_names(@directors)}
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[18px]">
+              <NeutralV2Components.n_film_card
+                :for={m <- @director_other_films}
+                film={film_card_shape(m)}
+              />
+            </div>
+          </section>
+
+          <%!-- SIMILAR FILMS --%>
+          <section :if={@related_movies != []} id="similar">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+              Similar films
+            </h2>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-[18px]">
+              <NeutralV2Components.n_film_card
+                :for={r <- Enum.take(@related_movies, 12)}
+                film={related_card_shape(r)}
+              />
+            </div>
+          </section>
+
+          <%!-- MEDIA --%>
+          <section :if={@videos != []} id="media">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+              Media
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px]">
+              <a
+                :for={v <- Enum.take(@videos, 9)}
+                href={"https://www.youtube.com/watch?v=#{v.key}"}
+                target="_blank"
+                rel="noopener"
+                class="block bg-mist-50 border border-mist-950/10 rounded-lg overflow-hidden hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow no-underline text-inherit"
+              >
+                <div class="relative aspect-video bg-mist-200">
+                  <img
+                    src={"https://img.youtube.com/vi/#{v.key}/hqdefault.jpg"}
+                    alt={v.name}
+                    class="absolute inset-0 w-full h-full object-cover"
+                  />
+                  <div class="absolute inset-0 grid place-items-center">
+                    <div class="w-12 h-12 rounded-full bg-black/60 grid place-items-center text-white text-[20px]">
+                      ▶
+                    </div>
+                  </div>
+                </div>
+                <div class="px-4 py-3">
+                  <div class="text-[13px] font-semibold text-mist-950 truncate">{v.name}</div>
+                  <div class="text-[11.5px] text-mist-500">{v.type}</div>
+                </div>
+              </a>
+            </div>
+          </section>
+
+          <%!-- RELEASE DATES BY COUNTRY --%>
+          <% all_releases = prioritize_releases(@release_dates || []) %>
+          <% visible_releases =
+            if @show_all_releases, do: all_releases, else: Enum.take(all_releases, 8) %>
+          <section :if={all_releases != []} id="releases">
+            <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
+              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+                Release information
+                <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                  {length(all_releases)}
+                </span>
+              </h2>
+              <button
+                :if={length(all_releases) > 8}
+                type="button"
+                phx-click="toggle_all_releases"
+                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+              >
+                {if @show_all_releases, do: "Show top 8", else: "Show all #{length(all_releases)}"}
+              </button>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div
+                :for={r <- visible_releases}
+                class="bg-mist-50 border border-mist-950/10 rounded-lg p-4"
+              >
+                <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+                  {r.country_code}
+                </div>
+                <div class="mt-1 text-[13px] text-mist-950 tabular-nums">
+                  <%= if r.release_date do %>
+                    {Calendar.strftime(r.release_date, "%Y-%m-%d")}
+                  <% else %>
+                    —
+                  <% end %>
+                </div>
+                <span
+                  :if={r.certification}
+                  class="inline-block mt-2 px-2 py-[2px] rounded text-[10.5px] font-semibold bg-mist-100 text-mist-700 border border-mist-950/10"
+                >
+                  {r.certification}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <%!-- TECHNICAL DETAILS --%>
+          <section id="details">
+            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-6">
+              Technical details
+            </h2>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-[13px]">
+              <div
+                :if={format_money(Map.get(@movie, :budget))}
+                class="flex justify-between border-b border-mist-950/10 pb-2"
+              >
+                <dt class="text-mist-500">Budget</dt>
+                <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :budget))}</dd>
+              </div>
+              <div
+                :if={format_money(Map.get(@movie, :revenue))}
+                class="flex justify-between border-b border-mist-950/10 pb-2"
+              >
+                <dt class="text-mist-500">Revenue</dt>
+                <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :revenue))}</dd>
+              </div>
+              <div
+                :if={@movie.original_language}
+                class="flex justify-between border-b border-mist-950/10 pb-2"
+              >
+                <dt class="text-mist-500">Language</dt>
+                <dd class="text-mist-950">{@movie.original_language}</dd>
+              </div>
+              <div
+                :if={@production_companies != []}
+                class="flex justify-between border-b border-mist-950/10 pb-2"
+              >
+                <dt class="text-mist-500">Production</dt>
+                <dd class="text-mist-950 text-right">
+                  {@production_companies
+                  |> Enum.take(2)
+                  |> Enum.map(&production_company_name/1)
+                  |> Enum.join(" · ")}
+                </dd>
+              </div>
+              <div class="flex justify-between border-b border-mist-950/10 pb-2">
+                <dt class="text-mist-500">TMDb / IMDb</dt>
+                <dd class="text-mist-950 tabular-nums">
+                  {@movie.tmdb_id}<span :if={@movie.imdb_id}> · {@movie.imdb_id}</span>
+                </dd>
+              </div>
+            </dl>
+          </section>
         </div>
         <aside class="hidden lg:block">
           <NeutralV2Components.n_section_nav sections={section_nav_items(assigns)} />
