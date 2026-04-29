@@ -23,9 +23,36 @@ import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
+
+const Hooks = {
+  SectionNav: {
+    mounted() {
+      const links = this.el.querySelectorAll("[data-section-id]")
+      const linkMap = new Map()
+      links.forEach(a => linkMap.set(a.dataset.sectionId, a))
+
+      this.observer = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(l => l.classList.remove("active"))
+            linkMap.get(e.target.id)?.classList.add("active")
+          }
+        })
+      }, { rootMargin: "-100px 0px -70% 0px" })
+
+      linkMap.forEach((_, id) => {
+        const section = document.getElementById(id)
+        if (section) this.observer.observe(section)
+      })
+    },
+    destroyed() { this.observer?.disconnect() }
+  }
+}
+
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: {_csrf_token: csrfToken}
+  params: {_csrf_token: csrfToken},
+  hooks: Hooks
 })
 
 // Show progress bar on live navigation and form submits

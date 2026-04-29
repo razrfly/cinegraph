@@ -24,7 +24,9 @@
           <a href="#" class="text-sm/7 font-medium text-mist-950">Docs</a>
         </div>
         <div class="flex items-center">
-          <a href={~p"/oatmeal-demo"} class="font-display text-2xl text-mist-950 italic">Oatmeal</a>
+          <a href={~p"/oatmeal-demo"} class="font-display text-2xl text-mist-950 italic">
+            Oatmeal
+          </a>
         </div>
         <div class="flex flex-1 items-center justify-end gap-4">
           <a
@@ -61,59 +63,62 @@
       <section class="py-16">
         <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
           <div class="grid grid-cols-1 gap-2 lg:grid-cols-3">
-            <div :for={
-              p <- [
-                %{
-                  name: "Starter",
-                  price: "$12",
-                  per: "/mo",
-                  desc: "Small teams getting started with shared inboxes",
-                  cta: "soft",
-                  badge: nil,
-                  features: [
-                    "Shared inbox for up to 2 mailboxes",
-                    "Tagging & assignment",
-                    "Private notes",
-                    "Automatic replies",
-                    "Email support"
-                  ]
-                },
-                %{
-                  name: "Growth",
-                  price: "$49",
-                  per: "/mo",
-                  desc: "Growing teams needing collaboration and insights",
-                  cta: "primary",
-                  badge: "Most popular",
-                  features: [
-                    "Everything in Starter",
-                    "Inbox Agent",
-                    "Unlimited mailboxes",
-                    "Collision detection",
-                    "Snippets and templates",
-                    "Reporting dashboard",
-                    "Slack integration"
-                  ]
-                },
-                %{
-                  name: "Pro",
-                  price: "$299",
-                  per: "/mo",
-                  desc: "Support-focused organizations and larger teams",
-                  cta: "soft",
-                  badge: nil,
-                  features: [
-                    "Everything in Growth",
-                    "Custom roles & permissions",
-                    "Automation engine",
-                    "API access",
-                    "SLA tracking",
-                    "SSO support",
-                    "SOC 2 compliance"
-                  ]
-                }
-              ]
-            } class="flex flex-col justify-between gap-6 rounded-xl bg-mist-950/[0.025] p-6">
+            <div
+              :for={
+                p <- [
+                  %{
+                    name: "Starter",
+                    price: "$12",
+                    per: "/mo",
+                    desc: "Small teams getting started with shared inboxes",
+                    cta: "soft",
+                    badge: nil,
+                    features: [
+                      "Shared inbox for up to 2 mailboxes",
+                      "Tagging & assignment",
+                      "Private notes",
+                      "Automatic replies",
+                      "Email support"
+                    ]
+                  },
+                  %{
+                    name: "Growth",
+                    price: "$49",
+                    per: "/mo",
+                    desc: "Growing teams needing collaboration and insights",
+                    cta: "primary",
+                    badge: "Most popular",
+                    features: [
+                      "Everything in Starter",
+                      "Inbox Agent",
+                      "Unlimited mailboxes",
+                      "Collision detection",
+                      "Snippets and templates",
+                      "Reporting dashboard",
+                      "Slack integration"
+                    ]
+                  },
+                  %{
+                    name: "Pro",
+                    price: "$299",
+                    per: "/mo",
+                    desc: "Support-focused organizations and larger teams",
+                    cta: "soft",
+                    badge: nil,
+                    features: [
+                      "Everything in Growth",
+                      "Custom roles & permissions",
+                      "Automation engine",
+                      "API access",
+                      "SLA tracking",
+                      "SSO support",
+                      "SOC 2 compliance"
+                    ]
+                  }
+                ]
+              }
+              class="flex flex-col justify-between gap-6 rounded-xl bg-mist-950/[0.025] p-6"
+            >
               <div class="self-stretch">
                 <div class="flex items-center justify-between">
                   <span
@@ -224,29 +229,32 @@
             </h2>
           </div>
           <dl class="divide-y divide-mist-950/10 border-y border-mist-950/10">
-            <div :for={
-              f <- [
-                %{
-                  q: "Is the trial really free?",
-                  a:
-                    "Yes. 14 days, all features, no credit card required. We'll email you twice during the trial; we won't keep emailing after."
-                },
-                %{
-                  q: "Do you charge per seat?",
-                  a:
-                    "Growth and Pro are flat-rate up to a generous cap (25 seats on Growth). Past that, $9/seat. Starter is fixed-team."
-                },
-                %{
-                  q: "Can I switch plans?",
-                  a: "Yes, any time. Downgrades take effect at the next billing cycle."
-                },
-                %{
-                  q: "Discounts for nonprofits?",
-                  a:
-                    "30% off Growth and Pro for registered nonprofits. Email support@oatmeal with documentation."
-                }
-              ]
-            } class="py-4">
+            <div
+              :for={
+                f <- [
+                  %{
+                    q: "Is the trial really free?",
+                    a:
+                      "Yes. 14 days, all features, no credit card required. We'll email you twice during the trial; we won't keep emailing after."
+                  },
+                  %{
+                    q: "Do you charge per seat?",
+                    a:
+                      "Growth and Pro are flat-rate up to a generous cap (25 seats on Growth). Past that, $9/seat. Starter is fixed-team."
+                  },
+                  %{
+                    q: "Can I switch plans?",
+                    a: "Yes, any time. Downgrades take effect at the next billing cycle."
+                  },
+                  %{
+                    q: "Discounts for nonprofits?",
+                    a:
+                      "30% off Growth and Pro for registered nonprofits. Email support@oatmeal with documentation."
+                  }
+                ]
+              }
+              class="py-4"
+            >
               <dt class="text-base/7 text-mist-950 font-medium">{f.q}</dt>
               <dd class="mt-1 text-sm/7 text-mist-700">{f.a}</dd>
             </div>
