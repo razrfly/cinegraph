@@ -152,14 +152,33 @@ defmodule Cinegraph.Health.ImdbEventInspector do
         end
 
       nil ->
+        # No __NEXT_DATA__ block — but distinguish two sub-cases:
+        # 1. IMDb returned a real page that just lacks the script tag
+        #    (rare; would be a real format change → :parser_breakage)
+        # 2. Crawlbase/IMDb returned an error page like "403 Forbidden"
+        #    or "404 Not Found" with the body short and the title saying
+        #    so → :bad_event_id
         Map.merge(base, %{
           parser_status: :no_next_data,
           has_next_data: false,
           editions_count: 0,
           years_with_data: %{count: 0, sample: []},
           event_name: nil,
-          suggested_label: :parser_breakage
+          suggested_label: classify_no_next_data(html)
         })
+    end
+  end
+
+  defp classify_no_next_data(html) do
+    cond do
+      String.contains?(html, "403 Forbidden") -> :bad_event_id
+      String.contains?(html, "404 Not Found") -> :bad_event_id
+      String.contains?(html, "Page Not Found") -> :bad_event_id
+      # Body is suspiciously small — treating short non-NEXT_DATA responses
+      # as "the event ID is wrong / page doesn't really exist" rather than
+      # "the IMDb format changed".
+      byte_size(html) < 5_000 -> :bad_event_id
+      true -> :parser_breakage
     end
   end
 
