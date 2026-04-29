@@ -4,6 +4,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   """
   use Phoenix.Component
 
+  alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.NeutralV2Components
 
   attr :total_count, :integer, default: nil
@@ -112,7 +113,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
         </button>
       </div>
 
-      <div :if={@filter_options[:genres] != []} class="flex items-center gap-[6px] flex-wrap">
+      <div :if={(@filter_options[:genres] || []) != []} class="flex items-center gap-[6px] flex-wrap">
         <span class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase shrink-0 mr-1">
           GENRE
         </span>
@@ -211,7 +212,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
       id: movie.id,
       title: movie.title,
       year: year_of(movie.release_date),
-      dir: nil,
+      dir: director_of(movie),
+      genre: primary_genre(movie),
+      genres: genres_of(movie),
       score: overall_score(movie),
       poster_url: tmdb_poster_url(movie.poster_path, "w500"),
       href: movie_href(movie)
@@ -231,10 +234,44 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   defp tmdb_poster_url("/" <> _ = path, size), do: "https://image.tmdb.org/t/p/#{size}#{path}"
   defp tmdb_poster_url(path, size), do: "https://image.tmdb.org/t/p/#{size}/#{path}"
 
-  defp movie_href(%{slug: slug}) when is_binary(slug) and slug != "",
-    do: "/movies-v2/#{slug}"
+  defp movie_href(%{slug: slug, id: id}), do: UrlHelpers.movie_href(slug, id)
+  defp movie_href(%{id: id}), do: UrlHelpers.movie_href(nil, id)
 
-  defp movie_href(%{id: id}), do: "/movies/#{id}"
+  defp director_of(movie) do
+    Map.get(movie, :director) || person_name_from_loaded_assoc(movie, :directors)
+  end
+
+  defp genres_of(movie) do
+    movie
+    |> loaded_assoc(:genres)
+    |> Enum.map(&genre_name/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp primary_genre(movie), do: movie |> genres_of() |> List.first()
+
+  defp loaded_assoc(movie, assoc) do
+    case Map.get(movie, assoc) do
+      %Ecto.Association.NotLoaded{} -> []
+      nil -> []
+      values when is_list(values) -> values
+      value -> [value]
+    end
+  end
+
+  defp person_name_from_loaded_assoc(movie, assoc) do
+    movie
+    |> loaded_assoc(assoc)
+    |> Enum.find_value(fn
+      %{person: %{name: name}} when is_binary(name) and name != "" -> name
+      %{name: name} when is_binary(name) and name != "" -> name
+      _ -> nil
+    end)
+  end
+
+  defp genre_name(%{name: name}) when is_binary(name) and name != "", do: name
+  defp genre_name(name) when is_binary(name) and name != "", do: name
+  defp genre_name(_), do: nil
 
   defp format_count(nil), do: "—"
 

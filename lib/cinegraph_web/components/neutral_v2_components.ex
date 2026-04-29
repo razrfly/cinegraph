@@ -1026,7 +1026,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <span :if={!n[:won]} class="w-[12px] shrink-0"></span>
           <div class="flex-1 min-w-0 text-[13px] text-mist-950">
             <span class="font-medium">{n.category}</span>
-            <span :if={n[:person_name]} class="text-mist-700"> —     {n.person_name}</span>
+            <span :if={n[:person_name]} class="text-mist-700"> —  {n.person_name}</span>
             <span
               :if={n[:film_title]}
               class="text-mist-700"
@@ -1167,7 +1167,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <div class="text-[11.5px] text-mist-700">
             <b class="text-mist-950 font-semibold tabular-nums">{@c[:films_together]}</b>
             {pluralize(@c[:films_together] || 0, "film")} together
-            <span :if={@c[:year_range]} class="text-mist-500"> ·     {@c.year_range}</span>
+            <span :if={@c[:year_range]} class="text-mist-500"> ·  {@c.year_range}</span>
           </div>
         </div>
       </div>
