@@ -142,6 +142,7 @@ defmodule CinegraphWeb.GlobalSearchLive do
         <div
           id="global-search-listbox"
           role="listbox"
+          phx-mousedown-prevent
           class="absolute top-[calc(100%+6px)] left-0 right-0 bg-white rounded-lg border border-mist-950/10 shadow-[0_8px_32px_rgba(0,0,0,.08)] overflow-hidden z-10 max-h-[70vh] overflow-y-auto"
         >
           <%= cond do %>
@@ -174,9 +175,8 @@ defmodule CinegraphWeb.GlobalSearchLive do
   # state for a single character that was below threshold anyway.
   defp dropdown_visible?(%{open?: true}), do: true
 
-  defp dropdown_visible?(%{query: q})
-       when is_binary(q) and byte_size(q) >= @min_query_length,
-       do: true
+  defp dropdown_visible?(%{query: q}) when is_binary(q),
+    do: String.length(q) >= @min_query_length
 
   defp dropdown_visible?(_), do: false
 

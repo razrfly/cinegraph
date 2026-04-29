@@ -60,6 +60,14 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
       refute html =~ ~s|id="global-search-listbox"|
     end
 
+    test "single multibyte character leaves the dropdown closed", %{conn: conn} do
+      {:ok, view, _} = live_isolated(conn, CinegraphWeb.GlobalSearchLive)
+
+      html = render_change(view, "change", %{"q" => "é"})
+
+      refute html =~ ~s|id="global-search-listbox"|
+    end
+
     test "a real query opens the dropdown and renders results", %{conn: conn} do
       _movie = insert_movie!(%{title: "Sondergaard Standard", tmdb_id: 80_001})
       _person = insert_person!(%{name: "Sondergaard Searchable", tmdb_id: 80_002})
@@ -70,6 +78,7 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
       html = render_async(view)
 
       assert html =~ ~s|id="global-search-listbox"|
+      assert html =~ "phx-mousedown-prevent"
       assert html =~ "Sondergaard Standard"
       assert html =~ "Sondergaard Searchable"
     end
