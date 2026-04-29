@@ -232,6 +232,46 @@ defmodule Cinegraph.Health.ObanReader do
   end
 
   @doc """
+  Discarded jobs in `[start_dt, end_dt)` for a queue and/or worker filter.
+  Returns rows with worker, attempt, discarded_at, and the most recent
+  `errors[].error` text. The caller groups by error pattern.
+
+  At least one of `:queue` or `:worker` must be provided.
+  """
+  def discards_for_queue(opts, %DateTime{} = start_dt, end_dt \\ nil) do
+    queue = Keyword.get(opts, :queue)
+    worker = Keyword.get(opts, :worker)
+
+    if is_nil(queue) and is_nil(worker) do
+      raise ArgumentError, "discards_for_queue/3 requires :queue or :worker"
+    end
+
+    base =
+      from(j in Oban.Job,
+        where: j.state == "discarded" and j.discarded_at >= ^start_dt,
+        select: %{
+          worker: j.worker,
+          attempt: j.attempt,
+          discarded_at: j.discarded_at,
+          last_error:
+            fragment(
+              "CASE WHEN array_length(?, 1) > 0 THEN ?[array_upper(?, 1)] ->> 'error' ELSE NULL END",
+              j.errors,
+              j.errors,
+              j.errors
+            )
+        }
+      )
+
+    base = if queue, do: from(j in base, where: j.queue == ^to_string(queue)), else: base
+    base = if worker, do: from(j in base, where: j.worker == ^worker), else: base
+
+    base = if end_dt, do: from(j in base, where: j.discarded_at < ^end_dt), else: base
+
+    Repo.replica().all(base)
+  end
+
+  @doc """
   Returns the list of queue names configured for Oban (atoms).
   """
   def configured_queues do
