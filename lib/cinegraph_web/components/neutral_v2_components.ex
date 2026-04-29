@@ -296,7 +296,14 @@ defmodule CinegraphWeb.NeutralV2Components do
                 stroke-width="1.4"
                 stroke-linecap="round"
               />
-              <circle cx="8" cy="8" r="2.5" stroke="currentColor" class="text-mist-900" stroke-width="1.4" />
+              <circle
+                cx="8"
+                cy="8"
+                r="2.5"
+                stroke="currentColor"
+                class="text-mist-900"
+                stroke-width="1.4"
+              />
             </svg>
           </button>
           <button
@@ -305,8 +312,21 @@ defmodule CinegraphWeb.NeutralV2Components do
             aria-label="Search"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <circle cx="7" cy="7" r="5" stroke="currentColor" class="text-mist-900" stroke-width="1.4" />
-              <path d="M11 11 L14 14" stroke="currentColor" class="text-mist-900" stroke-width="1.4" stroke-linecap="round" />
+              <circle
+                cx="7"
+                cy="7"
+                r="5"
+                stroke="currentColor"
+                class="text-mist-900"
+                stroke-width="1.4"
+              />
+              <path
+                d="M11 11 L14 14"
+                stroke="currentColor"
+                class="text-mist-900"
+                stroke-width="1.4"
+                stroke-linecap="round"
+              />
             </svg>
           </button>
           <button
@@ -516,15 +536,12 @@ defmodule CinegraphWeb.NeutralV2Components do
   # Generate an SVG placeholder ONLY when the film map has the rich mock-data
   # shape (id + title + year + dir + genre). Real Movie structs from the DB
   # don't have :dir/:genre, so we skip the generator and render a blank tile.
-  defp maybe_generated_poster(%{id: _, title: _, dir: dir, genre: _, year: _}) when is_binary(dir),
-    do: PosterSvg.poster(%{id: get_in_safe([:id]), title: "", dir: "", genre: [""], year: ""})
   defp maybe_generated_poster(%{title: title, dir: dir, year: year, genre: genre, id: id})
        when is_binary(title) and is_binary(dir) do
     PosterSvg.poster(%{id: id, title: title, dir: dir, year: year, genre: genre})
   end
-  defp maybe_generated_poster(_), do: nil
 
-  defp get_in_safe(_), do: nil
+  defp maybe_generated_poster(_), do: nil
 
   # Compute card score from explicit :score, else avg of the 4 dimension fields.
   defp card_score(%{score: nil}), do: nil
@@ -572,7 +589,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           </span>
         </div>
         <div class="text-[11.5px] text-mist-700 mt-[2px] whitespace-nowrap overflow-hidden text-ellipsis">
-          {@person.role} · {hd(@person.known_for)}
+          {@person.role}{if known = List.first(@person.known_for || []), do: " · #{known}", else: ""}
         </div>
       </div>
       <div class="text-right shrink-0">
@@ -753,9 +770,10 @@ defmodule CinegraphWeb.NeutralV2Components do
     by_id = Map.new(nodes, fn n -> {n.id, n} end)
 
     edges_xy =
-      Enum.map(edges, fn {a, b} ->
-        na = by_id[a]
-        nb = by_id[b]
+      edges
+      |> Enum.map(fn {a, b} -> {by_id[a], by_id[b]} end)
+      |> Enum.filter(fn {na, nb} -> na && nb end)
+      |> Enum.map(fn {na, nb} ->
         {na.x * assigns.width, na.y * assigns.height, nb.x * assigns.width, nb.y * assigns.height}
       end)
 
@@ -848,6 +866,7 @@ defmodule CinegraphWeb.NeutralV2Components do
   `:time_machine`, `:auteurs`, `:box_office`) plus `:overall`. Values are 0–10.
   """
   attr :scores, :map, required: true
+
   attr :weights, :map,
     default: %{
       mob: 10,
@@ -857,6 +876,7 @@ defmodule CinegraphWeb.NeutralV2Components do
       auteurs: 20,
       box_office: 20
     }
+
   attr :disparity_label, :string, default: nil
   attr :disparity_summary, :string, default: nil
 
@@ -958,8 +978,6 @@ defmodule CinegraphWeb.NeutralV2Components do
   end
 
   defp score_for_bar(nil), do: nil
-  defp score_for_bar(0), do: nil
-  defp score_for_bar(+0.0), do: nil
   defp score_for_bar(v) when is_number(v), do: v
   defp score_for_bar(_), do: nil
 
@@ -967,8 +985,6 @@ defmodule CinegraphWeb.NeutralV2Components do
   defp score_pct(v) when is_number(v), do: round(min(max(v, 0), 10) * 10)
 
   defp format_score(nil), do: "—"
-  defp format_score(0), do: "—"
-  defp format_score(+0.0), do: "—"
 
   defp format_score(v) when is_float(v),
     do: :erlang.float_to_binary(Float.round(v, 1), decimals: 1)
@@ -1010,7 +1026,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <span :if={!n[:won]} class="w-[12px] shrink-0"></span>
           <div class="flex-1 min-w-0 text-[13px] text-mist-950">
             <span class="font-medium">{n.category}</span>
-            <span :if={n[:person_name]} class="text-mist-700"> — {n.person_name}</span>
+            <span :if={n[:person_name]} class="text-mist-700"> —     {n.person_name}</span>
             <span
               :if={n[:film_title]}
               class="text-mist-700"
@@ -1020,7 +1036,9 @@ defmodule CinegraphWeb.NeutralV2Components do
                 :if={n[:film_href]}
                 href={n[:film_href]}
                 class="underline decoration-mist-950/15 underline-offset-2 hover:text-mist-950"
-              >{n.film_title}</a>
+              >
+                {n.film_title}
+              </a>
               <span :if={!n[:film_href]}>{n.film_title}</span>
             </span>
           </div>
@@ -1066,7 +1084,10 @@ defmodule CinegraphWeb.NeutralV2Components do
         alt=""
         class="w-9 h-[54px] shrink-0 rounded-[3px] border border-mist-950/10 object-cover bg-mist-100"
       />
-      <div :if={!@credit[:avatar_url] && !@credit[:poster_url]} class="w-9 h-9 rounded-full shrink-0 bg-mist-950/[0.05] grid place-items-center text-[10px] text-mist-500">
+      <div
+        :if={!@credit[:avatar_url] && !@credit[:poster_url]}
+        class="w-9 h-9 rounded-full shrink-0 bg-mist-950/[0.05] grid place-items-center text-[10px] text-mist-500"
+      >
         ?
       </div>
       <div class="flex-1 min-w-0">
@@ -1146,7 +1167,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <div class="text-[11.5px] text-mist-700">
             <b class="text-mist-950 font-semibold tabular-nums">{@c[:films_together]}</b>
             {pluralize(@c[:films_together] || 0, "film")} together
-            <span :if={@c[:year_range]} class="text-mist-500"> · {@c.year_range}</span>
+            <span :if={@c[:year_range]} class="text-mist-500"> ·     {@c.year_range}</span>
           </div>
         </div>
       </div>
@@ -1158,7 +1179,10 @@ defmodule CinegraphWeb.NeutralV2Components do
         <span class="text-[10.5px] text-mist-700 font-medium shrink-0">{@strength_label}</span>
       </div>
 
-      <div :if={@c[:avg_score] || @c[:total_revenue]} class="flex items-center gap-4 text-[11px] text-mist-500 tabular-nums">
+      <div
+        :if={@c[:avg_score] || @c[:total_revenue]}
+        class="flex items-center gap-4 text-[11px] text-mist-500 tabular-nums"
+      >
         <span :if={@c[:avg_score]}>
           avg <b class="text-mist-950 font-semibold">{format_score(@c.avg_score)}</b>
         </span>

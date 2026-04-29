@@ -49,7 +49,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
     career = People.get_career_stats(person.id)
     award_stats = Festivals.get_person_nomination_stats(person.id)
     collab_trends = Collaborations.get_person_collaboration_trends(person.id)
-    frequent_collabs = get_frequent_collaborators(person)
+    frequent_collabs = Collaborations.get_frequent_collaborators(person)
 
     role_filter = params["role"] || "all"
 
@@ -70,7 +70,10 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
   end
 
   def handle_event("set_role", %{"role" => role}, socket) do
-    new_params = Map.put(socket.assigns.params, "role", role) |> Map.reject(fn {_k, v} -> v == "all" or v == "" or is_nil(v) end)
+    new_params =
+      Map.put(socket.assigns.params, "role", role)
+      |> Map.reject(fn {_k, v} -> v == "all" or v == "" or is_nil(v) end)
+
     qs = if new_params == %{}, do: "", else: "?" <> URI.encode_query(new_params)
     slug = socket.assigns.person.slug || to_string(socket.assigns.person.id)
     {:noreply, push_patch(socket, to: "/people-v2/#{slug}#{qs}")}
@@ -116,55 +119,15 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
     end
   end
 
-  defp get_frequent_collaborators(person) do
-    person_id = if is_binary(person.id), do: String.to_integer(person.id), else: person.id
-
-    query = """
-    SELECT
-      CASE WHEN c.person_a_id = $1 THEN c.person_b_id ELSE c.person_a_id END as collab_id,
-      c.collaboration_count,
-      c.first_collaboration_date,
-      c.latest_collaboration_date,
-      c.avg_movie_rating,
-      c.total_revenue
-    FROM collaborations c
-    WHERE (c.person_a_id = $1 OR c.person_b_id = $1) AND c.collaboration_count >= 2
-    ORDER BY c.collaboration_count DESC, c.latest_collaboration_date DESC
-    LIMIT 8
-    """
-
-    case Cinegraph.Repo.query(query, [person_id]) do
-      {:ok, %{rows: rows}} ->
-        Enum.map(rows, fn [cid, count, first, last, avg, rev] ->
-          collaborator = Cinegraph.People.get_person!(cid)
-
-          %{
-            person: collaborator,
-            collaboration_count: count,
-            first_date: first,
-            latest_date: last,
-            avg_rating: avg,
-            total_revenue: rev,
-            strength:
-              cond do
-                count >= 10 -> :very_strong
-                count >= 5 -> :strong
-                true -> :moderate
-              end
-          }
-        end)
-
-      _ ->
-        []
-    end
-  end
-
   # ─── Adapters & helpers ────────────────────────────────────────────
 
   defp tmdb_url(nil, _), do: nil
   defp tmdb_url("", _), do: nil
   defp tmdb_url("/" <> _ = path, size), do: "https://image.tmdb.org/t/p/#{size}#{path}"
   defp tmdb_url(path, size), do: "https://image.tmdb.org/t/p/#{size}/#{path}"
+
+  defp movie_href(slug, _id) when is_binary(slug) and slug != "", do: "/movies-v2/#{slug}"
+  defp movie_href(_slug, id), do: "/movies/#{id}"
 
   defp year_of(%Date{year: y}), do: y
   defp year_of(_), do: nil
@@ -194,9 +157,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
   defp grouped_by_year(credits) do
     credits
     |> Enum.filter(& &1.movie)
-    |> Enum.sort_by(
-      fn c -> {-(c.movie.release_date && c.movie.release_date.year || 0)} end
-    )
+    |> Enum.sort_by(fn c -> {-((c.movie.release_date && c.movie.release_date.year) || 0)} end)
     |> Enum.group_by(fn c ->
       case c.movie.release_date do
         %Date{year: y} -> y
@@ -222,7 +183,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
       year: year_of(movie.release_date),
       poster_url: tmdb_url(movie.poster_path, "w92"),
       score: nil,
-      href: "/movies-v2/#{movie.slug || movie.id}"
+      href: movie_href(movie.slug, movie.id)
     }
   end
 
@@ -266,7 +227,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
       year: year_of(m.release_date),
       score: nil,
       poster_url: tmdb_url(m.poster_path, "w500"),
-      href: "/movies-v2/#{m.slug}"
+      href: movie_href(m.slug, m.id)
     }
   end
 
@@ -429,7 +390,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
         <div class="flex-1 min-w-0">
           <div class="text-[12px] font-semibold text-mist-700 tracking-[.06em] uppercase mb-2">
             {@person.known_for_department || "Person"}
-            <span :if={@years_active_str}> · Active {@years_active_str}</span>
+            <span :if={@years_active_str}> · Active    {@years_active_str}</span>
           </div>
 
           <h1 class="font-display italic text-[44px] sm:text-[64px] lg:text-[80px] tracking-[-.02em] text-balance text-mist-950 leading-[0.95]">
@@ -439,7 +400,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
           <div class="mt-4 flex items-center gap-4 flex-wrap text-[13px] text-mist-700">
             <span :if={@person.birthday}>
               Born {format_date(@person.birthday)}
-              <span :if={@person.deathday}> — died {format_date(@person.deathday)}</span>
+              <span :if={@person.deathday}> — died    {format_date(@person.deathday)}</span>
             </span>
             <span :if={@person.place_of_birth} class="text-mist-500">
               · {@person.place_of_birth}
@@ -508,7 +469,9 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
       <section>
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">Films</div>
+            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+              Films
+            </div>
             <div class="mt-2 font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
               {@career[:total_movies] || 0}
             </div>
@@ -520,7 +483,9 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
           </div>
 
           <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">Awards</div>
+            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+              Awards
+            </div>
             <div class="mt-2 font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
               {@award_stats[:total_wins] || 0}
             </div>
@@ -530,7 +495,9 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
           </div>
 
           <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">Avg score</div>
+            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+              Avg score
+            </div>
             <div class="mt-2 flex items-end justify-between gap-2">
               <span class="font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
                 <%= if @avg_score do %>
@@ -562,7 +529,9 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
           </div>
 
           <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">Collaborators</div>
+            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+              Collaborators
+            </div>
             <div class="mt-2 font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
               {length(@frequent_collabs)}
             </div>
@@ -726,13 +695,18 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
             </a>
           </form>
 
-          <div :if={@six_degrees_path == :no_path} class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded text-[13.5px] text-amber-900">
+          <div
+            :if={@six_degrees_path == :no_path}
+            class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded text-[13.5px] text-amber-900"
+          >
             No path found within 6 degrees.
           </div>
 
           <div :if={is_list(@six_degrees_path)} class="mt-4 space-y-2">
             <div class="text-[12.5px] text-mist-700 font-semibold">
-              Path found ({length(@six_degrees_path)} {if length(@six_degrees_path) == 1, do: "degree", else: "degrees"})
+              Path found ({length(@six_degrees_path)} {if length(@six_degrees_path) == 1,
+                do: "degree",
+                else: "degrees"})
             </div>
             <ol class="list-decimal pl-5 text-[13.5px] text-mist-900 space-y-1">
               <li :for={hop <- @six_degrees_path}>
