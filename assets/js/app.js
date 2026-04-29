@@ -21,10 +21,12 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
+import GlobalSearch from "./hooks/global_search"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
 const Hooks = {
+  GlobalSearch,
   SectionNav: {
     mounted() {
       const links = this.el.querySelectorAll("[data-section-id]")

@@ -104,6 +104,24 @@ defmodule CinegraphWeb.Telemetry do
         description: "Number of replica database queries"
       ),
 
+      # Global Search Metrics (Cinegraph.Search.global/2)
+      summary("cinegraph.search.global.duration_ms",
+        unit: :millisecond,
+        tags: [:cache_hit?],
+        description: "End-to-end Cinegraph.Search.global/2 duration"
+      ),
+      summary("cinegraph.search.group.duration_ms",
+        unit: :millisecond,
+        tags: [:group, :fallback?],
+        description: "Per-group typeahead query duration"
+      ),
+      counter("cinegraph.search.global.duration_ms.count",
+        event_name: [:cinegraph, :search, :global],
+        measurement: :duration_ms,
+        tags: [:cache_hit?],
+        description: "Number of Cinegraph.Search.global/2 calls"
+      ),
+
       # VM Metrics
       summary("vm.memory.total", unit: {:byte, :kilobyte}),
       summary("vm.total_run_queue_lengths.total"),

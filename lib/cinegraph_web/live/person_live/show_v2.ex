@@ -388,7 +388,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
         <div class="flex-1 min-w-0">
           <div class="text-[12px] font-semibold text-mist-700 tracking-[.06em] uppercase mb-2">
             {@person.known_for_department || "Person"}
-            <span :if={@years_active_str}> · Active   {@years_active_str}</span>
+            <span :if={@years_active_str}> · Active    {@years_active_str}</span>
           </div>
 
           <h1 class="font-display italic text-[44px] sm:text-[64px] lg:text-[80px] tracking-[-.02em] text-balance text-mist-950 leading-[0.95]">
@@ -398,7 +398,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
           <div class="mt-4 flex items-center gap-4 flex-wrap text-[13px] text-mist-700">
             <span :if={@person.birthday}>
               Born {format_date(@person.birthday)}
-              <span :if={@person.deathday}> — died   {format_date(@person.deathday)}</span>
+              <span :if={@person.deathday}> — died    {format_date(@person.deathday)}</span>
             </span>
             <span :if={@person.place_of_birth} class="text-mist-500">
               · {@person.place_of_birth}

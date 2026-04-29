@@ -242,6 +242,10 @@ defmodule CinegraphWeb.NeutralV2Components do
   attr :active, :string, default: "Movies"
   attr :mobile, :boolean, default: false
 
+  slot :search,
+    doc:
+      "Optional override for the desktop search slot. Falls back to the static n_search_input stub."
+
   def n_top_nav(assigns) do
     items = [
       %{id: "Movies", badge: nil},
@@ -280,7 +284,11 @@ defmodule CinegraphWeb.NeutralV2Components do
           </a>
         </nav>
         <div class="flex-1 max-w-[420px] ml-auto max-md:hidden">
-          <.n_search_input compact />
+          <%= if @search != [] do %>
+            {render_slot(@search)}
+          <% else %>
+            <.n_search_input compact />
+          <% end %>
         </div>
         <div class="flex items-center gap-2 ml-auto md:ml-0">
           <button

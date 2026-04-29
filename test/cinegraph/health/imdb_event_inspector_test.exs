@@ -74,10 +74,8 @@ defmodule Cinegraph.Health.ImdbEventInspectorTest do
       assert r.suggested_label == :parser_breakage
     end
 
-    test "missing __NEXT_DATA__ tag with normal-size body → :no_next_data / :parser_breakage" do
-      # Pad to >=5KB so the size-heuristic doesn't kick in
-      padding = String.duplicate("<p>filler</p>", 1000)
-      html = "<html><body>#{padding}Page without next-data</body></html>"
+    test "missing __NEXT_DATA__ tag without error indicators → :no_next_data / :parser_breakage" do
+      html = "<html><body>Page without next-data</body></html>"
 
       r = ImdbEventInspector.parse_inspection_html(html, "ev0000484", "https://example.test")
 
@@ -86,23 +84,33 @@ defmodule Cinegraph.Health.ImdbEventInspectorTest do
       assert r.suggested_label == :parser_breakage
     end
 
-    test "403 Forbidden body without __NEXT_DATA__ → :bad_event_id" do
+    test "403 Forbidden body without __NEXT_DATA__ → :source_unavailable" do
       html =
         "<html><head><title>403 Forbidden</title></head><body><h1>403 Forbidden</h1></body></html>"
 
       r = ImdbEventInspector.parse_inspection_html(html, "ev0002561", "https://example.test")
 
       assert r.parser_status == :no_next_data
-      assert r.suggested_label == :bad_event_id
+      assert r.suggested_label == :source_unavailable
     end
 
-    test "tiny body without __NEXT_DATA__ → :bad_event_id (size heuristic)" do
-      html = "<html><body>tiny</body></html>"
+    test "404 Not Found body without __NEXT_DATA__ → :bad_event_id" do
+      html =
+        "<html><head><title>404 Not Found</title></head><body><h1>404 Not Found</h1></body></html>"
 
       r = ImdbEventInspector.parse_inspection_html(html, "ev0000xxx", "https://example.test")
 
       assert r.parser_status == :no_next_data
       assert r.suggested_label == :bad_event_id
+    end
+
+    test "tiny body without __NEXT_DATA__ → :parser_breakage" do
+      html = "<html><body>tiny</body></html>"
+
+      r = ImdbEventInspector.parse_inspection_html(html, "ev0000xxx", "https://example.test")
+
+      assert r.parser_status == :no_next_data
+      assert r.suggested_label == :parser_breakage
     end
 
     test "malformed JSON inside __NEXT_DATA__ → :json_failed" do

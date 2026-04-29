@@ -76,6 +76,41 @@ defmodule Cinegraph.Movies.Cache do
   end
 
   @doc """
+  Generic cache-or-compute helper.
+
+  Used by callers that need a one-line cache wrap with their own key + TTL —
+  e.g. `Cinegraph.Search.global/2` keying on a normalized query string.
+
+  On cache error, falls through to `fun.()` rather than raising.
+  """
+  def fetch_or_compute(key, ttl, fun) when is_function(fun, 0) do
+    case Cachex.get(@cache_name, key) do
+      {:ok, nil} ->
+        value = fun.()
+
+        case Cachex.put(@cache_name, key, value, ttl: ttl) do
+          {:ok, true} ->
+            :ok
+
+          {:error, reason} ->
+            Logger.warning("[Movies.Cache] Failed to cache key #{key}: #{inspect(reason)}")
+        end
+
+        value
+
+      {:ok, cached} ->
+        cached
+
+      {:error, reason} ->
+        Logger.warning(
+          "[Movies.Cache] Error reading cache key #{key}: #{inspect(reason)}, falling back"
+        )
+
+        fun.()
+    end
+  end
+
+  @doc """
   Get cache statistics for monitoring.
   """
   def stats do
