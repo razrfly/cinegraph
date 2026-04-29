@@ -7,6 +7,7 @@ defmodule CinegraphWeb.DesignPreviewHTML do
   use CinegraphWeb, :html
 
   alias CinegraphWeb.NeutralComponents
+  alias CinegraphWeb.NeutralV2Components
 
   embed_templates "design_preview_html/*"
 end

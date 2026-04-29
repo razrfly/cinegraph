@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-mist-100">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Cinegraph · Design Preview V2</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='2' width='20' height='20' rx='4' fill='%2316140f'/%3E%3Cpath d='M7 12 L11 8 L15 14 L17 11' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='7' cy='12' r='1.4' fill='%23fff'/%3E%3Ccircle cx='11' cy='8' r='1.4' fill='%23fff'/%3E%3Ccircle cx='15' cy='14' r='1.4' fill='%23fff'/%3E%3Ccircle cx='17' cy='11' r='1.4' fill='%23fff'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+  </head>
+  <body class="bg-mist-100 text-mist-950 antialiased">
+    <NeutralV2Components.n_top_nav active="Movies" />
+
+    <main class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16">
+      <%!-- ───────────── 1. DISCOVER HERO ───────────── --%>
+      <section class="mb-10 lg:mb-16">
+        <div class="flex items-baseline justify-between mb-[14px] flex-wrap gap-4">
+          <div>
+            <h1 class="font-display italic text-[44px] sm:text-[56px] lg:text-[72px] tracking-[-.02em] text-balance text-mist-950 leading-[1.02]">
+              Discover.
+            </h1>
+            <div class="text-[15px] text-mist-700 mt-2 max-w-2xl">
+              Films, people, lists & data — all canonically sourced.
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <NeutralV2Components.n_btn variant="ghost" size="md" icon="◌">
+              Random film
+            </NeutralV2Components.n_btn>
+            <NeutralV2Components.n_btn variant="secondary" size="md">
+              Browse all
+            </NeutralV2Components.n_btn>
+          </div>
+        </div>
+        <NeutralV2Components.n_search_hero genres={@genres} />
+      </section>
+
+      <%!-- ───────────── 2. INSIGHT STRIP ───────────── --%>
+      <section class="mb-10 lg:mb-16">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <NeutralV2Components.n_insight_tile
+            label="Avg. cultural relevance"
+            value={@insights.cri.current}
+            delta={trunc(@insights.cri.delta)}
+            sub={@insights.cri.sub}
+            spark_seed={2}
+          />
+          <NeutralV2Components.n_insight_tile
+            label="Awards events tracked"
+            value={@insights.awards.current}
+            delta={@insights.awards.delta}
+            sub={@insights.awards.sub}
+            spark_seed={5}
+          />
+          <NeutralV2Components.n_insight_tile
+            label="People in graph"
+            value={@insights.people.current}
+            delta={@insights.people.delta}
+            sub={@insights.people.sub}
+            spark_seed={3}
+          />
+          <NeutralV2Components.n_insight_tile
+            label="Canon lists synced"
+            value={@insights.canon.current}
+            delta={@insights.canon.delta}
+            sub={@insights.canon.sub}
+            spark_seed={7}
+          />
+        </div>
+      </section>
+
+      <%!-- ───────────── 3. TRENDING THIS WEEK ───────────── --%>
+      <section class="mb-10 lg:mb-[42px]">
+        <NeutralV2Components.n_section_header
+          title="Trending this week"
+          subtitle="Ranked by combined critical, audience and cultural movement."
+        >
+          <:action>
+            <div class="flex gap-[10px] items-center">
+              <NeutralV2Components.n_tabs
+                tabs={["This week", "This month", "All time"]}
+                value="This week"
+              />
+              <NeutralV2Components.n_link_action>See all</NeutralV2Components.n_link_action>
+            </div>
+          </:action>
+        </NeutralV2Components.n_section_header>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-[18px]">
+          <NeutralV2Components.n_film_card
+            :for={{film, i} <- Enum.with_index(Enum.take(@films, 6))}
+            film={film}
+            rank={i + 1}
+          />
+        </div>
+      </section>
+
+      <%!-- ───────────── 4. PEOPLE + UPDATES ROW ───────────── --%>
+      <section class="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 mb-10 lg:mb-[42px]">
+        <div>
+          <NeutralV2Components.n_section_header
+            title="Popular people"
+            subtitle="Cast, directors, and cinematographers gaining attention."
+          >
+            <:action>
+              <NeutralV2Components.n_link_action>See all</NeutralV2Components.n_link_action>
+            </:action>
+          </NeutralV2Components.n_section_header>
+          <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-1">
+            <NeutralV2Components.n_person_card
+              :for={{person, i} <- Enum.with_index(Enum.take(@people, 7))}
+              person={person}
+              rank={i + 1}
+            />
+          </div>
+        </div>
+        <div>
+          <NeutralV2Components.n_section_header
+            title="Recently updated"
+            subtitle="Awards, releases, and data ingestions in the last 48h."
+          >
+            <:action>
+              <NeutralV2Components.n_link_action>Activity log</NeutralV2Components.n_link_action>
+            </:action>
+          </NeutralV2Components.n_section_header>
+          <div class="bg-mist-50 border border-mist-950/10 rounded-lg pt-1 px-[18px] pb-2">
+            <NeutralV2Components.n_update_row :for={u <- @updates} update={u} />
+          </div>
+        </div>
+      </section>
+
+      <%!-- ───────────── 5. COLLECTIONS ───────────── --%>
+      <section class="mb-10 lg:mb-[42px]">
+        <NeutralV2Components.n_section_header
+          title="Collections & curated lists"
+          subtitle="Canonical and editorial lists tracked across the graph."
+        >
+          <:action>
+            <NeutralV2Components.n_link_action>Browse 312 lists</NeutralV2Components.n_link_action>
+          </:action>
+        </NeutralV2Components.n_section_header>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[14px]">
+          <NeutralV2Components.n_list_card
+            :for={list <- Enum.take(@lists, 4)}
+            list={list}
+            films={Enum.slice(@films, rem(String.length(list.id), 8), 4)}
+          />
+        </div>
+      </section>
+
+      <%!-- ───────────── 6. GRAPH CALLOUT ───────────── --%>
+      <section class="mb-10 lg:mb-[42px] bg-mist-50 border border-mist-950/10 rounded-[10px] px-6 py-8 lg:px-[26px] lg:py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-8 items-center">
+          <div>
+            <div class="flex items-center gap-2 mb-[10px]">
+              <NeutralV2Components.n_pill tone="ink" size="xs">BETA</NeutralV2Components.n_pill>
+              <NeutralV2Components.n_eyebrow>Data Explorer · GraphQL</NeutralV2Components.n_eyebrow>
+            </div>
+            <h3 class="font-display italic text-[28px] lg:text-[32px] tracking-[-.01em] text-mist-950 leading-[1.15]">
+              Trace the connections behind any film.
+            </h3>
+            <p class="text-sm text-mist-700 mt-3 leading-[1.55] max-w-[480px]">
+              Query 48,923 people across 16,420 films and 312 canonical lists. Walk filmographies,
+              collaborations, and influence — visually or via API.
+            </p>
+            <div class="flex gap-[10px] mt-4 flex-wrap">
+              <NeutralV2Components.n_btn variant="primary" size="md">
+                Open data explorer →
+              </NeutralV2Components.n_btn>
+              <NeutralV2Components.n_btn variant="secondary" size="md">
+                View GraphQL schema
+              </NeutralV2Components.n_btn>
+            </div>
+            <div class="flex gap-[18px] mt-[18px] text-[11.5px] text-mist-500 flex-wrap">
+              <span><b class="text-mist-900 tabular-nums">16,420</b> films</span>
+              <span><b class="text-mist-900 tabular-nums">48,923</b> people</span>
+              <span><b class="text-mist-900 tabular-nums">2.1M</b> credits</span>
+              <span><b class="text-mist-900 tabular-nums">312</b> lists</span>
+            </div>
+          </div>
+          <div>
+            <NeutralV2Components.n_graph_preview graph={@graph} height={300} />
+          </div>
+        </div>
+      </section>
+
+      <%!-- ───────────── 7. FOOTER ───────────── --%>
+      <footer class="pt-6 border-t border-mist-950/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-[12px] text-mist-500">
+        <div class="flex items-center gap-[14px]">
+          <NeutralV2Components.n_brand size={15} />
+          <span class="font-display italic text-[14px] text-mist-700">
+            Cultural relevance, measured.
+          </span>
+        </div>
+        <div class="flex gap-[18px] flex-wrap">
+          <a href="#" class="text-mist-700 no-underline hover:text-mist-950">Methodology</a>
+          <a href="#" class="text-mist-700 no-underline hover:text-mist-950">API</a>
+          <a href="#" class="text-mist-700 no-underline hover:text-mist-950">Sources</a>
+          <a href="#" class="text-mist-700 no-underline hover:text-mist-950">About</a>
+        </div>
+      </footer>
+    </main>
+
+    <%!-- v1 ↔ v2 toggle pill --%>
+    <a
+      href={~p"/design-preview"}
+      class="fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
+    >
+      ← see v1 (cg tokens)
+    </a>
+  </body>
+</html>

@@ -117,7 +117,7 @@ defmodule CinegraphWeb.NeutralDesign.PosterSvg do
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 900" preserveAspectRatio="xMidYMid slice">\
     <rect width="600" height="900" fill="#{p.bg}"/>\
     <rect x="0" y="0" width="600" height="6" fill="#{p.hi}"/>\
-    <text x="40" y="58" fill="#{p.hi}" font-family="ui-sans-serif, -apple-system, sans-serif" font-weight="700" font-size="13" letter-spacing="6">#{film.year}  ·  #{esc(String.upcase(hd(film.genre)))}</text>\
+    <text x="40" y="58" fill="#{p.hi}" font-family="ui-sans-serif, -apple-system, sans-serif" font-weight="700" font-size="13" letter-spacing="6">#{film.year}  ·  #{esc(String.upcase(List.first(film.genre) || ""))}</text>\
     #{title_lines(lines, fs, p.txt, 360, "start", 40, true)}\
     <rect x="40" y="#{round(390 + length(lines) * fs * 0.95)}" width="80" height="2" fill="#{p.hi}"/>\
     <text x="40" y="850" fill="#{p.txt}" opacity=".75" font-family="ui-sans-serif" font-weight="700" font-size="14" letter-spacing="3">DIR. #{esc(String.upcase(film.dir))}</text>\
