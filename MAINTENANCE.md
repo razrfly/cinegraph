@@ -166,7 +166,7 @@ SSH plumbing). All accept `--json` for piping to `jq`.
 | `mix cinegraph.audit.imdb_event_id <ev> [--year YYYY]` | — | **Live IMDb fetch** for a single event ID; disambiguates `:source_unavailable` vs `:parser_breakage` vs `:bad_event_id` from the year-discovery audit. Documented exception to the pure-DB rule (see recipe below) (#772) |
 | `mix cinegraph.audit.queue_failures --queue X [--worker Y] [--days N]` | `mix cinegraph.prod.audit.queue_failures --queue X [--worker Y] [--days N]` | Generic discard analysis for an Oban queue/worker; groups by error pattern with sample text (#760, #772) |
 | `mix cinegraph.audit_people_scores` | — | Ground-truth auteurs score audit; flags ⚠️ failures after data imports / scoring formula changes |
-| `mix cinegraph.drift <people\|movies\|festivals\|ratings> [--limit N]` | `mix cinegraph.prod.drift <people\|movies\|festivals\|ratings> [--limit N]` *(new in #772)* | Per-domain drift checks (`Cinegraph.Health.Drift.*`) |
+| `mix cinegraph.drift <people\|movies\|festivals\|ratings> [--limit N] [--year YYYY] [--org SLUG]` | `mix cinegraph.prod.drift <people\|movies\|festivals\|ratings> [--limit N] [--year YYYY] [--org SLUG]` *(new in #772)* | Per-domain drift checks: `people`, `movies [--year YYYY]`, `festivals [--org SLUG]`, `ratings` (`Cinegraph.Health.Drift.*`) |
 | `mix cinegraph.status` | — | Combined activity + queue state + last-sync snapshot |
 | `mix cinegraph.queues` | `mix cinegraph.prod.queues` | Oban queue state (counts per queue × state, longest-running, failures last hour) |
 | `mix cinegraph.activity [--days N]` | `mix cinegraph.prod.activity [--days N]` | Movies/people/ceremonies added per UTC day, plus job completions and failures |

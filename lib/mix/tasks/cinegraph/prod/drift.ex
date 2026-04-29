@@ -65,19 +65,11 @@ defmodule Mix.Tasks.Cinegraph.Prod.Drift do
       |> Enum.map(fn
         {:limit, n} when is_integer(n) -> "limit: #{n}"
         {:year, n} when is_integer(n) -> "year: #{n}"
-        {:org, s} when is_binary(s) -> ~s|org: "#{escape_string(s)}"|
+        {:org, s} when is_binary(s) -> "org: #{inspect(s)}"
       end)
       |> Enum.join(", ")
 
     "[#{parts}]"
-  end
-
-  defp escape_string(s) do
-    if String.contains?(s, ~s["]) or String.contains?(s, "\\") or String.contains?(s, "\n") do
-      Mix.raise("invalid characters in option value: #{inspect(s)}")
-    else
-      s
-    end
   end
 
   defp reject_invalid_switches!([]), do: :ok

@@ -53,7 +53,7 @@ defmodule Cinegraph.Health.ImdbEventInspectorTest do
       assert r.event_name == "Some Event"
     end
 
-    test "editions present but no `year` fields → :no_editions / :parser_breakage" do
+    test "editions present but no `year` fields → :editions_parser_breakage / :parser_breakage" do
       html =
         next_data_html(%{
           "props" => %{
@@ -68,7 +68,7 @@ defmodule Cinegraph.Health.ImdbEventInspectorTest do
 
       r = ImdbEventInspector.parse_inspection_html(html, "ev0000999", "https://example.test")
 
-      assert r.parser_status == :no_editions
+      assert r.parser_status == :editions_parser_breakage
       assert r.editions_count == 2
       assert r.years_with_data.count == 0
       assert r.suggested_label == :parser_breakage

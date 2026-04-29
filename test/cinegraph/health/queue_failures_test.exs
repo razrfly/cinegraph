@@ -10,6 +10,16 @@ defmodule Cinegraph.Health.QueueFailuresTest do
       assert_raise ArgumentError, fn -> QueueFailures.audit(days: 7) end
     end
 
+    test "raises when :days or :top_n are not positive integers" do
+      assert_raise ArgumentError, ":days must be a positive integer, got: 0", fn ->
+        QueueFailures.audit(queue: "test_q", days: 0)
+      end
+
+      assert_raise ArgumentError, ":top_n must be a positive integer, got: -1", fn ->
+        QueueFailures.audit(queue: "test_q", top_n: -1)
+      end
+    end
+
     test "filter by queue returns the per-pattern + per-worker rollup" do
       err1 = oban_error(~s|HTTP 429 Too Many Requests|)
       err2 = oban_error(~s|HTTP 502 Bad Gateway|)
@@ -70,6 +80,19 @@ defmodule Cinegraph.Health.QueueFailuresTest do
       assert top.pct == 100.0
       assert top.sample_error =~ "HTTP 429"
       assert MapSet.new(top.sample_workers) == MapSet.new(["WorkerOne", "WorkerTwo"])
+    end
+
+    test "top_errors ordering and samples are deterministic for ties" do
+      rate_limit = oban_error(~s|HTTP 429 Too Many Requests|)
+      timeout = oban_error(~s|:timeout|)
+
+      insert_discard(queue: "tie_q", worker: "WorkerZ", error: timeout, hours_ago: 1)
+      insert_discard(queue: "tie_q", worker: "WorkerA", error: rate_limit, hours_ago: 2)
+
+      result = QueueFailures.audit(queue: "tie_q", days: 7, top_n: 2)
+
+      assert Enum.map(result.top_errors, & &1.pattern) == [:network, :rate_limit]
+      assert [%{sample_workers: ["WorkerZ"]}, %{sample_workers: ["WorkerA"]}] = result.top_errors
     end
   end
 
