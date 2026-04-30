@@ -51,8 +51,6 @@ defmodule CinegraphWeb.Router do
       live_session :v2_design,
         root_layout: {CinegraphWeb.Layouts, :v2_root},
         layout: false do
-        live "/movies-v2", MovieLive.IndexV2, :index
-        live "/movies-v2/:slug", MovieLive.ShowV2, :show
         live "/people-v2/:slug_or_id", PersonLive.ShowV2, :show
       end
     end
@@ -84,7 +82,19 @@ defmodule CinegraphWeb.Router do
     # All secondary routes redirect to the canonical slug URL to maintain SEO.
     # ========================================================================
 
-    live "/movies", MovieLive.Index, :index
+    # V2 movies — primary discovery + show routes. Uses the v2_root layout
+    # (mist palette, Instrument Serif italic). The legacy v1 index lives at
+    # /movies/legacy during the soak period; /movies-v2 is kept as an alias
+    # for any open tabs.
+    live_session :v2_movies,
+      root_layout: {CinegraphWeb.Layouts, :v2_root},
+      layout: false do
+      live "/movies", MovieLive.IndexV2, :index
+      live "/movies-v2", MovieLive.IndexV2, :index
+      live "/movies-v2/:slug", MovieLive.ShowV2, :show
+    end
+
+    live "/movies/legacy", MovieLive.Index, :index
     live "/movies/discover", MovieLive.DiscoveryTuner, :index
 
     # TMDb ID lookup route - for external project linking

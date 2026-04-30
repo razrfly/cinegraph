@@ -6,6 +6,7 @@ defmodule CinegraphWeb.MovieLive.Index do
 
   alias Cinegraph.Movies.Search
   alias CinegraphWeb.MovieLive.AdvancedFilters
+  alias CinegraphWeb.MovieLive.SortOptions
 
   import CinegraphWeb.LiveViewHelpers,
     only: [
@@ -56,7 +57,7 @@ defmodule CinegraphWeb.MovieLive.Index do
      |> assign(:actor_options, [])
      |> assign(:person_options, [])
      |> assign(:weight_presets, [])
-     |> assign(:sort_options, build_sort_options([]))
+     |> assign(:sort_options, SortOptions.static())
      |> assign(:sort_is_preset, false)
      |> assign(:show_scoring_info, false)}
   end
@@ -78,14 +79,15 @@ defmodule CinegraphWeb.MovieLive.Index do
          |> assign(:sort_criteria, extract_sort_criteria(params["sort"] || "release_date_desc"))
          |> assign(:sort_direction, extract_sort_direction(params["sort"] || "release_date_desc"))
          |> then(fn socket ->
-           presets = load_weight_presets()
+           presets = SortOptions.load_weight_presets()
            sort = params["sort"] || "release_date_desc"
+           criteria = String.replace(sort, ~r/_(asc|desc)$/, "")
            preset_slugs = Enum.map(presets, & &1.slug)
 
            socket
            |> assign(:weight_presets, presets)
-           |> assign(:sort_options, build_sort_options(presets))
-           |> assign(:sort_is_preset, String.replace(sort, ~r/_(asc|desc)$/, "") in preset_slugs)
+           |> assign(:sort_options, SortOptions.all())
+           |> assign(:sort_is_preset, criteria in preset_slugs)
          end)
          |> assign_pagination(meta)
          |> apply_action(socket.assigns.live_action, params)}
@@ -249,38 +251,6 @@ defmodule CinegraphWeb.MovieLive.Index do
       true ->
         nil
     end
-  end
-
-  defp load_weight_presets do
-    Cinegraph.Metrics.ScoringService.get_all_profiles()
-    |> Enum.map(fn p ->
-      %{slug: name_to_slug(p.name), name: p.name}
-    end)
-  end
-
-  defp name_to_slug(name),
-    do: name |> String.downcase() |> String.replace(" ", "_")
-
-  defp build_sort_options(presets) do
-    static = [
-      %{value: "release_date", label: "📅 Release Date", group: "Basic"},
-      %{value: "title", label: "🔤 Title", group: "Basic"},
-      %{value: "runtime", label: "⏱️ Runtime", group: "Basic"},
-      %{value: "rating", label: "⭐ Rating", group: "Ratings"},
-      %{value: "popularity", label: "🔥 Popularity", group: "Ratings"},
-      %{value: "mob", label: "👥 The Mob", group: "By Lens"},
-      %{value: "critics", label: "🎭 The Critics", group: "By Lens"},
-      %{value: "festival_recognition", label: "🏆 The Insiders", group: "By Lens"},
-      %{value: "time_machine", label: "⏳ The Time Machine", group: "By Lens"},
-      %{value: "auteurs", label: "🎬 The Auteurs", group: "By Lens"}
-    ]
-
-    preset_options =
-      Enum.map(presets, fn p ->
-        %{value: p.slug, label: p.name, group: "Scored Presets"}
-      end)
-
-    static ++ preset_options
   end
 
   # Helper functions for building URLs and pagination

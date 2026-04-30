@@ -1,0 +1,256 @@
+defmodule CinegraphWeb.MovieLive.IndexV2Test do
+  @moduledoc """
+  LiveView tests for the V2 movies discovery page (`/movies`).
+
+  Covers the filter shell from issue #785: sort segmented control, decade
+  chips, multi-select genre chips, drawer open/close, sort direction toggle,
+  scoring modal, clear-all, active-filter chip strip, pagination — i.e. the
+  user-visible behaviors the redesign added.
+
+  Card rendering is covered separately in `IndexV2ComponentsTest`.
+  """
+  use CinegraphWeb.ConnCase, async: false
+
+  import Phoenix.LiveViewTest
+
+  alias Cinegraph.Movies.{Movie, Genre}
+  alias Cinegraph.Repo
+
+  defp insert_movie!(attrs) do
+    defaults = %{
+      tmdb_id: System.unique_integer([:positive]),
+      title: "Test Movie",
+      original_title: "Test Movie",
+      release_date: ~D[2024-01-01]
+    }
+
+    %Movie{}
+    |> Movie.changeset(Map.merge(defaults, attrs))
+    |> Repo.insert!()
+  end
+
+  defp insert_genre!(name) do
+    Repo.insert!(%Genre{tmdb_id: System.unique_integer([:positive]), name: name})
+  end
+
+  setup do
+    Cachex.clear(:movies_cache)
+    Cachex.clear(:filter_options_cache)
+    :ok
+  end
+
+  describe "mount and render" do
+    test "renders the hero, sort row, and search input", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+
+      assert html =~ "Movies."
+      assert html =~ "Search films, people, lists"
+      assert html =~ "SORT"
+      assert html =~ "Most recent"
+      assert html =~ "Top Rated"
+      assert html =~ "Mob"
+      assert html =~ "Critics"
+      assert html =~ "Insiders"
+    end
+
+    test "renders the Filters drawer button and scoring info button", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      assert html =~ ~s(phx-click="toggle_drawer")
+      assert html =~ ~s(phx-click="show_scoring_info")
+    end
+  end
+
+  describe "decade chip toggle (single-select)" do
+    test "selecting a decade adds it to the URL", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies")
+
+      view
+      |> element(~s(button[phx-value-key="decade"][phx-value-value="1990"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      assert to =~ "decade=1990"
+    end
+
+    test "clicking the active decade clears it", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies?decade=1990")
+
+      view
+      |> element(~s(button[phx-value-key="decade"][phx-value-value="1990"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      refute to =~ "decade="
+    end
+  end
+
+  describe "genre chip toggle (multi-select)" do
+    setup do
+      drama = insert_genre!("Drama-V2-Test-#{System.unique_integer()}")
+      comedy = insert_genre!("Comedy-V2-Test-#{System.unique_integer()}")
+      Cachex.clear(:filter_options_cache)
+      %{drama: drama, comedy: comedy}
+    end
+
+    test "selecting a genre adds it to the genres list", %{conn: conn, drama: drama} do
+      {:ok, view, _} = live(conn, ~p"/movies")
+
+      view
+      |> element(~s(button[phx-value-key="genres"][phx-value-value="#{drama.id}"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      assert to =~ "genres"
+      assert to =~ "#{drama.id}"
+    end
+
+    test "selecting a second genre keeps the first", %{
+      conn: conn,
+      drama: drama,
+      comedy: comedy
+    } do
+      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}")
+
+      view
+      |> element(~s(button[phx-value-key="genres"][phx-value-value="#{comedy.id}"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      assert to =~ "#{drama.id}"
+      assert to =~ "#{comedy.id}"
+    end
+
+    test "clicking an active genre removes it", %{conn: conn, drama: drama} do
+      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}")
+
+      view
+      |> element(~s(button[phx-value-key="genres"][phx-value-value="#{drama.id}"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      refute to =~ "genres"
+    end
+  end
+
+  describe "drawer" do
+    test "toggle_drawer opens the drawer panel", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/movies")
+      assert html =~ "translate-x-full"
+
+      html2 = view |> element(~s(button[phx-click="toggle_drawer"])) |> render_click()
+      assert html2 =~ "translate-x-0"
+    end
+
+    test "hide_drawer closes the drawer", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies")
+      view |> element(~s(button[phx-click="toggle_drawer"])) |> render_click()
+
+      # The overlay div has phx-click="hide_drawer" — click it to close
+      html = render_click(view, "hide_drawer", %{})
+      assert html =~ "translate-x-full"
+    end
+  end
+
+  describe "scoring modal" do
+    test "show_scoring_info opens the modal with the lens copy", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies")
+
+      html = view |> element(~s(button[phx-click="show_scoring_info"])) |> render_click()
+      assert html =~ "How Cinegraph Scores Movies"
+      assert html =~ "The Mob"
+      assert html =~ "The Critics"
+      assert html =~ "The Insiders"
+    end
+
+    test "hide_scoring_info closes the modal", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies")
+      view |> element(~s(button[phx-click="show_scoring_info"])) |> render_click()
+
+      html = render_click(view, "hide_scoring_info", %{})
+      refute html =~ "How Cinegraph Scores Movies"
+    end
+  end
+
+  describe "sort segmented control" do
+    test "clicking 'Critics' patches sort=critics_desc", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies")
+
+      view
+      |> element(~s(button[phx-click="sort_criteria_changed"][phx-value-criteria="critics"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      assert to =~ "sort=critics_desc"
+    end
+
+    test "toggle_sort_direction flips desc → asc", %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies?sort=release_date_desc")
+
+      view
+      |> element(~s(button[phx-click="toggle_sort_direction"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      assert to =~ "sort=release_date_asc"
+    end
+  end
+
+  describe "active filter chip strip + remove_filter" do
+    setup do
+      drama = insert_genre!("Drama-Active-#{System.unique_integer()}")
+      Cachex.clear(:filter_options_cache)
+      %{drama: drama}
+    end
+
+    test "active chips appear when filters are set", %{conn: conn, drama: drama} do
+      {:ok, _view, html} = live(conn, ~p"/movies?genres[]=#{drama.id}&decade=1990")
+
+      assert html =~ "ACTIVE"
+      assert html =~ drama.name
+      assert html =~ "1990s"
+    end
+
+    test "remove_filter drops a single filter from the URL", %{conn: conn, drama: drama} do
+      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}&decade=1990")
+
+      view
+      |> element(~s(button[phx-click="remove_filter"][phx-value-filter="decade"]))
+      |> render_click()
+
+      to = assert_patch(view)
+      assert to =~ "genres"
+      refute to =~ "decade="
+    end
+
+    test "clear_filters wipes filters but keeps search", %{conn: conn, drama: drama} do
+      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}&decade=1990&search=foo")
+
+      # The active-filter chip strip "Clear all" link
+      view
+      |> element("section button[phx-click='clear_filters']", "Clear all")
+      |> render_click()
+
+      to = assert_patch(view)
+      refute to =~ "genres"
+      refute to =~ "decade="
+      assert to =~ "search=foo"
+    end
+  end
+
+  describe "results grid" do
+    test "movies render in the grid when there are results", %{conn: conn} do
+      _movie = insert_movie!(%{title: "Test Movie A V2", tmdb_id: 91_001})
+      Cachex.clear(:movies_cache)
+
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      assert html =~ "Test Movie A V2"
+    end
+  end
+
+  describe "/movies/legacy escape hatch" do
+    test "v1 page still serves at /movies/legacy", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies/legacy")
+      assert html =~ "Movies Database"
+    end
+  end
+end
