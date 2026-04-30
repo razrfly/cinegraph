@@ -112,7 +112,7 @@ defmodule CinegraphWeb.Telemetry do
       ),
       summary("cinegraph.search.group.duration_ms",
         unit: :millisecond,
-        tags: [:group, :fallback?],
+        tags: [:group, :fallback?, :crashed?],
         description: "Per-group typeahead query duration"
       ),
       counter("cinegraph.search.global.duration_ms.count",

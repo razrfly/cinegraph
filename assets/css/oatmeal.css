@@ -10,6 +10,12 @@
 @layer base {
   html { scroll-behavior: smooth; }
 
+  /* Oatmeal kit base: the html background tracks the theme so it bleeds
+     past the nav header and any other surface that doesn't paint its own
+     background. Mirrors `@variant dark` in tmp/oatmeal-mist-instrument/tailwind.css. */
+  html { background-color: theme('colors.mist.100'); }
+  html.dark { background-color: theme('colors.mist.950'); color-scheme: dark; }
+
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
   }
@@ -21,5 +27,9 @@
   .global-search-highlight {
     @apply bg-mist-50;
     box-shadow: inset 2px 0 0 theme('colors.mist.950');
+  }
+  .dark .global-search-highlight {
+    background-color: theme('colors.white' / 5%);
+    box-shadow: inset 2px 0 0 theme('colors.white');
   }
 }
