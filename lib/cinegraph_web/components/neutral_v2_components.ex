@@ -619,6 +619,7 @@ defmodule CinegraphWeb.NeutralV2Components do
     href = assigns.film[:href] || "#"
     lens_key = assigns.film[:lens_key]
     components = assigns.film[:lens_components] || []
+    score_tooltip = assigns.film[:score_tooltip]
 
     assigns =
       assigns
@@ -627,6 +628,7 @@ defmodule CinegraphWeb.NeutralV2Components do
       |> assign(:href, href)
       |> assign(:lens_key, lens_key)
       |> assign(:lens_components, components)
+      |> assign(:score_tooltip, score_tooltip)
 
     ~H"""
     <a href={@href} class="block no-underline text-inherit">
@@ -651,11 +653,17 @@ defmodule CinegraphWeb.NeutralV2Components do
         </div>
         <%= cond do %>
           <% @show_score && @score && @lens_key -> %>
-            <div class="absolute top-2 left-2 px-[8px] py-[3px] bg-gradient-to-r from-indigo-600 to-purple-700 text-white text-[11px] font-bold rounded-full tabular-nums tracking-[-.01em] shadow-md">
+            <div
+              title={@score_tooltip}
+              class="absolute top-2 left-2 px-[8px] py-[3px] bg-gradient-to-r from-indigo-600 to-purple-700 text-white text-[11px] font-bold rounded-full tabular-nums tracking-[-.01em] shadow-md"
+            >
               🎯 {@score}
             </div>
           <% @show_score && @score -> %>
-            <div class="absolute top-2 right-2 px-[7px] py-[3px] bg-white/[0.92] text-mist-950 text-[11px] font-bold rounded-[4px] tabular-nums tracking-[-.01em]">
+            <div
+              title={@score_tooltip}
+              class="absolute top-2 right-2 px-[7px] py-[3px] bg-white/[0.92] text-mist-950 text-[11px] font-bold rounded-[4px] tabular-nums tracking-[-.01em]"
+            >
               {@score}
             </div>
           <% true -> %>
@@ -682,7 +690,8 @@ defmodule CinegraphWeb.NeutralV2Components do
           class="mt-[6px] flex flex-wrap gap-[4px]"
         >
           <span
-            :for={{key, percent} <- @lens_components}
+            :for={{key, percent, tooltip} <- @lens_components}
+            title={tooltip}
             class={[
               "inline-flex items-center px-[6px] py-[1px] rounded text-[10px] font-medium tabular-nums border",
               lens_chip_tone(key, same_lens?(key, @lens_key))

@@ -18,6 +18,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
   attr :selected_lists, :list, default: []
   attr :selected_festivals, :list, default: []
   attr :selected_people, :list, default: []
+  attr :selected_decade, :string, default: nil
   attr :rating_preset, :string, default: nil
   attr :show_unreleased, :string, default: nil
   attr :active_filter_count, :integer, default: 0
@@ -98,6 +99,25 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             selected_people={@selected_people}
             search_term=""
           />
+        </section>
+
+        <%!-- ─── Decade (single-select pills) ─── --%>
+        <section :if={(@filter_options[:decades] || []) != []}>
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+            Decade
+          </h3>
+          <div class="flex flex-wrap gap-2">
+            <NeutralV2Components.n_chip_toggle
+              :for={d <- @filter_options[:decades]}
+              active={to_string(d.value) == to_string(@selected_decade || "")}
+              phx-click="toggle_chip"
+              phx-value-key="decade"
+              phx-value-value={to_string(d.value)}
+              phx-value-mode="single"
+            >
+              {d.label}
+            </NeutralV2Components.n_chip_toggle>
+          </div>
         </section>
 
         <%!-- ─── Rating Quality (segmented control) ─── --%>

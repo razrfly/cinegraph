@@ -46,17 +46,89 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       assert html =~ "Movies."
       assert html =~ "Search films, people, lists"
       assert html =~ "SORT"
+      # Phase 1 (issue #787): renamed labels on the V2 page
       assert html =~ "Most recent"
-      assert html =~ "Top Rated"
-      assert html =~ "Mob"
+      assert html =~ "Highest rated"
+      assert html =~ "Trending"
+      assert html =~ "Audience"
       assert html =~ "Critics"
-      assert html =~ "Insiders"
+      assert html =~ "Awards"
     end
 
-    test "renders the Filters drawer button and scoring info button", %{conn: conn} do
+    test "hero exposes 'How we score?' link wired to the scoring modal",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      assert html =~ "How we score?"
+      assert html =~ ~s(phx-click="show_scoring_info")
+    end
+
+    test "renders the Filters drawer button", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/movies")
       assert html =~ ~s(phx-click="toggle_drawer")
-      assert html =~ ~s(phx-click="show_scoring_info")
+    end
+
+    test "sort row no longer renders the floating ? or ↓ buttons",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      # The ? button left the row — Phase 1 moved it to the hero, Phase 2
+      # also exposed it inside the More-sorts menu. The standalone row icon
+      # carrying title="How scoring works" is gone.
+      refute html =~ ~s(title="How scoring works")
+    end
+
+    test "Phase 2: sort row shows only 3 primary chips with emoji prefixes",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+
+      # Three primary chips with emoji prefixes
+      assert html =~ "📅 Most recent"
+      assert html =~ "⭐ Highest rated"
+      assert html =~ "🔥 Trending"
+
+      # "More sorts ▾" trigger and grouped section headers in the menu
+      assert html =~ "More sorts ▾"
+      assert html =~ "Timeline"
+      assert html =~ "Quality"
+      assert html =~ "Cinegraph lenses"
+      assert html =~ "Scored presets"
+      # Footer link inside the menu
+      assert html =~ "How does Cinegraph score?"
+    end
+
+    test "Phase 2: decade chip block removed from above-the-fold view",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      # The page-level "DECADE" uppercase eyebrow no longer appears.
+      refute html =~ ~s(>\n          DECADE\n        </span>)
+    end
+
+    test "Phase 2: drawer renders Decade section with chip pills",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      # Drawer "Decade" h3 header
+      assert html =~ "Decade"
+      # At least one decade chip present
+      assert html =~ ~s(phx-value-key="decade")
+    end
+
+    test "Phase 2: genre chips include emoji prefixes", %{conn: conn} do
+      _drama = insert_genre!("Drama-Emoji-#{System.unique_integer()}")
+      Cachex.clear(:filter_options_cache)
+      {:ok, _view, html} = live(conn, ~p"/movies")
+
+      # We can't guarantee Drama specifically (it depends on seed data),
+      # but the GenreEmoji fallback or any of the standard emojis must appear
+      # near a phx-value-key="genres" chip. Loose check:
+      assert html =~ ~s(phx-value-key="genres")
+    end
+
+    test "Phase 2: hero subtitle splits count from action links",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      # Tunable scoring → and How we score? both present, no longer wrapped in
+      # the same paragraph with the count text.
+      assert html =~ "Tunable scoring →"
+      assert html =~ "How we score?"
     end
   end
 
@@ -152,10 +224,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
   end
 
   describe "scoring modal" do
-    test "show_scoring_info opens the modal with the lens copy", %{conn: conn} do
+    test "hero 'How we score?' link opens the modal", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/movies")
 
-      html = view |> element(~s(button[phx-click="show_scoring_info"])) |> render_click()
+      html =
+        view
+        |> element("button", "How we score?")
+        |> render_click()
+
       assert html =~ "How Cinegraph Scores Movies"
       assert html =~ "The Mob"
       assert html =~ "The Critics"
@@ -164,7 +240,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
 
     test "hide_scoring_info closes the modal", %{conn: conn} do
       {:ok, view, _} = live(conn, ~p"/movies")
-      view |> element(~s(button[phx-click="show_scoring_info"])) |> render_click()
+
+      view
+      |> element("button", "How we score?")
+      |> render_click()
 
       html = render_click(view, "hide_scoring_info", %{})
       refute html =~ "How Cinegraph Scores Movies"
@@ -183,15 +262,46 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       assert to =~ "sort=critics_desc"
     end
 
-    test "toggle_sort_direction flips desc → asc", %{conn: conn} do
-      {:ok, view, _} = live(conn, ~p"/movies?sort=release_date_desc")
+    # Direction toggle button removed in Phase 1 (issue #787). The macro
+    # handler is still in place — direction is changeable via URL param —
+    # but the floating ↓/↑ button is gone. Phase 2 reintroduces direction
+    # inside a structured menu.
+
+    test "active overflow sort surfaces on the More-sorts trigger label",
+         %{conn: conn} do
+      # `critics` is a static overflow option (guaranteed present regardless
+      # of scoring-profile seed state).
+      {:ok, _view, html} = live(conn, ~p"/movies?sort=critics_desc")
+      # Trigger no longer reads bare "More sorts ▾" when an overflow sort is active.
+      assert html =~ "Critics"
+      assert html =~ "↓"
+    end
+
+    test "active overflow sort renders a chip in the ACTIVE strip",
+         %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies?sort=critics_desc")
+      assert html =~ "ACTIVE"
+      assert html =~ "Sort:"
+      # The chip uses display_label which renders "🎭 Critics" for that value.
+      assert html =~ ~s(phx-value-filter="sort")
+    end
+
+    test "default sort does NOT show a sort chip", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/movies")
+      # No sort URL param → no sort chip in the strip
+      refute html =~ ~s(phx-value-filter="sort")
+    end
+
+    test "removing the sort chip clears it back to the default",
+         %{conn: conn} do
+      {:ok, view, _} = live(conn, ~p"/movies?sort=critics_desc")
 
       view
-      |> element(~s(button[phx-click="toggle_sort_direction"]))
+      |> element(~s(button[phx-click="remove_filter"][phx-value-filter="sort"]))
       |> render_click()
 
       to = assert_patch(view)
-      assert to =~ "sort=release_date_asc"
+      refute to =~ "sort="
     end
   end
 
