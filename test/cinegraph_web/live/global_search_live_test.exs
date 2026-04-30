@@ -68,6 +68,14 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
       refute html =~ ~s|id="global-search-listbox"|
     end
 
+    test "whitespace-only query leaves the dropdown closed", %{conn: conn} do
+      {:ok, view, _} = live_isolated(conn, CinegraphWeb.GlobalSearchLive)
+
+      html = render_change(view, "change", %{"q" => "  "})
+
+      refute html =~ ~s|id="global-search-listbox"|
+    end
+
     test "a real query opens the dropdown and renders results", %{conn: conn} do
       _movie = insert_movie!(%{title: "Sondergaard Standard", tmdb_id: 80_001})
       _person = insert_person!(%{name: "Sondergaard Searchable", tmdb_id: 80_002})

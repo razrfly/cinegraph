@@ -45,7 +45,10 @@ defmodule Cinegraph.SearchTest do
       assert Enum.any?(result.people, &(&1.name == "Wong Kar-wai"))
 
       # Wait for telemetry events from all groups
-      assert_receive {:telemetry, [:cinegraph, :search, :group], _, %{group: :people}}, 500
+      assert_receive {:telemetry, [:cinegraph, :search, :group], _, %{group: :people} = meta},
+                     500
+
+      assert meta.crashed? == false
 
       :telemetry.detach(handler_id)
     end

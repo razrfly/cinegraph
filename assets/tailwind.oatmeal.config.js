@@ -7,6 +7,7 @@ const mainConfig = require("./tailwind.config.js");
 
 module.exports = {
   ...mainConfig,
+  darkMode: "class",
   theme: {
     ...mainConfig.theme,
     extend: {

@@ -259,7 +259,7 @@ defmodule CinegraphWeb.NeutralV2Components do
     assigns = assign(assigns, :items, items)
 
     ~H"""
-    <header class="sticky top-0 z-[5] bg-mist-100/[0.92] backdrop-blur-md border-b border-mist-950/10">
+    <header class="sticky top-0 z-[5] bg-mist-100/[0.92] dark:bg-mist-950/[0.92] backdrop-blur-md border-b border-mist-950/10 dark:border-white/10">
       <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 flex items-center gap-4 py-[14px]">
         <.n_brand size={19} />
         <nav class="flex gap-[2px] items-center max-md:hidden">
@@ -269,8 +269,9 @@ defmodule CinegraphWeb.NeutralV2Components do
             class={[
               "inline-flex items-center gap-[6px] px-3 py-[7px] rounded-md text-[13.5px] no-underline tracking-[-.005em]",
               if(item.id == @active,
-                do: "font-semibold text-mist-950 bg-mist-950/[0.025]",
-                else: "font-medium text-mist-700 bg-transparent"
+                do:
+                  "font-semibold text-mist-950 dark:text-white bg-mist-950/[0.025] dark:bg-white/10",
+                else: "font-medium text-mist-700 dark:text-mist-400 bg-transparent"
               )
             ]}
           >
@@ -292,15 +293,23 @@ defmodule CinegraphWeb.NeutralV2Components do
         </div>
         <div class="flex items-center gap-2 ml-auto md:ml-0">
           <button
+            id="theme-toggle"
             type="button"
-            class="w-[34px] h-[34px] rounded-[7px] border border-mist-950/10 bg-mist-50 grid place-items-center cursor-pointer max-md:hidden"
-            aria-label="Theme"
+            phx-hook="ThemeToggle"
+            class="w-[34px] h-[34px] rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 hover:bg-mist-950/[0.04] dark:hover:bg-white/10 grid place-items-center cursor-pointer max-md:hidden"
+            aria-label="Toggle theme"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              class="block dark:hidden text-mist-900 dark:text-white"
+              aria-hidden="true"
+            >
               <path
                 d="M8 1.5 V3 M8 13 V14.5 M3.5 3.5 L4.5 4.5 M11.5 11.5 L12.5 12.5 M1.5 8 H3 M13 8 H14.5 M3.5 12.5 L4.5 11.5 M11.5 4.5 L12.5 3.5"
                 stroke="currentColor"
-                class="text-mist-900"
                 stroke-width="1.4"
                 stroke-linecap="round"
               />
@@ -309,14 +318,26 @@ defmodule CinegraphWeb.NeutralV2Components do
                 cy="8"
                 r="2.5"
                 stroke="currentColor"
-                class="text-mist-900"
                 stroke-width="1.4"
+              />
+            </svg>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              class="hidden dark:block text-mist-900 dark:text-white"
+              aria-hidden="true"
+            >
+              <path
+                d="M13.5 9.5 A6 6 0 0 1 6.5 2.5 A6 6 0 1 0 13.5 9.5 Z"
+                fill="currentColor"
               />
             </svg>
           </button>
           <button
             type="button"
-            class="w-[34px] h-[34px] rounded-[7px] border border-mist-950/10 bg-mist-50 grid place-items-center cursor-pointer md:hidden"
+            class="w-[34px] h-[34px] rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 grid place-items-center cursor-pointer md:hidden"
             aria-label="Search"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -325,13 +346,13 @@ defmodule CinegraphWeb.NeutralV2Components do
                 cy="7"
                 r="5"
                 stroke="currentColor"
-                class="text-mist-900"
+                class="text-mist-900 dark:text-white"
                 stroke-width="1.4"
               />
               <path
                 d="M11 11 L14 14"
                 stroke="currentColor"
-                class="text-mist-900"
+                class="text-mist-900 dark:text-white"
                 stroke-width="1.4"
                 stroke-linecap="round"
               />
@@ -339,13 +360,13 @@ defmodule CinegraphWeb.NeutralV2Components do
           </button>
           <button
             type="button"
-            class="h-[34px] px-3 rounded-[7px] border border-mist-950/10 bg-mist-50 text-[12.5px] font-semibold text-mist-950 cursor-pointer max-sm:hidden"
+            class="h-[34px] px-3 rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 text-[12.5px] font-semibold text-mist-950 dark:text-white cursor-pointer max-sm:hidden"
           >
             Sign in
           </button>
           <a
             href="#"
-            class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 px-3 py-1 text-sm/7 font-medium text-mist-100 hover:bg-mist-800"
+            class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 dark:bg-white px-3 py-1 text-sm/7 font-medium text-mist-100 dark:text-mist-950 hover:bg-mist-800 dark:hover:bg-mist-200"
           >
             Get started
           </a>

@@ -128,16 +128,17 @@ defmodule Cinegraph.Search do
   defp run_group(group, fun) do
     started = System.monotonic_time()
 
-    {rows, fallback?} =
+    {rows, fallback?, crashed?} =
       try do
-        fun.()
+        {rows, fallback?} = fun.()
+        {rows, fallback?, false}
       rescue
         e ->
           Logger.error("[Cinegraph.Search] #{group} crashed: #{Exception.message(e)}")
-          {[], true}
+          {[], true, true}
       end
 
-    emit_group(started, group, rows, fallback?)
+    emit_group(started, group, rows, fallback?, crashed?)
     rows
   end
 
@@ -515,13 +516,13 @@ defmodule Cinegraph.Search do
     )
   end
 
-  defp emit_group(started, group, rows, fallback?) do
+  defp emit_group(started, group, rows, fallback?, crashed?) do
     duration_ms = ms_since(started)
 
     :telemetry.execute(
       [:cinegraph, :search, :group],
       %{duration_ms: duration_ms, result_count: length(rows)},
-      %{group: group, fallback?: fallback?}
+      %{group: group, fallback?: fallback?, crashed?: crashed?}
     )
   end
 

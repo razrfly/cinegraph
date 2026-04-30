@@ -22,11 +22,13 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 import GlobalSearch from "./hooks/global_search"
+import ThemeToggle from "./hooks/theme_toggle"
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
 const Hooks = {
   GlobalSearch,
+  ThemeToggle,
   SectionNav: {
     mounted() {
       const links = this.el.querySelectorAll("[data-section-id]")
