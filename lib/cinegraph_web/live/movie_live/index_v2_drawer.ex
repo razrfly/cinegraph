@@ -1,0 +1,224 @@
+defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
+  @moduledoc """
+  Drawer + modal templates for the V2 movies page (`/movies`).
+
+  - `filters_drawer/1` — right-side panel with Lists, Festivals, Cast & Crew,
+    Rating Quality, and Include Unreleased. Uses `phx-change="apply_filters"`
+    so the existing `CinegraphWeb.SearchEventHandlers` macro can patch the URL
+    on each toggle (live-update mode).
+  - `scoring_modal/1` — port of v1's "How Cinegraph Scores Movies" modal,
+    restyled with the `mist-*` palette.
+  """
+  use Phoenix.Component
+
+  alias CinegraphWeb.NeutralV2Components
+
+  attr :show, :boolean, default: false
+  attr :filter_options, :map, required: true
+  attr :selected_lists, :list, default: []
+  attr :selected_festivals, :list, default: []
+  attr :selected_people, :list, default: []
+  attr :rating_preset, :string, default: nil
+  attr :show_unreleased, :string, default: nil
+  attr :active_filter_count, :integer, default: 0
+
+  def filters_drawer(assigns) do
+    ~H"""
+    <NeutralV2Components.n_drawer
+      id="filters-drawer"
+      show={@show}
+      title="Filters"
+      on_close="hide_drawer"
+    >
+      <form phx-change="apply_filters" id="filters-drawer-form">
+        <%!-- Hidden inputs ensure the form has *some* value for unchecked groups,
+              otherwise apply_filters skips them entirely --%>
+        <input type="hidden" name="filters[lists][]" value="" />
+        <input type="hidden" name="filters[festivals][]" value="" />
+
+        <%!-- ─── Canonical Lists ─── --%>
+        <section>
+          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+            Canonical Lists
+          </h3>
+          <div class="space-y-1.5">
+            <label
+              :for={list <- @filter_options[:lists] || []}
+              class="flex items-center gap-2.5 text-[13px] text-mist-900 cursor-pointer hover:text-mist-950"
+            >
+              <input
+                type="checkbox"
+                name="filters[lists][]"
+                value={list.key}
+                checked={list.key in @selected_lists}
+                class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950"
+              />
+              <span>{list.name}</span>
+            </label>
+            <p
+              :if={@filter_options[:lists] in [nil, []]}
+              class="text-[12px] text-mist-500 italic"
+            >
+              No lists configured.
+            </p>
+          </div>
+        </section>
+
+        <%!-- ─── Festivals / Awards ─── --%>
+        <section>
+          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+            Festivals / Awards
+          </h3>
+          <div class="space-y-1.5 max-h-56 overflow-y-auto">
+            <label
+              :for={fest <- @filter_options[:festivals] || []}
+              class="flex items-center gap-2.5 text-[13px] text-mist-900 cursor-pointer hover:text-mist-950"
+            >
+              <input
+                type="checkbox"
+                name="filters[festivals][]"
+                value={to_string(fest.id)}
+                checked={to_string(fest.id) in @selected_festivals}
+                class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950"
+              />
+              <span>{fest.name}</span>
+            </label>
+          </div>
+        </section>
+
+        <%!-- ─── Cast & Crew ─── --%>
+        <section>
+          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+            Cast &amp; Crew
+          </h3>
+          <.live_component
+            module={CinegraphWeb.Components.PersonAutocomplete}
+            id="people-search-v2"
+            field_name="filters[people_search]"
+            selected_people={@selected_people}
+            search_term=""
+          />
+        </section>
+
+        <%!-- ─── Rating Quality ─── --%>
+        <section>
+          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+            Rating Quality
+          </h3>
+          <select
+            name="filters[rating_preset]"
+            class="w-full rounded-md border-mist-950/15 bg-mist-50 text-[13px] text-mist-900 focus:border-mist-950 focus:ring-mist-950"
+          >
+            <option value="" selected={@rating_preset in [nil, ""]}>Any rating</option>
+            <option value="highly_rated" selected={@rating_preset == "highly_rated"}>
+              Highly rated (7.5+)
+            </option>
+            <option value="well_reviewed" selected={@rating_preset == "well_reviewed"}>
+              Well reviewed (6.0+)
+            </option>
+            <option
+              value="critically_acclaimed"
+              selected={@rating_preset == "critically_acclaimed"}
+            >
+              Critically acclaimed
+            </option>
+          </select>
+        </section>
+
+        <%!-- ─── Include Unreleased ─── --%>
+        <section>
+          <label class="flex items-center gap-2.5 text-[13px] text-mist-900 cursor-pointer">
+            <input type="hidden" name="filters[show_unreleased]" value="" />
+            <input
+              type="checkbox"
+              name="filters[show_unreleased]"
+              value="true"
+              checked={@show_unreleased == "true"}
+              class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950"
+            />
+            <span>Include unreleased films</span>
+          </label>
+        </section>
+      </form>
+
+      <:footer>
+        <div class="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            phx-click="clear_filters"
+            class="text-[13px] font-medium text-mist-700 underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950"
+          >
+            Clear filters
+          </button>
+          <div class="flex items-center gap-3">
+            <span :if={@active_filter_count > 0} class="text-[12px] text-mist-500 tabular-nums">
+              {@active_filter_count} active
+            </span>
+            <button
+              type="button"
+              phx-click="hide_drawer"
+              class="rounded-full bg-mist-950 text-mist-50 text-[13px] font-medium px-4 py-2 hover:bg-mist-800"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </:footer>
+    </NeutralV2Components.n_drawer>
+    """
+  end
+
+  attr :show, :boolean, default: false
+
+  def scoring_modal(assigns) do
+    ~H"""
+    <div :if={@show} class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="fixed inset-0 bg-mist-950/50" phx-click="hide_scoring_info"></div>
+      <div
+        class="relative bg-mist-50 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-mist-950/10"
+        phx-click-away="hide_scoring_info"
+        phx-window-keydown="hide_scoring_info"
+        phx-key="Escape"
+      >
+        <div class="flex justify-between items-start mb-5">
+          <h2 class="font-display italic text-[24px] text-mist-950">
+            How Cinegraph Scores Movies
+          </h2>
+          <button
+            phx-click="hide_scoring_info"
+            class="text-mist-500 hover:text-mist-950 text-[18px] leading-none"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="space-y-4">
+          <div :for={{emoji, name, tagline, desc} <- scoring_lenses()} class="flex gap-3">
+            <div class="text-2xl flex-shrink-0">{emoji}</div>
+            <div>
+              <div class="font-semibold text-mist-950 text-[14px]">{name}</div>
+              <div class="text-[11px] text-mist-500 italic mb-0.5">"{tagline}"</div>
+              <div class="text-[13px] text-mist-700">{desc}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp scoring_lenses do
+    [
+      {"🔥", "The Mob", "Millions voted.", "IMDb, TMDb, and Rotten Tomatoes audience scores."},
+      {"🎭", "The Critics", "The anointed few.",
+       "Metacritic Metascore + Rotten Tomatoes Tomatometer."},
+      {"🏆", "The Insiders", "Hollywood pats itself.",
+       "Festival wins, Oscar nominations, major awards."},
+      {"⏳", "The Time Machine", "What survives the hype.",
+       "Criterion, 1001 Movies, Sight & Sound lists."},
+      {"🎬", "The Auteurs", "Great films start with great people.",
+       "Director and cast quality scores."},
+      {"💵", "The Box Office", "Follow the money.", "Global revenue relative to budget."}
+    ]
+  end
+end

@@ -15,6 +15,11 @@ config :cinegraph, Cinegraph.Repo,
   show_sensitive_data_on_connection_error: true,
   pool_size: 20
 
+# Slow-query logging — warns whenever a query takes longer than the threshold.
+# Helps catch index gaps and N+1s during development.
+config :cinegraph, :slow_query_logger, true
+config :cinegraph, :slow_query_threshold_ms, 500
+
 # Read replica configuration for development
 # Points to same database as primary for simplicity
 config :cinegraph, Cinegraph.Repo.Replica,

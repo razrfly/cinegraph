@@ -167,6 +167,111 @@ defmodule CinegraphWeb.NeutralV2Components do
   defp btn_variant(_),
     do: "bg-mist-50 text-mist-950 border-mist-950/15 hover:bg-mist-950/[0.025]"
 
+  @doc """
+  Chip toggle — pill-shaped chip used for multi-select / single-select filters
+  (genre, decade, lens). Active state inverts to ink. Stateless: parent drives
+  the `:active` flag and handles the click via `phx-click` + `phx-value-*`.
+  """
+  attr :active, :boolean, default: false
+  attr :class, :string, default: ""
+
+  attr :rest, :global,
+    include:
+      ~w(phx-click phx-value-key phx-value-value phx-value-id phx-value-decade phx-value-sort phx-target type title)
+
+  slot :inner_block, required: true
+
+  def n_chip_toggle(assigns) do
+    ~H"""
+    <button
+      type="button"
+      class={[
+        "px-[11px] py-[5px] text-[12px] rounded-full cursor-pointer whitespace-nowrap shrink-0 transition-colors",
+        if(@active,
+          do: "font-semibold text-mist-50 bg-mist-950 border border-mist-950",
+          else:
+            "font-medium text-mist-900 bg-mist-50 border border-mist-950/10 hover:bg-mist-950/[0.025]"
+        ),
+        @class
+      ]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </button>
+    """
+  end
+
+  @doc """
+  Drawer — right-side slide-in panel. The parent owns the `show` boolean.
+  Renders an overlay (click → `phx-click="<on_close>"`) + a `w-full sm:w-[420px]`
+  panel that translates in from the right. Press Escape to close — the parent's
+  template should attach `phx-window-keydown` to its root.
+  """
+  attr :id, :string, required: true
+  attr :show, :boolean, default: false
+  attr :title, :string, default: ""
+  attr :on_close, :string, default: "hide_drawer"
+  attr :class, :string, default: ""
+  slot :inner_block, required: true
+  slot :footer
+
+  def n_drawer(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "fixed inset-0 z-40",
+        if(@show, do: "pointer-events-auto", else: "pointer-events-none")
+      ]}
+      aria-hidden={if @show, do: "false", else: "true"}
+    >
+      <div
+        class={[
+          "absolute inset-0 bg-mist-950/40 transition-opacity duration-200",
+          if(@show, do: "opacity-100", else: "opacity-0")
+        ]}
+        phx-click={@on_close}
+      />
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={"#{@id}-title"}
+        class={[
+          "absolute top-0 right-0 h-full w-full sm:w-[420px] bg-mist-50 border-l border-mist-950/10 shadow-2xl flex flex-col transition-transform duration-200 ease-out",
+          if(@show, do: "translate-x-0", else: "translate-x-full"),
+          @class
+        ]}
+      >
+        <header class="flex items-center justify-between px-5 py-4 border-b border-mist-950/10">
+          <h2
+            id={"#{@id}-title"}
+            class="font-display italic text-[20px] text-mist-950 leading-tight"
+          >
+            {@title}
+          </h2>
+          <button
+            type="button"
+            phx-click={@on_close}
+            class="text-mist-500 hover:text-mist-950 text-[18px] leading-none px-1"
+            aria-label="Close drawer"
+          >
+            ✕
+          </button>
+        </header>
+        <div class="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+          {render_slot(@inner_block)}
+        </div>
+        <footer
+          :if={@footer != []}
+          class="border-t border-mist-950/10 px-5 py-4 bg-mist-50"
+        >
+          {render_slot(@footer)}
+        </footer>
+      </aside>
+    </div>
+    """
+  end
+
   @doc "Brand mark — ink rounded square + 4-node graph SVG + Cinegraph wordmark."
   attr :size, :integer, default: 18
 
@@ -496,7 +601,13 @@ defmodule CinegraphWeb.NeutralV2Components do
   # MEDIA CARDS
   # ──────────────────────────────────────────────────────────────────
 
-  @doc "Film card — 2:3 poster + corner badges + title/year + director/delta meta."
+  @doc """
+  Film card — 2:3 poster + corner badges + title/year + director/delta meta.
+
+  When `film.lens_key` is set, the score badge renders as an indigo→purple gradient
+  pill (e.g. `🎯 84%` or `🎯 8.4`) instead of the neutral white pill, and an optional
+  row of small lens-component chips renders below the director line.
+  """
   attr :film, :map, required: true
   attr :rank, :integer, default: nil
   attr :show_score, :boolean, default: true
@@ -506,12 +617,16 @@ defmodule CinegraphWeb.NeutralV2Components do
     poster = assigns.film[:poster_url] || maybe_generated_poster(assigns.film)
     score = card_score(assigns.film)
     href = assigns.film[:href] || "#"
+    lens_key = assigns.film[:lens_key]
+    components = assigns.film[:lens_components] || []
 
     assigns =
       assigns
       |> assign(:poster, poster)
       |> assign(:score, score)
       |> assign(:href, href)
+      |> assign(:lens_key, lens_key)
+      |> assign(:lens_components, components)
 
     ~H"""
     <a href={@href} class="block no-underline text-inherit">
@@ -534,12 +649,17 @@ defmodule CinegraphWeb.NeutralV2Components do
         >
           #{@rank}
         </div>
-        <div
-          :if={@show_score && @score}
-          class="absolute top-2 right-2 px-[7px] py-[3px] bg-white/[0.92] text-mist-950 text-[11px] font-bold rounded-[4px] tabular-nums tracking-[-.01em]"
-        >
-          {@score}
-        </div>
+        <%= cond do %>
+          <% @show_score && @score && @lens_key -> %>
+            <div class="absolute top-2 left-2 px-[8px] py-[3px] bg-gradient-to-r from-indigo-600 to-purple-700 text-white text-[11px] font-bold rounded-full tabular-nums tracking-[-.01em] shadow-md">
+              🎯 {@score}
+            </div>
+          <% @show_score && @score -> %>
+            <div class="absolute top-2 right-2 px-[7px] py-[3px] bg-white/[0.92] text-mist-950 text-[11px] font-bold rounded-[4px] tabular-nums tracking-[-.01em]">
+              {@score}
+            </div>
+          <% true -> %>
+        <% end %>
       </div>
       <div class="pt-[10px]">
         <div class="flex items-baseline justify-between gap-2">
@@ -558,6 +678,20 @@ defmodule CinegraphWeb.NeutralV2Components do
           <.n_delta :if={Map.has_key?(@film, :delta)} value={@film.delta} />
         </div>
         <div
+          :if={!@compact && @lens_components != []}
+          class="mt-[6px] flex flex-wrap gap-[4px]"
+        >
+          <span
+            :for={{key, percent} <- @lens_components}
+            class={[
+              "inline-flex items-center px-[6px] py-[1px] rounded text-[10px] font-medium tabular-nums border",
+              lens_chip_tone(key, key == @lens_key)
+            ]}
+          >
+            {lens_chip_emoji(key)} {percent}%
+          </span>
+        </div>
+        <div
           :if={!@compact && @film[:reason]}
           class="mt-[5px] pl-2 border-l-2 border-mist-950/30 italic text-[11px] text-mist-500 truncate"
         >
@@ -567,6 +701,34 @@ defmodule CinegraphWeb.NeutralV2Components do
     </a>
     """
   end
+
+  defp lens_chip_emoji(:mob), do: "👥"
+  defp lens_chip_emoji("mob"), do: "👥"
+  defp lens_chip_emoji(:critics), do: "🎭"
+  defp lens_chip_emoji("critics"), do: "🎭"
+  defp lens_chip_emoji(:festival_recognition), do: "🏆"
+  defp lens_chip_emoji("festival_recognition"), do: "🏆"
+  defp lens_chip_emoji(:time_machine), do: "⏳"
+  defp lens_chip_emoji("time_machine"), do: "⏳"
+  defp lens_chip_emoji(:auteurs), do: "🎬"
+  defp lens_chip_emoji("auteurs"), do: "🎬"
+  defp lens_chip_emoji(_), do: "🎯"
+
+  defp lens_chip_tone(_, true), do: "bg-indigo-50 text-indigo-800 border-indigo-200"
+  defp lens_chip_tone(:mob, _), do: "bg-emerald-50 text-emerald-700 border-emerald-200"
+  defp lens_chip_tone("mob", _), do: "bg-emerald-50 text-emerald-700 border-emerald-200"
+  defp lens_chip_tone(:critics, _), do: "bg-blue-50 text-blue-700 border-blue-200"
+  defp lens_chip_tone("critics", _), do: "bg-blue-50 text-blue-700 border-blue-200"
+  defp lens_chip_tone(:festival_recognition, _), do: "bg-amber-50 text-amber-700 border-amber-200"
+
+  defp lens_chip_tone("festival_recognition", _),
+    do: "bg-amber-50 text-amber-700 border-amber-200"
+
+  defp lens_chip_tone(:time_machine, _), do: "bg-purple-50 text-purple-700 border-purple-200"
+  defp lens_chip_tone("time_machine", _), do: "bg-purple-50 text-purple-700 border-purple-200"
+  defp lens_chip_tone(:auteurs, _), do: "bg-orange-50 text-orange-700 border-orange-200"
+  defp lens_chip_tone("auteurs", _), do: "bg-orange-50 text-orange-700 border-orange-200"
+  defp lens_chip_tone(_, _), do: "bg-mist-100 text-mist-700 border-mist-950/15"
 
   # Generate an SVG placeholder ONLY when the film map has the rich mock-data
   # shape (id + title + year + dir + genre). Real Movie structs from the DB

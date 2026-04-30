@@ -49,6 +49,12 @@ defmodule Cinegraph.Application do
     Cinegraph.Repo.Metrics.init_counters()
     Cinegraph.Repo.Metrics.attach_handlers()
 
+    # Slow-query logging (dev only — prod uses PlanetScale's slow-query analytics)
+    if Application.get_env(:cinegraph, :slow_query_logger, false) do
+      threshold = Application.get_env(:cinegraph, :slow_query_threshold_ms, 500)
+      Cinegraph.Telemetry.SlowQueryLogger.attach(threshold)
+    end
+
     case Supervisor.start_link(children, opts) do
       {:ok, pid} ->
         # Schedule cache warmup after application starts
