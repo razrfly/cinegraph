@@ -3,7 +3,7 @@ defmodule Cinegraph.Search do
   Unified typeahead search across films, people, lists, and companies.
 
   Single entry point: `global/2`. Fans out four parallel queries via
-  `Task.async_stream/3` (75 ms hard timeout per group), caches the
+  `Task.async_stream/3` (100 ms hard timeout per group), caches the
   assembled result for 60s in `:movies_cache`, and emits `:telemetry`
   events at both the global and per-group level.
 
@@ -134,7 +134,7 @@ defmodule Cinegraph.Search do
       rescue
         e ->
           Logger.error("[Cinegraph.Search] #{group} crashed: #{Exception.message(e)}")
-          {[], :error}
+          {[], true}
       end
 
     emit_group(started, group, rows, fallback?)
