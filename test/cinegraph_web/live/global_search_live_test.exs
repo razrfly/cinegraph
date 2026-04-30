@@ -137,6 +137,22 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
       assert html =~ "Recent 5"
       refute html =~ "Recent 6"
     end
+
+    test "recents sanitize unsafe hrefs", %{conn: conn} do
+      {:ok, view, _} = live_isolated(conn, CinegraphWeb.GlobalSearchLive)
+
+      _ =
+        render_hook(view, "update_recents", %{
+          "recents" => [%{"href" => "javascript:alert(1)", "label" => "Unsafe Recent"}]
+        })
+
+      _ = render_hook(view, "focus", %{})
+      html = render(view)
+
+      assert html =~ "Unsafe Recent"
+      assert html =~ ~s|href="#"|
+      refute html =~ "javascript:alert"
+    end
   end
 
   describe "result row shape" do

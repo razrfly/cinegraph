@@ -297,7 +297,8 @@ defmodule CinegraphWeb.NeutralV2Components do
             type="button"
             phx-hook="ThemeToggle"
             class="w-[34px] h-[34px] rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 hover:bg-mist-950/[0.04] dark:hover:bg-white/10 grid place-items-center cursor-pointer max-md:hidden"
-            aria-label="Toggle theme"
+            aria-label="Toggle dark mode"
+            aria-pressed="false"
           >
             <svg
               width="14"
