@@ -182,6 +182,25 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
     {:noreply, push_patch(socket, to: path)}
   end
 
+  # Rating Quality segmented control: a flat list of buttons sets/clears the
+  # `rating_preset` URL param. Clicking the already-active value clears it.
+  def handle_event("set_rating_preset", %{"value" => value}, socket) do
+    new_value =
+      cond do
+        value == "" -> nil
+        to_string(socket.assigns.params["rating_preset"]) == value -> nil
+        true -> value
+      end
+
+    new_params =
+      socket.assigns.params
+      |> put_or_delete("rating_preset", new_value)
+      |> Map.put("page", "1")
+
+    path = build_path(socket, new_params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
   # Override remove_filter so the active-filter chip strip can drop one filter at
   # a time. Accepts an optional `filter-type` value ("basic"/"advanced") that the
   # legacy template emits — we ignore it; key alone is enough.
@@ -228,7 +247,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16">
+    <div
+      class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16"
+      phx-window-keydown="hide_drawer"
+      phx-key="Escape"
+    >
       <IndexV2Components.hero total_count={@total_count} />
       <IndexV2Components.filters
         search_term={@search_term}

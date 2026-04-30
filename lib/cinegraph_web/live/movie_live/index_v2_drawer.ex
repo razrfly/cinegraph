@@ -30,7 +30,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
       title="Filters"
       on_close="hide_drawer"
     >
-      <form phx-change="apply_filters" id="filters-drawer-form">
+      <form phx-change="apply_filters" id="filters-drawer-form" class="space-y-8">
         <%!-- Hidden inputs ensure the form has *some* value for unchecked groups,
               otherwise apply_filters skips them entirely --%>
         <input type="hidden" name="filters[lists][]" value="" />
@@ -38,22 +38,22 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
 
         <%!-- ─── Canonical Lists ─── --%>
         <section>
-          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
             Canonical Lists
           </h3>
-          <div class="space-y-1.5">
+          <div class="space-y-2.5">
             <label
               :for={list <- @filter_options[:lists] || []}
-              class="flex items-center gap-2.5 text-[13px] text-mist-900 cursor-pointer hover:text-mist-950"
+              class="flex items-start gap-2.5 text-[13.5px] text-mist-900 cursor-pointer hover:text-mist-950 leading-snug"
             >
               <input
                 type="checkbox"
                 name="filters[lists][]"
                 value={list.key}
                 checked={list.key in @selected_lists}
-                class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950"
+                class="mt-[2px] shrink-0 rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
               />
-              <span>{list.name}</span>
+              <span class="flex-1">{list.name}</span>
             </label>
             <p
               :if={@filter_options[:lists] in [nil, []]}
@@ -66,29 +66,29 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
 
         <%!-- ─── Festivals / Awards ─── --%>
         <section>
-          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
             Festivals / Awards
           </h3>
-          <div class="space-y-1.5 max-h-56 overflow-y-auto">
+          <div class="space-y-2.5 max-h-64 overflow-y-auto pr-1">
             <label
               :for={fest <- @filter_options[:festivals] || []}
-              class="flex items-center gap-2.5 text-[13px] text-mist-900 cursor-pointer hover:text-mist-950"
+              class="flex items-start gap-2.5 text-[13.5px] text-mist-900 cursor-pointer hover:text-mist-950 leading-snug"
             >
               <input
                 type="checkbox"
                 name="filters[festivals][]"
                 value={to_string(fest.id)}
                 checked={to_string(fest.id) in @selected_festivals}
-                class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950"
+                class="mt-[2px] shrink-0 rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
               />
-              <span>{fest.name}</span>
+              <span class="flex-1">{fest.name}</span>
             </label>
           </div>
         </section>
 
         <%!-- ─── Cast & Crew ─── --%>
         <section>
-          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
             Cast &amp; Crew
           </h3>
           <.live_component
@@ -100,41 +100,56 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
           />
         </section>
 
-        <%!-- ─── Rating Quality ─── --%>
+        <%!-- ─── Rating Quality (segmented control) ─── --%>
         <section>
-          <h3 class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
             Rating Quality
           </h3>
-          <select
-            name="filters[rating_preset]"
-            class="w-full rounded-md border-mist-950/15 bg-mist-50 text-[13px] text-mist-900 focus:border-mist-950 focus:ring-mist-950"
-          >
-            <option value="" selected={@rating_preset in [nil, ""]}>Any rating</option>
-            <option value="highly_rated" selected={@rating_preset == "highly_rated"}>
-              Highly rated (7.5+)
-            </option>
-            <option value="well_reviewed" selected={@rating_preset == "well_reviewed"}>
-              Well reviewed (6.0+)
-            </option>
-            <option
-              value="critically_acclaimed"
-              selected={@rating_preset == "critically_acclaimed"}
+          <input type="hidden" name="filters[rating_preset]" value={@rating_preset || ""} />
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              :for={{value, label, sub} <- rating_preset_options()}
+              type="button"
+              phx-click="set_rating_preset"
+              phx-value-value={value}
+              class={[
+                "flex flex-col items-center justify-center gap-[1px] rounded-lg border px-2 py-3 text-center transition-colors",
+                if(rating_preset_active?(@rating_preset, value),
+                  do: "bg-mist-950 border-mist-950 text-mist-50",
+                  else: "bg-mist-50 border-mist-950/15 text-mist-900 hover:bg-mist-950/[0.025]"
+                )
+              ]}
             >
-              Critically acclaimed
-            </option>
-          </select>
+              <span class="text-[13px] font-semibold leading-tight">{label}</span>
+              <span
+                :if={sub}
+                class={[
+                  "text-[10.5px] leading-tight",
+                  if(rating_preset_active?(@rating_preset, value),
+                    do: "text-mist-300",
+                    else: "text-mist-500"
+                  )
+                ]}
+              >
+                {sub}
+              </span>
+            </button>
+          </div>
         </section>
 
-        <%!-- ─── Include Unreleased ─── --%>
+        <%!-- ─── Other ─── --%>
         <section>
-          <label class="flex items-center gap-2.5 text-[13px] text-mist-900 cursor-pointer">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+            Other
+          </h3>
+          <label class="flex items-center gap-2.5 text-[13.5px] text-mist-900 cursor-pointer">
             <input type="hidden" name="filters[show_unreleased]" value="" />
             <input
               type="checkbox"
               name="filters[show_unreleased]"
               value="true"
               checked={@show_unreleased == "true"}
-              class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950"
+              class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
             />
             <span>Include unreleased films</span>
           </label>
@@ -173,7 +188,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
   def scoring_modal(assigns) do
     ~H"""
     <div :if={@show} class="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div class="fixed inset-0 bg-mist-950/50" phx-click="hide_scoring_info"></div>
+      <div class="fixed inset-0 bg-mist-950/50"></div>
       <div
         class="relative bg-mist-50 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-mist-950/10"
         phx-click-away="hide_scoring_info"
@@ -206,6 +221,19 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
     </div>
     """
   end
+
+  defp rating_preset_options do
+    [
+      {"", "Any", "rating"},
+      {"highly_rated", "7.5+", "Acclaimed"},
+      {"well_reviewed", "6.0+", "Solid"},
+      {"critically_acclaimed", "Top tier", "Critics' picks"}
+    ]
+  end
+
+  defp rating_preset_active?(nil, ""), do: true
+  defp rating_preset_active?("", ""), do: true
+  defp rating_preset_active?(current, value), do: to_string(current) == value
 
   defp scoring_lenses do
     [

@@ -13,7 +13,6 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.LiveViewHelpers
-  alias CinegraphWeb.MovieLive.SortOptions
   alias CinegraphWeb.NeutralV2Components
 
   @lens_keys ~w(mob critics festival_recognition time_machine auteurs)
@@ -454,8 +453,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
   # Score for the card badge + the lens-component chips below the title.
   #
-  # Lens sort: read score_cache.<lens>_score (0–10) and emit a "%" badge plus
+  # Lens sort: read score_cache.<lens>_score and emit a "%" badge plus
   # one chip per lens (mob/critics/festival_recognition/time_machine/auteurs).
+  # Cached worker scores are 0-10, while some query-time score components are
+  # 0-1; normalize both scales before rendering percentages.
   # The score_cache is preloaded by IndexV2 only when a lens sort is active
   # (single batched query — see preload_card_assocs/2).
   #
@@ -466,13 +467,15 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   defp score_for_card(movie, lens_key) when lens_key in @lens_keys do
     cache = loaded_score_cache(movie)
     primary = lens_value(cache, lens_key)
-    score_str = if primary, do: "#{round(primary * 10)}%", else: nil
+    primary_percent = lens_percent(primary)
+    score_str = if primary_percent, do: "#{primary_percent}%", else: nil
 
     chips =
       @lens_keys
       |> Enum.map(fn k ->
         val = lens_value(cache, k)
-        if val && val > 0.1, do: {k, round(val * 10)}, else: nil
+        percent = lens_percent(val)
+        if percent && percent > 1, do: {k, percent}, else: nil
       end)
       |> Enum.reject(&is_nil/1)
 
@@ -511,6 +514,21 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   defp lens_value(cache, "time_machine"), do: Map.get(cache, :time_machine_score)
   defp lens_value(cache, "auteurs"), do: Map.get(cache, :auteurs_score)
   defp lens_value(_, _), do: nil
+
+  defp lens_percent(nil), do: nil
+
+  defp lens_percent(value) when is_number(value) do
+    value
+    |> then(fn
+      v when v <= 1.0 -> v * 100
+      v -> v * 10
+    end)
+    |> round()
+    |> max(0)
+    |> min(100)
+  end
+
+  defp lens_percent(_), do: nil
 
   defp filter_value_present?(nil), do: false
   defp filter_value_present?(""), do: false
@@ -551,7 +569,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
     ids
     |> Enum.map(fn id ->
-      id_int = if is_binary(id), do: String.to_integer(id), else: id
+      id_int = parse_id(id)
       Enum.find(available, &(&1.id == id_int)) || %{name: to_string(id)}
     end)
     |> Enum.map(& &1.name)
@@ -576,7 +594,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
     ids
     |> Enum.map(fn id ->
-      id_int = if is_binary(id), do: String.to_integer(id), else: id
+      id_int = parse_id(id)
       Enum.find(available, &(&1.id == id_int)) || %{name: to_string(id)}
     end)
     |> Enum.map(& &1.name)
@@ -612,6 +630,17 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
   defp value_label_for(_, value, _opts) when is_list(value), do: Enum.join(value, ", ")
   defp value_label_for(_, value, _opts), do: to_string(value)
+
+  defp parse_id(id) when is_integer(id), do: id
+
+  defp parse_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  defp parse_id(_), do: nil
 
   defp truncate_join(names) do
     joined = Enum.join(names, ", ")
@@ -698,7 +727,4 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
     |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
     |> String.reverse()
   end
-
-  # silence the "alias unused" warning when SortOptions is only referenced indirectly
-  _ = SortOptions
 end
