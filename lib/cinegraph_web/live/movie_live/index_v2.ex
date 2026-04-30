@@ -273,6 +273,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
         selected_lists={IndexV2Components.list_param(@params, "lists")}
         selected_festivals={IndexV2Components.list_param(@params, "festivals")}
         selected_people={IndexV2Components.selected_people_ids(@params)}
+        selected_decade={@params["decade"]}
         rating_preset={@params["rating_preset"]}
         show_unreleased={@params["show_unreleased"]}
         active_filter_count={IndexV2Components.active_filter_count(@params)}

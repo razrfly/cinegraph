@@ -13,10 +13,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.LiveViewHelpers
+  alias CinegraphWeb.MovieLive.GenreEmoji
+  alias CinegraphWeb.MovieLive.SortOptions
   alias CinegraphWeb.NeutralV2Components
 
   @lens_keys ~w(mob critics festival_recognition time_machine auteurs)
-  @primary_sort_keys ~w(release_date score popularity mob critics festival_recognition)
+  # Phase 2 (issue #787): only the three table-stakes sorts stay on the
+  # segmented control. Lens sorts and presets move into the "More sorts ▾" menu.
+  @primary_sort_keys ~w(release_date score popularity)
   @basic_filter_keys ~w(search genres decade lists festivals people_ids rating_preset show_unreleased)
 
   # ──────────────────────────────────────────────────────────────────
@@ -31,14 +35,24 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
       <h1 class="font-display italic text-[44px] sm:text-[56px] lg:text-[72px] tracking-[-.02em] text-balance text-mist-950 leading-[1.02]">
         Movies.
       </h1>
-      <div class="text-[15px] text-mist-700 mt-2 max-w-2xl">
+      <p class="text-[15px] text-mist-700 mt-2 max-w-2xl">
         {format_count(@total_count)} films across canonical lists, festivals, and critical canon.
+      </p>
+      <div class="flex items-center gap-3 mt-1.5 text-[14px] text-mist-700">
         <a
           href="/movies/discover"
-          class="ml-2 underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950"
+          class="underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950"
         >
           Tunable scoring →
         </a>
+        <span class="text-mist-500" aria-hidden="true">·</span>
+        <button
+          type="button"
+          phx-click="show_scoring_info"
+          class="underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950 bg-transparent border-0 p-0 cursor-pointer font-[inherit] text-[14px] text-mist-700"
+        >
+          How we score?
+        </button>
       </div>
     </section>
     """
@@ -59,9 +73,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
   def filters(assigns) do
     selected_genres = list_param(assigns.params, "genres")
-    decades = assigns.filter_options[:decades] || []
     genres = assigns.filter_options[:genres] || []
-    visible_genre_count = 12
+    visible_genre_count = 10
 
     primary_sort_options =
       Enum.filter(assigns.sort_options, &(&1.value in @primary_sort_keys))
@@ -72,11 +85,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
     assigns =
       assigns
       |> assign(:selected_genres, selected_genres)
-      |> assign(:decades, decades)
       |> assign(:genres, genres)
       |> assign(:visible_genre_count, visible_genre_count)
       |> assign(:primary_sort_options, primary_sort_options)
       |> assign(:overflow_sort_options, overflow_sort_options)
+      |> assign(:overflow_groups, grouped_overflow_options(overflow_sort_options))
 
     ~H"""
     <section class="mb-6 space-y-4">
@@ -124,12 +137,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
                 else: "font-medium text-mist-700 bg-transparent hover:text-mist-950"
               )
             ]}
-            title={sort_label(opt)}
+            title={sort_tooltip(opt)}
           >
             {sort_label_short(opt)}
           </button>
 
-          <%!-- More overflow popover --%>
+          <%!-- More sorts ▾ overflow menu (structured, grouped) --%>
           <details
             :if={@overflow_sort_options != []}
             class="relative"
@@ -142,47 +155,70 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
                 else: "font-medium text-mist-700 hover:text-mist-950"
               )
             ]}>
-              ▼ More
+              {overflow_summary_label(
+                @sort_criteria,
+                @sort_direction,
+                @primary_sort_options,
+                @overflow_sort_options
+              )}
             </summary>
-            <div class="absolute right-0 mt-2 z-30 bg-mist-50 border border-mist-950/10 rounded-lg shadow-lg min-w-[200px] py-1">
-              <button
-                :for={opt <- @overflow_sort_options}
-                type="button"
-                phx-click="sort_criteria_changed"
-                phx-value-criteria={opt.value}
-                class={[
-                  "w-full text-left px-3 py-1.5 text-[12.5px] hover:bg-mist-950/[0.04]",
-                  if(@sort_criteria == opt.value,
-                    do: "font-semibold text-mist-950 bg-mist-950/[0.04]",
-                    else: "font-medium text-mist-800"
-                  )
-                ]}
-              >
-                {opt.label}
-              </button>
+            <div class="absolute right-0 mt-2 z-30 bg-mist-50 border border-mist-950/10 rounded-lg shadow-[0_8px_24px_rgba(20,18,15,.10)] min-w-[280px] py-2">
+              <div :for={{header, opts} <- @overflow_groups} class="px-1 pb-1">
+                <h4 class="px-3 pt-2 pb-1 text-[10.5px] font-semibold tracking-[.08em] uppercase text-mist-500">
+                  {header}
+                </h4>
+                <div
+                  :for={opt <- opts}
+                  class={[
+                    "flex items-center justify-between gap-2 mx-1 rounded-[6px]",
+                    if(@sort_criteria == opt.value,
+                      do: "bg-mist-950/[0.05]",
+                      else: "hover:bg-mist-950/[0.03]"
+                    )
+                  ]}
+                >
+                  <button
+                    type="button"
+                    phx-click="sort_criteria_changed"
+                    phx-value-criteria={opt.value}
+                    title={sort_tooltip(opt)}
+                    class={[
+                      "flex-1 text-left px-3 py-1.5 text-[12.5px]",
+                      if(@sort_criteria == opt.value,
+                        do: "font-semibold text-mist-950",
+                        else: "font-medium text-mist-800"
+                      )
+                    ]}
+                  >
+                    {display_label(opt)}
+                  </button>
+                  <button
+                    :if={@sort_criteria == opt.value}
+                    type="button"
+                    phx-click="toggle_sort_direction"
+                    title={
+                      if @sort_direction == :desc,
+                        do: "Switch to ascending",
+                        else: "Switch to descending"
+                    }
+                    class="px-2 py-1 mr-1 text-[12px] text-mist-700 hover:text-mist-950 tabular-nums"
+                  >
+                    {if @sort_direction == :desc, do: "↓", else: "↑"}
+                  </button>
+                </div>
+              </div>
+              <div class="border-t border-mist-950/10 mt-1 pt-1 px-3">
+                <button
+                  type="button"
+                  phx-click="show_scoring_info"
+                  class="w-full text-left text-[12px] text-mist-700 hover:text-mist-950 underline decoration-mist-950/15 underline-offset-4 py-1.5"
+                >
+                  How does Cinegraph score? →
+                </button>
+              </div>
             </div>
           </details>
         </div>
-
-        <%!-- Direction toggle --%>
-        <button
-          type="button"
-          phx-click="toggle_sort_direction"
-          class="inline-flex items-center justify-center w-7 h-7 rounded-md border border-mist-950/10 bg-mist-50 text-mist-700 hover:text-mist-950"
-          title={if @sort_direction == :desc, do: "Descending", else: "Ascending"}
-        >
-          {if @sort_direction == :desc, do: "↓", else: "↑"}
-        </button>
-
-        <%!-- Scoring info button --%>
-        <button
-          type="button"
-          phx-click="show_scoring_info"
-          class="inline-flex items-center justify-center w-7 h-7 rounded-full border border-mist-950/10 bg-mist-50 text-[12px] font-bold text-mist-500 hover:text-mist-950"
-          title="How scoring works"
-        >
-          ?
-        </button>
 
         <%!-- Filters drawer button --%>
         <button
@@ -214,24 +250,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
         </button>
       </div>
 
-      <%!-- Decade chips --%>
-      <div :if={@decades != []} class="flex items-center gap-[6px] flex-wrap">
-        <span class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase shrink-0 mr-1">
-          DECADE
-        </span>
-        <NeutralV2Components.n_chip_toggle
-          :for={d <- @decades}
-          active={to_string(d.value) == @params["decade"]}
-          phx-click="toggle_chip"
-          phx-value-key="decade"
-          phx-value-value={to_string(d.value)}
-          phx-value-mode="single"
-        >
-          {d.label}
-        </NeutralV2Components.n_chip_toggle>
-      </div>
-
-      <%!-- Genre chips (multi-select) --%>
+      <%!-- Genre chips (multi-select, with emoji prefix) --%>
       <div :if={@genres != []} class="flex items-center gap-[6px] flex-wrap">
         <span class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase shrink-0 mr-1">
           GENRE
@@ -244,7 +263,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
           phx-value-value={to_string(genre.id)}
           phx-value-mode="multi"
         >
-          {genre.name}
+          <span class="mr-[5px]">{GenreEmoji.for_id(genre.tmdb_id)}</span>{genre.name}
         </NeutralV2Components.n_chip_toggle>
         <details
           :if={length(@genres) > @visible_genre_count}
@@ -262,7 +281,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
               phx-value-value={to_string(genre.id)}
               phx-value-mode="multi"
             >
-              {genre.name}
+              <span class="mr-[5px]">{GenreEmoji.for_id(genre.tmdb_id)}</span>{genre.name}
             </NeutralV2Components.n_chip_toggle>
           </div>
         </details>
@@ -444,12 +463,21 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
       genre: List.first(genres),
       genres: genres,
       score: score_str,
+      score_tooltip: score_tooltip_for(active_lens_key),
       lens_key: active_lens_key,
       lens_components: lens_components,
       poster_url: tmdb_poster_url(movie.poster_path, "w500"),
       href: movie_href(movie)
     }
   end
+
+  # Tooltip rendered on the card's corner score badge. The active sort
+  # determines what the badge represents.
+  defp score_tooltip_for(lens_key) when lens_key in @lens_keys, do: lens_tooltip(lens_key)
+  defp score_tooltip_for(:preset), do: "Cinegraph composite score (Scored Preset)"
+
+  defp score_tooltip_for(_),
+    do: "Cinegraph composite score — audience + critics + awards + canon + talent"
 
   # Score for the card badge + the lens-component chips below the title.
   #
@@ -475,7 +503,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
       |> Enum.map(fn k ->
         val = lens_value(cache, k)
         percent = lens_percent(val)
-        if percent && percent > 1, do: {k, percent}, else: nil
+        # Threshold ≥5% on the displayed percent scale (issue #787 phase 1).
+        # Raises the floor from the previous >1% to silence near-zero noise.
+        if percent && percent >= 5, do: {k, percent, lens_tooltip(k)}, else: nil
       end)
       |> Enum.reject(&is_nil/1)
 
@@ -515,6 +545,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   defp lens_value(cache, "auteurs"), do: Map.get(cache, :auteurs_score)
   defp lens_value(_, _), do: nil
 
+  # Per-lens tooltip copy (mirrors the sort_tooltip strings).
+  defp lens_tooltip("mob"), do: "Audience — IMDb + TMDb + Rotten Tomatoes"
+  defp lens_tooltip("critics"), do: "Critics — Metacritic + Rotten Tomatoes"
+  defp lens_tooltip("festival_recognition"), do: "Awards — festival wins and major-award presence"
+  defp lens_tooltip("time_machine"), do: "All-time canon — Criterion, 1001 Movies, Sight & Sound"
+  defp lens_tooltip("auteurs"), do: "Director picks — director and cast quality"
+  defp lens_tooltip(_), do: nil
+
   defp lens_percent(nil), do: nil
 
   defp lens_percent(value) when is_number(value) do
@@ -541,17 +579,43 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   # ──────────────────────────────────────────────────────────────────
 
   defp build_active_chips(params, filter_options) do
-    @basic_filter_keys
-    |> Enum.reject(&(&1 == "search"))
-    |> Enum.flat_map(fn key ->
-      value = params[key]
+    filter_chips =
+      @basic_filter_keys
+      |> Enum.reject(&(&1 == "search"))
+      |> Enum.flat_map(fn key ->
+        value = params[key]
 
-      if filter_value_present?(value) do
-        [{key, label_for(key), value_label_for(key, value, filter_options)}]
-      else
-        []
-      end
-    end)
+        if filter_value_present?(value) do
+          [{key, label_for(key), value_label_for(key, value, filter_options)}]
+        else
+          []
+        end
+      end)
+
+    sort_chip(params) ++ filter_chips
+  end
+
+  # Surface the active sort as a chip when it differs from the default
+  # (`release_date_desc`). Uses the display_label/1 to match the More-sorts
+  # menu vocabulary; the trailing arrow communicates direction.
+  defp sort_chip(params) do
+    raw = params["sort"] || ""
+    default? = raw in ["", "release_date_desc"]
+
+    if default? do
+      []
+    else
+      criteria = String.replace(raw, ~r/_(asc|desc)$/, "")
+      direction = if String.ends_with?(raw, "_asc"), do: :asc, else: :desc
+
+      label =
+        case Enum.find(SortOptions.all(), &(&1.value == criteria)) do
+          nil -> criteria
+          opt -> display_label(opt)
+        end
+
+      [{"sort", "Sort", "#{label} #{direction_arrow(direction)}"}]
+    end
   end
 
   defp label_for("genres"), do: "Genres"
@@ -651,15 +715,90 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   # Sort label helpers
   # ──────────────────────────────────────────────────────────────────
 
-  defp sort_label(%{label: label}), do: label
-
-  defp sort_label_short(%{value: "release_date"}), do: "Most recent"
-  defp sort_label_short(%{value: "score"}), do: "Top rated"
-  defp sort_label_short(%{value: "popularity"}), do: "Most popular"
-  defp sort_label_short(%{value: "mob"}), do: "Mob"
-  defp sort_label_short(%{value: "critics"}), do: "Critics"
-  defp sort_label_short(%{value: "festival_recognition"}), do: "Insiders"
+  # Short label used in the primary segmented control (Phase 2: only 3 entries).
+  # Emoji prefix matches the genre-chip pattern for visual scanability.
+  defp sort_label_short(%{value: "release_date"}), do: "📅 Most recent"
+  defp sort_label_short(%{value: "score"}), do: "⭐ Highest rated"
+  defp sort_label_short(%{value: "popularity"}), do: "🔥 Trending"
   defp sort_label_short(%{label: label}), do: label
+
+  # Longer label used in the overflow ▼ More menu. Strips the canonical emojis
+  # and prefixes from `SortOptions.all/0` (which serve v1 / Tuner) and replaces
+  # the lens jargon with the V2 vocabulary. Falls through to the canonical
+  # label for everything else (Title / Runtime / Rating / Scored Presets).
+  defp display_label(%{value: "release_date"}), do: "📅 Most recent"
+  defp display_label(%{value: "score"}), do: "⭐ Highest rated"
+  defp display_label(%{value: "popularity"}), do: "🔥 Trending"
+  defp display_label(%{value: "mob"}), do: "👥 Audience"
+  defp display_label(%{value: "critics"}), do: "🎭 Critics"
+  defp display_label(%{value: "festival_recognition"}), do: "🏆 Awards"
+  defp display_label(%{value: "time_machine"}), do: "⏳ All-time canon"
+  defp display_label(%{value: "auteurs"}), do: "🎬 Director picks"
+  defp display_label(%{label: label}), do: label
+
+  # One-line explanation rendered as the `title=` attribute on each sort button.
+  # Mirrors the lens-tooltip copy used on card chips.
+  defp sort_tooltip(%{value: "release_date"}), do: "Newest releases first"
+  defp sort_tooltip(%{value: "score"}), do: "Top of the Cinegraph composite score"
+  defp sort_tooltip(%{value: "popularity"}), do: "What's hot right now (TMDb popularity)"
+  defp sort_tooltip(%{value: "rating"}), do: "Sorted by raw user rating"
+
+  defp sort_tooltip(%{value: "mob"}),
+    do: "What audiences love (IMDb + TMDb + Rotten Tomatoes)"
+
+  defp sort_tooltip(%{value: "critics"}),
+    do: "What critics rate highly (Metacritic + Rotten Tomatoes)"
+
+  defp sort_tooltip(%{value: "festival_recognition"}),
+    do: "Festival wins and major-award presence"
+
+  defp sort_tooltip(%{value: "time_machine"}),
+    do: "Films that survive — Criterion, 1001 Movies, Sight & Sound"
+
+  defp sort_tooltip(%{value: "auteurs"}), do: "Great directors, great casts"
+  defp sort_tooltip(%{value: "title"}), do: "Alphabetical by title"
+  defp sort_tooltip(%{value: "runtime"}), do: "By length (longest first)"
+  defp sort_tooltip(%{label: label}), do: label
+
+  # When an overflow sort is active, replace the generic "More sorts ▾" trigger
+  # with the active label + direction arrow so the user can see the current sort
+  # without opening the menu. Falls back to "More sorts ▾" otherwise.
+  defp overflow_summary_label(criteria, direction, primary_opts, overflow_opts) do
+    primary_values = Enum.map(primary_opts, & &1.value)
+
+    if criteria in primary_values do
+      "More sorts ▾"
+    else
+      case Enum.find(overflow_opts, &(&1.value == criteria)) do
+        nil -> "More sorts ▾"
+        opt -> "#{display_label(opt)} #{direction_arrow(direction)} ▾"
+      end
+    end
+  end
+
+  defp direction_arrow(:asc), do: "↑"
+  defp direction_arrow(_), do: "↓"
+
+  # Issue #787 Phase 2: structured "More sorts ▾" menu groups, in display order.
+  # Each group is `{header, [opt, ...]}`. Empty groups are filtered out.
+  defp grouped_overflow_options(overflow_opts) do
+    timeline_keys = ~w(title runtime)
+    quality_keys = ~w(rating critics mob festival_recognition)
+    lens_keys = ~w(time_machine auteurs)
+
+    by_value = Map.new(overflow_opts, fn opt -> {opt.value, opt} end)
+
+    presets =
+      Enum.filter(overflow_opts, fn opt -> Map.get(opt, :group) == "Scored Presets" end)
+
+    [
+      {"Timeline", Enum.map(timeline_keys, &Map.get(by_value, &1)) |> Enum.reject(&is_nil/1)},
+      {"Quality", Enum.map(quality_keys, &Map.get(by_value, &1)) |> Enum.reject(&is_nil/1)},
+      {"Cinegraph lenses", Enum.map(lens_keys, &Map.get(by_value, &1)) |> Enum.reject(&is_nil/1)},
+      {"Scored presets", presets}
+    ]
+    |> Enum.reject(fn {_, opts} -> opts == [] end)
+  end
 
   # ──────────────────────────────────────────────────────────────────
   # Movie / data helpers
