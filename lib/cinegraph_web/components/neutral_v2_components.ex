@@ -685,7 +685,7 @@ defmodule CinegraphWeb.NeutralV2Components do
             :for={{key, percent} <- @lens_components}
             class={[
               "inline-flex items-center px-[6px] py-[1px] rounded text-[10px] font-medium tabular-nums border",
-              lens_chip_tone(key, key == @lens_key)
+              lens_chip_tone(key, same_lens?(key, @lens_key))
             ]}
           >
             {lens_chip_emoji(key)} {percent}%
@@ -702,33 +702,35 @@ defmodule CinegraphWeb.NeutralV2Components do
     """
   end
 
-  defp lens_chip_emoji(:mob), do: "👥"
-  defp lens_chip_emoji("mob"), do: "👥"
-  defp lens_chip_emoji(:critics), do: "🎭"
-  defp lens_chip_emoji("critics"), do: "🎭"
-  defp lens_chip_emoji(:festival_recognition), do: "🏆"
-  defp lens_chip_emoji("festival_recognition"), do: "🏆"
-  defp lens_chip_emoji(:time_machine), do: "⏳"
-  defp lens_chip_emoji("time_machine"), do: "⏳"
-  defp lens_chip_emoji(:auteurs), do: "🎬"
-  defp lens_chip_emoji("auteurs"), do: "🎬"
-  defp lens_chip_emoji(_), do: "🎯"
+  defp lens_chip_emoji(key) do
+    case normalize_lens_key(key) do
+      "mob" -> "👥"
+      "critics" -> "🎭"
+      "festival_recognition" -> "🏆"
+      "time_machine" -> "⏳"
+      "auteurs" -> "🎬"
+      _ -> "🎯"
+    end
+  end
 
   defp lens_chip_tone(_, true), do: "bg-indigo-50 text-indigo-800 border-indigo-200"
-  defp lens_chip_tone(:mob, _), do: "bg-emerald-50 text-emerald-700 border-emerald-200"
-  defp lens_chip_tone("mob", _), do: "bg-emerald-50 text-emerald-700 border-emerald-200"
-  defp lens_chip_tone(:critics, _), do: "bg-blue-50 text-blue-700 border-blue-200"
-  defp lens_chip_tone("critics", _), do: "bg-blue-50 text-blue-700 border-blue-200"
-  defp lens_chip_tone(:festival_recognition, _), do: "bg-amber-50 text-amber-700 border-amber-200"
 
-  defp lens_chip_tone("festival_recognition", _),
-    do: "bg-amber-50 text-amber-700 border-amber-200"
+  defp lens_chip_tone(key, _) do
+    case normalize_lens_key(key) do
+      "mob" -> "bg-emerald-50 text-emerald-700 border-emerald-200"
+      "critics" -> "bg-blue-50 text-blue-700 border-blue-200"
+      "festival_recognition" -> "bg-amber-50 text-amber-700 border-amber-200"
+      "time_machine" -> "bg-purple-50 text-purple-700 border-purple-200"
+      "auteurs" -> "bg-orange-50 text-orange-700 border-orange-200"
+      _ -> "bg-mist-100 text-mist-700 border-mist-950/15"
+    end
+  end
 
-  defp lens_chip_tone(:time_machine, _), do: "bg-purple-50 text-purple-700 border-purple-200"
-  defp lens_chip_tone("time_machine", _), do: "bg-purple-50 text-purple-700 border-purple-200"
-  defp lens_chip_tone(:auteurs, _), do: "bg-orange-50 text-orange-700 border-orange-200"
-  defp lens_chip_tone("auteurs", _), do: "bg-orange-50 text-orange-700 border-orange-200"
-  defp lens_chip_tone(_, _), do: "bg-mist-100 text-mist-700 border-mist-950/15"
+  defp same_lens?(left, right), do: normalize_lens_key(left) == normalize_lens_key(right)
+
+  defp normalize_lens_key(key) when is_atom(key), do: Atom.to_string(key)
+  defp normalize_lens_key(key) when is_binary(key), do: key
+  defp normalize_lens_key(_), do: nil
 
   # Generate an SVG placeholder ONLY when the film map has the rich mock-data
   # shape (id + title + year + dir + genre). Real Movie structs from the DB

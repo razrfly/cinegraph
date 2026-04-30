@@ -8,6 +8,8 @@ defmodule CinegraphWeb.MovieLive.SortOptions do
 
   alias Cinegraph.Metrics.ScoringService
 
+  @preset_slugs_cache_key {__MODULE__, :preset_slugs}
+
   @static_options [
     %{value: "release_date", label: "📅 Release Date", group: "Basic"},
     %{value: "title", label: "🔤 Title", group: "Basic"},
@@ -58,7 +60,29 @@ defmodule CinegraphWeb.MovieLive.SortOptions do
   Returns the list of preset slugs currently registered.
   """
   @spec preset_slugs() :: [String.t()]
-  def preset_slugs, do: load_weight_presets() |> Enum.map(& &1.slug)
+  def preset_slugs do
+    case :persistent_term.get(@preset_slugs_cache_key, :missing) do
+      :missing ->
+        slugs = load_weight_presets() |> Enum.map(& &1.slug)
+        :persistent_term.put(@preset_slugs_cache_key, slugs)
+        slugs
+
+      slugs ->
+        slugs
+    end
+  end
+
+  @doc """
+  Clears the cached preset slug list.
+
+  Call after scoring profile changes so preset detection reflects the updated
+  profiles without waiting for an application restart.
+  """
+  @spec invalidate_preset_slug_cache() :: :ok
+  def invalidate_preset_slug_cache do
+    :persistent_term.erase(@preset_slugs_cache_key)
+    :ok
+  end
 
   @doc """
   Returns true when the given sort criterion (without `_asc`/`_desc` suffix) refers
