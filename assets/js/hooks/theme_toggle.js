@@ -9,6 +9,10 @@ function currentTheme() {
   return document.documentElement.classList.contains("dark") ? "dark" : "light"
 }
 
+function preferredTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+}
+
 function syncA11y(el) {
   el.setAttribute("aria-pressed", currentTheme() === "dark" ? "true" : "false")
 }
@@ -31,11 +35,13 @@ const ThemeToggle = {
     this.syncHandler = () => syncA11y(this.el)
     this.storageHandler = (event) => {
       if (event.key !== STORAGE_KEY) return
-      if (event.newValue === "dark" || event.newValue === "light") {
-        const root = document.documentElement
-        if (event.newValue === "dark") root.classList.add("dark")
-        else root.classList.remove("dark")
-      }
+      const root = document.documentElement
+      const theme =
+        event.newValue === "dark" || event.newValue === "light"
+          ? event.newValue
+          : preferredTheme()
+      if (theme === "dark") root.classList.add("dark")
+      else root.classList.remove("dark")
       syncA11y(this.el)
     }
     syncA11y(this.el)
