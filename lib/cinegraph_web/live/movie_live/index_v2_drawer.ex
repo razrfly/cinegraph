@@ -112,7 +112,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
               active={to_string(d.value) == to_string(@selected_decade || "")}
               phx-click="toggle_chip"
               phx-value-key="decade"
-              phx-value-value={to_string(d.value)}
+              phx-value-id={to_string(d.value)}
               phx-value-mode="single"
             >
               {d.label}
@@ -126,12 +126,13 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             Rating Quality
           </h3>
           <input type="hidden" name="filters[rating_preset]" value={@rating_preset || ""} />
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Rating Quality">
             <button
               :for={{value, label, sub} <- rating_preset_options()}
               type="button"
               phx-click="set_rating_preset"
-              phx-value-value={value}
+              phx-value-id={value}
+              aria-pressed={rating_preset_active?(@rating_preset, value)}
               class={[
                 "flex flex-col items-center justify-center gap-[1px] rounded-lg border px-2 py-3 text-center transition-colors",
                 if(rating_preset_active?(@rating_preset, value),

@@ -14,7 +14,6 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.LiveViewHelpers
   alias CinegraphWeb.MovieLive.GenreEmoji
-  alias CinegraphWeb.MovieLive.SortOptions
   alias CinegraphWeb.NeutralV2Components
 
   @lens_keys ~w(mob critics festival_recognition time_machine auteurs)
@@ -260,7 +259,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
           active={to_string(genre.id) in @selected_genres}
           phx-click="toggle_chip"
           phx-value-key="genres"
-          phx-value-value={to_string(genre.id)}
+          phx-value-id={to_string(genre.id)}
           phx-value-mode="multi"
         >
           <span class="mr-[5px]">{GenreEmoji.for_id(genre.tmdb_id)}</span>{genre.name}
@@ -278,7 +277,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
               active={to_string(genre.id) in @selected_genres}
               phx-click="toggle_chip"
               phx-value-key="genres"
-              phx-value-value={to_string(genre.id)}
+              phx-value-id={to_string(genre.id)}
               phx-value-mode="multi"
             >
               <span class="mr-[5px]">{GenreEmoji.for_id(genre.tmdb_id)}</span>{genre.name}
@@ -296,9 +295,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
   attr :params, :map, required: true
   attr :filter_options, :map, required: true
+  attr :sort_options, :list, required: true
 
   def active_filters(assigns) do
-    chips = build_active_chips(assigns.params, assigns.filter_options)
+    chips = build_active_chips(assigns.params, assigns.filter_options, assigns.sort_options)
     assigns = assign(assigns, :chips, chips)
 
     ~H"""
@@ -417,9 +417,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
 
   @doc "Returns the count of currently active filter URL params (excludes search/sort/page)."
   def active_filter_count(params) when is_map(params) do
-    @basic_filter_keys
-    |> Enum.reject(&(&1 == "search"))
-    |> Enum.count(fn key -> filter_value_present?(params[key]) end)
+    filter_count =
+      @basic_filter_keys
+      |> Enum.reject(&(&1 == "search"))
+      |> Enum.count(fn key -> filter_value_present?(params[key]) end)
+
+    if sort_param_non_default?(params["sort"]), do: filter_count + 1, else: filter_count
   end
 
   def active_filter_count(_), do: 0
@@ -483,8 +486,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   #
   # Lens sort: read score_cache.<lens>_score and emit a "%" badge plus
   # one chip per lens (mob/critics/festival_recognition/time_machine/auteurs).
-  # Cached worker scores are 0-10, while some query-time score components are
-  # 0-1; normalize both scales before rendering percentages.
+  # Cached worker scores are 0-10; normalize them before rendering percentages.
   # The score_cache is preloaded by IndexV2 only when a lens sort is active
   # (single batched query — see preload_card_assocs/2).
   #
@@ -495,14 +497,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   defp score_for_card(movie, lens_key) when lens_key in @lens_keys do
     cache = loaded_score_cache(movie)
     primary = lens_value(cache, lens_key)
-    primary_percent = lens_percent(primary)
+    primary_percent = lens_percent(primary, scale: :zero_to_ten)
     score_str = if primary_percent, do: "#{primary_percent}%", else: nil
 
     chips =
       @lens_keys
       |> Enum.map(fn k ->
         val = lens_value(cache, k)
-        percent = lens_percent(val)
+        percent = lens_percent(val, scale: :zero_to_ten)
         # Threshold ≥5% on the displayed percent scale (issue #787 phase 1).
         # Raises the floor from the previous >1% to silence near-zero noise.
         if percent && percent >= 5, do: {k, percent, lens_tooltip(k)}, else: nil
@@ -553,20 +555,21 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   defp lens_tooltip("auteurs"), do: "Director picks — director and cast quality"
   defp lens_tooltip(_), do: nil
 
-  defp lens_percent(nil), do: nil
+  defp lens_percent(value, opts)
+  defp lens_percent(nil, _opts), do: nil
 
-  defp lens_percent(value) when is_number(value) do
+  defp lens_percent(value, opts) when is_number(value) do
+    scale = Keyword.get(opts, :scale, :zero_to_ten)
+    multiplier = if scale == :zero_to_one, do: 100, else: 10
+
     value
-    |> then(fn
-      v when v <= 1.0 -> v * 100
-      v -> v * 10
-    end)
+    |> Kernel.*(multiplier)
     |> round()
     |> max(0)
     |> min(100)
   end
 
-  defp lens_percent(_), do: nil
+  defp lens_percent(_, _opts), do: nil
 
   defp filter_value_present?(nil), do: false
   defp filter_value_present?(""), do: false
@@ -578,7 +581,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   # Active-filter chip building
   # ──────────────────────────────────────────────────────────────────
 
-  defp build_active_chips(params, filter_options) do
+  defp build_active_chips(params, filter_options, sort_options) do
     filter_chips =
       @basic_filter_keys
       |> Enum.reject(&(&1 == "search"))
@@ -592,31 +595,32 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
         end
       end)
 
-    sort_chip(params) ++ filter_chips
+    sort_chip(params, sort_options) ++ filter_chips
   end
 
   # Surface the active sort as a chip when it differs from the default
   # (`release_date_desc`). Uses the display_label/1 to match the More-sorts
   # menu vocabulary; the trailing arrow communicates direction.
-  defp sort_chip(params) do
+  defp sort_chip(params, sort_options) do
     raw = params["sort"] || ""
-    default? = raw in ["", "release_date_desc"]
 
-    if default? do
-      []
-    else
+    if sort_param_non_default?(raw) do
       criteria = String.replace(raw, ~r/_(asc|desc)$/, "")
       direction = if String.ends_with?(raw, "_asc"), do: :asc, else: :desc
 
       label =
-        case Enum.find(SortOptions.all(), &(&1.value == criteria)) do
+        case Enum.find(sort_options, &(&1.value == criteria)) do
           nil -> criteria
           opt -> display_label(opt)
         end
 
       [{"sort", "Sort", "#{label} #{direction_arrow(direction)}"}]
+    else
+      []
     end
   end
+
+  defp sort_param_non_default?(raw), do: raw not in [nil, "", "release_date_desc"]
 
   defp label_for("genres"), do: "Genres"
   defp label_for("decade"), do: "Decade"

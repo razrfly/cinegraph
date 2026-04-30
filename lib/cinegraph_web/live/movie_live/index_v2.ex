@@ -153,8 +153,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
 
   # Chip toggle: `mode="multi"` adds/removes value in the list-typed param
   # (genres). `mode="single"` (default) toggles the single-string value (decade).
-  def handle_event("toggle_chip", %{"key" => key, "value" => value} = params, socket) do
+  def handle_event("toggle_chip", %{"key" => key} = params, socket) do
     mode = params["mode"] || "single"
+    value = chip_value(params)
     str_value = to_string(value)
 
     new_param =
@@ -185,20 +186,15 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   # Rating Quality segmented control: a flat list of buttons sets/clears the
   # `rating_preset` URL param. Clicking the already-active value clears it.
   def handle_event("set_rating_preset", %{"value" => value}, socket) do
-    new_value =
-      cond do
-        value == "" -> nil
-        to_string(socket.assigns.params["rating_preset"]) == value -> nil
-        true -> value
-      end
+    set_rating_preset(value, socket)
+  end
 
-    new_params =
-      socket.assigns.params
-      |> put_or_delete("rating_preset", new_value)
-      |> Map.put("page", "1")
+  def handle_event("set_rating_preset", %{"item" => value}, socket) do
+    set_rating_preset(value, socket)
+  end
 
-    path = build_path(socket, new_params)
-    {:noreply, push_patch(socket, to: path)}
+  def handle_event("set_rating_preset", %{"id" => value}, socket) do
+    set_rating_preset(value, socket)
   end
 
   # Override remove_filter so the active-filter chip strip can drop one filter at
@@ -227,6 +223,30 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   defp put_or_delete(map, key, ""), do: Map.delete(map, key)
   defp put_or_delete(map, key, []), do: Map.delete(map, key)
   defp put_or_delete(map, key, value), do: Map.put(map, key, value)
+
+  defp set_rating_preset(value, socket) do
+    new_value =
+      cond do
+        value == "" -> nil
+        to_string(socket.assigns.params["rating_preset"]) == value -> nil
+        true -> value
+      end
+
+    new_params =
+      socket.assigns.params
+      |> put_or_delete("rating_preset", new_value)
+      |> Map.put("page", "1")
+
+    path = build_path(socket, new_params)
+    {:noreply, push_patch(socket, to: path)}
+  end
+
+  # Avoid relying on `phx-value-value` for buttons: browsers also expose the
+  # native button value as `value`, which can arrive as an empty string.
+  defp chip_value(%{"item" => item}) when item not in [nil, ""], do: item
+  defp chip_value(%{"id" => id}) when id not in [nil, ""], do: id
+  defp chip_value(%{"value" => value}), do: value
+  defp chip_value(_), do: nil
 
   # Preloads only what the V2 grid needs. Empty list = use the read replica.
   # `:score_cache` is preloaded only when a Lens sort is active — this is what
@@ -263,7 +283,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
         params={@params}
         active_filter_count={IndexV2Components.active_filter_count(@params)}
       />
-      <IndexV2Components.active_filters params={@params} filter_options={@filter_options} />
+      <IndexV2Components.active_filters
+        params={@params}
+        filter_options={@filter_options}
+        sort_options={@sort_options}
+      />
       <IndexV2Components.results movies={@movies} active_lens_key={@active_lens_key} />
       <IndexV2Components.pagination meta={@meta} />
 
