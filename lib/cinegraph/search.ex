@@ -111,8 +111,8 @@ defmodule Cinegraph.Search do
 
     {by_group, complete?} =
       Enum.reduce(stream, {%{}, true}, fn
-        {:ok, {group, rows}}, {acc, ok?} ->
-          {Map.put(acc, group, rows), ok?}
+        {:ok, {group, {rows, crashed?}}}, {acc, ok?} ->
+          {Map.put(acc, group, rows), ok? and not crashed?}
 
         {:exit, _reason}, {acc, _ok?} ->
           # We can't tell which group timed out, but tracking the flag is
@@ -139,7 +139,7 @@ defmodule Cinegraph.Search do
       end
 
     emit_group(started, group, rows, fallback?, crashed?)
-    rows
+    {rows, crashed?}
   end
 
   defp total_count(by_group) do

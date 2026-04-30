@@ -13,7 +13,7 @@ defmodule CinegraphWeb.GlobalSearch.Components do
       </li>
       <li :for={r <- @recents} class="px-2">
         <a
-          href={r["href"]}
+          href={safe_recent_href(r["href"])}
           class="flex items-center gap-2 px-2 py-2 rounded-md text-[13px] text-mist-950 dark:text-white hover:bg-mist-50 dark:hover:bg-white/5 no-underline"
         >
           <span class="text-mist-500 dark:text-mist-400" aria-hidden="true">🕘</span>
@@ -23,6 +23,19 @@ defmodule CinegraphWeb.GlobalSearch.Components do
     </ul>
     """
   end
+
+  defp safe_recent_href(href) when is_binary(href) do
+    uri = URI.parse(href)
+
+    if String.starts_with?(href, "/") and not String.starts_with?(href, "//") and
+         is_nil(uri.scheme) and is_nil(uri.host) do
+      href
+    else
+      "#"
+    end
+  end
+
+  defp safe_recent_href(_), do: "#"
 
   def render_skeleton(assigns) do
     ~H"""
@@ -102,7 +115,13 @@ defmodule CinegraphWeb.GlobalSearch.Components do
           decoding="async"
           class="w-full h-full object-cover"
         />
-        <span :if={!@film.poster_path} class="text-mist-400 dark:text-mist-500 text-lg" aria-hidden="true">🎬</span>
+        <span
+          :if={!@film.poster_path}
+          class="text-mist-400 dark:text-mist-500 text-lg"
+          aria-hidden="true"
+        >
+          🎬
+        </span>
       </div>
       <div class="flex-1 min-w-0">
         <div class="text-[13.5px] text-mist-950 dark:text-white truncate">{@film.title}</div>
@@ -201,11 +220,20 @@ defmodule CinegraphWeb.GlobalSearch.Components do
           decoding="async"
           class="max-w-full max-h-full object-contain"
         />
-        <span :if={!@company.logo_path} class="text-mist-400 dark:text-mist-500 text-lg" aria-hidden="true">🏢</span>
+        <span
+          :if={!@company.logo_path}
+          class="text-mist-400 dark:text-mist-500 text-lg"
+          aria-hidden="true"
+        >
+          🏢
+        </span>
       </div>
       <div class="flex-1 min-w-0">
         <div class="text-[13.5px] text-mist-950 dark:text-white truncate">{@company.name}</div>
-        <div :if={@company.origin_country} class="text-[11.5px] text-mist-500 dark:text-mist-400 truncate">
+        <div
+          :if={@company.origin_country}
+          class="text-[11.5px] text-mist-500 dark:text-mist-400 truncate"
+        >
           {@company.origin_country}
         </div>
       </div>
