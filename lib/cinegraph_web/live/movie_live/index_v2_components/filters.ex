@@ -20,6 +20,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   attr :filter_options, :map, required: true
   attr :params, :map, required: true
   attr :active_filter_count, :integer, default: 0
+  attr :scope, :map, default: %{}
 
   def filters(assigns) do
     selected_genres = list_param(assigns.params, "genres")
@@ -238,15 +239,24 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   end
 
   def active_filter_count(params) when is_map(params) do
+    active_filter_count(params, %{})
+  end
+
+  def active_filter_count(_), do: 0
+
+  def active_filter_count(params, scope) when is_map(params) do
+    hidden_keys = hidden_filter_keys(scope)
+
     filter_count =
       @basic_filter_keys
       |> Enum.reject(&(&1 == "search"))
+      |> Enum.reject(&(&1 in hidden_keys))
       |> Enum.count(fn key -> filter_value_present?(params[key]) end)
 
     if sort_param_non_default?(params["sort"]), do: filter_count + 1, else: filter_count
   end
 
-  def active_filter_count(_), do: 0
+  def active_filter_count(_, _), do: 0
 
   def list_param(params, key) when is_map(params) do
     LiveViewHelpers.parse_array_param(params[key])
@@ -273,4 +283,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   defp filter_value_present?(_), do: true
 
   defp sort_param_non_default?(raw), do: raw not in [nil, "", "release_date_desc"]
+
+  defp hidden_filter_keys(%{kind: :list}), do: ["lists"]
+  defp hidden_filter_keys(%{kind: "list"}), do: ["lists"]
+  defp hidden_filter_keys(%{kind: :festival}), do: ["festivals"]
+  defp hidden_filter_keys(%{kind: "festival"}), do: ["festivals"]
+  defp hidden_filter_keys(_), do: []
 end

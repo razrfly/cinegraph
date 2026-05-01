@@ -1,167 +1,89 @@
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <!-- Navigation -->
-  <.back_link navigate={~p"/lists"} label="Back to Lists" />
+<div
+  :if={@list_info}
+  class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16"
+  phx-window-keydown="hide_drawer"
+  phx-key="Escape"
+>
+  <nav class="mb-8 text-[12px] text-mist-600">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950">Movies</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <.link navigate={~p"/lists"} class="hover:text-mist-950">Lists</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <span class="font-medium text-mist-950">{@list_info.short_name || @list_info.name}</span>
+  </nav>
 
-  <%= if @list_info do %>
-    <!-- Header -->
-    <div class="mb-6">
-      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 class="text-4xl font-bold text-gray-900">
-            {@list_info.name}
-          </h1>
-          <p class="text-gray-600 mt-2">
-            {@list_info.description}
-          </p>
-          <.results_count page={@page} per_page={@per_page} total={@total_movies} />
-        </div>
-        
-<!-- Search Bar -->
-        <.search_bar search_term={@search_term} placeholder="Search within this list..." />
-      </div>
-    </div>
-    
-<!-- Filter & Sort Controls -->
-    <div class="mb-6">
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <!-- Filter Toggle -->
-        <.filter_toggle
-          show_filters={@show_filters}
-          has_active_filters={has_active_filters(@filters)}
+  <section class="mb-10 grid gap-7 lg:grid-cols-[260px_1fr] lg:items-end">
+    <div class="overflow-hidden rounded-lg border border-mist-950/10 bg-mist-100">
+      <%= if @list_info.cover_image_url || @list_info.hero_image_url do %>
+        <img
+          src={@list_info.hero_image_url || @list_info.cover_image_url}
+          alt=""
+          class="aspect-[4/5] h-full w-full object-cover"
         />
-        
-<!-- Sort Controls -->
-        <.sort_controls
-          sort_criteria={@sort_criteria}
-          sort_direction={@sort_direction}
-          options={[
-            %{value: "release_date", label: "📅 Release Date", group: "Basic"},
-            %{value: "title", label: "🔤 Title", group: "Basic"},
-            %{value: "rating", label: "⭐ Rating", group: "Ratings"}
-          ]}
-        />
-      </div>
-      
-<!-- Filter Panel -->
-      <%= if @show_filters do %>
-        <div class="mt-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-          <form phx-change="apply_filters">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <!-- Genre Filter -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Genre
-                </label>
-                <input type="hidden" name="filters[genres][]" value="" />
-                <.multi_select_dropdown
-                  id="list-genres-select"
-                  name="filters[genres][]"
-                  options={@available_genres}
-                  selected={@filters.genres || []}
-                  placeholder="Select genres..."
-                  label_field={:name}
-                  value_field={:id}
-                />
-              </div>
-              
-<!-- Decade Filter -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Decade
-                </label>
-                <select
-                  name="filters[decade]"
-                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                >
-                  <option value="">All Decades</option>
-                  <%= for decade <- @available_decades do %>
-                    <option
-                      value={decade.value}
-                      selected={to_string(decade.value) == @filters.decade}
-                    >
-                      {decade.label}
-                    </option>
-                  <% end %>
-                </select>
-              </div>
-              
-<!-- Cast & Crew Filter -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Cast & Crew
-                </label>
-                <.live_component
-                  module={CinegraphWeb.Components.PersonAutocomplete}
-                  id="list-people-search"
-                  field_name="filters[people_search]"
-                  selected_people={@filters.people_ids || []}
-                  search_term=""
-                />
-              </div>
-              
-<!-- Festivals/Awards Filter -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Festivals/Awards
-                </label>
-                <input type="hidden" name="filters[festivals][]" value="" />
-                <.multi_select_dropdown
-                  id="list-festivals-select"
-                  name="filters[festivals][]"
-                  options={@festival_organizations}
-                  selected={@filters.festivals || []}
-                  placeholder="Select festivals..."
-                  label_field={:name}
-                  value_field={:id}
-                />
-              </div>
-            </div>
-            
-<!-- Filter Actions -->
-            <div class="mt-4 flex justify-end">
-              <button
-                type="button"
-                phx-click="clear_filters"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </form>
+      <% else %>
+        <div class="grid aspect-[4/5] place-items-center bg-gradient-to-br from-mist-100 to-mist-300 px-6 text-center font-display italic text-[42px] leading-none text-mist-950">
+          {@list_info.short_name || @list_info.name}
         </div>
       <% end %>
-      
-<!-- Active Filters Display -->
-      <%= if has_active_filters(@filters) do %>
-        <.active_filters_display filters={get_active_filters(@filters, assigns)} />
-      <% end %>
     </div>
-    
-<!-- Movies Grid -->
-    <.movie_grid movies={@movies} />
-    
-<!-- Empty State -->
-    <%= if Enum.empty?(@movies) do %>
-      <.empty_state title="No films found" message="Try adjusting your search criteria." />
-    <% end %>
-    
-<!-- Pagination -->
-    <.pagination
-      page={@page}
-      total_pages={@total_pages}
-      build_path={
-        fn page -> ~p"/lists/#{@list_info.slug}?#{build_pagination_params(assigns, page)}" end
-      }
-    />
-    
-<!-- Link to full search -->
-    <div class="mt-8 text-center">
-      <.link
-        navigate={~p"/movies?lists=#{@list_info.key}"}
-        class="text-blue-600 hover:text-blue-800 text-sm"
+
+    <div>
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        Curated List · {String.upcase(to_string(@list_info.category || "collection"))}
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <h1 class="mt-2 font-display italic text-[40px] sm:text-[52px] lg:text-[68px] text-balance text-mist-950 leading-[1.02]">
+        {@list_info.name}.
+      </h1>
+      <p
+        :if={@list_info.description}
+        class="mt-4 max-w-3xl text-[15px] leading-relaxed text-mist-700"
       >
-        View with full filtering options →
-      </.link>
+        {@list_info.description}
+      </p>
+      <div class="mt-5 flex flex-wrap items-center gap-2">
+        <CinegraphWeb.NeutralV2Components.n_pill tone="ink" size="sm">
+          {@total_movies} films
+        </CinegraphWeb.NeutralV2Components.n_pill>
+        <CinegraphWeb.NeutralV2Components.n_pill
+          :if={@list_info.short_name}
+          tone="neutral"
+          size="sm"
+        >
+          {@list_info.short_name}
+        </CinegraphWeb.NeutralV2Components.n_pill>
+        <a
+          :if={@list_info.source_url}
+          href={@list_info.source_url}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center rounded-md border border-mist-950/10 bg-mist-50 px-3 py-[5px] text-[12px] font-medium text-mist-950 hover:bg-mist-950/[0.025]"
+        >
+          Visit source ↗
+        </a>
+      </div>
     </div>
-  <% end %>
+  </section>
+
+  <CinegraphWeb.MovieLive.IndexV2Components.discovery_body
+    movies={@movies}
+    meta={@meta}
+    params={@params}
+    filter_options={@filter_options}
+    search_term={@search_term}
+    sort_options={@sort_options}
+    sort_criteria={@sort_criteria}
+    sort_direction={@sort_direction}
+    sort_is_preset={@sort_is_preset}
+    active_lens_key={@active_lens_key}
+    show_drawer={@show_drawer}
+    show_scoring_info={@show_scoring_info}
+    scope={%{kind: :list, key: @list_info.key}}
+  />
+
+  <a
+    href={~p"/lists/#{@list_info.slug}/legacy"}
+    class="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
+  >
+    ← Old list page
+  </a>
 </div>

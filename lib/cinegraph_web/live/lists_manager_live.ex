@@ -602,6 +602,8 @@ defmodule CinegraphWeb.ListsManagerLive do
       slug: slug,
       short_name: params["short_name"],
       icon: params["icon"],
+      cover_image_url: params["cover_image_url"],
+      hero_image_url: params["hero_image_url"],
       display_order: parse_int(params["display_order"], 0),
       active: true
     }
@@ -637,6 +639,8 @@ defmodule CinegraphWeb.ListsManagerLive do
       slug: params["slug"],
       short_name: params["short_name"],
       icon: params["icon"],
+      cover_image_url: params["cover_image_url"],
+      hero_image_url: params["hero_image_url"],
       display_order: parse_int(params["display_order"], list.display_order)
     }
 

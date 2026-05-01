@@ -12,6 +12,8 @@ defmodule Cinegraph.Festivals.FestivalOrganization do
     field :country, :string
     field :founded_year, :integer
     field :website, :string
+    field :logo_url, :string
+    field :hero_image_url, :string
     field :metadata, :map, default: %{}
     field :win_score, :float
     field :nom_score, :float
@@ -33,6 +35,8 @@ defmodule Cinegraph.Festivals.FestivalOrganization do
       :country,
       :founded_year,
       :website,
+      :logo_url,
+      :hero_image_url,
       :metadata,
       :win_score,
       :nom_score,

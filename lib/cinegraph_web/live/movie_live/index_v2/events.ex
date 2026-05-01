@@ -7,8 +7,6 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
   import Phoenix.LiveView, only: [push_patch: 2]
   import CinegraphWeb.LiveViewHelpers, only: [parse_array_param: 1]
 
-  alias CinegraphWeb.MovieLive.IndexV2
-
   def handle_event("toggle_drawer", _params, socket) do
     {:noreply, assign(socket, :show_drawer, !socket.assigns.show_drawer)}
   end
@@ -48,7 +46,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
       |> put_or_delete(key, new_param)
       |> Map.put("page", "1")
 
-    {:noreply, push_patch(socket, to: IndexV2.build_path(socket, new_params))}
+    {:noreply, push_patch(socket, to: socket.view.build_path(socket, new_params))}
   end
 
   def handle_event("set_rating_preset", %{"value" => value}, socket) do
@@ -71,7 +69,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
       |> Map.delete(filter_key)
       |> Map.put("page", "1")
 
-    {:noreply, push_patch(socket, to: IndexV2.build_path(socket, new_params))}
+    {:noreply, push_patch(socket, to: socket.view.build_path(socket, new_params))}
   end
 
   def handle_event(_event, _params, _socket), do: :unknown
@@ -94,7 +92,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
       |> put_or_delete("rating_preset", new_value)
       |> Map.put("page", "1")
 
-    {:noreply, push_patch(socket, to: IndexV2.build_path(socket, new_params))}
+    {:noreply, push_patch(socket, to: socket.view.build_path(socket, new_params))}
   end
 
   def chip_value(%{"item" => item}) when item not in [nil, ""], do: item
