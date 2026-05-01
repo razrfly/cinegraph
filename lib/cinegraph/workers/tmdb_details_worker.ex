@@ -137,12 +137,19 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       {:ok, movie} ->
         Logger.info("Successfully fully imported movie: #{movie.title} (#{movie.tmdb_id})")
 
-        # Queue OMDb enrichment if we have an IMDb ID
-        if movie.imdb_id do
-          queue_omdb_enrichment(movie)
-        else
-          Logger.info("No IMDb ID for movie #{movie.title}, skipping OMDb enrichment")
-        end
+        enrichment_queued =
+          if movie.imdb_id do
+            case queue_omdb_enrichment(movie) do
+              :ok ->
+                true
+
+              {:error, _reason} ->
+                false
+            end
+          else
+            Logger.info("No IMDb ID for movie #{movie.title}, skipping OMDb enrichment")
+            false
+          end
 
         # Update job metadata
         update_job_meta(job, %{
@@ -152,7 +159,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
           movie_title: movie.title,
           imdb_id: movie.imdb_id,
           tmdb_id: movie.tmdb_id,
-          enrichment_queued: not is_nil(movie.imdb_id),
+          enrichment_queued: enrichment_queued,
           collaboration_rebuild_requested: true
         })
 
@@ -189,6 +196,9 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     end
   end
 
+  @impl Oban.Worker
+  def timeout(_job), do: :timer.seconds(90)
+
   defp queue_omdb_enrichment(movie) do
     %{
       "movie_id" => movie.id,
@@ -203,7 +213,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         :ok
 
       {:error, reason} ->
-        Logger.error("Failed to queue OMDb enrichment: #{inspect(reason)}")
+        Logger.error("Failed to queue OMDb enrichment for #{movie.title}: #{inspect(reason)}")
         {:error, reason}
     end
   end

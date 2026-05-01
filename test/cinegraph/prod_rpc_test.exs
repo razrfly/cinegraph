@@ -37,9 +37,16 @@ defmodule Cinegraph.ProdRpcTest do
       assert String.ends_with?(shell_cmd, ~s|"|)
     end
 
-    test "wraps expression with Application.ensure_all_started/1" do
+    test "wraps expression with app startup and disables short-lived background processors" do
       args = ProdRpc.build_kamal_args(~s|:ok|)
       shell_cmd = List.last(args)
+      assert String.contains?(shell_cmd, "Application.put_env(:cinegraph, :start_oban, false)")
+
+      assert String.contains?(
+               shell_cmd,
+               "Application.put_env(:cinegraph, :start_background_children, false)"
+             )
+
       assert String.contains?(shell_cmd, "Application.ensure_all_started(:cinegraph)")
     end
 
@@ -52,7 +59,7 @@ defmodule Cinegraph.ProdRpcTest do
       # before the user expression.
       assert String.contains?(
                shell_cmd,
-               ~s|':logger.set_primary_config(:level, :critical); Application.ensure_all_started(:cinegraph); :ok'|
+               ~s|':logger.set_primary_config(:level, :critical); Application.put_env(:cinegraph, :start_oban, false); Application.put_env(:cinegraph, :start_background_children, false); Application.ensure_all_started(:cinegraph); :ok'|
              )
     end
 

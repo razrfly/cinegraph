@@ -109,6 +109,8 @@ defmodule Cinegraph.ProdRpc do
     # lines that mix with the JSON we want to parse.
     wrapped =
       ":logger.set_primary_config(:level, :critical); " <>
+        "Application.put_env(:cinegraph, :start_oban, false); " <>
+        "Application.put_env(:cinegraph, :start_background_children, false); " <>
         "Application.ensure_all_started(:cinegraph); " <>
         expression
 
