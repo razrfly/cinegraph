@@ -26,14 +26,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   alias Cinegraph.Repo
   alias CinegraphWeb.MovieLive.IndexV2Components
   alias CinegraphWeb.MovieLive.IndexV2Drawer
+  alias CinegraphWeb.MovieLive.IndexV2.Events
   alias CinegraphWeb.MovieLive.SortOptions
 
   import CinegraphWeb.LiveViewHelpers,
     only: [
       extract_sort_criteria: 1,
       extract_sort_direction: 1,
-      assign_pagination: 2,
-      parse_array_param: 1
+      assign_pagination: 2
     ]
 
   @page_size 24
@@ -133,120 +133,13 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
     end
   end
 
-  # ============================================================================
-  # V2-specific event handlers (drawer / scoring modal / chip toggles)
-  # ============================================================================
-
   @impl true
-  def handle_event("toggle_drawer", _params, socket) do
-    {:noreply, assign(socket, :show_drawer, !socket.assigns.show_drawer)}
+  def handle_event(event, params, socket) do
+    case Events.handle_event(event, params, socket) do
+      :unknown -> super(event, params, socket)
+      reply -> reply
+    end
   end
-
-  def handle_event("hide_drawer", _params, socket),
-    do: {:noreply, assign(socket, :show_drawer, false)}
-
-  def handle_event("show_scoring_info", _params, socket),
-    do: {:noreply, assign(socket, :show_scoring_info, true)}
-
-  def handle_event("hide_scoring_info", _params, socket),
-    do: {:noreply, assign(socket, :show_scoring_info, false)}
-
-  # Chip toggle: `mode="multi"` adds/removes value in the list-typed param
-  # (genres). `mode="single"` (default) toggles the single-string value (decade).
-  def handle_event("toggle_chip", %{"key" => key} = params, socket) do
-    mode = params["mode"] || "single"
-    value = chip_value(params)
-    str_value = to_string(value)
-
-    new_param =
-      case mode do
-        "multi" ->
-          current = parse_array_param(socket.assigns.params[key])
-
-          new_list =
-            if str_value in current,
-              do: List.delete(current, str_value),
-              else: [str_value | current]
-
-          if new_list == [], do: nil, else: new_list
-
-        _ ->
-          if to_string(socket.assigns.params[key]) == str_value, do: nil, else: str_value
-      end
-
-    new_params =
-      socket.assigns.params
-      |> put_or_delete(key, new_param)
-      |> Map.put("page", "1")
-
-    path = build_path(socket, new_params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  # Rating Quality segmented control: a flat list of buttons sets/clears the
-  # `rating_preset` URL param. Clicking the already-active value clears it.
-  def handle_event("set_rating_preset", %{"value" => value}, socket) do
-    set_rating_preset(value, socket)
-  end
-
-  def handle_event("set_rating_preset", %{"item" => value}, socket) do
-    set_rating_preset(value, socket)
-  end
-
-  def handle_event("set_rating_preset", %{"id" => value}, socket) do
-    set_rating_preset(value, socket)
-  end
-
-  # Override remove_filter so the active-filter chip strip can drop one filter at
-  # a time. Accepts an optional `filter-type` value ("basic"/"advanced") that the
-  # legacy template emits — we ignore it; key alone is enough.
-  def handle_event("remove_filter", %{"filter" => filter_key} = params, socket) do
-    _ = params["filter-type"]
-
-    new_params =
-      socket.assigns.params
-      |> Map.delete(filter_key)
-      |> Map.put("page", "1")
-
-    path = build_path(socket, new_params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  # Delegate everything else to the SearchEventHandlers macro
-  def handle_event(event, params, socket), do: super(event, params, socket)
-
-  # ============================================================================
-  # Helpers
-  # ============================================================================
-
-  defp put_or_delete(map, key, nil), do: Map.delete(map, key)
-  defp put_or_delete(map, key, ""), do: Map.delete(map, key)
-  defp put_or_delete(map, key, []), do: Map.delete(map, key)
-  defp put_or_delete(map, key, value), do: Map.put(map, key, value)
-
-  defp set_rating_preset(value, socket) do
-    new_value =
-      cond do
-        value == "" -> nil
-        to_string(socket.assigns.params["rating_preset"]) == value -> nil
-        true -> value
-      end
-
-    new_params =
-      socket.assigns.params
-      |> put_or_delete("rating_preset", new_value)
-      |> Map.put("page", "1")
-
-    path = build_path(socket, new_params)
-    {:noreply, push_patch(socket, to: path)}
-  end
-
-  # Avoid relying on `phx-value-value` for buttons: browsers also expose the
-  # native button value as `value`, which can arrive as an empty string.
-  defp chip_value(%{"item" => item}) when item not in [nil, ""], do: item
-  defp chip_value(%{"id" => id}) when id not in [nil, ""], do: id
-  defp chip_value(%{"value" => value}), do: value
-  defp chip_value(_), do: nil
 
   # Preloads only what the V2 grid needs. Empty list = use the read replica.
   # `:score_cache` is preloaded only when a Lens sort is active — this is what
