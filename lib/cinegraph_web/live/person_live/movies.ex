@@ -12,6 +12,8 @@ defmodule CinegraphWeb.PersonLive.Movies do
   alias CinegraphWeb.MovieLive.IndexV2.Results
   alias CinegraphWeb.MovieLive.SortOptions
 
+  import CinegraphWeb.PersonHelpers, only: [person_slug_or_id: 1]
+
   import CinegraphWeb.LiveViewHelpers,
     only: [
       extract_sort_criteria: 1,
@@ -112,6 +114,12 @@ defmodule CinegraphWeb.PersonLive.Movies do
          |> assign(:meta, meta)
          |> assign(:params, page_params)
          |> assign(:role_scope, role_scope)
+         |> assign(:search_term, params["search"] || "")
+         |> assign(:sort_criteria, criteria)
+         |> assign(:sort_direction, direction)
+         |> assign(:sort_is_preset, sort_is_preset)
+         |> assign(:active_lens_key, active_lens_key)
+         |> assign(:page_title, page_title(person, role_scope))
          |> assign_pagination(meta)
          |> put_flash(:error, "Unable to load movies")}
     end
@@ -159,9 +167,6 @@ defmodule CinegraphWeb.PersonLive.Movies do
       page_size: 24
     }
   end
-
-  def person_slug_or_id(%Person{slug: slug}) when is_binary(slug) and slug != "", do: slug
-  def person_slug_or_id(%Person{id: id}), do: to_string(id)
 
   def profile_url(%Person{profile_path: nil}), do: nil
   def profile_url(%Person{profile_path: path}), do: "https://image.tmdb.org/t/p/w342#{path}"
