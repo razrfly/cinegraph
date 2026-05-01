@@ -27,18 +27,23 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     |> apply_distinct_if_needed()
   end
 
-  # Genre filtering (OR logic - movie must have ANY of the selected genres)
+  # Genre filtering uses ALL semantics: each selected genre chip narrows the
+  # result set to movies that have every selected genre.
   defp filter_by_genres(query, []), do: query
   defp filter_by_genres(query, nil), do: query
 
   defp filter_by_genres(query, genre_ids) do
+    genre_ids = Enum.uniq(genre_ids)
+
     query
     |> join(:inner, [m], mg in "movie_genres", on: mg.movie_id == m.id)
     |> where([m, mg], mg.genre_id in ^genre_ids)
     |> group_by([m], m.id)
+    |> having([m, mg], count(mg.genre_id, :distinct) == ^length(genre_ids))
   end
 
-  # Country filtering
+  # Country filtering currently uses ANY semantics. A movie with any selected
+  # production country is included.
   defp filter_by_countries(query, []), do: query
   defp filter_by_countries(query, nil), do: query
 
@@ -52,7 +57,7 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     where(query, [m], m.id in subquery(subq))
   end
 
-  # Language filtering
+  # Language filtering uses ANY semantics because original_language is scalar.
   defp filter_by_languages(query, []), do: query
   defp filter_by_languages(query, nil), do: query
 
@@ -60,7 +65,8 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     where(query, [m], m.original_language in ^language_codes)
   end
 
-  # Canonical list filtering
+  # Canonical list filtering uses ANY semantics. Selecting multiple lists means
+  # movies from any selected list, not only the intersection of all lists.
   defp filter_by_lists(query, []), do: query
   defp filter_by_lists(query, nil), do: query
 
@@ -140,7 +146,8 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     )
   end
 
-  # Award filtering - uses subquery approach for better performance
+  # Award filtering - uses subquery approach for better performance.
+  # Multiple festival organizations use ANY semantics.
   # This avoids multiple joins to the same tables and reduces the need for DISTINCT
   defp filter_by_awards(query, params) do
     festival_ids = params.festivals || params.festival_id
@@ -453,7 +460,8 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
 
   defp filter_by_award_preset(query, _), do: query
 
-  # People filtering
+  # People filtering currently uses ANY semantics. Collaboration/intersection
+  # search should be modeled as a separate, explicit mode.
   defp filter_by_people(query, %{people_ids: [], people_role: _}), do: query
   defp filter_by_people(query, %{people_ids: nil, people_role: _}), do: query
 
