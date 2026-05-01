@@ -340,17 +340,7 @@ defmodule Cinegraph.Collaborations do
   def populate_key_collaborations_only(movie_ids \\ nil) do
     IO.puts("Populating key collaborations (top 20 cast + directors + key crew)...")
 
-    # Define key crew roles we care about
-    key_crew_jobs = [
-      "Director",
-      "Producer",
-      "Executive Producer",
-      "Screenplay",
-      "Writer",
-      "Director of Photography",
-      "Original Music Composer",
-      "Editor"
-    ]
+    key_crew_jobs = @key_crew_jobs
 
     # Use provided movie_ids or fetch from replica (when called directly, not from transaction)
     movie_ids = movie_ids || Repo.replica().all(from m in Movie, select: m.id)

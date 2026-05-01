@@ -133,16 +133,8 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   end
 
   defp perform_full_import(tmdb_id, _basic_data, job) do
-    # Fetch and store comprehensive movie data with all relationships
-    # Use Task.async with timeout to prevent stuck jobs
-    task =
-      Task.async(fn ->
-        Movies.fetch_and_store_movie_comprehensive(tmdb_id)
-      end)
-
-    # Wait up to 90 seconds for the comprehensive fetch
-    case Task.yield(task, 90_000) || Task.shutdown(task) do
-      {:ok, {:ok, movie}} ->
+    case Movies.fetch_and_store_movie_comprehensive(tmdb_id) do
+      {:ok, movie} ->
         Logger.info("Successfully fully imported movie: #{movie.title} (#{movie.tmdb_id})")
 
         # Queue OMDb enrichment if we have an IMDb ID
@@ -166,13 +158,9 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
 
         :ok
 
-      {:ok, {:error, reason}} ->
+      {:error, reason} ->
         Logger.error("Failed to import movie #{tmdb_id}: #{inspect(reason)}")
         {:error, reason}
-
-      nil ->
-        Logger.error("Timeout importing movie #{tmdb_id} - took longer than 90 seconds")
-        {:error, :timeout}
     end
   end
 

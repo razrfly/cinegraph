@@ -12,8 +12,8 @@ defmodule Cinegraph.Health.Drift.Collaborations do
   def all(opts \\ []) do
     Drift.run_all([
       fn -> missing_details(opts) end,
-      fn -> queue_backlog(_opts = opts) end,
-      fn -> recent_failures(opts) end
+      fn -> queue_backlog() end,
+      fn -> recent_failures() end
     ])
   end
 
@@ -39,7 +39,7 @@ defmodule Cinegraph.Health.Drift.Collaborations do
     end)
   end
 
-  def queue_backlog(_opts \\ []) do
+  def queue_backlog do
     Drift.cached({:collaborations, :queue_backlog}, @cache_ttl, fn ->
       stats = CollaborationMaintenance.stats()
       q = stats.queue
@@ -60,7 +60,7 @@ defmodule Cinegraph.Health.Drift.Collaborations do
     end)
   end
 
-  def recent_failures(_opts \\ []) do
+  def recent_failures do
     Drift.cached({:collaborations, :recent_failures}, @cache_ttl, fn ->
       stats = CollaborationMaintenance.stats()
 

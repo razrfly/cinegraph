@@ -21,6 +21,10 @@ defmodule Cinegraph.Workers.CollaborationRepairSweeper do
         )
 
         {:ok, Map.drop(result, [:movie_ids])}
+
+      {:error, reason} ->
+        Logger.error("CollaborationRepairSweeper failed: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 end
