@@ -459,7 +459,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
     case people do
       [_, _] ->
-        "/movies?people=#{Enum.join(people, ",")}&people_match=all"
+        encoded_people =
+          people
+          |> Enum.map(&URI.encode_www_form/1)
+          |> Enum.join(",")
+
+        "/movies?people=#{encoded_people}&people_match=all"
 
       _ ->
         nil

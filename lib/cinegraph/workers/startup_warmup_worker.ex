@@ -5,22 +5,13 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
 
   use Oban.Worker, queue: :maintenance, max_attempts: 3, priority: 3
 
-  alias Cinegraph.Repo
-  alias Ecto.Multi
-
   require Logger
 
   @doc false
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    case schedule_all_warmups() do
-      {:ok, _jobs} ->
-        :ok
-
-      {:error, step, reason, _changes} ->
-        Logger.error("Startup warmup child job was not scheduled at #{step}: #{inspect(reason)}")
-        {:error, reason}
-    end
+    schedule_all_warmups()
+    :ok
   end
 
   @doc """
@@ -41,13 +32,22 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
   end
 
   defp schedule_all_warmups do
-    Multi.new()
-    |> Oban.insert(
-      :cache_warmup,
-      Cinegraph.Workers.CacheWarmupWorker.new(%{operation: "warmup_predictions"})
-    )
-    |> Oban.insert(:movies_warmup, Cinegraph.Workers.MoviesCacheWarmer.new(%{}))
-    |> Oban.insert(:health_warmup, Cinegraph.Workers.HealthCacheWarmer.new(%{}))
-    |> Repo.transaction()
+    [
+      cache_warmup: Cinegraph.Workers.CacheWarmupWorker.new(%{operation: "warmup_predictions"}),
+      movies_warmup: Cinegraph.Workers.MoviesCacheWarmer.new(%{}),
+      health_warmup: Cinegraph.Workers.HealthCacheWarmer.new(%{})
+    ]
+    |> Enum.each(&schedule_child_warmup/1)
+  end
+
+  defp schedule_child_warmup({name, job}) do
+    case Oban.insert(job) do
+      {:ok, _job} = result ->
+        result
+
+      {:error, reason} = result ->
+        Logger.error("Startup warmup child job was not scheduled at #{name}: #{inspect(reason)}")
+        result
+    end
   end
 end

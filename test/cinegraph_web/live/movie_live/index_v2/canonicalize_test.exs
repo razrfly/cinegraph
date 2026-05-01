@@ -76,10 +76,13 @@ defmodule CinegraphWeb.MovieLive.IndexV2.CanonicalizeTest do
       id_person = insert_person!("ID Cache Person")
 
       cache =
-        Canonicalize.people_slug_cache_from_params(%{
-          "people" => slug_person.slug,
-          "people_ids" => to_string(id_person.id)
-        })
+        Canonicalize.people_slug_cache_from_params(
+          %{
+            "people" => slug_person.slug,
+            "people_ids" => to_string(id_person.id)
+          },
+          %{id_person.id => slug_person.slug}
+        )
 
       assert cache == %{id_person.id => id_person.slug}
     end
