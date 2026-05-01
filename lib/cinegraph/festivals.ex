@@ -147,6 +147,21 @@ defmodule Cinegraph.Festivals do
   end
 
   @doc """
+  Lists festival organizations enriched with movie and winner counts.
+  """
+  def list_organizations_with_stats do
+    stats_by_id = organization_stats_by_id()
+
+    Enum.map(list_organizations(), fn org ->
+      stats = Map.get(stats_by_id, org.id, %{movie_count: 0, winner_count: 0})
+
+      org
+      |> Map.put(:movie_count, stats.movie_count)
+      |> Map.put(:winner_count, stats.winner_count)
+    end)
+  end
+
+  @doc """
   Creates a festival organization.
   """
   def create_organization(attrs \\ %{}) do

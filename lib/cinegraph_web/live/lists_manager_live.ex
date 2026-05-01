@@ -8,6 +8,7 @@ defmodule CinegraphWeb.ListsManagerLive do
   alias Cinegraph.Repo
   alias Cinegraph.Movies.MovieLists
   alias Cinegraph.Workers.CanonicalImportOrchestrator
+  alias CinegraphWeb.ListsManager.Params, as: ListParams
   require Logger
 
   @refresh_interval 10_000
@@ -584,16 +585,9 @@ defmodule CinegraphWeb.ListsManagerLive do
   def handle_event("add_list", params, socket) do
     source_type = detect_source_type(params["source_url"])
 
-    slug =
-      case params["slug"] do
-        nil -> nil
-        "" -> slugify(params["name"])
-        s -> s
-      end
-
     attrs =
       params
-      |> list_attrs_from_params(source_type, slug, 0)
+      |> ListParams.list_attrs_from_params(source_type, ListParams.normalize_slug(params), 0)
       |> Map.merge(%{source_key: params["source_key"], active: true})
 
     case MovieLists.create_movie_list(attrs) do
@@ -616,8 +610,9 @@ defmodule CinegraphWeb.ListsManagerLive do
   def handle_event("update_list", params, socket) do
     list = MovieLists.get_movie_list!(String.to_integer(params["list_id"]))
     source_type = detect_source_type(params["source_url"])
+    slug = ListParams.normalize_slug(params, list.slug)
 
-    attrs = list_attrs_from_params(params, source_type, params["slug"], list.display_order)
+    attrs = ListParams.list_attrs_from_params(params, source_type, slug, list.display_order)
 
     case MovieLists.update_movie_list(list, attrs) do
       {:ok, updated_list} ->
@@ -1023,45 +1018,6 @@ defmodule CinegraphWeb.ListsManagerLive do
   end
 
   defp detect_source_type(_), do: "custom"
-
-  defp slugify(nil), do: nil
-
-  defp slugify(name) do
-    name
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9\s-]/, "")
-    |> String.replace(~r/\s+/, "-")
-    |> String.trim("-")
-  end
-
-  defp parse_int(nil, default), do: default
-  defp parse_int("", default), do: default
-
-  defp parse_int(val, default) when is_binary(val) do
-    case Integer.parse(val) do
-      {n, _} -> n
-      :error -> default
-    end
-  end
-
-  defp parse_int(val, _default) when is_integer(val), do: val
-
-  defp list_attrs_from_params(params, source_type, slug, display_order_default) do
-    %{
-      source_url: params["source_url"],
-      name: params["name"],
-      category: params["category"],
-      description: params["description"],
-      source_type: source_type,
-      tracks_awards: params["tracks_awards"] == "on",
-      slug: slug,
-      short_name: params["short_name"],
-      icon: params["icon"],
-      cover_image_url: params["cover_image_url"],
-      hero_image_url: params["hero_image_url"],
-      display_order: parse_int(params["display_order"], display_order_default)
-    }
-  end
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

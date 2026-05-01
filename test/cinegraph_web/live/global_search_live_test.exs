@@ -4,6 +4,7 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
   import Phoenix.LiveViewTest
 
   alias Cinegraph.Movies.{Movie, Person}
+  alias Cinegraph.Repo
 
   defp insert_movie!(attrs) do
     defaults = %{
@@ -28,7 +29,7 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
 
     %Person{}
     |> Person.changeset(Map.merge(defaults, attrs))
-    |> Cinegraph.Repo.insert!()
+    |> Repo.insert!()
   end
 
   setup do
@@ -174,6 +175,20 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
       html = render_async(view)
 
       assert html =~ ~r|href="/people/linkable-person[^"]*"|
+    end
+
+    test "person rows fall back to /people/<id> when slug is missing", %{conn: conn} do
+      person =
+        insert_person!(%{name: "No Slug Person", tmdb_id: 80_012, popularity: 50.0})
+        |> Ecto.Changeset.change(slug: nil)
+        |> Repo.update!()
+
+      {:ok, view, _} = live_isolated(conn, CinegraphWeb.GlobalSearchLive)
+      _ = render_change(view, "change", %{"q" => "no slug person"})
+      html = render_async(view)
+
+      assert html =~ ~s|href="/people/#{person.id}"|
+      refute html =~ ~s|href="/people/" role="option"|
     end
   end
 end

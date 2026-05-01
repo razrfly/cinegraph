@@ -340,7 +340,7 @@ defmodule Cinegraph.Search do
       id: row.id,
       tmdb_id: row.tmdb_id,
       name: row.name,
-      slug: to_string(row.slug),
+      slug: row.slug && to_string(row.slug),
       profile_path: row.profile_path,
       known_for_department: row.known_for_department
     }
