@@ -4,6 +4,7 @@ defmodule Cinegraph.Movies.SearchTest do
   alias Cinegraph.Festivals.FestivalOrganization
 
   alias Cinegraph.Movies.{
+    Credit,
     DiscoveryRankings,
     ExternalMetric,
     Genre,
@@ -212,9 +213,78 @@ defmodule Cinegraph.Movies.SearchTest do
       assert params.people_ids == [id_person.id]
     end
 
+    test "people_match accepts all mode" do
+      assert {:ok, params} = Params.validate(%{"people_match" => "all"})
+      assert params.people_match == "all"
+    end
+
     test "unknown list slugs normalize away safely" do
       assert {:ok, params} = Params.validate(%{"lists" => "not-a-real-list"})
       assert params.lists == []
+    end
+  end
+
+  describe "search_movies/1 people filters" do
+    test "default people matching returns movies with any selected person" do
+      amanda = insert_person!("Amanda Any Test")
+      jeffrey = insert_person!("Jeffrey Any Test")
+
+      amanda_only =
+        insert_movie!("People Any Amanda")
+        |> add_credit!(amanda)
+
+      jeffrey_only =
+        insert_movie!("People Any Jeffrey")
+        |> add_credit!(jeffrey)
+
+      together =
+        insert_movie!("People Any Together")
+        |> add_credit!(amanda)
+        |> add_credit!(jeffrey)
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "people" => "#{amanda.slug},#{jeffrey.slug}",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == [
+               amanda_only.title,
+               jeffrey_only.title,
+               together.title
+             ]
+
+      assert meta.total_count == 3
+    end
+
+    test "all people matching returns only movies with every selected person" do
+      amanda = insert_person!("Amanda All Test")
+      jeffrey = insert_person!("Jeffrey All Test")
+
+      _amanda_only =
+        insert_movie!("People All Amanda")
+        |> add_credit!(amanda)
+
+      _jeffrey_only =
+        insert_movie!("People All Jeffrey")
+        |> add_credit!(jeffrey)
+
+      together =
+        insert_movie!("People All Together")
+        |> add_credit!(amanda)
+        |> add_credit!(jeffrey)
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "people" => "#{amanda.slug},#{jeffrey.slug}",
+                 "people_match" => "all",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == [together.title]
+      assert meta.total_count == 1
     end
   end
 
@@ -334,6 +404,26 @@ defmodule Cinegraph.Movies.SearchTest do
       end)
 
     Repo.insert_all("movie_genres", rows)
+    movie
+  end
+
+  defp add_credit!(%Movie{} = movie, %Person{} = person, attrs \\ %{}) do
+    attrs =
+      Map.merge(
+        %{
+          movie_id: movie.id,
+          person_id: person.id,
+          credit_type: "cast",
+          cast_order: 0,
+          credit_id: "credit-#{movie.id}-#{person.id}-#{System.unique_integer([:positive])}"
+        },
+        attrs
+      )
+
+    %Credit{}
+    |> Credit.changeset(attrs)
+    |> Repo.insert!()
+
     movie
   end
 

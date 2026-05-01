@@ -447,9 +447,28 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       avg_score: c[:avg_movie_rating],
       total_revenue: c[:total_revenue],
       movies: movies,
-      href: nil
+      href: collaboration_search_href(c)
     }
   end
+
+  defp collaboration_search_href(c) do
+    people =
+      [c[:person_a], c[:person_b]]
+      |> Enum.map(&person_filter_value/1)
+      |> Enum.reject(&(&1 in [nil, ""]))
+
+    case people do
+      [_, _] ->
+        "/movies?people=#{Enum.join(people, ",")}&people_match=all"
+
+      _ ->
+        nil
+    end
+  end
+
+  defp person_filter_value(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
+  defp person_filter_value(%{id: id}) when not is_nil(id), do: to_string(id)
+  defp person_filter_value(_), do: nil
 
   defp director_names(directors) do
     directors |> Enum.map(& &1.person.name) |> Enum.join(" & ")
@@ -607,8 +626,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <div class="flex-1 min-w-0 text-white">
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
-              <span :if={@movie.runtime}> ·  {format_runtime(@movie.runtime)}</span>
-              <span :if={content_rating(@movie)}> ·  {content_rating(@movie)}</span>
+              <span :if={@movie.runtime}>{" · #{format_runtime(@movie.runtime)}"}</span>
+              <span :if={content_rating(@movie)}>{" · #{content_rating(@movie)}"}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -1033,7 +1052,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               >
                 <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
                   {l.list_authority || "List"}
-                  <span :if={l.list_year}> ·  {l.list_year}</span>
+                  <span :if={l.list_year}>{" · #{l.list_year}"}</span>
                 </div>
                 <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
                   {l.list_name}

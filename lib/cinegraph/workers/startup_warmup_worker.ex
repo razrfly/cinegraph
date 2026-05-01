@@ -5,19 +5,21 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
 
   use Oban.Worker, queue: :maintenance, max_attempts: 3, priority: 3
 
+  alias Cinegraph.Repo
+  alias Ecto.Multi
+
   require Logger
 
   @doc false
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    with {:ok, _job} <- Cinegraph.Workers.CacheWarmupWorker.schedule_warmup(),
-         {:ok, _job} <- Cinegraph.Workers.MoviesCacheWarmer.schedule(),
-         {:ok, _job} <- schedule_health_warmup() do
-      :ok
-    else
-      {:error, reason} = error ->
-        Logger.error("Startup warmup child job was not scheduled: #{inspect(reason)}")
-        error
+    case schedule_all_warmups() do
+      {:ok, _jobs} ->
+        :ok
+
+      {:error, step, reason, _changes} ->
+        Logger.error("Startup warmup child job was not scheduled at #{step}: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
@@ -38,8 +40,14 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
     result
   end
 
-  defp schedule_health_warmup do
-    Cinegraph.Workers.HealthCacheWarmer.new(%{})
-    |> Oban.insert()
+  defp schedule_all_warmups do
+    Multi.new()
+    |> Oban.insert(
+      :cache_warmup,
+      Cinegraph.Workers.CacheWarmupWorker.new(%{operation: "warmup_predictions"})
+    )
+    |> Oban.insert(:movies_warmup, Cinegraph.Workers.MoviesCacheWarmer.new(%{}))
+    |> Oban.insert(:health_warmup, Cinegraph.Workers.HealthCacheWarmer.new(%{}))
+    |> Repo.transaction()
   end
 end

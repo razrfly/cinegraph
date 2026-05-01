@@ -18,6 +18,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
   attr :selected_lists, :list, default: []
   attr :selected_festivals, :list, default: []
   attr :selected_people, :list, default: []
+  attr :people_match, :string, default: nil
   attr :selected_decade, :string, default: nil
   attr :rating_preset, :string, default: nil
   attr :show_unreleased, :string, default: nil
@@ -87,21 +88,54 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             </label>
           </div>
         </section>
+        <%!-- ─── Cast & Crew ─── --%>
+        <section>
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+            Cast &amp; Crew
+          </h3>
+          <.live_component
+            module={CinegraphWeb.Components.PersonAutocomplete}
+            id="people-search-v2"
+            field_name="filters[people_search]"
+            selected_people={@selected_people}
+            search_term=""
+          />
+          <div :if={length(@selected_people) >= 2} class="mt-3">
+            <div class="grid grid-cols-2 gap-2" role="group" aria-label="People matching">
+              <button
+                type="button"
+                phx-click="set_people_match"
+                phx-value-match="any"
+                aria-pressed={@people_match != "all"}
+                class={[
+                  "rounded-lg border px-3 py-2 text-[12.5px] font-semibold transition-colors",
+                  if(@people_match == "all",
+                    do: "bg-mist-50 border-mist-950/15 text-mist-700 hover:bg-mist-950/[0.025]",
+                    else: "bg-mist-950 border-mist-950 text-mist-50"
+                  )
+                ]}
+              >
+                Any person
+              </button>
+              <button
+                type="button"
+                phx-click="set_people_match"
+                phx-value-match="all"
+                aria-pressed={@people_match == "all"}
+                class={[
+                  "rounded-lg border px-3 py-2 text-[12.5px] font-semibold transition-colors",
+                  if(@people_match == "all",
+                    do: "bg-mist-950 border-mist-950 text-mist-50",
+                    else: "bg-mist-50 border-mist-950/15 text-mist-700 hover:bg-mist-950/[0.025]"
+                  )
+                ]}
+              >
+                All together
+              </button>
+            </div>
+          </div>
+        </section>
       </form>
-
-      <%!-- ─── Cast & Crew ─── --%>
-      <section>
-        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
-          Cast &amp; Crew
-        </h3>
-        <.live_component
-          module={CinegraphWeb.Components.PersonAutocomplete}
-          id="people-search-v2"
-          field_name="filters[people_search]"
-          selected_people={@selected_people}
-          search_term=""
-        />
-      </section>
 
       <%!-- ─── Decade (single-select pills) ─── --%>
       <section :if={(@filter_options[:decades] || []) != []}>

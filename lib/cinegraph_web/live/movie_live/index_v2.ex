@@ -118,6 +118,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
       socket.assigns.params
       |> Events.put_or_delete("people", if(slugs == [], do: nil, else: Enum.join(slugs, ",")))
       |> Map.delete("people_ids")
+      |> maybe_delete_people_match(slugs)
       |> Map.put("page", "1")
 
     socket = assign(socket, :people_slug_cache, people_slug_cache)
@@ -179,4 +180,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   defp person_id(%{id: id}), do: id
   defp person_id(%{"id" => id}), do: id
   defp person_id(_), do: nil
+
+  defp maybe_delete_people_match(params, slugs) when length(slugs) >= 2, do: params
+  defp maybe_delete_people_match(params, _slugs), do: Map.delete(params, "people_match")
 end

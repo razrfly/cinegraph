@@ -82,7 +82,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
         slugs == [] ->
           params
           |> Map.delete("people")
+          |> Map.delete("people_ids")
           |> Map.delete("people_role")
+          |> Map.delete("people_match")
 
         Map.has_key?(params, "people_ids") ->
           Map.delete(params, "people")
@@ -92,18 +94,26 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
       end
 
     params
+    |> canonicalize_people_match(slugs)
     |> Map.delete("people_search")
     |> Map.delete("people_search[people_ids]")
     |> Map.delete("people_search[role_filter]")
   end
 
+  defp canonicalize_people_match(params, slugs) do
+    case {params["people_match"], length(slugs)} do
+      {"all", count} when count >= 2 -> params
+      _ -> Map.delete(params, "people_match")
+    end
+  end
+
   defp people_param_values(params) do
     cond do
-      Map.has_key?(params, "people") ->
-        params["people"]
-
-      Map.has_key?(params, "people_ids") ->
+      filter_value_present?(params["people_ids"]) ->
         params["people_ids"]
+
+      filter_value_present?(params["people"]) ->
+        params["people"]
 
       match?(%{}, params["people_search"]) ->
         get_in(params, ["people_search", "people_ids"])
@@ -115,6 +125,15 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
         nil
     end
   end
+
+  defp filter_value_present?(nil), do: false
+  defp filter_value_present?(""), do: false
+  defp filter_value_present?([]), do: false
+
+  defp filter_value_present?(list) when is_list(list),
+    do: Enum.any?(list, &filter_value_present?/1)
+
+  defp filter_value_present?(_value), do: true
 
   defp canonical_genre_slugs(_socket, nil), do: []
   defp canonical_genre_slugs(_socket, []), do: []
