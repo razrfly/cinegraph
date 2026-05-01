@@ -11,6 +11,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
   """
   use Phoenix.Component
 
+  alias CinegraphWeb.Components.PeopleMatch
   alias CinegraphWeb.NeutralV2Components
 
   attr :show, :boolean, default: false
@@ -100,40 +101,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             selected_people={@selected_people}
             search_term=""
           />
-          <div :if={length(@selected_people) >= 2} class="mt-3">
-            <div class="grid grid-cols-2 gap-2" role="group" aria-label="People matching">
-              <button
-                type="button"
-                phx-click="set_people_match"
-                phx-value-match="any"
-                aria-pressed={@people_match != "all"}
-                class={[
-                  "rounded-lg border px-3 py-2 text-[12.5px] font-semibold transition-colors",
-                  if(@people_match == "all",
-                    do: "bg-mist-50 border-mist-950/15 text-mist-700 hover:bg-mist-950/[0.025]",
-                    else: "bg-mist-950 border-mist-950 text-mist-50"
-                  )
-                ]}
-              >
-                Any person
-              </button>
-              <button
-                type="button"
-                phx-click="set_people_match"
-                phx-value-match="all"
-                aria-pressed={@people_match == "all"}
-                class={[
-                  "rounded-lg border px-3 py-2 text-[12.5px] font-semibold transition-colors",
-                  if(@people_match == "all",
-                    do: "bg-mist-950 border-mist-950 text-mist-50",
-                    else: "bg-mist-50 border-mist-950/15 text-mist-700 hover:bg-mist-950/[0.025]"
-                  )
-                ]}
-              >
-                All together
-              </button>
-            </div>
-          </div>
+          <PeopleMatch.controls
+            id="people-match-v2"
+            selected_people={@selected_people}
+            people_match={@people_match}
+          />
         </section>
       </form>
 
