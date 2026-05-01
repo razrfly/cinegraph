@@ -22,7 +22,7 @@ defmodule Cinegraph.Movies do
   }
 
   alias Cinegraph.Services.TMDb
-  alias Cinegraph.Metrics
+  alias Cinegraph.{Collaborations, Metrics}
   alias Cinegraph.Metrics.ScoringService
   require Logger
 
@@ -716,44 +716,60 @@ defmodule Cinegraph.Movies do
     alias Cinegraph.Imports.QualityFilter
 
     # Process cast
-    Enum.each(cast, fn cast_member ->
-      # Check if person meets quality criteria
-      if QualityFilter.should_import_person?(cast_member) do
-        with {:ok, person} <- create_or_update_person_from_tmdb(cast_member),
-             credit_attrs <- %{
-               movie_id: movie.id,
-               person_id: person.id,
-               credit_type: "cast",
-               character: cast_member["character"],
-               cast_order: cast_member["order"],
-               credit_id: cast_member["credit_id"]
-             } do
-          create_credit(credit_attrs)
+    cast_count =
+      Enum.reduce(cast, 0, fn cast_member, count ->
+        # Check if person meets quality criteria
+        if QualityFilter.should_import_person?(cast_member) do
+          with {:ok, person} <- create_or_update_person_from_tmdb(cast_member),
+               credit_attrs <- %{
+                 movie_id: movie.id,
+                 person_id: person.id,
+                 credit_type: "cast",
+                 character: cast_member["character"],
+                 cast_order: cast_member["order"],
+                 credit_id: cast_member["credit_id"]
+               },
+               {:ok, _credit} <- create_credit(credit_attrs) do
+            count + 1
+          else
+            _ -> count
+          end
+        else
+          count
         end
-      end
-    end)
+      end)
 
     # Process crew
-    Enum.each(crew, fn crew_member ->
-      # Always import directors regardless of quality criteria (Issue #474: festival inference needs them)
-      # For other crew roles, apply quality filter
-      should_import =
-        crew_member["job"] == "Director" or QualityFilter.should_import_person?(crew_member)
+    crew_count =
+      Enum.reduce(crew, 0, fn crew_member, count ->
+        # Always import directors regardless of quality criteria (Issue #474: festival inference needs them)
+        # For other crew roles, apply quality filter
+        should_import =
+          crew_member["job"] == "Director" or QualityFilter.should_import_person?(crew_member)
 
-      if should_import do
-        with {:ok, person} <- create_or_update_person_from_tmdb(crew_member),
-             credit_attrs <- %{
-               movie_id: movie.id,
-               person_id: person.id,
-               credit_type: "crew",
-               department: crew_member["department"],
-               job: crew_member["job"],
-               credit_id: crew_member["credit_id"]
-             } do
-          create_credit(credit_attrs)
+        if should_import do
+          with {:ok, person} <- create_or_update_person_from_tmdb(crew_member),
+               credit_attrs <- %{
+                 movie_id: movie.id,
+                 person_id: person.id,
+                 credit_type: "crew",
+                 department: crew_member["department"],
+                 job: crew_member["job"],
+                 credit_id: crew_member["credit_id"]
+               },
+               {:ok, _credit} <- create_credit(credit_attrs) do
+            count + 1
+          else
+            _ -> count
+          end
+        else
+          count
         end
-      end
-    end)
+      end)
+
+    if cast_count + crew_count > 0 do
+      Collaborations.enqueue_movie_rebuild(movie)
+    end
 
     :ok
   end

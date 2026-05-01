@@ -17,7 +17,7 @@ defmodule Cinegraph.Health.Verdict do
   @type drift_result :: map()
   @type domain_results :: %{atom() => [drift_result()]}
 
-  @domain_priority [:people, :movies, :festivals, :ratings]
+  @domain_priority [:people, :movies, :festivals, :ratings, :collaborations]
   @status_priority %{red: 3, amber: 2, green: 1, unknown: 0}
 
   @doc """

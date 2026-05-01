@@ -53,13 +53,14 @@ defmodule CinegraphWeb.AdminHealthLive.ShowTest do
       refute html =~ ~s(role="dialog")
     end
 
-    test "renders all 4 domain cards (people, movies, festivals, ratings)", %{conn: conn} do
+    test "renders all 5 domain cards including collaborations", %{conn: conn} do
       {:ok, _live, html} = live(conn, ~p"/admin/health")
 
       assert html =~ ~s(phx-value-domain="people")
       assert html =~ ~s(phx-value-domain="movies")
       assert html =~ ~s(phx-value-domain="festivals")
       assert html =~ ~s(phx-value-domain="ratings")
+      assert html =~ ~s(phx-value-domain="collaborations")
     end
 
     test "movies drawer shows year-imports drill-down link", %{conn: conn} do
@@ -76,6 +77,14 @@ defmodule CinegraphWeb.AdminHealthLive.ShowTest do
 
       assert html =~ "Festivals drift"
       assert html =~ "/admin/award-imports"
+    end
+
+    test "open_drawer event mounts the drawer for Collaborations", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/admin/health")
+      html = render_click(live, "open_drawer", %{"domain" => "collaborations"})
+
+      assert html =~ "Collaborations drift"
+      assert html =~ ~s(role="dialog")
     end
   end
 
@@ -137,6 +146,29 @@ defmodule CinegraphWeb.AdminHealthLive.ShowTest do
       assert props.headline =~ "vs TMDb"
       refute props.headline =~ "unavailable"
       assert props.unknown_count == 0
+    end
+
+    test "collaborations headline reports coverage" do
+      verdict = %{
+        domains: %{
+          collaborations: %{
+            status: :red,
+            checks: [
+              %{
+                check: :missing_details,
+                status: :red,
+                total_population: 100,
+                affected_count: 25,
+                affected_pct: 25.0,
+                blocked_reason: nil
+              }
+            ]
+          }
+        }
+      }
+
+      props = Show.domain_card_props(verdict, :collaborations)
+      assert props.headline == "75.0% collaboration coverage"
     end
   end
 end

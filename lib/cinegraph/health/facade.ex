@@ -34,7 +34,8 @@ defmodule Cinegraph.Health.Facade do
       people: Cinegraph.Health.Drift.People,
       movies: Cinegraph.Health.Drift.Movies,
       festivals: Cinegraph.Health.Drift.Festivals,
-      ratings: Cinegraph.Health.Drift.Ratings
+      ratings: Cinegraph.Health.Drift.Ratings,
+      collaborations: Cinegraph.Health.Drift.Collaborations
     ]
 
     domain_results =

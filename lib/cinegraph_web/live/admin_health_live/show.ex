@@ -168,12 +168,14 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   defp parse_domain("movies"), do: :movies
   defp parse_domain("festivals"), do: :festivals
   defp parse_domain("ratings"), do: :ratings
+  defp parse_domain("collaborations"), do: :collaborations
   defp parse_domain(_), do: nil
 
   defp drift_module(:people), do: Cinegraph.Health.Drift.People
   defp drift_module(:movies), do: Cinegraph.Health.Drift.Movies
   defp drift_module(:festivals), do: Cinegraph.Health.Drift.Festivals
   defp drift_module(:ratings), do: Cinegraph.Health.Drift.Ratings
+  defp drift_module(:collaborations), do: Cinegraph.Health.Drift.Collaborations
 
   defp normalize_checks({:error, _}), do: []
   defp normalize_checks(checks) when is_list(checks), do: checks
@@ -270,6 +272,16 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
     end
   end
 
+  defp headline_for(:collaborations, checks) do
+    case Enum.find(checks, &(&1.check == :missing_details)) do
+      %{blocked_reason: nil, affected_pct: pct} ->
+        "#{Float.round(100.0 - pct, 1)}% collaboration coverage"
+
+      _ ->
+        "collaboration coverage unavailable — see drawer"
+    end
+  end
+
   defp headline_for(_, _), do: ""
 
   defp format_int(n) when is_integer(n) do
@@ -320,5 +332,6 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   def drawer_title(:movies), do: "Movies drift"
   def drawer_title(:festivals), do: "Festivals drift"
   def drawer_title(:ratings), do: "Ratings drift"
+  def drawer_title(:collaborations), do: "Collaborations drift"
   def drawer_title(_), do: "Drift"
 end
