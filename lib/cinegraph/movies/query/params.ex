@@ -6,6 +6,13 @@ defmodule Cinegraph.Movies.Query.Params do
 
   use Ecto.Schema
   import Ecto.Changeset
+  import Ecto.Query
+
+  alias Cinegraph.Festivals.FestivalOrganization
+  alias Cinegraph.Movies.Genre
+  alias Cinegraph.Movies.MovieList
+  alias Cinegraph.Movies.Person
+  alias Cinegraph.Repo
 
   @primary_key false
   embedded_schema do
@@ -172,6 +179,8 @@ defmodule Cinegraph.Movies.Query.Params do
     params
     |> normalize_array_params()
     |> normalize_people_search()
+    |> normalize_people_values()
+    |> normalize_list_values()
     |> normalize_blank_enums()
     |> normalize_numeric_params()
   end
@@ -179,7 +188,7 @@ defmodule Cinegraph.Movies.Query.Params do
   defp normalize_array_params(params) do
     # Handle both array notation and comma-separated strings
     Enum.reduce(
-      [:genres, :countries, :languages, :lists, :festivals, :people_ids],
+      [:genres, :countries, :languages, :lists, :festivals, :people_ids, :people],
       params,
       fn key, acc ->
         key_str = to_string(key)
@@ -299,7 +308,13 @@ defmodule Cinegraph.Movies.Query.Params do
         "" ->
           Map.delete(acc, field)
 
-        values when is_list(values) and field in ["genres", "countries", "festivals"] ->
+        values when is_list(values) and field == "genres" ->
+          Map.put(acc, field, parse_genre_values(values))
+
+        values when is_list(values) and field == "festivals" ->
+          Map.put(acc, field, parse_festival_values(values))
+
+        values when is_list(values) and field in ["countries"] ->
           # Convert array of strings to integers for ID-based filters
           parsed =
             Enum.map(values, fn v ->
@@ -332,6 +347,173 @@ defmodule Cinegraph.Movies.Query.Params do
       end
     end)
   end
+
+  defp parse_genre_values(values) do
+    values = Enum.reject(values, &(&1 in [nil, ""]))
+
+    {ids, slugs} =
+      Enum.reduce(values, {[], []}, fn
+        v, {ids, slugs} when is_integer(v) ->
+          {[v | ids], slugs}
+
+        v, {ids, slugs} when is_binary(v) ->
+          case Integer.parse(v) do
+            {int, ""} -> {[int | ids], slugs}
+            _ -> {ids, [Genre.slug(v) | slugs]}
+          end
+
+        _v, acc ->
+          acc
+      end)
+
+    slug_ids =
+      slugs
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> genre_ids_for_slugs()
+
+    (ids ++ slug_ids)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp genre_ids_for_slugs([]), do: []
+
+  defp genre_ids_for_slugs(slugs) do
+    Genre
+    |> select([g], %{id: g.id, name: g.name})
+    |> Repo.replica().all()
+    |> Enum.filter(&(Genre.slug(&1.name) in slugs))
+    |> Enum.map(& &1.id)
+  end
+
+  defp parse_festival_values(values) do
+    values = Enum.reject(values, &(&1 in [nil, ""]))
+
+    {ids, slugs} =
+      Enum.reduce(values, {[], []}, fn
+        v, {ids, slugs} when is_integer(v) ->
+          {[v | ids], slugs}
+
+        v, {ids, slugs} when is_binary(v) ->
+          case Integer.parse(v) do
+            {int, ""} -> {[int | ids], slugs}
+            _ -> {ids, [slugify(v) | slugs]}
+          end
+
+        _v, acc ->
+          acc
+      end)
+
+    slug_ids =
+      slugs
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> festival_ids_for_slugs()
+
+    (ids ++ slug_ids)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp festival_ids_for_slugs([]), do: []
+
+  defp festival_ids_for_slugs(slugs) do
+    FestivalOrganization
+    |> where([fo], fo.slug in ^slugs)
+    |> select([fo], fo.id)
+    |> Repo.replica().all()
+  end
+
+  defp normalize_list_values(params) do
+    case Map.get(params, "lists") do
+      values when is_list(values) ->
+        Map.put(params, "lists", list_keys_for_values(values))
+
+      _ ->
+        params
+    end
+  end
+
+  defp list_keys_for_values(values) do
+    values =
+      values
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.map(&to_string/1)
+
+    slugs = Enum.map(values, &slugify/1)
+
+    db_matches =
+      MovieList
+      |> where([ml], ml.source_key in ^values or ml.slug in ^slugs)
+      |> select([ml], ml.source_key)
+      |> Repo.replica().all()
+
+    if db_matches == [] do
+      Enum.uniq(values)
+    else
+      Enum.uniq(db_matches)
+    end
+  end
+
+  defp normalize_people_values(params) do
+    case Map.get(params, "people") do
+      values when is_list(values) ->
+        params
+        |> Map.put("people_ids", people_ids_for_values(values))
+        |> Map.delete("people")
+
+      _ ->
+        params
+    end
+  end
+
+  defp people_ids_for_values(values) do
+    values = Enum.reject(values, &(&1 in [nil, ""]))
+
+    {ids, slugs} =
+      Enum.reduce(values, {[], []}, fn
+        v, {ids, slugs} when is_integer(v) ->
+          {[v | ids], slugs}
+
+        v, {ids, slugs} when is_binary(v) ->
+          case Integer.parse(v) do
+            {int, ""} -> {[int | ids], slugs}
+            _ -> {ids, [slugify(v) | slugs]}
+          end
+
+        _v, acc ->
+          acc
+      end)
+
+    slug_ids =
+      slugs
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> person_ids_for_slugs()
+
+    (ids ++ slug_ids)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp person_ids_for_slugs([]), do: []
+
+  defp person_ids_for_slugs(slugs) do
+    Person
+    |> where([p], p.slug in ^slugs)
+    |> select([p], p.id)
+    |> Repo.replica().all()
+  end
+
+  defp slugify(value) when is_binary(value) do
+    value
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.trim("-")
+  end
+
+  defp slugify(_), do: nil
 
   defp parse_floats(params, fields) do
     Enum.reduce(fields, params, fn field, acc ->

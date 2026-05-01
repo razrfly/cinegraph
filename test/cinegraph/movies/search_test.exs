@@ -1,7 +1,19 @@
 defmodule Cinegraph.Movies.SearchTest do
   use Cinegraph.DataCase, async: false
 
-  alias Cinegraph.Movies.{Genre, Movie, Search}
+  alias Cinegraph.Festivals.FestivalOrganization
+
+  alias Cinegraph.Movies.{
+    DiscoveryRankings,
+    ExternalMetric,
+    Genre,
+    Movie,
+    MovieList,
+    Person,
+    Search
+  }
+
+  alias Cinegraph.Movies.Query.Params
 
   setup do
     Cachex.clear(:movies_cache)
@@ -44,6 +56,47 @@ defmodule Cinegraph.Movies.SearchTest do
       assert meta.total_count == 1
     end
 
+    test "comma-delimited genre slugs resolve to genre IDs" do
+      drama = insert_genre!("Drama")
+      comedy = insert_genre!("Comedy")
+
+      _drama_only =
+        insert_movie!("Genre Slug Drama")
+        |> add_genres!([drama])
+
+      _both =
+        insert_movie!("Genre Slug Both")
+        |> add_genres!([drama, comedy])
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "genres" => "#{Genre.slug(comedy)},#{Genre.slug(drama)}",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Genre Slug Both"]
+      assert meta.total_count == 1
+    end
+
+    test "unknown genre slugs normalize away safely" do
+      drama = insert_genre!("Drama")
+
+      _movie =
+        insert_movie!("Genre Unknown Slug Drama")
+        |> add_genres!([drama])
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "genres" => "not-a-real-genre,#{Genre.slug(drama)}",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Genre Unknown Slug Drama"]
+      assert meta.total_count == 1
+    end
+
     test "duplicate genre params do not make the all-genres match impossible" do
       drama = insert_genre!("Drama")
       comedy = insert_genre!("Comedy")
@@ -76,6 +129,73 @@ defmodule Cinegraph.Movies.SearchTest do
     end
   end
 
+  describe "search_movies/1 default discovery rankings" do
+    test "default browse uses the materialized rankings ordering and count" do
+      lower = insert_movie!("MV Lower Score", release_date: ~D[2024-01-01])
+      higher = insert_movie!("MV Higher Score", release_date: ~D[2024-01-01])
+
+      add_tmdb_metrics!(lower, popularity: 1.0, votes: 10.0, rating: 5.0)
+      add_tmdb_metrics!(higher, popularity: 500.0, votes: 10_000.0, rating: 8.0)
+
+      DiscoveryRankings.refresh(concurrently: false)
+
+      assert {:ok, {movies, meta}} = Search.search_movies_uncached(%{"per_page" => "10"})
+
+      assert movie_titles(movies) == ["MV Higher Score", "MV Lower Score"]
+      assert meta.total_count == 2
+      assert meta.total_pages == 1
+    end
+
+    test "default browse count comes from the materialized view" do
+      _refreshed_movie = insert_movie!("MV Count Refreshed")
+      DiscoveryRankings.refresh(concurrently: false)
+
+      _unrefreshed_movie = insert_movie!("MV Count Not Yet Refreshed")
+
+      assert {:ok, count} = Search.count_movies(%{})
+      assert count == 1
+    end
+
+    test "non-default filters fall back to generic search semantics" do
+      _refreshed_movie = insert_movie!("MV Search Refreshed")
+      DiscoveryRankings.refresh(concurrently: false)
+
+      _unrefreshed_match = insert_movie!("MV Search Unrefreshed Match")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "search" => "Unrefreshed Match",
+                 "per_page" => "10"
+               })
+
+      assert movie_titles(movies) == ["MV Search Unrefreshed Match"]
+      assert meta.total_count == 1
+    end
+  end
+
+  describe "filter URL value normalization" do
+    test "festival slugs normalize to festival IDs" do
+      festival = insert_festival!("BAFTA Test")
+
+      assert {:ok, params} = Params.validate(%{"festivals" => festival.slug})
+      assert params.festivals == [festival.id]
+    end
+
+    test "list slugs normalize to canonical source keys" do
+      list = insert_movie_list!("Slug List Test")
+
+      assert {:ok, params} = Params.validate(%{"lists" => list.slug})
+      assert params.lists == [list.source_key]
+    end
+
+    test "person slugs normalize to person IDs" do
+      person = insert_person!("Slug Person Test")
+
+      assert {:ok, params} = Params.validate(%{"people" => person.slug})
+      assert params.people_ids == [person.id]
+    end
+  end
+
   defp search_by_genres(genre_ids) do
     Search.search_movies(%{
       "genres[]" => Enum.map(genre_ids, &to_string/1),
@@ -84,15 +204,38 @@ defmodule Cinegraph.Movies.SearchTest do
     })
   end
 
-  defp insert_movie!(title) do
+  defp insert_movie!(title, attrs \\ []) do
+    release_date = Keyword.get(attrs, :release_date, ~D[2024-01-01])
+
     %Movie{}
     |> Movie.changeset(%{
       tmdb_id: System.unique_integer([:positive]),
       title: title,
       original_title: title,
-      release_date: ~D[2024-01-01]
+      release_date: release_date
     })
     |> Repo.insert!()
+  end
+
+  defp add_tmdb_metrics!(movie, popularity: popularity, votes: votes, rating: rating) do
+    fetched_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    [
+      {"popularity_score", popularity},
+      {"rating_votes", votes},
+      {"rating_average", rating}
+    ]
+    |> Enum.each(fn {metric_type, value} ->
+      Repo.insert!(%ExternalMetric{
+        movie_id: movie.id,
+        source: "tmdb",
+        metric_type: metric_type,
+        value: value,
+        fetched_at: fetched_at
+      })
+    end)
+
+    movie
   end
 
   defp insert_genre!(name) do
@@ -100,6 +243,45 @@ defmodule Cinegraph.Movies.SearchTest do
       tmdb_id: System.unique_integer([:positive]),
       name: "#{name} #{System.unique_integer([:positive])}"
     })
+  end
+
+  defp insert_festival!(name) do
+    slug =
+      name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "-")
+      |> String.trim("-")
+
+    Repo.insert!(%FestivalOrganization{
+      name: "#{name} #{System.unique_integer([:positive])}",
+      slug: "#{slug}-#{System.unique_integer([:positive])}",
+      abbreviation: "T#{System.unique_integer([:positive])}"
+    })
+  end
+
+  defp insert_movie_list!(name) do
+    unique = System.unique_integer([:positive])
+
+    %MovieList{}
+    |> MovieList.changeset(%{
+      source_key: "slug_list_#{unique}",
+      name: "#{name} #{unique}",
+      slug: "slug-list-#{unique}",
+      active: true,
+      source_type: "custom",
+      source_url: "https://example.test/list/#{unique}",
+      category: "curated"
+    })
+    |> Repo.insert!()
+  end
+
+  defp insert_person!(name) do
+    %Person{}
+    |> Person.changeset(%{
+      tmdb_id: System.unique_integer([:positive]),
+      name: "#{name} #{System.unique_integer([:positive])}"
+    })
+    |> Repo.insert!()
   end
 
   defp add_genres!(%Movie{} = movie, genres) do

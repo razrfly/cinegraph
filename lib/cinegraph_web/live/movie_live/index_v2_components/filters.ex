@@ -4,13 +4,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   """
   use Phoenix.Component
 
+  alias Cinegraph.Movies.Genre
   alias CinegraphWeb.LiveViewHelpers
   alias CinegraphWeb.MovieLive.GenreEmoji
   alias CinegraphWeb.MovieLive.IndexV2Components.SortLabels
   alias CinegraphWeb.NeutralV2Components
 
   @primary_sort_keys ~w(release_date score popularity)
-  @basic_filter_keys ~w(search genres decade lists festivals people_ids rating_preset show_unreleased)
+  @basic_filter_keys ~w(search genres decade lists festivals people people_ids rating_preset show_unreleased)
 
   attr :search_term, :string, default: ""
   attr :sort_options, :list, required: true
@@ -23,8 +24,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   attr :scope, :map, default: %{}
 
   def filters(assigns) do
-    selected_genres = list_param(assigns.params, "genres")
     genres = assigns.filter_options[:genres] || []
+    selected_genres = selected_genre_slugs(assigns.params, genres)
     visible_genre_count = 10
 
     primary_sort_options =
@@ -205,10 +206,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
         </span>
         <NeutralV2Components.n_chip_toggle
           :for={genre <- Enum.take(@genres, @visible_genre_count)}
-          active={to_string(genre.id) in @selected_genres}
+          active={Genre.slug(genre) in @selected_genres}
           phx-click="toggle_chip"
           phx-value-key="genres"
-          phx-value-id={to_string(genre.id)}
+          phx-value-id={Genre.slug(genre)}
           phx-value-mode="multi"
         >
           <span class="mr-[5px]">{GenreEmoji.for_id(genre.tmdb_id)}</span>{genre.name}
@@ -223,10 +224,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
           <div class="absolute left-0 mt-2 z-30 bg-mist-50 border border-mist-950/10 rounded-lg shadow-lg p-2 flex flex-wrap gap-[6px] max-w-[420px]">
             <NeutralV2Components.n_chip_toggle
               :for={genre <- Enum.drop(@genres, @visible_genre_count)}
-              active={to_string(genre.id) in @selected_genres}
+              active={Genre.slug(genre) in @selected_genres}
               phx-click="toggle_chip"
               phx-value-key="genres"
-              phx-value-id={to_string(genre.id)}
+              phx-value-id={Genre.slug(genre)}
               phx-value-mode="multi"
             >
               <span class="mr-[5px]">{GenreEmoji.for_id(genre.tmdb_id)}</span>{genre.name}
@@ -265,7 +266,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   def list_param(_, _), do: []
 
   def selected_people_ids(params) when is_map(params) do
-    case params["people_ids"] do
+    case params["people"] || params["people_ids"] do
       nil -> []
       "" -> []
       ids when is_binary(ids) -> ids |> String.split(",", trim: true)
@@ -275,6 +276,30 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   end
 
   def selected_people_ids(_), do: []
+
+  defp selected_genre_slugs(params, genres) when is_map(params) do
+    params
+    |> list_param("genres")
+    |> Enum.map(&genre_slug_for_value(&1, genres))
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp selected_genre_slugs(_, _), do: []
+
+  defp genre_slug_for_value(value, genres) when is_binary(value) do
+    case Integer.parse(value) do
+      {id, ""} -> genre_slug_for_value(id, genres)
+      _ -> Genre.slug(value)
+    end
+  end
+
+  defp genre_slug_for_value(value, genres) when is_integer(value) do
+    genres
+    |> Enum.find(&(&1.id == value))
+    |> Genre.slug()
+  end
+
+  defp genre_slug_for_value(_, _), do: nil
 
   defp filter_value_present?(nil), do: false
   defp filter_value_present?(""), do: false

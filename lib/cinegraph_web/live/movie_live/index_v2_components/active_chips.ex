@@ -4,10 +4,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   """
   use Phoenix.Component
 
+  alias Cinegraph.Movies.Genre
   alias CinegraphWeb.LiveViewHelpers
   alias CinegraphWeb.MovieLive.IndexV2Components.SortLabels
 
-  @basic_filter_keys ~w(search genres decade lists festivals people_ids rating_preset show_unreleased)
+  @basic_filter_keys ~w(search genres decade lists festivals people people_ids rating_preset show_unreleased)
 
   attr :params, :map, required: true
   attr :filter_options, :map, required: true
@@ -108,20 +109,18 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   defp label_for("decade"), do: "Decade"
   defp label_for("lists"), do: "Lists"
   defp label_for("festivals"), do: "Festivals"
+  defp label_for("people"), do: "Cast & Crew"
   defp label_for("people_ids"), do: "Cast & Crew"
   defp label_for("rating_preset"), do: "Rating"
   defp label_for("show_unreleased"), do: "Unreleased"
   defp label_for(other), do: other |> String.replace("_", " ") |> String.capitalize()
 
   defp value_label_for("genres", value, opts) do
-    ids = LiveViewHelpers.parse_array_param(value)
+    values = LiveViewHelpers.parse_array_param(value)
     available = opts[:genres] || []
 
-    ids
-    |> Enum.map(fn id ->
-      id_int = parse_id(id)
-      Enum.find(available, &(&1.id == id_int)) || %{name: to_string(id)}
-    end)
+    values
+    |> Enum.map(&genre_for_value(&1, available))
     |> Enum.map(& &1.name)
     |> truncate_join()
   end
@@ -131,9 +130,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
     available = opts[:lists] || []
 
     keys
-    |> Enum.map(fn k ->
-      Enum.find(available, &(&1.key == k)) || %{name: k}
-    end)
+    |> Enum.map(&list_for_value(&1, available))
     |> Enum.map(& &1.name)
     |> truncate_join()
   end
@@ -143,10 +140,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
     available = opts[:festivals] || []
 
     ids
-    |> Enum.map(fn id ->
-      id_int = parse_id(id)
-      Enum.find(available, &(&1.id == id_int)) || %{name: to_string(id)}
-    end)
+    |> Enum.map(&festival_for_value(&1, available))
     |> Enum.map(& &1.name)
     |> truncate_join()
   end
@@ -165,7 +159,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   defp value_label_for("show_unreleased", "true", _opts), do: "Yes"
   defp value_label_for("show_unreleased", _, _opts), do: "No"
 
-  defp value_label_for("people_ids", value, _opts) do
+  defp value_label_for("people_ids", value, opts) do
+    value_label_for("people", value, opts)
+  end
+
+  defp value_label_for("people", value, _opts) do
     ids =
       value
       |> to_string()
@@ -181,16 +179,42 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   defp value_label_for(_, value, _opts) when is_list(value), do: Enum.join(value, ", ")
   defp value_label_for(_, value, _opts), do: to_string(value)
 
-  defp parse_id(id) when is_integer(id), do: id
+  defp list_for_value(value, available) do
+    value = to_string(value)
+    Enum.find(available, &(&1.key == value or Map.get(&1, :slug) == value)) || %{name: value}
+  end
 
-  defp parse_id(id) when is_binary(id) do
-    case Integer.parse(id) do
-      {int, ""} -> int
-      _ -> nil
+  defp festival_for_value(value, available) when is_binary(value) do
+    case Integer.parse(value) do
+      {id, ""} ->
+        Enum.find(available, &(&1.id == id)) || %{name: value}
+
+      _ ->
+        Enum.find(available, &(Map.get(&1, :slug) == value)) || %{name: value}
     end
   end
 
-  defp parse_id(_), do: nil
+  defp festival_for_value(value, available) when is_integer(value) do
+    Enum.find(available, &(&1.id == value)) || %{name: to_string(value)}
+  end
+
+  defp festival_for_value(value, _available), do: %{name: to_string(value)}
+
+  defp genre_for_value(value, available) when is_binary(value) do
+    case Integer.parse(value) do
+      {id, ""} ->
+        Enum.find(available, &(&1.id == id)) || %{name: value}
+
+      _ ->
+        Enum.find(available, &(Genre.slug(&1) == Genre.slug(value))) || %{name: value}
+    end
+  end
+
+  defp genre_for_value(value, available) when is_integer(value) do
+    Enum.find(available, &(&1.id == value)) || %{name: to_string(value)}
+  end
+
+  defp genre_for_value(value, _available), do: %{name: to_string(value)}
 
   defp truncate_join(names) do
     joined = Enum.join(names, ", ")

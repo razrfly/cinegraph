@@ -30,4 +30,18 @@ defmodule Cinegraph.Movies.Genre do
 
     changeset(%__MODULE__{}, attrs)
   end
+
+  @doc """
+  Returns the stable URL slug for a genre name or genre struct.
+  """
+  def slug(%__MODULE__{name: name}), do: slug(name)
+
+  def slug(name) when is_binary(name) do
+    name
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9]+/, "-")
+    |> String.trim("-")
+  end
+
+  def slug(_), do: nil
 end

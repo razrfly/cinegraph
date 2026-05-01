@@ -52,7 +52,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
                 type="checkbox"
                 name="filters[lists][]"
                 value={list.key}
-                checked={list.key in @selected_lists}
+                checked={list_selected?(list, @selected_lists)}
                 class="mt-[2px] shrink-0 rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
               />
               <span class="flex-1">{list.name}</span>
@@ -80,7 +80,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
                 type="checkbox"
                 name="filters[festivals][]"
                 value={to_string(fest.id)}
-                checked={to_string(fest.id) in @selected_festivals}
+                checked={festival_selected?(fest, @selected_festivals)}
                 class="mt-[2px] shrink-0 rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
               />
               <span class="flex-1">{fest.name}</span>
@@ -256,6 +256,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
   defp rating_preset_active?(nil, ""), do: true
   defp rating_preset_active?("", ""), do: true
   defp rating_preset_active?(current, value), do: to_string(current) == value
+
+  defp list_selected?(list, selected) do
+    list.key in selected or Map.get(list, :slug) in selected
+  end
+
+  defp festival_selected?(festival, selected) do
+    to_string(festival.id) in selected or Map.get(festival, :slug) in selected
+  end
 
   defp scoring_lenses do
     [

@@ -13,7 +13,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
 
   import Phoenix.LiveViewTest
 
-  alias Cinegraph.Movies.{Movie, Genre}
+  alias Cinegraph.Movies.{DiscoveryRankings, Genre, Movie}
   alias Cinegraph.Repo
 
   defp insert_movie!(attrs) do
@@ -168,12 +168,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       {:ok, view, _} = live(conn, ~p"/movies")
 
       view
-      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{drama.id}"]))
+      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{Genre.slug(drama)}"]))
       |> render_click()
 
       to = assert_patch(view)
-      assert to =~ "genres"
-      assert to =~ "#{drama.id}"
+      assert to =~ "genres=#{Genre.slug(drama)}"
+      refute to =~ "genres[]"
     end
 
     test "selecting a second genre keeps the first", %{
@@ -181,22 +181,21 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       drama: drama,
       comedy: comedy
     } do
-      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}")
+      {:ok, view, _} = live(conn, ~p"/movies?genres=#{Genre.slug(drama)}")
 
       view
-      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{comedy.id}"]))
+      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{Genre.slug(comedy)}"]))
       |> render_click()
 
       to = assert_patch(view)
-      assert to =~ "#{drama.id}"
-      assert to =~ "#{comedy.id}"
+      assert to =~ "genres=#{Genre.slug(comedy)},#{Genre.slug(drama)}"
     end
 
     test "clicking an active genre removes it", %{conn: conn, drama: drama} do
-      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}")
+      {:ok, view, _} = live(conn, ~p"/movies?genres=#{Genre.slug(drama)}")
 
       view
-      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{drama.id}"]))
+      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{Genre.slug(drama)}"]))
       |> render_click()
 
       to = assert_patch(view)
@@ -313,7 +312,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
     end
 
     test "active chips appear when filters are set", %{conn: conn, drama: drama} do
-      {:ok, _view, html} = live(conn, ~p"/movies?genres[]=#{drama.id}&decade=1990")
+      {:ok, _view, html} = live(conn, ~p"/movies?genres=#{Genre.slug(drama)}&decade=1990")
 
       assert html =~ "ACTIVE"
       assert html =~ drama.name
@@ -321,7 +320,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
     end
 
     test "remove_filter drops a single filter from the URL", %{conn: conn, drama: drama} do
-      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}&decade=1990")
+      {:ok, view, _} = live(conn, ~p"/movies?genres=#{Genre.slug(drama)}&decade=1990")
 
       view
       |> element(~s(button[phx-click="remove_filter"][phx-value-filter="decade"]))
@@ -333,7 +332,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
     end
 
     test "clear_filters wipes filters but keeps search", %{conn: conn, drama: drama} do
-      {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}&decade=1990&search=foo")
+      {:ok, view, _} =
+        live(conn, ~p"/movies?genres=#{Genre.slug(drama)}&decade=1990&search=foo")
 
       # The active-filter chip strip "Clear all" link
       view
@@ -350,6 +350,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
   describe "results grid" do
     test "movies render in the grid when there are results", %{conn: conn} do
       _movie = insert_movie!(%{title: "Test Movie A V2", tmdb_id: 91_001})
+      DiscoveryRankings.refresh(concurrently: false)
       Cachex.clear(:movies_cache)
 
       {:ok, _view, html} = live(conn, ~p"/movies")
