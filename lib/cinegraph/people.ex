@@ -292,6 +292,7 @@ defmodule Cinegraph.People do
       |> limit(^limit)
       |> select([p], %{
         id: p.id,
+        slug: p.slug,
         name: p.name,
         profile_path: p.profile_path,
         known_for_department: p.known_for_department,
@@ -308,6 +309,7 @@ defmodule Cinegraph.People do
       |> limit(^(limit - length(prefix_results)))
       |> select([p], %{
         id: p.id,
+        slug: p.slug,
         name: p.name,
         profile_path: p.profile_path,
         known_for_department: p.known_for_department,

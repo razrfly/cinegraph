@@ -10,6 +10,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
   alias Cinegraph.Repo
   alias CinegraphWeb.LiveViewHelpers
 
+  @doc """
+  Converts incoming filter params into the canonical URL shape used by movie
+  index V2.
+  """
   def filter_params(socket, params) do
     params
     |> canonicalize_genre_param(socket)
@@ -19,11 +23,18 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
     |> strip_empty_filter_params()
   end
 
-  def people_slug_cache_from_params(params) do
-    params
-    |> people_param_values()
-    |> LiveViewHelpers.parse_array_param()
-    |> people_slug_cache_for_values()
+  @doc """
+  Builds a cache of person IDs to slugs from params and merges it with any
+  existing socket cache.
+  """
+  def people_slug_cache_from_params(params, seed \\ %{}) do
+    cache =
+      params
+      |> people_param_values()
+      |> LiveViewHelpers.parse_array_param()
+      |> people_slug_cache_for_values()
+
+    Map.merge(seed, cache)
   end
 
   defp canonicalize_genre_param(params, socket) do
@@ -64,15 +75,23 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
 
   defp canonicalize_people_param(params, socket) do
     values = people_param_values(params)
+    slugs = canonical_people_slugs(values, socket.assigns[:people_slug_cache] || %{})
 
     params =
-      case canonical_people_slugs(values, socket.assigns[:people_slug_cache] || %{}) do
-        [] -> Map.delete(params, "people")
-        slugs -> Map.put(params, "people", Enum.join(slugs, ","))
+      cond do
+        slugs == [] ->
+          params
+          |> Map.delete("people")
+          |> Map.delete("people_role")
+
+        Map.has_key?(params, "people_ids") ->
+          Map.delete(params, "people")
+
+        true ->
+          Map.put(params, "people", Enum.join(slugs, ","))
       end
 
     params
-    |> Map.delete("people_ids")
     |> Map.delete("people_search")
     |> Map.delete("people_search[people_ids]")
     |> Map.delete("people_search[role_filter]")
@@ -253,8 +272,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
       end)
 
     id_slugs = slugs_from_cache_or_query(ids, cache)
+    existing_slugs = existing_person_slugs(slugs)
 
-    (slugs ++ id_slugs)
+    (existing_slugs ++ id_slugs)
     |> Enum.reject(&(&1 in [nil, ""]))
   end
 
@@ -278,6 +298,17 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Canonicalize do
     Person
     |> where([p], p.id in ^ids)
     |> select([p], %{id: p.id, slug: p.slug})
+    |> Repo.replica().all()
+  end
+
+  defp existing_person_slugs([]), do: []
+
+  defp existing_person_slugs(slugs) do
+    slugs = Enum.uniq(slugs)
+
+    Person
+    |> where([p], p.slug in ^slugs)
+    |> select([p], p.slug)
     |> Repo.replica().all()
   end
 
