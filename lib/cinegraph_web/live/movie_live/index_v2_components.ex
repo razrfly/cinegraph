@@ -118,6 +118,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
       selected_lists={@selected_lists}
       selected_festivals={@selected_festivals}
       selected_people={@selected_people}
+      people_match={@params["people_match"]}
       selected_decade={@params["decade"]}
       rating_preset={@params["rating_preset"]}
       show_unreleased={@params["show_unreleased"]}

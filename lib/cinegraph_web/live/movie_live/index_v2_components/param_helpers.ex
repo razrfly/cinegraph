@@ -17,5 +17,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ParamHelpers do
   defp filter_value_present?(nil), do: false
   defp filter_value_present?(""), do: false
   defp filter_value_present?([]), do: false
+
+  defp filter_value_present?(list) when is_list(list),
+    do: Enum.any?(list, &filter_value_present?/1)
+
   defp filter_value_present?(_), do: true
 end

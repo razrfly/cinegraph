@@ -270,12 +270,13 @@ defmodule CinegraphWeb.CollaborationLive.Index do
   defp format_rating(value) when is_integer(value), do: Float.round(value * 1.0, 1)
   defp format_rating(_value), do: 0.0
 
-  defp format_millions(value), do: value |> numeric_value() |> div(1_000_000)
+  defp format_millions(value),
+    do: value |> numeric_value() |> Kernel./(1_000_000) |> Float.round(1)
 
-  defp positive_number?(value), do: numeric_value(value) > 0
+  defp positive_number?(value), do: numeric_value(value) > 0.0
 
-  defp numeric_value(%Decimal{} = value), do: value |> Decimal.to_float() |> trunc()
-  defp numeric_value(value) when is_integer(value), do: value
-  defp numeric_value(value) when is_float(value), do: trunc(value)
-  defp numeric_value(_value), do: 0
+  defp numeric_value(%Decimal{} = value), do: Decimal.to_float(value)
+  defp numeric_value(value) when is_integer(value), do: value * 1.0
+  defp numeric_value(value) when is_float(value), do: value
+  defp numeric_value(_value), do: 0.0
 end

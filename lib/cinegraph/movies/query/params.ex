@@ -62,6 +62,7 @@ defmodule Cinegraph.Movies.Query.Params do
     # People filters
     field :people_ids, {:array, :integer}, default: []
     field :people_role, :string
+    field :people_match, :string, default: "any"
 
     # Metric thresholds (for advanced users)
     field :festival_recognition_min, :float
@@ -98,6 +99,7 @@ defmodule Cinegraph.Movies.Query.Params do
   @valid_award_presets ~w(recent_awards 2010s 2000s classic)
   @valid_award_statuses ~w(any_nomination won nominated_only multiple_awards)
   @valid_people_roles ~w(any director cast writer producer cinematographer composer editor)
+  @valid_people_matches ~w(any all)
 
   def changeset(params) do
     %__MODULE__{}
@@ -129,6 +131,7 @@ defmodule Cinegraph.Movies.Query.Params do
       :award_preset,
       :people_ids,
       :people_role,
+      :people_match,
       :festival_recognition_min,
       :time_machine_min,
       :auteurs_min,
@@ -141,6 +144,7 @@ defmodule Cinegraph.Movies.Query.Params do
     |> validate_inclusion(:award_preset, @valid_award_presets, allow_nil: true)
     |> validate_inclusion(:award_status, @valid_award_statuses, allow_nil: true)
     |> validate_inclusion(:people_role, @valid_people_roles, allow_nil: true)
+    |> validate_inclusion(:people_match, @valid_people_matches)
     |> validate_number(:page, greater_than: 0)
     |> validate_number(:per_page, greater_than: 0, less_than_or_equal_to: 100)
     |> validate_number(:runtime_min, greater_than_or_equal_to: 0)
@@ -265,7 +269,7 @@ defmodule Cinegraph.Movies.Query.Params do
 
   defp normalize_blank_enums(params) do
     enum_fields =
-      ~w(rating_preset discovery_preset award_preset award_status people_role search preset disparity)
+      ~w(rating_preset discovery_preset award_preset award_status people_role people_match search preset disparity)
 
     Enum.reduce(enum_fields, params, fn f, acc ->
       case Map.get(acc, f) do

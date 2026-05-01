@@ -462,70 +462,80 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
 
   defp filter_by_award_preset(query, _), do: query
 
-  # People filtering currently uses ANY semantics. Collaboration/intersection
-  # search should be modeled as a separate, explicit mode.
   defp filter_by_people(query, %{people_ids: [], people_role: _}), do: query
   defp filter_by_people(query, %{people_ids: nil, people_role: _}), do: query
 
-  defp filter_by_people(query, %{people_ids: people_ids, people_role: role}) do
-    subq = build_people_subquery(people_ids, role)
+  defp filter_by_people(query, %{people_ids: people_ids, people_role: role} = params) do
+    people_ids = Enum.uniq(people_ids)
+    subq = build_people_subquery(people_ids, role, Map.get(params, :people_match, "any"))
     where(query, [m], m.id in subquery(subq))
   end
 
-  defp build_people_subquery(people_ids, role) do
+  defp build_people_subquery(people_ids, role, match_mode) do
     base = from(mc in "movie_credits", select: mc.movie_id, where: mc.person_id in ^people_ids)
 
-    case role do
-      "director" ->
-        where(base, [mc], mc.job == "Director")
+    base =
+      case role do
+        "director" ->
+          where(base, [mc], mc.job == "Director")
 
-      "cast" ->
-        where(base, [mc], mc.credit_type == "cast")
+        "cast" ->
+          where(base, [mc], mc.credit_type == "cast")
 
-      "writer" ->
-        where(
-          base,
-          [mc],
-          mc.job in [
-            "Writer",
-            "Screenplay",
-            "Story",
-            "Novel",
-            "Characters",
-            "Teleplay",
-            "Adaptation"
-          ]
-        )
+        "writer" ->
+          where(
+            base,
+            [mc],
+            mc.job in [
+              "Writer",
+              "Screenplay",
+              "Story",
+              "Novel",
+              "Characters",
+              "Teleplay",
+              "Adaptation"
+            ]
+          )
 
-      "producer" ->
-        where(
-          base,
-          [mc],
-          mc.job in [
-            "Producer",
-            "Executive Producer",
-            "Associate Producer",
-            "Co-Producer",
-            "Line Producer"
-          ]
-        )
+        "producer" ->
+          where(
+            base,
+            [mc],
+            mc.job in [
+              "Producer",
+              "Executive Producer",
+              "Associate Producer",
+              "Co-Producer",
+              "Line Producer"
+            ]
+          )
 
-      "cinematographer" ->
-        where(
-          base,
-          [mc],
-          mc.job in ["Director of Photography", "Cinematography", "Cinematographer"]
-        )
+        "cinematographer" ->
+          where(
+            base,
+            [mc],
+            mc.job in ["Director of Photography", "Cinematography", "Cinematographer"]
+          )
 
-      "composer" ->
-        where(
-          base,
-          [mc],
-          mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"]
-        )
+        "composer" ->
+          where(
+            base,
+            [mc],
+            mc.job in ["Original Music Composer", "Composer", "Music", "Music Score"]
+          )
 
-      "editor" ->
-        where(base, [mc], mc.job in ["Editor", "Film Editor", "Editorial", "Editing"])
+        "editor" ->
+          where(base, [mc], mc.job in ["Editor", "Film Editor", "Editorial", "Editing"])
+
+        _ ->
+          base
+      end
+
+    case match_mode do
+      "all" ->
+        base
+        |> group_by([mc], mc.movie_id)
+        |> having([mc], count(mc.person_id, :distinct) == ^length(people_ids))
 
       _ ->
         base

@@ -61,6 +61,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
     set_rating_preset(value, socket)
   end
 
+  def handle_event("set_people_match", %{"match" => value}, socket) do
+    set_people_match(value, socket)
+  end
+
+  def handle_event("set_people_match", %{"value" => value}, socket) do
+    set_people_match(value, socket)
+  end
+
   def handle_event("remove_filter", %{"filter" => filter_key} = params, socket) do
     _ = params["filter-type"]
 
@@ -74,6 +82,17 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
 
   def handle_event(_event, _params, _socket), do: :unknown
 
+  defp set_people_match(value, socket) do
+    new_value = if value == "all", do: "all", else: nil
+
+    new_params =
+      socket.assigns.params
+      |> put_or_delete("people_match", new_value)
+      |> Map.put("page", "1")
+
+    {:noreply, push_patch(socket, to: socket.view.build_path(socket, new_params))}
+  end
+
   def put_or_delete(map, key, nil), do: Map.delete(map, key)
   def put_or_delete(map, key, ""), do: Map.delete(map, key)
   def put_or_delete(map, key, []), do: Map.delete(map, key)
@@ -86,6 +105,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
     |> Map.delete("people_search")
     |> Map.delete("people_search[people_ids]")
     |> Map.delete("people_search[role_filter]")
+    |> Map.delete("people_match")
   end
 
   defp delete_filter(params, "people_ids"), do: delete_filter(params, "people")
