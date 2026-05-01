@@ -99,7 +99,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
          %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/movies")
       # The page-level "DECADE" uppercase eyebrow no longer appears.
-      refute html =~ ~s(>\n          DECADE\n        </span>)
+      refute html =~ ~r/>\s*DECADE\s*<\/span>/s
     end
 
     test "Phase 2: drawer renders Decade section with chip pills",
@@ -137,7 +137,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       {:ok, view, _} = live(conn, ~p"/movies")
 
       view
-      |> element(~s(button[phx-value-key="decade"][phx-value-value="1990"]))
+      |> element(~s(button[phx-value-key="decade"][phx-value-id="1990"]))
       |> render_click()
 
       to = assert_patch(view)
@@ -148,7 +148,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       {:ok, view, _} = live(conn, ~p"/movies?decade=1990")
 
       view
-      |> element(~s(button[phx-value-key="decade"][phx-value-value="1990"]))
+      |> element(~s(button[phx-value-key="decade"][phx-value-id="1990"]))
       |> render_click()
 
       to = assert_patch(view)
@@ -168,7 +168,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       {:ok, view, _} = live(conn, ~p"/movies")
 
       view
-      |> element(~s(button[phx-value-key="genres"][phx-value-value="#{drama.id}"]))
+      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{drama.id}"]))
       |> render_click()
 
       to = assert_patch(view)
@@ -184,7 +184,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}")
 
       view
-      |> element(~s(button[phx-value-key="genres"][phx-value-value="#{comedy.id}"]))
+      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{comedy.id}"]))
       |> render_click()
 
       to = assert_patch(view)
@@ -196,7 +196,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Test do
       {:ok, view, _} = live(conn, ~p"/movies?genres[]=#{drama.id}")
 
       view
-      |> element(~s(button[phx-value-key="genres"][phx-value-value="#{drama.id}"]))
+      |> element(~s(button[phx-value-key="genres"][phx-value-id="#{drama.id}"]))
       |> render_click()
 
       to = assert_patch(view)

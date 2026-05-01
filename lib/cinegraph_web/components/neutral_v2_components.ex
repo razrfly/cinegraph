@@ -177,7 +177,7 @@ defmodule CinegraphWeb.NeutralV2Components do
 
   attr :rest, :global,
     include:
-      ~w(phx-click phx-value-key phx-value-value phx-value-id phx-value-decade phx-value-sort phx-target type title)
+      ~w(phx-click phx-value-key phx-value-item phx-value-value phx-value-id phx-value-decade phx-value-sort phx-value-mode phx-target type title)
 
   slot :inner_block, required: true
 
