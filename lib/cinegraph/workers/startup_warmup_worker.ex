@@ -11,7 +11,6 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     schedule_all_warmups()
-    :ok
   end
 
   @doc """
@@ -32,12 +31,32 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
   end
 
   defp schedule_all_warmups do
+    warmup_jobs()
+    |> Enum.reduce([], fn child, failed ->
+      case schedule_child_warmup(child) do
+        {:ok, _job} -> failed
+        {:error, reason} -> [warmup_failure(child, reason) | failed]
+        other -> [warmup_failure(child, other) | failed]
+      end
+    end)
+    |> case do
+      [] -> :ok
+      failed -> {:error, {:startup_warmup_children_failed, Enum.reverse(failed)}}
+    end
+  end
+
+  defp warmup_jobs do
     [
-      cache_warmup: Cinegraph.Workers.CacheWarmupWorker.new(%{operation: "warmup_predictions"}),
-      movies_warmup: Cinegraph.Workers.MoviesCacheWarmer.new(%{}),
-      health_warmup: Cinegraph.Workers.HealthCacheWarmer.new(%{})
+      cache_warmup:
+        Cinegraph.Workers.CacheWarmupWorker.new(
+          %{operation: "warmup_predictions"},
+          unique: startup_child_unique_opts()
+        ),
+      movies_warmup:
+        Cinegraph.Workers.MoviesCacheWarmer.new(%{}, unique: startup_child_unique_opts()),
+      health_warmup:
+        Cinegraph.Workers.HealthCacheWarmer.new(%{}, unique: startup_child_unique_opts())
     ]
-    |> Enum.each(&schedule_child_warmup/1)
   end
 
   defp schedule_child_warmup({name, job}) do
@@ -49,5 +68,11 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
         Logger.error("Startup warmup child job was not scheduled at #{name}: #{inspect(reason)}")
         result
     end
+  end
+
+  defp warmup_failure({name, _job}, reason), do: {name, reason}
+
+  defp startup_child_unique_opts do
+    [period: 300, fields: [:worker, :args, :queue], states: [:available, :scheduled, :executing]]
   end
 end
