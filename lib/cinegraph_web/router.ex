@@ -82,30 +82,34 @@ defmodule CinegraphWeb.Router do
     # All secondary routes redirect to the canonical slug URL to maintain SEO.
     # ========================================================================
 
+    # Static-segment routes must be declared BEFORE the dynamic /movies/:slug
+    # below — Phoenix dispatches in source order, and /movies/:slug would
+    # otherwise capture "/movies/legacy", "/movies/discover", etc.
+    live "/movies/legacy", MovieLive.Index, :index
+    live "/movies/discover", MovieLive.DiscoveryTuner, :index
+
+    # TMDb / IMDb ID lookup routes — programmatic redirects to canonical slug.
+    live "/movies/tmdb/:tmdb_id", MovieLive.Show, :show_by_tmdb
+    live "/movies/imdb/:imdb_id", MovieLive.Show, :show_by_imdb
+
     # V2 movies — primary discovery + show routes. Uses the v2_root layout
-    # (mist palette, Instrument Serif italic). The legacy v1 index lives at
-    # /movies/legacy during the soak period; /movies-v2 is kept as an alias
-    # for any open tabs.
+    # (mist palette, Instrument Serif italic). The legacy v1 page lives at
+    # /movies/:slug/legacy as the named escape hatch; /movies-v2/* are kept
+    # as aliases for open tabs / external V2-pinned links.
     live_session :v2_movies,
       root_layout: {CinegraphWeb.Layouts, :v2_root},
       layout: false do
       live "/movies", MovieLive.IndexV2, :index
+      live "/movies/:slug", MovieLive.ShowV2, :show
       live "/movies-v2", MovieLive.IndexV2, :index
       live "/movies-v2/:slug", MovieLive.ShowV2, :show
     end
 
-    live "/movies/legacy", MovieLive.Index, :index
-    live "/movies/discover", MovieLive.DiscoveryTuner, :index
-
-    # TMDb ID lookup route - for external project linking
-    live "/movies/tmdb/:tmdb_id", MovieLive.Show, :show_by_tmdb
-
-    # IMDb ID lookup route - for cross-platform compatibility
-    live "/movies/imdb/:imdb_id", MovieLive.Show, :show_by_imdb
-
-    # Support both ID and slug for backward compatibility
-    live "/movies/:id_or_slug", MovieLive.Show, :show
-    live "/movies/:id_or_slug/legacy", MovieLive.ShowLegacy, :show
+    # V1 escape hatch (was the prehistoric MovieLive.ShowLegacy slot — retired
+    # in #792). 2-segment path, no conflict with /movies/:slug. The MovieLive.Show
+    # LiveView's handle_params/3 expects :id_or_slug, so we keep that param name
+    # (it accepts both numeric ids and slugs via load_movie_by_id_or_slug/1).
+    live "/movies/:id_or_slug/legacy", MovieLive.Show, :show
     live "/movies/:id_or_slug/metrics", MovieMetricsLive.Show, :show
 
     # ========================================================================
