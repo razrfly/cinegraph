@@ -41,7 +41,19 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
       # V2-specific marker: the bottom-right escape-hatch pill (#792)
       assert html =~ "Old movie page"
-      assert html =~ "fixed bottom-4 right-4"
+      assert html =~ ~p"/movies/#{movie.slug}/legacy"
+      assert html =~ movie.title
+    end
+
+    test "falls back to numeric ID routes for movies without slugs", %{conn: conn, movie: movie} do
+      movie =
+        movie
+        |> Ecto.Changeset.change(slug: nil)
+        |> Repo.update!()
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.id}")
+      assert html =~ "Old movie page"
+      assert html =~ ~p"/movies/#{movie.id}/legacy"
       assert html =~ movie.title
     end
   end
@@ -50,6 +62,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
     test "still renders the V2 show page", %{conn: conn, movie: movie} do
       {:ok, _view, html} = live(conn, ~p"/movies-v2/#{movie.slug}")
       assert html =~ "Old movie page"
+      assert html =~ ~p"/movies/#{movie.slug}/legacy"
       assert html =~ movie.title
     end
   end
