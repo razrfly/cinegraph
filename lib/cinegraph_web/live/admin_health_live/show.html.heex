@@ -143,6 +143,15 @@
             signals={ratings_props.signals}
             unknown_count={ratings_props.unknown_count}
           />
+          <% collaborations_props = domain_card_props(verdict, :collaborations) %>
+          <.drift_card
+            domain={:collaborations}
+            title="Collaborations"
+            status={collaborations_props.status}
+            headline={collaborations_props.headline}
+            signals={collaborations_props.signals}
+            unknown_count={collaborations_props.unknown_count}
+          />
         </div>
     <% end %>
   </section>

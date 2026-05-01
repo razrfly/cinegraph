@@ -73,6 +73,10 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
   defp warmup_failure({name, _job}, reason), do: {name, reason}
 
   defp startup_child_unique_opts do
-    [period: 300, fields: [:worker, :args, :queue], states: [:available, :scheduled, :executing]]
+    [
+      period: 300,
+      fields: [:worker, :args, :queue],
+      states: [:available, :scheduled, :executing, :retryable, :completed]
+    ]
   end
 end

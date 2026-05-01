@@ -9,7 +9,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     unique: [fields: [:args], keys: [:tmdb_id, :imdb_id, :source_key], period: 300]
 
   alias Cinegraph.{Repo, Movies}
-  alias Cinegraph.Workers.{OMDbEnrichmentWorker, CollaborationWorker}
+  alias Cinegraph.Workers.OMDbEnrichmentWorker
   alias Cinegraph.Imports.QualityFilter
   alias Cinegraph.Services.TMDb
   alias Cinegraph.Services.TMDb.FallbackSearch
@@ -152,9 +152,6 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
           Logger.info("No IMDb ID for movie #{movie.title}, skipping OMDb enrichment")
         end
 
-        # Queue collaboration building
-        queue_collaboration_building(movie)
-
         # Update job metadata
         update_job_meta(job, %{
           status: "imported",
@@ -164,7 +161,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
           imdb_id: movie.imdb_id,
           tmdb_id: movie.tmdb_id,
           enrichment_queued: not is_nil(movie.imdb_id),
-          collaboration_queued: true
+          collaboration_rebuild_requested: true
         })
 
         :ok
@@ -220,24 +217,6 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       {:error, reason} ->
         Logger.error("Failed to queue OMDb enrichment: #{inspect(reason)}")
         {:error, reason}
-    end
-  end
-
-  defp queue_collaboration_building(movie) do
-    %{
-      "movie_id" => movie.id
-    }
-    |> CollaborationWorker.new()
-    |> Oban.insert()
-    |> case do
-      {:ok, _} ->
-        Logger.info("Queued collaboration building for #{movie.title}")
-        :ok
-
-      {:error, reason} ->
-        Logger.warning("Failed to queue collaboration building: #{inspect(reason)}")
-        # Not critical, so we don't fail the import
-        :ok
     end
   end
 

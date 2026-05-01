@@ -56,6 +56,11 @@ config :cinegraph, :health,
       omdb_null_backlog: {5.0, 15.0},
       omdb_stale: {30.0, 60.0},
       rt_metacritic_gap: {30.0, 50.0}
+    },
+    collaborations: %{
+      missing_details: {1.0, 10.0},
+      queue_backlog: {10_000, 50_000},
+      recent_failures: {0, 10}
     }
   }
 
@@ -202,6 +207,8 @@ config :cinegraph, Oban,
        {"30 6 * * *", Cinegraph.Workers.OmdbBackfillSweeper},
        # IMDb-id repair via TMDb fetches: 5,000/day on :tmdb.
        {"0 7 * * *", Cinegraph.Workers.ImdbIdRepairSweeper},
+       # Collaboration graph repair: 5,000/day on :collaboration.
+       {"30 7 * * *", Cinegraph.Workers.CollaborationRepairSweeper},
        # Zero-credits cleanup — two phases. Sunday 04:00 enqueues TMDb
        # refetches for orphan people; Monday 04:00 deletes those that
        # remained orphaned (gives the refetches 24h to land).

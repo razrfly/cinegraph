@@ -18,9 +18,12 @@ defmodule Cinegraph.Workers.CollaborationWorker do
   def perform(%Oban.Job{args: %{"movie_id" => movie_id}}) do
     Logger.info("Processing collaborations for movie #{movie_id}")
 
-    case Collaborations.populate_movie_collaborations(movie_id) do
-      {:ok, count} ->
-        Logger.info("Successfully processed #{count} collaborations for movie #{movie_id}")
+    case Collaborations.rebuild_movie_collaborations(movie_id) do
+      {:ok, %{details: details, affected_pairs: affected_pairs}} ->
+        Logger.info(
+          "Successfully rebuilt #{details} collaboration details for movie #{movie_id} across #{affected_pairs} affected pairs"
+        )
+
         :ok
 
       {:error, reason} ->
