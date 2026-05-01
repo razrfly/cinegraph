@@ -39,10 +39,20 @@ defmodule Mix.Tasks.Cinegraph.Prod.Collaborations do
           limit = Keyword.get(opts, :limit, 5_000)
           dry_run? = Keyword.get(opts, :dry_run, false)
 
-          "({:ok, result} = Cinegraph.Maintenance.Collaborations.backfill(limit: #{limit}, dry_run: #{inspect(dry_run?)}); IO.puts(Jason.encode!(result)))"
+          """
+          case Cinegraph.Maintenance.Collaborations.backfill(limit: #{limit}, dry_run: #{inspect(dry_run?)}) do
+            {:ok, result} -> IO.puts(Jason.encode!(result))
+            {:error, reason} -> raise "collaboration backfill failed: \#{inspect(reason)}"
+          end
+          """
 
         movie_id = Keyword.get(opts, :repair_movie) ->
-          "({:ok, result} = Cinegraph.Maintenance.Collaborations.repair_movie(#{movie_id}); IO.puts(Jason.encode!(result)))"
+          """
+          case Cinegraph.Maintenance.Collaborations.repair_movie(#{movie_id}) do
+            {:ok, result} -> IO.puts(Jason.encode!(result))
+            {:error, reason} -> raise "collaboration repair failed: \#{inspect(reason)}"
+          end
+          """
 
         true ->
           usage_error("choose one of --health, --backfill, or --repair-movie MOVIE_ID")

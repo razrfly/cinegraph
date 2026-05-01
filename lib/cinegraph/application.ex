@@ -18,8 +18,7 @@ defmodule Cinegraph.Application do
         {Phoenix.PubSub, name: Cinegraph.PubSub},
         # Start the Finch HTTP client for sending emails
         {Finch, name: Cinegraph.Finch},
-        # Start Oban
-        {Oban, Application.fetch_env!(:cinegraph, Oban)},
+        oban_child_spec(),
         # Start Cachex for performance caching
         Supervisor.child_spec({Cachex, name: :predictions_cache}, id: :predictions_cache),
         # Start Cachex for movies page caching (Phase 1 optimization)
@@ -92,6 +91,18 @@ defmodule Cinegraph.Application do
       ]
     else
       []
+    end
+  end
+
+  defp oban_child_spec do
+    if Application.get_env(:cinegraph, :start_oban, true) do
+      {Oban, Application.fetch_env!(:cinegraph, Oban)}
+    else
+      %{
+        id: :oban_disabled_placeholder,
+        start: {Task, :start_link, [fn -> :ok end]},
+        restart: :temporary
+      }
     end
   end
 

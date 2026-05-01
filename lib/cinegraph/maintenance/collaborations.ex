@@ -94,14 +94,14 @@ defmodule Cinegraph.Maintenance.Collaborations do
          }}
 
       {:error, reason} ->
-        {:ok,
+        {:error,
          %{
            movie_id: movie_id,
            has_credits: has_credits?,
            detail_count_before: before_details,
            enqueued: 0,
            failed: 1,
-           error: inspect(reason)
+           error: reason
          }}
     end
   end
