@@ -11,6 +11,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   """
   use CinegraphWeb, :live_view
 
+  import CinegraphWeb.PersonHelpers, only: [person_slug_or_id: 1]
   import CinegraphWeb.SEOHelpers
 
   alias Cinegraph.Movies
@@ -379,7 +380,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       name: credit.person.name,
       character: credit.character,
       avatar_url: tmdb_url(credit.person.profile_path, "w185"),
-      href: "/people-v2/#{credit.person.slug || credit.person.id}"
+      href: person_href(credit.person)
     }
   end
 
@@ -388,9 +389,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       name: c.person.name,
       job: c.job,
       avatar_url: tmdb_url(c.person.profile_path, "w185"),
-      href: "/people-v2/#{c.person.slug || c.person.id}"
+      href: person_href(c.person)
     }
   end
+
+  defp person_href(person), do: "/people/#{person_slug_or_id(person)}"
 
   defp prioritize_releases(releases) do
     releases
@@ -692,7 +695,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 <div class="flex -space-x-2 shrink-0">
                   <a
                     :for={d <- @directors}
-                    href={"/people-v2/#{d.person.slug || d.person.id}"}
+                    href={person_href(d.person)}
                     title={d.person.name}
                     class="block no-underline"
                   >
@@ -713,7 +716,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 <div class="text-[13.5px] text-white/85 min-w-0">
                   <%= for {d, idx} <- Enum.with_index(@directors) do %>
                     {if idx > 0, do: ", "}<a
-                      href={"/people-v2/#{d.person.slug || d.person.id}"}
+                      href={person_href(d.person)}
                       class="text-white/85 hover:text-white no-underline"
                     >{d.person.name}</a>
                   <% end %>
@@ -728,7 +731,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 <div class="flex -space-x-2 shrink-0">
                   <a
                     :for={c <- top_cast}
-                    href={"/people-v2/#{c.person.slug || c.person.id}"}
+                    href={person_href(c.person)}
                     title={c.person.name}
                     class="block no-underline"
                   >
@@ -749,7 +752,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 <div class="text-[13.5px] text-white/85 min-w-0">
                   <%= for {c, idx} <- Enum.with_index(top_cast) do %>
                     {if idx > 0, do: ", "}<a
-                      href={"/people-v2/#{c.person.slug || c.person.id}"}
+                      href={person_href(c.person)}
                       class="text-white/85 hover:text-white no-underline"
                     >{c.person.name}</a>
                   <% end %>

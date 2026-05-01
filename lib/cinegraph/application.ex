@@ -57,7 +57,8 @@ defmodule Cinegraph.Application do
     case Supervisor.start_link(children, opts) do
       {:ok, pid} ->
         # Schedule cache warmup after application starts
-        if Application.get_env(:cinegraph, :start_background_children, true) do
+        if Application.get_env(:cinegraph, :start_oban, true) &&
+             Application.get_env(:cinegraph, :start_background_children, true) do
           Cinegraph.Workers.StartupWarmupWorker.schedule()
         end
 
@@ -82,7 +83,8 @@ defmodule Cinegraph.Application do
   # Controlled by `:cinegraph, :start_background_children` (default `true`;
   # `config/test.exs` sets it to `false`).
   defp background_children do
-    if Application.get_env(:cinegraph, :start_background_children, true) do
+    if Application.get_env(:cinegraph, :start_oban, true) &&
+         Application.get_env(:cinegraph, :start_background_children, true) do
       [
         Cinegraph.Imports.ImportStats,
         Cinegraph.Cache.DashboardStats,
