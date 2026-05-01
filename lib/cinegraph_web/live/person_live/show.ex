@@ -5,6 +5,7 @@ defmodule CinegraphWeb.PersonLive.Show do
   alias Cinegraph.Collaborations
   alias Cinegraph.Festivals
   import CinegraphWeb.CollaborationComponents
+  import CinegraphWeb.PersonHelpers, only: [person_slug_or_id: 1]
   import CinegraphWeb.SEOHelpers
 
   @impl true
@@ -29,12 +30,7 @@ defmodule CinegraphWeb.PersonLive.Show do
 
       person ->
         # Redirect to canonical slug URL if slug exists
-        redirect_path =
-          if person.slug do
-            ~p"/people/#{person.slug}"
-          else
-            ~p"/people/#{person.id}"
-          end
+        redirect_path = ~p"/people/#{person_slug_or_id(person)}"
 
         {:noreply, push_navigate(socket, to: redirect_path)}
     end
@@ -53,8 +49,8 @@ defmodule CinegraphWeb.PersonLive.Show do
 
       person ->
         # If accessed by ID and slug exists, redirect to canonical slug URL
-        if is_numeric?(id_or_slug) && person.slug do
-          {:noreply, push_navigate(socket, to: ~p"/people/#{person.slug}")}
+        if is_numeric?(id_or_slug) && person.slug && person.slug != "" do
+          {:noreply, push_navigate(socket, to: ~p"/people/#{person_slug_or_id(person)}")}
         else
           {:noreply, load_person_data(socket, person)}
         end

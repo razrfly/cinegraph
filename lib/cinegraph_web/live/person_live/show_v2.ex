@@ -11,6 +11,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
   use CinegraphWeb, :live_view
 
   import CinegraphWeb.SEOHelpers
+  import CinegraphWeb.PersonHelpers, only: [person_slug_or_id: 1]
 
   alias Cinegraph.People
   alias Cinegraph.Collaborations
@@ -92,9 +93,6 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
   end
 
   def handle_event("search_six_degrees", _params, socket), do: {:noreply, socket}
-
-  defp person_slug_or_id(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
-  defp person_slug_or_id(%{id: id}), do: to_string(id)
 
   defp slug_present?(slug), do: is_binary(slug) and slug != ""
 
