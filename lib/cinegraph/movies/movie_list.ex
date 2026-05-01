@@ -83,6 +83,8 @@ defmodule Cinegraph.Movies.MovieList do
     |> validate_length(:source_key, max: 255)
     |> validate_length(:name, max: 500)
     |> validate_url(:source_url)
+    |> validate_optional_url(:cover_image_url)
+    |> validate_optional_url(:hero_image_url)
     |> extract_source_id()
     |> unique_constraint(:source_key)
     |> unique_constraint(:slug)
@@ -99,16 +101,32 @@ defmodule Cinegraph.Movies.MovieList do
 
   # Private functions
 
+  defp validate_optional_url(changeset, field) do
+    validate_change(changeset, field, fn
+      _, value when value in [nil, ""] -> []
+      _, value -> url_errors(field, value)
+    end)
+  end
+
   defp validate_url(changeset, field) do
     validate_change(changeset, field, fn _, url ->
+      url_errors(field, url)
+    end)
+  end
+
+  defp url_errors(field, url) do
+    if is_binary(url) do
       case URI.parse(url) do
-        %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and not is_nil(host) ->
+        %URI{scheme: scheme, host: host}
+        when scheme in ["http", "https"] and not is_nil(host) ->
           []
 
         _ ->
           [{field, "must be a valid HTTP(S) URL"}]
       end
-    end)
+    else
+      [{field, "must be a valid HTTP(S) URL"}]
+    end
   end
 
   defp extract_source_id(changeset) do

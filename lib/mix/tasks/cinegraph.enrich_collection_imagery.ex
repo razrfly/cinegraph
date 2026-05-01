@@ -30,11 +30,17 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
     |> Enum.each(fn list ->
       case fetch_og_image(list.source_url) do
         {:ok, image_url} ->
-          list
-          |> MovieList.changeset(%{cover_image_url: image_url})
-          |> Repo.update()
+          case list
+               |> MovieList.changeset(%{cover_image_url: image_url})
+               |> Repo.update() do
+            {:ok, _} ->
+              Mix.shell().info("movie_lists: #{list.source_key} -> #{image_url}")
 
-          Mix.shell().info("movie_lists: #{list.source_key} -> #{image_url}")
+            {:error, changeset} ->
+              Mix.shell().error(
+                "movie_lists: #{list.source_key} failed: #{inspect(changeset.errors)}"
+              )
+          end
 
         :error ->
           Mix.shell().info("movie_lists: #{list.source_key} missed")
@@ -49,11 +55,17 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
     |> Enum.each(fn org ->
       case fetch_og_image(org.website) do
         {:ok, image_url} ->
-          org
-          |> FestivalOrganization.changeset(%{logo_url: image_url})
-          |> Repo.update()
+          case org
+               |> FestivalOrganization.changeset(%{logo_url: image_url})
+               |> Repo.update() do
+            {:ok, _} ->
+              Mix.shell().info("festival_organizations: #{org.slug || org.id} -> #{image_url}")
 
-          Mix.shell().info("festival_organizations: #{org.slug || org.id} -> #{image_url}")
+            {:error, changeset} ->
+              Mix.shell().error(
+                "festival_organizations: #{org.slug || org.id} failed: #{inspect(changeset.errors)}"
+              )
+          end
 
         :error ->
           Mix.shell().info("festival_organizations: #{org.slug || org.id} missed")
@@ -96,11 +108,20 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
   end
 
   defp absolute_url(nil, _base), do: :error
-  defp absolute_url("http" <> _ = url, _base), do: {:ok, url}
 
-  defp absolute_url("/" <> _ = path, base) do
-    uri = URI.parse(base)
-    {:ok, "#{uri.scheme}://#{uri.host}#{path}"}
+  defp absolute_url(url, base) when is_binary(url) do
+    merged = URI.merge(base, url)
+
+    case merged do
+      %URI{scheme: scheme, host: host} = uri
+      when scheme in ["http", "https"] and not is_nil(host) ->
+        {:ok, URI.to_string(uri)}
+
+      _ ->
+        :error
+    end
+  rescue
+    _ -> :error
   end
 
   defp absolute_url(_url, _base), do: :error

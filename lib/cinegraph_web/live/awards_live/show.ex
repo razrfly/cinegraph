@@ -33,11 +33,12 @@ defmodule CinegraphWeb.AwardsLive.Show do
   @impl CinegraphWeb.SearchEventHandlers
   def build_path(socket, params) do
     org = socket.assigns.organization
+    slug_or_id = org.slug || org.id
 
     case socket.assigns.filter_mode do
-      :winners -> ~p"/awards/#{org.slug}/winners?#{params}"
-      :nominees -> ~p"/awards/#{org.slug}/nominees?#{params}"
-      _ -> ~p"/awards/#{org.slug}?#{params}"
+      :winners -> ~p"/awards/#{slug_or_id}/winners?#{params}"
+      :nominees -> ~p"/awards/#{slug_or_id}/nominees?#{params}"
+      _ -> ~p"/awards/#{slug_or_id}?#{params}"
     end
   end
 
@@ -83,7 +84,7 @@ defmodule CinegraphWeb.AwardsLive.Show do
   end
 
   defp load_awards_page(slug, params, socket) do
-    organization = Festivals.get_organization_by_slug(slug)
+    organization = Festivals.get_organization_by_slug_or_id(slug)
 
     if organization do
       page_params = Map.delete(params, "slug")
@@ -158,12 +159,13 @@ defmodule CinegraphWeb.AwardsLive.Show do
   @impl Phoenix.LiveView
   def handle_event("change_filter", %{"filter" => filter}, socket) do
     org = socket.assigns.organization
+    slug_or_id = org.slug || org.id
 
     base_path =
       case filter do
-        "winners" -> ~p"/awards/#{org.slug}/winners"
-        "nominees" -> ~p"/awards/#{org.slug}/nominees"
-        _ -> ~p"/awards/#{org.slug}"
+        "winners" -> ~p"/awards/#{slug_or_id}/winners"
+        "nominees" -> ~p"/awards/#{slug_or_id}/nominees"
+        _ -> ~p"/awards/#{slug_or_id}"
       end
 
     {:noreply, push_navigate(socket, to: base_path)}
@@ -226,9 +228,9 @@ defmodule CinegraphWeb.AwardsLive.Show do
     "Explore #{org.name} films, winners, and nominees. Discover award-winning cinema on Cinegraph."
   end
 
-  defp awards_canonical_path(org, :winners), do: "/awards/#{org.slug}/winners"
-  defp awards_canonical_path(org, :nominees), do: "/awards/#{org.slug}/nominees"
-  defp awards_canonical_path(org, _), do: "/awards/#{org.slug}"
+  defp awards_canonical_path(org, :winners), do: "/awards/#{org.slug || org.id}/winners"
+  defp awards_canonical_path(org, :nominees), do: "/awards/#{org.slug || org.id}/nominees"
+  defp awards_canonical_path(org, _), do: "/awards/#{org.slug || org.id}"
 
   defp maybe_assign_og_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
     assign(socket, :og_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")

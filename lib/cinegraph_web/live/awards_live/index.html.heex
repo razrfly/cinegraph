@@ -75,7 +75,7 @@
       href={~p"/awards/#{org.slug || org.id}"}
       image_url={org.logo_url}
       eyebrow={Enum.reject([org.abbreviation, org.country], &is_nil/1) |> Enum.join(" / ")}
-      icon="trophy"
+      icon="🏆"
       meta={[
         %{label: "#{org.movie_count} films", tone: "ink"},
         %{label: "#{org.winner_count} winners", tone: "amber"}

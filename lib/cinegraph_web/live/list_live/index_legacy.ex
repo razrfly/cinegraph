@@ -11,12 +11,11 @@ defmodule CinegraphWeb.ListLive.IndexLegacy do
   @impl true
   def mount(_params, _session, socket) do
     lists = ListSlugs.all()
+    counts_by_key = Movies.count_movies_by_list_keys(Enum.map(lists, & &1.key))
 
-    # Get movie counts for each list
     lists_with_counts =
       Enum.map(lists, fn list ->
-        count = Movies.count_movies_in_list(list.key)
-        Map.put(list, :movie_count, count)
+        Map.put(list, :movie_count, Map.get(counts_by_key, list.key, 0))
       end)
 
     {:ok,

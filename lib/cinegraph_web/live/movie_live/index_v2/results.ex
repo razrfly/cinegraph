@@ -10,7 +10,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Results do
   # surface lens-component chips consistently on every scoped discovery page.
   def preload_card_assocs([], _active_lens_key), do: []
 
-  def preload_card_assocs(movies, active_lens_key) when is_binary(active_lens_key) do
+  def preload_card_assocs(movies, active_lens_key)
+      when is_binary(active_lens_key) and active_lens_key != "" do
     Repo.replica().preload(movies, [:score_cache])
   end
 

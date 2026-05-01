@@ -133,9 +133,9 @@
   <a
     href={
       case @filter_mode do
-        :winners -> ~p"/awards/#{@organization.slug}/winners/legacy"
-        :nominees -> ~p"/awards/#{@organization.slug}/nominees/legacy"
-        _ -> ~p"/awards/#{@organization.slug}/legacy"
+        :winners -> ~p"/awards/#{@organization.slug || @organization.id}/winners/legacy"
+        :nominees -> ~p"/awards/#{@organization.slug || @organization.id}/nominees/legacy"
+        _ -> ~p"/awards/#{@organization.slug || @organization.id}/legacy"
       end
     }
     class="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"

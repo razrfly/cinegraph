@@ -110,6 +110,31 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Counts full movies for each canonical list key in one query.
+  """
+  def count_movies_by_list_keys(list_keys) when is_list(list_keys) do
+    list_keys = Enum.uniq(Enum.filter(list_keys, &is_binary/1))
+
+    if list_keys == [] do
+      %{}
+    else
+      from(m in Movie,
+        join:
+          key in fragment(
+            "SELECT unnest(?::text[]) AS list_key",
+            type(^list_keys, {:array, :string})
+          ),
+        on: fragment("? \\? ?", m.canonical_sources, field(key, :list_key)),
+        where: m.import_status == "full",
+        group_by: field(key, :list_key),
+        select: {field(key, :list_key), count(m.id)}
+      )
+      |> Repo.replica().all()
+      |> Map.new()
+    end
+  end
+
+  @doc """
   Returns the list of soft imported movies.
   These are movies that didn't meet quality criteria but are tracked.
   """
