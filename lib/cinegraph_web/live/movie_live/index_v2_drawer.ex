@@ -87,79 +87,80 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             </label>
           </div>
         </section>
+      </form>
 
-        <%!-- ─── Cast & Crew ─── --%>
-        <section>
-          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
-            Cast &amp; Crew
-          </h3>
-          <.live_component
-            module={CinegraphWeb.Components.PersonAutocomplete}
-            id="people-search-v2"
-            field_name="filters[people_search]"
-            selected_people={@selected_people}
-            search_term=""
-          />
-        </section>
+      <%!-- ─── Cast & Crew ─── --%>
+      <section>
+        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+          Cast &amp; Crew
+        </h3>
+        <.live_component
+          module={CinegraphWeb.Components.PersonAutocomplete}
+          id="people-search-v2"
+          field_name="filters[people_search]"
+          selected_people={@selected_people}
+          search_term=""
+        />
+      </section>
 
-        <%!-- ─── Decade (single-select pills) ─── --%>
-        <section :if={(@filter_options[:decades] || []) != []}>
-          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
-            Decade
-          </h3>
-          <div class="flex flex-wrap gap-2">
-            <NeutralV2Components.n_chip_toggle
-              :for={d <- @filter_options[:decades]}
-              active={to_string(d.value) == to_string(@selected_decade || "")}
-              phx-click="toggle_chip"
-              phx-value-key="decade"
-              phx-value-id={to_string(d.value)}
-              phx-value-mode="single"
-            >
-              {d.label}
-            </NeutralV2Components.n_chip_toggle>
-          </div>
-        </section>
+      <%!-- ─── Decade (single-select pills) ─── --%>
+      <section :if={(@filter_options[:decades] || []) != []}>
+        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+          Decade
+        </h3>
+        <div class="flex flex-wrap gap-2">
+          <NeutralV2Components.n_chip_toggle
+            :for={d <- @filter_options[:decades]}
+            active={to_string(d.value) == to_string(@selected_decade || "")}
+            phx-click="toggle_chip"
+            phx-value-key="decade"
+            phx-value-id={to_string(d.value)}
+            phx-value-mode="single"
+          >
+            {d.label}
+          </NeutralV2Components.n_chip_toggle>
+        </div>
+      </section>
 
-        <%!-- ─── Rating Quality (segmented control) ─── --%>
-        <section>
-          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
-            Rating Quality
-          </h3>
-          <input type="hidden" name="filters[rating_preset]" value={@rating_preset || ""} />
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Rating Quality">
-            <button
-              :for={{value, label, sub} <- rating_preset_options()}
-              type="button"
-              phx-click="set_rating_preset"
-              phx-value-id={value}
-              aria-pressed={rating_preset_active?(@rating_preset, value)}
+      <%!-- ─── Rating Quality (segmented control) ─── --%>
+      <section>
+        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+          Rating Quality
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Rating Quality">
+          <button
+            :for={{value, label, sub} <- rating_preset_options()}
+            type="button"
+            phx-click="set_rating_preset"
+            phx-value-id={value}
+            aria-pressed={rating_preset_active?(@rating_preset, value)}
+            class={[
+              "flex flex-col items-center justify-center gap-[1px] rounded-lg border px-2 py-3 text-center transition-colors",
+              if(rating_preset_active?(@rating_preset, value),
+                do: "bg-mist-950 border-mist-950 text-mist-50",
+                else: "bg-mist-50 border-mist-950/15 text-mist-900 hover:bg-mist-950/[0.025]"
+              )
+            ]}
+          >
+            <span class="text-[13px] font-semibold leading-tight">{label}</span>
+            <span
+              :if={sub}
               class={[
-                "flex flex-col items-center justify-center gap-[1px] rounded-lg border px-2 py-3 text-center transition-colors",
+                "text-[10.5px] leading-tight",
                 if(rating_preset_active?(@rating_preset, value),
-                  do: "bg-mist-950 border-mist-950 text-mist-50",
-                  else: "bg-mist-50 border-mist-950/15 text-mist-900 hover:bg-mist-950/[0.025]"
+                  do: "text-mist-300",
+                  else: "text-mist-500"
                 )
               ]}
             >
-              <span class="text-[13px] font-semibold leading-tight">{label}</span>
-              <span
-                :if={sub}
-                class={[
-                  "text-[10.5px] leading-tight",
-                  if(rating_preset_active?(@rating_preset, value),
-                    do: "text-mist-300",
-                    else: "text-mist-500"
-                  )
-                ]}
-              >
-                {sub}
-              </span>
-            </button>
-          </div>
-        </section>
+              {sub}
+            </span>
+          </button>
+        </div>
+      </section>
 
-        <%!-- ─── Other ─── --%>
+      <%!-- ─── Other ─── --%>
+      <form phx-change="apply_filters">
         <section>
           <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
             Other

@@ -109,10 +109,10 @@
 
               <div class="flex items-center space-x-4 text-sm text-gray-600">
                 <%= if Map.get(result, :avg_rating) do %>
-                  <span>Avg Rating: ★ {Float.round(Map.get(result, :avg_rating) || 0, 1)}</span>
+                  <span>Avg Rating: ★ {format_rating(Map.get(result, :avg_rating))}</span>
                 <% end %>
-                <%= if Map.get(result, :total_revenue) && Map.get(result, :total_revenue) > 0 do %>
-                  <span>Total Revenue: ${div(Map.get(result, :total_revenue), 1_000_000)}M</span>
+                <%= if positive_number?(Map.get(result, :total_revenue)) do %>
+                  <span>Total Revenue: ${format_millions(Map.get(result, :total_revenue))}M</span>
                 <% end %>
                 <%= if Map.get(result, :latest_date) do %>
                   <span>Latest: {Map.get(result, :latest_date).year}</span>
@@ -126,7 +126,8 @@
                       navigate={~p"/movies/#{movie.slug || movie.id}"}
                       class="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                     >
-                      {movie.title} ({movie.release_date.year})
+                      {movie.title}
+                      <span :if={movie.release_date}>({movie.release_date.year})</span>
                     </.link>
                   <% end %>
                   <%= if length(Map.get(result, :movies)) > 5 do %>
@@ -177,13 +178,13 @@
             <%= if Map.get(collab, :avg_rating) do %>
               <div class="flex justify-between">
                 <span>Avg Rating:</span>
-                <span class="font-medium">★ {Float.round(collab.avg_rating || 0, 1)}</span>
+                <span class="font-medium">★ {format_rating(collab.avg_rating)}</span>
               </div>
             <% end %>
-            <%= if Map.get(collab, :total_revenue) && collab.total_revenue > 0 do %>
+            <%= if positive_number?(Map.get(collab, :total_revenue)) do %>
               <div class="flex justify-between">
                 <span>Revenue:</span>
-                <span class="font-medium">${div(collab.total_revenue, 1_000_000)}M</span>
+                <span class="font-medium">${format_millions(collab.total_revenue)}M</span>
               </div>
             <% end %>
           </div>
@@ -221,7 +222,7 @@
             <div class="text-sm text-gray-600">
               {similar.collaboration_count} films together
               <%= if similar.avg_movie_rating do %>
-                • ★ {Float.round(similar.avg_movie_rating || 0, 1)}
+                • ★ {format_rating(similar.avg_movie_rating)}
               <% end %>
             </div>
           </div>

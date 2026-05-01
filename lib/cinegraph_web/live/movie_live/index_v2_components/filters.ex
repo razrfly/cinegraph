@@ -7,6 +7,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   alias Cinegraph.Movies.Genre
   alias CinegraphWeb.LiveViewHelpers
   alias CinegraphWeb.MovieLive.GenreEmoji
+  alias CinegraphWeb.MovieLive.IndexV2Components.ParamHelpers
   alias CinegraphWeb.MovieLive.IndexV2Components.SortLabels
   alias CinegraphWeb.NeutralV2Components
 
@@ -247,7 +248,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
 
   def active_filter_count(params, scope) when is_map(params) do
     hidden_keys = hidden_filter_keys(scope)
-    params = normalize_people_filter(params)
+    params = ParamHelpers.normalize_people_filter(params)
 
     filter_count =
       @basic_filter_keys
@@ -259,18 +260,6 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   end
 
   def active_filter_count(_, _), do: 0
-
-  defp normalize_people_filter(params) do
-    cond do
-      filter_value_present?(params["people_ids"]) ->
-        params
-        |> Map.put("people", params["people_ids"])
-        |> Map.delete("people_ids")
-
-      true ->
-        Map.delete(params, "people_ids")
-    end
-  end
 
   def list_param(params, key) when is_map(params) do
     LiveViewHelpers.parse_array_param(params[key])

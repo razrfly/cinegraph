@@ -607,8 +607,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <div class="flex-1 min-w-0 text-white">
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
-              <span :if={@movie.runtime}> ·             {format_runtime(@movie.runtime)}</span>
-              <span :if={content_rating(@movie)}> ·             {content_rating(@movie)}</span>
+              <span :if={@movie.runtime}> ·  {format_runtime(@movie.runtime)}</span>
+              <span :if={content_rating(@movie)}> ·  {content_rating(@movie)}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -1033,7 +1033,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               >
                 <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
                   {l.list_authority || "List"}
-                  <span :if={l.list_year}> ·             {l.list_year}</span>
+                  <span :if={l.list_year}> ·  {l.list_year}</span>
                 </div>
                 <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
                   {l.list_name}

@@ -25,7 +25,14 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
 
   def update(assigns, socket) do
     # Parse selected_people if it comes as a string (from form params)
-    selected_people = parse_selected_people(assigns[:selected_people] || [])
+    selected_people =
+      if Map.has_key?(assigns, :selected_people) do
+        parse_selected_people(assigns[:selected_people] || [])
+      else
+        socket.assigns[:selected_people] || []
+      end
+
+    search_term = Map.get(assigns, :search_term, socket.assigns[:search_term] || "")
 
     # Handle cache updates when search results come back
     socket =
@@ -59,12 +66,15 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
      socket
      |> assign(assigns)
      |> assign(:selected_people, selected_people)
-     |> assign(:search_term, assigns[:search_term] || "")}
+     |> assign(:search_term, search_term)}
   end
 
   def handle_event("search", params, socket) do
     # Handle various parameter formats that LiveView might send
-    query = params["value"] || params["search"] || params["query"] || ""
+    query =
+      params["value"] || params["person_search_input"] || params["search"] || params["query"] ||
+        ""
+
     handle_search_query(query, socket)
   end
 
@@ -167,7 +177,6 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
         <div class="relative">
           <input
             type="text"
-            name="person_search_input"
             phx-keyup="search"
             phx-target={@myself}
             phx-debounce="300"
@@ -175,7 +184,6 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
             placeholder="Start typing a person's name..."
             class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pr-8"
             autocomplete="off"
-            form=""
           />
           <%= if @search_term != "" do %>
             <button

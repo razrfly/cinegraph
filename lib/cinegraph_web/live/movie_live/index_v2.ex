@@ -75,19 +75,42 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   end
 
   @impl true
+  def handle_info({:search_people_autocomplete, component_id, query}, socket) do
+    results =
+      if String.trim(query) == "" do
+        []
+      else
+        Cinegraph.Movies.Search.search_people(query, 10)
+      end
+
+    send_update(CinegraphWeb.Components.PersonAutocomplete,
+      id: component_id,
+      search_results: results,
+      searching: false,
+      cache_query: query,
+      cache_timestamp: DateTime.utc_now()
+    )
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info({:people_selected, _component_id, selected_people}, socket) do
     slugs =
       selected_people
-      |> Enum.map(& &1.slug)
+      |> Enum.map(&person_slug/1)
       |> Enum.reject(&(&1 in [nil, ""]))
 
     people_slug_cache =
       selected_people
       |> Enum.reduce(socket.assigns[:people_slug_cache] || %{}, fn person, acc ->
-        if person.slug in [nil, ""] do
+        slug = person_slug(person)
+        id = person_id(person)
+
+        if id in [nil, ""] or slug in [nil, ""] do
           acc
         else
-          Map.put(acc, person.id, person.slug)
+          Map.put(acc, id, slug)
         end
       end)
 
@@ -148,4 +171,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
     </div>
     """
   end
+
+  defp person_slug(%{slug: slug}), do: slug
+  defp person_slug(%{"slug" => slug}), do: slug
+  defp person_slug(_), do: nil
+
+  defp person_id(%{id: id}), do: id
+  defp person_id(%{"id" => id}), do: id
+  defp person_id(_), do: nil
 end

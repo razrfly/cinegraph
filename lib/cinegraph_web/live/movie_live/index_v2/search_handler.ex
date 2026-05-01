@@ -19,6 +19,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2.SearchHandler do
       assign_pagination: 2
     ]
 
+  @doc """
+  Fetches filter options for the movie index, returning empty option lists if
+  the backing search service is temporarily unavailable.
+  """
   def filter_options do
     Search.get_filter_options()
   rescue
@@ -31,6 +35,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2.SearchHandler do
       %{genres: [], decades: [], lists: [], festivals: [], languages: []}
   end
 
+  @doc """
+  Runs the movie search for the canonical params and assigns list, sort, cache,
+  and pagination state back onto the socket.
+  """
   def assign_search(socket, params, page_size) do
     sort_param = params["sort"] || "release_date_desc"
     criteria = extract_sort_criteria(sort_param)
@@ -38,7 +46,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2.SearchHandler do
     sort_is_preset = SortOptions.preset?(criteria)
     active_lens_key = SortOptions.active_lens_key(criteria)
     query_params = Map.put(params, "per_page", to_string(page_size))
-    people_slug_cache = Canonicalize.people_slug_cache_from_params(params)
+
+    people_slug_cache =
+      Canonicalize.people_slug_cache_from_params(
+        params,
+        socket.assigns[:people_slug_cache] || %{}
+      )
 
     case Search.search_movies(query_params) do
       {:ok, {movies, meta}} ->
@@ -60,14 +73,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2.SearchHandler do
       {:error, _} ->
         socket
         |> assign(:movies, [])
-        |> assign(:meta, %Flop.Meta{total_count: 0, total_pages: 0, current_page: 1})
+        |> assign(:meta, %Flop.Meta{total_count: 0, total_pages: 1, current_page: 1})
         |> assign(:params, params)
         |> assign(:people_slug_cache, people_slug_cache)
         |> assign(:search_term, params["search"] || "")
         |> assign(:sort_criteria, criteria)
         |> assign(:sort_direction, direction)
-        |> assign(:sort_is_preset, false)
-        |> assign(:active_lens_key, nil)
+        |> assign(:sort_is_preset, sort_is_preset)
+        |> assign(:active_lens_key, active_lens_key)
         |> assign(:total_count, 0)
         |> assign(:total_movies, 0)
         |> assign(:total_pages, 1)

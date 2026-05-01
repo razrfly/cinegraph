@@ -7,18 +7,23 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
 
   require Logger
 
+  @doc false
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    Cinegraph.Workers.CacheWarmupWorker.schedule_warmup()
-
-    Cinegraph.Workers.MoviesCacheWarmer.schedule()
-
-    Cinegraph.Workers.HealthCacheWarmer.new(%{})
-    |> Oban.insert()
-
-    :ok
+    with {:ok, _job} <- Cinegraph.Workers.CacheWarmupWorker.schedule_warmup(),
+         {:ok, _job} <- Cinegraph.Workers.MoviesCacheWarmer.schedule(),
+         {:ok, _job} <- schedule_health_warmup() do
+      :ok
+    else
+      {:error, reason} = error ->
+        Logger.error("Startup warmup child job was not scheduled: #{inspect(reason)}")
+        error
+    end
   end
 
+  @doc """
+  Queues the one-shot startup warmup orchestrator after the boot grace period.
+  """
   def schedule do
     %{}
     |> new(schedule_in: 5)
@@ -31,5 +36,10 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
   defp log_schedule_result({:error, reason} = result) do
     Logger.warning("Startup warmup job was not scheduled: #{inspect(reason)}")
     result
+  end
+
+  defp schedule_health_warmup do
+    Cinegraph.Workers.HealthCacheWarmer.new(%{})
+    |> Oban.insert()
   end
 end
