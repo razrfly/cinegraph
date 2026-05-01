@@ -38,8 +38,8 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
          |> push_navigate(to: ~p"/people")}
 
       person ->
-        if numeric?(identifier) && person.slug do
-          {:noreply, push_navigate(socket, to: "/people/#{person.slug}")}
+        if numeric?(identifier) && slug_present?(person.slug) do
+          {:noreply, push_navigate(socket, to: "/people/#{person_slug_or_id(person)}")}
         else
           {:noreply, load_person_data(socket, person, params)}
         end
@@ -76,8 +76,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
       |> Map.reject(fn {_k, v} -> v == "all" or v == "" or is_nil(v) end)
 
     qs = if new_params == %{}, do: "", else: "?" <> URI.encode_query(new_params)
-    slug = socket.assigns.person.slug || to_string(socket.assigns.person.id)
-    {:noreply, push_patch(socket, to: "/people/#{slug}#{qs}")}
+    {:noreply, push_patch(socket, to: "/people/#{person_slug_or_id(socket.assigns.person)}#{qs}")}
   end
 
   def handle_event("search_six_degrees", %{"target_person_id" => target_id}, socket)
@@ -94,7 +93,10 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
   def handle_event("search_six_degrees", _params, socket), do: {:noreply, socket}
 
-  defp person_slug_or_id(person), do: person.slug || to_string(person.id)
+  defp person_slug_or_id(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
+  defp person_slug_or_id(%{id: id}), do: to_string(id)
+
+  defp slug_present?(slug), do: is_binary(slug) and slug != ""
 
   defp person_movies_path(person, "actor"),
     do: "/people/#{person_slug_or_id(person)}/movies/acting"
@@ -219,7 +221,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
         end,
       avg_score: c.avg_rating && Decimal.to_float(c.avg_rating),
       total_revenue: c.total_revenue,
-      href: "/people/#{p.slug || p.id}"
+      href: "/people/#{person_slug_or_id(p)}"
     }
   end
 
@@ -753,7 +755,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
     <%!-- v1 access pill --%>
     <a
-      href={"/people/#{@person.slug || @person.id}/legacy"}
+      href={"/people/#{person_slug_or_id(@person)}/legacy"}
       class="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
     >
       ← see classic page

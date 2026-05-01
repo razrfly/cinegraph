@@ -125,7 +125,7 @@
         </p>
         <div class="mt-2 flex flex-wrap gap-1.5">
           <CinegraphWeb.NeutralV2Components.n_pill tone="ink" size="xs">
-            {format_count(person.movie_count)} films
+            {format_count(person.movie_count)} {films_label(person.movie_count)}
           </CinegraphWeb.NeutralV2Components.n_pill>
           <CinegraphWeb.NeutralV2Components.n_pill
             :if={person.quality_score}

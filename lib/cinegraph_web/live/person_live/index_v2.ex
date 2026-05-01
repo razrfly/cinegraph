@@ -329,6 +329,9 @@ defmodule CinegraphWeb.PersonLive.IndexV2 do
 
   def format_count(number), do: number |> to_string()
 
+  def films_label(1), do: "film"
+  def films_label(_), do: "films"
+
   def format_score(nil), do: nil
 
   def format_score(score) when is_float(score),

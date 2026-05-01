@@ -25,7 +25,7 @@ defmodule CinegraphWeb.PersonLive.IndexV2Test do
       assert html =~ "Search people"
       assert html =~ "Old people page"
       assert html =~ "Vera V2 Person"
-      assert html =~ "1 films"
+      assert html =~ "1 film"
       assert html =~ ~s(href="/people/#{person.slug}")
     end
 
@@ -175,6 +175,16 @@ defmodule CinegraphWeb.PersonLive.IndexV2Test do
       {:ok, _view, directing_html} = live(conn, ~p"/people/#{person.slug}/movies/directing")
       assert directing_html =~ "Directed Scoped Movie"
       refute directing_html =~ "Acting Scoped Movie"
+    end
+
+    test "handles movie search validation errors without missing pagination assigns", %{
+      conn: conn
+    } do
+      person = insert_person!(%{name: "Invalid Search Person", known_for_department: "Acting"})
+
+      {:ok, _view, html} = live(conn, ~p"/people/#{person.slug}/movies?sort=invalid")
+
+      assert html =~ "0 films"
     end
   end
 
