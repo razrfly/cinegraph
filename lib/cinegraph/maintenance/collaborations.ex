@@ -50,19 +50,32 @@ defmodule Cinegraph.Maintenance.Collaborations do
   end
 
   def backfill(opts \\ []) do
-    limit = positive_limit!(Keyword.get(opts, :limit, @default_limit))
-    dry_run? = Keyword.get(opts, :dry_run, false)
-    ids = missing_movie_ids(limit: limit)
+    try do
+      limit = positive_limit!(Keyword.get(opts, :limit, @default_limit))
+      dry_run? = Keyword.get(opts, :dry_run, false)
+      ids = missing_movie_ids(limit: limit)
 
-    result =
-      if dry_run? do
-        %{found: length(ids), enqueued: 0, failed: 0, dry_run: true, movie_ids: ids}
-      else
-        {enqueued, failed} = enqueue_in_chunks(ids)
-        %{found: length(ids), enqueued: enqueued, failed: failed, dry_run: false, movie_ids: ids}
-      end
+      result =
+        if dry_run? do
+          %{found: length(ids), enqueued: 0, failed: 0, dry_run: true, movie_ids: ids}
+        else
+          {enqueued, failed} = enqueue_in_chunks(ids)
 
-    {:ok, Map.merge(result, %{stats: stats()})}
+          %{
+            found: length(ids),
+            enqueued: enqueued,
+            failed: failed,
+            dry_run: false,
+            movie_ids: ids
+          }
+        end
+
+      {:ok, Map.merge(result, %{stats: stats()})}
+    rescue
+      error ->
+        Logger.error("Collaboration backfill failed: #{Exception.message(error)}")
+        {:error, error}
+    end
   end
 
   def repair_movie(movie_id) when is_integer(movie_id) do

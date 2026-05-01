@@ -76,7 +76,7 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
     [
       period: 300,
       fields: [:worker, :args, :queue],
-      states: [:available, :scheduled, :executing, :retryable, :completed]
+      states: [:available, :scheduled, :executing, :retryable]
     ]
   end
 end

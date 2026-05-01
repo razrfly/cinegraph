@@ -38,17 +38,19 @@ defmodule Mix.Tasks.Cinegraph.Collaborations do
           Collaborations.stats()
 
         Keyword.get(opts, :backfill, false) ->
-          {:ok, result} =
-            Collaborations.backfill(
-              limit: Keyword.get(opts, :limit, 5_000),
-              dry_run: Keyword.get(opts, :dry_run, false)
-            )
-
-          result
+          case Collaborations.backfill(
+                 limit: Keyword.get(opts, :limit, 5_000),
+                 dry_run: Keyword.get(opts, :dry_run, false)
+               ) do
+            {:ok, result} -> result
+            {:error, reason} -> operation_error("backfill", reason)
+          end
 
         movie_id = Keyword.get(opts, :repair_movie) ->
-          {:ok, result} = Collaborations.repair_movie(movie_id)
-          result
+          case Collaborations.repair_movie(movie_id) do
+            {:ok, result} -> result
+            {:error, reason} -> operation_error("repair_movie", reason)
+          end
 
         true ->
           usage_error("choose one of --health, --backfill, or --repair-movie MOVIE_ID")
@@ -73,6 +75,11 @@ defmodule Mix.Tasks.Cinegraph.Collaborations do
     Mix.shell().info("  mix cinegraph.collaborations --health [--json]")
     Mix.shell().info("  mix cinegraph.collaborations --backfill [--limit N] [--dry-run] [--json]")
     Mix.shell().info("  mix cinegraph.collaborations --repair-movie MOVIE_ID [--json]")
+    System.halt(1)
+  end
+
+  defp operation_error(operation, reason) do
+    Mix.shell().error("✗ #{operation} failed: #{inspect(reason)}")
     System.halt(1)
   end
 end

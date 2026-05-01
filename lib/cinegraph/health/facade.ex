@@ -17,7 +17,7 @@ defmodule Cinegraph.Health.Facade do
   @drift_timeout 120_000
 
   @doc """
-  Run all 4 drift domains in parallel, roll them up via `Verdict.compute/1`.
+  Run all 5 drift domains in parallel, roll them up via `Verdict.compute/1`.
 
   ## Options
 
