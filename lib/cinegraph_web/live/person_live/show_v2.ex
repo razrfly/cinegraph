@@ -1,6 +1,6 @@
 defmodule CinegraphWeb.PersonLive.ShowV2 do
   @moduledoc """
-  Person show page on the V2 design system. Mounts at `/people-v2/:slug_or_id`.
+  Person show page on the V2 design system. Mounts at `/people/:slug_or_id`.
 
   See issue #757. KEEP features at parity with `PersonLive.Show`, plus 3 NEW:
 
@@ -39,7 +39,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
       person ->
         if numeric?(identifier) && person.slug do
-          {:noreply, push_navigate(socket, to: "/people-v2/#{person.slug}")}
+          {:noreply, push_navigate(socket, to: "/people/#{person.slug}")}
         else
           {:noreply, load_person_data(socket, person, params)}
         end
@@ -77,7 +77,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
     qs = if new_params == %{}, do: "", else: "?" <> URI.encode_query(new_params)
     slug = socket.assigns.person.slug || to_string(socket.assigns.person.id)
-    {:noreply, push_patch(socket, to: "/people-v2/#{slug}#{qs}")}
+    {:noreply, push_patch(socket, to: "/people/#{slug}#{qs}")}
   end
 
   def handle_event("search_six_degrees", %{"target_person_id" => target_id}, socket)
@@ -93,6 +93,20 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
   end
 
   def handle_event("search_six_degrees", _params, socket), do: {:noreply, socket}
+
+  defp person_slug_or_id(person), do: person.slug || to_string(person.id)
+
+  defp person_movies_path(person, "actor"),
+    do: "/people/#{person_slug_or_id(person)}/movies/acting"
+
+  defp person_movies_path(person, "director"),
+    do: "/people/#{person_slug_or_id(person)}/movies/directing"
+
+  defp person_movies_path(person, _role), do: "/people/#{person_slug_or_id(person)}/movies"
+
+  defp person_movies_cta_label("actor"), do: "Open acting credits"
+  defp person_movies_cta_label("director"), do: "Open directed films"
+  defp person_movies_cta_label(_role), do: "Open all films"
 
   @impl true
   def handle_info({:find_path, target_id}, socket) do
@@ -205,7 +219,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
         end,
       avg_score: c.avg_rating && Decimal.to_float(c.avg_rating),
       total_revenue: c.total_revenue,
-      href: "/people-v2/#{p.slug || p.id}"
+      href: "/people/#{p.slug || p.id}"
     }
   end
 
@@ -563,12 +577,29 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
       <%!-- FILMOGRAPHY w/ role-chip filter (NEW) --%>
       <section>
         <div class="flex items-end justify-between gap-4 mb-6 flex-wrap">
-          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
-            Filmography
-            <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
-              {@filmography_total}
-            </span>
-          </h2>
+          <div>
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+              Filmography
+              <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                {@filmography_total}
+              </span>
+            </h2>
+            <div class="mt-2 flex flex-wrap items-center gap-3">
+              <a
+                href={person_movies_path(@person, @role_filter)}
+                class="inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+              >
+                {person_movies_cta_label(@role_filter)} →
+              </a>
+              <a
+                :if={@role_filter != "all"}
+                href={person_movies_path(@person, "all")}
+                class="inline-flex items-center gap-2 text-[12.5px] font-medium text-mist-600 underline decoration-mist-950/10 underline-offset-4"
+              >
+                Open full filmography
+              </a>
+            </div>
+          </div>
           <div class="inline-flex p-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-lg gap-[2px]">
             <button
               :for={{key, label} <- role_options()}
@@ -722,7 +753,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
     <%!-- v1 access pill --%>
     <a
-      href={"/people/#{@person.slug || @person.id}"}
+      href={"/people/#{@person.slug || @person.id}/legacy"}
       class="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
     >
       ← see classic page

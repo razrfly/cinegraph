@@ -1,0 +1,380 @@
+<div
+  class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16"
+  phx-window-keydown="hide_drawer"
+  phx-key="Escape"
+>
+  <nav class="mb-8 text-[12px] text-mist-600">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950">Movies</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <span class="font-medium text-mist-950">People</span>
+  </nav>
+
+  <section class="mb-8 lg:mb-10">
+    <CinegraphWeb.NeutralV2Components.n_eyebrow>
+      People
+    </CinegraphWeb.NeutralV2Components.n_eyebrow>
+    <h1 class="mt-2 font-display italic text-[44px] sm:text-[56px] lg:text-[72px] text-balance text-mist-950 leading-[1.02]">
+      People.
+    </h1>
+    <p class="mt-3 max-w-2xl text-[15px] leading-relaxed text-mist-700">
+      Actors, directors, writers, and craftspeople connected through films, awards, and collaborations.
+    </p>
+  </section>
+
+  <section class="mb-7 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <div class="flex gap-[2px] overflow-x-auto rounded-lg border border-mist-950/10 bg-mist-950/[0.025] p-[3px]">
+      <.link
+        :for={{id, label} <- @department_presets}
+        patch={department_preset_path(@params, id)}
+        class={[
+          "rounded-[6px] px-3 py-[6px] text-[12.5px] whitespace-nowrap",
+          if(@department_preset == id,
+            do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
+            else: "font-medium text-mist-700 hover:text-mist-950"
+          )
+        ]}
+      >
+        {label}
+      </.link>
+    </div>
+
+    <form class="flex flex-col gap-2 sm:flex-row" phx-change="filter" phx-submit="filter">
+      <input
+        name="search"
+        value={@search}
+        placeholder="Search people"
+        phx-debounce="350"
+        class="h-10 rounded-lg border border-mist-950/15 bg-mist-50 px-3 text-[13px] text-mist-950 placeholder:text-mist-500"
+      />
+      <select
+        name="sort"
+        class="h-10 min-w-[160px] rounded-lg border border-mist-950/15 bg-mist-50 pl-3 pr-10 text-[13px] text-mist-950"
+      >
+        <option value="relevance_desc" selected={@sort == "relevance_desc"}>Relevance</option>
+        <option value="popularity_desc" selected={@sort == "popularity_desc"}>
+          TMDb popularity
+        </option>
+        <option value="movie_count_desc" selected={@sort == "movie_count_desc"}>
+          Most films
+        </option>
+        <option value="name" selected={@sort == "name"}>Name</option>
+        <option value="birthday_desc" selected={@sort == "birthday_desc"}>Youngest</option>
+        <option value="birthday" selected={@sort == "birthday"}>Oldest</option>
+        <option value="recently_added" selected={@sort == "recently_added"}>
+          Recently added
+        </option>
+      </select>
+      <button
+        type="button"
+        phx-click="toggle_drawer"
+        class="h-10 rounded-lg border border-mist-950/15 bg-mist-50 px-4 text-[13px] font-semibold text-mist-950 hover:bg-mist-950/[0.025]"
+      >
+        Filters
+      </button>
+    </form>
+  </section>
+
+  <section :if={active_filters(assigns) != []} class="mb-7 flex flex-wrap gap-2">
+    <button
+      :for={{key, label, value} <- active_filters(assigns)}
+      type="button"
+      phx-click="remove_filter"
+      phx-value-key={key}
+      class="inline-flex items-center gap-2 rounded-full border border-mist-950/10 bg-mist-950/[0.025] px-3 py-1.5 text-[12px] text-mist-800 hover:bg-mist-950/[0.05]"
+    >
+      <span class="font-semibold">{label}</span>
+      <span>{value}</span>
+      <span aria-hidden="true">×</span>
+    </button>
+  </section>
+
+  <div :if={@people == []} class="py-20 text-center">
+    <p class="font-display italic text-[28px] text-mist-700">No people match these filters.</p>
+  </div>
+
+  <section
+    :if={@people != []}
+    class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+  >
+    <.link
+      :for={person <- @people}
+      navigate={person_path(person)}
+      class="group grid min-h-[92px] grid-cols-[68px_1fr] gap-3 rounded-lg border border-mist-950/10 bg-mist-50 p-3 transition-colors hover:bg-mist-950/[0.025]"
+    >
+      <div class="h-[72px] w-[68px] overflow-hidden rounded-md bg-mist-100">
+        <%= if profile_url(person) do %>
+          <img
+            src={profile_url(person)}
+            alt={person.name}
+            loading="lazy"
+            class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          />
+        <% else %>
+          <div class="grid h-full w-full place-items-center bg-mist-100 px-2 text-center font-display italic text-[22px] leading-none text-mist-700">
+            {person.name |> String.split() |> Enum.take(2) |> Enum.map_join(" ", &String.first/1)}
+          </div>
+        <% end %>
+      </div>
+
+      <div class="min-w-0 self-center">
+        <h2 class="line-clamp-1 text-[14.5px] font-semibold leading-snug text-mist-950 group-hover:underline group-hover:decoration-mist-950/20 group-hover:underline-offset-4">
+          {person.name}
+        </h2>
+        <p class="mt-1 text-[12.5px] text-mist-600">
+          {person.known_for_department || "Film"}
+        </p>
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          <CinegraphWeb.NeutralV2Components.n_pill tone="ink" size="xs">
+            {format_count(person.movie_count)} films
+          </CinegraphWeb.NeutralV2Components.n_pill>
+          <CinegraphWeb.NeutralV2Components.n_pill
+            :if={person.quality_score}
+            tone="neutral"
+            size="xs"
+          >
+            Quality {format_score(person.quality_score)}
+          </CinegraphWeb.NeutralV2Components.n_pill>
+          <CinegraphWeb.NeutralV2Components.n_pill
+            :if={@sort == "popularity_desc" && person.popularity}
+            tone="neutral"
+            size="xs"
+          >
+            TMDb {Float.round(person.popularity, 1)}
+          </CinegraphWeb.NeutralV2Components.n_pill>
+        </div>
+        <p
+          :if={short_place(person.place_of_birth)}
+          class="mt-2 line-clamp-1 text-[12px] text-mist-500"
+        >
+          {short_place(person.place_of_birth)}
+        </p>
+      </div>
+    </.link>
+  </section>
+
+  <nav
+    :if={@total_pages > 1}
+    class="mt-8 flex items-center justify-between gap-4 border-t border-mist-950/10 pt-6 text-[13px] text-mist-700"
+  >
+    <button
+      type="button"
+      phx-click="page"
+      phx-value-page={max(1, @page - 1)}
+      disabled={@page <= 1}
+      class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-4 py-2 font-medium text-mist-950 hover:bg-mist-950/[0.025] disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      ← Previous
+    </button>
+
+    <div class="text-center text-[12px] tabular-nums">
+      Page <b class="font-semibold text-mist-950">{@page}</b>
+      of <b class="font-semibold text-mist-950">{@total_pages}</b>
+      <span class="hidden text-mist-500 sm:inline">
+        · {format_count(@total_people)} people
+      </span>
+    </div>
+
+    <button
+      type="button"
+      phx-click="page"
+      phx-value-page={min(@total_pages, @page + 1)}
+      disabled={@page >= @total_pages}
+      class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-4 py-2 font-medium text-mist-950 hover:bg-mist-950/[0.025] disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      Next →
+    </button>
+  </nav>
+
+  <CinegraphWeb.NeutralV2Components.n_drawer
+    id="people-filters"
+    show={@show_drawer}
+    title="People filters"
+  >
+    <form class="space-y-6" phx-change="filter" phx-submit="filter">
+      <div>
+        <label class="flex items-center gap-2 text-[13px] font-medium text-mist-800">
+          <input type="hidden" name="include_adult" value="false" />
+          <input
+            type="checkbox"
+            name="include_adult"
+            value="true"
+            checked={@include_adult}
+          /> Include adult people
+        </label>
+      </div>
+
+      <div>
+        <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          Department
+        </label>
+        <select
+          name="departments[]"
+          multiple
+          size="6"
+          class="w-full rounded-lg border border-mist-950/15 bg-mist-50 px-3 py-2 text-[13px] text-mist-950"
+        >
+          <option
+            :for={department <- @departments}
+            value={department}
+            selected={department in selected_values(@params, "departments")}
+          >
+            {department}
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          Gender
+        </label>
+        <div class="space-y-2 text-[13px] text-mist-800">
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="genders[]"
+              value="1"
+              checked={"1" in selected_values(@params, "genders")}
+            /> Female
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="genders[]"
+              value="2"
+              checked={"2" in selected_values(@params, "genders")}
+            /> Male
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="genders[]"
+              value="3"
+              checked={"3" in selected_values(@params, "genders")}
+            /> Non-binary
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          Status
+        </label>
+        <div class="space-y-2 text-[13px] text-mist-800">
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="status[]"
+              value="living"
+              checked={"living" in selected_values(@params, "status")}
+            /> Living
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="status[]"
+              value="deceased"
+              checked={"deceased" in selected_values(@params, "status")}
+            /> Deceased
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="status[]"
+              value="has_biography"
+              checked={"has_biography" in selected_values(@params, "status")}
+            /> Has biography
+          </label>
+          <label class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="status[]"
+              value="has_image"
+              checked={"has_image" in selected_values(@params, "status")}
+            /> Has image
+          </label>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+            Min age
+          </label>
+          <input
+            name="age_min"
+            type="number"
+            min="0"
+            max="120"
+            value={@params["age_min"]}
+            class="w-full rounded-lg border border-mist-950/15 bg-mist-50 px-3 py-2 text-[13px]"
+          />
+        </div>
+        <div>
+          <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+            Max age
+          </label>
+          <input
+            name="age_max"
+            type="number"
+            min="0"
+            max="120"
+            value={@params["age_max"]}
+            class="w-full rounded-lg border border-mist-950/15 bg-mist-50 px-3 py-2 text-[13px]"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          Birth decade
+        </label>
+        <select
+          name="birth_decade"
+          class="w-full rounded-lg border border-mist-950/15 bg-mist-50 px-3 py-2 text-[13px]"
+        >
+          <option value="">All decades</option>
+          <option
+            :for={decade <- Enum.sort(@birth_decades, :desc)}
+            value={decade}
+            selected={to_string(decade) == @params["birth_decade"]}
+          >
+            {decade}s
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <label class="mb-2 block text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          Birthplace
+        </label>
+        <input
+          name="nationality"
+          value={@params["nationality"]}
+          list="people-nationalities"
+          placeholder="e.g. New York, London"
+          class="w-full rounded-lg border border-mist-950/15 bg-mist-50 px-3 py-2 text-[13px]"
+        />
+        <datalist id="people-nationalities">
+          <option :for={nationality <- Enum.take(@nationalities, 30)} value={nationality}>
+            {nationality}
+          </option>
+        </datalist>
+      </div>
+    </form>
+    <:footer>
+      <.link
+        patch={~p"/people"}
+        class="inline-flex w-full justify-center rounded-lg bg-mist-950 px-4 py-2 text-[13px] font-semibold text-mist-50 hover:bg-mist-800"
+      >
+        Clear filters
+      </.link>
+    </:footer>
+  </CinegraphWeb.NeutralV2Components.n_drawer>
+
+  <a
+    href="/people/legacy"
+    class="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
+  >
+    ← Old people page
+  </a>
+</div>

@@ -140,7 +140,7 @@ defmodule CinegraphWeb.GlobalSearch.Components do
   def person_row(assigns) do
     ~H"""
     <a
-      href={"/people/" <> @person.slug}
+      href={person_href(@person)}
       role="option"
       class="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-mist-50 dark:hover:bg-white/5 no-underline"
     >
@@ -173,6 +173,9 @@ defmodule CinegraphWeb.GlobalSearch.Components do
     </a>
     """
   end
+
+  defp person_href(%{slug: slug}) when is_binary(slug) and slug != "", do: "/people/#{slug}"
+  defp person_href(%{id: id}), do: "/people/#{id}"
 
   attr :list, :map, required: true
 

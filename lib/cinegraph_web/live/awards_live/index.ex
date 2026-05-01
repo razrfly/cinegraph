@@ -9,7 +9,7 @@ defmodule CinegraphWeb.AwardsLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    organizations = organizations_with_stats()
+    organizations = Festivals.list_organizations_with_stats()
 
     {:ok,
      socket
@@ -78,16 +78,4 @@ defmodule CinegraphWeb.AwardsLive.Index do
   defp sort_organizations(orgs, "films"), do: Enum.sort_by(orgs, & &1.movie_count, :desc)
   defp sort_organizations(orgs, "winners"), do: Enum.sort_by(orgs, & &1.winner_count, :desc)
   defp sort_organizations(orgs, _), do: Enum.sort_by(orgs, &String.downcase(&1.name || ""))
-
-  defp organizations_with_stats do
-    stats_by_id = Festivals.organization_stats_by_id()
-
-    Enum.map(Festivals.list_organizations(), fn org ->
-      stats = Map.get(stats_by_id, org.id, %{movie_count: 0, winner_count: 0})
-
-      org
-      |> Map.put(:movie_count, stats.movie_count)
-      |> Map.put(:winner_count, stats.winner_count)
-    end)
-  end
 end

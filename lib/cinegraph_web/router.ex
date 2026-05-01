@@ -130,14 +130,24 @@ defmodule CinegraphWeb.Router do
     # All secondary routes redirect to the canonical slug URL to maintain SEO.
     # ========================================================================
 
-    live "/people", PersonLive.Index, :index
+    live "/people/legacy", PersonLive.Index, :index
+
+    live_session :v2_people,
+      root_layout: {CinegraphWeb.Layouts, :v2_root},
+      layout: false do
+      live "/people", PersonLive.IndexV2, :index
+      live "/people/:slug_or_id/movies", PersonLive.Movies, :index
+      live "/people/:slug_or_id/movies/acting", PersonLive.Movies, :acting
+      live "/people/:slug_or_id/movies/directing", PersonLive.Movies, :directing
+      live "/people/:slug_or_id", PersonLive.ShowV2, :show
+    end
 
     # TMDb ID lookup route - for external project linking
     live "/people/tmdb/:tmdb_id", PersonLive.Show, :show_by_tmdb
 
-    # Support both ID and slug for backward compatibility
-    live "/people/:id_or_slug", PersonLive.Show, :show
-    live "/people/:id_or_slug/legacy", PersonLive.ShowLegacy, :show
+    # V1 escape hatch while the V2 person profile soaks.
+    live "/people/:id_or_slug/legacy", PersonLive.Show, :show
+    live "/people/:id_or_slug/classic", PersonLive.ShowLegacy, :show
 
     # Collaboration routes
     live "/collaborations", CollaborationLive.Index, :index

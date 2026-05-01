@@ -105,6 +105,18 @@ defmodule Cinegraph.SearchTest do
 
       assert hd(result.films).id == movie.id
     end
+
+    test "person rows preserve nil slug for route fallback" do
+      person =
+        insert_person!("Nil Slug Search Person", 700_005, popularity: 5.0)
+        |> Ecto.Changeset.change(slug: nil)
+        |> Repo.update!()
+
+      result = Search.global("nil slug search")
+
+      assert [%{id: id, slug: nil} | _] = result.people
+      assert id == person.id
+    end
   end
 
   describe "normalize_query/1" do

@@ -8,6 +8,7 @@ defmodule Cinegraph.People do
   alias Cinegraph.Movies.Person
   alias Cinegraph.Movies.Credit
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Metrics.PersonMetric
 
   @doc """
   Returns the list of people with optional pagination, filtering, and sorting.
@@ -26,6 +27,74 @@ defmodule Cinegraph.People do
   end
 
   @doc """
+  Returns people for the V2 index with card-ready aggregate fields.
+  """
+  def list_people_for_index(params \\ %{}) do
+    base_query =
+      Person
+      |> filter_by_search(params["search"])
+      |> filter_by_department(params["departments"])
+      |> filter_by_gender(params["genders"])
+      |> filter_by_age_range(params["age_min"], params["age_max"])
+      |> filter_by_decade(params["birth_decade"])
+      |> filter_by_status(params["status"])
+      |> filter_by_nationality(params["nationality"])
+      |> filter_by_adult_browse(params)
+
+    if params["sort_by"] == "movie_count" do
+      list_people_for_index_by_movie_count(base_query, params)
+    else
+      base_query
+      |> with_quality_score()
+      |> sort_people_for_index(params["sort_by"], params["sort_order"])
+      |> select_index_card_fields()
+      |> paginate(params)
+    end
+  end
+
+  defp list_people_for_index_by_movie_count(query, params) do
+    query
+    |> with_quality_score()
+    |> join(:left, [p], c in Credit, on: c.person_id == p.id)
+    |> group_by([p, pm, c], [p.id, pm.score])
+    |> sort_people_by_movie_count(params["sort_order"])
+    |> select([p, pm, c], %{
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      profile_path: p.profile_path,
+      known_for_department: p.known_for_department,
+      place_of_birth: p.place_of_birth,
+      popularity: p.popularity,
+      quality_score: pm.score,
+      birthday: p.birthday,
+      deathday: p.deathday,
+      movie_count: count(fragment("DISTINCT ?", c.movie_id))
+    })
+    |> paginate(params)
+  end
+
+  defp select_index_card_fields(query) do
+    select(query, [p, pm], %{
+      id: p.id,
+      slug: p.slug,
+      name: p.name,
+      profile_path: p.profile_path,
+      known_for_department: p.known_for_department,
+      place_of_birth: p.place_of_birth,
+      popularity: p.popularity,
+      quality_score: pm.score,
+      birthday: p.birthday,
+      deathday: p.deathday,
+      movie_count:
+        fragment(
+          "(SELECT COUNT(DISTINCT mc.movie_id) FROM movie_credits mc WHERE mc.person_id = ?)",
+          p.id
+        )
+    })
+  end
+
+  @doc """
   Returns the count of all people with optional filtering.
   Uses read replica for better load distribution.
   """
@@ -38,6 +107,7 @@ defmodule Cinegraph.People do
     |> filter_by_decade(params["birth_decade"])
     |> filter_by_status(params["status"])
     |> filter_by_nationality(params["nationality"])
+    |> filter_by_adult_browse(params)
     |> Repo.replica().aggregate(:count, :id)
   end
 
@@ -534,6 +604,31 @@ defmodule Cinegraph.People do
     where(query, [p], ilike(p.place_of_birth, ^search_pattern))
   end
 
+  defp filter_by_adult_browse(query, params) do
+    cond do
+      include_adult?(params["include_adult"]) ->
+        query
+
+      has_search?(params["search"]) ->
+        query
+
+      true ->
+        where(query, [p], p.adult == false or is_nil(p.adult))
+    end
+  end
+
+  defp include_adult?(value) when value in [true, "true", "1", 1, "on"], do: true
+  defp include_adult?(_), do: false
+
+  defp has_search?(value) when is_binary(value), do: String.trim(value) != ""
+  defp has_search?(_), do: false
+
+  defp with_quality_score(query) do
+    join(query, :left, [p], pm in PersonMetric,
+      on: pm.person_id == p.id and pm.metric_type == "quality_score"
+    )
+  end
+
   defp sort_people(query, nil, _), do: order_by(query, desc: :popularity)
   defp sort_people(query, "", _), do: order_by(query, desc: :popularity)
 
@@ -570,6 +665,50 @@ defmodule Cinegraph.People do
       _ ->
         order_by(query, desc: :popularity)
     end
+  end
+
+  defp sort_people_for_index(query, nil, _), do: sort_people_for_index(query, "relevance", "desc")
+  defp sort_people_for_index(query, "", _), do: sort_people_for_index(query, "relevance", "desc")
+
+  defp sort_people_for_index(query, sort_by, sort_order) do
+    direction = if sort_order == "desc", do: :desc, else: :asc
+
+    case sort_by do
+      "relevance" ->
+        order_by(query, [p, pm],
+          desc_nulls_last: pm.score,
+          desc_nulls_last: p.popularity,
+          asc: p.name
+        )
+
+      "name" ->
+        order_by(query, [p], [{^direction, p.name}])
+
+      "popularity" ->
+        order_by(query, [p], [{^direction, p.popularity}])
+
+      "birthday" ->
+        if direction == :asc do
+          order_by(query, [p], [
+            {^direction, fragment("COALESCE(?, '1900-01-01')", p.birthday)}
+          ])
+        else
+          order_by(query, [p], [
+            {^direction, fragment("COALESCE(?, '2100-01-01')", p.birthday)}
+          ])
+        end
+
+      "recently_added" ->
+        order_by(query, [p], [{^direction, p.inserted_at}])
+
+      _ ->
+        sort_people_for_index(query, "relevance", "desc")
+    end
+  end
+
+  defp sort_people_by_movie_count(query, sort_order) do
+    direction = if sort_order == "asc", do: :asc, else: :desc
+    order_by(query, [_p, _pm, c], [{^direction, count(fragment("DISTINCT ?", c.movie_id))}])
   end
 
   defp paginate(query, %{"page" => page, "per_page" => per_page}) do

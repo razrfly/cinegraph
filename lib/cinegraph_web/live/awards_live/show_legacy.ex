@@ -160,10 +160,8 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
       end
 
     query =
-      socket.assigns[:params]
-      |> Kernel.||(%{})
+      (socket.assigns[:params] || %{})
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
-      |> Map.new()
       |> URI.encode_query()
 
     path = if query == "", do: base_path, else: "#{base_path}?#{query}"

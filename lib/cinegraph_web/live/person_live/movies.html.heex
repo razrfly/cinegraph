@@ -1,0 +1,122 @@
+<div
+  :if={@person}
+  class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16"
+  phx-window-keydown="hide_drawer"
+  phx-key="Escape"
+>
+  <nav class="mb-8 text-[12px] text-mist-600">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950">Movies</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <.link navigate={~p"/people"} class="hover:text-mist-950">People</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <.link navigate={~p"/people/#{@person.slug || @person.id}"} class="hover:text-mist-950">
+      {@person.name}
+    </.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <span class="font-medium text-mist-950">Movies</span>
+  </nav>
+
+  <section class="mb-8 grid gap-7 lg:grid-cols-[180px_1fr] lg:items-end">
+    <div class="overflow-hidden rounded-lg border border-mist-950/10 bg-mist-100">
+      <%= if profile_url(@person) do %>
+        <img
+          src={profile_url(@person)}
+          alt=""
+          class="aspect-[2/3] h-full w-full object-cover"
+        />
+      <% else %>
+        <div class="grid aspect-[2/3] place-items-center bg-gradient-to-br from-mist-100 to-mist-300 px-6 text-center font-display italic text-[42px] leading-none text-mist-950">
+          {@person.name}
+        </div>
+      <% end %>
+    </div>
+
+    <div>
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        Person Filmography · {String.upcase(to_string(@person.known_for_department || "credits"))}
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <h1 class="mt-2 font-display italic text-[40px] sm:text-[52px] lg:text-[68px] text-balance text-mist-950 leading-[1.02]">
+        Films.
+      </h1>
+      <p class="mt-4 max-w-3xl text-[15px] leading-relaxed text-mist-700">
+        All films connected to {@person.name} in Cinegraph.
+      </p>
+      <div class="mt-5 flex flex-wrap items-center gap-2">
+        <CinegraphWeb.NeutralV2Components.n_pill tone="ink" size="sm">
+          {@total_movies || 0} films
+        </CinegraphWeb.NeutralV2Components.n_pill>
+        <CinegraphWeb.NeutralV2Components.n_pill
+          :if={@person.known_for_department}
+          tone="neutral"
+          size="sm"
+        >
+          {@person.known_for_department}
+        </CinegraphWeb.NeutralV2Components.n_pill>
+        <.link
+          navigate={~p"/people/#{@person.slug || @person.id}"}
+          class="inline-flex items-center rounded-md border border-mist-950/10 bg-mist-50 px-3 py-[5px] text-[12px] font-medium text-mist-950 hover:bg-mist-950/[0.025]"
+        >
+          View profile
+        </.link>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-7 inline-flex gap-[2px] rounded-lg border border-mist-950/10 bg-mist-950/[0.025] p-[3px]">
+    <button
+      phx-click="change_role"
+      phx-value-role="all"
+      class={[
+        "rounded-[6px] px-3 py-[6px] text-[12.5px]",
+        if(@role_scope == :all,
+          do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
+          else: "font-medium text-mist-700 hover:text-mist-950"
+        )
+      ]}
+    >
+      All Films
+    </button>
+    <button
+      phx-click="change_role"
+      phx-value-role="acting"
+      class={[
+        "rounded-[6px] px-3 py-[6px] text-[12.5px]",
+        if(@role_scope == :acting,
+          do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
+          else: "font-medium text-mist-700 hover:text-mist-950"
+        )
+      ]}
+    >
+      Acting
+    </button>
+    <button
+      phx-click="change_role"
+      phx-value-role="directing"
+      class={[
+        "rounded-[6px] px-3 py-[6px] text-[12.5px]",
+        if(@role_scope == :directing,
+          do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
+          else: "font-medium text-mist-700 hover:text-mist-950"
+        )
+      ]}
+    >
+      Directing
+    </button>
+  </section>
+
+  <CinegraphWeb.MovieLive.IndexV2Components.discovery_body
+    movies={@movies}
+    meta={@meta}
+    params={@params}
+    filter_options={@filter_options}
+    search_term={@search_term}
+    sort_options={@sort_options}
+    sort_criteria={@sort_criteria}
+    sort_direction={@sort_direction}
+    sort_is_preset={@sort_is_preset}
+    active_lens_key={@active_lens_key}
+    show_drawer={@show_drawer}
+    show_scoring_info={@show_scoring_info}
+    scope={%{kind: :person, id: @person.id}}
+  />
+</div>
