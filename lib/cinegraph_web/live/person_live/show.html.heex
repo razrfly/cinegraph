@@ -585,6 +585,7 @@
             Crew Credits ({length(@person.crew_credits)})
           </h3>
           <.link
+            :if={Enum.any?(@person.crew_credits || [], fn c -> c.job == "Director" end)}
             navigate={~p"/people/#{@person.slug || @person.id}/movies/directing"}
             class="text-sm font-medium text-blue-600 hover:text-blue-800"
           >

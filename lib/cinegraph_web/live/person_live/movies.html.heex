@@ -9,7 +9,7 @@
     <span class="mx-2 text-mist-400">/</span>
     <.link navigate={~p"/people"} class="hover:text-mist-950">People</.link>
     <span class="mx-2 text-mist-400">/</span>
-    <.link navigate={~p"/people/#{@person.slug || @person.id}"} class="hover:text-mist-950">
+    <.link navigate={~p"/people/#{person_slug_or_id(@person)}"} class="hover:text-mist-950">
       {@person.name}
     </.link>
     <span class="mx-2 text-mist-400">/</span>
@@ -53,7 +53,7 @@
           {@person.known_for_department}
         </CinegraphWeb.NeutralV2Components.n_pill>
         <.link
-          navigate={~p"/people/#{@person.slug || @person.id}"}
+          navigate={~p"/people/#{person_slug_or_id(@person)}"}
           class="inline-flex items-center rounded-md border border-mist-950/10 bg-mist-50 px-3 py-[5px] text-[12px] font-medium text-mist-950 hover:bg-mist-950/[0.025]"
         >
           View profile

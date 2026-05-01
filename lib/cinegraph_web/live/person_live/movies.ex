@@ -24,9 +24,9 @@ defmodule CinegraphWeb.PersonLive.Movies do
     person = socket.assigns.person
 
     case socket.assigns.role_scope do
-      :acting -> ~p"/people/#{person.slug || person.id}/movies/acting?#{params}"
-      :directing -> ~p"/people/#{person.slug || person.id}/movies/directing?#{params}"
-      _ -> ~p"/people/#{person.slug || person.id}/movies?#{params}"
+      :acting -> ~p"/people/#{person_slug_or_id(person)}/movies/acting?#{params}"
+      :directing -> ~p"/people/#{person_slug_or_id(person)}/movies/directing?#{params}"
+      _ -> ~p"/people/#{person_slug_or_id(person)}/movies?#{params}"
     end
   end
 
@@ -103,13 +103,16 @@ defmodule CinegraphWeb.PersonLive.Movies do
          |> assign_pagination(meta)}
 
       {:error, _changeset} ->
+        meta = empty_pagination_meta()
+
         {:noreply,
          socket
          |> assign(:person, person)
          |> assign(:movies, [])
-         |> assign(:meta, %{})
+         |> assign(:meta, meta)
          |> assign(:params, page_params)
          |> assign(:role_scope, role_scope)
+         |> assign_pagination(meta)
          |> put_flash(:error, "Unable to load movies")}
     end
   end
@@ -120,9 +123,9 @@ defmodule CinegraphWeb.PersonLive.Movies do
 
     path =
       case role do
-        "acting" -> ~p"/people/#{person.slug || person.id}/movies/acting"
-        "directing" -> ~p"/people/#{person.slug || person.id}/movies/directing"
-        _ -> ~p"/people/#{person.slug || person.id}/movies"
+        "acting" -> ~p"/people/#{person_slug_or_id(person)}/movies/acting"
+        "directing" -> ~p"/people/#{person_slug_or_id(person)}/movies/directing"
+        _ -> ~p"/people/#{person_slug_or_id(person)}/movies"
       end
 
     {:noreply, push_navigate(socket, to: path)}
@@ -147,6 +150,18 @@ defmodule CinegraphWeb.PersonLive.Movies do
   defp page_title(person, :acting), do: "#{person.name} - Acting Credits"
   defp page_title(person, :directing), do: "#{person.name} - Directed Films"
   defp page_title(person, _), do: "#{person.name} - Movies"
+
+  defp empty_pagination_meta do
+    %{
+      total_count: 0,
+      total_pages: 1,
+      current_page: 1,
+      page_size: 24
+    }
+  end
+
+  def person_slug_or_id(%Person{slug: slug}) when is_binary(slug) and slug != "", do: slug
+  def person_slug_or_id(%Person{id: id}), do: to_string(id)
 
   def profile_url(%Person{profile_path: nil}), do: nil
   def profile_url(%Person{profile_path: path}), do: "https://image.tmdb.org/t/p/w342#{path}"
