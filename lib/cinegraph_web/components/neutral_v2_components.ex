@@ -1419,7 +1419,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         <div class="flex gap-2 overflow-x-auto">
           <.link
             :for={m <- @c.movies}
-            navigate={UrlHelpers.movie_href(m.slug, m.id)}
+            {movie_link_attrs(m)}
             class="shrink-0 text-center no-underline text-inherit hover:opacity-75"
             title={m.title}
           >
@@ -1456,6 +1456,12 @@ defmodule CinegraphWeb.NeutralV2Components do
   end
 
   defp format_revenue(n), do: to_string(n)
+
+  defp movie_link_attrs(%{slug: slug, id: id}) when is_binary(slug) and slug != "" do
+    %{navigate: UrlHelpers.movie_href(slug, id)}
+  end
+
+  defp movie_link_attrs(%{id: id}), do: %{href: UrlHelpers.movie_href(nil, id)}
 
   @doc """
   Vertical right-rail "On this page" TOC. Each entry is a map with `:id`,

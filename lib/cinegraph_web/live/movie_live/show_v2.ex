@@ -82,8 +82,14 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   # ─── Data loading (mirrors V1 patterns) ────────────────────────────
 
-  defp load_movie(slug) do
-    movie = Movies.get_movie_by_slug!(slug)
+  defp load_movie(id_or_slug) do
+    case fetch_movie_by_slug_or_id(id_or_slug) do
+      {:ok, movie} -> load_movie_data(movie)
+      {:error, :not_found} -> {:error, :not_found}
+    end
+  end
+
+  defp load_movie_data(movie) do
     movie = Repo.replica().preload(movie, :score_cache)
     movie = Map.merge(movie, Metrics.get_movie_aggregates(movie.id))
 
@@ -158,6 +164,21 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
        related_movies: related,
        director_other_films: director_other_films
      }}
+  rescue
+    Ecto.NoResultsError -> {:error, :not_found}
+  end
+
+  defp fetch_movie_by_slug_or_id(id_or_slug) do
+    {:ok, Movies.get_movie_by_slug!(id_or_slug)}
+  rescue
+    Ecto.NoResultsError -> fetch_movie_by_id(id_or_slug)
+  end
+
+  defp fetch_movie_by_id(id_or_slug) do
+    case Integer.parse(id_or_slug) do
+      {id, ""} -> {:ok, Movies.get_movie!(id)}
+      _ -> {:error, :not_found}
+    end
   rescue
     Ecto.NoResultsError -> {:error, :not_found}
   end
@@ -519,6 +540,19 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     ]
   end
 
+  defp legacy_escape_pill(assigns) do
+    ~H"""
+    <%!-- Legacy v1 escape hatch — temporary during the V2 soak period (#792).
+         Same placement and styling as the index pill in IndexV2. --%>
+    <.link
+      navigate={~p"/movies/#{@movie.slug || @movie.id}/legacy"}
+      class="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
+    >
+      ← Old movie page
+    </.link>
+    """
+  end
+
   # ─── Render ────────────────────────────────────────────────────────
 
   @impl true
@@ -578,8 +612,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <div class="flex-1 min-w-0 text-white">
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
-              <span :if={@movie.runtime}> ·        {format_runtime(@movie.runtime)}</span>
-              <span :if={content_rating(@movie)}> ·        {content_rating(@movie)}</span>
+              <span :if={@movie.runtime}> ·         {format_runtime(@movie.runtime)}</span>
+              <span :if={content_rating(@movie)}> ·         {content_rating(@movie)}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -1004,7 +1038,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               >
                 <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
                   {l.list_authority || "List"}
-                  <span :if={l.list_year}> ·        {l.list_year}</span>
+                  <span :if={l.list_year}> ·         {l.list_year}</span>
                 </div>
                 <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
                   {l.list_name}
@@ -1266,14 +1300,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       </div>
     </div>
 
-    <%!-- Legacy v1 escape hatch — temporary during the V2 soak period (#792).
-         Same placement and styling as the index pill in IndexV2. --%>
-    <.link
-      navigate={~p"/movies/#{@movie.slug || @movie.id}/legacy"}
-      class="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
-    >
-      ← Old movie page
-    </.link>
+    <.legacy_escape_pill movie={@movie} />
     """
   end
 end
