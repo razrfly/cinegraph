@@ -68,6 +68,8 @@ defmodule CinegraphWeb.ListLive.ShowLegacy do
   def handle_params(%{"slug" => slug} = params, _url, socket) do
     case ListSlugs.get_by_slug(slug) do
       {:ok, list_info} ->
+        page_params = Map.delete(params, "slug")
+
         # Merge the list filter with any additional query params
         search_params =
           params
@@ -81,7 +83,7 @@ defmodule CinegraphWeb.ListLive.ShowLegacy do
              |> assign(:list_info, list_info)
              |> assign(:movies, movies)
              |> assign(:meta, meta)
-             |> assign(:params, params)
+             |> assign(:params, page_params)
              |> assign(:search_term, params["search"] || "")
              |> assign(:filters, normalize_filters(params))
              |> assign(
@@ -102,7 +104,7 @@ defmodule CinegraphWeb.ListLive.ShowLegacy do
              |> assign(:list_info, list_info)
              |> assign(:movies, [])
              |> assign(:meta, %{})
-             |> assign(:params, params)
+             |> assign(:params, page_params)
              |> assign(:filters, %{})
              |> put_flash(:error, "Unable to load movies")}
         end

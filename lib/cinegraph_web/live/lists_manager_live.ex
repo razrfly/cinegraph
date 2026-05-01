@@ -591,22 +591,10 @@ defmodule CinegraphWeb.ListsManagerLive do
         s -> s
       end
 
-    attrs = %{
-      source_url: params["source_url"],
-      name: params["name"],
-      source_key: params["source_key"],
-      category: params["category"],
-      description: params["description"],
-      source_type: source_type,
-      tracks_awards: params["tracks_awards"] == "on",
-      slug: slug,
-      short_name: params["short_name"],
-      icon: params["icon"],
-      cover_image_url: params["cover_image_url"],
-      hero_image_url: params["hero_image_url"],
-      display_order: parse_int(params["display_order"], 0),
-      active: true
-    }
+    attrs =
+      params
+      |> list_attrs_from_params(source_type, slug, 0)
+      |> Map.merge(%{source_key: params["source_key"], active: true})
 
     case MovieLists.create_movie_list(attrs) do
       {:ok, list} ->
@@ -629,20 +617,7 @@ defmodule CinegraphWeb.ListsManagerLive do
     list = MovieLists.get_movie_list!(String.to_integer(params["list_id"]))
     source_type = detect_source_type(params["source_url"])
 
-    attrs = %{
-      source_url: params["source_url"],
-      name: params["name"],
-      category: params["category"],
-      description: params["description"],
-      source_type: source_type,
-      tracks_awards: params["tracks_awards"] == "on",
-      slug: params["slug"],
-      short_name: params["short_name"],
-      icon: params["icon"],
-      cover_image_url: params["cover_image_url"],
-      hero_image_url: params["hero_image_url"],
-      display_order: parse_int(params["display_order"], list.display_order)
-    }
+    attrs = list_attrs_from_params(params, source_type, params["slug"], list.display_order)
 
     case MovieLists.update_movie_list(list, attrs) do
       {:ok, updated_list} ->
@@ -1070,6 +1045,23 @@ defmodule CinegraphWeb.ListsManagerLive do
   end
 
   defp parse_int(val, _default) when is_integer(val), do: val
+
+  defp list_attrs_from_params(params, source_type, slug, display_order_default) do
+    %{
+      source_url: params["source_url"],
+      name: params["name"],
+      category: params["category"],
+      description: params["description"],
+      source_type: source_type,
+      tracks_awards: params["tracks_awards"] == "on",
+      slug: slug,
+      short_name: params["short_name"],
+      icon: params["icon"],
+      cover_image_url: params["cover_image_url"],
+      hero_image_url: params["hero_image_url"],
+      display_order: parse_int(params["display_order"], display_order_default)
+    }
+  end
 
   defp format_changeset_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

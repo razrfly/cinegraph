@@ -9,17 +9,15 @@ defmodule CinegraphWeb.AwardsLive.IndexLegacy do
 
   @impl true
   def mount(_params, _session, socket) do
-    organizations = Festivals.list_organizations()
+    stats_by_id = Festivals.organization_stats_by_id()
 
-    # Enrich with counts
     organizations_with_stats =
-      Enum.map(organizations, fn org ->
-        movie_count = Festivals.count_movies_for_organization(org.id) || 0
-        winner_count = Festivals.count_winners_for_organization(org.id) || 0
+      Enum.map(Festivals.list_organizations(), fn org ->
+        stats = Map.get(stats_by_id, org.id, %{movie_count: 0, winner_count: 0})
 
         org
-        |> Map.put(:movie_count, movie_count)
-        |> Map.put(:winner_count, winner_count)
+        |> Map.put(:movie_count, stats.movie_count)
+        |> Map.put(:winner_count, stats.winner_count)
       end)
 
     {:ok,

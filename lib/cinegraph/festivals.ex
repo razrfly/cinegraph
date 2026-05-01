@@ -67,6 +67,26 @@ defmodule Cinegraph.Festivals do
   end
 
   @doc """
+  Gets an organization by slug, falling back to a numeric id.
+  """
+  def get_organization_by_slug_or_id(slug_or_id) do
+    get_organization_by_slug(slug_or_id) || get_organization_by_id_param(slug_or_id)
+  end
+
+  defp get_organization_by_id_param(id) when is_integer(id) do
+    Repo.replica().get(FestivalOrganization, id)
+  end
+
+  defp get_organization_by_id_param(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {parsed_id, ""} -> Repo.replica().get(FestivalOrganization, parsed_id)
+      _ -> nil
+    end
+  end
+
+  defp get_organization_by_id_param(_id), do: nil
+
+  @doc """
   Lists all festival organizations.
   """
   def list_organizations do
@@ -103,6 +123,27 @@ defmodule Cinegraph.Festivals do
       select: count(n.movie_id, :distinct)
     )
     |> Repo.replica().one()
+  end
+
+  @doc """
+  Returns movie and winner counts keyed by festival organization id.
+  """
+  def organization_stats_by_id do
+    from(n in FestivalNomination,
+      join: c in FestivalCeremony,
+      on: n.ceremony_id == c.id,
+      where: not is_nil(n.movie_id),
+      group_by: c.organization_id,
+      select: {
+        c.organization_id,
+        count(n.movie_id, :distinct),
+        filter(count(n.movie_id, :distinct), n.won == true)
+      }
+    )
+    |> Repo.replica().all()
+    |> Map.new(fn {organization_id, movie_count, winner_count} ->
+      {organization_id, %{movie_count: movie_count, winner_count: winner_count}}
+    end)
   end
 
   @doc """

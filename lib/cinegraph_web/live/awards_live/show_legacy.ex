@@ -40,11 +40,12 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
   @impl CinegraphWeb.SearchEventHandlers
   def build_path(socket, params) do
     org = socket.assigns.organization
+    slug_or_id = org.slug || org.id
 
     case socket.assigns.filter_mode do
-      :winners -> ~p"/awards/#{org.slug}/winners/legacy?#{params}"
-      :nominees -> ~p"/awards/#{org.slug}/nominees/legacy?#{params}"
-      _ -> ~p"/awards/#{org.slug}/legacy?#{params}"
+      :winners -> ~p"/awards/#{slug_or_id}/winners/legacy?#{params}"
+      :nominees -> ~p"/awards/#{slug_or_id}/nominees/legacy?#{params}"
+      _ -> ~p"/awards/#{slug_or_id}/legacy?#{params}"
     end
   end
 
@@ -78,10 +79,11 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
 
   @impl true
   def handle_params(%{"slug" => slug} = params, _url, socket) do
-    organization = Festivals.get_organization_by_slug(slug)
+    organization = Festivals.get_organization_by_slug_or_id(slug)
 
     if organization do
       filter_mode = determine_filter_mode(socket.assigns.live_action)
+      page_params = Map.delete(params, "slug")
 
       # Build search params with festival filter
       search_params =
@@ -97,7 +99,7 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
            |> assign(:organization, organization)
            |> assign(:movies, movies)
            |> assign(:meta, meta)
-           |> assign(:params, params)
+           |> assign(:params, page_params)
            |> assign(:filter_mode, filter_mode)
            |> assign(:search_term, params["search"] || "")
            |> assign(:sort_criteria, extract_sort_criteria(params["sort"] || "release_date_desc"))
@@ -115,8 +117,20 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
            |> assign(:organization, organization)
            |> assign(:movies, [])
            |> assign(:meta, %{})
-           |> assign(:params, params)
+           |> assign(:params, page_params)
+           |> assign(:filter_mode, filter_mode)
+           |> assign(:search_term, params["search"] || "")
+           |> assign(:sort_criteria, extract_sort_criteria(params["sort"] || "release_date_desc"))
+           |> assign(
+             :sort_direction,
+             extract_sort_direction(params["sort"] || "release_date_desc")
+           )
            |> assign(:filters, %{})
+           |> assign(:total_movies, 0)
+           |> assign(:total_pages, 1)
+           |> assign(:current_page, 1)
+           |> assign(:page, 1)
+           |> assign(:per_page, 50)
            |> put_flash(:error, "Unable to load movies")}
       end
     else
@@ -136,15 +150,25 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
   @impl Phoenix.LiveView
   def handle_event("change_filter", %{"filter" => filter}, socket) do
     org = socket.assigns.organization
+    slug_or_id = org.slug || org.id
 
     base_path =
       case filter do
-        "winners" -> ~p"/awards/#{org.slug}/winners/legacy"
-        "nominees" -> ~p"/awards/#{org.slug}/nominees/legacy"
-        _ -> ~p"/awards/#{org.slug}/legacy"
+        "winners" -> ~p"/awards/#{slug_or_id}/winners/legacy"
+        "nominees" -> ~p"/awards/#{slug_or_id}/nominees/legacy"
+        _ -> ~p"/awards/#{slug_or_id}/legacy"
       end
 
-    {:noreply, push_navigate(socket, to: base_path)}
+    query =
+      socket.assigns[:params]
+      |> Kernel.||(%{})
+      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+      |> Map.new()
+      |> URI.encode_query()
+
+    path = if query == "", do: base_path, else: "#{base_path}?#{query}"
+
+    {:noreply, push_navigate(socket, to: path)}
   end
 
   # Delegate all other events to the SearchEventHandlers macro
@@ -171,11 +195,12 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
   def build_pagination_path(assigns, page) do
     params = build_pagination_params(assigns, page)
     org = assigns.organization
+    slug_or_id = org.slug || org.id
 
     case assigns.filter_mode do
-      :winners -> ~p"/awards/#{org.slug}/winners/legacy?#{params}"
-      :nominees -> ~p"/awards/#{org.slug}/nominees/legacy?#{params}"
-      _ -> ~p"/awards/#{org.slug}/legacy?#{params}"
+      :winners -> ~p"/awards/#{slug_or_id}/winners/legacy?#{params}"
+      :nominees -> ~p"/awards/#{slug_or_id}/nominees/legacy?#{params}"
+      _ -> ~p"/awards/#{slug_or_id}/legacy?#{params}"
     end
   end
 
@@ -212,9 +237,9 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
     "Explore #{org.name} films, winners, and nominees. Discover award-winning cinema on Cinegraph."
   end
 
-  defp awards_canonical_path(org, :winners), do: "/awards/#{org.slug}/winners"
-  defp awards_canonical_path(org, :nominees), do: "/awards/#{org.slug}/nominees"
-  defp awards_canonical_path(org, _), do: "/awards/#{org.slug}"
+  defp awards_canonical_path(org, :winners), do: "/awards/#{org.slug || org.id}/winners"
+  defp awards_canonical_path(org, :nominees), do: "/awards/#{org.slug || org.id}/nominees"
+  defp awards_canonical_path(org, _), do: "/awards/#{org.slug || org.id}"
 
   defp maybe_assign_og_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
     assign(socket, :og_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")

@@ -12,11 +12,14 @@ defmodule CinegraphWeb.ListLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    lists = lists_with_counts()
+
     {:ok,
      socket
      |> assign(:page_title, "Lists")
      |> assign(:active_nav, "Lists")
-     |> assign(:lists, [])
+     |> assign(:all_lists, lists)
+     |> assign(:lists, lists)
      |> assign(:category, "all")
      |> assign(:search, "")
      |> assign(:sort, "display")}
@@ -29,12 +32,7 @@ defmodule CinegraphWeb.ListLive.Index do
     sort = params["sort"] || "display"
 
     lists =
-      ListSlugs.all()
-      |> Enum.map(fn list ->
-        list
-        |> Map.put(:movie_count, Movies.count_movies_in_list(list.key))
-        |> Map.put(:category, list[:category] || list["category"] || "curated")
-      end)
+      socket.assigns.all_lists
       |> filter_lists(category, search)
       |> sort_lists(sort)
 
@@ -80,4 +78,15 @@ defmodule CinegraphWeb.ListLive.Index do
 
   defp normalize_category(category) when category in @categories, do: category
   defp normalize_category(_category), do: "all"
+
+  defp lists_with_counts do
+    lists = ListSlugs.all()
+    counts_by_key = Movies.count_movies_by_list_keys(Enum.map(lists, & &1.key))
+
+    Enum.map(lists, fn list ->
+      list
+      |> Map.put(:movie_count, Map.get(counts_by_key, list.key, 0))
+      |> Map.put(:category, list[:category] || list["category"] || "curated")
+    end)
+  end
 end

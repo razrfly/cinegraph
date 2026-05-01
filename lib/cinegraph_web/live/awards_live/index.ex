@@ -9,11 +9,14 @@ defmodule CinegraphWeb.AwardsLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
+    organizations = organizations_with_stats()
+
     {:ok,
      socket
      |> assign(:page_title, "Awards & Festivals")
      |> assign(:active_nav, "Awards")
-     |> assign(:organizations, [])
+     |> assign(:all_organizations, organizations)
+     |> assign(:organizations, organizations)
      |> assign(:category, "all")
      |> assign(:search, "")
      |> assign(:sort, "name")}
@@ -26,15 +29,7 @@ defmodule CinegraphWeb.AwardsLive.Index do
     sort = params["sort"] || "name"
 
     organizations =
-      Festivals.list_organizations()
-      |> Enum.map(fn org ->
-        movie_count = Festivals.count_movies_for_organization(org.id) || 0
-        winner_count = Festivals.count_winners_for_organization(org.id) || 0
-
-        org
-        |> Map.put(:movie_count, movie_count)
-        |> Map.put(:winner_count, winner_count)
-      end)
+      socket.assigns.all_organizations
       |> filter_organizations(category, search)
       |> sort_organizations(sort)
 
@@ -83,4 +78,16 @@ defmodule CinegraphWeb.AwardsLive.Index do
   defp sort_organizations(orgs, "films"), do: Enum.sort_by(orgs, & &1.movie_count, :desc)
   defp sort_organizations(orgs, "winners"), do: Enum.sort_by(orgs, & &1.winner_count, :desc)
   defp sort_organizations(orgs, _), do: Enum.sort_by(orgs, &String.downcase(&1.name || ""))
+
+  defp organizations_with_stats do
+    stats_by_id = Festivals.organization_stats_by_id()
+
+    Enum.map(Festivals.list_organizations(), fn org ->
+      stats = Map.get(stats_by_id, org.id, %{movie_count: 0, winner_count: 0})
+
+      org
+      |> Map.put(:movie_count, stats.movie_count)
+      |> Map.put(:winner_count, stats.winner_count)
+    end)
+  end
 end

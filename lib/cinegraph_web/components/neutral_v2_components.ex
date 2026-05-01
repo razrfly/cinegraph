@@ -367,9 +367,9 @@ defmodule CinegraphWeb.NeutralV2Components do
       <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 flex items-center gap-4 py-[14px]">
         <.n_brand size={19} />
         <nav class="flex gap-[2px] items-center max-md:hidden">
-          <a
+          <.link
             :for={item <- @items}
-            href={item.href}
+            navigate={item.href}
             class={[
               "inline-flex items-center gap-[6px] px-3 py-[7px] rounded-md text-[13.5px] no-underline tracking-[-.005em]",
               if(item.id == @active,
@@ -380,7 +380,7 @@ defmodule CinegraphWeb.NeutralV2Components do
             ]}
           >
             {item.id}
-          </a>
+          </.link>
         </nav>
         <div class="flex-1 max-w-[420px] ml-auto max-md:hidden">
           <%= if @search != [] do %>
@@ -868,8 +868,8 @@ defmodule CinegraphWeb.NeutralV2Components do
       |> assign(:initials, collection_initials(title))
 
     ~H"""
-    <a
-      href={@href}
+    <.link
+      navigate={@href}
       class="group block overflow-hidden rounded-lg border border-mist-950/10 bg-mist-50 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
     >
       <div class={["relative aspect-[8/5] overflow-hidden", @seed_class]}>
@@ -915,7 +915,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           Browse →
         </div>
       </div>
-    </a>
+    </.link>
     """
   end
 
