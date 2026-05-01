@@ -24,7 +24,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2ComponentsTest do
       html = render_component(&results/1, movies: [movie])
       {:ok, document} = Floki.parse_document(html)
 
-      assert Floki.attribute(document, "a", "href") == ["/movies-v2/the-apartment-1960"]
+      # Issue #792: cards now link to the clean /movies/:slug primary URL
+      assert Floki.attribute(document, "a", "href") == ["/movies/the-apartment-1960"]
       assert Floki.text(document) =~ "The Apartment"
       assert Floki.text(document) =~ "Billy Wilder"
 

@@ -14,6 +14,7 @@ defmodule CinegraphWeb.NeutralV2Components do
   """
   use Phoenix.Component
 
+  alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.NeutralDesign.PosterSvg
 
   # ──────────────────────────────────────────────────────────────────
@@ -1418,7 +1419,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         <div class="flex gap-2 overflow-x-auto">
           <.link
             :for={m <- @c.movies}
-            navigate={"/movies-v2/#{m.slug || m.id}"}
+            navigate={UrlHelpers.movie_href(m.slug, m.id)}
             class="shrink-0 text-center no-underline text-inherit hover:opacity-75"
             title={m.title}
           >

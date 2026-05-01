@@ -1,6 +1,6 @@
 defmodule CinegraphWeb.MovieLive.ShowV2 do
   @moduledoc """
-  Movie show page on the V2 design system. Mounts at `/movies-v2/:slug`.
+  Movie show page on the V2 design system. Mounts at `/movies/:slug`.
 
   Models its hero on `MovieLive.Show` (V1) — full-bleed backdrop with a simple
   bottom-up dark gradient and white text — then applies V2 styling
@@ -55,7 +55,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         {:noreply,
          socket
          |> put_flash(:error, "Movie not found")
-         |> push_navigate(to: ~p"/movies-v2")}
+         |> push_navigate(to: ~p"/movies")}
     end
   end
 
@@ -549,7 +549,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       <%!-- BREADCRUMB — floats over the hero backdrop, top-left --%>
       <div class="absolute top-3 left-0 right-0 z-10 mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
         <a
-          href={~p"/movies-v2"}
+          href={~p"/movies"}
           class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/30 backdrop-blur-sm text-[11.5px] text-white/85 hover:text-white hover:bg-black/40 no-underline"
         >
           ← All movies
@@ -578,8 +578,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <div class="flex-1 min-w-0 text-white">
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
-              <span :if={@movie.runtime}> ·      {format_runtime(@movie.runtime)}</span>
-              <span :if={content_rating(@movie)}> ·      {content_rating(@movie)}</span>
+              <span :if={@movie.runtime}> ·        {format_runtime(@movie.runtime)}</span>
+              <span :if={content_rating(@movie)}> ·        {content_rating(@movie)}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -1004,7 +1004,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               >
                 <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
                   {l.list_authority || "List"}
-                  <span :if={l.list_year}> ·      {l.list_year}</span>
+                  <span :if={l.list_year}> ·        {l.list_year}</span>
                 </div>
                 <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
                   {l.list_name}
@@ -1265,6 +1265,15 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         </div>
       </div>
     </div>
+
+    <%!-- Legacy v1 escape hatch — temporary during the V2 soak period (#792).
+         Same placement and styling as the index pill in IndexV2. --%>
+    <.link
+      navigate={~p"/movies/#{@movie.slug || @movie.id}/legacy"}
+      class="fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-xs font-medium text-mist-100 shadow-lg hover:bg-mist-800"
+    >
+      ← Old movie page
+    </.link>
     """
   end
 end
