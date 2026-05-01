@@ -66,7 +66,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
 
     new_params =
       socket.assigns.params
-      |> Map.delete(filter_key)
+      |> delete_filter(filter_key)
       |> Map.put("page", "1")
 
     {:noreply, push_patch(socket, to: socket.view.build_path(socket, new_params))}
@@ -78,6 +78,18 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Events do
   def put_or_delete(map, key, ""), do: Map.delete(map, key)
   def put_or_delete(map, key, []), do: Map.delete(map, key)
   def put_or_delete(map, key, value), do: Map.put(map, key, value)
+
+  defp delete_filter(params, "people") do
+    params
+    |> Map.delete("people")
+    |> Map.delete("people_ids")
+    |> Map.delete("people_search")
+    |> Map.delete("people_search[people_ids]")
+    |> Map.delete("people_search[role_filter]")
+  end
+
+  defp delete_filter(params, "people_ids"), do: delete_filter(params, "people")
+  defp delete_filter(params, filter_key), do: Map.delete(params, filter_key)
 
   def set_rating_preset(value, socket) do
     new_value =

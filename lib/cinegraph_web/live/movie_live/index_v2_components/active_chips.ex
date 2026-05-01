@@ -8,7 +8,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   alias CinegraphWeb.LiveViewHelpers
   alias CinegraphWeb.MovieLive.IndexV2Components.SortLabels
 
-  @basic_filter_keys ~w(search genres decade lists festivals people people_ids rating_preset show_unreleased)
+  @basic_filter_keys ~w(search genres decade lists festivals people rating_preset show_unreleased)
 
   attr :params, :map, required: true
   attr :filter_options, :map, required: true
@@ -60,6 +60,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
 
   defp build_active_chips(params, filter_options, sort_options, scope) do
     hidden_keys = hidden_filter_keys(scope)
+    params = normalize_people_filter(params)
 
     filter_chips =
       @basic_filter_keys
@@ -76,6 +77,18 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
       end)
 
     sort_chip(params, sort_options) ++ filter_chips
+  end
+
+  defp normalize_people_filter(params) do
+    cond do
+      filter_value_present?(params["people_ids"]) ->
+        params
+        |> Map.put("people", params["people_ids"])
+        |> Map.delete("people_ids")
+
+      true ->
+        Map.delete(params, "people_ids")
+    end
   end
 
   defp sort_chip(params, sort_options) do
