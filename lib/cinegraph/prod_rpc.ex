@@ -106,11 +106,13 @@ defmodule Cinegraph.ProdRpc do
     # the eval'd BEAM from binding port 4000.
     # Silence prod-side logging *before* starting the app, otherwise Repo.Metrics,
     # DashboardStats, MoviesCacheWarmer, etc. flood stdout with INFO/WARNING
-    # lines that mix with the JSON we want to parse.
+    # lines that mix with the JSON we want to parse. We still start Oban because
+    # maintenance evals enqueue jobs; clearing queues/plugins prevents this
+    # short-lived eval BEAM from processing jobs or firing cron/plugins itself.
     wrapped =
       ":logger.set_primary_config(:level, :critical); " <>
-        "Application.put_env(:cinegraph, :start_oban, false); " <>
         "Application.put_env(:cinegraph, :start_background_children, false); " <>
+        "Application.put_env(:cinegraph, Oban, Keyword.merge(Application.fetch_env!(:cinegraph, Oban), queues: [], plugins: [])); " <>
         "Application.ensure_all_started(:cinegraph); " <>
         expression
 

@@ -40,14 +40,22 @@ defmodule Cinegraph.ProdRpcTest do
     test "wraps expression with app startup and disables short-lived background processors" do
       args = ProdRpc.build_kamal_args(~s|:ok|)
       shell_cmd = List.last(args)
-      assert String.contains?(shell_cmd, "Application.put_env(:cinegraph, :start_oban, false)")
 
-      assert String.contains?(
-               shell_cmd,
-               "Application.put_env(:cinegraph, :start_background_children, false)"
-             )
+      disable_background =
+        "Application.put_env(:cinegraph, :start_background_children, false)"
 
-      assert String.contains?(shell_cmd, "Application.ensure_all_started(:cinegraph)")
+      disable_oban_processing =
+        "Application.put_env(:cinegraph, Oban, Keyword.merge(Application.fetch_env!(:cinegraph, Oban), queues: [], plugins: []))"
+
+      ensure_started = "Application.ensure_all_started(:cinegraph)"
+
+      background_index = assert_index(shell_cmd, disable_background)
+      oban_config_index = assert_index(shell_cmd, disable_oban_processing)
+      ensure_started_index = assert_index(shell_cmd, ensure_started)
+
+      assert background_index < oban_config_index
+      assert oban_config_index < ensure_started_index
+      refute String.contains?(shell_cmd, "Application.put_env(:cinegraph, :start_oban, false)")
     end
 
     test "single-quotes the wrapped expression for the container shell" do
@@ -59,7 +67,7 @@ defmodule Cinegraph.ProdRpcTest do
       # before the user expression.
       assert String.contains?(
                shell_cmd,
-               ~s|':logger.set_primary_config(:level, :critical); Application.put_env(:cinegraph, :start_oban, false); Application.put_env(:cinegraph, :start_background_children, false); Application.ensure_all_started(:cinegraph); :ok'|
+               ~s|':logger.set_primary_config(:level, :critical); Application.put_env(:cinegraph, :start_background_children, false); Application.put_env(:cinegraph, Oban, Keyword.merge(Application.fetch_env!(:cinegraph, Oban), queues: [], plugins: [])); Application.ensure_all_started(:cinegraph); :ok'|
              )
     end
 
@@ -105,6 +113,16 @@ defmodule Cinegraph.ProdRpcTest do
     test "returns {:error, {:json_parse_failed, raw, _}} for non-JSON" do
       assert {:error, {:json_parse_failed, "boom", %Jason.DecodeError{}}} =
                ProdRpc.decode_json("boom")
+    end
+  end
+
+  defp assert_index(string, substring) do
+    case :binary.match(string, substring) do
+      {index, _length} ->
+        index
+
+      :nomatch ->
+        flunk("expected #{inspect(string)} to contain #{inspect(substring)}")
     end
   end
 end

@@ -13,7 +13,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
   import Phoenix.LiveViewTest
 
+  alias Cinegraph.Movies.Credit
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.Person
   alias Cinegraph.Repo
 
   defp insert_movie!(attrs) do
@@ -26,6 +28,30 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
     %Movie{}
     |> Movie.changeset(Map.merge(defaults, attrs))
+    |> Repo.insert!()
+  end
+
+  defp insert_person!(attrs) do
+    defaults = %{
+      tmdb_id: System.unique_integer([:positive]),
+      name: "Route Credit Person #{System.unique_integer([:positive])}"
+    }
+
+    %Person{}
+    |> Person.changeset(Map.merge(defaults, attrs))
+    |> Repo.insert!()
+  end
+
+  defp insert_credit!(movie, person, attrs) do
+    defaults = %{
+      movie_id: movie.id,
+      person_id: person.id,
+      credit_type: "cast",
+      credit_id: "route-credit-#{movie.id}-#{person.id}-#{System.unique_integer([:positive])}"
+    }
+
+    %Credit{}
+    |> Credit.changeset(Map.merge(defaults, attrs))
     |> Repo.insert!()
   end
 
@@ -70,6 +96,29 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ "Old movie page"
       assert html =~ ~p"/movies/#{movie.id}/legacy"
       assert html =~ movie.title
+    end
+
+    test "links cast and crew to canonical people pages", %{conn: conn, movie: movie} do
+      cast_member = insert_person!(%{name: "Canonical Cast Person"})
+      crew_member = insert_person!(%{name: "Canonical Crew Person"})
+
+      insert_credit!(movie, cast_member, %{
+        credit_type: "cast",
+        character: "Runway Assistant",
+        cast_order: 0
+      })
+
+      insert_credit!(movie, crew_member, %{
+        credit_type: "crew",
+        department: "Directing",
+        job: "Director"
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ ~s(href="/people/canonical-cast-person")
+      assert html =~ ~s(href="/people/canonical-crew-person")
+      refute html =~ "/people-v2/"
     end
   end
 
