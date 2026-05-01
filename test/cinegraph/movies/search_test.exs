@@ -16,7 +16,7 @@ defmodule Cinegraph.Movies.SearchTest do
   alias Cinegraph.Movies.Query.Params
 
   setup do
-    Cachex.clear(:movies_cache)
+    assert {:ok, _} = Cachex.clear(:movies_cache)
     :ok
   end
 
@@ -31,8 +31,9 @@ defmodule Cinegraph.Movies.SearchTest do
       add_genres!(drama_only, [drama])
       add_genres!(comedy_only, [comedy])
 
-      assert {:ok, {movies, _meta}} = search_by_genres([drama.id])
+      assert {:ok, {movies, meta}} = search_by_genres([drama.id])
       assert movie_titles(movies) == ["Genre Single Drama"]
+      assert meta.total_count == 1
     end
 
     test "stacked genres return only movies with all selected genres" do
@@ -52,8 +53,11 @@ defmodule Cinegraph.Movies.SearchTest do
         |> add_genres!([drama, comedy])
 
       assert {:ok, {movies, meta}} = search_by_genres([drama.id, comedy.id])
+      assert {:ok, count} = count_by_genres([drama.id, comedy.id])
+
       assert movie_titles(movies) == ["Genre Stack Both"]
       assert meta.total_count == 1
+      assert count == meta.total_count
     end
 
     test "comma-delimited genre slugs resolve to genre IDs" do
@@ -194,14 +198,44 @@ defmodule Cinegraph.Movies.SearchTest do
       assert {:ok, params} = Params.validate(%{"people" => person.slug})
       assert params.people_ids == [person.id]
     end
+
+    test "people slugs do not overwrite explicit people IDs" do
+      slug_person = insert_person!("Slug Person Test")
+      id_person = insert_person!("Explicit Person Test")
+
+      assert {:ok, params} =
+               Params.validate(%{
+                 "people" => slug_person.slug,
+                 "people_ids" => to_string(id_person.id)
+               })
+
+      assert params.people_ids == [id_person.id]
+    end
+
+    test "unknown list slugs normalize away safely" do
+      assert {:ok, params} = Params.validate(%{"lists" => "not-a-real-list"})
+      assert params.lists == []
+    end
   end
 
   defp search_by_genres(genre_ids) do
-    Search.search_movies(%{
+    genre_ids
+    |> genre_params()
+    |> Search.search_movies()
+  end
+
+  defp count_by_genres(genre_ids) do
+    genre_ids
+    |> genre_params()
+    |> Search.count_movies()
+  end
+
+  defp genre_params(genre_ids) do
+    %{
       "genres[]" => Enum.map(genre_ids, &to_string/1),
       "per_page" => "10",
       "sort" => "title_asc"
-    })
+    }
   end
 
   defp insert_movie!(title, attrs \\ []) do
@@ -276,10 +310,19 @@ defmodule Cinegraph.Movies.SearchTest do
   end
 
   defp insert_person!(name) do
+    unique = System.unique_integer([:positive])
+
+    slug =
+      name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "-")
+      |> String.trim("-")
+
     %Person{}
     |> Person.changeset(%{
-      tmdb_id: System.unique_integer([:positive]),
-      name: "#{name} #{System.unique_integer([:positive])}"
+      tmdb_id: unique,
+      name: "#{name} #{unique}",
+      slug: "#{slug}-#{unique}"
     })
     |> Repo.insert!()
   end

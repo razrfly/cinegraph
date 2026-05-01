@@ -32,7 +32,7 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_genres(query, []), do: query
   defp filter_by_genres(query, nil), do: query
 
-  defp filter_by_genres(query, genre_ids) do
+  defp filter_by_genres(query, genre_ids) when is_list(genre_ids) do
     genre_ids = Enum.uniq(genre_ids)
 
     query
@@ -41,6 +41,8 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     |> group_by([m], m.id)
     |> having([m, mg], count(mg.genre_id, :distinct) == ^length(genre_ids))
   end
+
+  defp filter_by_genres(query, _), do: query
 
   # Country filtering currently uses ANY semantics. A movie with any selected
   # production country is included.

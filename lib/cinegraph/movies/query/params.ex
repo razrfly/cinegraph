@@ -449,22 +449,26 @@ defmodule Cinegraph.Movies.Query.Params do
       |> select([ml], ml.source_key)
       |> Repo.replica().all()
 
-    if db_matches == [] do
-      Enum.uniq(values)
-    else
-      Enum.uniq(db_matches)
-    end
+    Enum.uniq(db_matches)
   end
 
   defp normalize_people_values(params) do
     case Map.get(params, "people") do
       values when is_list(values) ->
         params
-        |> Map.put("people_ids", people_ids_for_values(values))
+        |> put_people_ids_if_missing(values)
         |> Map.delete("people")
 
       _ ->
         params
+    end
+  end
+
+  defp put_people_ids_if_missing(params, values) do
+    if Map.has_key?(params, "people_ids") do
+      params
+    else
+      Map.put(params, "people_ids", people_ids_for_values(values))
     end
   end
 

@@ -59,20 +59,7 @@ defmodule Cinegraph.Application do
       {:ok, pid} ->
         # Schedule cache warmup after application starts
         if Application.get_env(:cinegraph, :start_background_children, true) do
-          Task.start(fn ->
-            # Wait 5 seconds for app to fully initialize
-            Process.sleep(5000)
-            Cinegraph.Workers.CacheWarmupWorker.schedule_warmup()
-
-            # Schedule initial movies cache warming (Phase 2 optimization)
-            # This warms the cache for popular queries immediately on startup
-            Cinegraph.Workers.MoviesCacheWarmer.schedule()
-
-            # Warm /admin/health drift cache so first cold paint after deploy
-            # doesn't trip the LB 10s timeout (#745 Phase 3.3). Subsequent
-            # warms are driven by the every-4-min cron entry.
-            Cinegraph.Workers.HealthCacheWarmer.new(%{}) |> Oban.insert()
-          end)
+          Cinegraph.Workers.StartupWarmupWorker.schedule()
         end
 
         {:ok, pid}
