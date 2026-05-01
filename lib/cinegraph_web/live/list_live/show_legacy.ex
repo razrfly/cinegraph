@@ -1,4 +1,4 @@
-defmodule CinegraphWeb.ListLive.Show do
+defmodule CinegraphWeb.ListLive.ShowLegacy do
   @moduledoc """
   LiveView for displaying movies from a specific curated list.
   Provides a clean URL at /lists/:slug while reusing the movie search infrastructure.
@@ -8,15 +8,22 @@ defmodule CinegraphWeb.ListLive.Show do
 
   alias Cinegraph.Lists.ListSlugs
   alias Cinegraph.Movies.Search
-  alias CinegraphWeb.MovieLive.IndexV2.Events
-  alias CinegraphWeb.MovieLive.IndexV2.Results
-  alias CinegraphWeb.MovieLive.SortOptions
 
   import CinegraphWeb.LiveViewHelpers,
     only: [
       extract_sort_criteria: 1,
       extract_sort_direction: 1,
-      assign_pagination: 2
+      assign_pagination: 2,
+      build_pagination_params: 2,
+      parse_array_param: 1
+    ]
+
+  import CinegraphWeb.FilterHelpers,
+    only: [
+      has_active_filters?: 2,
+      build_active_filters_list: 3,
+      list_view_filter_configs: 0,
+      list_view_filter_fields: 0
     ]
 
   @site_url "https://cinegraph.io"
@@ -27,7 +34,7 @@ defmodule CinegraphWeb.ListLive.Show do
 
   @impl CinegraphWeb.SearchEventHandlers
   def build_path(socket, params) do
-    ~p"/lists/#{socket.assigns.list_info.slug}?#{params}"
+    ~p"/lists/#{socket.assigns.list_info.slug}/legacy?#{params}"
   end
 
   # ============================================================================
@@ -45,61 +52,46 @@ defmodule CinegraphWeb.ListLive.Show do
      |> assign(:meta, %{})
      |> assign(:list_info, nil)
      |> assign(:search_term, "")
-     |> assign(:active_nav, "Lists")
-     |> assign(:filter_options, filter_options)
-     |> assign(:sort_options, SortOptions.all())
      |> assign(:sort_criteria, "release_date")
      |> assign(:sort_direction, :desc)
-     |> assign(:sort_is_preset, false)
-     |> assign(:active_lens_key, nil)
-     |> assign(:show_drawer, false)
-     |> assign(:show_scoring_info, false)
      |> assign(:show_filters, false)
+     |> assign(:filters, %{})
+     # Filter options for dropdowns
+     |> assign(:available_genres, filter_options.genres)
+     |> assign(:available_decades, filter_options.decades)
+     |> assign(:festival_organizations, filter_options.festivals)
+     # Person search options
      |> assign(:person_options, [])}
   end
 
   @impl true
-  def handle_params(%{"slug" => slug} = params, url, socket) do
-    if query_slug_param?(url) do
-      clean_params = Map.delete(params, "slug")
-      {:noreply, push_patch(socket, to: ~p"/lists/#{slug}?#{clean_params}")}
-    else
-      load_list_page(slug, params, socket)
-    end
-  end
-
-  defp load_list_page(slug, params, socket) do
+  def handle_params(%{"slug" => slug} = params, _url, socket) do
     case ListSlugs.get_by_slug(slug) do
       {:ok, list_info} ->
-        page_params = Map.delete(params, "slug")
-        sort_param = params["sort"] || "release_date_desc"
-        criteria = extract_sort_criteria(sort_param)
-        direction = extract_sort_direction(sort_param)
-        sort_is_preset = SortOptions.preset?(criteria)
-        active_lens_key = SortOptions.active_lens_key(criteria)
-
         # Merge the list filter with any additional query params
         search_params =
           params
           |> Map.put("lists", list_info.key)
-          |> Map.put("per_page", "24")
           |> Map.delete("slug")
 
         case Search.search_movies(search_params) do
           {:ok, {movies, meta}} ->
-            movies = Results.preload_card_assocs(movies, active_lens_key)
-
             {:noreply,
              socket
              |> assign(:list_info, list_info)
              |> assign(:movies, movies)
              |> assign(:meta, meta)
-             |> assign(:params, page_params)
+             |> assign(:params, params)
              |> assign(:search_term, params["search"] || "")
-             |> assign(:sort_criteria, criteria)
-             |> assign(:sort_direction, direction)
-             |> assign(:sort_is_preset, sort_is_preset)
-             |> assign(:active_lens_key, active_lens_key)
+             |> assign(:filters, normalize_filters(params))
+             |> assign(
+               :sort_criteria,
+               extract_sort_criteria(params["sort"] || "release_date_desc")
+             )
+             |> assign(
+               :sort_direction,
+               extract_sort_direction(params["sort"] || "release_date_desc")
+             )
              |> assign_pagination(meta)
              |> assign(:list_slug, list_info.slug)
              |> assign_list_page_seo(list_info, movies)}
@@ -110,7 +102,8 @@ defmodule CinegraphWeb.ListLive.Show do
              |> assign(:list_info, list_info)
              |> assign(:movies, [])
              |> assign(:meta, %{})
-             |> assign(:params, page_params)
+             |> assign(:params, params)
+             |> assign(:filters, %{})
              |> put_flash(:error, "Unable to load movies")}
         end
 
@@ -119,21 +112,6 @@ defmodule CinegraphWeb.ListLive.Show do
          socket
          |> put_flash(:error, "List not found")
          |> push_navigate(to: ~p"/lists")}
-    end
-  end
-
-  defp query_slug_param?(url) do
-    case URI.parse(url).query do
-      nil -> false
-      query -> Map.has_key?(URI.decode_query(query), "slug")
-    end
-  end
-
-  @impl Phoenix.LiveView
-  def handle_event(event, params, socket) do
-    case Events.handle_event(event, params, socket) do
-      :unknown -> super(event, params, socket)
-      reply -> reply
     end
   end
 
@@ -170,5 +148,28 @@ defmodule CinegraphWeb.ListLive.Show do
     else
       text
     end
+  end
+
+  # ============================================================================
+  # Filter Helpers
+  # ============================================================================
+
+  defp normalize_filters(params) do
+    %{
+      genres: parse_array_param(params["genres"]),
+      decade: params["decade"],
+      people_ids: parse_array_param(params["people_ids"]),
+      festivals: parse_array_param(params["festivals"])
+    }
+  end
+
+  # Check if any filters are active (called from template)
+  defp has_active_filters(filters) do
+    has_active_filters?(filters, list_view_filter_fields())
+  end
+
+  # Get list of active filters for display (called from template)
+  defp get_active_filters(filters, assigns) do
+    build_active_filters_list(filters, assigns, list_view_filter_configs())
   end
 end

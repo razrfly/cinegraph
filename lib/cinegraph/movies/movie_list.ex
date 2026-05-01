@@ -43,6 +43,8 @@ defmodule Cinegraph.Movies.MovieList do
     field :slug, :string
     field :short_name, :string
     field :icon, :string
+    field :cover_image_url, :string
+    field :hero_image_url, :string
     field :display_order, :integer, default: 0
 
     timestamps()
@@ -68,6 +70,8 @@ defmodule Cinegraph.Movies.MovieList do
       :slug,
       :short_name,
       :icon,
+      :cover_image_url,
+      :hero_image_url,
       :display_order
     ])
     |> validate_required([:source_key, :name, :source_type, :source_url])

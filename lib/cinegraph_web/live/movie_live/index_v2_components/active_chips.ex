@@ -12,9 +12,17 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   attr :params, :map, required: true
   attr :filter_options, :map, required: true
   attr :sort_options, :list, required: true
+  attr :scope, :map, default: %{}
 
   def active_filters(assigns) do
-    chips = build_active_chips(assigns.params, assigns.filter_options, assigns.sort_options)
+    chips =
+      build_active_chips(
+        assigns.params,
+        assigns.filter_options,
+        assigns.sort_options,
+        assigns.scope
+      )
+
     assigns = assign(assigns, :chips, chips)
 
     ~H"""
@@ -49,10 +57,13 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
     """
   end
 
-  defp build_active_chips(params, filter_options, sort_options) do
+  defp build_active_chips(params, filter_options, sort_options, scope) do
+    hidden_keys = hidden_filter_keys(scope)
+
     filter_chips =
       @basic_filter_keys
       |> Enum.reject(&(&1 == "search"))
+      |> Enum.reject(&(&1 in hidden_keys))
       |> Enum.flat_map(fn key ->
         value = params[key]
 
@@ -185,4 +196,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
     joined = Enum.join(names, ", ")
     if String.length(joined) > 30, do: String.slice(joined, 0..27) <> "…", else: joined
   end
+
+  defp hidden_filter_keys(%{kind: :list}), do: ["lists"]
+  defp hidden_filter_keys(%{kind: "list"}), do: ["lists"]
+  defp hidden_filter_keys(%{kind: :festival}), do: ["festivals"]
+  defp hidden_filter_keys(%{kind: "festival"}), do: ["festivals"]
+  defp hidden_filter_keys(_), do: []
 end

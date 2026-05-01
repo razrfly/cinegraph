@@ -354,12 +354,10 @@ defmodule CinegraphWeb.NeutralV2Components do
 
   def n_top_nav(assigns) do
     items = [
-      %{id: "Movies", badge: nil},
-      %{id: "TV", badge: nil},
-      %{id: "People", badge: nil},
-      %{id: "Lists", badge: nil},
-      %{id: "Trends", badge: nil},
-      %{id: "Data", badge: "BETA"}
+      %{id: "Movies", href: "/movies"},
+      %{id: "People", href: "/people"},
+      %{id: "Lists", href: "/lists"},
+      %{id: "Awards", href: "/awards"}
     ]
 
     assigns = assign(assigns, :items, items)
@@ -371,7 +369,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         <nav class="flex gap-[2px] items-center max-md:hidden">
           <a
             :for={item <- @items}
-            href="#"
+            href={item.href}
             class={[
               "inline-flex items-center gap-[6px] px-3 py-[7px] rounded-md text-[13.5px] no-underline tracking-[-.005em]",
               if(item.id == @active,
@@ -382,12 +380,6 @@ defmodule CinegraphWeb.NeutralV2Components do
             ]}
           >
             {item.id}
-            <span
-              :if={item.badge}
-              class="text-[9px] font-bold px-[5px] py-[2px] bg-mist-950 text-mist-50 rounded-[3px] tracking-[.05em]"
-            >
-              {item.badge}
-            </span>
           </a>
         </nav>
         <div class="flex-1 max-w-[420px] ml-auto max-md:hidden">
@@ -848,6 +840,116 @@ defmodule CinegraphWeb.NeutralV2Components do
       </div>
     </a>
     """
+  end
+
+  @doc "Collection card — real-data card for public list and awards indexes."
+  attr :collection, :map, required: true
+  attr :href, :string, required: true
+  attr :image_url, :string, default: nil
+  attr :eyebrow, :string, default: nil
+  attr :title, :string, default: nil
+  attr :description, :string, default: nil
+  attr :meta, :list, default: []
+  attr :icon, :string, default: nil
+
+  def n_collection_card(assigns) do
+    title = assigns.title || collection_value(assigns.collection, :name) || "Untitled"
+    image_url = assigns.image_url || collection_image(assigns.collection)
+
+    assigns =
+      assigns
+      |> assign(:title, title)
+      |> assign(:image_url, image_url)
+      |> assign(
+        :description,
+        assigns.description || collection_value(assigns.collection, :description)
+      )
+      |> assign(:seed_class, collection_seed_class(assigns.collection))
+      |> assign(:initials, collection_initials(title))
+
+    ~H"""
+    <a
+      href={@href}
+      class="group block overflow-hidden rounded-lg border border-mist-950/10 bg-mist-50 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
+    >
+      <div class={["relative aspect-[8/5] overflow-hidden", @seed_class]}>
+        <img
+          :if={@image_url}
+          src={@image_url}
+          alt=""
+          loading="lazy"
+          class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+        />
+        <div
+          :if={!@image_url}
+          class="grid h-full w-full place-items-center px-5 text-center font-display italic text-[34px] leading-none text-mist-950"
+        >
+          {@initials}
+        </div>
+        <div
+          :if={@icon}
+          class="absolute bottom-3 right-3 rounded-md bg-mist-50/90 px-2 py-1 text-[13px] font-semibold text-mist-950 shadow-sm"
+        >
+          {@icon}
+        </div>
+      </div>
+      <div class="px-4 py-4">
+        <div
+          :if={@eyebrow}
+          class="mb-2 text-[10.5px] font-semibold uppercase tracking-[.08em] text-mist-500"
+        >
+          {@eyebrow}
+        </div>
+        <h2 class="text-[17px] font-semibold leading-snug text-mist-950">
+          {@title}
+        </h2>
+        <p :if={@description} class="mt-2 line-clamp-2 text-[13px] leading-relaxed text-mist-700">
+          {@description}
+        </p>
+        <div :if={@meta != []} class="mt-4 flex flex-wrap gap-2">
+          <.n_pill :for={item <- @meta} tone={item[:tone] || "neutral"} size="xs">
+            {item.label}
+          </.n_pill>
+        </div>
+        <div class="mt-4 text-[12px] font-semibold text-mist-950">
+          Browse →
+        </div>
+      </div>
+    </a>
+    """
+  end
+
+  defp collection_value(collection, key) when is_map(collection) do
+    Map.get(collection, key) || Map.get(collection, to_string(key))
+  end
+
+  defp collection_image(collection) do
+    collection_value(collection, :cover_image_url) || collection_value(collection, :logo_url)
+  end
+
+  defp collection_initials(title) do
+    title
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.reject(&(&1 in ["The", "A", "An", "of", "and", "&"]))
+    |> Enum.take(3)
+    |> Enum.map(&String.first/1)
+    |> Enum.join("")
+    |> String.upcase()
+  end
+
+  defp collection_seed_class(collection) do
+    seed =
+      (collection_value(collection, :slug) || collection_value(collection, :source_key) ||
+         collection_value(collection, :name) || "")
+      |> to_string()
+      |> :erlang.phash2(4)
+
+    case seed do
+      0 -> "bg-gradient-to-br from-mist-100 to-mist-300"
+      1 -> "bg-gradient-to-br from-emerald-50 to-mist-200"
+      2 -> "bg-gradient-to-br from-amber-50 to-mist-200"
+      _ -> "bg-gradient-to-br from-blue-50 to-mist-200"
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────

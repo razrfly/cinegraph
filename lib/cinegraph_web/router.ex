@@ -166,15 +166,25 @@ defmodule CinegraphWeb.Router do
     # Disparity Explorer
     live "/explore/disparity", DisparityExplorerLive, :index
 
-    # Curated Lists routes
-    live "/lists", ListLive.Index, :index
-    live "/lists/:slug", ListLive.Show, :show
+    # Legacy collection escape hatches while V2 soaks.
+    live "/lists/legacy", ListLive.IndexLegacy, :index
+    live "/lists/:slug/legacy", ListLive.ShowLegacy, :show
+    live "/awards/legacy", AwardsLive.IndexLegacy, :index
+    live "/awards/:slug/legacy", AwardsLive.ShowLegacy, :show
+    live "/awards/:slug/winners/legacy", AwardsLive.ShowLegacy, :winners
+    live "/awards/:slug/nominees/legacy", AwardsLive.ShowLegacy, :nominees
 
-    # Awards/Festivals routes
-    live "/awards", AwardsLive.Index, :index
-    live "/awards/:slug", AwardsLive.Show, :show
-    live "/awards/:slug/winners", AwardsLive.Show, :winners
-    live "/awards/:slug/nominees", AwardsLive.Show, :nominees
+    # V2 collection routes use the same root layout as the V2 movie pages.
+    live_session :v2_collections,
+      root_layout: {CinegraphWeb.Layouts, :v2_root},
+      layout: false do
+      live "/lists", ListLive.Index, :index
+      live "/lists/:slug", ListLive.Show, :show
+      live "/awards", AwardsLive.Index, :index
+      live "/awards/:slug", AwardsLive.Show, :show
+      live "/awards/:slug/winners", AwardsLive.Show, :winners
+      live "/awards/:slug/nominees", AwardsLive.Show, :nominees
+    end
   end
 
   # GraphQL API — read-only, authenticated via Bearer token

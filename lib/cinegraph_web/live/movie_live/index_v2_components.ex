@@ -10,6 +10,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   alias CinegraphWeb.MovieLive.IndexV2Components.ActiveChips
   alias CinegraphWeb.MovieLive.IndexV2Components.CardHelpers
   alias CinegraphWeb.MovieLive.IndexV2Components.Filters
+  alias CinegraphWeb.MovieLive.IndexV2Drawer
 
   attr :total_count, :integer, default: nil
 
@@ -50,12 +51,14 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   attr :filter_options, :map, required: true
   attr :params, :map, required: true
   attr :active_filter_count, :integer, default: 0
+  attr :scope, :map, default: %{}
 
   def filters(assigns), do: Filters.filters(assigns)
 
   attr :params, :map, required: true
   attr :filter_options, :map, required: true
   attr :sort_options, :list, required: true
+  attr :scope, :map, default: %{}
 
   def active_filters(assigns), do: ActiveChips.active_filters(assigns)
 
@@ -63,6 +66,67 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   attr :active_lens_key, :any, default: nil
 
   def results(assigns), do: CardHelpers.results(assigns)
+
+  attr :movies, :list, required: true
+  attr :meta, :any, required: true
+  attr :params, :map, required: true
+  attr :filter_options, :map, required: true
+  attr :search_term, :string, default: ""
+  attr :sort_options, :list, required: true
+  attr :sort_criteria, :string, default: "release_date"
+  attr :sort_direction, :atom, default: :desc
+  attr :sort_is_preset, :boolean, default: false
+  attr :active_lens_key, :any, default: nil
+  attr :show_drawer, :boolean, default: false
+  attr :show_scoring_info, :boolean, default: false
+  attr :scope, :map, default: %{}
+
+  def discovery_body(assigns) do
+    active_filter_count = active_filter_count(assigns.params, assigns.scope)
+
+    assigns =
+      assigns
+      |> assign(:active_filter_count, active_filter_count)
+      |> assign(:selected_lists, list_param(assigns.params, "lists"))
+      |> assign(:selected_festivals, list_param(assigns.params, "festivals"))
+      |> assign(:selected_people, selected_people_ids(assigns.params))
+
+    ~H"""
+    <.filters
+      search_term={@search_term}
+      sort_options={@sort_options}
+      sort_criteria={@sort_criteria}
+      sort_direction={@sort_direction}
+      sort_is_preset={@sort_is_preset}
+      filter_options={@filter_options}
+      params={@params}
+      scope={@scope}
+      active_filter_count={@active_filter_count}
+    />
+    <.active_filters
+      params={@params}
+      filter_options={@filter_options}
+      sort_options={@sort_options}
+      scope={@scope}
+    />
+    <.results movies={@movies} active_lens_key={@active_lens_key} />
+    <.pagination meta={@meta} />
+
+    <IndexV2Drawer.filters_drawer
+      show={@show_drawer}
+      filter_options={@filter_options}
+      selected_lists={@selected_lists}
+      selected_festivals={@selected_festivals}
+      selected_people={@selected_people}
+      selected_decade={@params["decade"]}
+      rating_preset={@params["rating_preset"]}
+      show_unreleased={@params["show_unreleased"]}
+      active_filter_count={@active_filter_count}
+      scope={@scope}
+    />
+    <IndexV2Drawer.scoring_modal show={@show_scoring_info} />
+    """
+  end
 
   attr :meta, :any, required: true
 
@@ -104,6 +168,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   end
 
   defdelegate active_filter_count(params), to: Filters
+  defdelegate active_filter_count(params, scope), to: Filters
   defdelegate list_param(params, key), to: Filters
   defdelegate selected_people_ids(params), to: Filters
 

@@ -1,0 +1,169 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Navigation -->
+  <.back_link navigate={~p"/lists"} label="Back to Lists" />
+
+  <%= if @list_info do %>
+    <!-- Header -->
+    <div class="mb-6">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h1 class="text-4xl font-bold text-gray-900">
+            {@list_info.name}
+          </h1>
+          <p class="text-gray-600 mt-2">
+            {@list_info.description}
+          </p>
+          <.results_count page={@page} per_page={@per_page} total={@total_movies} />
+        </div>
+        
+<!-- Search Bar -->
+        <.search_bar search_term={@search_term} placeholder="Search within this list..." />
+      </div>
+    </div>
+    
+<!-- Filter & Sort Controls -->
+    <div class="mb-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <!-- Filter Toggle -->
+        <.filter_toggle
+          show_filters={@show_filters}
+          has_active_filters={has_active_filters(@filters)}
+        />
+        
+<!-- Sort Controls -->
+        <.sort_controls
+          sort_criteria={@sort_criteria}
+          sort_direction={@sort_direction}
+          options={[
+            %{value: "release_date", label: "📅 Release Date", group: "Basic"},
+            %{value: "title", label: "🔤 Title", group: "Basic"},
+            %{value: "rating", label: "⭐ Rating", group: "Ratings"}
+          ]}
+        />
+      </div>
+      
+<!-- Filter Panel -->
+      <%= if @show_filters do %>
+        <div class="mt-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <form phx-change="apply_filters">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- Genre Filter -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Genre
+                </label>
+                <input type="hidden" name="filters[genres][]" value="" />
+                <.multi_select_dropdown
+                  id="list-genres-select"
+                  name="filters[genres][]"
+                  options={@available_genres}
+                  selected={@filters.genres || []}
+                  placeholder="Select genres..."
+                  label_field={:name}
+                  value_field={:id}
+                />
+              </div>
+              
+<!-- Decade Filter -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Decade
+                </label>
+                <select
+                  name="filters[decade]"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="">All Decades</option>
+                  <%= for decade <- @available_decades do %>
+                    <option
+                      value={decade.value}
+                      selected={to_string(decade.value) == @filters.decade}
+                    >
+                      {decade.label}
+                    </option>
+                  <% end %>
+                </select>
+              </div>
+              
+<!-- Cast & Crew Filter -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Cast & Crew
+                </label>
+                <.live_component
+                  module={CinegraphWeb.Components.PersonAutocomplete}
+                  id="list-people-search"
+                  field_name="filters[people_search]"
+                  selected_people={@filters.people_ids || []}
+                  search_term=""
+                />
+              </div>
+              
+<!-- Festivals/Awards Filter -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Festivals/Awards
+                </label>
+                <input type="hidden" name="filters[festivals][]" value="" />
+                <.multi_select_dropdown
+                  id="list-festivals-select"
+                  name="filters[festivals][]"
+                  options={@festival_organizations}
+                  selected={@filters.festivals || []}
+                  placeholder="Select festivals..."
+                  label_field={:name}
+                  value_field={:id}
+                />
+              </div>
+            </div>
+            
+<!-- Filter Actions -->
+            <div class="mt-4 flex justify-end">
+              <button
+                type="button"
+                phx-click="clear_filters"
+                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </form>
+        </div>
+      <% end %>
+      
+<!-- Active Filters Display -->
+      <%= if has_active_filters(@filters) do %>
+        <.active_filters_display filters={get_active_filters(@filters, assigns)} />
+      <% end %>
+    </div>
+    
+<!-- Movies Grid -->
+    <.movie_grid movies={@movies} />
+    
+<!-- Empty State -->
+    <%= if Enum.empty?(@movies) do %>
+      <.empty_state title="No films found" message="Try adjusting your search criteria." />
+    <% end %>
+    
+<!-- Pagination -->
+    <.pagination
+      page={@page}
+      total_pages={@total_pages}
+      build_path={
+        fn page ->
+          ~p"/lists/#{@list_info.slug}/legacy?#{build_pagination_params(assigns, page)}"
+        end
+      }
+    />
+    
+<!-- Link to full search -->
+    <div class="mt-8 text-center">
+      <.link
+        navigate={~p"/movies?lists=#{@list_info.key}"}
+        class="text-blue-600 hover:text-blue-800 text-sm"
+      >
+        View with full filtering options →
+      </.link>
+    </div>
+  <% end %>
+</div>

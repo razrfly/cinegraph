@@ -284,8 +284,12 @@ defmodule Cinegraph.People do
     |> distinct(true)
     |> order_by([p], fragment("EXTRACT(decade FROM ?) * 10", p.birthday))
     |> Repo.replica().all()
-    |> Enum.map(&trunc/1)
+    |> Enum.map(&normalize_birth_decade/1)
   end
+
+  defp normalize_birth_decade(%Decimal{} = decade), do: Decimal.to_integer(decade)
+  defp normalize_birth_decade(decade) when is_integer(decade), do: decade
+  defp normalize_birth_decade(decade) when is_float(decade), do: trunc(decade)
 
   @doc """
   Gets available nationalities/places of birth for filtering.

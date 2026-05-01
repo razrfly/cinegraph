@@ -22,6 +22,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
   attr :rating_preset, :string, default: nil
   attr :show_unreleased, :string, default: nil
   attr :active_filter_count, :integer, default: 0
+  attr :scope, :map, default: %{}
 
   def filters_drawer(assigns) do
     ~H"""
@@ -34,11 +35,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
       <form phx-change="apply_filters" id="filters-drawer-form" class="space-y-8">
         <%!-- Hidden inputs ensure the form has *some* value for unchecked groups,
               otherwise apply_filters skips them entirely --%>
-        <input type="hidden" name="filters[lists][]" value="" />
-        <input type="hidden" name="filters[festivals][]" value="" />
+        <input :if={!list_scope?(@scope)} type="hidden" name="filters[lists][]" value="" />
+        <input :if={!festival_scope?(@scope)} type="hidden" name="filters[festivals][]" value="" />
 
         <%!-- ─── Canonical Lists ─── --%>
-        <section>
+        <section :if={!list_scope?(@scope)}>
           <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
             Canonical Lists
           </h3>
@@ -66,7 +67,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
         </section>
 
         <%!-- ─── Festivals / Awards ─── --%>
-        <section>
+        <section :if={!festival_scope?(@scope)}>
           <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
             Festivals / Awards
           </h3>
@@ -270,4 +271,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
       {"💵", "The Box Office", "Follow the money.", "Global revenue relative to budget."}
     ]
   end
+
+  defp list_scope?(%{kind: :list}), do: true
+  defp list_scope?(%{kind: "list"}), do: true
+  defp list_scope?(_), do: false
+
+  defp festival_scope?(%{kind: :festival}), do: true
+  defp festival_scope?(%{kind: "festival"}), do: true
+  defp festival_scope?(_), do: false
 end

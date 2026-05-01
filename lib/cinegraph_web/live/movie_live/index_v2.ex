@@ -23,10 +23,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   require Logger
 
   alias Cinegraph.Movies.Search
-  alias Cinegraph.Repo
   alias CinegraphWeb.MovieLive.IndexV2Components
-  alias CinegraphWeb.MovieLive.IndexV2Drawer
   alias CinegraphWeb.MovieLive.IndexV2.Events
+  alias CinegraphWeb.MovieLive.IndexV2.Results
   alias CinegraphWeb.MovieLive.SortOptions
 
   import CinegraphWeb.LiveViewHelpers,
@@ -98,7 +97,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
 
     case Search.search_movies(query_params) do
       {:ok, {movies, meta}} ->
-        movies = preload_card_assocs(movies, active_lens_key)
+        movies = Results.preload_card_assocs(movies, active_lens_key)
 
         {:noreply,
          socket
@@ -141,18 +140,6 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
     end
   end
 
-  # Preloads only what the V2 grid needs. Empty list = use the read replica.
-  # `:score_cache` is preloaded only when a Lens sort is active — this is what
-  # surfaces the lens-component % chips on cards. Single batched query for all
-  # 24 rows; verified no N+1 in `docs/perf/movies-v2-explain.md`.
-  defp preload_card_assocs([], _), do: []
-
-  defp preload_card_assocs(movies, lens_key) when is_binary(lens_key) do
-    Repo.replica().preload(movies, [:score_cache])
-  end
-
-  defp preload_card_assocs(movies, _), do: movies
-
   # ============================================================================
   # Render
   # ============================================================================
@@ -166,36 +153,20 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
       phx-key="Escape"
     >
       <IndexV2Components.hero total_count={@total_count} />
-      <IndexV2Components.filters
+      <IndexV2Components.discovery_body
+        movies={@movies}
+        meta={@meta}
+        params={@params}
+        filter_options={@filter_options}
         search_term={@search_term}
         sort_options={@sort_options}
         sort_criteria={@sort_criteria}
         sort_direction={@sort_direction}
         sort_is_preset={@sort_is_preset}
-        filter_options={@filter_options}
-        params={@params}
-        active_filter_count={IndexV2Components.active_filter_count(@params)}
+        active_lens_key={@active_lens_key}
+        show_drawer={@show_drawer}
+        show_scoring_info={@show_scoring_info}
       />
-      <IndexV2Components.active_filters
-        params={@params}
-        filter_options={@filter_options}
-        sort_options={@sort_options}
-      />
-      <IndexV2Components.results movies={@movies} active_lens_key={@active_lens_key} />
-      <IndexV2Components.pagination meta={@meta} />
-
-      <IndexV2Drawer.filters_drawer
-        show={@show_drawer}
-        filter_options={@filter_options}
-        selected_lists={IndexV2Components.list_param(@params, "lists")}
-        selected_festivals={IndexV2Components.list_param(@params, "festivals")}
-        selected_people={IndexV2Components.selected_people_ids(@params)}
-        selected_decade={@params["decade"]}
-        rating_preset={@params["rating_preset"]}
-        show_unreleased={@params["show_unreleased"]}
-        active_filter_count={IndexV2Components.active_filter_count(@params)}
-      />
-      <IndexV2Drawer.scoring_modal show={@show_scoring_info} />
 
       <%!-- Legacy v1 escape hatch — temporary during the V2 soak period --%>
       <a

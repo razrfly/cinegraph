@@ -47,7 +47,11 @@ defmodule Cinegraph.Lists.ListSlugs do
            name: list.name,
            short_name: list.short_name,
            description: list.description,
-           icon: list.icon
+           icon: list.icon,
+           category: list.category,
+           source_url: list.source_url,
+           cover_image_url: list.cover_image_url,
+           hero_image_url: list.hero_image_url
          }}
     end
   end
@@ -59,7 +63,7 @@ defmodule Cinegraph.Lists.ListSlugs do
   def all do
     MovieLists.all_displayable()
     |> Enum.map(&to_display_map/1)
-    |> Enum.sort_by(&Map.get(&1, :name, ""))
+    |> Enum.sort_by(&{Map.get(&1, :display_order, 0), Map.get(&1, :name, "")})
   end
 
   @doc """
@@ -103,7 +107,12 @@ defmodule Cinegraph.Lists.ListSlugs do
       name: list.name,
       short_name: list.short_name,
       description: list.description,
-      icon: list.icon
+      icon: list.icon,
+      category: list.category,
+      source_url: list.source_url,
+      display_order: list.display_order,
+      cover_image_url: list.cover_image_url,
+      hero_image_url: list.hero_image_url
     }
   end
 end

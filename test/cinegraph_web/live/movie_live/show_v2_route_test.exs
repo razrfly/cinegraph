@@ -56,6 +56,21 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ ~p"/movies/#{movie.id}/legacy"
       assert html =~ movie.title
     end
+
+    test "falls back to numeric ID legacy links for movies with empty slugs", %{
+      conn: conn,
+      movie: movie
+    } do
+      movie =
+        movie
+        |> Ecto.Changeset.change(slug: "")
+        |> Repo.update!()
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.id}")
+      assert html =~ "Old movie page"
+      assert html =~ ~p"/movies/#{movie.id}/legacy"
+      assert html =~ movie.title
+    end
   end
 
   describe "/movies-v2/:slug — alias" do

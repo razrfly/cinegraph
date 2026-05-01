@@ -1,0 +1,111 @@
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Navigation -->
+  <div class="mb-6">
+    <.link
+      navigate={~p"/movies"}
+      class="inline-flex items-center text-blue-600 hover:text-blue-800"
+    >
+      <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to Movies
+    </.link>
+  </div>
+  
+<!-- Header -->
+  <div class="mb-8">
+    <h1 class="text-4xl font-bold text-gray-900">Awards & Festivals</h1>
+    <p class="text-gray-600 mt-2">
+      Explore films recognized by the world's most prestigious awards ceremonies
+    </p>
+  </div>
+  
+<!-- Organizations Grid -->
+  <%= if Enum.empty?(@organizations) do %>
+    <div class="text-center py-12">
+      <div class="mx-auto h-12 w-12 text-gray-400">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+          />
+        </svg>
+      </div>
+      <h3 class="mt-2 text-sm font-medium text-gray-900">No festivals found</h3>
+      <p class="mt-1 text-sm text-gray-500">Festival data hasn't been imported yet.</p>
+    </div>
+  <% else %>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <%= for org <- @organizations do %>
+        <.link
+          navigate={~p"/awards/#{org.slug || org.id}"}
+          class="group block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden border border-gray-200"
+        >
+          <div class="p-6">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h2 class="text-xl font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                  {org.name}
+                </h2>
+                <%= if org.abbreviation do %>
+                  <p class="text-gray-500 text-sm mt-1">
+                    {org.abbreviation}
+                  </p>
+                <% end %>
+                <%= if org.country do %>
+                  <p class="text-gray-500 text-sm">
+                    {org.country}{if org.founded_year, do: " • Est. #{org.founded_year}"}
+                  </p>
+                <% end %>
+              </div>
+              <div class="ml-4 flex-shrink-0 text-3xl">
+                🏆
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+              <%= if org.movie_count > 0 do %>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                  {org.movie_count} films
+                </span>
+              <% end %>
+              <%= if org.winner_count > 0 do %>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800">
+                  {org.winner_count} winners
+                </span>
+              <% end %>
+            </div>
+
+            <div class="mt-4 flex items-center text-sm text-blue-600 group-hover:text-blue-700">
+              <span>Browse films</span>
+              <svg
+                class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </div>
+          </div>
+        </.link>
+      <% end %>
+    </div>
+  <% end %>
+  
+<!-- Info Section -->
+  <div class="mt-12 bg-gray-50 rounded-lg p-6">
+    <h3 class="text-lg font-semibold text-gray-900 mb-2">About Awards Data</h3>
+    <p class="text-gray-600 text-sm">
+      Browse films that have been recognized by major awards organizations around the world.
+      Each festival page shows nominated and winning films, searchable by year and category.
+    </p>
+  </div>
+</div>
