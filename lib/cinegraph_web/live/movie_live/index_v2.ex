@@ -22,7 +22,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
 
   require Logger
 
+  import Ecto.Query
+
+  alias Cinegraph.Repo
   alias Cinegraph.Movies.Search
+  alias Cinegraph.Movies.Genre
+  alias Cinegraph.Movies.Person
   alias CinegraphWeb.MovieLive.IndexV2Components
   alias CinegraphWeb.MovieLive.IndexV2.Events
   alias CinegraphWeb.MovieLive.IndexV2.Results
@@ -42,7 +47,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
   # ============================================================================
 
   @impl CinegraphWeb.SearchEventHandlers
-  def build_path(_socket, params), do: ~p"/movies?#{params}"
+  def build_path(socket, params) do
+    params = canonicalize_filter_params(socket, params)
+    query = Plug.Conn.Query.encode(params) |> String.replace("%2C", ",")
+
+    if query == "", do: ~p"/movies", else: "/movies?#{query}"
+  end
 
   # ============================================================================
   # Mount / handle_params
@@ -178,4 +188,227 @@ defmodule CinegraphWeb.MovieLive.IndexV2 do
     </div>
     """
   end
+
+  defp canonicalize_filter_params(socket, params) do
+    params
+    |> canonicalize_genre_param(socket)
+    |> canonicalize_festival_param(socket)
+    |> canonicalize_list_param(socket)
+    |> canonicalize_people_param()
+    |> strip_empty_filter_params()
+  end
+
+  defp canonicalize_genre_param(params, socket) do
+    genres = Map.get(params, "genres") || Map.get(params, "genres[]")
+
+    params =
+      case canonical_genre_slugs(socket, genres) do
+        [] -> Map.delete(params, "genres")
+        slugs -> Map.put(params, "genres", Enum.join(slugs, ","))
+      end
+
+    Map.delete(params, "genres[]")
+  end
+
+  defp canonicalize_festival_param(params, socket) do
+    festivals = Map.get(params, "festivals") || Map.get(params, "festivals[]")
+
+    params =
+      case canonical_festival_slugs(socket, festivals) do
+        [] -> Map.delete(params, "festivals")
+        slugs -> Map.put(params, "festivals", Enum.join(slugs, ","))
+      end
+
+    Map.delete(params, "festivals[]")
+  end
+
+  defp canonicalize_list_param(params, socket) do
+    lists = Map.get(params, "lists") || Map.get(params, "lists[]")
+
+    params =
+      case canonical_list_slugs(socket, lists) do
+        [] -> Map.delete(params, "lists")
+        slugs -> Map.put(params, "lists", Enum.join(slugs, ","))
+      end
+
+    Map.delete(params, "lists[]")
+  end
+
+  defp canonicalize_people_param(params) do
+    values =
+      cond do
+        Map.has_key?(params, "people") ->
+          params["people"]
+
+        Map.has_key?(params, "people_ids") ->
+          params["people_ids"]
+
+        match?(%{}, params["people_search"]) ->
+          get_in(params, ["people_search", "people_ids"])
+
+        Map.has_key?(params, "people_search[people_ids]") ->
+          params["people_search[people_ids]"]
+
+        true ->
+          nil
+      end
+
+    params =
+      case canonical_people_slugs(values) do
+        [] -> Map.delete(params, "people")
+        slugs -> Map.put(params, "people", Enum.join(slugs, ","))
+      end
+
+    params
+    |> Map.delete("people_ids")
+    |> Map.delete("people_search")
+    |> Map.delete("people_search[people_ids]")
+    |> Map.delete("people_search[role_filter]")
+  end
+
+  defp canonical_genre_slugs(_socket, nil), do: []
+  defp canonical_genre_slugs(_socket, []), do: []
+
+  defp canonical_genre_slugs(socket, values) do
+    values = CinegraphWeb.LiveViewHelpers.parse_array_param(values)
+
+    genres =
+      socket.assigns
+      |> Map.get(:filter_options, %{})
+      |> Map.get(:genres, [])
+
+    values
+    |> Enum.map(&genre_slug_for_value(&1, genres))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp genre_slug_for_value(value, genres) when is_integer(value) do
+    genres
+    |> Enum.find(&(&1.id == value))
+    |> Genre.slug()
+  end
+
+  defp genre_slug_for_value(value, genres) when is_binary(value) do
+    case Integer.parse(value) do
+      {id, ""} -> genre_slug_for_value(id, genres)
+      _ -> Genre.slug(value)
+    end
+  end
+
+  defp genre_slug_for_value(_value, _genres), do: nil
+
+  defp canonical_festival_slugs(_socket, nil), do: []
+  defp canonical_festival_slugs(_socket, []), do: []
+
+  defp canonical_festival_slugs(socket, values) do
+    values = CinegraphWeb.LiveViewHelpers.parse_array_param(values)
+
+    festivals =
+      socket.assigns
+      |> Map.get(:filter_options, %{})
+      |> Map.get(:festivals, [])
+
+    values
+    |> Enum.map(&festival_slug_for_value(&1, festivals))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp festival_slug_for_value(value, festivals) when is_integer(value) do
+    festivals
+    |> Enum.find(&(&1.id == value))
+    |> map_slug()
+  end
+
+  defp festival_slug_for_value(value, festivals) when is_binary(value) do
+    case Integer.parse(value) do
+      {id, ""} -> festival_slug_for_value(id, festivals)
+      _ -> value
+    end
+  end
+
+  defp festival_slug_for_value(_value, _festivals), do: nil
+
+  defp canonical_list_slugs(_socket, nil), do: []
+  defp canonical_list_slugs(_socket, []), do: []
+
+  defp canonical_list_slugs(socket, values) do
+    values = CinegraphWeb.LiveViewHelpers.parse_array_param(values)
+
+    lists =
+      socket.assigns
+      |> Map.get(:filter_options, %{})
+      |> Map.get(:lists, [])
+
+    values
+    |> Enum.map(&list_slug_for_value(&1, lists))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp list_slug_for_value(value, lists) do
+    value = to_string(value)
+
+    case Enum.find(lists, &(&1.key == value or Map.get(&1, :slug) == value)) do
+      nil -> value
+      list -> Map.get(list, :slug) || list.key
+    end
+  end
+
+  defp canonical_people_slugs(nil), do: []
+  defp canonical_people_slugs([]), do: []
+
+  defp canonical_people_slugs(values) do
+    values
+    |> CinegraphWeb.LiveViewHelpers.parse_array_param()
+    |> people_slugs_for_values()
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp people_slugs_for_values(values) do
+    {ids, slugs} =
+      Enum.reduce(values, {[], []}, fn
+        v, {ids, slugs} when is_integer(v) ->
+          {[v | ids], slugs}
+
+        v, {ids, slugs} when is_binary(v) ->
+          case Integer.parse(v) do
+            {id, ""} -> {[id | ids], slugs}
+            _ -> {ids, [v | slugs]}
+          end
+
+        _v, acc ->
+          acc
+      end)
+
+    id_slugs =
+      case ids do
+        [] ->
+          []
+
+        ids ->
+          Person
+          |> where([p], p.id in ^ids)
+          |> select([p], p.slug)
+          |> Repo.replica().all()
+      end
+
+    (slugs ++ id_slugs)
+    |> Enum.reject(&(&1 in [nil, ""]))
+  end
+
+  defp strip_empty_filter_params(params) do
+    params
+    |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
+    |> Map.new()
+  end
+
+  defp map_slug(nil), do: nil
+  defp map_slug(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
+  defp map_slug(_), do: nil
 end

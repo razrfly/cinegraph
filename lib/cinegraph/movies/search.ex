@@ -9,7 +9,7 @@ defmodule Cinegraph.Movies.Search do
 
   import Ecto.Query
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.{DiscoveryRankings, Movie}
   alias Cinegraph.Movies.Query.{Params, CustomFilters, CustomSorting}
   alias Cinegraph.Metrics.ScoringService
 
@@ -39,15 +39,24 @@ defmodule Cinegraph.Movies.Search do
   """
   def search_movies_uncached(params) do
     with {:ok, validated_params} <- Params.validate(params) do
-      # Start with base query for fully imported movies
-      base_query = from(m in Movie, where: m.import_status == "full")
+      if DiscoveryRankings.default_browse?(validated_params) do
+        DiscoveryRankings.list_default(validated_params)
+      else
+        search_movies_generic(validated_params)
+      end
+    end
+  end
 
-      # Apply custom filters first (genres, awards, people, etc.)
-      filtered_query = CustomFilters.apply_all(base_query, validated_params)
+  defp search_movies_generic(validated_params) do
+    # Start with base query for fully imported movies
+    base_query = from(m in Movie, where: m.import_status == "full")
 
-      # Check if we need custom sorting
-      needs_custom_sort =
-        validated_params.sort in ~w(
+    # Apply custom filters first (genres, awards, people, etc.)
+    filtered_query = CustomFilters.apply_all(base_query, validated_params)
+
+    # Check if we need custom sorting
+    needs_custom_sort =
+      validated_params.sort in ~w(
           rating rating_asc rating_desc
           popularity popularity_asc popularity_desc
           discovery_score discovery_score_asc discovery_score_desc
@@ -60,60 +69,59 @@ defmodule Cinegraph.Movies.Search do
           box_office box_office_asc box_office_desc
         ) or validated_params.sort in @preset_sort_variants
 
-      # Resolve preset weights for score-cache sorts
-      preset_slug =
-        cond do
-          validated_params.sort in @preset_sort_variants ->
-            String.replace(validated_params.sort, ~r/_(asc|desc)$/, "")
+    # Resolve preset weights for score-cache sorts
+    preset_slug =
+      cond do
+        validated_params.sort in @preset_sort_variants ->
+          String.replace(validated_params.sort, ~r/_(asc|desc)$/, "")
 
-          validated_params.sort in ~w(score score_asc score_desc) and
-              not is_nil(validated_params.preset) ->
-            validated_params.preset
+        validated_params.sort in ~w(score score_asc score_desc) and
+            not is_nil(validated_params.preset) ->
+          validated_params.preset
 
-          true ->
-            nil
-        end
-
-      preset_weights =
-        if preset_slug do
-          case ScoringService.get_profile_by_slug(preset_slug) do
-            nil -> nil
-            profile -> profile.category_weights
-          end
-        else
+        true ->
           nil
-        end
-
-      # Apply custom sorting if needed
-      sorted_query =
-        if needs_custom_sort do
-          CustomSorting.apply(filtered_query, validated_params.sort, preset_weights)
-        else
-          filtered_query
-        end
-
-      # Convert params to Flop format
-      flop_params = Params.to_flop_params(validated_params)
-
-      # If we applied custom sorting, remove order from Flop params
-      flop_params =
-        if needs_custom_sort do
-          Map.delete(flop_params, :order_by)
-        else
-          flop_params
-        end
-
-      # Use Flop for remaining filters, sorting (if not custom), and pagination
-      # Route to read replica for better load distribution
-      case Flop.validate_and_run(sorted_query, flop_params, for: Movie, repo: Repo.replica()) do
-        {:ok, {movies, meta}} ->
-          # Add discovery scores for display if not using discovery sorting
-          movies = maybe_add_discovery_scores(movies, validated_params.sort)
-          {:ok, {movies, meta}}
-
-        {:error, changeset} ->
-          {:error, changeset}
       end
+
+    preset_weights =
+      if preset_slug do
+        case ScoringService.get_profile_by_slug(preset_slug) do
+          nil -> nil
+          profile -> profile.category_weights
+        end
+      else
+        nil
+      end
+
+    # Apply custom sorting if needed
+    sorted_query =
+      if needs_custom_sort do
+        CustomSorting.apply(filtered_query, validated_params.sort, preset_weights)
+      else
+        filtered_query
+      end
+
+    # Convert params to Flop format
+    flop_params = Params.to_flop_params(validated_params)
+
+    # If we applied custom sorting, remove order from Flop params
+    flop_params =
+      if needs_custom_sort do
+        Map.delete(flop_params, :order_by)
+      else
+        flop_params
+      end
+
+    # Use Flop for remaining filters, sorting (if not custom), and pagination
+    # Route to read replica for better load distribution
+    case Flop.validate_and_run(sorted_query, flop_params, for: Movie, repo: Repo.replica()) do
+      {:ok, {movies, meta}} ->
+        # Add discovery scores for display if not using discovery sorting
+        movies = maybe_add_discovery_scores(movies, validated_params.sort)
+        {:ok, {movies, meta}}
+
+      {:error, changeset} ->
+        {:error, changeset}
     end
   end
 
@@ -123,21 +131,25 @@ defmodule Cinegraph.Movies.Search do
   """
   def count_movies(params \\ %{}) do
     with {:ok, validated_params} <- Params.validate(params) do
-      base_query = from(m in Movie, where: m.import_status == "full")
-      filtered_query = CustomFilters.apply_all(base_query, validated_params)
+      if DiscoveryRankings.default_browse?(validated_params) do
+        {:ok, DiscoveryRankings.count_default()}
+      else
+        base_query = from(m in Movie, where: m.import_status == "full")
+        filtered_query = CustomFilters.apply_all(base_query, validated_params)
 
-      # Handle special case for genre filtering with GROUP BY
-      # Route to read replica for better load distribution
-      count =
-        if validated_params.genres && validated_params.genres != [] do
-          # Wrap the grouped query in a subquery and count the results
-          from(m in subquery(filtered_query), select: count())
-          |> Repo.replica().one()
-        else
-          Repo.replica().aggregate(filtered_query, :count, :id)
-        end
+        # Handle special case for genre filtering with GROUP BY
+        # Route to read replica for better load distribution
+        count =
+          if validated_params.genres && validated_params.genres != [] do
+            # Wrap the grouped query in a subquery and count the results
+            from(m in subquery(filtered_query), select: count())
+            |> Repo.replica().one()
+          else
+            Repo.replica().aggregate(filtered_query, :count, :id)
+          end
 
-      {:ok, count}
+        {:ok, count}
+      end
     end
   end
 
@@ -223,14 +235,12 @@ defmodule Cinegraph.Movies.Search do
   end
 
   defp list_canonical_lists do
-    Cinegraph.Movies.MovieLists.get_active_source_keys()
-    |> Enum.map(fn key ->
-      case Cinegraph.Movies.MovieLists.get_config(key) do
-        {:ok, config} -> %{id: key, key: key, name: config.name}
-        _ -> nil
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
+    from(ml in Cinegraph.Movies.MovieList,
+      where: ml.active == true,
+      select: %{id: ml.source_key, key: ml.source_key, slug: ml.slug, name: ml.name},
+      order_by: ml.name
+    )
+    |> Repo.replica().all()
   end
 
   defp generate_decades do
@@ -245,7 +255,7 @@ defmodule Cinegraph.Movies.Search do
 
   defp list_festival_organizations do
     from(fo in "festival_organizations",
-      select: %{id: fo.id, name: fo.name, abbreviation: fo.abbreviation},
+      select: %{id: fo.id, name: fo.name, slug: fo.slug, abbreviation: fo.abbreviation},
       order_by: fo.name
     )
     |> Repo.replica().all()

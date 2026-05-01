@@ -5,7 +5,11 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
   """
 
   use Phoenix.LiveComponent
+  import Ecto.Query
+
+  alias Cinegraph.Movies.Person
   alias Cinegraph.People
+  alias Cinegraph.Repo
 
   def mount(socket) do
     {:ok,
@@ -333,16 +337,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
         People.get_people_by_ids(selected)
 
       Enum.all?(selected, &is_binary/1) ->
-        # List of string IDs
-        ids =
-          selected
-          |> Enum.map(&Integer.parse/1)
-          |> Enum.flat_map(fn
-            {id, _} -> [id]
-            :error -> []
-          end)
-
-        if ids == [], do: [], else: People.get_people_by_ids(ids)
+        people_for_values(selected)
 
       true ->
         []
@@ -350,8 +345,7 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
   end
 
   defp parse_selected_people(selected) when is_binary(selected) do
-    # Parse comma-separated IDs and fetch people
-    ids =
+    values =
       selected
       |> String.trim()
       |> case do
@@ -362,15 +356,35 @@ defmodule CinegraphWeb.Components.PersonAutocomplete do
           s
           |> String.split(",", trim: true)
           |> Enum.map(&String.trim/1)
-          |> Enum.map(&Integer.parse/1)
-          |> Enum.flat_map(fn
-            {id, _} -> [id]
-            :error -> []
-          end)
       end
 
-    if ids == [], do: [], else: People.get_people_by_ids(ids)
+    people_for_values(values)
   end
 
   defp parse_selected_people(_), do: []
+
+  defp people_for_values([]), do: []
+
+  defp people_for_values(values) do
+    {ids, slugs} =
+      Enum.reduce(values, {[], []}, fn value, {ids, slugs} ->
+        case Integer.parse(to_string(value)) do
+          {id, ""} -> {[id | ids], slugs}
+          _ -> {ids, [to_string(value) | slugs]}
+        end
+      end)
+
+    by_ids = if ids == [], do: [], else: People.get_people_by_ids(ids)
+
+    by_slugs =
+      if slugs == [] do
+        []
+      else
+        Person
+        |> where([p], p.slug in ^slugs)
+        |> Repo.replica().all()
+      end
+
+    Enum.uniq_by(by_ids ++ by_slugs, & &1.id)
+  end
 end

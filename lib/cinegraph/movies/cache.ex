@@ -19,6 +19,7 @@ defmodule Cinegraph.Movies.Cache do
   @cache_name :movies_cache
   @filter_options_key "filter_options"
   @filter_options_ttl :timer.hours(1)
+  @search_cache_version 2
   @query_results_ttl :timer.minutes(15)
   @discovery_scores_ttl :timer.hours(24)
 
@@ -200,7 +201,7 @@ defmodule Cinegraph.Movies.Cache do
     params_hash = :erlang.phash2(sorted_params)
     page = Map.get(params, "page", "1")
 
-    "search:#{params_hash}:page:#{page}"
+    "search:v#{@search_cache_version}:#{params_hash}:page:#{page}"
   end
 
   @doc """
