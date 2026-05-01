@@ -111,8 +111,10 @@ defmodule Cinegraph.ProdRpc do
     # short-lived eval BEAM from processing jobs or firing cron/plugins itself.
     wrapped =
       ":logger.set_primary_config(:level, :critical); " <>
+        "oban_config = Application.fetch_env!(:cinegraph, Oban); " <>
+        "Application.put_env(:cinegraph, :known_oban_queues, Keyword.keys(Keyword.get(oban_config, :queues, []))); " <>
         "Application.put_env(:cinegraph, :start_background_children, false); " <>
-        "Application.put_env(:cinegraph, Oban, Keyword.merge(Application.fetch_env!(:cinegraph, Oban), queues: [], plugins: [])); " <>
+        "Application.put_env(:cinegraph, Oban, Keyword.merge(oban_config, queues: [], plugins: [])); " <>
         "Application.ensure_all_started(:cinegraph); " <>
         expression
 

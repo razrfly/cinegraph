@@ -92,14 +92,10 @@ defmodule CinegraphWeb.Plugs.ETagPlug do
     end
   end
 
-  defp cacheable_for_etag?(path) do
-    cond do
-      movie_detail_path?(path) -> true
-      person_detail_path?(path) -> true
-      list_detail_path?(path) -> true
-      award_detail_path?(path) -> true
-      true -> false
-    end
+  defp cacheable_for_etag?(_path) do
+    # LiveView HTML embeds CSRF tokens. Returning 304 would make the browser
+    # reuse an old HTML document with stale LiveView connection params.
+    false
   end
 
   defp get_resource_freshness(path) do
@@ -289,10 +285,7 @@ defmodule CinegraphWeb.Plugs.ETagPlug do
   # ============================================================================
 
   defp cache_control_header do
-    # s-maxage: CDN caches for 7 days (content rarely changes)
-    # max-age: Browser caches for 5 minutes (short for LiveView)
-    # stale-while-revalidate: Serve stale for up to 30 days while fetching fresh
-    "public, max-age=300, s-maxage=604800, stale-while-revalidate=2592000"
+    "private, no-store, no-cache, must-revalidate, max-age=0"
   end
 
   defp format_http_date(%DateTime{} = datetime) do
@@ -309,36 +302,4 @@ defmodule CinegraphWeb.Plugs.ETagPlug do
 
   defp format_http_date(_), do: nil
 
-  # ============================================================================
-  # Path Detection Helpers
-  # ============================================================================
-
-  defp movie_detail_path?(path) do
-    case String.split(path, "/", trim: true) do
-      ["movies", slug] when slug not in ["discover", "tmdb", "imdb"] -> true
-      _ -> false
-    end
-  end
-
-  defp person_detail_path?(path) do
-    case String.split(path, "/", trim: true) do
-      ["people", slug] when slug != "tmdb" -> true
-      _ -> false
-    end
-  end
-
-  defp list_detail_path?(path) do
-    case String.split(path, "/", trim: true) do
-      ["lists", _slug] -> true
-      _ -> false
-    end
-  end
-
-  defp award_detail_path?(path) do
-    case String.split(path, "/", trim: true) do
-      ["awards", _slug] -> true
-      ["awards", _slug, _action] -> true
-      _ -> false
-    end
-  end
 end

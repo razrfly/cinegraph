@@ -277,6 +277,16 @@ defmodule Cinegraph.Health.ObanReader do
   Returns the list of queue names configured for Oban (atoms).
   """
   def configured_queues do
+    case Application.get_env(:cinegraph, :known_oban_queues) do
+      queues when is_list(queues) and queues != [] ->
+        queues
+
+      _ ->
+        configured_queues_from_oban()
+    end
+  end
+
+  defp configured_queues_from_oban do
     case Application.get_env(:cinegraph, Oban) do
       nil ->
         []

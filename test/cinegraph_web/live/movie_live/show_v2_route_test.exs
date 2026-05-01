@@ -13,9 +13,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
   import Phoenix.LiveViewTest
 
+  alias Cinegraph.Collaborations.Collaboration
   alias Cinegraph.Movies.Credit
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.Person
+  alias Cinegraph.Movies.Search
   alias Cinegraph.Repo
 
   defp insert_movie!(attrs) do
@@ -120,6 +122,34 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ ~s(href="/people/canonical-crew-person")
       refute html =~ "/people-v2/"
     end
+
+    test "notable collaboration count matches the linked all-people movie search", %{conn: conn} do
+      movie = insert_movie!(%{title: "Collaboration Count Route Current"})
+      other_movie = insert_movie!(%{title: "Collaboration Count Route Other"})
+      actor_a = insert_person!(%{name: "Route Count Actor A"})
+      actor_b = insert_person!(%{name: "Route Count Actor B"})
+
+      insert_credit!(movie, actor_a, %{credit_type: "cast", cast_order: 0})
+      insert_credit!(movie, actor_b, %{credit_type: "cast", cast_order: 1})
+      insert_credit!(other_movie, actor_a, %{credit_type: "cast", cast_order: 0})
+      insert_credit!(other_movie, actor_b, %{credit_type: "cast", cast_order: 1})
+
+      insert_collaboration!(actor_a, actor_b, %{collaboration_count: 5})
+
+      assert {:ok, linked_count} =
+               Search.count_movies(%{
+                 "people_ids" => "#{actor_a.id},#{actor_b.id}",
+                 "people_match" => "all"
+               })
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert linked_count == 2
+      assert html =~ ~r/>#{linked_count}<\/b>\s+films together/
+
+      assert html =~
+               ~s(href="/movies?people=#{actor_a.slug},#{actor_b.slug}&amp;people_match=all")
+    end
   end
 
   describe "/movies-v2/:slug — alias" do
@@ -140,5 +170,22 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       # V2 marker should NOT appear on V1
       refute html =~ "Old movie page"
     end
+  end
+
+  defp insert_collaboration!(person_a, person_b, attrs) do
+    {person_a_id, person_b_id} = {min(person_a.id, person_b.id), max(person_a.id, person_b.id)}
+
+    %Collaboration{}
+    |> Collaboration.changeset(
+      Map.merge(
+        %{
+          person_a_id: person_a_id,
+          person_b_id: person_b_id,
+          collaboration_count: 2
+        },
+        attrs
+      )
+    )
+    |> Repo.insert!()
   end
 end

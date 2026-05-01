@@ -10,6 +10,36 @@ defmodule Cinegraph.Health.ObanReaderTest do
       assert :omdb in queues
       assert :maintenance in queues
     end
+
+    test "prefers known queue names captured before ProdRpc disables Oban processors" do
+      previous_known = Application.get_env(:cinegraph, :known_oban_queues)
+      previous_oban = Application.fetch_env!(:cinegraph, Oban)
+
+      try do
+        Application.put_env(:cinegraph, :known_oban_queues, [:tmdb, :collaboration])
+        Application.put_env(:cinegraph, Oban, Keyword.merge(previous_oban, queues: []))
+
+        assert ObanReader.configured_queues() == [:tmdb, :collaboration]
+      after
+        restore_env(:known_oban_queues, previous_known)
+        Application.put_env(:cinegraph, Oban, previous_oban)
+      end
+    end
+
+    test "falls back to Oban config when no known queue names are present" do
+      previous_known = Application.get_env(:cinegraph, :known_oban_queues)
+
+      try do
+        Application.delete_env(:cinegraph, :known_oban_queues)
+
+        queues = ObanReader.configured_queues()
+        assert :tmdb in queues
+        assert :omdb in queues
+        assert :maintenance in queues
+      after
+        restore_env(:known_oban_queues, previous_known)
+      end
+    end
   end
 
   describe "counts_by_queue_and_state/2" do
@@ -137,4 +167,7 @@ defmodule Cinegraph.Health.ObanReaderTest do
   end
 
   defp minutes_ago(n), do: DateTime.utc_now() |> DateTime.add(-n * 60, :second)
+
+  defp restore_env(key, nil), do: Application.delete_env(:cinegraph, key)
+  defp restore_env(key, value), do: Application.put_env(:cinegraph, key, value)
 end

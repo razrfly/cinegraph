@@ -4,10 +4,10 @@ defmodule CinegraphWeb.Plugs.CacheControlPlugTest do
   alias CinegraphWeb.Plugs.CacheControlPlug
 
   describe "cacheable_path?/1" do
-    test "movie detail pages are cacheable" do
-      assert CacheControlPlug.cacheable_path?("/movies/fight-club-1999")
-      assert CacheControlPlug.cacheable_path?("/movies/the-matrix-1999")
-      assert CacheControlPlug.cacheable_path?("/movies/some-slug-with-numbers-123")
+    test "movie detail pages are not cacheable because they are LiveViews" do
+      refute CacheControlPlug.cacheable_path?("/movies/fight-club-1999")
+      refute CacheControlPlug.cacheable_path?("/movies/the-matrix-1999")
+      refute CacheControlPlug.cacheable_path?("/movies/some-slug-with-numbers-123")
     end
 
     test "movie index and special pages are not cacheable" do
@@ -20,9 +20,9 @@ defmodule CinegraphWeb.Plugs.CacheControlPlugTest do
       refute CacheControlPlug.cacheable_path?("/movies/imdb/tt0137523")
     end
 
-    test "person detail pages are cacheable" do
-      assert CacheControlPlug.cacheable_path?("/people/tom-hanks")
-      assert CacheControlPlug.cacheable_path?("/people/some-person-123")
+    test "person detail pages are not cacheable because they are LiveViews" do
+      refute CacheControlPlug.cacheable_path?("/people/tom-hanks")
+      refute CacheControlPlug.cacheable_path?("/people/some-person-123")
     end
 
     test "person index and lookup pages are not cacheable" do
@@ -30,20 +30,20 @@ defmodule CinegraphWeb.Plugs.CacheControlPlugTest do
       refute CacheControlPlug.cacheable_path?("/people/tmdb/31")
     end
 
-    test "list detail pages are cacheable" do
-      assert CacheControlPlug.cacheable_path?("/lists/1001-movies")
-      assert CacheControlPlug.cacheable_path?("/lists/criterion-collection")
+    test "list detail pages are not cacheable because they are LiveViews" do
+      refute CacheControlPlug.cacheable_path?("/lists/1001-movies")
+      refute CacheControlPlug.cacheable_path?("/lists/criterion-collection")
     end
 
     test "list index is not cacheable" do
       refute CacheControlPlug.cacheable_path?("/lists")
     end
 
-    test "award detail pages are cacheable" do
-      assert CacheControlPlug.cacheable_path?("/awards/oscars")
-      assert CacheControlPlug.cacheable_path?("/awards/cannes")
-      assert CacheControlPlug.cacheable_path?("/awards/oscars/winners")
-      assert CacheControlPlug.cacheable_path?("/awards/oscars/nominees")
+    test "award detail pages are not cacheable because they are LiveViews" do
+      refute CacheControlPlug.cacheable_path?("/awards/oscars")
+      refute CacheControlPlug.cacheable_path?("/awards/cannes")
+      refute CacheControlPlug.cacheable_path?("/awards/oscars/winners")
+      refute CacheControlPlug.cacheable_path?("/awards/oscars/nominees")
     end
 
     test "award index is not cacheable" do

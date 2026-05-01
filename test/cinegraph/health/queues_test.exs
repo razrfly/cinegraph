@@ -63,6 +63,25 @@ defmodule Cinegraph.Health.QueuesTest do
       snapshot = Queues.snapshot(bypass_cache: true)
       assert snapshot.total_failures_last_hour == 2
     end
+
+    test "uses known queue names when runtime Oban processors are disabled" do
+      previous_known = Application.get_env(:cinegraph, :known_oban_queues)
+      previous_oban = Application.fetch_env!(:cinegraph, Oban)
+
+      try do
+        Application.put_env(:cinegraph, :known_oban_queues, [:tmdb, :collaboration])
+        Application.put_env(:cinegraph, Oban, Keyword.merge(previous_oban, queues: []))
+        insert_oban_job(queue: "collaboration", state: "available")
+
+        snapshot = Queues.snapshot(bypass_cache: true)
+
+        assert Enum.map(snapshot.queues, & &1.name) == [:tmdb, :collaboration]
+        assert Enum.find(snapshot.queues, &(&1.name == :collaboration)).available == 1
+      after
+        restore_env(:known_oban_queues, previous_known)
+        Application.put_env(:cinegraph, Oban, previous_oban)
+      end
+    end
   end
 
   describe "ObanReader.configured_queues/0" do
@@ -107,4 +126,7 @@ defmodule Cinegraph.Health.QueuesTest do
   end
 
   defp minutes_ago(n), do: DateTime.utc_now() |> DateTime.add(-n * 60, :second)
+
+  defp restore_env(key, nil), do: Application.delete_env(:cinegraph, key)
+  defp restore_env(key, value), do: Application.put_env(:cinegraph, key, value)
 end
