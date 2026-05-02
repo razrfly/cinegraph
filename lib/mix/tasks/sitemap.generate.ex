@@ -8,7 +8,7 @@ defmodule Mix.Tasks.Sitemap.Generate do
 
   ## Options
 
-      --host    Override the host URL (default: https://cinegraph.io)
+      --host    Override the host URL (default: https://cinegraph.org)
       --stats   Only show URL counts without generating
 
   ## Examples

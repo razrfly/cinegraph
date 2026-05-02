@@ -29,7 +29,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2RouteTest do
       assert html =~ ~p"/people/#{person.slug}/movies"
       assert html =~ "Open all films"
       assert html =~ "Canonical V2 Person"
-      assert html =~ ~s(<link rel="canonical" href="https://cinegraph.io/people/#{person.slug}")
+      assert html =~ ~s(<link rel="canonical" href="https://cinegraph.org/people/#{person.slug}")
       assert html =~ ~s(<meta property="og:type" content="profile")
       assert html =~ ~s(<meta property="og:title" content="Canonical V2 Person")
       assert html =~ ~s(<meta name="twitter:title" content="Canonical V2 Person")

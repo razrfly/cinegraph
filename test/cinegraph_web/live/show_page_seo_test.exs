@@ -32,7 +32,7 @@ defmodule CinegraphWeb.ShowPageSEOTest do
 
     assert document
            |> Floki.find(
-             ~s(link[rel="canonical"][href="https://cinegraph.io/lists/#{list.slug}"])
+             ~s(link[rel="canonical"][href="https://cinegraph.org/lists/#{list.slug}"])
            )
            |> Enum.any?()
 
@@ -63,7 +63,7 @@ defmodule CinegraphWeb.ShowPageSEOTest do
 
     assert document
            |> Floki.find(
-             ~s(link[rel="canonical"][href="https://cinegraph.io/awards/#{organization.slug}/winners"])
+             ~s(link[rel="canonical"][href="https://cinegraph.org/awards/#{organization.slug}/winners"])
            )
            |> Enum.any?()
 

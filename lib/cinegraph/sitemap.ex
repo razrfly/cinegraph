@@ -23,7 +23,7 @@ defmodule Cinegraph.Sitemap do
   import Ecto.Query
   require Logger
 
-  @site_url "https://cinegraph.io"
+  @site_url "https://cinegraph.org"
 
   @doc """
   Generates and persists a sitemap for the website.

@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
 
   @shortdoc "Enriches movie list and awards imagery from source websites"
   @requirements ["app.start"]
-  @headers [{"user-agent", "CinegraphBot/1.0 (+https://cinegraph.io)"}]
+  @headers [{"user-agent", "CinegraphBot/1.0 (+https://cinegraph.org)"}]
 
   @impl true
   def run(_args) do
