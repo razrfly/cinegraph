@@ -35,6 +35,16 @@ defmodule CinegraphWeb.NeutralV2ComponentsTest do
       assert html =~ ~s(style="width: 0%")
       refute text =~ "—"
     end
+
+    test "renders missing lenses as neutral no-data rows" do
+      html = render_component(&n_score_bar/1, label: "Box Office", value: 0, missing: true)
+      text = html |> Floki.parse_document!() |> Floki.text()
+
+      assert text =~ "No data"
+      refute text =~ "0.0"
+      assert html =~ ~s(style="width: 0%")
+      assert html =~ "bg-mist-950/[0.12]"
+    end
   end
 
   describe "n_collaboration_card/1" do

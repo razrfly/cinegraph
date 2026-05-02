@@ -18,7 +18,8 @@ defmodule Cinegraph.Movies.Movie do
              :movie_release_dates,
              :external_metrics,
              :external_recommendations,
-             :score_cache
+             :score_cache,
+             :scoreability
            ]}
 
   @derive {
@@ -113,6 +114,7 @@ defmodule Cinegraph.Movies.Movie do
     # External data associations  
     has_many :external_metrics, Cinegraph.Movies.ExternalMetric, foreign_key: :movie_id
     has_one :score_cache, Cinegraph.Movies.MovieScoreCache, foreign_key: :movie_id
+    has_one :scoreability, Cinegraph.Movies.MovieScoreability, foreign_key: :movie_id
 
     has_many :external_recommendations, Cinegraph.Movies.MovieRecommendation,
       foreign_key: :source_movie_id
@@ -124,6 +126,16 @@ defmodule Cinegraph.Movies.Movie do
     field :critics_score, :float, virtual: true
     field :score_confidence, :float, virtual: true
     field :overall_score, :float, virtual: true
+    field :raw_cinegraph_score, :float, virtual: true
+    field :cinegraph_display_score, :float, virtual: true
+    field :cinegraph_sort_score, :float, virtual: true
+    field :scoreability_state, :string, virtual: true
+    field :score_confidence_label, :string, virtual: true
+    field :present_lens_count, :integer, virtual: true
+    field :missing_lens_count, :integer, virtual: true
+    field :present_lens_labels, {:array, :string}, virtual: true
+    field :missing_lens_labels, {:array, :string}, virtual: true
+    field :score_hidden_reason, :string, virtual: true
 
     timestamps()
   end

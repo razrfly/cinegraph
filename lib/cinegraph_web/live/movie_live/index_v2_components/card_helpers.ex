@@ -6,6 +6,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
 
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.NeutralV2Components
+  alias Cinegraph.Movies.Scoreability
 
   @lens_keys ~w(mob critics festival_recognition time_machine auteurs)
 
@@ -43,6 +44,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
   defp to_card_shape(movie, active_lens_key) do
     genres = genres_of(movie)
     {score_str, lens_components} = score_for_card(movie, active_lens_key)
+    reason = scoreability_reason(movie, active_lens_key)
 
     %{
       id: movie.id,
@@ -55,6 +57,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
       score_tooltip: score_tooltip_for(active_lens_key),
       lens_key: active_lens_key,
       lens_components: lens_components,
+      reason: reason,
       poster_url: tmdb_poster_url(movie.poster_path, "w500"),
       href: movie_href(movie)
     }
@@ -64,7 +67,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
   defp score_tooltip_for(:preset), do: "Cinegraph composite score (Scored Preset)"
 
   defp score_tooltip_for(_),
-    do: "Cinegraph composite score — audience + critics + awards + canon + talent"
+    do: "CineGraph score — shown only when at least two evidence lenses are available"
 
   defp score_for_card(movie, lens_key) when lens_key in @lens_keys do
     cache = loaded_score_cache(movie)
@@ -94,9 +97,38 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
   defp score_for_card(movie, _), do: default_score(movie)
 
   defp default_score(movie) do
-    case Map.get(movie, :overall_score) do
-      v when is_number(v) -> {Float.round(v * 1.0, 1) |> :erlang.float_to_binary(decimals: 1), []}
+    case Scoreability.display_score(movie) || Map.get(movie, :overall_score) do
+      v when is_number(v) -> {format_score(v), []}
       _ -> {nil, []}
+    end
+  end
+
+  defp scoreability_reason(movie, lens_key) when lens_key in @lens_keys do
+    case loaded_scoreability(movie) do
+      nil ->
+        nil
+
+      scoreability ->
+        "#{Scoreability.confidence_badge(scoreability)} · #{Scoreability.lens_summary(scoreability)}"
+    end
+  end
+
+  defp scoreability_reason(movie, _lens_key) do
+    case loaded_scoreability(movie) do
+      nil ->
+        nil
+
+      scoreability ->
+        case Scoreability.state(scoreability) do
+          "scoreable" ->
+            "#{Scoreability.confidence_badge(scoreability)} · #{Scoreability.lens_summary(scoreability)}"
+
+          "limited" ->
+            "Limited confidence · #{Scoreability.lens_summary(scoreability)}"
+
+          _ ->
+            "Not enough evidence yet"
+        end
     end
   end
 
@@ -104,6 +136,11 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
   defp loaded_score_cache(%{score_cache: nil}), do: nil
   defp loaded_score_cache(%{score_cache: cache}), do: cache
   defp loaded_score_cache(_), do: nil
+
+  defp loaded_scoreability(%{scoreability: %Ecto.Association.NotLoaded{}}), do: nil
+  defp loaded_scoreability(%{scoreability: nil}), do: nil
+  defp loaded_scoreability(%{scoreability: scoreability}), do: scoreability
+  defp loaded_scoreability(movie), do: movie
 
   defp lens_value(nil, _), do: nil
   defp lens_value(cache, "mob"), do: Map.get(cache, :mob_score)
@@ -135,6 +172,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
   end
 
   defp lens_percent(_, _opts), do: nil
+
+  defp format_score(value),
+    do: Float.round(value * 1.0, 1) |> :erlang.float_to_binary(decimals: 1)
 
   defp year_of(%Date{year: y}), do: y
   defp year_of(_), do: nil

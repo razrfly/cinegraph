@@ -9,6 +9,7 @@ defmodule Cinegraph.Movies.SearchTest do
     ExternalMetric,
     Genre,
     Movie,
+    MovieScoreCache,
     MovieList,
     Person,
     ProductionCompany,
@@ -132,6 +133,38 @@ defmodule Cinegraph.Movies.SearchTest do
 
       assert movie_titles(movies) == ["Genre Malformed Drama"]
       assert meta.total_count == 1
+    end
+  end
+
+  describe "search_movies/1 CineGraph scoreability sorting" do
+    test "score sort ranks scoreable movies before insufficient-evidence movies" do
+      scoreable = insert_movie!("Scoreability Sort Strong", release_date: ~D[2020-01-01])
+      limited = insert_movie!("Scoreability Sort Limited", release_date: ~D[2021-01-01])
+      insufficient = insert_movie!("Scoreability Sort Sparse", release_date: ~D[2022-01-01])
+
+      insert_score_cache!(scoreable, 8.0, [8.0, 7.0, 6.0, 5.0, 4.0, 3.0])
+      insert_score_cache!(limited, 7.0, [7.0, 6.0, 0.0, 0.0, 0.0, 0.0])
+      insert_score_cache!(insufficient, 9.9, [9.9, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+      assert {:ok, {movies, _meta}} =
+               Search.search_movies_uncached(%{
+                 "sort" => "score_desc",
+                 "per_page" => "10"
+               })
+
+      assert movie_titles(movies) == [
+               "Scoreability Sort Strong",
+               "Scoreability Sort Limited",
+               "Scoreability Sort Sparse"
+             ]
+
+      assert Enum.map(movies, & &1.scoreability_state) == [
+               "scoreable",
+               "limited",
+               "insufficient_evidence"
+             ]
+
+      assert Enum.map(movies, & &1.overall_score) == [8.0, 7.0, nil]
     end
   end
 
@@ -497,6 +530,34 @@ defmodule Cinegraph.Movies.SearchTest do
     end)
 
     movie
+  end
+
+  defp insert_score_cache!(movie, overall_score, [
+         mob,
+         critics,
+         festival,
+         time_machine,
+         auteurs,
+         box_office
+       ]) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    Repo.insert!(%MovieScoreCache{
+      movie_id: movie.id,
+      mob_score: mob,
+      critics_score: critics,
+      festival_recognition_score: festival,
+      time_machine_score: time_machine,
+      auteurs_score: auteurs,
+      box_office_score: box_office,
+      overall_score: overall_score,
+      score_confidence: 1.0,
+      disparity_score: 0.0,
+      disparity_category: "perfect_harmony",
+      unpredictability_score: 0.0,
+      calculated_at: now,
+      calculation_version: "test"
+    })
   end
 
   defp insert_genre!(name) do

@@ -13,6 +13,7 @@ defmodule Cinegraph.Cultural do
     MovieDataChange
   }
 
+  alias Cinegraph.Movies.{Movie, MovieList}
   alias Cinegraph.Festivals
 
   alias Cinegraph.Scrapers.OscarScraper
@@ -284,10 +285,114 @@ defmodule Cinegraph.Cultural do
   @doc """
   Gets curated lists that contain a specific movie.
   """
-  def get_list_movies_for_movie(_movie_id, _opts \\ []) do
-    # TODO: Fix the rank column issue with PostgreSQL
-    # For now, return empty list since we don't have movie list items in the database yet
-    []
+  def get_list_movies_for_movie(movie_id, _opts \\ []) do
+    case Repo.replica().get(Movie, movie_id) do
+      nil ->
+        []
+
+      %Movie{canonical_sources: sources} ->
+        appearances =
+          sources
+          |> canonical_appearances()
+
+        source_keys = Map.keys(appearances)
+
+        if source_keys == [] do
+          []
+        else
+          MovieList
+          |> where([ml], ml.active == true)
+          |> where([ml], not is_nil(ml.slug))
+          |> where([ml], ml.source_key in ^source_keys)
+          |> where(
+            [ml],
+            ml.tracks_awards == false or
+              (ml.category not in ["awards", "festivals"] and not is_nil(ml.slug))
+          )
+          |> Repo.replica().all()
+          |> Enum.map(
+            &normalize_movie_list_appearance(&1, Map.fetch!(appearances, &1.source_key))
+          )
+          |> Enum.sort_by(&list_appearance_sort_key/1)
+        end
+    end
+  end
+
+  defp canonical_appearances(sources) when is_map(sources) do
+    sources
+    |> Enum.filter(fn
+      {key, value} when is_binary(key) and is_map(value) ->
+        Map.get(value, "included") != false
+
+      _ ->
+        false
+    end)
+    |> Enum.into(%{})
+  end
+
+  defp canonical_appearances(_), do: %{}
+
+  defp normalize_movie_list_appearance(%MovieList{} = list, metadata) do
+    metadata = metadata || %{}
+
+    %{
+      source_key: list.source_key,
+      list_name: list.name,
+      short_name: list.short_name,
+      slug: list.slug,
+      category: list.category,
+      source_type: list.source_type,
+      source_url: list.source_url,
+      cover_image_url: list.cover_image_url,
+      hero_image_url: list.hero_image_url,
+      icon: list.icon,
+      display_order: list.display_order || 0,
+      rank: parse_integer(Map.get(metadata, "list_position")),
+      list_year: list_appearance_year(metadata, list.metadata || %{}),
+      appearance_metadata: metadata
+    }
+  end
+
+  defp list_appearance_year(metadata, list_metadata) do
+    metadata
+    |> Map.get("year")
+    |> parse_integer()
+    |> case do
+      nil ->
+        metadata
+        |> Map.get("edition")
+        |> parse_integer()
+        |> case do
+          nil -> list_metadata |> Map.get("edition") |> parse_integer()
+          year -> year
+        end
+
+      year ->
+        year
+    end
+  end
+
+  defp parse_integer(value) when is_integer(value), do: value
+
+  defp parse_integer(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  defp parse_integer(_), do: nil
+
+  defp list_appearance_sort_key(appearance) do
+    ranked? = if appearance.rank, do: 0, else: 1
+    rank = appearance.rank || 999_999
+
+    {
+      appearance.display_order || 0,
+      ranked?,
+      rank,
+      String.downcase(appearance.list_name || "")
+    }
   end
 
   @doc """

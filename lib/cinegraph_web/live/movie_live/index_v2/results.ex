@@ -12,8 +12,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2.Results do
 
   def preload_card_assocs(movies, active_lens_key)
       when is_binary(active_lens_key) and active_lens_key != "" do
-    Repo.replica().preload(movies, [:score_cache])
+    Repo.replica().preload(movies, [:score_cache, :scoreability])
   end
 
-  def preload_card_assocs(movies, _active_lens_key), do: movies
+  def preload_card_assocs(movies, _active_lens_key),
+    do: Repo.replica().preload(movies, [:scoreability])
 end

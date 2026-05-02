@@ -92,24 +92,27 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
   def browser_region(params), do: browser_region_candidates(params)
 
   defp load_movie_data(movie) do
-    movie = Repo.replica().preload(movie, :score_cache)
+    movie = Repo.replica().preload(movie, [:score_cache, :scoreability])
     movie = Map.merge(movie, Metrics.get_movie_aggregates(movie.id))
 
     current_version = MovieScoreCacheWorker.current_version()
 
-    {scores, disparity} =
+    {scores, disparity, scoreability} =
       if movie.score_cache && movie.score_cache.calculation_version == current_version do
-        {build_display_scores(movie.score_cache),
+        {build_display_scores(movie.score_cache, movie.scoreability),
          %{
            disparity_score: movie.score_cache.disparity_score,
            disparity_category: movie.score_cache.disparity_category
-         }}
+         }, movie.scoreability}
       else
         MovieScoreCacheWorker.new(%{"movie_id" => movie.id}, unique: [period: 60])
         |> Oban.insert()
 
         sd = MovieScoring.calculate_movie_scores(movie)
-        {build_display_scores_from_data(sd), DisparityCalculator.calculate_all(sd)}
+        scoreability = build_scoreability_from_scores(sd)
+
+        {build_display_scores_from_data(sd, scoreability), DisparityCalculator.calculate_all(sd),
+         scoreability}
       end
 
     credits = Movies.get_movie_credits(movie.id)
@@ -137,6 +140,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
     data = %{
       movie: movie,
       scores: scores,
+      scoreability: scoreability,
       disparity_data: disparity,
       cast: cast,
       crew: crew,
@@ -165,7 +169,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
     Ecto.NoResultsError -> {:error, :not_found}
   end
 
-  defp build_display_scores(cache) do
+  defp build_display_scores(cache, scoreability) do
     %{
       mob: cache.mob_score || 0.0,
       critics: cache.critics_score || 0.0,
@@ -173,11 +177,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
       time_machine: cache.time_machine_score || 0.0,
       auteurs: cache.auteurs_score || 0.0,
       box_office: cache.box_office_score || 0.0,
-      overall: cache.overall_score || 0.0
+      overall: scoreability && scoreability.cinegraph_display_score
     }
   end
 
-  defp build_display_scores_from_data(sd) do
+  defp build_display_scores_from_data(sd, scoreability) do
     c = sd.components
 
     %{
@@ -187,8 +191,103 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
       time_machine: c.time_machine,
       auteurs: c.auteurs,
       box_office: c.box_office,
-      overall: sd.overall_score
+      overall: scoreability.cinegraph_display_score
     }
+  end
+
+  defp build_scoreability_from_scores(sd) do
+    c = sd.components
+
+    lens_scores = [
+      {"mob", c.mob},
+      {"critics", c.critics},
+      {"festival_recognition", c.festival_recognition},
+      {"time_machine", c.time_machine},
+      {"auteurs", c.auteurs},
+      {"box_office", c.box_office}
+    ]
+
+    present =
+      lens_scores
+      |> Enum.filter(fn {_key, value} -> is_number(value) and value > 0 end)
+      |> Enum.map(&elem(&1, 0))
+
+    missing =
+      lens_scores
+      |> Enum.reject(fn {_key, value} -> is_number(value) and value > 0 end)
+      |> Enum.map(&elem(&1, 0))
+
+    present_count = length(present)
+    evidence_confidence = Float.round(present_count / 6.0, 3)
+    display_score = if present_count >= 2, do: sd.overall_score
+    sort_score = if display_score, do: display_score * evidence_confidence
+
+    %{
+      raw_cinegraph_score: sd.overall_score,
+      legacy_score_confidence: sd.score_confidence,
+      present_lens_count: present_count,
+      missing_lens_count: length(missing),
+      present_lens_labels: present,
+      missing_lens_labels: missing,
+      evidence_confidence: evidence_confidence,
+      scoreability_state: scoreability_state(sd.overall_score, present_count),
+      score_confidence_label:
+        score_confidence_label(sd.overall_score, present_count, evidence_confidence),
+      cinegraph_display_score: display_score,
+      cinegraph_sort_score: sort_score,
+      score_hidden_reason: score_hidden_reason(sd.overall_score, present_count),
+      score_explanation_short:
+        score_explanation_short(sd.overall_score, present_count, evidence_confidence),
+      score_explanation_detail: score_explanation_detail(sd.overall_score, present_count)
+    }
+  end
+
+  defp scoreability_state(nil, _count), do: "insufficient_evidence"
+  defp scoreability_state(_score, count) when count >= 4, do: "scoreable"
+  defp scoreability_state(_score, count) when count >= 2, do: "limited"
+  defp scoreability_state(_score, _count), do: "insufficient_evidence"
+
+  defp score_confidence_label(nil, _count, _confidence), do: "insufficient"
+  defp score_confidence_label(_score, count, _confidence) when count <= 1, do: "insufficient"
+
+  defp score_confidence_label(_score, count, confidence) when confidence >= 0.70 or count >= 5,
+    do: "high"
+
+  defp score_confidence_label(_score, count, confidence) when confidence >= 0.35 or count >= 3,
+    do: "medium"
+
+  defp score_confidence_label(_score, _count, _confidence), do: "low"
+
+  defp score_hidden_reason(nil, _count), do: "no_score_cache"
+  defp score_hidden_reason(_score, count) when count <= 1, do: "not_enough_evidence"
+  defp score_hidden_reason(_score, _count), do: "none"
+
+  defp score_explanation_short(nil, _count, _confidence), do: "Not enough evidence yet"
+
+  defp score_explanation_short(_score, count, _confidence) when count <= 1,
+    do: "Not enough evidence yet"
+
+  defp score_explanation_short(_score, count, _confidence) when count <= 3,
+    do: "Limited confidence"
+
+  defp score_explanation_short(_score, count, confidence) when confidence >= 0.70 or count >= 5,
+    do: "High confidence"
+
+  defp score_explanation_short(_score, _count, _confidence), do: "Medium confidence"
+
+  defp score_explanation_detail(nil, _count),
+    do: "No CineGraph score cache is available for this movie yet."
+
+  defp score_explanation_detail(_score, count) when count <= 1 do
+    "CineGraph needs at least 2 independent evidence lenses before showing a fair numeric score."
+  end
+
+  defp score_explanation_detail(_score, count) when count <= 3 do
+    "This score is based on limited evidence and may move as more lenses become available."
+  end
+
+  defp score_explanation_detail(_score, _count) do
+    "This movie has enough independent evidence for a CineGraph score."
   end
 
   defp fetch_directors_filmography(directors, exclude_movie_id) do

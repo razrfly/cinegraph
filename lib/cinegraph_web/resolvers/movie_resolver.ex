@@ -128,9 +128,11 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   @doc false
   def lens_scores(movie, _, %{context: %{loader: loader}}) do
     loader = Dataloader.load(loader, :db, {:score_cache, %{}}, movie)
+    loader = Dataloader.load(loader, :db, {:scoreability, %{}}, movie)
 
     on_load(loader, fn loader ->
       cache = Dataloader.get(loader, :db, {:score_cache, %{}}, movie)
+      scoreability = Dataloader.get(loader, :db, {:scoreability, %{}}, movie)
 
       result =
         if cache do
@@ -144,6 +146,15 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
             box_office: cache.box_office_score,
             overall: cache.overall_score,
             confidence: cache.score_confidence,
+            display_score: scoreability && scoreability.cinegraph_display_score,
+            sort_score: scoreability && scoreability.cinegraph_sort_score,
+            scoreability_state: scoreability && scoreability.scoreability_state,
+            score_confidence_label: scoreability && scoreability.score_confidence_label,
+            present_lens_count: scoreability && scoreability.present_lens_count,
+            missing_lens_count: scoreability && scoreability.missing_lens_count,
+            present_lens_labels: scoreability && scoreability.present_lens_labels,
+            missing_lens_labels: scoreability && scoreability.missing_lens_labels,
+            score_hidden_reason: scoreability && scoreability.score_hidden_reason,
             disparity_score: cache.disparity_score,
             disparity_category: cache.disparity_category,
             unpredictability_score: cache.unpredictability_score

@@ -14,6 +14,7 @@ defmodule CinegraphWeb.NeutralV2Components do
   """
   use Phoenix.Component
 
+  alias Cinegraph.Movies.Scoreability
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.NeutralDesign.PosterSvg
 
@@ -1190,6 +1191,7 @@ defmodule CinegraphWeb.NeutralV2Components do
 
   attr :disparity_label, :string, default: nil
   attr :disparity_summary, :string, default: nil
+  attr :scoreability, :map, default: nil
 
   def n_score_panel(assigns) do
     ~H"""
@@ -1197,18 +1199,73 @@ defmodule CinegraphWeb.NeutralV2Components do
       <div class="flex items-start justify-between gap-6 flex-wrap mb-6">
         <div>
           <.n_eyebrow>Cinegraph score</.n_eyebrow>
-          <div class="flex items-baseline gap-3 mt-1">
-            <div class="font-display italic text-[64px] tracking-[-.02em] text-mist-950 leading-none tabular-nums">
-              {format_score(@scores[:overall])}
+          <%= if @scores[:overall] do %>
+            <div class="flex items-baseline gap-3 mt-1">
+              <div class="font-display italic text-[64px] tracking-[-.02em] text-mist-950 leading-none tabular-nums">
+                {format_score(@scores[:overall])}
+              </div>
+              <div class="text-[14px] text-mist-500 tabular-nums">/ 10</div>
             </div>
-            <div class="text-[14px] text-mist-500 tabular-nums">/ 10</div>
+          <% else %>
+            <div class="mt-2 font-display italic text-[34px] tracking-[-.01em] text-mist-950 leading-tight">
+              Not enough evidence yet
+            </div>
+          <% end %>
+          <div :if={@scoreability} class="mt-2 flex items-center gap-2 flex-wrap">
+            <span class="inline-flex items-center rounded-md border border-mist-950/10 bg-white px-2 py-1 text-[11.5px] font-semibold text-mist-800">
+              {Scoreability.confidence_badge(@scoreability)}
+            </span>
+            <span class="text-[12.5px] text-mist-700">
+              {Scoreability.lens_summary(@scoreability)}
+            </span>
           </div>
+          <p :if={@scoreability} class="mt-2 max-w-2xl text-[12.5px] leading-[1.5] text-mist-700">
+            {Scoreability.detail_explanation(@scoreability)}
+          </p>
           <div :if={@disparity_label} class="mt-2 flex items-center gap-2 flex-wrap">
             <span class="font-display italic text-[16px] text-mist-950">
               {@disparity_label}
             </span>
             <span :if={@disparity_summary} class="text-[12.5px] text-mist-700">
               — {@disparity_summary}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        :if={
+          @scoreability &&
+            (Scoreability.present_lens_labels(@scoreability) != [] ||
+               Scoreability.missing_lens_labels(@scoreability) != [])
+        }
+        class="mb-5 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11.5px]"
+      >
+        <div>
+          <div class="mb-1 font-semibold text-mist-950">Available evidence</div>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              :for={
+                lens <-
+                  Scoreability.human_lens_labels(Scoreability.present_lens_labels(@scoreability))
+              }
+              class="rounded-md border border-mist-950/10 bg-white px-2 py-1 text-mist-800"
+            >
+              {lens}
+            </span>
+          </div>
+        </div>
+        <div>
+          <div class="mb-1 font-semibold text-mist-950">Missing evidence</div>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              :for={
+                lens <-
+                  Scoreability.human_lens_labels(Scoreability.missing_lens_labels(@scoreability))
+              }
+              class="rounded-md border border-mist-950/10 bg-mist-100 px-2 py-1 text-mist-600"
+            >
+              {lens}
             </span>
           </div>
         </div>
@@ -1221,6 +1278,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           description="Audience consensus from IMDb, TMDb, and Rotten Tomatoes audience ratings."
           value={@scores[:mob]}
           weight={@weights[:mob]}
+          missing={score_lens_missing?(@scoreability, "mob")}
         />
         <.n_score_bar
           label="The Critics"
@@ -1228,6 +1286,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           description="Professional review signal from Rotten Tomatoes Tomatometer and Metacritic Metascore."
           value={@scores[:critics]}
           weight={@weights[:critics]}
+          missing={score_lens_missing?(@scoreability, "critics")}
         />
         <.n_score_bar
           label="The Insiders"
@@ -1235,6 +1294,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           description="Festival wins and nominations across Academy, Cannes, Venice, BAFTA, Sundance, and other industry bodies."
           value={@scores[:festival_recognition]}
           weight={@weights[:festival_recognition]}
+          missing={score_lens_missing?(@scoreability, "festival_recognition")}
         />
         <.n_score_bar
           label="Time Machine"
@@ -1242,6 +1302,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           description="Long-term cultural staying power from canonical lists like Criterion, AFI, BFI Sight & Sound, and similar sources."
           value={@scores[:time_machine]}
           weight={@weights[:time_machine]}
+          missing={score_lens_missing?(@scoreability, "time_machine")}
         />
         <.n_score_bar
           label="The Auteurs"
@@ -1249,6 +1310,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           description="Quality scores for the director, cast, and crew based on their broader film achievements."
           value={@scores[:auteurs]}
           weight={@weights[:auteurs]}
+          missing={score_lens_missing?(@scoreability, "auteurs")}
         />
         <.n_score_bar
           label="Box Office"
@@ -1256,6 +1318,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           description="Commercial performance from revenue and return on investment, weighted 60% revenue and 40% ROI."
           value={@scores[:box_office]}
           weight={@weights[:box_office]}
+          missing={score_lens_missing?(@scoreability, "box_office")}
         />
       </div>
     </div>
@@ -1268,9 +1331,10 @@ defmodule CinegraphWeb.NeutralV2Components do
   attr :weight, :integer, default: nil
   attr :sublabel, :string, default: nil
   attr :description, :string, default: nil
+  attr :missing, :boolean, default: false
 
   def n_score_bar(assigns) do
-    val = score_for_bar(assigns.value)
+    val = if assigns.missing, do: nil, else: score_for_bar(assigns.value)
     pct = score_pct(val)
     tooltip_id = score_bar_tooltip_id(assigns.label, assigns.sublabel)
     assigns = assigns |> assign(:val, val) |> assign(:pct, pct) |> assign(:tooltip_id, tooltip_id)
@@ -1307,17 +1371,30 @@ defmodule CinegraphWeb.NeutralV2Components do
           <span :if={@sublabel} class="text-[11px] text-mist-500">{@sublabel}</span>
         </div>
         <div class="flex items-baseline gap-2">
-          <span class="text-[14px] font-semibold text-mist-950 tabular-nums">
-            {format_score(@val)}
+          <span class={[
+            "text-[14px] font-semibold tabular-nums",
+            if(@missing, do: "text-mist-500", else: "text-mist-950")
+          ]}>
+            {if @missing, do: "No data", else: format_score(@val)}
           </span>
           <span :if={@weight} class="text-[10px] text-mist-500 tabular-nums">{@weight}%</span>
         </div>
       </div>
       <div class="h-[5px] w-full bg-mist-950/[0.05] rounded-full overflow-hidden">
-        <div class="h-full bg-mist-950" style={"width: #{@pct}%"}></div>
+        <div
+          class={if(@missing, do: "h-full bg-mist-950/[0.12]", else: "h-full bg-mist-950")}
+          style={"width: #{@pct}%"}
+        >
+        </div>
       </div>
     </div>
     """
+  end
+
+  defp score_lens_missing?(nil, _lens), do: false
+
+  defp score_lens_missing?(scoreability, lens) do
+    lens in Scoreability.missing_lens_labels(scoreability)
   end
 
   defp score_for_bar(nil), do: nil

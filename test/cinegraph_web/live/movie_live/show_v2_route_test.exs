@@ -17,6 +17,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
   alias Cinegraph.Movies.Availability
   alias Cinegraph.Movies.Credit
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.MovieList
   alias Cinegraph.Movies.Person
   alias Cinegraph.Movies.ProductionCompany
   alias Cinegraph.Movies.Search
@@ -56,6 +57,26 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
     %ProductionCompany{}
     |> ProductionCompany.changeset(Map.merge(defaults, Map.new(attrs)))
+    |> Repo.insert!()
+  end
+
+  defp insert_movie_list!(attrs) do
+    source_key = Map.fetch!(attrs, :source_key)
+
+    defaults = %{
+      source_key: source_key,
+      name: "Route List #{source_key}",
+      source_type: "custom",
+      source_url: "https://example.test/#{source_key}",
+      category: "curated",
+      active: true,
+      tracks_awards: false,
+      slug: source_key,
+      display_order: 0
+    }
+
+    %MovieList{}
+    |> MovieList.changeset(Map.merge(defaults, attrs))
     |> Repo.insert!()
   end
 
@@ -189,6 +210,70 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ ~s(href="/companies/overflow-studio")
       assert html =~ ~s(href="/companies/hidden-studio")
       assert html =~ "Production"
+    end
+
+    test "renders canonical list appearances in nav, Where it lives, and the lists section", %{
+      conn: conn,
+      movie: movie
+    } do
+      insert_movie_list!(%{
+        source_key: "route_critics",
+        name: "Route Critics Top 100",
+        short_name: "Route Critics",
+        slug: "route-critics",
+        category: "critics",
+        display_order: 1
+      })
+
+      insert_movie_list!(%{
+        source_key: "route_registry",
+        name: "Route Registry Collection",
+        short_name: "Route Registry",
+        slug: "route-registry",
+        category: "registry",
+        display_order: 2
+      })
+
+      movie
+      |> Ecto.Changeset.change(%{
+        canonical_sources: %{
+          "route_critics" => %{
+            "included" => true,
+            "list_position" => "12",
+            "edition" => "2022"
+          },
+          "route_registry" => %{"included" => true}
+        }
+      })
+      |> Repo.update!()
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ ~s(href="#lists")
+      assert html =~ ~s(data-scroll-to="lists")
+      assert html =~ ~s(id="lists")
+      assert html =~ "On canonical lists"
+      assert html =~ "2 appearances"
+      assert html =~ "Route Critics Top 100"
+      assert html =~ "Route Registry Collection"
+      assert html =~ "#12"
+      assert html =~ "Included"
+      assert html =~ "CRITICS · 2022"
+      assert html =~ ~s(href="/lists/route-critics")
+      assert html =~ ~s(href="/lists/route-registry")
+      assert html =~ "View list"
+    end
+
+    test "does not render canonical list surfaces for movies without list appearances", %{
+      conn: conn,
+      movie: movie
+    } do
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      refute html =~ ~s(href="#lists")
+      refute html =~ ~s(data-scroll-to="lists")
+      refute html =~ ~s(id="lists")
+      refute html =~ "On canonical lists"
     end
 
     test "notable collaboration count matches the linked all-people movie search", %{conn: conn} do
