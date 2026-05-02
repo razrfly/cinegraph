@@ -13,20 +13,48 @@ defmodule Cinegraph.Workers.CanonicalListRefreshSweeper do
   @doc false
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    opts = [
-      blank_only: true,
-      limit: 5,
-      trigger: "scheduled_canonical_refresh"
+    [
+      [blank_only: true],
+      [stale_days: 90]
     ]
+    |> Enum.map(&run_refresh/1)
+    |> combine_stats()
+    |> then(&{:ok, &1})
+  end
 
-    case RefreshCanonicalLists.run(opts) do
-      {:ok, %{found: found, enqueued: enqueued, already_queued: already, failed: failed} = stats} ->
-        Logger.info(
-          "CanonicalListRefreshSweeper: found=#{found} enqueued=#{enqueued} " <>
-            "already=#{already} failed=#{failed}"
-        )
+  defp run_refresh(selector_opts) do
+    opts =
+      selector_opts ++
+        [
+          limit: 5,
+          trigger: "scheduled_canonical_refresh"
+        ]
 
-        {:ok, stats}
-    end
+    {:ok, stats} = RefreshCanonicalLists.run(opts)
+
+    Logger.info(
+      "CanonicalListRefreshSweeper: selector=#{inspect(selector_opts)} " <>
+        "found=#{stats.found} enqueued=#{stats.enqueued} " <>
+        "already=#{stats.already_queued} failed=#{stats.failed}"
+    )
+
+    stats
+  end
+
+  defp combine_stats(stats) do
+    Enum.reduce(stats, empty_stats(), fn stat, acc ->
+      %{
+        found: acc.found + stat.found,
+        enqueued: acc.enqueued + stat.enqueued,
+        already_queued: acc.already_queued + stat.already_queued,
+        failed: acc.failed + stat.failed,
+        dry_run: false,
+        lists: acc.lists ++ stat.lists
+      }
+    end)
+  end
+
+  defp empty_stats do
+    %{found: 0, enqueued: 0, already_queued: 0, failed: 0, dry_run: false, lists: []}
   end
 end
