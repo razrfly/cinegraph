@@ -429,7 +429,9 @@ defmodule Cinegraph.Search do
           id: c.id,
           tmdb_id: c.tmdb_id,
           name: c.name,
+          slug: c.slug,
           logo_path: c.logo_path,
+          logo_url: c.logo_url,
           origin_country: c.origin_country
         }
       )
@@ -442,7 +444,9 @@ defmodule Cinegraph.Search do
           id: c.id,
           tmdb_id: c.tmdb_id,
           name: c.name,
+          slug: c.slug,
           logo_path: c.logo_path,
+          logo_url: c.logo_url,
           origin_country: c.origin_country
         }
       )
@@ -469,7 +473,9 @@ defmodule Cinegraph.Search do
           id: c.id,
           tmdb_id: c.tmdb_id,
           name: c.name,
+          slug: c.slug,
           logo_path: c.logo_path,
+          logo_url: c.logo_url,
           origin_country: c.origin_country
         }
       )
@@ -483,7 +489,9 @@ defmodule Cinegraph.Search do
       id: row.id,
       tmdb_id: row.tmdb_id,
       name: row.name,
+      slug: row.slug,
       logo_path: row.logo_path,
+      logo_url: row.logo_url,
       origin_country: row.origin_country
     }
   end

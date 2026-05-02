@@ -6,7 +6,8 @@ defmodule Cinegraph.Movies.ComprehensiveImportTest do
   alias Cinegraph.Movies.{
     Movie,
     MovieAvailabilityRefresh,
-    MovieWatchProvider
+    MovieWatchProvider,
+    ProductionCompany
   }
 
   alias Cinegraph.Repo
@@ -88,6 +89,52 @@ defmodule Cinegraph.Movies.ComprehensiveImportTest do
 
       assert Repo.get!(Movie, movie.id)
       assert Repo.aggregate(MovieAvailabilityRefresh, :count) == 0
+    end
+
+    test "creates production companies with slugs from basic TMDb payload" do
+      payload =
+        watch_payload()
+        |> tmdb_payload()
+        |> Map.put("production_companies", [
+          %{
+            "id" => 41_077,
+            "name" => "A24",
+            "logo_path" => "/a24.png",
+            "origin_country" => "US"
+          }
+        ])
+
+      assert {:ok, %Movie{}} = Movies.store_movie_comprehensive_data(payload)
+
+      company = Repo.get_by!(ProductionCompany, tmdb_id: 41_077)
+      assert company.name == "A24"
+      assert company.logo_path == "/a24.png"
+      assert company.origin_country == "US"
+      assert company.slug == "a24"
+      assert company.metadata == %{}
+    end
+
+    test "company metadata enqueue failures do not fail comprehensive storage" do
+      payload =
+        watch_payload()
+        |> tmdb_payload()
+        |> Map.put("production_companies", [
+          %{
+            "id" => 41_078,
+            "name" => "Nonblocking Company",
+            "logo_path" => nil,
+            "origin_country" => "US"
+          }
+        ])
+
+      enqueue_fun = fn _company -> raise "queue unavailable" end
+
+      assert {:ok, %Movie{}} =
+               Movies.store_movie_comprehensive_data(payload,
+                 company_metadata_enqueue_fun: enqueue_fun
+               )
+
+      assert Repo.get_by!(ProductionCompany, tmdb_id: 41_078).slug == "nonblocking-company"
     end
   end
 

@@ -75,6 +75,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ "Old movie page"
       assert html =~ ~p"/movies/#{movie.slug}/legacy"
       assert html =~ movie.title
+      assert html =~ ~s(<link rel="canonical" href="https://cinegraph.io/movies/#{movie.slug}")
+      assert html =~ ~s(<meta property="og:type" content="video.movie")
+      assert html =~ ~s(<meta property="og:title" content="Routing Smoke Title)
+      assert html =~ ~s(<meta name="twitter:title" content="Routing Smoke Title)
+      assert html =~ ~s("Movie")
+      assert html =~ ~s("BreadcrumbList")
     end
 
     test "falls back to numeric ID routes for movies without slugs", %{conn: conn, movie: movie} do

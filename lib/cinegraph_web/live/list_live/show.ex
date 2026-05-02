@@ -12,14 +12,14 @@ defmodule CinegraphWeb.ListLive.Show do
   alias CinegraphWeb.MovieLive.IndexV2.Results
   alias CinegraphWeb.MovieLive.SortOptions
 
+  import CinegraphWeb.SEOHelpers, only: [assign_curated_list_seo: 3]
+
   import CinegraphWeb.LiveViewHelpers,
     only: [
       extract_sort_criteria: 1,
       extract_sort_direction: 1,
       assign_pagination: 2
     ]
-
-  @site_url "https://cinegraph.io"
 
   # ============================================================================
   # SearchEventHandlers Callback
@@ -102,7 +102,7 @@ defmodule CinegraphWeb.ListLive.Show do
              |> assign(:active_lens_key, active_lens_key)
              |> assign_pagination(meta)
              |> assign(:list_slug, list_info.slug)
-             |> assign_list_page_seo(list_info, movies)}
+             |> assign_curated_list_seo(list_info, movies)}
 
           {:error, _} ->
             {:noreply,
@@ -134,41 +134,6 @@ defmodule CinegraphWeb.ListLive.Show do
     case Events.handle_event(event, params, socket) do
       :unknown -> super(event, params, socket)
       reply -> reply
-    end
-  end
-
-  # ============================================================================
-  # SEO Helpers
-  # ============================================================================
-
-  defp assign_list_page_seo(socket, list_info, movies) do
-    description = list_info.description || "Browse #{list_info.name} on Cinegraph"
-
-    socket
-    |> assign(:page_title, list_info.name)
-    |> assign(:meta_description, truncate_text(description, 160))
-    |> assign(:canonical_url, "#{@site_url}/lists/#{list_info.slug}")
-    |> assign(:og_title, list_info.name)
-    |> assign(:og_description, truncate_text(description, 200))
-    |> assign(:og_type, "website")
-    |> assign(:og_url, "#{@site_url}/lists/#{list_info.slug}")
-    |> maybe_assign_og_image(movies)
-    |> assign(:json_ld, CinegraphWeb.SEO.item_list_schema(movies, list_info.name))
-  end
-
-  defp maybe_assign_og_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
-    assign(socket, :og_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")
-  end
-
-  defp maybe_assign_og_image(socket, _movies), do: socket
-
-  defp truncate_text(nil, _length), do: nil
-
-  defp truncate_text(text, length) when is_binary(text) do
-    if String.length(text) > length do
-      text |> String.slice(0, length - 3) |> String.trim_trailing() |> Kernel.<>("...")
-    else
-      text
     end
   end
 end

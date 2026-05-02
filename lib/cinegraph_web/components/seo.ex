@@ -14,6 +14,109 @@ defmodule CinegraphWeb.SEO do
 
   @tmdb_image_base "https://image.tmdb.org/t/p"
   @site_url "https://cinegraph.io"
+  @site_name "Cinegraph"
+  @default_description "Discover movies, explore film industry relationships, and track awards data."
+
+  # =============================================================================
+  # Meta Tag Component
+  # =============================================================================
+
+  @doc """
+  Renders shared SEO, Open Graph, Twitter, canonical, and JSON-LD tags.
+
+  Layouts pass their full assigns map so this component can support the current
+  `:meta_*` contract while temporarily falling back to older `:og_*` assigns.
+  """
+  attr :assigns, :map, required: true
+
+  def meta_tags(assigns) do
+    seo = build_meta(assigns.assigns)
+    assigns = assign(assigns, :seo, seo)
+
+    ~H"""
+    <meta name="description" content={@seo.description} />
+    <%= if @seo.canonical_url do %>
+      <link rel="canonical" href={@seo.canonical_url} />
+    <% end %>
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:type" content={@seo.type} />
+    <meta property="og:title" content={@seo.title} />
+    <meta property="og:description" content={@seo.description} />
+    <%= if @seo.image do %>
+      <meta property="og:image" content={@seo.image} />
+      <%= if @seo.image_width do %>
+        <meta property="og:image:width" content={@seo.image_width} />
+      <% end %>
+      <%= if @seo.image_height do %>
+        <meta property="og:image:height" content={@seo.image_height} />
+      <% end %>
+    <% end %>
+    <%= if @seo.url do %>
+      <meta property="og:url" content={@seo.url} />
+    <% end %>
+    <meta property="og:site_name" content={@seo.site_name} />
+    <meta property="og:locale" content={@seo.locale} />
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={@seo.title} />
+    <meta name="twitter:description" content={@seo.description} />
+    <%= if @seo.image do %>
+      <meta name="twitter:image" content={@seo.image} />
+    <% end %>
+
+    <!-- JSON-LD Structured Data -->
+    <%= for schema <- @seo.json_ld do %>
+      <script type="application/ld+json">
+        <%= raw(Jason.encode!(schema, pretty: false)) %>
+      </script>
+    <% end %>
+    """
+  end
+
+  defp build_meta(assigns) do
+    title = first_present(assigns, [:meta_title, :og_title, :page_title]) || @site_name
+
+    description =
+      first_present(assigns, [:meta_description, :og_description]) || @default_description
+
+    canonical_url = present(assigns[:canonical_url])
+    url = first_present(assigns, [:meta_url, :og_url]) || canonical_url
+
+    %{
+      title: title,
+      description: description,
+      image: first_present(assigns, [:meta_image, :og_image]),
+      image_width: first_present(assigns, [:meta_image_width, :og_image_width]),
+      image_height: first_present(assigns, [:meta_image_height, :og_image_height]),
+      type: first_present(assigns, [:meta_type, :og_type]) || "website",
+      url: url,
+      canonical_url: canonical_url,
+      site_name: first_present(assigns, [:meta_site_name]) || @site_name,
+      locale: first_present(assigns, [:meta_locale]) || "en_US",
+      json_ld: normalize_json_ld(assigns[:json_ld])
+    }
+  end
+
+  defp first_present(assigns, keys) do
+    Enum.find_value(keys, fn key -> present(assigns[key]) end)
+  end
+
+  defp present(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      value -> value
+    end
+  end
+
+  defp present(value), do: value
+
+  defp normalize_json_ld(nil), do: []
+  defp normalize_json_ld([]), do: []
+  defp normalize_json_ld(schemas) when is_list(schemas), do: Enum.reject(schemas, &is_nil/1)
+  defp normalize_json_ld(schema) when is_map(schema), do: [schema]
+  defp normalize_json_ld(_schema), do: []
 
   # =============================================================================
   # JSON-LD Script Component
@@ -49,7 +152,7 @@ defmodule CinegraphWeb.SEO do
       "@context" => "https://schema.org",
       "@type" => "Movie",
       "name" => movie.title,
-      "url" => "#{base_url}/movies/#{movie.slug}"
+      "url" => "#{base_url}/movies/#{slug_or_id(movie)}"
     }
     |> maybe_add("alternateName", movie.original_title, movie.original_title != movie.title)
     |> maybe_add("description", movie.overview)
@@ -155,7 +258,7 @@ defmodule CinegraphWeb.SEO do
       "@context" => "https://schema.org",
       "@type" => "Person",
       "name" => person.name,
-      "url" => "#{base_url}/people/#{person.slug}"
+      "url" => "#{base_url}/people/#{slug_or_id(person)}"
     }
     |> maybe_add("image", profile_url(person.profile_path, "w500"))
     |> maybe_add("birthDate", format_date(person.birthday))
@@ -256,7 +359,7 @@ defmodule CinegraphWeb.SEO do
     %{
       "@type" => "Movie",
       "name" => item.title,
-      "url" => "#{base_url}/movies/#{item.slug}"
+      "url" => "#{base_url}/movies/#{slug_or_id(item)}"
     }
     |> maybe_add("image", poster_url(item.poster_path, "w342"))
     |> maybe_add("datePublished", format_date(item.release_date))
@@ -266,7 +369,7 @@ defmodule CinegraphWeb.SEO do
     %{
       "@type" => "Person",
       "name" => item.name,
-      "url" => "#{base_url}/people/#{item.slug}"
+      "url" => "#{base_url}/people/#{slug_or_id(item)}"
     }
     |> maybe_add("image", profile_url(item.profile_path, "w185"))
   end
@@ -344,8 +447,15 @@ defmodule CinegraphWeb.SEO do
     |> maybe_add("url", person_url(person))
   end
 
-  defp person_url(%{slug: slug}) when is_binary(slug), do: "#{@site_url}/people/#{slug}"
-  defp person_url(_), do: nil
+  defp person_url(%{slug: slug} = person) when is_binary(slug) and slug != "",
+    do: "#{@site_url}/people/#{slug_or_id(person)}"
+
+  defp person_url(%{id: _id} = person), do: "#{@site_url}/people/#{slug_or_id(person)}"
+  defp person_url(_person), do: nil
+
+  defp slug_or_id(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
+  defp slug_or_id(%{id: id}), do: id
+  defp slug_or_id(_), do: nil
 
   # Extract directors from movie credits
   defp get_directors(%{movie_credits: credits}) when is_list(credits) do

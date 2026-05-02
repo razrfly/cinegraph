@@ -22,6 +22,7 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     |> filter_by_discovery_preset(params.discovery_preset)
     |> filter_by_award_preset(params.award_preset)
     |> filter_by_people(params)
+    |> filter_by_production_companies(params.production_company_ids)
     |> filter_by_metric_thresholds(params)
     |> filter_by_disparity(params.disparity)
     |> apply_distinct_if_needed()
@@ -66,6 +67,23 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   defp filter_by_languages(query, language_codes) do
     where(query, [m], m.original_language in ^language_codes)
   end
+
+  # Production company filtering uses ANY semantics. A movie with any selected
+  # production company is included.
+  defp filter_by_production_companies(query, []), do: query
+  defp filter_by_production_companies(query, nil), do: query
+
+  defp filter_by_production_companies(query, company_ids) when is_list(company_ids) do
+    subq =
+      from(mpc in "movie_production_companies",
+        select: mpc.movie_id,
+        where: mpc.production_company_id in ^company_ids
+      )
+
+    where(query, [m], m.id in subquery(subq))
+  end
+
+  defp filter_by_production_companies(query, _), do: query
 
   # Canonical list filtering uses ANY semantics. Selecting multiple lists means
   # movies from any selected list, not only the intersection of all lists.

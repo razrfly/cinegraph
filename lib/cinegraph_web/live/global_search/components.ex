@@ -209,22 +209,22 @@ defmodule CinegraphWeb.GlobalSearch.Components do
 
   def company_row(assigns) do
     ~H"""
-    <div
+    <a
+      href={company_href(@company)}
       role="option"
-      class="flex items-center gap-3 px-2 py-2 rounded-md text-mist-700 dark:text-mist-400 cursor-default"
-      title="No detail page yet"
+      class="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-mist-50 dark:hover:bg-white/5 no-underline"
     >
       <div class="w-10 h-10 rounded bg-mist-100 dark:bg-white/5 overflow-hidden grid place-items-center shrink-0">
         <img
-          :if={@company.logo_path}
-          src={ProductionCompany.logo_url(@company.logo_path, "w92")}
+          :if={company_logo(@company)}
+          src={company_logo(@company)}
           alt=""
           loading="lazy"
           decoding="async"
           class="max-w-full max-h-full object-contain"
         />
         <span
-          :if={!@company.logo_path}
+          :if={!company_logo(@company)}
           class="text-mist-400 dark:text-mist-500 text-lg"
           aria-hidden="true"
         >
@@ -240,9 +240,19 @@ defmodule CinegraphWeb.GlobalSearch.Components do
           {@company.origin_country}
         </div>
       </div>
-    </div>
+    </a>
     """
   end
+
+  defp company_href(%{slug: slug}) when is_binary(slug) and slug != "", do: "/companies/#{slug}"
+  defp company_href(%{id: id}), do: "/companies/#{id}"
+
+  defp company_logo(%{logo_url: url}) when is_binary(url) and url != "", do: url
+
+  defp company_logo(%{logo_path: path}) when is_binary(path) and path != "",
+    do: ProductionCompany.logo_url(path, "w92")
+
+  defp company_logo(_company), do: nil
 
   defp initials(nil), do: "?"
 

@@ -3,7 +3,7 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
 
   import Phoenix.LiveViewTest
 
-  alias Cinegraph.Movies.{Movie, Person}
+  alias Cinegraph.Movies.{Movie, Person, ProductionCompany}
   alias Cinegraph.Repo
 
   defp insert_movie!(attrs) do
@@ -29,6 +29,17 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
 
     %Person{}
     |> Person.changeset(Map.merge(defaults, attrs))
+    |> Repo.insert!()
+  end
+
+  defp insert_company!(attrs) do
+    defaults = %{
+      tmdb_id: System.unique_integer([:positive]),
+      name: "Test Company"
+    }
+
+    %ProductionCompany{}
+    |> ProductionCompany.changeset(Map.merge(defaults, attrs))
     |> Repo.insert!()
   end
 
@@ -189,6 +200,22 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
 
       assert html =~ ~s|href="/people/#{person.id}"|
       refute html =~ ~s|href="/people/" role="option"|
+    end
+
+    test "company rows link to /companies/<slug> and prefer logo_url", %{conn: conn} do
+      _company =
+        insert_company!(%{
+          name: "Linkable Company",
+          logo_path: "/legacy.png",
+          logo_url: "https://example.com/company.svg"
+        })
+
+      {:ok, view, _} = live_isolated(conn, CinegraphWeb.GlobalSearchLive)
+      _ = render_change(view, "change", %{"q" => "linkable company"})
+      html = render_async(view)
+
+      assert html =~ ~s|href="/companies/linkable-company"|
+      assert html =~ ~s|src="https://example.com/company.svg"|
     end
   end
 end

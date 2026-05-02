@@ -17,14 +17,14 @@ defmodule CinegraphWeb.AwardsLive.Show do
   alias CinegraphWeb.MovieLive.IndexV2.Results
   alias CinegraphWeb.MovieLive.SortOptions
 
+  import CinegraphWeb.SEOHelpers, only: [assign_awards_seo: 4]
+
   import CinegraphWeb.LiveViewHelpers,
     only: [
       extract_sort_criteria: 1,
       extract_sort_direction: 1,
       assign_pagination: 2
     ]
-
-  @site_url "https://cinegraph.io"
 
   # ============================================================================
   # SearchEventHandlers Callback
@@ -120,7 +120,7 @@ defmodule CinegraphWeb.AwardsLive.Show do
            |> assign(:sort_is_preset, sort_is_preset)
            |> assign(:active_lens_key, active_lens_key)
            |> assign_pagination(meta)
-           |> assign_awards_page_seo(organization, filter_mode, movies)}
+           |> assign_awards_seo(organization, filter_mode, movies)}
 
         {:error, _} ->
           {:noreply,
@@ -190,51 +190,4 @@ defmodule CinegraphWeb.AwardsLive.Show do
   defp award_status_for_mode(:winners), do: "won"
   defp award_status_for_mode(:nominees), do: "nominated_only"
   defp award_status_for_mode(:all), do: "any_nomination"
-
-  defp page_title(org, :winners), do: "#{org.name} - Winners"
-  defp page_title(org, :nominees), do: "#{org.name} - Nominees"
-  defp page_title(org, _), do: org.name
-
-  # ============================================================================
-  # SEO Helpers
-  # ============================================================================
-
-  defp assign_awards_page_seo(socket, organization, filter_mode, movies) do
-    title = page_title(organization, filter_mode)
-    description = awards_description(organization, filter_mode)
-    path = awards_canonical_path(organization, filter_mode)
-
-    socket
-    |> assign(:page_title, title)
-    |> assign(:meta_description, description)
-    |> assign(:canonical_url, "#{@site_url}#{path}")
-    |> assign(:og_title, title)
-    |> assign(:og_description, description)
-    |> assign(:og_type, "website")
-    |> assign(:og_url, "#{@site_url}#{path}")
-    |> maybe_assign_og_image(movies)
-    |> assign(:json_ld, CinegraphWeb.SEO.item_list_schema(movies, title))
-  end
-
-  defp awards_description(org, :winners) do
-    "Browse all #{org.name} award winners. Discover acclaimed films honored by #{org.name}."
-  end
-
-  defp awards_description(org, :nominees) do
-    "Browse #{org.name} nominees. Explore films nominated for #{org.name} awards."
-  end
-
-  defp awards_description(org, _) do
-    "Explore #{org.name} films, winners, and nominees. Discover award-winning cinema on Cinegraph."
-  end
-
-  defp awards_canonical_path(org, :winners), do: "/awards/#{org.slug || org.id}/winners"
-  defp awards_canonical_path(org, :nominees), do: "/awards/#{org.slug || org.id}/nominees"
-  defp awards_canonical_path(org, _), do: "/awards/#{org.slug || org.id}"
-
-  defp maybe_assign_og_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
-    assign(socket, :og_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")
-  end
-
-  defp maybe_assign_og_image(socket, _movies), do: socket
 end
