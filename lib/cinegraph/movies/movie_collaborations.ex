@@ -6,7 +6,7 @@ defmodule Cinegraph.Movies.MovieCollaborations do
 
   alias Cinegraph.Repo
   alias Cinegraph.Collaborations
-  alias Cinegraph.Movies.MovieScoring
+  alias Cinegraph.Movies.{MovieScoring, Search}
 
   @doc """
   Get key collaborations (director-actor reunions and actor partnerships) for a movie.
@@ -24,13 +24,17 @@ defmodule Cinegraph.Movies.MovieCollaborations do
           actor <- top_actors do
         case Collaborations.find_actor_director_movies(actor.person_id, director.person_id) do
           movies when length(movies) > 1 ->
-            %{
-              type: :director_actor,
-              person_a: actor.person,
-              person_b: director.person,
-              collaboration_count: length(movies),
-              is_reunion: true
-            }
+            count = linked_movie_count(actor.person, director.person)
+
+            if count > 1 do
+              %{
+                type: :director_actor,
+                person_a: actor.person,
+                person_b: director.person,
+                collaboration_count: count,
+                is_reunion: true
+              }
+            end
 
           _ ->
             nil
@@ -46,18 +50,22 @@ defmodule Cinegraph.Movies.MovieCollaborations do
         SELECT c.collaboration_count
         FROM collaborations c
         WHERE (c.person_a_id = $1 AND c.person_b_id = $2)
-           OR (c.person_a_id = $2 AND c.person_b_id = $1)
+          OR (c.person_a_id = $2 AND c.person_b_id = $1)
         """
 
         case Repo.query(query, [actor1.person_id, actor2.person_id]) do
-          {:ok, %{rows: [[count]]}} when count > 1 ->
-            %{
-              type: :actor_actor,
-              person_a: actor1.person,
-              person_b: actor2.person,
-              collaboration_count: count,
-              is_reunion: true
-            }
+          {:ok, %{rows: [[stored_count]]}} when stored_count > 1 ->
+            count = linked_movie_count(actor1.person, actor2.person)
+
+            if count > 1 do
+              %{
+                type: :actor_actor,
+                person_a: actor1.person,
+                person_b: actor2.person,
+                collaboration_count: count,
+                is_reunion: true
+              }
+            end
 
           _ ->
             nil
@@ -77,6 +85,30 @@ defmodule Cinegraph.Movies.MovieCollaborations do
       total_reunions: length(all_collaborations)
     }
   end
+
+  defp linked_movie_count(person_a, person_b) do
+    people =
+      [person_filter_value(person_a), person_filter_value(person_b)]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(",")
+
+    if people == "" do
+      0
+    else
+      case Search.search_movies(%{
+             "people" => people,
+             "people_match" => "all",
+             "per_page" => "1"
+           }) do
+        {:ok, {_movies, meta}} -> meta.total_count
+        _ -> 0
+      end
+    end
+  end
+
+  defp person_filter_value(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
+  defp person_filter_value(%{id: id}) when not is_nil(id), do: to_string(id)
+  defp person_filter_value(_person), do: nil
 
   @doc """
   Get collaboration timelines for key partnerships in a movie.

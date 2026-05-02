@@ -44,15 +44,22 @@ defmodule Cinegraph.ProdRpcTest do
       disable_background =
         "Application.put_env(:cinegraph, :start_background_children, false)"
 
+      capture_known_queues =
+        "Application.put_env(:cinegraph, :known_oban_queues, Keyword.keys(Keyword.get(oban_config, :queues, [])))"
+
       disable_oban_processing =
-        "Application.put_env(:cinegraph, Oban, Keyword.merge(Application.fetch_env!(:cinegraph, Oban), queues: [], plugins: []))"
+        "Application.put_env(:cinegraph, Oban, Keyword.merge(oban_config, queues: [], plugins: []))"
 
       ensure_started = "Application.ensure_all_started(:cinegraph)"
 
+      fetch_config_index = assert_index(shell_cmd, "oban_config = Application.fetch_env!(:cinegraph, Oban)")
+      capture_queues_index = assert_index(shell_cmd, capture_known_queues)
       background_index = assert_index(shell_cmd, disable_background)
       oban_config_index = assert_index(shell_cmd, disable_oban_processing)
       ensure_started_index = assert_index(shell_cmd, ensure_started)
 
+      assert fetch_config_index < capture_queues_index
+      assert capture_queues_index < background_index
       assert background_index < oban_config_index
       assert oban_config_index < ensure_started_index
       refute String.contains?(shell_cmd, "Application.put_env(:cinegraph, :start_oban, false)")
@@ -67,7 +74,7 @@ defmodule Cinegraph.ProdRpcTest do
       # before the user expression.
       assert String.contains?(
                shell_cmd,
-               ~s|':logger.set_primary_config(:level, :critical); Application.put_env(:cinegraph, :start_background_children, false); Application.put_env(:cinegraph, Oban, Keyword.merge(Application.fetch_env!(:cinegraph, Oban), queues: [], plugins: [])); Application.ensure_all_started(:cinegraph); :ok'|
+               ~s|':logger.set_primary_config(:level, :critical); oban_config = Application.fetch_env!(:cinegraph, Oban); Application.put_env(:cinegraph, :known_oban_queues, Keyword.keys(Keyword.get(oban_config, :queues, []))); Application.put_env(:cinegraph, :start_background_children, false); Application.put_env(:cinegraph, Oban, Keyword.merge(oban_config, queues: [], plugins: [])); Application.ensure_all_started(:cinegraph); :ok'|
              )
     end
 
