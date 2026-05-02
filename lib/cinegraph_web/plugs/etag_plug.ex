@@ -1,46 +1,16 @@
 defmodule CinegraphWeb.Plugs.ETagPlug do
   @moduledoc """
-  ETag-based conditional request handling for cacheable pages.
+  ETag support for HTML responses, currently disabled.
 
-  This plug generates ETags based on ALL data that appears on a page,
-  not just the primary record's `updated_at`. When data changes anywhere
-  that affects the page content, the ETag changes and Cloudflare refetches.
+  LiveView HTML embeds per-session CSRF and socket connection params. Reusing a
+  cached HTML document through conditional ETag handling can leave browsers with
+  stale LiveView connection data, so this plug intentionally does not emit ETags
+  or return conditional responses for any path.
 
-  ## Data Freshness Sources
-
-  ### Movie Pages
-  - `movies.updated_at` - Core movie data
-  - `external_metrics.fetched_at` - Ratings, popularity, etc.
-  - `movie_credits.updated_at` - Cast/crew changes
-
-  ### Person Pages
-  - `people.updated_at` - Core person data
-  - `movie_credits.updated_at` - Filmography changes
-
-  ### List/Award Pages
-  - Use the list/award `updated_at` or fall back to a daily refresh
-
-  ## How it works
-
-  1. On first request:
-     - Query the MAX of all relevant `updated_at`/`fetched_at` timestamps
-     - Generate ETag from this composite timestamp
-     - Set `ETag` and `Last-Modified` headers
-     - Return full response
-
-  2. On subsequent requests with `If-None-Match`:
-     - Run same lightweight query to get current max timestamp
-     - Compare ETag
-     - If match: return 304 Not Modified (saves bandwidth + CDN validates)
-     - If no match: proceed with full response
-
-  ## Integration with Cloudflare
-
-  Cloudflare will:
-  1. Cache the page with the ETag
-  2. On cache hit with stale content, send `If-None-Match` to origin
-  3. If origin returns 304, Cloudflare serves cached content
-  4. If origin returns 200, Cloudflare updates cache
+  `cacheable_for_etag?/1` is the single source of truth for whether this plug may
+  handle a request. It currently always returns `false`; the freshness helpers
+  below are retained for a future cache strategy that can safely separate shared
+  page data from session-specific LiveView HTML.
   """
 
   import Plug.Conn
@@ -49,8 +19,10 @@ defmodule CinegraphWeb.Plugs.ETagPlug do
   alias Cinegraph.Repo
   import Ecto.Query
 
+  @doc false
   def init(opts), do: opts
 
+  @doc false
   def call(conn, _opts) do
     # Only process GET requests for cacheable paths
     if conn.method == "GET" and cacheable_for_etag?(conn.request_path) do
@@ -301,5 +273,4 @@ defmodule CinegraphWeb.Plugs.ETagPlug do
   end
 
   defp format_http_date(_), do: nil
-
 end

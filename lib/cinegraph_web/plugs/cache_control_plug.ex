@@ -24,8 +24,10 @@ defmodule CinegraphWeb.Plugs.CacheControlPlug do
 
   import Plug.Conn
 
+  @doc false
   def init(opts), do: opts
 
+  @doc false
   def call(conn, _opts) do
     # Register a before_send callback to set cache headers
     # This runs after the response is built but before it's sent

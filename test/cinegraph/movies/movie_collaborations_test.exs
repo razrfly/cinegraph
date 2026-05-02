@@ -52,6 +52,8 @@ defmodule Cinegraph.Movies.MovieCollaborationsTest do
       insert_detail!(collaboration, current, "actor-actor")
       insert_detail!(collaboration, detail_backed, "actor-actor")
 
+      # get_key_collaborations/2 uses search results, which intentionally skip
+      # the unreleased movie above.
       assert %{actor_partnerships: [%{collaboration_count: 3}]} =
                MovieCollaborations.get_key_collaborations(
                  preload_people([current_a, current_b]),

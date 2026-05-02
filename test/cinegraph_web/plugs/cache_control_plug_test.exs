@@ -1,7 +1,11 @@
 defmodule CinegraphWeb.Plugs.CacheControlPlugTest do
   use ExUnit.Case, async: true
 
+  import Plug.Conn
+
   alias CinegraphWeb.Plugs.CacheControlPlug
+
+  @no_cache_header "private, no-store, no-cache, must-revalidate, max-age=0"
 
   describe "cacheable_path?/1" do
     test "movie detail pages are not cacheable because they are LiveViews" do
@@ -71,6 +75,37 @@ defmodule CinegraphWeb.Plugs.CacheControlPlugTest do
       refute CacheControlPlug.cacheable_path?("/")
       refute CacheControlPlug.cacheable_path?("/collaborations")
       refute CacheControlPlug.cacheable_path?("/six-degrees")
+    end
+  end
+
+  describe "call/2 header behavior" do
+    test "sets no-cache headers on HTML responses" do
+      conn =
+        :get
+        |> Plug.Test.conn("/movies/fight-club-1999")
+        |> put_req_header("accept", "text/html")
+        |> put_resp_content_type("text/html")
+        |> CacheControlPlug.call([])
+        |> send_resp(200, "<html></html>")
+
+      assert [@no_cache_header] = get_resp_header(conn, "cache-control")
+      assert ["no-cache"] = get_resp_header(conn, "pragma")
+      assert ["-1"] = get_resp_header(conn, "expires")
+    end
+
+    test "does not override cache headers on non-HTML responses" do
+      conn =
+        :get
+        |> Plug.Test.conn("/api/movies")
+        |> put_req_header("accept", "application/json")
+        |> put_resp_content_type("application/json")
+        |> put_resp_header("cache-control", "public, max-age=60")
+        |> CacheControlPlug.call([])
+        |> send_resp(200, ~s({"ok":true}))
+
+      assert ["public, max-age=60"] = get_resp_header(conn, "cache-control")
+      assert [] = get_resp_header(conn, "pragma")
+      assert [] = get_resp_header(conn, "expires")
     end
   end
 end
