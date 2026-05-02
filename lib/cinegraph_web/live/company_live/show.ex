@@ -142,28 +142,27 @@ defmodule CinegraphWeb.CompanyLive.Show do
 
     socket
     |> assign(:page_title, title)
+    |> assign(:meta_title, title)
     |> assign(:meta_description, description)
+    |> assign(:meta_type, "website")
     |> assign(:canonical_url, "#{@site_url}#{path}")
-    |> assign(:og_title, title)
-    |> assign(:og_description, description)
-    |> assign(:og_type, "website")
-    |> assign(:og_url, "#{@site_url}#{path}")
-    |> maybe_assign_og_image(company, movies)
+    |> assign(:meta_url, "#{@site_url}#{path}")
+    |> maybe_assign_meta_image(company, movies)
     |> assign(:json_ld, CinegraphWeb.SEO.item_list_schema(movies, title))
   end
 
-  defp maybe_assign_og_image(socket, company, movies) do
+  defp maybe_assign_meta_image(socket, company, movies) do
     case company_logo_url(company) do
-      nil -> maybe_assign_movie_og_image(socket, movies)
-      url -> assign(socket, :og_image, url)
+      nil -> maybe_assign_movie_meta_image(socket, movies)
+      url -> assign(socket, :meta_image, url)
     end
   end
 
-  defp maybe_assign_movie_og_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
-    assign(socket, :og_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")
+  defp maybe_assign_movie_meta_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
+    assign(socket, :meta_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")
   end
 
-  defp maybe_assign_movie_og_image(socket, _movies), do: socket
+  defp maybe_assign_movie_meta_image(socket, _movies), do: socket
 
   defp empty_pagination_meta do
     %{

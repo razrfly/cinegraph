@@ -64,6 +64,17 @@ defmodule Cinegraph.Movies.ProductionCompanyTest do
       assert get_change(changeset, :slug) == "basic-company"
     end
 
+    test "generates a fallback slug when the name slugifies to empty" do
+      changeset =
+        ProductionCompany.changeset(%ProductionCompany{}, %{
+          tmdb_id: 6,
+          name: "映画会社"
+        })
+
+      assert changeset.valid?
+      assert get_change(changeset, :slug) == "company-6"
+    end
+
     test "metadata defaults to empty map" do
       {:ok, company} =
         %ProductionCompany{}
@@ -71,6 +82,14 @@ defmodule Cinegraph.Movies.ProductionCompanyTest do
         |> Repo.insert()
 
       assert company.metadata == %{}
+    end
+  end
+
+  describe "get_production_company_by_id_or_slug/1" do
+    test "prefers numeric slugs over numeric ID lookup" do
+      company = insert_company!(tmdb_id: 8, name: "Numeric Slug", slug: "123")
+
+      assert Movies.get_production_company_by_id_or_slug("123").id == company.id
     end
   end
 

@@ -73,6 +73,23 @@ defmodule CinegraphWeb.SEOTest do
       assert html |> String.split(~s(type="application/ld+json")) |> length() == 3
     end
 
+    test "escapes closing script sequences in JSON-LD" do
+      html =
+        render_component(&SEO.meta_tags/1,
+          assigns: %{
+            page_title: "Schema Page",
+            json_ld: %{
+              "@context" => "https://schema.org",
+              "@type" => "Movie",
+              "name" => "</script>"
+            }
+          }
+        )
+
+      assert html =~ ~S(<\/script>)
+      refute html =~ ~S("</script>")
+    end
+
     test "omits image tags when no image is available" do
       html =
         render_component(&SEO.meta_tags/1,

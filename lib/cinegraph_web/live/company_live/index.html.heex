@@ -43,14 +43,19 @@
 
     <form class="flex flex-col gap-2 sm:flex-row" phx-change="filter" phx-submit="filter">
       <input type="hidden" name="category" value={@category} />
+      <label for="company_search" class="sr-only">Search companies</label>
       <input
+        id="company_search"
+        type="search"
         name="search"
         value={@search}
         placeholder="Search companies"
         phx-debounce="350"
         class="h-10 rounded-lg border border-mist-950/15 bg-mist-50 px-3 text-[13px] text-mist-950 placeholder:text-mist-500"
       />
+      <label for="company_sort" class="sr-only">Sort companies</label>
       <select
+        id="company_sort"
         name="sort"
         class="h-10 min-w-[150px] rounded-lg border border-mist-950/15 bg-mist-50 pl-3 pr-10 text-[13px] text-mist-950"
       >

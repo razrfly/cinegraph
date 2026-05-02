@@ -72,15 +72,18 @@ defmodule Cinegraph.Maintenance.Companies do
       end
 
     if dry_run? do
+      movie_counts = movie_counts_for(companies)
+
       {:ok,
        %{
          dry_run: true,
          found: length(companies),
          refreshed: 0,
          failed: 0,
-         companies: shape(companies)
+         companies: shape(companies, movie_counts)
        }}
     else
+      movie_counts = movie_counts_for(companies)
       results = Enum.map(companies, &Movies.refresh_production_company_metadata/1)
 
       {:ok,
@@ -89,7 +92,7 @@ defmodule Cinegraph.Maintenance.Companies do
          found: length(companies),
          refreshed: Enum.count(results, &match?({:ok, _}, &1)),
          failed: Enum.count(results, &match?({:error, _}, &1)),
-         companies: shape(companies),
+         companies: shape(companies, movie_counts),
          errors: errors(companies, results)
        }}
     end
@@ -110,19 +113,27 @@ defmodule Cinegraph.Maintenance.Companies do
     |> Enum.filter(predicate)
     |> Enum.sort_by(& &1.movie_count, :desc)
     |> Enum.take(limit)
-    |> shape()
+    |> then(fn top_companies -> shape(top_companies, movie_counts_for(top_companies)) end)
   end
 
-  defp shape(companies) do
+  defp shape(companies, movie_counts) do
     Enum.map(companies, fn company ->
       %{
         id: company.id,
         tmdb_id: company.tmdb_id,
         slug: company.slug,
         name: company.name,
-        movie_count: Map.get(company, :movie_count) || full_movie_count_for_company(company.id)
+        movie_count:
+          Map.get(company, :movie_count) || Map.get(movie_counts, company.id) ||
+            full_movie_count_for_company(company.id)
       }
     end)
+  end
+
+  defp movie_counts_for(companies) do
+    companies
+    |> Enum.map(& &1.id)
+    |> Movies.count_movies_by_production_company_ids()
   end
 
   defp errors(companies, results) do

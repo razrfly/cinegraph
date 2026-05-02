@@ -69,11 +69,13 @@ defmodule CinegraphWeb.SEO do
     <!-- JSON-LD Structured Data -->
     <%= for schema <- @seo.json_ld do %>
       <script type="application/ld+json">
-        <%= raw(Jason.encode!(schema, pretty: false)) %>
+        <%= raw(schema |> Jason.encode!(pretty: false) |> escape_json_ld()) %>
       </script>
     <% end %>
     """
   end
+
+  defp escape_json_ld(json), do: String.replace(json, "</", "<\\/")
 
   defp build_meta(assigns) do
     title = first_present(assigns, [:meta_title, :og_title, :page_title]) || @site_name
@@ -130,7 +132,7 @@ defmodule CinegraphWeb.SEO do
   def json_ld(assigns) do
     ~H"""
     <script type="application/ld+json">
-      <%= raw(Jason.encode!(@data, pretty: false)) %>
+      <%= raw(@data |> Jason.encode!(pretty: false) |> escape_json_ld()) %>
     </script>
     """
   end
