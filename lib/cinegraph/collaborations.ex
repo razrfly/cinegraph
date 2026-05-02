@@ -556,10 +556,14 @@ defmodule Cinegraph.Collaborations do
   end
 
   @doc """
-  Finds movies where a specific actor and director worked together.
+  Finds movies where two people worked together.
+
+  Accepts `:type` as `:any`, a collaboration type string, or a list of
+  collaboration type strings.
   """
-  def find_actor_director_movies(actor_id, director_id) do
-    {person_a_id, person_b_id} = order_person_ids(actor_id, director_id)
+  def find_collaboration_movies(person_a_id, person_b_id, opts \\ []) do
+    {person_a_id, person_b_id} = order_person_ids(person_a_id, person_b_id)
+    types = collaboration_type_filter(Keyword.get(opts, :type, :any))
 
     query =
       from cd in CollaborationDetail,
@@ -568,12 +572,51 @@ defmodule Cinegraph.Collaborations do
         join: m in Movie,
         on: cd.movie_id == m.id,
         where: c.person_a_id == ^person_a_id and c.person_b_id == ^person_b_id,
-        where: cd.collaboration_type == "actor-director",
         order_by: [desc: m.release_date],
-        preload: [movie: m]
+        select: %{
+          id: m.id,
+          title: m.title,
+          slug: m.slug,
+          release_date: m.release_date,
+          poster_path: m.poster_path,
+          score: cd.movie_rating
+        }
 
-    Repo.replica().all(query) |> Enum.map(& &1.movie)
+    query
+    |> maybe_filter_collaboration_types(types)
+    |> Repo.replica().all()
+    |> Enum.map(&normalize_collaboration_movie/1)
   end
+
+  @doc """
+  Finds movies where a specific actor and director worked together.
+  """
+  def find_actor_director_movies(actor_id, director_id) do
+    find_collaboration_movies(actor_id, director_id, type: "actor-director")
+  end
+
+  defp collaboration_type_filter(:any), do: :any
+  defp collaboration_type_filter(""), do: :any
+  defp collaboration_type_filter(type) when is_binary(type), do: [type]
+
+  defp collaboration_type_filter(types) when is_list(types) do
+    types
+    |> Enum.filter(&is_binary/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp collaboration_type_filter(_), do: :any
+
+  defp maybe_filter_collaboration_types(query, :any), do: query
+  defp maybe_filter_collaboration_types(query, []), do: where(query, false)
+
+  defp maybe_filter_collaboration_types(query, types),
+    do: where(query, [cd], cd.collaboration_type in ^types)
+
+  defp normalize_collaboration_movie(%{score: %Decimal{} = score} = movie),
+    do: %{movie | score: Decimal.to_float(score)}
+
+  defp normalize_collaboration_movie(movie), do: movie
 
   @doc """
   Finds similar collaborations based on genres and success metrics.

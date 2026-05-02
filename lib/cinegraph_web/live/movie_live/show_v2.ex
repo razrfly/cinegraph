@@ -209,14 +209,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
     key_collabs = MovieCollaborations.get_key_collaborations(cast, crew)
 
-    collab_timelines =
-      MovieCollaborations.get_collaboration_timelines(movie, key_collabs) || []
-
-    timeline_index =
-      collab_timelines
-      |> Enum.map(fn t -> {{t.person_a.id, t.person_b.id}, t.movies} end)
-      |> Map.new()
-
     related = MovieCollaborations.get_related_movies_by_collaboration(movie, cast, crew) || []
 
     director_other_films =
@@ -243,7 +235,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         production_companies: production_companies,
         release_dates: release_dates,
         key_collabs: key_collabs,
-        timeline_index: timeline_index,
         related_movies: related,
         director_other_films: director_other_films
       }
@@ -511,25 +502,25 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     end)
   end
 
-  defp collab_shape(c, timeline_index) do
-    movies = Map.get(timeline_index, {c[:person_a].id, c[:person_b].id})
-
+  defp collab_shape(c) do
     %{
       person_a: c[:person_a].name,
       person_b: c[:person_b].name,
       avatar_a: tmdb_url(c[:person_a].profile_path, "w185"),
       avatar_b: tmdb_url(c[:person_b].profile_path, "w185"),
-      films_together: c[:collaboration_count] || c[:total_collaborations] || 0,
+      films_together:
+        c[:films_together] || length(c[:movies] || []) || c[:collaboration_count] ||
+          c[:total_collaborations] || 0,
       strength:
         cond do
-          (c[:collaboration_count] || 0) >= 10 -> :very_strong
-          (c[:collaboration_count] || 0) >= 5 -> :strong
+          (c[:films_together] || c[:collaboration_count] || 0) >= 10 -> :very_strong
+          (c[:films_together] || c[:collaboration_count] || 0) >= 5 -> :strong
           true -> :moderate
         end,
       year_range: c[:year_range],
       avg_score: c[:avg_movie_rating],
       total_revenue: c[:total_revenue],
-      movies: movies,
+      movies: c[:movies],
       href: CollaborationHelpers.collaboration_search_href(c)
     }
   end
@@ -584,9 +575,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   defp top_festival_win(_), do: nil
 
   defp top_collab_pairing(key_collabs) do
-    pair =
-      List.first(key_collabs[:director_actor_reunions] || []) ||
-        List.first(key_collabs[:actor_partnerships] || [])
+    pair = List.first(key_collabs[:notable_collaborations] || [])
 
     if pair, do: "#{pair.person_a.name} + #{pair.person_b.name}", else: nil
   end
@@ -672,9 +661,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     do: ShowV2Availability.assign_availability(socket, movie, region)
 
   defp section_nav_items(assigns) do
-    has_collabs =
-      (assigns[:key_collabs][:director_actor_reunions] || []) != [] ||
-        (assigns[:key_collabs][:actor_partnerships] || []) != []
+    has_collabs = (assigns[:key_collabs][:notable_collaborations] || []) != []
 
     [
       %{id: "score", label: "Score", present?: true},
@@ -846,8 +833,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               </p>
             <% end %>
 
-            <%!-- Directed by + Starring — avatar pile + inline names --%>
-            <div :if={@directors != [] || @cast != []} class="mt-5 space-y-2.5">
+            <%!-- Directed by + Starring + Studios — compact hero metadata rows --%>
+            <div
+              :if={@directors != [] || @cast != [] || @production_companies != []}
+              class="mt-5 space-y-2.5"
+            >
               <div :if={@directors != []} class="flex items-center gap-2.5 flex-wrap">
                 <span class="text-[10px] font-semibold text-white/55 tracking-[.06em] uppercase shrink-0">
                   Directed by
@@ -925,6 +915,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                   </a>
                 </div>
               </div>
+
+              <ProductionDetails.hero_production_companies production_companies={
+                @production_companies
+              } />
             </div>
 
             <%!-- Actions --%>
@@ -1230,10 +1224,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
           <%!-- NOTABLE COLLABORATIONS --%>
           <section
-            :if={
-              (@key_collabs[:director_actor_reunions] || []) != [] ||
-                (@key_collabs[:actor_partnerships] || []) != []
-            }
+            :if={(@key_collabs[:notable_collaborations] || []) != []}
             id="collaborations"
           >
             <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
@@ -1241,12 +1232,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             </h2>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <NeutralV2Components.n_collaboration_card
-                :for={c <- @key_collabs[:director_actor_reunions] || []}
-                collaboration={collab_shape(c, @timeline_index)}
-              />
-              <NeutralV2Components.n_collaboration_card
-                :for={c <- @key_collabs[:actor_partnerships] || []}
-                collaboration={collab_shape(c, @timeline_index)}
+                :for={c <- @key_collabs[:notable_collaborations] || []}
+                collaboration={collab_shape(c)}
               />
             </div>
             <a

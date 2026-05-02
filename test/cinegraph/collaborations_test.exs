@@ -141,6 +141,66 @@ defmodule Cinegraph.CollaborationsTest do
     end
   end
 
+  describe "find_collaboration_movies/3" do
+    test "returns actor-actor shared films" do
+      actor_a = insert_person!("Lookup Actor A", 902_001)
+      actor_b = insert_person!("Lookup Actor B", 902_002)
+      movie_a = insert_movie!("Lookup Actor Pair First", ~D[2010-01-01])
+      movie_b = insert_movie!("Lookup Actor Pair Second", ~D[2012-01-01])
+
+      for movie <- [movie_a, movie_b] do
+        insert_cast_credit!(movie, actor_a, 0)
+        insert_cast_credit!(movie, actor_b, 1)
+        assert {:ok, %{details: 1}} = Collaborations.rebuild_movie_collaborations(movie.id)
+      end
+
+      assert [
+               %{id: second_id, title: "Lookup Actor Pair Second"},
+               %{id: first_id, title: "Lookup Actor Pair First"}
+             ] =
+               Collaborations.find_collaboration_movies(actor_a.id, actor_b.id,
+                 type: "actor-actor"
+               )
+
+      assert second_id == movie_b.id
+      assert first_id == movie_a.id
+    end
+
+    test "returns actor-director shared films and compatibility wrapper still works" do
+      actor = insert_person!("Lookup Actor", 902_003)
+      director = insert_person!("Lookup Director", 902_004)
+      movie = insert_movie!("Lookup Actor Director", ~D[2015-01-01])
+
+      insert_cast_credit!(movie, actor, 0)
+      insert_crew_credit!(movie, director, "Director")
+      assert {:ok, %{details: 1}} = Collaborations.rebuild_movie_collaborations(movie.id)
+
+      assert [%{id: movie_id, title: "Lookup Actor Director"}] =
+               Collaborations.find_collaboration_movies(actor.id, director.id,
+                 type: "actor-director"
+               )
+
+      assert [%{id: ^movie_id}] = Collaborations.find_actor_director_movies(actor.id, director.id)
+    end
+
+    test "lookup is order-insensitive" do
+      actor_a = insert_person!("Lookup Ordered Actor A", 902_005)
+      actor_b = insert_person!("Lookup Ordered Actor B", 902_006)
+      movie = insert_movie!("Lookup Ordered Pair", ~D[2016-01-01])
+
+      insert_cast_credit!(movie, actor_a, 0)
+      insert_cast_credit!(movie, actor_b, 1)
+      assert {:ok, %{details: 1}} = Collaborations.rebuild_movie_collaborations(movie.id)
+
+      forward = Collaborations.find_collaboration_movies(actor_a.id, actor_b.id, type: :any)
+      reverse = Collaborations.find_collaboration_movies(actor_b.id, actor_a.id, type: :any)
+
+      assert forward == reverse
+      assert [%{id: id}] = forward
+      assert id == movie.id
+    end
+  end
+
   describe "get_frequent_collaborators/1" do
     test "returns collaboration summaries for either side of the relationship" do
       person = insert_person!("Jane Filmmaker", 900_001)

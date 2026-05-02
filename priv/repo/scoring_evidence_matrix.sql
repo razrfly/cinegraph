@@ -285,13 +285,15 @@ SELECT
 
   COALESCE(legacy_score_confidence, 0.0) AS rating_confidence,
 
+  -- evidence_confidence_baseline intentionally keeps rt_tomatometer only in the
+  -- critics LEAST(...) component; the audience/rating component is limited to
+  -- IMDb and TMDb so critic evidence is not counted twice.
   ROUND((
     0.20 * LEAST(1.0, (
       (
         (imdb_rating IS NOT NULL AND imdb_rating > 0)::int +
-        (tmdb_rating IS NOT NULL AND tmdb_rating > 0)::int +
-        (rt_tomatometer IS NOT NULL AND rt_tomatometer > 0)::int
-      )::numeric / 3.0
+        (tmdb_rating IS NOT NULL AND tmdb_rating > 0)::int
+      )::numeric / 2.0
     )) +
     0.15 * LEAST(1.0, (
       (
@@ -340,9 +342,12 @@ SELECT
   END AS evidence_regime,
 
   (canonical_list_count > 0) AS validation_target_canonical_any,
-  (canonical_list_count > 0) AS validation_target_canonical_without_time_machine,
+  (canonical_list_count > 0 AND COALESCE(time_machine_score, 0) <= 0) AS validation_target_canonical_without_time_machine,
   (festival_nomination_count > 0 OR festival_win_count > 0) AS validation_target_award_any,
-  (festival_nomination_count > 0 OR festival_win_count > 0) AS validation_target_award_without_festival,
+  (
+    (festival_nomination_count > 0 OR festival_win_count > 0) AND
+    COALESCE(festival_recognition_score, 0) <= 0
+  ) AS validation_target_award_without_festival,
 
   true AS feature_mask_full,
   true AS feature_mask_without_canonical,
