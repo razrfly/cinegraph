@@ -12,6 +12,7 @@ defmodule Cinegraph.Movies.Search do
   alias Cinegraph.Movies.{DiscoveryRankings, Movie, MovieScoreCache}
   alias Cinegraph.Movies.Query.{Params, CustomFilters, CustomSorting}
   alias Cinegraph.Metrics.ScoringService
+  alias Cinegraph.Workers.MovieScoreCacheWorker
 
   defmacrop score_cache_present_lens_count_fragment(sc) do
     quote do
@@ -25,6 +26,52 @@ defmodule Cinegraph.Movies.Search do
           (COALESCE(?, 0) > 0)::int +
           (COALESCE(?, 0) > 0)::int
         )
+        """,
+        unquote(sc).mob_score,
+        unquote(sc).critics_score,
+        unquote(sc).festival_recognition_score,
+        unquote(sc).time_machine_score,
+        unquote(sc).auteurs_score,
+        unquote(sc).box_office_score
+      )
+    end
+  end
+
+  defmacrop score_cache_present_lens_labels_fragment(sc) do
+    quote do
+      fragment(
+        """
+        ARRAY_REMOVE(ARRAY[
+          CASE WHEN COALESCE(?, 0) > 0 THEN 'mob' END,
+          CASE WHEN COALESCE(?, 0) > 0 THEN 'critics' END,
+          CASE WHEN COALESCE(?, 0) > 0 THEN 'festival_recognition' END,
+          CASE WHEN COALESCE(?, 0) > 0 THEN 'time_machine' END,
+          CASE WHEN COALESCE(?, 0) > 0 THEN 'auteurs' END,
+          CASE WHEN COALESCE(?, 0) > 0 THEN 'box_office' END
+        ], NULL)
+        """,
+        unquote(sc).mob_score,
+        unquote(sc).critics_score,
+        unquote(sc).festival_recognition_score,
+        unquote(sc).time_machine_score,
+        unquote(sc).auteurs_score,
+        unquote(sc).box_office_score
+      )
+    end
+  end
+
+  defmacrop score_cache_missing_lens_labels_fragment(sc) do
+    quote do
+      fragment(
+        """
+        ARRAY_REMOVE(ARRAY[
+          CASE WHEN COALESCE(?, 0) <= 0 THEN 'mob' END,
+          CASE WHEN COALESCE(?, 0) <= 0 THEN 'critics' END,
+          CASE WHEN COALESCE(?, 0) <= 0 THEN 'festival_recognition' END,
+          CASE WHEN COALESCE(?, 0) <= 0 THEN 'time_machine' END,
+          CASE WHEN COALESCE(?, 0) <= 0 THEN 'auteurs' END,
+          CASE WHEN COALESCE(?, 0) <= 0 THEN 'box_office' END
+        ], NULL)
         """,
         unquote(sc).mob_score,
         unquote(sc).critics_score,
@@ -311,10 +358,13 @@ defmodule Cinegraph.Movies.Search do
   end
 
   defp count_plain_score_sort_scoreable_movies(params) do
+    current_version = MovieScoreCacheWorker.current_version()
+
     MovieScoreCache
     |> join(:inner, [sc], m in Movie, on: m.id == sc.movie_id)
     |> where([sc, m], m.import_status == "full")
     |> maybe_released_only_score_cache_movie(params)
+    |> where([sc], sc.calculation_version == ^current_version)
     |> where([sc], not is_nil(sc.overall_score))
     |> where([sc], score_cache_present_lens_count_fragment(sc) >= 2)
     |> Repo.replica().aggregate(:count, :id)
@@ -324,10 +374,13 @@ defmodule Cinegraph.Movies.Search do
     do: []
 
   defp fetch_plain_score_sort_scoreable(params, direction, offset, limit) do
+    current_version = MovieScoreCacheWorker.current_version()
+
     MovieScoreCache
     |> join(:inner, [sc], m in Movie, on: m.id == sc.movie_id)
     |> where([sc, m], m.import_status == "full")
     |> maybe_released_only_score_cache_movie(params)
+    |> where([sc], sc.calculation_version == ^current_version)
     |> where([sc], not is_nil(sc.overall_score))
     |> where([sc], score_cache_present_lens_count_fragment(sc) >= 2)
     |> order_by([sc, m], [
@@ -346,6 +399,9 @@ defmodule Cinegraph.Movies.Search do
     |> select_merge([sc, _m], %{
       overall_score: sc.overall_score,
       raw_cinegraph_score: sc.overall_score,
+      score_confidence: sc.score_confidence,
+      mob_score: sc.mob_score,
+      critics_score: sc.critics_score,
       cinegraph_display_score: sc.overall_score,
       cinegraph_sort_score:
         fragment(
@@ -366,7 +422,26 @@ defmodule Cinegraph.Movies.Search do
         ),
       present_lens_count: score_cache_present_lens_count_fragment(sc),
       missing_lens_count: fragment("6 - ?", score_cache_present_lens_count_fragment(sc)),
-      score_hidden_reason: fragment("'none'")
+      present_lens_labels: score_cache_present_lens_labels_fragment(sc),
+      missing_lens_labels: score_cache_missing_lens_labels_fragment(sc),
+      evidence_confidence:
+        fragment(
+          "ROUND((?::numeric / 6.0), 3)::double precision",
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      cohort_percentile: fragment("NULL::double precision"),
+      score_hidden_reason: fragment("'none'"),
+      score_explanation_short:
+        fragment(
+          "CASE WHEN ? BETWEEN 2 AND 3 THEN 'Limited confidence' WHEN ? >= 5 THEN 'High confidence' ELSE 'Medium confidence' END",
+          score_cache_present_lens_count_fragment(sc),
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      score_explanation_detail:
+        fragment(
+          "CASE WHEN ? BETWEEN 2 AND 3 THEN 'This score is based on limited evidence and may move as more lenses become available.' ELSE 'This movie has enough independent evidence for a CineGraph score.' END",
+          score_cache_present_lens_count_fragment(sc)
+        )
     })
     |> Repo.replica().all()
   end
@@ -374,8 +449,12 @@ defmodule Cinegraph.Movies.Search do
   defp fetch_plain_score_sort_insufficient(_params, _offset, limit) when limit <= 0, do: []
 
   defp fetch_plain_score_sort_insufficient(params, offset, limit) do
+    current_version = MovieScoreCacheWorker.current_version()
+
     Movie
-    |> join(:left, [m], sc in MovieScoreCache, on: sc.movie_id == m.id)
+    |> join(:left, [m], sc in MovieScoreCache,
+      on: sc.movie_id == m.id and sc.calculation_version == ^current_version
+    )
     |> where([m, sc], m.import_status == "full")
     |> maybe_released_only_movie_score_cache(params)
     |> where(
@@ -406,11 +485,36 @@ defmodule Cinegraph.Movies.Search do
           sc,
           score_cache_present_lens_count_fragment(sc)
         ),
+      present_lens_labels:
+        fragment(
+          "CASE WHEN ?.id IS NULL THEN ARRAY[]::text[] ELSE ? END",
+          sc,
+          score_cache_present_lens_labels_fragment(sc)
+        ),
+      missing_lens_labels:
+        fragment(
+          "CASE WHEN ?.id IS NULL THEN ARRAY['mob', 'critics', 'festival_recognition', 'time_machine', 'auteurs', 'box_office'] ELSE ? END",
+          sc,
+          score_cache_missing_lens_labels_fragment(sc)
+        ),
+      evidence_confidence:
+        fragment(
+          "CASE WHEN ?.id IS NULL THEN 0.0 ELSE ROUND((?::numeric / 6.0), 3)::double precision END",
+          sc,
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      cohort_percentile: fragment("NULL::double precision"),
       score_hidden_reason:
         fragment(
           "CASE WHEN ?.id IS NULL OR ? IS NULL THEN 'no_score_cache' ELSE 'not_enough_evidence' END",
           sc,
           sc.overall_score
+        ),
+      score_explanation_short: fragment("'Not enough evidence yet'"),
+      score_explanation_detail:
+        fragment(
+          "CASE WHEN ?.id IS NULL THEN 'No CineGraph score cache is available for this movie yet.' ELSE 'CineGraph needs at least 2 independent evidence lenses before showing a fair numeric score.' END",
+          sc
         )
     })
     |> Repo.replica().all()

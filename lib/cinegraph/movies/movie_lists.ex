@@ -83,7 +83,8 @@ defmodule Cinegraph.Movies.MovieLists do
     attrs = %{
       last_import_at: DateTime.utc_now(),
       last_import_status: status,
-      total_imports: movie_list.total_imports + 1
+      total_imports: (movie_list.total_imports || 0) + 1,
+      metadata: movie_list.metadata || %{}
     }
 
     movie_list

@@ -117,12 +117,18 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
         {:error, :not_found}
 
       list ->
-        # Update metadata with expected count
-        updated_metadata = Map.put(list.metadata || %{}, "expected_movie_count", expected_count)
+        status = completion_status(actual_count, expected_count)
+
+        updated_metadata =
+          (list.metadata || %{})
+          |> Map.put("expected_movie_count", expected_count)
+          |> Map.put("actual_movie_count", actual_count)
+          |> Map.put("last_import_finished_at", DateTime.utc_now() |> DateTime.to_iso8601())
+          |> maybe_put_error(status, actual_count, expected_count)
 
         attrs = %{
           last_import_at: DateTime.utc_now(),
-          last_import_status: "success",
+          last_import_status: status,
           metadata: updated_metadata,
           total_imports: (list.total_imports || 0) + 1
         }
@@ -130,7 +136,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
         case MovieLists.update_movie_list(list, attrs) do
           {:ok, updated_list} ->
             Logger.info(
-              "Import complete for #{list_key}: #{actual_count} movies (expected: #{expected_count || "unknown"})"
+              "Import #{status} for #{list_key}: #{actual_count} movies (expected: #{expected_count || "unknown"})"
             )
 
             # Broadcast completion
@@ -162,12 +168,43 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
         :ok
 
       list ->
+        metadata =
+          (list.metadata || %{})
+          |> Map.put("last_import_error", reason)
+          |> Map.put("last_import_finished_at", DateTime.utc_now() |> DateTime.to_iso8601())
+
         MovieLists.update_movie_list(list, %{
           last_import_at: DateTime.utc_now(),
-          last_import_status: "failed: #{reason}",
+          last_import_status: "failed",
+          metadata: metadata,
           total_imports: (list.total_imports || 0) + 1
         })
     end
+  end
+
+  defp completion_status(actual_count, expected_count)
+       when is_integer(expected_count) and expected_count > 0 do
+    cond do
+      actual_count == 0 -> "failed"
+      actual_count < expected_count -> "partial"
+      true -> "success"
+    end
+  end
+
+  defp completion_status(actual_count, _expected_count) do
+    if actual_count > 0, do: "success", else: "failed"
+  end
+
+  defp maybe_put_error(metadata, "failed", actual_count, expected_count) do
+    Map.put(
+      metadata,
+      "last_import_error",
+      "actual movie count #{actual_count} did not satisfy expected count #{expected_count || "unknown"}"
+    )
+  end
+
+  defp maybe_put_error(metadata, _status, _actual_count, _expected_count) do
+    Map.delete(metadata, "last_import_error")
   end
 
   defp schedule_next_check(args) do
