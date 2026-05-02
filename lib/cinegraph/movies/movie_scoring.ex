@@ -4,6 +4,9 @@ defmodule Cinegraph.Movies.MovieScoring do
   Extracted from LiveView to improve separation of concerns.
   """
 
+  import Ecto.Query
+
+  alias Cinegraph.Movies.ExternalMetric
   alias Cinegraph.Repo
   alias Cinegraph.Scoring.{FestivalPrestige, Lenses}
   alias Cinegraph.Metrics.ScoringService
@@ -338,25 +341,17 @@ defmodule Cinegraph.Movies.MovieScoring do
     if movie_ids == [] do
       %{}
     else
-      query = """
-      SELECT movie_id, AVG(value)
-      FROM external_metrics
-      WHERE movie_id = ANY($1::int[])
-        AND source IN ('imdb', 'tmdb')
-        AND metric_type = 'rating_average'
-      GROUP BY movie_id
-      """
-
-      case Repo.query(query, [movie_ids]) do
-        {:ok, %{rows: rows}} ->
-          Map.new(rows, fn [movie_id, score] ->
-            score_val = normalize_number(score)
-            {movie_id, if(score_val, do: Float.round(score_val, 1), else: nil)}
-          end)
-
-        _ ->
-          %{}
-      end
+      ExternalMetric
+      |> where([em], em.movie_id in ^movie_ids)
+      |> where([em], em.source in ["imdb", "tmdb"])
+      |> where([em], em.metric_type == "rating_average")
+      |> group_by([em], em.movie_id)
+      |> select([em], {em.movie_id, avg(em.value)})
+      |> Repo.all()
+      |> Map.new(fn {movie_id, score} ->
+        score_val = normalize_number(score)
+        {movie_id, if(score_val, do: Float.round(score_val, 1), else: nil)}
+      end)
     end
   end
 

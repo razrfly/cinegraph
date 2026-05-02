@@ -70,6 +70,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetails do
         <a
           :if={@overflow_count > 0}
           href="#cast"
+          data-scroll-to="cast"
           class="ml-1 text-blue-300 hover:text-blue-200 no-underline"
         >
           +{@overflow_count} more
