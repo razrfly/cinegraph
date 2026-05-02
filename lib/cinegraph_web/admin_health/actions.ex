@@ -131,6 +131,6 @@ defmodule CinegraphWeb.AdminHealth.Actions do
       "AdminHealth.Actions enqueue partial failure: #{ok_count} ok, #{length(errors)} errors"
     )
 
-    {:ok, ok_count}
+    {:error, %{ok: ok_count, errors: errors}}
   end
 end

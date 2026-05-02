@@ -29,7 +29,8 @@ defmodule Cinegraph.Maintenance.RefreshAvailabilityTest do
 
       [job] = Repo.all(Oban.Job)
       assert job.worker == "Cinegraph.Workers.MovieAvailabilityRefreshWorker"
-      refute Map.has_key?(job.args, "regions")
+      assert "US" in job.args["regions"]
+      assert "GB" in job.args["regions"]
       assert job.args["force"] == false
     end
 

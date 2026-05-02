@@ -11,6 +11,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Drift do
       mix cinegraph.prod.drift movies    [--json] [--limit N] [--year YYYY]
       mix cinegraph.prod.drift festivals [--json] [--limit N] [--org SLUG]
       mix cinegraph.prod.drift ratings   [--json] [--limit N]
+      mix cinegraph.prod.drift availability [--json] [--limit N]
 
   Requires the `kamal` CLI on PATH. See MAINTENANCE.md → "Audits & ad-hoc
   reports".
@@ -28,7 +29,8 @@ defmodule Mix.Tasks.Cinegraph.Prod.Drift do
     "people" => {"Cinegraph.Health.Drift.People", [:limit]},
     "movies" => {"Cinegraph.Health.Drift.Movies", [:limit, :year]},
     "festivals" => {"Cinegraph.Health.Drift.Festivals", [:limit, :org]},
-    "ratings" => {"Cinegraph.Health.Drift.Ratings", [:limit]}
+    "ratings" => {"Cinegraph.Health.Drift.Ratings", [:limit]},
+    "availability" => {"Cinegraph.Health.Drift.Availability", [:limit]}
   }
 
   @impl Mix.Task
@@ -44,14 +46,19 @@ defmodule Mix.Tasks.Cinegraph.Prod.Drift do
 
     {module, allowed} =
       case Map.fetch(@domain_options, domain) do
-        {:ok, v} -> v
-        :error -> usage_error("unknown domain '#{domain}' — try people|movies|festivals|ratings")
+        {:ok, v} ->
+          v
+
+        :error ->
+          usage_error(
+            "unknown domain '#{domain}' — try people|movies|festivals|ratings|availability"
+          )
       end
 
     runner_opts = Keyword.drop(opts, [:json])
     validate_opts!(runner_opts, domain, allowed)
 
-    expr = ~s|IO.puts(Jason.encode!(#{module}.all(#{build_opts_kw(runner_opts)})))|
+    expr = build_expression(module, runner_opts)
 
     case ProdRpc.eval_json(expr) do
       {:ok, drift} -> ProdRpc.print(drift, opts)
@@ -70,6 +77,11 @@ defmodule Mix.Tasks.Cinegraph.Prod.Drift do
       |> Enum.join(", ")
 
     "[#{parts}]"
+  end
+
+  @doc false
+  def build_expression(module, opts) when is_binary(module) do
+    ~s|IO.puts(Jason.encode!(#{module}.all(#{build_opts_kw(opts)})))|
   end
 
   defp reject_invalid_switches!([]), do: :ok
@@ -100,6 +112,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Drift do
     Mix.shell().info("  mix cinegraph.prod.drift movies    [--json] [--limit N] [--year YYYY]")
     Mix.shell().info("  mix cinegraph.prod.drift festivals [--json] [--limit N] [--org SLUG]")
     Mix.shell().info("  mix cinegraph.prod.drift ratings   [--json] [--limit N]")
+    Mix.shell().info("  mix cinegraph.prod.drift availability [--json] [--limit N]")
     System.halt(1)
   end
 end

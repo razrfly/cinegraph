@@ -8,6 +8,7 @@ defmodule Mix.Tasks.Cinegraph.Drift do
       mix cinegraph.drift movies [--json] [--year YYYY]   (PR 4)
       mix cinegraph.drift festivals [--json] [--org SLUG] (PR 4)
       mix cinegraph.drift ratings [--json]                (PR 4)
+      mix cinegraph.drift availability [--json] [--limit N]
 
   ## Options
 
@@ -49,8 +50,13 @@ defmodule Mix.Tasks.Cinegraph.Drift do
       "ratings" ->
         runner_opts |> validate_opts!(:ratings) |> run_ratings(json?)
 
+      "availability" ->
+        runner_opts |> validate_opts!(:availability) |> run_availability(json?)
+
       other ->
-        usage_error("unknown domain '#{other}' — try people|movies|festivals|ratings")
+        usage_error(
+          "unknown domain '#{other}' — try people|movies|festivals|ratings|availability"
+        )
     end
   end
 
@@ -68,7 +74,8 @@ defmodule Mix.Tasks.Cinegraph.Drift do
     people: [:limit],
     movies: [:limit, :year],
     festivals: [:limit, :org],
-    ratings: [:limit]
+    ratings: [:limit],
+    availability: [:limit]
   }
 
   defp validate_opts!(opts, domain) do
@@ -98,6 +105,9 @@ defmodule Mix.Tasks.Cinegraph.Drift do
 
   defp run_ratings(opts, json?),
     do: run_domain(:ratings, &Cinegraph.Health.Drift.Ratings.all/1, opts, json?)
+
+  defp run_availability(opts, json?),
+    do: run_domain(:availability, &Cinegraph.Health.Drift.Availability.all/1, opts, json?)
 
   defp run_domain(domain, runner, opts, json?) do
     results = runner.(opts)
@@ -198,6 +208,7 @@ defmodule Mix.Tasks.Cinegraph.Drift do
     Mix.shell().info("  mix cinegraph.drift movies    [--json] [--limit N] [--year YYYY]")
     Mix.shell().info("  mix cinegraph.drift festivals [--json] [--limit N] [--org SLUG]")
     Mix.shell().info("  mix cinegraph.drift ratings   [--json] [--limit N]")
+    Mix.shell().info("  mix cinegraph.drift availability [--json] [--limit N]")
     System.halt(1)
   end
 end

@@ -99,6 +99,13 @@ defmodule Cinegraph.Movies.Availability do
 
   def configured_regions, do: @default_regions
   def default_region, do: @default_region
+  def supported_regions, do: @region_names |> Map.keys() |> Enum.sort()
+
+  def supported_region?(region) when is_binary(region) do
+    Map.has_key?(@region_names, normalize_region(region))
+  end
+
+  def supported_region?(_region), do: false
 
   @doc """
   Syncs the watch-provider catalog from TMDb for the selected regions.
