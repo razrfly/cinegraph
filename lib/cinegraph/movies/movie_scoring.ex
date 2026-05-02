@@ -341,13 +341,18 @@ defmodule Cinegraph.Movies.MovieScoring do
     if movie_ids == [] do
       %{}
     else
-      ExternalMetric
-      |> where([em], em.movie_id in ^movie_ids)
-      |> where([em], em.source in ["imdb", "tmdb"])
-      |> where([em], em.metric_type == "rating_average")
-      |> group_by([em], em.movie_id)
-      |> select([em], {em.movie_id, avg(em.value)})
-      |> Repo.replica().all()
+      query =
+        ExternalMetric
+        |> where([em], em.movie_id in ^movie_ids)
+        |> where([em], em.source in ["imdb", "tmdb"])
+        |> where([em], em.metric_type == "rating_average")
+        |> group_by([em], em.movie_id)
+        |> select([em], {em.movie_id, avg(em.value)})
+
+      repo = if Repo.in_transaction?(), do: Repo, else: Repo.replica()
+
+      query
+      |> repo.all()
       |> Map.new(fn {movie_id, score} ->
         score_val = normalize_number(score)
         {movie_id, if(score_val, do: Float.round(score_val, 1), else: nil)}
