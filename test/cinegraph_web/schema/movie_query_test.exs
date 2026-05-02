@@ -224,6 +224,15 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
             critics
             overall
             confidence
+            displayScore
+            sortScore
+            scoreabilityState
+            scoreConfidenceLabel
+            presentLensCount
+            missingLensCount
+            presentLensLabels
+            missingLensLabels
+            scoreHiddenReason
             disparityCategory
           }
         }
@@ -236,7 +245,76 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
       assert scores["critics"] == 8.2
       assert scores["overall"] == 6.8
       assert scores["confidence"] == 0.85
+      assert scores["displayScore"] == 6.8
+      assert_in_delta scores["sortScore"], 6.8, 0.001
+      assert scores["scoreabilityState"] == "scoreable"
+      assert scores["scoreConfidenceLabel"] == "high"
+      assert scores["presentLensCount"] == 6
+      assert scores["missingLensCount"] == 0
+
+      assert scores["presentLensLabels"] == [
+               "mob",
+               "critics",
+               "festival_recognition",
+               "time_machine",
+               "auteurs",
+               "box_office"
+             ]
+
+      assert scores["missingLensLabels"] == []
+      assert scores["scoreHiddenReason"] == "none"
       assert scores["disparityCategory"] == "critics_darling"
+    end
+
+    test "lens scores hide public display score when evidence is insufficient" do
+      movie = insert_movie(%{tmdb_id: 60_003, title: "Sparse Cached Movie"})
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      {:ok, _} =
+        %Cinegraph.Movies.MovieScoreCache{}
+        |> Cinegraph.Movies.MovieScoreCache.changeset(%{
+          movie_id: movie.id,
+          mob_score: 7.5,
+          critics_score: 0.0,
+          festival_recognition_score: 0.0,
+          time_machine_score: 0.0,
+          auteurs_score: 0.0,
+          box_office_score: 0.0,
+          overall_score: 1.2,
+          score_confidence: 0.25,
+          disparity_score: 0.0,
+          disparity_category: "perfect_harmony",
+          unpredictability_score: 0.0,
+          calculated_at: now,
+          calculation_version: "1.0"
+        })
+        |> Repo.insert()
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          lensScores {
+            overall
+            displayScore
+            sortScore
+            scoreabilityState
+            scoreConfidenceLabel
+            presentLensCount
+            scoreHiddenReason
+          }
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      scores = result["lensScores"]
+      assert scores["overall"] == 1.2
+      assert scores["displayScore"] == nil
+      assert scores["sortScore"] == nil
+      assert scores["scoreabilityState"] == "insufficient_evidence"
+      assert scores["scoreConfidenceLabel"] == "insufficient"
+      assert scores["presentLensCount"] == 1
+      assert scores["scoreHiddenReason"] == "not_enough_evidence"
     end
   end
 

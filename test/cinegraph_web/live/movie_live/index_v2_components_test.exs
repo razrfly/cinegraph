@@ -4,7 +4,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2ComponentsTest do
   import Phoenix.LiveViewTest
   import CinegraphWeb.MovieLive.IndexV2Components
 
-  alias Cinegraph.Movies.{Credit, Genre, Movie, MovieScoreCache, Person}
+  alias Cinegraph.Movies.{Credit, Genre, Movie, MovieScoreCache, MovieScoreability, Person}
   alias CinegraphWeb.MovieLive.GenreEmoji
 
   describe "results/1" do
@@ -58,6 +58,64 @@ defmodule CinegraphWeb.MovieLive.IndexV2ComponentsTest do
       assert html =~ "10%"
       refute html =~ "80%"
       refute html =~ "100%"
+    end
+
+    test "renders scoreability states for public CineGraph card scores" do
+      scoreable = %Movie{
+        id: 44,
+        title: "Scoreable Movie",
+        release_date: ~D[2020-01-01],
+        slug: "scoreable-movie-2020",
+        scoreability: %MovieScoreability{
+          cinegraph_display_score: 8.4,
+          scoreability_state: "scoreable",
+          score_confidence_label: "high",
+          present_lens_count: 5,
+          missing_lens_count: 1,
+          present_lens_labels: ~w(mob critics festival_recognition time_machine auteurs),
+          missing_lens_labels: ~w(box_office)
+        }
+      }
+
+      limited = %Movie{
+        id: 45,
+        title: "Limited Movie",
+        release_date: ~D[2021-01-01],
+        slug: "limited-movie-2021",
+        scoreability: %MovieScoreability{
+          cinegraph_display_score: 6.8,
+          scoreability_state: "limited",
+          score_confidence_label: "low",
+          present_lens_count: 2,
+          missing_lens_count: 4,
+          present_lens_labels: ~w(mob critics),
+          missing_lens_labels: ~w(festival_recognition time_machine auteurs box_office)
+        }
+      }
+
+      insufficient = %Movie{
+        id: 46,
+        title: "Sparse Movie",
+        release_date: ~D[2022-01-01],
+        slug: "sparse-movie-2022",
+        scoreability: %MovieScoreability{
+          cinegraph_display_score: nil,
+          scoreability_state: "insufficient_evidence",
+          score_confidence_label: "insufficient",
+          present_lens_count: 1,
+          missing_lens_count: 5,
+          present_lens_labels: ~w(critics),
+          missing_lens_labels: ~w(mob festival_recognition time_machine auteurs box_office)
+        }
+      }
+
+      html = render_component(&results/1, movies: [scoreable, limited, insufficient])
+
+      assert html =~ "8.4"
+      assert html =~ "6.8"
+      assert html =~ "High confidence · 5 of 6 evidence lenses"
+      assert html =~ "Limited confidence · 2 of 6 evidence lenses"
+      assert html =~ "Not enough evidence yet"
     end
   end
 

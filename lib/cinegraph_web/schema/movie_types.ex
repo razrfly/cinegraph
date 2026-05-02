@@ -38,6 +38,21 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :box_office, :float, description: "Box office performance — 0-10"
     field :overall, :float, description: "Weighted overall score — 0-10"
     field :confidence, :float, description: "Data confidence — 0-1"
+
+    field :display_score, :float,
+      description: "Public CineGraph score, null when evidence is insufficient"
+
+    field :sort_score, :float, description: "Evidence-adjusted CineGraph sort score"
+    field :scoreability_state, :string, description: "scoreable | limited | insufficient_evidence"
+    field :score_confidence_label, :string, description: "high | medium | low | insufficient"
+    field :present_lens_count, :integer, description: "Number of available evidence lenses"
+    field :missing_lens_count, :integer, description: "Number of unavailable evidence lenses"
+    field :present_lens_labels, list_of(:string), description: "Available evidence lens keys"
+    field :missing_lens_labels, list_of(:string), description: "Unavailable evidence lens keys"
+
+    field :score_hidden_reason, :string,
+      description: "none | no_score_cache | not_enough_evidence"
+
     field :disparity_score, :float, description: "Mob vs critics gap"
 
     field :disparity_category, :string,

@@ -326,6 +326,29 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
   # Sorts by pre-computed overall_score from movie_score_caches
   # ---------------------------------------------------------------------------
 
+  defmacrop score_cache_present_lens_count_fragment(sc) do
+    quote do
+      fragment(
+        """
+        (
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int
+        )
+        """,
+        unquote(sc).mob_score,
+        unquote(sc).critics_score,
+        unquote(sc).festival_recognition_score,
+        unquote(sc).time_machine_score,
+        unquote(sc).auteurs_score,
+        unquote(sc).box_office_score
+      )
+    end
+  end
+
   # Sorts by the pre-computed overall_score when no preset weights are given
   defp apply_score_cache_sort(query, direction, nil) do
     order_func = if direction == :desc, do: :desc_nulls_last, else: :asc_nulls_last
@@ -333,13 +356,116 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
     if has_group_by?(query) do
       query
       |> maybe_join_score_cache()
-      |> select_merge([m, score_cache: sc], %{overall_score: fragment("MAX(?)", sc.overall_score)})
-      |> order_by([score_cache: sc], [{^order_func, fragment("MAX(?)", sc.overall_score)}])
+      |> select_merge([m, score_cache: sc], %{
+        overall_score:
+          fragment(
+            "CASE WHEN MAX(?) >= 2 THEN MAX(?) ELSE NULL END",
+            score_cache_present_lens_count_fragment(sc),
+            sc.overall_score
+          ),
+        cinegraph_display_score:
+          fragment(
+            "CASE WHEN MAX(?) >= 2 THEN MAX(?) ELSE NULL END",
+            score_cache_present_lens_count_fragment(sc),
+            sc.overall_score
+          ),
+        cinegraph_sort_score:
+          fragment(
+            "CASE WHEN MAX(?) >= 2 THEN MAX(?) * (MAX(?)::float / 6.0) ELSE NULL END",
+            score_cache_present_lens_count_fragment(sc),
+            sc.overall_score,
+            score_cache_present_lens_count_fragment(sc)
+          ),
+        scoreability_state:
+          fragment(
+            "CASE WHEN MAX(?.id) IS NULL THEN 'insufficient_evidence' WHEN MAX(?) >= 4 THEN 'scoreable' WHEN MAX(?) >= 2 THEN 'limited' ELSE 'insufficient_evidence' END",
+            sc,
+            score_cache_present_lens_count_fragment(sc),
+            score_cache_present_lens_count_fragment(sc)
+          ),
+        present_lens_count: fragment("MAX(?)", score_cache_present_lens_count_fragment(sc)),
+        missing_lens_count: fragment("6 - MAX(?)", score_cache_present_lens_count_fragment(sc))
+      })
+      |> order_by([score_cache: sc], [
+        {:asc,
+         fragment(
+           "CASE WHEN MAX(?.id) IS NOT NULL AND MAX(?) >= 2 THEN 0 ELSE 1 END",
+           sc,
+           score_cache_present_lens_count_fragment(sc)
+         )},
+        {^order_func,
+         fragment(
+           "CASE WHEN MAX(?) >= 2 THEN MAX(?) * (MAX(?)::float / 6.0) ELSE NULL END",
+           score_cache_present_lens_count_fragment(sc),
+           sc.overall_score,
+           score_cache_present_lens_count_fragment(sc)
+         )}
+      ])
     else
       query
       |> maybe_join_score_cache()
-      |> select_merge([m, score_cache: sc], %{overall_score: sc.overall_score})
-      |> order_by([score_cache: sc], [{^order_func, sc.overall_score}])
+      |> select_merge([m, score_cache: sc], %{
+        overall_score:
+          fragment(
+            "CASE WHEN ? >= 2 THEN ? ELSE NULL END",
+            score_cache_present_lens_count_fragment(sc),
+            sc.overall_score
+          ),
+        raw_cinegraph_score: sc.overall_score,
+        cinegraph_display_score:
+          fragment(
+            "CASE WHEN ? >= 2 THEN ? ELSE NULL END",
+            score_cache_present_lens_count_fragment(sc),
+            sc.overall_score
+          ),
+        cinegraph_sort_score:
+          fragment(
+            "CASE WHEN ? >= 2 THEN ? * (?::float / 6.0) ELSE NULL END",
+            score_cache_present_lens_count_fragment(sc),
+            sc.overall_score,
+            score_cache_present_lens_count_fragment(sc)
+          ),
+        scoreability_state:
+          fragment(
+            "CASE WHEN ?.id IS NULL THEN 'insufficient_evidence' WHEN ? >= 4 THEN 'scoreable' WHEN ? >= 2 THEN 'limited' ELSE 'insufficient_evidence' END",
+            sc,
+            score_cache_present_lens_count_fragment(sc),
+            score_cache_present_lens_count_fragment(sc)
+          ),
+        score_confidence_label:
+          fragment(
+            "CASE WHEN ?.id IS NULL OR ? <= 1 THEN 'insufficient' WHEN ? >= 5 THEN 'high' WHEN ? >= 3 THEN 'medium' ELSE 'low' END",
+            sc,
+            score_cache_present_lens_count_fragment(sc),
+            score_cache_present_lens_count_fragment(sc),
+            score_cache_present_lens_count_fragment(sc)
+          ),
+        present_lens_count: score_cache_present_lens_count_fragment(sc),
+        missing_lens_count: fragment("6 - ?", score_cache_present_lens_count_fragment(sc)),
+        score_hidden_reason:
+          fragment(
+            "CASE WHEN ?.id IS NULL THEN 'no_score_cache' WHEN ? <= 1 THEN 'not_enough_evidence' ELSE 'none' END",
+            sc,
+            score_cache_present_lens_count_fragment(sc)
+          )
+      })
+      |> order_by([m, score_cache: sc], [
+        {:asc,
+         fragment(
+           "CASE WHEN ?.id IS NOT NULL AND ? >= 2 THEN 0 ELSE 1 END",
+           sc,
+           score_cache_present_lens_count_fragment(sc)
+         )},
+        {^order_func,
+         fragment(
+           "CASE WHEN ? >= 2 THEN ? * (?::float / 6.0) ELSE NULL END",
+           score_cache_present_lens_count_fragment(sc),
+           sc.overall_score,
+           score_cache_present_lens_count_fragment(sc)
+         )},
+        {:desc_nulls_last, m.release_date},
+        {:asc, m.id}
+      ])
     end
   end
 

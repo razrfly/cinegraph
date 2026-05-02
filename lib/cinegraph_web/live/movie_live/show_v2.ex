@@ -125,6 +125,74 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   defp movie_slug_or_id(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
   defp movie_slug_or_id(%{id: id}), do: id
 
+  defp list_appearance_card(assigns) do
+    assigns = assign(assigns, :href, list_appearance_href(assigns.list))
+
+    ~H"""
+    <%= if @href do %>
+      <.link
+        navigate={@href}
+        class="group block overflow-hidden rounded-lg border border-mist-950/10 bg-mist-50 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
+      >
+        <.list_appearance_card_inner list={@list} />
+      </.link>
+    <% else %>
+      <div class="overflow-hidden rounded-lg border border-mist-950/10 bg-mist-50">
+        <.list_appearance_card_inner list={@list} />
+      </div>
+    <% end %>
+    """
+  end
+
+  defp list_appearance_card_inner(assigns) do
+    ~H"""
+    <% image = list_appearance_image(@list) %>
+    <div class={[
+      "relative aspect-[8/5] overflow-hidden bg-gradient-to-br",
+      list_appearance_visual_class(@list)
+    ]}>
+      <img
+        :if={image}
+        src={image}
+        alt=""
+        loading="lazy"
+        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+      />
+      <div
+        :if={!image}
+        class="grid h-full w-full place-items-center px-5 text-center font-display italic text-[34px] leading-none text-mist-950"
+      >
+        {list_appearance_initials(@list)}
+      </div>
+      <div class="absolute bottom-3 right-3 rounded-md bg-mist-50/90 px-2 py-1 text-[13px] font-semibold text-mist-950 shadow-sm">
+        {list_appearance_rank(@list)}
+      </div>
+    </div>
+    <div class="px-4 py-4">
+      <div
+        :if={eyebrow = list_appearance_eyebrow(@list)}
+        class="mb-2 text-[10.5px] font-semibold uppercase tracking-[.08em] text-mist-500"
+      >
+        {eyebrow}
+      </div>
+      <h3 class="line-clamp-2 text-[17px] font-semibold leading-snug text-mist-950">
+        {@list.list_name}
+      </h3>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <NeutralV2Components.n_pill tone="ink" size="xs">
+          {list_appearance_rank(@list)}
+        </NeutralV2Components.n_pill>
+        <NeutralV2Components.n_pill :if={@list.short_name} tone="neutral" size="xs">
+          {@list.short_name}
+        </NeutralV2Components.n_pill>
+      </div>
+      <div :if={list_appearance_href(@list)} class="mt-4 text-[12px] font-semibold text-mist-950">
+        View list →
+      </div>
+    </div>
+    """
+  end
+
   # ─── Render ────────────────────────────────────────────────────────
 
   @impl true
@@ -294,6 +362,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <section id="score">
             <NeutralV2Components.n_score_panel
               scores={@scores}
+              scoreability={@scoreability}
               disparity_label={disparity_label(@disparity_data[:disparity_category])}
               disparity_summary={disparity_summary(@disparity_data, @scores)}
             />
@@ -548,31 +617,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <section :if={@canon_lists != []} id="lists">
             <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
               On canonical lists
+              <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                {length(@canon_lists)} {pluralize_str(length(@canon_lists), "appearance")}
+              </span>
             </h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div
-                :for={l <- @canon_lists}
-                class="bg-mist-50 border border-mist-950/10 rounded-lg p-5"
-              >
-                <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
-                  {l.list_authority || "List"}
-                  <span :if={l.list_year}>{" · #{l.list_year}"}</span>
-                </div>
-                <div class="mt-1 font-display italic text-[18px] text-mist-950 leading-tight">
-                  {l.list_name}
-                </div>
-                <div class="mt-3 flex items-baseline gap-3 text-[12px] text-mist-700 tabular-nums">
-                  <span :if={l.rank}>
-                    <b class="text-mist-950 font-semibold">#{l.rank}</b>
-                  </span>
-                  <span :if={l.prestige_score}>
-                    prestige <b class="text-mist-950 font-semibold">{l.prestige_score}</b>
-                  </span>
-                  <span :if={l[:award_category]} class="text-mist-500">
-                    {l.award_category}
-                  </span>
-                </div>
-              </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <.list_appearance_card :for={l <- @canon_lists} list={l} />
             </div>
           </section>
 

@@ -52,7 +52,9 @@ defmodule Cinegraph.ProdRpcTest do
 
       ensure_started = "Application.ensure_all_started(:cinegraph)"
 
-      fetch_config_index = assert_index(shell_cmd, "oban_config = Application.fetch_env!(:cinegraph, Oban)")
+      fetch_config_index =
+        assert_index(shell_cmd, "oban_config = Application.fetch_env!(:cinegraph, Oban)")
+
       capture_queues_index = assert_index(shell_cmd, capture_known_queues)
       background_index = assert_index(shell_cmd, disable_background)
       oban_config_index = assert_index(shell_cmd, disable_oban_processing)
