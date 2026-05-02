@@ -138,9 +138,9 @@ thresholds =
   WITH thresholds(min_lenses) AS (VALUES (0), (2), (3), (4))
   SELECT
     (min_lenses::text || '+ lenses') AS threshold,
-    COUNT(*) FILTER (WHERE present_lens_count >= min_lenses AND raw_cinegraph_score IS NOT NULL) AS visible_rows,
+    COUNT(*) FILTER (WHERE present_lens_count >= min_lenses AND cinegraph_display_score IS NOT NULL) AS visible_rows,
     ROUND(
-      100.0 * COUNT(*) FILTER (WHERE present_lens_count >= min_lenses AND raw_cinegraph_score IS NOT NULL) /
+      100.0 * COUNT(*) FILTER (WHERE present_lens_count >= min_lenses AND cinegraph_display_score IS NOT NULL) /
       NULLIF(COUNT(*), 0),
       2
     ) AS visible_pct

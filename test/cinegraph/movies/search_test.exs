@@ -166,6 +166,92 @@ defmodule Cinegraph.Movies.SearchTest do
 
       assert Enum.map(movies, & &1.overall_score) == [8.0, 7.0, nil]
     end
+
+    test "plain score sort paginates across the scoreable and insufficient boundary" do
+      first = insert_movie!("Scoreability Page First", release_date: ~D[2020-01-01])
+      second = insert_movie!("Scoreability Page Second", release_date: ~D[2021-01-01])
+      sparse_newer = insert_movie!("Scoreability Page Sparse Newer", release_date: ~D[2024-01-01])
+      sparse_older = insert_movie!("Scoreability Page Sparse Older", release_date: ~D[2023-01-01])
+
+      insert_score_cache!(first, 9.0, [9.0, 9.0, 9.0, 9.0, 9.0, 9.0])
+      insert_score_cache!(second, 8.0, [8.0, 8.0, 8.0, 8.0, 8.0, 8.0])
+      insert_score_cache!(sparse_newer, 10.0, [10.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+      insert_score_cache!(sparse_older, 9.5, [9.5, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+      assert {:ok, {page_1, meta_1}} =
+               Search.search_movies_uncached(%{
+                 "sort" => "score_desc",
+                 "per_page" => "3",
+                 "page" => "1"
+               })
+
+      assert {:ok, {page_2, meta_2}} =
+               Search.search_movies_uncached(%{
+                 "sort" => "score_desc",
+                 "per_page" => "3",
+                 "page" => "2"
+               })
+
+      assert movie_titles(page_1) == [
+               first.title,
+               second.title,
+               sparse_newer.title
+             ]
+
+      assert movie_titles(page_2) == [sparse_older.title]
+      assert meta_1.total_count == 4
+      assert meta_1.total_pages == 2
+      assert meta_2.current_page == 2
+    end
+
+    test "ascending score sort keeps insufficient-evidence movies after scoreable movies" do
+      high = insert_movie!("Scoreability Asc High", release_date: ~D[2020-01-01])
+      low = insert_movie!("Scoreability Asc Low", release_date: ~D[2021-01-01])
+      insufficient = insert_movie!("Scoreability Asc Sparse", release_date: ~D[2022-01-01])
+
+      insert_score_cache!(high, 9.0, [9.0, 9.0, 9.0, 9.0, 9.0, 9.0])
+      insert_score_cache!(low, 3.0, [3.0, 3.0, 0.0, 0.0, 0.0, 0.0])
+      insert_score_cache!(insufficient, 1.0, [1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+      assert {:ok, {movies, _meta}} =
+               Search.search_movies_uncached(%{
+                 "sort" => "score_asc",
+                 "per_page" => "10"
+               })
+
+      assert movie_titles(movies) == [
+               low.title,
+               high.title,
+               insufficient.title
+             ]
+
+      assert List.last(movies).scoreability_state == "insufficient_evidence"
+    end
+
+    test "filtered score sorts stay on the generic filter path" do
+      drama = insert_genre!("Scoreability Filter Drama")
+      comedy = insert_genre!("Scoreability Filter Comedy")
+
+      drama_movie =
+        insert_movie!("Scoreability Filter Match", release_date: ~D[2020-01-01])
+        |> add_genres!([drama])
+
+      _comedy_movie =
+        insert_movie!("Scoreability Filter Miss", release_date: ~D[2020-01-01])
+        |> add_genres!([comedy])
+
+      insert_score_cache!(drama_movie, 8.0, [8.0, 8.0, 8.0, 8.0, 8.0, 8.0])
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "sort" => "score_desc",
+                 "genres[]" => [to_string(drama.id)],
+                 "per_page" => "10"
+               })
+
+      assert movie_titles(movies) == [drama_movie.title]
+      assert meta.total_count == 1
+    end
   end
 
   describe "search_movies/1 default discovery rankings" do

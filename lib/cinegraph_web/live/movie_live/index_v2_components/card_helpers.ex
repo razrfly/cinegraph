@@ -140,7 +140,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
   defp loaded_scoreability(%{scoreability: %Ecto.Association.NotLoaded{}}), do: nil
   defp loaded_scoreability(%{scoreability: nil}), do: nil
   defp loaded_scoreability(%{scoreability: scoreability}), do: scoreability
-  defp loaded_scoreability(movie), do: movie
+  defp loaded_scoreability(_), do: nil
 
   defp lens_value(nil, _), do: nil
   defp lens_value(cache, "mob"), do: Map.get(cache, :mob_score)

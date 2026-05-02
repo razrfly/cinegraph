@@ -306,8 +306,9 @@ defmodule Cinegraph.Cultural do
           |> where([ml], ml.source_key in ^source_keys)
           |> where(
             [ml],
-            ml.tracks_awards == false or
-              (ml.category not in ["awards", "festivals"] and not is_nil(ml.slug))
+            ml.tracks_awards == false and
+              ml.category not in ["awards", "festivals"] and
+              not is_nil(ml.slug)
           )
           |> Repo.replica().all()
           |> Enum.map(
@@ -322,7 +323,7 @@ defmodule Cinegraph.Cultural do
     sources
     |> Enum.filter(fn
       {key, value} when is_binary(key) and is_map(value) ->
-        Map.get(value, "included") != false
+        Map.get(value, "included") == true
 
       _ ->
         false

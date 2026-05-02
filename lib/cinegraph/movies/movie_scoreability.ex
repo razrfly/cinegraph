@@ -33,7 +33,7 @@ defmodule Cinegraph.Movies.MovieScoreability do
     field :missing_lens_count, :integer
     field :present_lens_labels, {:array, :string}
     field :missing_lens_labels, {:array, :string}
-    field :evidence_confidence, :decimal
+    field :evidence_confidence, :float
 
     field :scoreability_state, :string
     field :score_confidence_label, :string
