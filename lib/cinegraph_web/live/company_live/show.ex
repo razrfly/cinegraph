@@ -19,7 +19,7 @@ defmodule CinegraphWeb.CompanyLive.Show do
       assign_pagination: 2
     ]
 
-  @site_url "https://cinegraph.io"
+  @site_url "https://cinegraph.org"
 
   @impl CinegraphWeb.SearchEventHandlers
   def build_path(socket, params) do

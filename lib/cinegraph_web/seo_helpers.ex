@@ -16,7 +16,7 @@ defmodule CinegraphWeb.SEOHelpers do
   import Phoenix.Component, only: [assign: 3]
   alias CinegraphWeb.SEO
 
-  @site_url "https://cinegraph.io"
+  @site_url "https://cinegraph.org"
   @tmdb_image_base "https://image.tmdb.org/t/p"
 
   @doc """

@@ -31,7 +31,7 @@ defmodule CinegraphWeb.AwardsLive.ShowLegacy do
       awards_view_filter_fields: 0
     ]
 
-  @site_url "https://cinegraph.io"
+  @site_url "https://cinegraph.org"
 
   # ============================================================================
   # SearchEventHandlers Callback

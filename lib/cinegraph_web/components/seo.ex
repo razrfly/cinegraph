@@ -13,7 +13,7 @@ defmodule CinegraphWeb.SEO do
   import Phoenix.HTML, only: [raw: 1]
 
   @tmdb_image_base "https://image.tmdb.org/t/p"
-  @site_url "https://cinegraph.io"
+  @site_url "https://cinegraph.org"
   @site_name "Cinegraph"
   @default_description "Discover movies, explore film industry relationships, and track awards data."
 

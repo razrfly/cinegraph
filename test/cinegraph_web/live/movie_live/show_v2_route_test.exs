@@ -75,7 +75,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ "Old movie page"
       assert html =~ ~p"/movies/#{movie.slug}/legacy"
       assert html =~ movie.title
-      assert html =~ ~s(<link rel="canonical" href="https://cinegraph.io/movies/#{movie.slug}")
+      assert html =~ ~s(<link rel="canonical" href="https://cinegraph.org/movies/#{movie.slug}")
       assert html =~ ~s(<meta property="og:type" content="video.movie")
       assert html =~ ~s(<meta property="og:title" content="Routing Smoke Title)
       assert html =~ ~s(<meta name="twitter:title" content="Routing Smoke Title)

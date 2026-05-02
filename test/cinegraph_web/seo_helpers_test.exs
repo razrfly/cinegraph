@@ -24,7 +24,7 @@ defmodule CinegraphWeb.SEOHelpersTest do
       assert assigns.page_title == "The Matrix"
       assert assigns.meta_title == "The Matrix (1999)"
       assert assigns.meta_type == "video.movie"
-      assert assigns.canonical_url == "https://cinegraph.io/movies/the-matrix-1999"
+      assert assigns.canonical_url == "https://cinegraph.org/movies/the-matrix-1999"
       assert assigns.meta_image == "https://image.tmdb.org/t/p/w1280/backdrop.jpg"
       assert json_ld_types(assigns) == ["Movie", "BreadcrumbList"]
     end
@@ -56,7 +56,7 @@ defmodule CinegraphWeb.SEOHelpersTest do
       assert assigns.page_title == "Carrie-Anne Moss"
       assert assigns.meta_title == "Carrie-Anne Moss"
       assert assigns.meta_type == "profile"
-      assert assigns.canonical_url == "https://cinegraph.io/people/carrie-anne-moss"
+      assert assigns.canonical_url == "https://cinegraph.org/people/carrie-anne-moss"
       assert assigns.meta_image == "https://image.tmdb.org/t/p/w500/profile.jpg"
       assert json_ld_types(assigns) == ["Person", "BreadcrumbList"]
     end
@@ -94,7 +94,7 @@ defmodule CinegraphWeb.SEOHelpersTest do
       assigns = socket_assigns(assign_curated_list_seo(socket(), list_info, movies))
 
       assert assigns.meta_title == "Criterion Collection"
-      assert assigns.canonical_url == "https://cinegraph.io/lists/criterion-collection"
+      assert assigns.canonical_url == "https://cinegraph.org/lists/criterion-collection"
       assert assigns.meta_image == "https://image.tmdb.org/t/p/w780/seven.jpg"
       assert json_ld_types(assigns) == ["ItemList", "BreadcrumbList"]
     end
@@ -117,13 +117,13 @@ defmodule CinegraphWeb.SEOHelpersTest do
         socket_assigns(assign_awards_seo(socket(), organization, :nominees, movies))
 
       assert all_assigns.meta_title == "Academy Awards"
-      assert all_assigns.canonical_url == "https://cinegraph.io/awards/academy-awards"
+      assert all_assigns.canonical_url == "https://cinegraph.org/awards/academy-awards"
       assert winner_assigns.meta_title == "Academy Awards Winners"
-      assert winner_assigns.canonical_url == "https://cinegraph.io/awards/academy-awards/winners"
+      assert winner_assigns.canonical_url == "https://cinegraph.org/awards/academy-awards/winners"
       assert nominee_assigns.meta_title == "Academy Awards Nominees"
 
       assert nominee_assigns.canonical_url ==
-               "https://cinegraph.io/awards/academy-awards/nominees"
+               "https://cinegraph.org/awards/academy-awards/nominees"
 
       assert json_ld_types(winner_assigns) == ["ItemList", "BreadcrumbList"]
     end

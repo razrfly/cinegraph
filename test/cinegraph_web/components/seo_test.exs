@@ -17,13 +17,13 @@ defmodule CinegraphWeb.SEOTest do
             meta_image_width: 1200,
             meta_image_height: 630,
             meta_type: "video.movie",
-            canonical_url: "https://cinegraph.io/movies/the-matrix-1999",
+            canonical_url: "https://cinegraph.org/movies/the-matrix-1999",
             json_ld: %{"@context" => "https://schema.org", "@type" => "Movie"}
           }
         )
 
       assert html =~ ~S|<meta name="description" content="A hacker discovers reality|
-      assert html =~ ~S|<link rel="canonical" href="https://cinegraph.io/movies/the-matrix-1999"|
+      assert html =~ ~S|<link rel="canonical" href="https://cinegraph.org/movies/the-matrix-1999"|
       assert html =~ ~S|<meta property="og:type" content="video.movie"|
       assert html =~ ~S|<meta property="og:title" content="The Matrix (1999)"|
 
@@ -45,7 +45,7 @@ defmodule CinegraphWeb.SEOTest do
             og_description: "Legacy description",
             og_image: "https://example.com/legacy.jpg",
             og_type: "profile",
-            og_url: "https://cinegraph.io/legacy"
+            og_url: "https://cinegraph.org/legacy"
           }
         )
 
@@ -53,7 +53,7 @@ defmodule CinegraphWeb.SEOTest do
       assert html =~ ~S|<meta property="og:description" content="Legacy description"|
       assert html =~ ~S|<meta property="og:image" content="https://example.com/legacy.jpg"|
       assert html =~ ~S|<meta property="og:type" content="profile"|
-      assert html =~ ~S|<meta property="og:url" content="https://cinegraph.io/legacy"|
+      assert html =~ ~S|<meta property="og:url" content="https://cinegraph.org/legacy"|
     end
 
     test "renders a list of JSON-LD schemas" do
