@@ -12,6 +12,7 @@ defmodule Cinegraph.Movies.Query.Params do
   alias Cinegraph.Movies.Genre
   alias Cinegraph.Movies.MovieList
   alias Cinegraph.Movies.Person
+  alias Cinegraph.Movies.ProductionCompany
   alias Cinegraph.Repo
 
   @primary_key false
@@ -63,6 +64,9 @@ defmodule Cinegraph.Movies.Query.Params do
     field :people_ids, {:array, :integer}, default: []
     field :people_role, :string
     field :people_match, :string, default: "any"
+
+    # Production company filters
+    field :production_company_ids, {:array, :integer}, default: []
 
     # Metric thresholds (for advanced users)
     field :festival_recognition_min, :float
@@ -132,6 +136,7 @@ defmodule Cinegraph.Movies.Query.Params do
       :people_ids,
       :people_role,
       :people_match,
+      :production_company_ids,
       :festival_recognition_min,
       :time_machine_min,
       :auteurs_min,
@@ -184,6 +189,7 @@ defmodule Cinegraph.Movies.Query.Params do
     |> normalize_array_params()
     |> normalize_people_search()
     |> normalize_people_values()
+    |> normalize_company_values()
     |> normalize_list_values()
     |> normalize_blank_enums()
     |> normalize_numeric_params()
@@ -192,7 +198,17 @@ defmodule Cinegraph.Movies.Query.Params do
   defp normalize_array_params(params) do
     # Handle both array notation and comma-separated strings
     Enum.reduce(
-      [:genres, :countries, :languages, :lists, :festivals, :people_ids, :people],
+      [
+        :genres,
+        :countries,
+        :languages,
+        :lists,
+        :festivals,
+        :people_ids,
+        :people,
+        :companies,
+        :production_company_ids
+      ],
       params,
       fn key, acc ->
         key_str = to_string(key)
@@ -294,7 +310,8 @@ defmodule Cinegraph.Movies.Query.Params do
   defp normalize_numeric_params(params) do
     numeric_fields = ~w(page per_page year year_from year_to decade 
                         runtime_min runtime_max festival_id award_category_id
-                        award_year_from award_year_to genres countries festivals)
+                        award_year_from award_year_to genres countries festivals
+                        production_company_ids)
 
     float_fields = ~w(rating_min festival_recognition_min time_machine_min auteurs_min)
 
@@ -317,6 +334,9 @@ defmodule Cinegraph.Movies.Query.Params do
 
         values when is_list(values) and field == "festivals" ->
           Map.put(acc, field, parse_festival_values(values))
+
+        values when is_list(values) and field == "production_company_ids" ->
+          Map.put(acc, field, parse_company_values(values))
 
         values when is_list(values) and field in ["countries"] ->
           # Convert array of strings to integers for ID-based filters
@@ -511,6 +531,61 @@ defmodule Cinegraph.Movies.Query.Params do
     Person
     |> where([p], p.slug in ^slugs)
     |> select([p], p.id)
+    |> Repo.replica().all()
+  end
+
+  defp normalize_company_values(params) do
+    cond do
+      Map.has_key?(params, "production_company_ids") ->
+        Map.delete(params, "companies")
+
+      match?(values when is_list(values), Map.get(params, "companies")) ->
+        params
+        |> Map.put("production_company_ids", company_ids_for_values(Map.get(params, "companies")))
+        |> Map.delete("companies")
+
+      true ->
+        params
+    end
+  end
+
+  defp parse_company_values(values), do: company_ids_for_values(values)
+
+  defp company_ids_for_values(values) do
+    values = Enum.reject(values, &(&1 in [nil, ""]))
+
+    {ids, slugs} =
+      Enum.reduce(values, {[], []}, fn
+        v, {ids, slugs} when is_integer(v) ->
+          {[v | ids], slugs}
+
+        v, {ids, slugs} when is_binary(v) ->
+          case Integer.parse(v) do
+            {int, ""} -> {[int | ids], slugs}
+            _ -> {ids, [slugify(v) | slugs]}
+          end
+
+        _v, acc ->
+          acc
+      end)
+
+    slug_ids =
+      slugs
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> company_ids_for_slugs()
+
+    (ids ++ slug_ids)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp company_ids_for_slugs([]), do: []
+
+  defp company_ids_for_slugs(slugs) do
+    ProductionCompany
+    |> where([c], c.slug in ^slugs)
+    |> select([c], c.id)
     |> Repo.replica().all()
   end
 

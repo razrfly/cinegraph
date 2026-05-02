@@ -11,6 +11,7 @@ defmodule Cinegraph.Movies.SearchTest do
     Movie,
     MovieList,
     Person,
+    ProductionCompany,
     Search
   }
 
@@ -218,6 +219,31 @@ defmodule Cinegraph.Movies.SearchTest do
       assert params.people_match == "all"
     end
 
+    test "company slugs normalize to production company IDs" do
+      company = insert_company!("Slug Company Test")
+
+      assert {:ok, params} = Params.validate(%{"companies" => company.slug})
+      assert params.production_company_ids == [company.id]
+    end
+
+    test "unknown company slugs normalize away safely" do
+      assert {:ok, params} = Params.validate(%{"companies" => "not-a-real-company"})
+      assert params.production_company_ids == []
+    end
+
+    test "production_company_ids take precedence over company slugs" do
+      slug_company = insert_company!("Slug Company Test")
+      id_company = insert_company!("Explicit Company Test")
+
+      assert {:ok, params} =
+               Params.validate(%{
+                 "companies" => slug_company.slug,
+                 "production_company_ids" => to_string(id_company.id)
+               })
+
+      assert params.production_company_ids == [id_company.id]
+    end
+
     test "unknown list slugs normalize away safely" do
       assert {:ok, params} = Params.validate(%{"lists" => "not-a-real-list"})
       assert params.lists == []
@@ -284,6 +310,137 @@ defmodule Cinegraph.Movies.SearchTest do
                })
 
       assert movie_titles(movies) == [together.title]
+      assert meta.total_count == 1
+    end
+  end
+
+  describe "search_movies/1 production company filters" do
+    test "single company returns movies with that company" do
+      a24 = insert_company!("A24 Search")
+      neon = insert_company!("Neon Search")
+
+      _a24_movie =
+        insert_movie!("Company Single A24")
+        |> add_companies!([a24])
+
+      _neon_movie =
+        insert_movie!("Company Single Neon")
+        |> add_companies!([neon])
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "companies" => to_string(a24.id),
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Company Single A24"]
+      assert meta.total_count == 1
+    end
+
+    test "company filter bypasses default browse optimization" do
+      a24 = insert_company!("A24 Default Browse")
+      _match = insert_movie!("Company Default Browse A24") |> add_companies!([a24])
+      _miss = insert_movie!("Company Default Browse Outside")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "companies" => to_string(a24.id),
+                 "per_page" => "10"
+               })
+
+      assert movie_titles(movies) == ["Company Default Browse A24"]
+      assert meta.total_count == 1
+    end
+
+    test "multiple companies use any semantics" do
+      a24 = insert_company!("A24 Any")
+      neon = insert_company!("Neon Any")
+      searchlight = insert_company!("Searchlight Any")
+
+      _a24_movie =
+        insert_movie!("Company Any A24")
+        |> add_companies!([a24])
+
+      _neon_movie =
+        insert_movie!("Company Any Neon")
+        |> add_companies!([neon])
+
+      _searchlight_movie =
+        insert_movie!("Company Any Searchlight")
+        |> add_companies!([searchlight])
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "companies" => "#{a24.slug},#{neon.slug}",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Company Any A24", "Company Any Neon"]
+      assert meta.total_count == 2
+    end
+
+    test "malformed and blank company params normalize away safely" do
+      a24 = insert_company!("A24 Malformed")
+
+      _movie =
+        insert_movie!("Company Malformed A24")
+        |> add_companies!([a24])
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "companies[]" => ["not-a-company", "", to_string(a24.id)],
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Company Malformed A24"]
+      assert meta.total_count == 1
+    end
+
+    test "count matches filtered search meta" do
+      company = insert_company!("Company Count")
+
+      _match =
+        insert_movie!("Company Count Match")
+        |> add_companies!([company])
+
+      _miss = insert_movie!("Company Count Miss")
+
+      params = %{
+        "companies" => company.slug,
+        "per_page" => "10",
+        "sort" => "title_asc"
+      }
+
+      assert {:ok, {_movies, meta}} = Search.search_movies(params)
+      assert {:ok, count} = Search.count_movies(params)
+      assert count == meta.total_count
+    end
+
+    test "company filter composes with search and sort" do
+      company = insert_company!("Company Compose")
+
+      _match =
+        insert_movie!("Company Compose Moonlight")
+        |> add_companies!([company])
+
+      _company_nonmatch =
+        insert_movie!("Company Compose Other")
+        |> add_companies!([company])
+
+      _search_nonmatch = insert_movie!("Company Compose Moonlight Outside")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies(%{
+                 "companies" => company.slug,
+                 "search" => "Moonlight",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Company Compose Moonlight"]
       assert meta.total_count == 1
     end
   end
@@ -397,6 +554,24 @@ defmodule Cinegraph.Movies.SearchTest do
     |> Repo.insert!()
   end
 
+  defp insert_company!(name) do
+    unique = System.unique_integer([:positive])
+
+    slug =
+      name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "-")
+      |> String.trim("-")
+
+    %ProductionCompany{}
+    |> ProductionCompany.changeset(%{
+      tmdb_id: unique,
+      name: "#{name} #{unique}",
+      slug: "#{slug}-#{unique}"
+    })
+    |> Repo.insert!()
+  end
+
   defp add_genres!(%Movie{} = movie, genres) do
     rows =
       Enum.map(genres, fn genre ->
@@ -404,6 +579,16 @@ defmodule Cinegraph.Movies.SearchTest do
       end)
 
     Repo.insert_all("movie_genres", rows)
+    movie
+  end
+
+  defp add_companies!(%Movie{} = movie, companies) do
+    rows =
+      Enum.map(companies, fn company ->
+        %{movie_id: movie.id, production_company_id: company.id}
+      end)
+
+    Repo.insert_all("movie_production_companies", rows)
     movie
   end
 

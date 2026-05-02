@@ -31,6 +31,7 @@ defmodule Cinegraph.Movies.DiscoveryRankings do
       empty?(params.lists) and
       empty?(params.festivals) and
       empty?(params.people_ids) and
+      empty?(params.production_company_ids) and
       is_nil(params.year) and
       is_nil(params.year_from) and
       is_nil(params.year_to) and

@@ -337,6 +337,237 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Gets a production company by slug or numeric ID.
+  """
+  def get_production_company_by_id_or_slug(id_or_slug) when is_integer(id_or_slug) do
+    Repo.replica().get(ProductionCompany, id_or_slug)
+  end
+
+  def get_production_company_by_id_or_slug(id_or_slug) when is_binary(id_or_slug) do
+    case Integer.parse(id_or_slug) do
+      {id, ""} ->
+        Repo.replica().get(ProductionCompany, id)
+
+      _ ->
+        Repo.replica().get_by(ProductionCompany, slug: id_or_slug)
+    end
+  end
+
+  @doc """
+  Lists production companies with movie-count stats for the company index.
+
+  By default only companies attached to at least one fully imported movie are
+  returned, so public cards match the movie grid users can browse.
+  """
+  def list_production_companies_with_stats(opts \\ []) do
+    include_orphans? = Elixir.Keyword.get(opts, :include_orphans, false)
+    category = Elixir.Keyword.get(opts, :category, "all")
+    search = Elixir.Keyword.get(opts, :search, "")
+    sort = Elixir.Keyword.get(opts, :sort, "films")
+    limit = Elixir.Keyword.get(opts, :limit, if(include_orphans?, do: nil, else: 96))
+
+    base_query =
+      from(c in ProductionCompany,
+        left_join: mpc in "movie_production_companies",
+        on: mpc.production_company_id == c.id,
+        left_join: m in Movie,
+        on: m.id == mpc.movie_id and m.import_status == "full",
+        group_by: c.id,
+        select: %{
+          id: c.id,
+          tmdb_id: c.tmdb_id,
+          name: c.name,
+          slug: c.slug,
+          description: c.description,
+          website: c.website,
+          logo_path: c.logo_path,
+          logo_url: c.logo_url,
+          hero_image_url: c.hero_image_url,
+          origin_country: c.origin_country,
+          metadata: c.metadata,
+          inserted_at: c.inserted_at,
+          updated_at: c.updated_at,
+          movie_count: count(m.id),
+          latest_movie_release_date: max(m.release_date),
+          latest_movie_title:
+            fragment(
+              "(array_remove(array_agg(? ORDER BY ? DESC NULLS LAST), NULL))[1]",
+              m.title,
+              m.release_date
+            )
+        }
+      )
+
+    base_query =
+      base_query
+      |> maybe_filter_company_index_search(search)
+      |> maybe_filter_company_index_category(category)
+      |> maybe_exclude_orphan_companies(include_orphans?)
+      |> order_company_index(sort)
+      |> maybe_limit_company_index(limit)
+
+    base_query
+    |> Repo.replica().all()
+    |> Enum.map(&put_company_index_flags/1)
+  end
+
+  @doc """
+  Counts full movies by production-company id.
+  """
+  def count_movies_by_production_company_ids(company_ids) when is_list(company_ids) do
+    company_ids =
+      company_ids
+      |> Enum.filter(&is_integer/1)
+      |> Enum.uniq()
+
+    if company_ids == [] do
+      %{}
+    else
+      from(mpc in "movie_production_companies",
+        join: m in Movie,
+        on: m.id == mpc.movie_id,
+        where: m.import_status == "full",
+        where: mpc.production_company_id in ^company_ids,
+        group_by: mpc.production_company_id,
+        select: {mpc.production_company_id, count(m.id)}
+      )
+      |> Repo.replica().all()
+      |> Map.new()
+    end
+  end
+
+  @doc """
+  Returns true when a production company's stored TMDb metadata is missing or stale.
+  """
+  def production_company_metadata_stale?(company, days \\ 180) when is_map(company) do
+    tmdb = company.metadata |> ensure_map() |> Map.get("tmdb") |> ensure_map()
+
+    missing_company_details? = is_nil(tmdb["company_details"])
+    missing_company_images? = is_nil(tmdb["company_images"])
+
+    missing_company_details? or missing_company_images? or
+      stale_iso8601?(tmdb["details_fetched_at"], days) or
+      stale_iso8601?(tmdb["images_fetched_at"], days)
+  end
+
+  @doc """
+  Finds a production company by slug, name, local ID, or TMDb ID.
+  """
+  def find_production_company(value) when is_binary(value) do
+    trimmed = String.trim(value)
+
+    case Integer.parse(trimmed) do
+      {id, ""} ->
+        from(c in ProductionCompany, where: c.id == ^id or c.tmdb_id == ^id, limit: 1)
+        |> Repo.replica().one()
+
+      _ ->
+        from(c in ProductionCompany,
+          where: c.slug == ^trimmed or fragment("lower(?) = lower(?)", c.name, ^trimmed),
+          limit: 1
+        )
+        |> Repo.replica().one()
+    end
+  end
+
+  def find_production_company(id) when is_integer(id),
+    do: get_production_company_by_id_or_slug(id)
+
+  @doc """
+  Returns production companies missing or stale TMDb metadata.
+  """
+  def list_production_companies_for_metadata_refresh(opts \\ []) do
+    mode = Elixir.Keyword.get(opts, :mode, :missing)
+    limit = Elixir.Keyword.get(opts, :limit, 100)
+    stale_days = Elixir.Keyword.get(opts, :stale_days, 180)
+
+    ProductionCompany
+    |> order_by([c], asc: c.name)
+    |> Repo.replica().all()
+    |> Enum.filter(fn company ->
+      case mode do
+        :stale -> production_company_metadata_stale?(company, stale_days)
+        _ -> production_company_missing_metadata?(company)
+      end
+    end)
+    |> Enum.take(limit)
+  end
+
+  @doc """
+  Enqueues a TMDb metadata refresh for a production company when missing/stale.
+  """
+  def enqueue_production_company_metadata_refresh(%ProductionCompany{} = company, opts \\ []) do
+    force? = Elixir.Keyword.get(opts, :force, false)
+
+    if force? or production_company_metadata_stale?(company) do
+      Cinegraph.Workers.TMDbCompanyMetadataWorker.new(%{"company_id" => company.id})
+      |> Oban.insert()
+      |> case do
+        {:ok, _job} -> :ok
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      :ok
+    end
+  rescue
+    error ->
+      Logger.warning(
+        "Failed to enqueue company metadata refresh for #{company.id}: #{Exception.message(error)}"
+      )
+
+      {:error, error}
+  end
+
+  @doc """
+  Backfills missing production company slugs.
+
+  Duplicate names receive a stable TMDb/local ID suffix.
+  """
+  def backfill_production_company_slugs do
+    ProductionCompany
+    |> where([c], is_nil(c.slug) or c.slug == "")
+    |> Repo.all()
+    |> Enum.reduce_while({:ok, 0}, fn company, {:ok, count} ->
+      slug = unique_company_slug(company)
+
+      case update_company_slug(company, slug) do
+        {:ok, _company} -> {:cont, {:ok, count + 1}}
+        {:error, changeset} -> {:halt, {:error, company, changeset}}
+      end
+    end)
+  end
+
+  @doc """
+  Refreshes stored TMDb metadata for a production company.
+
+  Raw endpoint responses are stored under `metadata["tmdb"]`; display fields
+  are derived only after both endpoint fetches succeed.
+  """
+  def refresh_production_company_metadata(company_or_id, opts \\ [])
+
+  def refresh_production_company_metadata(%ProductionCompany{} = company, opts) do
+    details_fetcher = Elixir.Keyword.get(opts, :details_fetcher, &TMDb.get_company/1)
+    images_fetcher = Elixir.Keyword.get(opts, :images_fetcher, &TMDb.get_company_images/1)
+    now = Elixir.Keyword.get(opts, :fetched_at, DateTime.utc_now() |> DateTime.truncate(:second))
+
+    with {:ok, details} <- fetch_company_details(details_fetcher, company.tmdb_id),
+         {:ok, images} <- fetch_company_images(images_fetcher, company.tmdb_id) do
+      attrs = company_metadata_attrs(company, details, images, now)
+
+      company
+      |> ProductionCompany.changeset(attrs)
+      |> Repo.update()
+    end
+  end
+
+  def refresh_production_company_metadata(company_id, opts) when is_integer(company_id) do
+    case Repo.get(ProductionCompany, company_id) do
+      nil -> {:error, :not_found}
+      company -> refresh_production_company_metadata(company, opts)
+    end
+  end
+
+  @doc """
   Fetches a movie from TMDB and stores it in the database with all related data.
   """
   def fetch_and_store_movie_comprehensive(tmdb_id) do
@@ -360,7 +591,7 @@ defmodule Cinegraph.Movies do
          :ok <- process_movie_videos(movie, tmdb_data["videos"]),
          :ok <- process_movie_release_dates(movie, tmdb_data["release_dates"]),
          :ok <- process_movie_collection(movie, tmdb_data["belongs_to_collection"]),
-         :ok <- process_movie_companies(movie, tmdb_data["production_companies"]),
+         :ok <- process_movie_companies(movie, tmdb_data["production_companies"], opts),
          :ok <- process_movie_recommendations(movie, tmdb_data["recommendations"]),
          :ok <- process_movie_similar(movie, tmdb_data["similar"]),
          :ok <- process_movie_reviews(movie, tmdb_data["reviews"]),
@@ -881,20 +1112,26 @@ defmodule Cinegraph.Movies do
     end
   end
 
-  defp process_movie_companies(_movie, nil), do: :ok
+  defp process_movie_companies(_movie, nil, _opts), do: :ok
 
-  defp process_movie_companies(movie, companies) do
+  defp process_movie_companies(movie, companies, opts) do
+    enqueue_fun =
+      Elixir.Keyword.get(
+        opts,
+        :company_metadata_enqueue_fun,
+        &enqueue_production_company_metadata_refresh/1
+      )
+
     Enum.each(companies, fn company_data ->
-      # For now, just create basic company record
-      # Could fetch full details with TMDb.get_company(company_data["id"])
       case create_or_update_company_basic(company_data) do
         {:ok, company} ->
-          # Create movie_production_companies association
           Repo.insert_all(
             "movie_production_companies",
             [[movie_id: movie.id, production_company_id: company.id]],
             on_conflict: :nothing
           )
+
+          maybe_enqueue_company_metadata(company, enqueue_fun)
 
         {:error, reason} ->
           Logger.warning(
@@ -904,6 +1141,26 @@ defmodule Cinegraph.Movies do
     end)
 
     :ok
+  end
+
+  defp maybe_enqueue_company_metadata(company, enqueue_fun) do
+    case enqueue_fun.(company) do
+      :ok ->
+        :ok
+
+      {:ok, _} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "Failed to enqueue metadata refresh for company #{company.name}: #{inspect(reason)}"
+        )
+    end
+  rescue
+    error ->
+      Logger.warning(
+        "Company metadata enqueue failed for company #{company.name}: #{Exception.message(error)}"
+      )
   end
 
   # Helper functions for creating/updating related entities
@@ -978,14 +1235,9 @@ defmodule Cinegraph.Movies do
     case Repo.get_by(ProductionCompany, tmdb_id: company_data["id"]) do
       nil ->
         # Try to insert, but handle race condition
-        %ProductionCompany{}
-        |> ProductionCompany.changeset(%{
-          tmdb_id: company_data["id"],
-          name: company_data["name"],
-          logo_path: company_data["logo_path"],
-          origin_country: company_data["origin_country"]
-        })
-        |> Repo.insert()
+        company_data
+        |> company_basic_attrs()
+        |> insert_company_basic()
         |> case do
           {:ok, company} ->
             {:ok, company}
@@ -995,17 +1247,12 @@ defmodule Cinegraph.Movies do
             case Repo.get_by(ProductionCompany, tmdb_id: company_data["id"]) do
               nil ->
                 # Still doesn't exist somehow, return the original error
-                %ProductionCompany{}
-                |> ProductionCompany.changeset(%{
-                  tmdb_id: company_data["id"],
-                  name: company_data["name"],
-                  logo_path: company_data["logo_path"],
-                  origin_country: company_data["origin_country"]
-                })
-                |> Repo.insert()
+                company_data
+                |> company_basic_attrs()
+                |> insert_company_basic()
 
               existing_company ->
-                {:ok, existing_company}
+                ensure_company_slug(existing_company)
             end
 
           error ->
@@ -1013,9 +1260,343 @@ defmodule Cinegraph.Movies do
         end
 
       existing ->
-        {:ok, existing}
+        existing
+        |> ProductionCompany.changeset(company_basic_attrs_for_existing(existing, company_data))
+        |> Repo.update()
+        |> case do
+          {:ok, company} -> ensure_company_slug(company)
+          error -> error
+        end
     end
   end
+
+  defp company_basic_attrs(company_data) do
+    %{
+      tmdb_id: company_data["id"],
+      name: company_data["name"],
+      logo_path: company_data["logo_path"],
+      origin_country: company_data["origin_country"]
+    }
+  end
+
+  defp company_basic_attrs_for_existing(%ProductionCompany{} = company, company_data) do
+    attrs = company_basic_attrs(company_data)
+
+    case company.slug do
+      slug when is_binary(slug) and slug != "" ->
+        attrs
+
+      _ ->
+        Map.put(
+          attrs,
+          :slug,
+          unique_company_slug(%{company | name: attrs.name, tmdb_id: attrs.tmdb_id})
+        )
+    end
+  end
+
+  defp insert_company_basic(attrs) do
+    changeset = ProductionCompany.changeset(%ProductionCompany{}, attrs)
+
+    case Repo.insert(changeset) do
+      {:ok, company} ->
+        {:ok, company}
+
+      {:error, %Ecto.Changeset{errors: [slug: {"has already been taken", _}]}} ->
+        slug = unique_company_slug(%ProductionCompany{tmdb_id: attrs.tmdb_id, name: attrs.name})
+
+        %ProductionCompany{}
+        |> ProductionCompany.changeset(Map.put(attrs, :slug, slug))
+        |> Repo.insert()
+
+      error ->
+        error
+    end
+  end
+
+  defp ensure_company_slug(%ProductionCompany{slug: slug} = company)
+       when is_binary(slug) and slug != "" do
+    {:ok, company}
+  end
+
+  defp ensure_company_slug(%ProductionCompany{} = company) do
+    update_company_slug(company, unique_company_slug(company))
+  end
+
+  defp update_company_slug(%ProductionCompany{} = company, slug) do
+    company
+    |> ProductionCompany.changeset(%{slug: slug})
+    |> Repo.update()
+  end
+
+  defp unique_company_slug(%ProductionCompany{} = company) do
+    base_slug =
+      company.name
+      |> to_string()
+      |> ProductionCompany.slugify()
+      |> case do
+        "" -> "company"
+        slug -> slug
+      end
+
+    cond do
+      company_slug_available?(base_slug, company.id) ->
+        base_slug
+
+      company.tmdb_id ->
+        candidate = "#{base_slug}-#{company.tmdb_id}"
+
+        if company_slug_available?(candidate, company.id) do
+          candidate
+        else
+          "#{candidate}-#{company.id || System.unique_integer([:positive])}"
+        end
+
+      company.id ->
+        "#{base_slug}-#{company.id}"
+
+      true ->
+        base_slug
+    end
+  end
+
+  defp company_slug_available?(slug, nil) do
+    not Repo.exists?(from(c in ProductionCompany, where: c.slug == ^slug))
+  end
+
+  defp company_slug_available?(slug, company_id) do
+    not Repo.exists?(from(c in ProductionCompany, where: c.slug == ^slug and c.id != ^company_id))
+  end
+
+  defp fetch_company_details(fetcher, tmdb_id) do
+    case fetcher.(tmdb_id) do
+      {:ok, details} -> {:ok, details}
+      {:error, reason} -> {:error, {:company_details, reason}}
+    end
+  end
+
+  defp fetch_company_images(fetcher, tmdb_id) do
+    case fetcher.(tmdb_id) do
+      {:ok, images} -> {:ok, images}
+      {:error, reason} -> {:error, {:company_images, reason}}
+    end
+  end
+
+  defp company_metadata_attrs(company, details, images, fetched_at) do
+    selected_logo = select_company_logo(company, images)
+
+    tmdb_metadata =
+      company.metadata
+      |> ensure_map()
+      |> get_in(["tmdb"])
+      |> ensure_map()
+      |> Map.merge(%{
+        "company_details" => details,
+        "company_images" => images,
+        "details_fetched_at" => DateTime.to_iso8601(fetched_at),
+        "images_fetched_at" => DateTime.to_iso8601(fetched_at)
+      })
+      |> maybe_put_selected_logo(selected_logo)
+
+    metadata =
+      company.metadata
+      |> ensure_map()
+      |> Map.put("tmdb", tmdb_metadata)
+
+    %{
+      metadata: metadata,
+      website: company_website(company, details),
+      logo_url: company_logo_url(company, selected_logo)
+    }
+  end
+
+  defp ensure_map(value) when is_map(value), do: value
+  defp ensure_map(_value), do: %{}
+
+  defp maybe_put_selected_logo(metadata, nil), do: metadata
+
+  defp maybe_put_selected_logo(metadata, selected_logo),
+    do: Map.put(metadata, "selected_logo", selected_logo)
+
+  defp company_website(company, details) do
+    case Map.get(details, "homepage") do
+      homepage when is_binary(homepage) and homepage != "" -> homepage
+      _ -> company.website
+    end
+  end
+
+  defp company_logo_url(_company, %{
+         "file_path" => file_path,
+         "chosen_from" => "tmdb_company_images"
+       })
+       when is_binary(file_path) do
+    tmdb_image_url(file_path, "original")
+  end
+
+  defp company_logo_url(_company, %{
+         "file_path" => file_path,
+         "chosen_from" => "tmdb_embedded_logo_path"
+       })
+       when is_binary(file_path) do
+    tmdb_image_url(file_path, "w500")
+  end
+
+  defp company_logo_url(company, _selected_logo), do: company.logo_url
+
+  defp select_company_logo(company, %{"logos" => logos}) when is_list(logos) do
+    logos
+    |> Enum.filter(&valid_company_logo?/1)
+    |> Enum.sort_by(&company_logo_sort_key/1)
+    |> List.first()
+    |> case do
+      nil ->
+        select_company_logo(company, nil)
+
+      logo ->
+        %{
+          "file_path" => logo["file_path"],
+          "file_type" => company_logo_file_type(logo),
+          "iso_639_1" => logo["iso_639_1"],
+          "chosen_from" => "tmdb_company_images",
+          "vote_average" => logo["vote_average"],
+          "vote_count" => logo["vote_count"]
+        }
+        |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+        |> Map.new()
+    end
+  end
+
+  defp select_company_logo(%ProductionCompany{logo_path: path}, _images)
+       when is_binary(path) and path != "" do
+    %{
+      "file_path" => path,
+      "file_type" => "png",
+      "chosen_from" => "tmdb_embedded_logo_path"
+    }
+  end
+
+  defp select_company_logo(_company, _images), do: nil
+
+  defp valid_company_logo?(%{"file_path" => path}) when is_binary(path) and path != "", do: true
+  defp valid_company_logo?(_logo), do: false
+
+  defp company_logo_sort_key(logo) do
+    {
+      if(company_logo_file_type(logo) == "svg", do: 0, else: 1),
+      if(logo["iso_639_1"] in ["en", nil, ""], do: 0, else: 1),
+      -(logo["vote_average"] || 0),
+      -(logo["vote_count"] || 0)
+    }
+  end
+
+  defp company_logo_file_type(%{"file_type" => type}) when is_binary(type) do
+    type
+    |> String.downcase()
+    |> String.trim_leading(".")
+  end
+
+  defp company_logo_file_type(%{"file_path" => path}) when is_binary(path) do
+    path
+    |> Path.extname()
+    |> String.downcase()
+    |> String.trim_leading(".")
+  end
+
+  defp company_logo_file_type(_logo), do: nil
+
+  defp tmdb_image_url(path, size), do: "https://image.tmdb.org/t/p/#{size}#{path}"
+
+  defp put_company_index_flags(company) do
+    company
+    |> Map.put(:has_logo_url, present?(company.logo_url))
+    |> Map.put(:has_logo, present?(company.logo_url) or present?(company.logo_path))
+    |> Map.put(:has_svg_logo, company_svg_logo?(company))
+  end
+
+  defp maybe_filter_company_index_search(query, search) when is_binary(search) do
+    search = String.trim(search)
+
+    if search == "" do
+      query
+    else
+      escaped = escape_like_wildcards(search)
+
+      where(
+        query,
+        [c],
+        fragment("LOWER(?) LIKE LOWER(?)", c.name, ^"%#{escaped}%") or
+          fragment("LOWER(?) LIKE LOWER(?)", c.origin_country, ^"%#{escaped}%")
+      )
+    end
+  end
+
+  defp maybe_filter_company_index_search(query, _search), do: query
+
+  defp maybe_filter_company_index_category(query, "major"),
+    do: having(query, [_c, _mpc, m], count(m.id) >= 25)
+
+  defp maybe_filter_company_index_category(query, "international"),
+    do: where(query, [c], not is_nil(c.origin_country) and c.origin_country != "US")
+
+  defp maybe_filter_company_index_category(query, "with-logos"),
+    do:
+      where(
+        query,
+        [c],
+        (not is_nil(c.logo_url) and c.logo_url != "") or
+          (not is_nil(c.logo_path) and c.logo_path != "")
+      )
+
+  defp maybe_filter_company_index_category(query, _category), do: query
+
+  defp maybe_exclude_orphan_companies(query, true), do: query
+
+  defp maybe_exclude_orphan_companies(query, false),
+    do: having(query, [_c, _mpc, m], count(m.id) > 0)
+
+  defp order_company_index(query, "name"),
+    do: order_by(query, [c], asc: fragment("lower(?)", c.name))
+
+  defp order_company_index(query, "newest"),
+    do: order_by(query, [_c, _mpc, m], desc: max(m.release_date))
+
+  defp order_company_index(query, _sort),
+    do: order_by(query, [_c, _mpc, m], desc: count(m.id), desc: max(m.release_date))
+
+  defp maybe_limit_company_index(query, nil), do: query
+
+  defp maybe_limit_company_index(query, limit) when is_integer(limit) and limit > 0,
+    do: limit(query, ^limit)
+
+  defp maybe_limit_company_index(query, _limit), do: query
+
+  defp company_svg_logo?(company) do
+    company.metadata
+    |> ensure_map()
+    |> get_in(["tmdb", "selected_logo", "file_type"])
+    |> case do
+      type when is_binary(type) -> String.downcase(type) == "svg"
+      _ -> false
+    end
+  end
+
+  defp production_company_missing_metadata?(%ProductionCompany{} = company) do
+    tmdb = company.metadata |> ensure_map() |> Map.get("tmdb") |> ensure_map()
+    is_nil(tmdb["company_details"]) or is_nil(tmdb["company_images"])
+  end
+
+  defp stale_iso8601?(value, days) when is_binary(value) do
+    with {:ok, fetched_at, _offset} <- DateTime.from_iso8601(value) do
+      DateTime.diff(DateTime.utc_now(), fetched_at, :day) > days
+    else
+      _ -> true
+    end
+  end
+
+  defp stale_iso8601?(_value, _days), do: true
+
+  defp present?(value) when is_binary(value), do: String.trim(value) != ""
+  defp present?(_value), do: false
 
   @doc """
   Fetches full person details from TMDB.

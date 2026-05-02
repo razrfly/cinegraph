@@ -9,7 +9,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   alias CinegraphWeb.MovieLive.IndexV2Components.ParamHelpers
   alias CinegraphWeb.MovieLive.IndexV2Components.SortLabels
 
-  @basic_filter_keys ~w(search genres decade lists festivals people rating_preset show_unreleased)
+  @basic_filter_keys ~w(search genres decade lists festivals companies people rating_preset show_unreleased)
 
   attr :params, :map, required: true
   attr :filter_options, :map, required: true
@@ -111,6 +111,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   defp label_for("decade"), do: "Decade"
   defp label_for("lists"), do: "Lists"
   defp label_for("festivals"), do: "Festivals"
+  defp label_for("companies"), do: "Companies"
   defp label_for("people"), do: "Cast & Crew"
   defp label_for("people_ids"), do: "Cast & Crew"
   defp label_for("rating_preset"), do: "Rating"
@@ -145,6 +146,16 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
     |> Enum.map(&festival_for_value(&1, available))
     |> Enum.map(& &1.name)
     |> truncate_join()
+  end
+
+  defp value_label_for("companies", value, _opts) do
+    ids = LiveViewHelpers.parse_array_param(value)
+
+    case length(ids) do
+      0 -> "—"
+      1 -> "1 company"
+      n -> "#{n} companies"
+    end
   end
 
   defp value_label_for("decade", value, _opts), do: "#{value}s"
@@ -227,5 +238,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   defp hidden_filter_keys(%{kind: "list"}), do: ["lists"]
   defp hidden_filter_keys(%{kind: :festival}), do: ["festivals"]
   defp hidden_filter_keys(%{kind: "festival"}), do: ["festivals"]
+  defp hidden_filter_keys(%{kind: :company}), do: ["companies"]
+  defp hidden_filter_keys(%{kind: "company"}), do: ["companies"]
   defp hidden_filter_keys(_), do: []
 end

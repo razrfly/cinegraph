@@ -234,6 +234,13 @@ defmodule Cinegraph.Services.TMDb do
   end
 
   @doc """
+  Fetches production company images by ID.
+  """
+  def get_company_images(company_id) when is_integer(company_id) or is_binary(company_id) do
+    Client.get("/company/#{company_id}/images")
+  end
+
+  @doc """
   Tests the TMDb connection and displays configuration status.
   """
   def test_connection do

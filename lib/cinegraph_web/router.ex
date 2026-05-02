@@ -194,6 +194,8 @@ defmodule CinegraphWeb.Router do
       live "/awards/:slug", AwardsLive.Show, :show
       live "/awards/:slug/winners", AwardsLive.Show, :winners
       live "/awards/:slug/nominees", AwardsLive.Show, :nominees
+      live "/companies", CompanyLive.Index, :index
+      live "/companies/:slug_or_id", CompanyLive.Show, :show
     end
   end
 

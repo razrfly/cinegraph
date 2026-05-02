@@ -1,0 +1,98 @@
+<div
+  :if={@company}
+  class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16"
+  phx-window-keydown="hide_drawer"
+  phx-key="Escape"
+>
+  <nav class="mb-8 text-[12px] text-mist-600">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950">Movies</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <.link navigate={~p"/companies"} class="hover:text-mist-950">Companies</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <span class="font-medium text-mist-950">{@company.name}</span>
+  </nav>
+
+  <section class="mb-10 grid gap-7 lg:grid-cols-[220px_1fr] lg:items-end">
+    <div class="overflow-hidden rounded-lg border border-mist-950/10 bg-mist-100">
+      <%= if company_logo_url(@company) do %>
+        <div class="grid aspect-[4/3] place-items-center bg-mist-50 p-8">
+          <img
+            src={company_logo_url(@company)}
+            alt=""
+            class="max-h-full max-w-full object-contain"
+          />
+        </div>
+      <% else %>
+        <div class="grid aspect-[4/3] place-items-center bg-gradient-to-br from-mist-100 to-mist-300 px-6 text-center font-display italic text-[38px] leading-none text-mist-950">
+          {@company.name}
+        </div>
+      <% end %>
+    </div>
+
+    <div>
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        Production Company{if @company.origin_country,
+          do: " · #{String.upcase(@company.origin_country)}",
+          else: ""}
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <h1 class="mt-2 font-display italic text-[40px] sm:text-[52px] lg:text-[68px] text-balance text-mist-950 leading-[1.02]">
+        {@company.name}.
+      </h1>
+      <p class="mt-4 max-w-3xl text-[15px] leading-relaxed text-mist-700">
+        Browse films connected to {@company.name} in Cinegraph.
+      </p>
+      <p
+        :if={@company.description}
+        class="mt-3 max-w-3xl text-[14px] leading-relaxed text-mist-600"
+      >
+        {@company.description}
+      </p>
+      <div class="mt-5 flex flex-wrap items-center gap-2">
+        <CinegraphWeb.NeutralV2Components.n_pill tone="ink" size="sm">
+          {@total_movies || 0} films
+        </CinegraphWeb.NeutralV2Components.n_pill>
+        <CinegraphWeb.NeutralV2Components.n_pill
+          :if={@company.origin_country}
+          tone="neutral"
+          size="sm"
+        >
+          {@company.origin_country}
+        </CinegraphWeb.NeutralV2Components.n_pill>
+        <a
+          :if={@company.website}
+          href={@company.website}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center rounded-md border border-mist-950/10 bg-mist-50 px-3 py-[5px] text-[12px] font-medium text-mist-950 hover:bg-mist-950/[0.025]"
+        >
+          Website ↗
+        </a>
+        <a
+          :if={@company.tmdb_id}
+          href={tmdb_company_url(@company)}
+          target="_blank"
+          rel="noopener"
+          class="inline-flex items-center rounded-md border border-mist-950/10 bg-mist-50 px-3 py-[5px] text-[12px] font-medium text-mist-950 hover:bg-mist-950/[0.025]"
+        >
+          TMDb ↗
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <CinegraphWeb.MovieLive.IndexV2Components.discovery_body
+    movies={@movies}
+    meta={@meta}
+    params={@params}
+    filter_options={@filter_options}
+    search_term={@search_term}
+    sort_options={@sort_options}
+    sort_criteria={@sort_criteria}
+    sort_direction={@sort_direction}
+    sort_is_preset={@sort_is_preset}
+    active_lens_key={@active_lens_key}
+    show_drawer={@show_drawer}
+    show_scoring_info={@show_scoring_info}
+    scope={%{kind: :company, id: @company.id}}
+  />
+</div>

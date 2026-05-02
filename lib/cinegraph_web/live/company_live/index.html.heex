@@ -1,0 +1,84 @@
+<div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16">
+  <nav class="mb-8 text-[12px] text-mist-600">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950">Movies</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <span class="font-medium text-mist-950">Companies</span>
+  </nav>
+
+  <section class="mb-8 lg:mb-10">
+    <CinegraphWeb.NeutralV2Components.n_eyebrow>
+      Production Companies
+    </CinegraphWeb.NeutralV2Components.n_eyebrow>
+    <h1 class="mt-2 font-display italic text-[44px] sm:text-[56px] lg:text-[72px] text-balance text-mist-950 leading-[1.02]">
+      Companies.
+    </h1>
+    <p class="mt-3 max-w-2xl text-[15px] leading-relaxed text-mist-700">
+      Browse studios, labels, and production companies behind films in Cinegraph.
+    </p>
+  </section>
+
+  <section class="mb-7 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div class="inline-flex gap-[2px] rounded-lg border border-mist-950/10 bg-mist-950/[0.025] p-[3px]">
+      <.link
+        :for={
+          {id, label} <- [
+            {"all", "All"},
+            {"major", "Major"},
+            {"international", "International"},
+            {"with-logos", "With logos"}
+          ]
+        }
+        patch={~p"/companies?#{%{category: id, search: @search, sort: @sort}}"}
+        class={[
+          "rounded-[6px] px-3 py-[6px] text-[12.5px]",
+          if(@category == id,
+            do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
+            else: "font-medium text-mist-700 hover:text-mist-950"
+          )
+        ]}
+      >
+        {label}
+      </.link>
+    </div>
+
+    <form class="flex flex-col gap-2 sm:flex-row" phx-change="filter" phx-submit="filter">
+      <input type="hidden" name="category" value={@category} />
+      <input
+        name="search"
+        value={@search}
+        placeholder="Search companies"
+        phx-debounce="350"
+        class="h-10 rounded-lg border border-mist-950/15 bg-mist-50 px-3 text-[13px] text-mist-950 placeholder:text-mist-500"
+      />
+      <select
+        name="sort"
+        class="h-10 min-w-[150px] rounded-lg border border-mist-950/15 bg-mist-50 pl-3 pr-10 text-[13px] text-mist-950"
+      >
+        <option value="name" selected={@sort == "name"}>Name</option>
+        <option value="films" selected={@sort == "films"}>Film count</option>
+        <option value="newest" selected={@sort == "newest"}>Newest film</option>
+      </select>
+    </form>
+  </section>
+
+  <div :if={@companies == []} class="py-20 text-center">
+    <p class="font-display italic text-[28px] text-mist-700">No companies match these filters.</p>
+  </div>
+
+  <section
+    :if={@companies != []}
+    class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+  >
+    <CinegraphWeb.NeutralV2Components.n_collection_card
+      :for={company <- @companies}
+      collection={company}
+      href={~p"/companies/#{company.slug || company.id}"}
+      image_url={company_logo_url(company)}
+      eyebrow={company.origin_country || "Production Company"}
+      meta={[
+        %{label: "#{company.movie_count} films", tone: "ink"},
+        %{label: company.origin_country || "Production Company", tone: "neutral"}
+      ]}
+    />
+  </section>
+</div>
