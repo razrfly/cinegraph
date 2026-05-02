@@ -275,49 +275,33 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
 
   def top_canon_authorities(_), do: nil
 
-  def list_appearance_href(%{slug: slug}) when is_binary(slug) and slug != "",
-    do: "/lists/#{slug}"
+  defdelegate list_appearance_href(list),
+    to: CinegraphWeb.MovieLive.ShowV2.ListAppearance,
+    as: :href
 
-  def list_appearance_href(_), do: nil
+  defdelegate list_appearance_title(list),
+    to: CinegraphWeb.MovieLive.ShowV2.ListAppearance,
+    as: :title
 
-  def list_appearance_title(list), do: list[:short_name] || list[:list_name] || "Untitled list"
+  defdelegate list_appearance_eyebrow(list),
+    to: CinegraphWeb.MovieLive.ShowV2.ListAppearance,
+    as: :eyebrow
 
-  def list_appearance_eyebrow(list) do
-    label =
-      [list[:category], list[:list_year]]
-      |> Enum.reject(&(&1 in [nil, ""]))
-      |> Enum.map(&to_string/1)
-      |> Enum.map(&String.upcase/1)
-      |> Enum.join(" · ")
+  defdelegate list_appearance_rank(list),
+    to: CinegraphWeb.MovieLive.ShowV2.ListAppearance,
+    as: :rank
 
-    if label == "", do: nil, else: label
-  end
+  defdelegate list_appearance_image(list),
+    to: CinegraphWeb.MovieLive.ShowV2.ListAppearance,
+    as: :image
 
-  def list_appearance_rank(%{rank: rank}) when is_integer(rank), do: "##{rank}"
-  def list_appearance_rank(_), do: "Included"
+  defdelegate list_appearance_initials(list),
+    to: CinegraphWeb.MovieLive.ShowV2.ListAppearance,
+    as: :initials
 
-  def list_appearance_image(list), do: list[:cover_image_url] || list[:hero_image_url]
-
-  def list_appearance_initials(list) do
-    list
-    |> list_appearance_title()
-    |> String.split(~r/\s+/, trim: true)
-    |> Enum.reject(&(&1 in ["The", "A", "An", "of", "and", "&", "|"]))
-    |> Enum.take(3)
-    |> Enum.map(&String.first/1)
-    |> Enum.join("")
-    |> String.upcase()
-  end
-
-  def list_appearance_visual_class(list) do
-    case list[:category] do
-      "critics" -> "from-amber-100 to-mist-200"
-      "registry" -> "from-sky-100 to-mist-200"
-      "curated" -> "from-emerald-100 to-mist-200"
-      "personal" -> "from-rose-100 to-mist-200"
-      _ -> "from-mist-100 to-mist-300"
-    end
-  end
+  defdelegate list_appearance_visual_class(list),
+    to: CinegraphWeb.MovieLive.ShowV2.ListAppearance,
+    as: :visual_class
 
   def top_festival_win(noms) when is_list(noms) do
     Enum.find_value(noms, fn org ->

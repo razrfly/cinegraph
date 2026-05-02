@@ -52,7 +52,8 @@ defmodule Cinegraph.CulturalTest do
             "active_list" => %{"included" => true},
             "inactive_list" => %{"included" => true},
             "unknown_list" => %{"included" => true},
-            "award_only" => %{"included" => true}
+            "award_only" => %{"included" => true},
+            "award_curated" => %{"included" => true}
           }
         })
 
@@ -73,7 +74,45 @@ defmodule Cinegraph.CulturalTest do
         tracks_awards: true
       })
 
+      insert_movie_list!(%{
+        source_key: "award_curated",
+        name: "Award Curated",
+        slug: "award-curated",
+        category: "curated",
+        tracks_awards: true
+      })
+
       assert [%{source_key: "active_list"}] = Cultural.get_list_movies_for_movie(movie.id)
+    end
+
+    test "only includes canonical sources explicitly marked included" do
+      movie =
+        insert_movie!(%{
+          canonical_sources: %{
+            "included_list" => %{"included" => true},
+            "missing_flag" => %{"list_position" => 5},
+            "truthy_string" => %{"included" => "true"},
+            "excluded_list" => %{"included" => false}
+          }
+        })
+
+      insert_movie_list!(%{source_key: "included_list", name: "Included", slug: "included-list"})
+
+      insert_movie_list!(%{
+        source_key: "missing_flag",
+        name: "Missing Flag",
+        slug: "missing-flag"
+      })
+
+      insert_movie_list!(%{
+        source_key: "truthy_string",
+        name: "Truthy String",
+        slug: "truthy-string"
+      })
+
+      insert_movie_list!(%{source_key: "excluded_list", name: "Excluded", slug: "excluded-list"})
+
+      assert [%{source_key: "included_list"}] = Cultural.get_list_movies_for_movie(movie.id)
     end
 
     test "handles missing and unparseable rank while deriving year from list metadata" do

@@ -9,9 +9,32 @@ defmodule Cinegraph.Movies.Search do
 
   import Ecto.Query
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{DiscoveryRankings, Movie}
+  alias Cinegraph.Movies.{DiscoveryRankings, Movie, MovieScoreCache}
   alias Cinegraph.Movies.Query.{Params, CustomFilters, CustomSorting}
   alias Cinegraph.Metrics.ScoringService
+
+  defmacrop score_cache_present_lens_count_fragment(sc) do
+    quote do
+      fragment(
+        """
+        (
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int +
+          (COALESCE(?, 0) > 0)::int
+        )
+        """,
+        unquote(sc).mob_score,
+        unquote(sc).critics_score,
+        unquote(sc).festival_recognition_score,
+        unquote(sc).time_machine_score,
+        unquote(sc).auteurs_score,
+        unquote(sc).box_office_score
+      )
+    end
+  end
 
   @preset_sort_variants ~w(
     cinegraph_editorial cinegraph_editorial_asc cinegraph_editorial_desc
@@ -48,6 +71,14 @@ defmodule Cinegraph.Movies.Search do
   end
 
   defp search_movies_generic(validated_params) do
+    if plain_score_sort?(validated_params) do
+      search_movies_plain_score_sort(validated_params)
+    else
+      search_movies_generic_query(validated_params)
+    end
+  end
+
+  defp search_movies_generic_query(validated_params) do
     # Start with base query for fully imported movies
     base_query = from(m in Movie, where: m.import_status == "full")
 
@@ -123,6 +154,38 @@ defmodule Cinegraph.Movies.Search do
       {:error, changeset} ->
         {:error, changeset}
     end
+  end
+
+  defp search_movies_plain_score_sort(validated_params) do
+    page = validated_params.page || 1
+    per_page = validated_params.per_page || 50
+    offset = (page - 1) * per_page
+    direction = score_sort_direction(validated_params.sort)
+
+    total_count = count_plain_score_sort_movies(validated_params)
+    scoreable_count = count_plain_score_sort_scoreable_movies(validated_params)
+
+    movies =
+      cond do
+        offset >= scoreable_count ->
+          fetch_plain_score_sort_insufficient(
+            validated_params,
+            offset - scoreable_count,
+            per_page
+          )
+
+        offset + per_page <= scoreable_count ->
+          fetch_plain_score_sort_scoreable(validated_params, direction, offset, per_page)
+
+        true ->
+          scoreable_limit = max(scoreable_count - offset, 0)
+          insufficient_limit = per_page - scoreable_limit
+
+          fetch_plain_score_sort_scoreable(validated_params, direction, offset, scoreable_limit) ++
+            fetch_plain_score_sort_insufficient(validated_params, 0, insufficient_limit)
+      end
+
+    {:ok, {movies, search_meta(page, per_page, total_count)}}
   end
 
   @doc """
@@ -202,6 +265,210 @@ defmodule Cinegraph.Movies.Search do
       movies
     end
   end
+
+  defp plain_score_sort?(%Params{} = params) do
+    params.sort in ~w(score score_asc score_desc) and
+      is_nil(params.preset) and
+      is_nil(params.search) and
+      params.genres == [] and
+      params.countries == [] and
+      params.languages == [] and
+      params.lists == [] and
+      is_nil(params.year) and
+      is_nil(params.year_from) and
+      is_nil(params.year_to) and
+      is_nil(params.decade) and
+      is_nil(params.runtime_min) and
+      is_nil(params.runtime_max) and
+      is_nil(params.rating_min) and
+      is_nil(params.award_status) and
+      is_nil(params.festival_id) and
+      params.festivals == [] and
+      is_nil(params.award_category_id) and
+      is_nil(params.award_year_from) and
+      is_nil(params.award_year_to) and
+      is_nil(params.rating_preset) and
+      is_nil(params.discovery_preset) and
+      is_nil(params.award_preset) and
+      params.people_ids == [] and
+      is_nil(params.people_role) and
+      params.people_match == "any" and
+      params.production_company_ids == [] and
+      is_nil(params.festival_recognition_min) and
+      is_nil(params.time_machine_min) and
+      is_nil(params.auteurs_min) and
+      is_nil(params.disparity)
+  end
+
+  defp score_sort_direction("score_asc"), do: :asc_nulls_last
+  defp score_sort_direction(_), do: :desc_nulls_last
+
+  defp count_plain_score_sort_movies(params) do
+    Movie
+    |> where([m], m.import_status == "full")
+    |> maybe_released_only_movie(params)
+    |> Repo.replica().aggregate(:count, :id)
+  end
+
+  defp count_plain_score_sort_scoreable_movies(params) do
+    MovieScoreCache
+    |> join(:inner, [sc], m in Movie, on: m.id == sc.movie_id)
+    |> where([sc, m], m.import_status == "full")
+    |> maybe_released_only_score_cache_movie(params)
+    |> where([sc], not is_nil(sc.overall_score))
+    |> where([sc], score_cache_present_lens_count_fragment(sc) >= 2)
+    |> Repo.replica().aggregate(:count, :id)
+  end
+
+  defp fetch_plain_score_sort_scoreable(_params, _direction, _offset, limit) when limit <= 0,
+    do: []
+
+  defp fetch_plain_score_sort_scoreable(params, direction, offset, limit) do
+    MovieScoreCache
+    |> join(:inner, [sc], m in Movie, on: m.id == sc.movie_id)
+    |> where([sc, m], m.import_status == "full")
+    |> maybe_released_only_score_cache_movie(params)
+    |> where([sc], not is_nil(sc.overall_score))
+    |> where([sc], score_cache_present_lens_count_fragment(sc) >= 2)
+    |> order_by([sc, m], [
+      {^direction,
+       fragment(
+         "? * (?::float / 6.0)",
+         sc.overall_score,
+         score_cache_present_lens_count_fragment(sc)
+       )},
+      desc_nulls_last: m.release_date,
+      asc: m.id
+    ])
+    |> limit(^limit)
+    |> offset(^offset)
+    |> select([sc, m], m)
+    |> select_merge([sc, _m], %{
+      overall_score: sc.overall_score,
+      raw_cinegraph_score: sc.overall_score,
+      cinegraph_display_score: sc.overall_score,
+      cinegraph_sort_score:
+        fragment(
+          "? * (?::float / 6.0)",
+          sc.overall_score,
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      scoreability_state:
+        fragment(
+          "CASE WHEN ? >= 4 THEN 'scoreable' ELSE 'limited' END",
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      score_confidence_label:
+        fragment(
+          "CASE WHEN ? >= 5 THEN 'high' WHEN ? >= 3 THEN 'medium' ELSE 'low' END",
+          score_cache_present_lens_count_fragment(sc),
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      present_lens_count: score_cache_present_lens_count_fragment(sc),
+      missing_lens_count: fragment("6 - ?", score_cache_present_lens_count_fragment(sc)),
+      score_hidden_reason: fragment("'none'")
+    })
+    |> Repo.replica().all()
+  end
+
+  defp fetch_plain_score_sort_insufficient(_params, _offset, limit) when limit <= 0, do: []
+
+  defp fetch_plain_score_sort_insufficient(params, offset, limit) do
+    Movie
+    |> join(:left, [m], sc in MovieScoreCache, on: sc.movie_id == m.id)
+    |> where([m, sc], m.import_status == "full")
+    |> maybe_released_only_movie_score_cache(params)
+    |> where(
+      [m, sc],
+      is_nil(sc.id) or is_nil(sc.overall_score) or
+        score_cache_present_lens_count_fragment(sc) < 2
+    )
+    |> order_by([m, _sc], desc_nulls_last: m.release_date, asc: m.id)
+    |> limit(^limit)
+    |> offset(^offset)
+    |> select([m, sc], m)
+    |> select_merge([_m, sc], %{
+      overall_score: nil,
+      raw_cinegraph_score: sc.overall_score,
+      cinegraph_display_score: nil,
+      cinegraph_sort_score: nil,
+      scoreability_state: fragment("'insufficient_evidence'"),
+      score_confidence_label: fragment("'insufficient'"),
+      present_lens_count:
+        fragment(
+          "CASE WHEN ?.id IS NULL THEN 0 ELSE ? END",
+          sc,
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      missing_lens_count:
+        fragment(
+          "CASE WHEN ?.id IS NULL THEN 6 ELSE 6 - ? END",
+          sc,
+          score_cache_present_lens_count_fragment(sc)
+        ),
+      score_hidden_reason:
+        fragment(
+          "CASE WHEN ?.id IS NULL OR ? IS NULL THEN 'no_score_cache' ELSE 'not_enough_evidence' END",
+          sc,
+          sc.overall_score
+        )
+    })
+    |> Repo.replica().all()
+  end
+
+  defp maybe_released_only_movie(query, %{show_unreleased: true}), do: query
+
+  defp maybe_released_only_movie(query, _params) do
+    where(query, [m], is_nil(m.release_date) or m.release_date <= ^Date.utc_today())
+  end
+
+  defp maybe_released_only_score_cache_movie(query, %{show_unreleased: true}), do: query
+
+  defp maybe_released_only_score_cache_movie(query, _params) do
+    where(query, [_sc, m], is_nil(m.release_date) or m.release_date <= ^Date.utc_today())
+  end
+
+  defp maybe_released_only_movie_score_cache(query, %{show_unreleased: true}), do: query
+
+  defp maybe_released_only_movie_score_cache(query, _params) do
+    where(query, [m, _sc], is_nil(m.release_date) or m.release_date <= ^Date.utc_today())
+  end
+
+  defp search_meta(page, per_page, total_count) do
+    total_pages =
+      case total_count do
+        0 -> 0
+        count -> ceil(count / per_page)
+      end
+
+    %Flop.Meta{
+      current_offset: (page - 1) * per_page,
+      current_page: page,
+      page_size: per_page,
+      next_offset: next_offset(page, per_page, total_pages),
+      next_page: next_page(page, total_pages),
+      previous_offset: previous_offset(page, per_page),
+      previous_page: previous_page(page),
+      total_count: total_count,
+      total_pages: total_pages,
+      has_next_page?: page < total_pages,
+      has_previous_page?: page > 1,
+      schema: Movie,
+      flop: %Flop{page: page, page_size: per_page}
+    }
+  end
+
+  defp next_offset(page, per_page, total_pages) when page < total_pages, do: page * per_page
+  defp next_offset(_page, _per_page, _total_pages), do: nil
+
+  defp next_page(page, total_pages) when page < total_pages, do: page + 1
+  defp next_page(_page, _total_pages), do: nil
+
+  defp previous_offset(page, per_page) when page > 1, do: max((page - 2) * per_page, 0)
+  defp previous_offset(_page, _per_page), do: nil
+
+  defp previous_page(page) when page > 1, do: page - 1
+  defp previous_page(_page), do: nil
 
   defp uses_discovery_sorting?(sort) do
     base =

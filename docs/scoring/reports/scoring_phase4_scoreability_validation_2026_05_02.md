@@ -13,9 +13,9 @@ enqueue jobs, or call external APIs.
 | View rows | 1144666 |
 | Rows with raw score | 902490 |
 | 2+ lens numeric display count | 550797 |
-| 0-lens numeric display count | 0 |
 | Distinct movie IDs | 1144666 |
 | 1-lens numeric display count | 0 |
+| 0-lens numeric display count | 0 |
 
 ## Scoreability Buckets
 
@@ -34,7 +34,7 @@ Differences are expected if the database snapshot or score cache changed.
 
 | Threshold | Visible rows | Visible % |
 | --- | --- | --- |
-| 0+ lenses | 902,490 | 78.840 |
+| 0+ lenses | 550,797 | 48.120 |
 | 2+ lenses | 550,797 | 48.120 |
 | 3+ lenses | 302,832 | 26.460 |
 | 4+ lenses | 48,556 | 4.240 |
