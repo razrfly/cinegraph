@@ -15,7 +15,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetailsTest do
           ]
         )
 
-      assert html =~ "—"
+      assert length(Regex.scan(~r/—/, html)) == 2
       refute html =~ ~r/>\s+-\s*</
     end
   end
