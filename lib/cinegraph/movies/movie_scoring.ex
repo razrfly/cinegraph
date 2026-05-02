@@ -347,7 +347,7 @@ defmodule Cinegraph.Movies.MovieScoring do
       |> where([em], em.metric_type == "rating_average")
       |> group_by([em], em.movie_id)
       |> select([em], {em.movie_id, avg(em.value)})
-      |> Repo.all()
+      |> Repo.replica().all()
       |> Map.new(fn {movie_id, score} ->
         score_val = normalize_number(score)
         {movie_id, if(score_val, do: Float.round(score_val, 1), else: nil)}
