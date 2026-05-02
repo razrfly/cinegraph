@@ -31,10 +31,22 @@ defmodule Cinegraph.Movies.MovieAvailabilityRefresh do
     |> validate_inclusion(:source, WatchProvider.valid_sources())
     |> validate_inclusion(:status, @valid_statuses)
     |> validate_length(:region, is: 2)
+    |> validate_temporal_consistency()
     |> foreign_key_constraint(:movie_id)
     |> unique_constraint([:movie_id, :region, :source],
       name: :movie_availability_refresh_unique_idx
     )
+  end
+
+  defp validate_temporal_consistency(changeset) do
+    fetched_at = get_field(changeset, :fetched_at)
+    stale_after = get_field(changeset, :stale_after)
+
+    if fetched_at && stale_after && DateTime.compare(stale_after, fetched_at) != :gt do
+      add_error(changeset, :stale_after, "must be after fetched_at")
+    else
+      changeset
+    end
   end
 
   def valid_statuses, do: @valid_statuses

@@ -19,6 +19,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.Person
   alias Cinegraph.Movies.Search
+  alias Cinegraph.Movies.WatchProviderRegion
   alias Cinegraph.Workers.MovieAvailabilityRefreshWorker
   alias Cinegraph.Repo
 
@@ -187,6 +188,134 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ ~r/Netflix.*Prime Video/s
     end
 
+    test "renders multiple regions and switches provider groups", %{conn: conn, movie: movie} do
+      payload = %{
+        "results" => %{
+          "US" => %{
+            "flatrate" => [provider(8, "Netflix", 1)]
+          },
+          "GB" => %{
+            "rent" => [provider(2, "Apple TV", 2)]
+          }
+        }
+      }
+
+      %WatchProviderRegion{}
+      |> WatchProviderRegion.changeset(%{
+        iso_3166_1: "GB",
+        english_name: "United Kingdom",
+        source: "tmdb",
+        active: true
+      })
+      |> Repo.insert!()
+
+      assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
+
+      {:ok, view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability for 🇺🇸 United States."
+      assert html =~ "Netflix"
+      assert html =~ "United Kingdom"
+
+      html =
+        view
+        |> form("#availability-region-form", region: "GB")
+        |> render_change()
+
+      assert html =~ "Availability for 🇬🇧 United Kingdom."
+      assert html =~ "Apple TV"
+      refute html =~ "Netflix"
+    end
+
+    test "uses browser locale region when normalized for the movie", %{conn: conn, movie: movie} do
+      payload = %{
+        "results" => %{
+          "US" => %{"flatrate" => [provider(8, "Netflix", 1)]},
+          "GB" => %{"rent" => [provider(2, "Apple TV", 2)]}
+        }
+      }
+
+      assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
+
+      conn = put_connect_params(conn, %{"browser_locale" => "en-GB"})
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability for 🇬🇧 United Kingdom."
+      assert html =~ "Apple TV"
+      refute html =~ "Netflix"
+    end
+
+    test "uses browser timezone region ahead of US browser language", %{conn: conn, movie: movie} do
+      payload = %{
+        "results" => %{
+          "US" => %{"flatrate" => [provider(8, "Netflix", 1)]},
+          "PL" => %{"rent" => [provider(2, "Apple TV", 2)]}
+        }
+      }
+
+      assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
+
+      conn =
+        put_connect_params(conn, %{
+          "browser_locale" => "en-US",
+          "browser_locales" => ["en-US", "pl"],
+          "browser_timezone" => "Europe/Warsaw"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability for 🇵🇱 Poland."
+      assert html =~ "Apple TV"
+      refute html =~ "Netflix"
+    end
+
+    test "uses later browser locale when earlier hints are unavailable", %{
+      conn: conn,
+      movie: movie
+    } do
+      payload = %{
+        "results" => %{
+          "US" => %{"flatrate" => [provider(8, "Netflix", 1)]},
+          "GB" => %{"rent" => [provider(2, "Apple TV", 2)]}
+        }
+      }
+
+      assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
+
+      conn =
+        put_connect_params(conn, %{
+          "browser_locales" => ["fr-FR", "en-GB"],
+          "browser_timezone" => "Europe/Warsaw"
+        })
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability for 🇬🇧 United Kingdom."
+      assert html =~ "Apple TV"
+      refute html =~ "Netflix"
+    end
+
+    test "falls back to US when browser locale region is not normalized", %{
+      conn: conn,
+      movie: movie
+    } do
+      payload = %{
+        "results" => %{
+          "US" => %{"flatrate" => [provider(8, "Netflix", 1)]},
+          "GB" => %{"rent" => [provider(2, "Apple TV", 2)]}
+        }
+      }
+
+      assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
+
+      conn = put_connect_params(conn, %{"browser_locale" => "fr-FR"})
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability for 🇺🇸 United States."
+      assert html =~ "Netflix"
+      refute html =~ "Apple TV"
+    end
+
     test "renders stale warning", %{conn: conn, movie: movie} do
       assert {:ok, _} =
                Availability.store_tmdb_watch_providers(movie, watch_payload(),
@@ -207,13 +336,13 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
       {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
 
-      assert html =~ "No availability found for US."
+      assert html =~ "No availability found for 🇺🇸 United States."
     end
 
     test "renders never-fetched state", %{conn: conn, movie: movie} do
       {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
 
-      assert html =~ "Availability has not been checked for US yet."
+      assert html =~ "Availability for 🇺🇸 United States has not been checked yet."
     end
 
     test "renders error state", %{conn: conn, movie: movie} do
@@ -221,11 +350,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
       {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
 
-      assert html =~ "Availability could not be refreshed."
+      assert html =~ "Availability for 🇺🇸 United States could not be refreshed."
     end
 
     test "renders queued state", %{conn: conn, movie: movie} do
-      %{"movie_id" => movie.id, "regions" => ["US"], "force" => true}
+      %{"movie_id" => movie.id, "regions" => ["US"], "force" => true, "source" => "manual"}
       |> MovieAvailabilityRefreshWorker.new()
       |> Oban.insert!()
 

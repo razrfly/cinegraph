@@ -8,7 +8,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
     max_attempts: 5,
     unique: [
       fields: [:args],
-      keys: [:movie_id, :regions],
+      keys: [:movie_id, :regions, :force],
       period: 3600,
       states: [:available, :scheduled, :executing, :retryable]
     ]
@@ -21,7 +21,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"movie_id" => movie_id} = args}) do
-    regions = Map.get(args, "regions", ["US"])
+    regions = Map.get(args, "regions", Availability.configured_regions())
     force? = Map.get(args, "force", false)
 
     case Repo.get(Movie, movie_id) do
@@ -41,7 +41,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
   end
 
   def refresh_movie(%Movie{} = movie, opts \\ []) do
-    regions = Keyword.get(opts, :regions, ["US"])
+    regions = Keyword.get(opts, :regions, Availability.configured_regions())
     force? = Keyword.get(opts, :force, false)
     fetch_fun = Keyword.get(opts, :fetch_fun, &TMDb.get_movie_watch_providers/1)
 

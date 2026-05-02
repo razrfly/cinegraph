@@ -41,6 +41,36 @@ defmodule Cinegraph.Movies.AvailabilityBackfillTest do
       assert Repo.aggregate(MovieWatchProvider, :count) == 1
     end
 
+    test "default run normalizes all regions in existing raw TMDb JSON" do
+      movie = insert_movie!(%{tmdb_data: %{"watch_providers" => multi_region_payload()}})
+
+      assert {:ok, stats} = AvailabilityBackfill.run()
+
+      assert stats.processed == 1
+      assert stats.success == 2
+      assert stats.last_id == movie.id
+
+      regions =
+        MovieAvailabilityRefresh
+        |> Repo.all()
+        |> Enum.map(& &1.region)
+        |> Enum.sort()
+
+      assert regions == ["GB", "US"]
+    end
+
+    test "regions option limits backfill normalization" do
+      insert_movie!(%{tmdb_data: %{"watch_providers" => multi_region_payload()}})
+
+      assert {:ok, stats} = AvailabilityBackfill.run(regions: ["GB"])
+
+      assert stats.processed == 1
+      assert stats.success == 1
+
+      assert [refresh] = Repo.all(MovieAvailabilityRefresh)
+      assert refresh.region == "GB"
+    end
+
     test "after_id resumes after a known movie id" do
       first = insert_movie!(%{tmdb_data: %{"watch_providers" => watch_payload(8, "Netflix")}})
 
@@ -70,11 +100,24 @@ defmodule Cinegraph.Movies.AvailabilityBackfillTest do
       assert Repo.aggregate(MovieAvailabilityRefresh, :count) == 1
     end
 
+    test "soft-imported movies are skipped by selection" do
+      insert_movie!(%{
+        import_status: "soft",
+        tmdb_data: %{"watch_providers" => watch_payload()}
+      })
+
+      assert {:ok, stats} = AvailabilityBackfill.run()
+
+      assert stats.processed == 0
+      assert Repo.aggregate(MovieAvailabilityRefresh, :count) == 0
+      assert Repo.aggregate(MovieWatchProvider, :count) == 0
+    end
+
     test "already-normalized movie region rows are skipped" do
       movie = insert_movie!(%{tmdb_data: %{"watch_providers" => watch_payload()}})
       assert {:ok, _results} = Availability.store_tmdb_watch_providers(movie, watch_payload())
 
-      assert {:ok, stats} = AvailabilityBackfill.run()
+      assert {:ok, stats} = AvailabilityBackfill.run(regions: ["US", "us"])
 
       assert stats.processed == 0
       assert stats.success == 0
@@ -124,6 +167,21 @@ defmodule Cinegraph.Movies.AvailabilityBackfillTest do
 
   defp no_results_payload do
     %{"results" => %{"US" => %{"link" => "https://example.test/watch"}}}
+  end
+
+  defp multi_region_payload do
+    %{
+      "results" => %{
+        "US" => %{
+          "link" => "https://example.test/us",
+          "flatrate" => [provider(8, "Netflix")]
+        },
+        "GB" => %{
+          "link" => "https://example.test/gb",
+          "rent" => [provider(2, "Apple TV")]
+        }
+      }
+    }
   end
 
   defp provider(id, name) do

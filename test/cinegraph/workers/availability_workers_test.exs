@@ -28,6 +28,23 @@ defmodule Cinegraph.Workers.AvailabilityWorkersTest do
       assert Repo.one(MovieAvailabilityRefresh).status == "success"
     end
 
+    test "defaults to all regions returned by TMDb payload" do
+      movie = insert_movie!()
+
+      assert {:ok, %{status: "refreshed"}} =
+               MovieAvailabilityRefreshWorker.refresh_movie(movie,
+                 fetch_fun: fn _tmdb_id -> {:ok, multi_region_payload()} end
+               )
+
+      regions =
+        MovieAvailabilityRefresh
+        |> Repo.all()
+        |> Enum.map(& &1.region)
+        |> Enum.sort()
+
+      assert regions == ["GB", "US"]
+    end
+
     test "skips fresh rows when not forced" do
       movie = insert_movie!()
       assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, watch_payload())
@@ -120,6 +137,15 @@ defmodule Cinegraph.Workers.AvailabilityWorkersTest do
           "link" => "https://example.test/watch",
           "flatrate" => [provider(provider_id, provider_name)]
         }
+      }
+    }
+  end
+
+  defp multi_region_payload do
+    %{
+      "results" => %{
+        "US" => %{"flatrate" => [provider(8, "Netflix")]},
+        "GB" => %{"rent" => [provider(2, "Apple TV")]}
       }
     }
   end

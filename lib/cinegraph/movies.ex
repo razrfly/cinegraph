@@ -377,7 +377,7 @@ defmodule Cinegraph.Movies do
         &Availability.store_tmdb_watch_providers/3
       )
 
-    regions = Elixir.Keyword.get(opts, :availability_regions, ["US"])
+    regions = Elixir.Keyword.get(opts, :availability_regions, Availability.configured_regions())
     payload = Map.get(tmdb_data, "watch_providers")
 
     case store_fun.(movie, payload, regions: regions) do

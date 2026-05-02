@@ -20,15 +20,91 @@ defmodule Cinegraph.Movies.Availability do
 
   alias Cinegraph.Services.TMDb
 
-  @default_regions ["US"]
+  @default_regions :all
+  @default_region "US"
   @default_source "tmdb"
   @stale_after_seconds 30 * 24 * 60 * 60
+  @region_names %{
+    "AD" => "Andorra",
+    "AR" => "Argentina",
+    "AT" => "Austria",
+    "AU" => "Australia",
+    "BE" => "Belgium",
+    "BG" => "Bulgaria",
+    "BO" => "Bolivia",
+    "BR" => "Brazil",
+    "BZ" => "Belize",
+    "CA" => "Canada",
+    "CH" => "Switzerland",
+    "CL" => "Chile",
+    "CO" => "Colombia",
+    "CR" => "Costa Rica",
+    "CY" => "Cyprus",
+    "CZ" => "Czechia",
+    "DE" => "Germany",
+    "DK" => "Denmark",
+    "DO" => "Dominican Republic",
+    "EC" => "Ecuador",
+    "EE" => "Estonia",
+    "EG" => "Egypt",
+    "ES" => "Spain",
+    "FI" => "Finland",
+    "FR" => "France",
+    "GB" => "United Kingdom",
+    "GG" => "Guernsey",
+    "GI" => "Gibraltar",
+    "GR" => "Greece",
+    "GT" => "Guatemala",
+    "HK" => "Hong Kong",
+    "HN" => "Honduras",
+    "HU" => "Hungary",
+    "ID" => "Indonesia",
+    "IE" => "Ireland",
+    "IL" => "Israel",
+    "IN" => "India",
+    "IS" => "Iceland",
+    "IT" => "Italy",
+    "JP" => "Japan",
+    "KR" => "South Korea",
+    "LT" => "Lithuania",
+    "LU" => "Luxembourg",
+    "LV" => "Latvia",
+    "MX" => "Mexico",
+    "MY" => "Malaysia",
+    "NI" => "Nicaragua",
+    "NL" => "Netherlands",
+    "NO" => "Norway",
+    "NZ" => "New Zealand",
+    "PA" => "Panama",
+    "PE" => "Peru",
+    "PH" => "Philippines",
+    "PL" => "Poland",
+    "PT" => "Portugal",
+    "PY" => "Paraguay",
+    "RU" => "Russia",
+    "SE" => "Sweden",
+    "SG" => "Singapore",
+    "SI" => "Slovenia",
+    "SK" => "Slovakia",
+    "SV" => "El Salvador",
+    "TH" => "Thailand",
+    "TR" => "Turkey",
+    "TW" => "Taiwan",
+    "UA" => "Ukraine",
+    "US" => "United States",
+    "UY" => "Uruguay",
+    "VE" => "Venezuela",
+    "ZA" => "South Africa"
+  }
+
+  def configured_regions, do: @default_regions
+  def default_region, do: @default_region
 
   @doc """
   Syncs the watch-provider catalog from TMDb for the selected regions.
   """
   def sync_provider_catalog!(opts \\ []) do
-    regions = opts |> Keyword.get(:regions, @default_regions) |> normalize_regions()
+    regions = opts |> Keyword.get(:regions, [@default_region]) |> normalize_regions()
     source = opts |> Keyword.get(:source, @default_source) |> to_string()
     fetched_at = Keyword.get(opts, :fetched_at, now())
     fetch_fun = Keyword.get(opts, :fetch_fun, &TMDb.get_watch_providers/1)
@@ -38,8 +114,8 @@ defmodule Cinegraph.Movies.Availability do
         {:ok, %{"results" => providers}} when is_list(providers) ->
           Enum.map(providers, &upsert_catalog_provider!(&1, region, source, fetched_at))
 
-        {:ok, _payload} ->
-          []
+        {:ok, payload} ->
+          raise "TMDb watch-provider catalog sync returned malformed payload for #{region}: #{inspect(payload)}"
 
         {:error, reason} ->
           raise "TMDb watch-provider catalog sync failed for #{region}: #{inspect(reason)}"
@@ -59,8 +135,8 @@ defmodule Cinegraph.Movies.Availability do
       {:ok, %{"results" => regions}} when is_list(regions) ->
         Enum.map(regions, &upsert_region!(&1, source, fetched_at))
 
-      {:ok, _payload} ->
-        []
+      {:ok, payload} ->
+        raise "TMDb watch-provider region sync returned malformed payload: #{inspect(payload)}"
 
       {:error, reason} ->
         raise "TMDb watch-provider region sync failed: #{inspect(reason)}"
@@ -107,6 +183,7 @@ defmodule Cinegraph.Movies.Availability do
         where: r.movie_id == ^movie_id,
         where: r.source == ^source,
         where: r.region in ^regions,
+        where: r.status != "error",
         where: r.stale_after > ^now,
         select: count(r.id)
       )
@@ -204,9 +281,30 @@ defmodule Cinegraph.Movies.Availability do
     |> Enum.uniq()
     |> Enum.sort()
     |> case do
-      [] -> ["US"]
+      [] -> [@default_region]
       regions -> regions
     end
+  end
+
+  @doc """
+  Returns display labels for availability regions.
+  """
+  def region_options(regions, opts \\ []) do
+    source = opts |> Keyword.get(:source, @default_source) |> to_string()
+    normalized_regions = normalize_regions(regions)
+
+    labels =
+      from(r in WatchProviderRegion,
+        where: r.source == ^source,
+        where: r.iso_3166_1 in ^normalized_regions,
+        select: {r.iso_3166_1, r.english_name}
+      )
+      |> Repo.all()
+      |> Map.new()
+
+    Enum.map(normalized_regions, fn region ->
+      {region, region_label(region, Map.get(labels, region))}
+    end)
   end
 
   @doc """
@@ -218,14 +316,14 @@ defmodule Cinegraph.Movies.Availability do
 
   Options:
 
-    * `:regions` - region codes to normalize, defaults to `["US"]`
+    * `:regions` - region codes to normalize, defaults to all regions in the payload
     * `:source` - source identifier, defaults to `"tmdb"`
     * `:fetched_at` - timestamp for deterministic tests
     * `:stale_after` - explicit stale timestamp, defaults to fetched_at + 30 days
   """
   def store_tmdb_watch_providers(%Movie{} = movie, tmdb_payload, opts \\ []) do
     source = opts |> Keyword.get(:source, @default_source) |> to_string()
-    regions = opts |> Keyword.get(:regions, @default_regions) |> normalize_regions()
+    requested_regions = Keyword.get(opts, :regions, @default_regions)
     fetched_at = Keyword.get(opts, :fetched_at, now())
 
     stale_after =
@@ -234,12 +332,16 @@ defmodule Cinegraph.Movies.Availability do
     Repo.transaction(fn ->
       case tmdb_payload do
         %{"results" => results} when is_map(results) ->
+          regions = resolve_regions(requested_regions, results)
+
           Enum.map(regions, fn region ->
             store_region(movie, results, region, source, fetched_at, stale_after)
           end)
 
         _ ->
-          Enum.map(regions, fn region ->
+          requested_regions
+          |> fallback_regions()
+          |> Enum.map(fn region ->
             replace_region_rows(movie.id, region, source)
 
             refresh =
@@ -372,17 +474,13 @@ defmodule Cinegraph.Movies.Availability do
       metadata: %{"provider_payload" => provider_data}
     }
 
-    case Repo.get_by(WatchProvider, source: source, source_provider_id: attrs.source_provider_id) do
-      nil ->
-        %WatchProvider{}
-        |> WatchProvider.changeset(attrs)
-        |> Repo.insert!()
-
-      provider ->
-        provider
-        |> WatchProvider.changeset(attrs)
-        |> Repo.update!()
-    end
+    %WatchProvider{}
+    |> WatchProvider.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: {:replace_all_except, [:id, :inserted_at]},
+      conflict_target: [:source, :source_provider_id],
+      returning: true
+    )
   end
 
   defp upsert_catalog_provider!(provider_data, region, source, fetched_at) do
@@ -400,22 +498,33 @@ defmodule Cinegraph.Movies.Availability do
       metadata: %{"provider_payload" => provider_data}
     }
 
-    case Repo.get_by(WatchProvider, source: source, source_provider_id: attrs.source_provider_id) do
-      nil ->
-        %WatchProvider{}
-        |> WatchProvider.changeset(attrs)
-        |> Repo.insert!()
+    conflict_query =
+      from(p in WatchProvider,
+        update: [
+          set: [
+            tmdb_provider_id: ^attrs.tmdb_provider_id,
+            name: ^attrs.name,
+            logo_path: ^attrs.logo_path,
+            display_priorities:
+              fragment(
+                "COALESCE(?, '{}'::jsonb) || ?",
+                p.display_priorities,
+                ^attrs.display_priorities
+              ),
+            active: ^attrs.active,
+            last_seen_at: ^attrs.last_seen_at,
+            metadata: fragment("COALESCE(?, '{}'::jsonb) || ?", p.metadata, ^attrs.metadata)
+          ]
+        ]
+      )
 
-      provider ->
-        provider
-        |> WatchProvider.changeset(%{
-          attrs
-          | display_priorities:
-              Map.merge(provider.display_priorities || %{}, attrs.display_priorities),
-            metadata: Map.merge(provider.metadata || %{}, attrs.metadata)
-        })
-        |> Repo.update!()
-    end
+    %WatchProvider{}
+    |> WatchProvider.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: conflict_query,
+      conflict_target: [:source, :source_provider_id],
+      returning: true
+    )
   end
 
   defp upsert_region!(region_data, source, fetched_at) do
@@ -431,35 +540,31 @@ defmodule Cinegraph.Movies.Availability do
       metadata: %{"region_payload" => region_data}
     }
 
-    case Repo.get_by(WatchProviderRegion, source: source, iso_3166_1: code) do
-      nil ->
-        %WatchProviderRegion{}
-        |> WatchProviderRegion.changeset(attrs)
-        |> Repo.insert!()
-
-      region ->
-        region
-        |> WatchProviderRegion.changeset(attrs)
-        |> Repo.update!()
-    end
+    %WatchProviderRegion{}
+    |> WatchProviderRegion.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: {:replace_all_except, [:id, :inserted_at]},
+      conflict_target: [:source, :iso_3166_1],
+      returning: true
+    )
   end
 
   defp upsert_refresh!(attrs) do
-    case Repo.get_by(MovieAvailabilityRefresh,
-           movie_id: attrs.movie_id,
-           region: attrs.region,
-           source: attrs.source
-         ) do
-      nil ->
-        %MovieAvailabilityRefresh{}
-        |> MovieAvailabilityRefresh.changeset(attrs)
-        |> Repo.insert!()
+    %MovieAvailabilityRefresh{}
+    |> MovieAvailabilityRefresh.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: {:replace_all_except, [:id, :inserted_at]},
+      conflict_target: [:movie_id, :region, :source],
+      returning: true
+    )
+  end
 
-      refresh ->
-        refresh
-        |> MovieAvailabilityRefresh.changeset(attrs)
-        |> Repo.update!()
-    end
+  defp normalize_regions(:all), do: [@default_region]
+
+  defp normalize_regions(regions) when is_binary(regions) do
+    regions
+    |> String.split(",", trim: true)
+    |> normalize_regions()
   end
 
   defp normalize_regions(regions) when is_list(regions) do
@@ -472,12 +577,27 @@ defmodule Cinegraph.Movies.Availability do
 
   defp normalize_regions(region), do: normalize_regions([region])
 
+  defp resolve_regions(:all, results) when is_map(results) do
+    results
+    |> Map.keys()
+    |> normalize_regions()
+    |> case do
+      [] -> [@default_region]
+      regions -> regions
+    end
+  end
+
+  defp resolve_regions(regions, _results), do: normalize_regions(regions)
+
+  defp fallback_regions(:all), do: [@default_region]
+  defp fallback_regions(regions), do: normalize_regions(regions)
+
   defp normalize_region(region) do
     region
     |> List.wrap()
     |> normalize_regions()
     |> List.first()
-    |> Kernel.||("US")
+    |> Kernel.||(@default_region)
   end
 
   defp tmdb_provider_id("tmdb", provider_id) when is_integer(provider_id), do: provider_id
@@ -501,4 +621,22 @@ defmodule Cinegraph.Movies.Availability do
   end
 
   defp now, do: DateTime.utc_now() |> DateTime.truncate(:second)
+
+  defp region_label(region, catalog_name) do
+    name = catalog_name || Map.get(@region_names, region)
+
+    case {flag_emoji(region), name} do
+      {nil, nil} -> region
+      {nil, name} -> name
+      {_flag, nil} -> region
+      {flag, name} -> "#{flag} #{name}"
+    end
+  end
+
+  defp flag_emoji(<<first::utf8, second::utf8>>)
+       when first in ?A..?Z and second in ?A..?Z do
+    <<0x1F1E6 + first - ?A::utf8, 0x1F1E6 + second - ?A::utf8>>
+  end
+
+  defp flag_emoji(_region), do: nil
 end

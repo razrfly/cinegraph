@@ -6,7 +6,15 @@ defmodule Cinegraph.Health.Drift.Availability do
   import Ecto.Query, warn: false
 
   alias Cinegraph.Health.Drift
-  alias Cinegraph.Movies.{Movie, MovieAvailabilityRefresh, WatchProvider, WatchProviderRegion}
+
+  alias Cinegraph.Movies.{
+    Availability,
+    Movie,
+    MovieAvailabilityRefresh,
+    WatchProvider,
+    WatchProviderRegion
+  }
+
   alias Cinegraph.Repo
 
   @cache_ttl :timer.minutes(5)
@@ -27,13 +35,15 @@ defmodule Cinegraph.Health.Drift.Availability do
 
     Drift.cached({:availability, :availability_missing, limit}, @cache_ttl, fn ->
       base = full_movies_with_tmdb()
+      region = Availability.default_region()
 
       missing =
         from(m in base,
           where:
             fragment(
-              "NOT EXISTS (SELECT 1 FROM movie_availability_refreshes r WHERE r.movie_id = ? AND r.region = 'US' AND r.source = 'tmdb')",
-              m.id
+              "NOT EXISTS (SELECT 1 FROM movie_availability_refreshes r WHERE r.movie_id = ? AND r.region = ? AND r.source = 'tmdb')",
+              m.id,
+              ^region
             )
         )
 
@@ -44,7 +54,11 @@ defmodule Cinegraph.Health.Drift.Availability do
         missing
         |> order_by([m], asc: m.id)
         |> limit(^limit)
-        |> select([m], %{id: m.id, title: m.title, reason: "no US/tmdb availability refresh row"})
+        |> select([m], %{
+          id: m.id,
+          title: m.title,
+          reason: fragment("? || '/tmdb availability refresh row missing'", ^region)
+        })
         |> Repo.replica().all()
 
       Drift.result(:availability, :availability_missing, total, affected, examples)
@@ -56,10 +70,11 @@ defmodule Cinegraph.Health.Drift.Availability do
 
     Drift.cached({:availability, :availability_stale, limit}, @cache_ttl, fn ->
       now = DateTime.utc_now() |> DateTime.truncate(:second)
+      region = Availability.default_region()
 
       base =
         from(r in MovieAvailabilityRefresh,
-          where: r.region == "US",
+          where: r.region == ^region,
           where: r.source == "tmdb"
         )
 
@@ -95,7 +110,7 @@ defmodule Cinegraph.Health.Drift.Availability do
     Drift.cached({:availability, :availability_fetch_errors, limit}, @cache_ttl, fn ->
       base =
         from(r in MovieAvailabilityRefresh,
-          where: r.region == "US",
+          where: r.region == ^Availability.default_region(),
           where: r.source == "tmdb"
         )
 
@@ -149,8 +164,10 @@ defmodule Cinegraph.Health.Drift.Availability do
         ) || 0
 
       missing_catalog? = provider_count == 0 or region_count == 0
-      affected = stale_providers + stale_regions + if(missing_catalog?, do: 1, else: 0)
       total = max(provider_count + region_count, 1)
+
+      affected =
+        min(stale_providers + stale_regions + if(missing_catalog?, do: 1, else: 0), total)
 
       examples =
         if missing_catalog? do

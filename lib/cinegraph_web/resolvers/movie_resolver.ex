@@ -7,7 +7,9 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   import Absinthe.Resolution.Helpers, only: [on_load: 2]
 
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{Movie, Credit, ExternalMetric, MovieVideo}
+  alias Cinegraph.Movies.{Availability, Movie, Credit, ExternalMetric, MovieVideo}
+
+  @availability_group_order ~w(flatrate free ads rent buy)
 
   # ---------------------------------------------------------------------------
   # Top-level query resolvers
@@ -169,6 +171,29 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, videos}
   end
 
+  def availability(movie, args, _) do
+    regions = Availability.available_regions(movie.id)
+    region = select_availability_region(Map.get(args, :region), regions)
+    region_options = Availability.region_options(regions)
+    region_label = region_options |> Map.new() |> Map.get(region, region)
+    groups = Availability.list_movie_availability(movie.id, region)
+    freshness = Availability.availability_freshness(movie.id, region)
+
+    {:ok,
+     %{
+       region: region,
+       region_label: region_label,
+       status: availability_status(freshness),
+       tmdb_link: freshness && freshness.tmdb_link,
+       fetched_at: iso8601(freshness && freshness.fetched_at),
+       stale_after: iso8601(freshness && freshness.stale_after),
+       is_stale: stale?(freshness),
+       refresh_queued: Availability.availability_refresh_queued?(movie.id, region),
+       groups: availability_groups(groups),
+       available_regions: availability_region_options(region_options)
+     }}
+  end
+
   # ---------------------------------------------------------------------------
   # Private helpers
   # ---------------------------------------------------------------------------
@@ -199,4 +224,88 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
 
   defp float_to_int(nil), do: nil
   defp float_to_int(v), do: round(v)
+
+  defp select_availability_region(region, regions) when is_binary(region) do
+    normalized = region |> String.trim() |> String.upcase()
+
+    if normalized == "" do
+      select_availability_region(nil, regions)
+    else
+      normalized
+    end
+  end
+
+  defp select_availability_region(_region, regions) do
+    cond do
+      Availability.default_region() in regions -> Availability.default_region()
+      regions != [] -> List.first(regions)
+      true -> Availability.default_region()
+    end
+  end
+
+  defp availability_status(nil), do: "never_fetched"
+  defp availability_status(%{status: status}), do: status
+
+  defp stale?(%{stale_after: %DateTime{} = stale_after}) do
+    DateTime.compare(stale_after, DateTime.utc_now()) == :lt
+  end
+
+  defp stale?(_), do: false
+
+  defp availability_groups(groups) do
+    Enum.map(@availability_group_order, fn type ->
+      rows = Map.get(groups, type, [])
+
+      %{
+        monetization_type: type,
+        label: availability_group_label(type),
+        providers: Enum.map(rows, &availability_row/1)
+      }
+    end)
+  end
+
+  defp availability_row(row) do
+    %{
+      monetization_type: row.monetization_type,
+      display_priority: row.display_priority,
+      tmdb_link: row.tmdb_link,
+      fetched_at: iso8601(row.fetched_at),
+      stale_after: iso8601(row.stale_after),
+      provider: watch_provider(row.watch_provider)
+    }
+  end
+
+  defp watch_provider(nil), do: nil
+
+  defp watch_provider(provider) do
+    %{
+      source: provider.source,
+      source_provider_id: provider.source_provider_id,
+      tmdb_provider_id: provider.tmdb_provider_id,
+      name: provider.name,
+      logo_path: provider.logo_path,
+      logo_url: tmdb_logo_url(provider.logo_path),
+      display_priorities: provider.display_priorities
+    }
+  end
+
+  defp availability_region_options(region_options) do
+    Enum.map(region_options, fn {region, label} ->
+      %{region: region, label: label}
+    end)
+  end
+
+  defp availability_group_label("flatrate"), do: "Streaming"
+  defp availability_group_label("free"), do: "Free"
+  defp availability_group_label("ads"), do: "Free with ads"
+  defp availability_group_label("rent"), do: "Rent"
+  defp availability_group_label("buy"), do: "Buy"
+  defp availability_group_label(type), do: type
+
+  defp tmdb_logo_url(nil), do: nil
+  defp tmdb_logo_url(""), do: nil
+  defp tmdb_logo_url(path), do: "https://image.tmdb.org/t/p/w92#{path}"
+
+  defp iso8601(nil), do: nil
+  defp iso8601(%DateTime{} = value), do: DateTime.to_iso8601(value)
 end
