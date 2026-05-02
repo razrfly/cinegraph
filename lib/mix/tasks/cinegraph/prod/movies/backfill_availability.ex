@@ -38,7 +38,8 @@ defmodule Mix.Tasks.Cinegraph.Prod.Movies.BackfillAvailability do
     expr = build_expression(opts)
 
     case ProdRpc.eval_json(expr) do
-      {:ok, %{"error" => reason}} -> ProdRpc.print_error({:eval_failed, reason})
+      {:ok, %{"__error__" => reason}} -> ProdRpc.print_error({:eval_failed, reason})
+      {:ok, %{__error__: reason}} -> ProdRpc.print_error({:eval_failed, reason})
       {:ok, stats} -> ProdRpc.print(stats, opts)
       {:error, reason} -> ProdRpc.print_error(reason)
     end
@@ -48,7 +49,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Movies.BackfillAvailability do
   def build_expression(opts) do
     ~s|case Cinegraph.Movies.AvailabilityBackfill.run(#{build_opts_kw(opts)}) do
   {:ok, stats} -> IO.puts(Jason.encode!(stats))
-  {:error, reason} -> IO.puts(Jason.encode!(%{error: inspect(reason)}))
+  {:error, reason} -> IO.puts(Jason.encode!(%{__error__: inspect(reason)}))
 end|
   end
 
