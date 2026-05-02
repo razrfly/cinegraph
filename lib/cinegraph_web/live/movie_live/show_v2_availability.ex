@@ -24,7 +24,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
       availability_region_options: region_options,
       availability_groups: Availability.list_movie_availability(movie.id, region),
       availability_freshness: Availability.availability_freshness(movie.id, region),
-      availability_refresh_queued?: Availability.availability_refresh_queued?(movie.id, region)
+      availability_refresh_queued: Availability.availability_refresh_queued?(movie.id, region)
     }
   end
 

@@ -8,7 +8,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
     max_attempts: 5,
     unique: [
       fields: [:args],
-      keys: [:movie_id, :regions, :force],
+      keys: [:movie_id, :regions],
       period: 3600,
       states: [:available, :scheduled, :executing, :retryable]
     ]

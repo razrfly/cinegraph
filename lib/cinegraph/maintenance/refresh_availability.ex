@@ -160,17 +160,14 @@ defmodule Cinegraph.Maintenance.RefreshAvailability do
     end)
   end
 
-  defp maybe_put_regions(job, :all), do: job
-
   defp maybe_put_regions(%Ecto.Changeset{} = changeset, regions) do
     args = Ecto.Changeset.get_field(changeset, :args) || %{}
     Ecto.Changeset.put_change(changeset, :args, Map.put(args, "regions", regions))
   end
 
-  defp refresh_regions_arg(:all), do: :all
   defp refresh_regions_arg(regions), do: normalize_regions(regions)
 
-  defp normalize_regions(:all), do: [Availability.default_region()]
+  defp normalize_regions(:all), do: Availability.supported_regions()
 
   defp normalize_regions(regions) when is_binary(regions) do
     regions

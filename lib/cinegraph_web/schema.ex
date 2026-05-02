@@ -23,6 +23,10 @@ defmodule CinegraphWeb.Schema do
     loader =
       Dataloader.new()
       |> Dataloader.add_source(:db, Dataloader.Ecto.new(Cinegraph.Repo))
+      |> Dataloader.add_source(
+        :availability,
+        Dataloader.KV.new(&MovieResolver.load_availability/2, async?: false)
+      )
 
     Map.put(ctx, :loader, loader)
   end

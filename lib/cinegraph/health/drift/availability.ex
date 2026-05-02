@@ -39,12 +39,9 @@ defmodule Cinegraph.Health.Drift.Availability do
 
       missing =
         from(m in base,
-          where:
-            fragment(
-              "NOT EXISTS (SELECT 1 FROM movie_availability_refreshes r WHERE r.movie_id = ? AND r.region = ? AND r.source = 'tmdb')",
-              m.id,
-              ^region
-            )
+          left_join: r in MovieAvailabilityRefresh,
+          on: r.movie_id == m.id and r.region == ^region and r.source == "tmdb",
+          where: is_nil(r.id)
         )
 
       total = Repo.replica().one(from(m in base, select: count(m.id))) || 0

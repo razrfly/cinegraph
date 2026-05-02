@@ -7,7 +7,16 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   import Absinthe.Resolution.Helpers, only: [on_load: 2]
 
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{Availability, Movie, Credit, ExternalMetric, MovieVideo}
+
+  alias Cinegraph.Movies.{
+    Availability,
+    Credit,
+    ExternalMetric,
+    Movie,
+    MovieAvailabilityRefresh,
+    MovieVideo,
+    MovieWatchProvider
+  }
 
   @availability_group_order ~w(flatrate free ads rent buy)
 
@@ -171,32 +180,169 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, videos}
   end
 
-  def availability(movie, args, _) do
-    regions = Availability.available_regions(movie.id)
-    region = select_availability_region(Map.get(args, :region), regions)
-    region_options = Availability.region_options(regions)
-    region_label = region_options |> Map.new() |> Map.get(region, region)
-    groups = Availability.list_movie_availability(movie.id, region)
-    freshness = Availability.availability_freshness(movie.id, region)
+  def availability(movie, args, %{context: %{loader: loader}}) do
+    batch_key = {:movie_availability, Map.get(args, :region)}
+    loader = Dataloader.load(loader, :availability, batch_key, movie.id)
 
-    {:ok,
-     %{
-       region: region,
-       region_label: region_label,
-       status: availability_status(freshness),
-       tmdb_link: freshness && freshness.tmdb_link,
-       fetched_at: iso8601(freshness && freshness.fetched_at),
-       stale_after: iso8601(freshness && freshness.stale_after),
-       is_stale: stale?(freshness),
-       refresh_queued: Availability.availability_refresh_queued?(movie.id, region),
-       groups: availability_groups(groups),
-       available_regions: availability_region_options(region_options)
-     }}
+    on_load(loader, fn loader ->
+      {:ok, Dataloader.get(loader, :availability, batch_key, movie.id)}
+    end)
+  end
+
+  def availability(movie, args, _) do
+    {:ok, load_availability({:movie_availability, Map.get(args, :region)}, [movie.id])[movie.id]}
+  end
+
+  def load_availability({:movie_availability, requested_region}, movie_ids) do
+    movie_ids = Enum.to_list(movie_ids)
+    source = "tmdb"
+    regions_by_movie = available_regions_by_movie(movie_ids, source)
+
+    selected_by_movie =
+      Map.new(movie_ids, fn movie_id ->
+        regions = Map.get(regions_by_movie, movie_id, [Availability.default_region()])
+        {movie_id, select_availability_region(requested_region, regions)}
+      end)
+
+    selected_regions = selected_by_movie |> Map.values() |> Enum.uniq()
+
+    option_regions =
+      (selected_regions ++ Enum.flat_map(regions_by_movie, fn {_movie_id, regions} -> regions end))
+      |> Enum.uniq()
+
+    labels = option_regions |> Availability.region_options(source: source) |> Map.new()
+    freshness_by_key = availability_freshness_by_key(movie_ids, selected_regions, source)
+    groups_by_key = availability_groups_by_key(movie_ids, selected_regions, source)
+    queued_by_key = availability_queued_by_key(movie_ids, selected_by_movie)
+
+    Map.new(movie_ids, fn movie_id ->
+      region = Map.fetch!(selected_by_movie, movie_id)
+      regions = Map.get(regions_by_movie, movie_id, [Availability.default_region()])
+
+      region_options =
+        if region in regions do
+          regions
+        else
+          [region | regions]
+        end
+
+      freshness = Map.get(freshness_by_key, {movie_id, region})
+
+      {movie_id,
+       %{
+         region: region,
+         region_label: Map.get(labels, region, region),
+         status: availability_status(freshness),
+         tmdb_link: freshness && freshness.tmdb_link,
+         fetched_at: iso8601(freshness && freshness.fetched_at),
+         stale_after: iso8601(freshness && freshness.stale_after),
+         is_stale: stale?(freshness),
+         refresh_queued: Map.get(queued_by_key, {movie_id, region}, false),
+         groups: availability_groups(Map.get(groups_by_key, {movie_id, region}, %{})),
+         available_regions:
+           availability_region_options(Enum.map(region_options, &{&1, Map.get(labels, &1, &1)}))
+       }}
+    end)
   end
 
   # ---------------------------------------------------------------------------
   # Private helpers
   # ---------------------------------------------------------------------------
+
+  defp available_regions_by_movie(movie_ids, source) do
+    availability_regions =
+      from(mwp in MovieWatchProvider,
+        where: mwp.movie_id in ^movie_ids,
+        where: mwp.source == ^source,
+        select: {mwp.movie_id, mwp.region}
+      )
+      |> Repo.all()
+
+    refresh_regions =
+      from(r in MovieAvailabilityRefresh,
+        where: r.movie_id in ^movie_ids,
+        where: r.source == ^source,
+        select: {r.movie_id, r.region}
+      )
+      |> Repo.all()
+
+    (availability_regions ++ refresh_regions)
+    |> Enum.group_by(fn {movie_id, _region} -> movie_id end, fn {_movie_id, region} -> region end)
+    |> Map.new(fn {movie_id, regions} -> {movie_id, regions |> Enum.uniq() |> Enum.sort()} end)
+  end
+
+  defp availability_freshness_by_key(movie_ids, regions, source) do
+    from(r in MovieAvailabilityRefresh,
+      where: r.movie_id in ^movie_ids,
+      where: r.region in ^regions,
+      where: r.source == ^source
+    )
+    |> Repo.all()
+    |> Map.new(fn row -> {{row.movie_id, row.region}, row} end)
+  end
+
+  defp availability_groups_by_key(movie_ids, regions, source) do
+    rows =
+      from(mwp in MovieWatchProvider,
+        where: mwp.movie_id in ^movie_ids,
+        where: mwp.region in ^regions,
+        where: mwp.source == ^source,
+        order_by: [
+          asc: mwp.movie_id,
+          asc: mwp.region,
+          asc: mwp.monetization_type,
+          asc_nulls_last: mwp.display_priority,
+          asc: mwp.id
+        ],
+        preload: [:watch_provider]
+      )
+      |> Repo.all()
+
+    rows
+    |> Enum.group_by(&{&1.movie_id, &1.region})
+    |> Map.new(fn {key, grouped_rows} ->
+      groups =
+        MovieWatchProvider.valid_monetization_types()
+        |> Map.new(fn type ->
+          type_rows =
+            grouped_rows
+            |> Enum.filter(&(&1.monetization_type == type))
+            |> Enum.sort_by(&{is_nil(&1.display_priority), &1.display_priority || 999_999})
+
+          {type, type_rows}
+        end)
+
+      {key, groups}
+    end)
+  end
+
+  defp availability_queued_by_key(movie_ids, selected_by_movie) do
+    movie_id_strings = Enum.map(movie_ids, &to_string/1)
+
+    jobs =
+      from(j in Oban.Job,
+        where: j.worker == "Cinegraph.Workers.MovieAvailabilityRefreshWorker",
+        where: j.state in ["available", "scheduled", "executing", "retryable"],
+        where: fragment("?->>'movie_id'", j.args) in ^movie_id_strings,
+        select: j.args
+      )
+      |> Repo.all()
+
+    Map.new(selected_by_movie, fn {movie_id, region} ->
+      queued? =
+        Enum.any?(jobs, fn args ->
+          to_string(args["movie_id"]) == to_string(movie_id) and job_matches_region?(args, region)
+        end)
+
+      {{movie_id, region}, queued?}
+    end)
+  end
+
+  defp job_matches_region?(%{"regions" => regions}, region) when is_list(regions) do
+    region in Enum.map(regions, &to_string/1)
+  end
+
+  defp job_matches_region?(_args, _region), do: true
 
   defp fetch_movie(field, value) do
     case Repo.get_by(Movie, [{field, value}]) do
@@ -228,10 +374,11 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   defp select_availability_region(region, regions) when is_binary(region) do
     normalized = region |> String.trim() |> String.upcase()
 
-    if normalized == "" do
-      select_availability_region(nil, regions)
-    else
-      normalized
+    cond do
+      normalized == "" -> select_availability_region(nil, regions)
+      normalized in regions -> normalized
+      Availability.supported_region?(normalized) -> normalized
+      true -> select_availability_region(nil, regions)
     end
   end
 

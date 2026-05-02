@@ -111,7 +111,7 @@ defmodule Cinegraph.Movies.AvailabilityBackfill do
       if dry_run? do
         classify_dry_run(stats, payload, movie_regions)
       else
-        store_movie(movie, stats, payload, regions, source)
+        store_movie(movie, stats, payload, movie_regions, source)
       end
     end
   end

@@ -38,7 +38,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     "en" => "US",
     "fr" => "FR",
     "de" => "DE",
-    "es" => "ES",
     "it" => "IT",
     "pt" => "PT",
     "ja" => "JP",
@@ -979,7 +978,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <ShowV2Availability.where_to_watch
             availability_freshness={@availability_freshness}
             availability_region_label={@availability_region_label}
-            availability_refresh_queued={@availability_refresh_queued?}
+            availability_refresh_queued={@availability_refresh_queued}
             availability_regions={@availability_regions}
             availability_region_options={@availability_region_options}
             availability_region={@availability_region}
