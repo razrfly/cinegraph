@@ -238,27 +238,44 @@ defmodule Cinegraph.Services.TMDb do
   @doc """
   Fetches production company images by ID.
   """
-  def get_company_images(company_id, fetcher \\ &Client.get/1)
+  def get_company_images(company_id, opts \\ [])
+
+  def get_company_images(company_id, fetcher)
       when (is_integer(company_id) or is_binary(company_id)) and is_function(fetcher, 1) do
+    get_company_images(company_id, fetcher: fetcher)
+  end
+
+  def get_company_images(company_id, opts)
+      when (is_integer(company_id) or is_binary(company_id)) and is_list(opts) do
     company_id = company_id |> to_string() |> String.trim()
     cache_key = "tmdb:company_images:#{company_id}"
+    fetcher = Keyword.get(opts, :fetcher, &Client.get/1)
+    track? = Keyword.get(opts, :track, true)
 
-    case Cachex.get(:movies_cache, cache_key) do
-      {:ok, nil} ->
-        fetch_and_cache_company_images(company_id, cache_key, fetcher)
+    if Keyword.get(opts, :force_refresh, false) do
+      fetch_and_cache_company_images(company_id, cache_key, fetcher, track?)
+    else
+      case Cachex.get(:movies_cache, cache_key) do
+        {:ok, nil} ->
+          fetch_and_cache_company_images(company_id, cache_key, fetcher, track?)
 
-      {:ok, images} ->
-        {:ok, images}
+        {:ok, images} ->
+          {:ok, images}
 
-      {:error, _reason} ->
-        fetch_and_cache_company_images(company_id, cache_key, fetcher)
+        {:error, _reason} ->
+          fetch_and_cache_company_images(company_id, cache_key, fetcher, track?)
+      end
     end
   end
 
-  defp fetch_and_cache_company_images(company_id, cache_key, fetcher) do
-    ApiTracker.track_lookup("tmdb", "company_images", to_string(company_id), fn ->
+  defp fetch_and_cache_company_images(company_id, cache_key, fetcher, track?) do
+    if track? do
+      ApiTracker.track_lookup("tmdb", "company_images", to_string(company_id), fn ->
+        fetcher.("/company/#{company_id}/images")
+      end)
+    else
       fetcher.("/company/#{company_id}/images")
-    end)
+    end
     |> cache_successful_company_images(cache_key)
   end
 

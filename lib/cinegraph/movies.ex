@@ -552,7 +552,12 @@ defmodule Cinegraph.Movies do
 
   def refresh_production_company_metadata(%ProductionCompany{} = company, opts) do
     details_fetcher = Elixir.Keyword.get(opts, :details_fetcher, &TMDb.get_company/1)
-    images_fetcher = Elixir.Keyword.get(opts, :images_fetcher, &TMDb.get_company_images/1)
+
+    images_fetcher =
+      Elixir.Keyword.get(opts, :images_fetcher, fn tmdb_id ->
+        TMDb.get_company_images(tmdb_id, force_refresh: true)
+      end)
+
     now = Elixir.Keyword.get(opts, :fetched_at, DateTime.utc_now() |> DateTime.truncate(:second))
 
     with {:ok, details} <- fetch_company_details(details_fetcher, company.tmdb_id),
