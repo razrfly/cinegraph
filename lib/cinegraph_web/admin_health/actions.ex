@@ -9,7 +9,11 @@ defmodule CinegraphWeb.AdminHealth.Actions do
   Returns `{:ok, n_queued}` on success or `{:error, reason}`.
   """
 
-  alias Cinegraph.Workers.{OMDbEnrichmentWorker, PersonTmdbRefreshWorker}
+  alias Cinegraph.Workers.{
+    MovieAvailabilityRefreshWorker,
+    OMDbEnrichmentWorker,
+    PersonTmdbRefreshWorker
+  }
 
   require Logger
 
@@ -38,6 +42,21 @@ defmodule CinegraphWeb.AdminHealth.Actions do
   def queue_person_tmdb_refresh(person_ids) when is_list(person_ids) do
     enqueue(person_ids, fn id ->
       PersonTmdbRefreshWorker.new(%{"person_id" => id})
+    end)
+  end
+
+  @doc """
+  Enqueue a forced availability refresh for each given movie id.
+  """
+  @spec queue_availability_refresh([integer()]) :: {:ok, non_neg_integer()} | {:error, term()}
+  def queue_availability_refresh(movie_ids) when is_list(movie_ids) do
+    enqueue(movie_ids, fn id ->
+      MovieAvailabilityRefreshWorker.new(%{
+        "movie_id" => id,
+        "regions" => ["US"],
+        "force" => true,
+        "source" => "manual"
+      })
     end)
   end
 

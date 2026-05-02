@@ -179,6 +179,30 @@ defmodule CinegraphWeb.AdminHealthLive.ComponentsTest do
     end
   end
 
+  describe "drift_drawer/1" do
+    test "shows availability refresh action for availability examples" do
+      html =
+        render_component(&drift_drawer/1,
+          domain: :availability,
+          title: "Availability drift",
+          checks: [
+            %{
+              check: :availability_stale,
+              status: :amber,
+              affected_count: 1,
+              total_population: 10,
+              affected_pct: 10.0,
+              blocked_reason: nil,
+              examples: [%{id: 123, title: "Movie", reason: "availability stale"}]
+            }
+          ]
+        )
+
+      assert html =~ "Queue availability refresh"
+      assert html =~ ~s(phx-value-domain="availability")
+    end
+  end
+
   describe "trend_chart/1" do
     test "empty history shows the 'capturing' message" do
       html = render_component(&trend_chart/1, history: [])

@@ -143,6 +143,15 @@
             signals={ratings_props.signals}
             unknown_count={ratings_props.unknown_count}
           />
+          <% availability_props = domain_card_props(verdict, :availability) %>
+          <.drift_card
+            domain={:availability}
+            title="Availability"
+            status={availability_props.status}
+            headline={availability_props.headline}
+            signals={availability_props.signals}
+            unknown_count={availability_props.unknown_count}
+          />
           <% collaborations_props = domain_card_props(verdict, :collaborations) %>
           <.drift_card
             domain={:collaborations}

@@ -35,6 +35,7 @@ defmodule Cinegraph.Health.Facade do
       movies: Cinegraph.Health.Drift.Movies,
       festivals: Cinegraph.Health.Drift.Festivals,
       ratings: Cinegraph.Health.Drift.Ratings,
+      availability: Cinegraph.Health.Drift.Availability,
       collaborations: Cinegraph.Health.Drift.Collaborations
     ]
 

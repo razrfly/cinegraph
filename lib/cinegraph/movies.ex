@@ -18,6 +18,7 @@ defmodule Cinegraph.Movies do
     SpokenLanguage,
     MovieVideo,
     MovieReleaseDate,
+    Availability,
     Filters
   }
 
@@ -339,8 +340,17 @@ defmodule Cinegraph.Movies do
   Fetches a movie from TMDB and stores it in the database with all related data.
   """
   def fetch_and_store_movie_comprehensive(tmdb_id) do
-    with {:ok, tmdb_data} <- TMDb.get_movie_ultra_comprehensive(tmdb_id),
-         {:ok, movie} <- create_or_update_movie_from_tmdb(tmdb_data),
+    with {:ok, tmdb_data} <- TMDb.get_movie_ultra_comprehensive(tmdb_id) do
+      store_movie_comprehensive_data(tmdb_data)
+    end
+  end
+
+  @doc """
+  Stores a comprehensive TMDb movie payload and all supported related data.
+  """
+  def store_movie_comprehensive_data(tmdb_data, opts \\ []) do
+    with {:ok, movie} <- create_or_update_movie_from_tmdb(tmdb_data),
+         :ok <- store_movie_availability(movie, tmdb_data, opts),
          :ok <- Metrics.store_tmdb_metrics(movie, tmdb_data),
          :ok <- process_movie_credits(movie, tmdb_data["credits"]),
          :ok <- process_movie_genres(movie, tmdb_data["genres"]),
@@ -357,6 +367,37 @@ defmodule Cinegraph.Movies do
          :ok <- process_movie_lists(movie, tmdb_data["lists"]) do
       {:ok, movie}
     end
+  end
+
+  defp store_movie_availability(movie, tmdb_data, opts) do
+    store_fun =
+      Elixir.Keyword.get(
+        opts,
+        :availability_store_fun,
+        &Availability.store_tmdb_watch_providers/3
+      )
+
+    regions = Elixir.Keyword.get(opts, :availability_regions, ["US"])
+    payload = Map.get(tmdb_data, "watch_providers")
+
+    case store_fun.(movie, payload, regions: regions) do
+      {:ok, _results} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "Failed to normalize watch availability for movie #{movie.id}: #{inspect(reason)}"
+        )
+
+        :ok
+    end
+  rescue
+    error ->
+      Logger.warning(
+        "Failed to normalize watch availability for movie #{movie.id}: #{Exception.message(error)}"
+      )
+
+      :ok
   end
 
   @doc """
