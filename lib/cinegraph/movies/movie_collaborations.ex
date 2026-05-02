@@ -4,8 +4,10 @@ defmodule Cinegraph.Movies.MovieCollaborations do
   Extracted from LiveView to improve separation of concerns.
   """
 
+  import Ecto.Query, warn: false
+
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{MovieScoring, Search}
+  alias Cinegraph.Movies.{Credit, Movie, MovieScoring}
 
   @movie_show_collaboration_policy %{
     included_types: [:actor_actor, :director_actor, :director_director],
@@ -27,7 +29,7 @@ defmodule Cinegraph.Movies.MovieCollaborations do
     director_actor_reunions =
       for director <- directors,
           actor <- top_actors do
-        movies = linked_movies(actor.person, director.person)
+        movies = linked_movies(actor.person, :actor, director.person, :director)
 
         if length(movies) >= @movie_show_collaboration_policy.min_films_together do
           %{
@@ -48,8 +50,8 @@ defmodule Cinegraph.Movies.MovieCollaborations do
     # Actor-Actor partnerships
     actor_partnerships =
       for {actor1, idx} <- Enum.with_index(top_actors),
-          actor2 <- Enum.slice(top_actors, (idx + 1)..-1//1) do
-        movies = linked_movies(actor1.person, actor2.person)
+          actor2 <- Enum.drop(top_actors, idx + 1) do
+        movies = linked_movies(actor1.person, :actor, actor2.person, :actor)
 
         if length(movies) >= @movie_show_collaboration_policy.min_films_together do
           %{
@@ -69,8 +71,8 @@ defmodule Cinegraph.Movies.MovieCollaborations do
 
     director_director_reunions =
       for {director1, idx} <- Enum.with_index(directors),
-          director2 <- Enum.slice(directors, (idx + 1)..-1//1) do
-        movies = linked_movies(director1.person, director2.person)
+          director2 <- Enum.drop(directors, idx + 1) do
+        movies = linked_movies(director1.person, :director, director2.person, :director)
 
         if length(movies) >= @movie_show_collaboration_policy.min_films_together do
           %{
@@ -88,39 +90,75 @@ defmodule Cinegraph.Movies.MovieCollaborations do
       end
       |> Enum.reject(&is_nil/1)
 
-    # Combine and sort by collaboration count
-    all_collaborations =
+    full_collaborations =
       (director_actor_reunions ++ actor_partnerships ++ director_director_reunions)
       |> Enum.filter(&(&1.type in @movie_show_collaboration_policy.included_types))
+
+    all_collaborations =
+      full_collaborations
+      |> hydrate_collaboration_scores()
       |> Enum.sort_by(&collaboration_rank/1, :desc)
       |> Enum.take(@movie_show_collaboration_policy.limit)
 
     %{
       director_actor_reunions: Enum.filter(all_collaborations, &(&1.type == :director_actor)),
       actor_partnerships: Enum.filter(all_collaborations, &(&1.type == :actor_actor)),
+      director_director_reunions:
+        Enum.filter(all_collaborations, &(&1.type == :director_director)),
       notable_collaborations: all_collaborations,
-      total_reunions: length(all_collaborations)
+      total_reunions: length(full_collaborations)
     }
   end
 
-  defp linked_movies(person_a, person_b) do
-    people =
-      [person_filter_value(person_a), person_filter_value(person_b)]
-      |> Enum.reject(&(&1 in [nil, ""]))
-      |> Enum.join(",")
-
-    if people == "" do
-      []
+  defp linked_movies(person_a, role_a, person_b, role_b) do
+    with person_a_id when not is_nil(person_a_id) <- person_id(person_a),
+         person_b_id when not is_nil(person_b_id) <- person_id(person_b) do
+      Movie
+      |> join(:inner, [m], credit_a in Credit, on: credit_a.movie_id == m.id)
+      |> join(:inner, [m, credit_a], credit_b in Credit, on: credit_b.movie_id == m.id)
+      |> where([m], m.import_status == "full")
+      |> where([m], is_nil(m.release_date) or m.release_date <= ^Date.utc_today())
+      |> where([m, credit_a], credit_a.person_id == ^person_a_id)
+      |> where([m, credit_a], ^role_condition(role_a, :a))
+      |> where([m, credit_a, credit_b], credit_b.person_id == ^person_b_id)
+      |> where([m, credit_a, credit_b], ^role_condition(role_b, :b))
+      |> distinct([m], m.id)
+      |> order_by([m], desc: m.release_date)
+      |> limit(50)
+      |> select([m], %{
+        id: m.id,
+        title: m.title,
+        slug: m.slug,
+        release_date: m.release_date,
+        poster_path: m.poster_path
+      })
+      |> Repo.replica().all()
+      |> Enum.map(&shape_timeline_movie/1)
     else
-      case Search.search_movies(%{
-             "people" => people,
-             "people_match" => "all",
-             "per_page" => "50"
-           }) do
-        {:ok, {movies, _meta}} -> Enum.map(movies, &shape_timeline_movie/1)
-        _ -> []
-      end
+      _ ->
+        []
     end
+  end
+
+  defp role_condition(:actor, :a), do: dynamic([_m, credit_a], credit_a.credit_type == "cast")
+
+  defp role_condition(:actor, :b),
+    do: dynamic([_m, _credit_a, credit_b], credit_b.credit_type == "cast")
+
+  defp role_condition(:director, :a) do
+    dynamic(
+      [_m, credit_a],
+      credit_a.credit_type == "crew" and credit_a.department == "Directing" and
+        credit_a.job == "Director"
+    )
+  end
+
+  defp role_condition(:director, :b) do
+    dynamic(
+      [_m, _credit_a, credit_b],
+      credit_b.credit_type == "crew" and credit_b.department == "Directing" and
+        credit_b.job == "Director"
+    )
   end
 
   defp collaboration_rank(collaboration) do
@@ -142,13 +180,29 @@ defmodule Cinegraph.Movies.MovieCollaborations do
       slug: movie.slug,
       release_date: movie.release_date,
       poster_path: Map.get(movie, :poster_path),
-      score: MovieScoring.get_movie_score(movie.id)
+      score: nil
     }
   end
 
-  defp person_filter_value(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
-  defp person_filter_value(%{id: id}) when not is_nil(id), do: to_string(id)
-  defp person_filter_value(_person), do: nil
+  defp hydrate_collaboration_scores(collaborations) do
+    scores =
+      collaborations
+      |> Enum.flat_map(&(&1.movies || []))
+      |> Enum.map(& &1.id)
+      |> MovieScoring.get_movie_scores()
+
+    Enum.map(collaborations, fn collaboration ->
+      movies =
+        Enum.map(collaboration.movies || [], fn movie ->
+          %{movie | score: Map.get(scores, movie.id)}
+        end)
+
+      %{collaboration | movies: movies}
+    end)
+  end
+
+  defp person_id(%{id: id}) when is_integer(id), do: id
+  defp person_id(_person), do: nil
 
   @doc """
   Get collaboration timelines for key partnerships in a movie.

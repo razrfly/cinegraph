@@ -327,6 +327,40 @@ defmodule Cinegraph.Movies.MovieScoring do
   end
 
   @doc """
+  Gets audience rating scores for multiple movies in one query.
+
+  Returns a map of `movie_id => score` using the same IMDb/TMDb average and
+  normalization as `get_movie_score/1`.
+  """
+  def get_movie_scores(movie_ids) when is_list(movie_ids) do
+    movie_ids = movie_ids |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    if movie_ids == [] do
+      %{}
+    else
+      query = """
+      SELECT movie_id, AVG(value)
+      FROM external_metrics
+      WHERE movie_id = ANY($1::int[])
+        AND source IN ('imdb', 'tmdb')
+        AND metric_type = 'rating_average'
+      GROUP BY movie_id
+      """
+
+      case Repo.query(query, [movie_ids]) do
+        {:ok, %{rows: rows}} ->
+          Map.new(rows, fn [movie_id, score] ->
+            score_val = normalize_number(score)
+            {movie_id, if(score_val, do: Float.round(score_val, 1), else: nil)}
+          end)
+
+        _ ->
+          %{}
+      end
+    end
+  end
+
+  @doc """
   Explains the auteurs score for a movie.
 
   Returns a map with:
