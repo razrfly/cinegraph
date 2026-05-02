@@ -5,16 +5,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
 
   import Ecto.Query
 
-  alias Cinegraph.Cultural
-  alias Cinegraph.ExternalSources
-  alias Cinegraph.Metrics
+  alias Cinegraph.{Cultural, ExternalSources, Metrics, Repo}
   alias Cinegraph.Metrics.DisparityCalculator
   alias Cinegraph.Movies
-  alias Cinegraph.Movies.Availability
-  alias Cinegraph.Movies.MovieCollaborations
-  alias Cinegraph.Movies.MovieScoring
-  alias Cinegraph.Repo
-  alias CinegraphWeb.MovieLive.ShowV2Availability
+  alias Cinegraph.Movies.{MovieCollaborations, MovieScoring}
   alias Cinegraph.Workers.MovieScoreCacheWorker
 
   @language_region_fallbacks %{
@@ -86,6 +80,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
     {"Africa/Johannesburg", "ZA"}
   ]
 
+  @doc "Loads all non-availability assigns needed by the V2 movie show page."
   def load_movie(id_or_slug) do
     case fetch_movie_by_slug_or_id(id_or_slug) do
       {:ok, movie} -> load_movie_data(movie)
@@ -93,6 +88,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
     end
   end
 
+  @doc "Derives preferred availability region candidates from browser connect params."
   def browser_region(params), do: browser_region_candidates(params)
 
   defp load_movie_data(movie) do
@@ -136,13 +132,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
 
     related = MovieCollaborations.get_related_movies_by_collaboration(movie, cast, crew) || []
 
-    director_other_films =
-      case directors do
-        [%{person: %{id: pid}} | _] -> fetch_director_filmography(pid, movie.id)
-        _ -> []
-      end
-
-    availability = ShowV2Availability.availability_assigns(movie, Availability.default_region())
+    director_other_films = fetch_directors_filmography(directors, movie.id)
 
     data = %{
       movie: movie,
@@ -163,7 +153,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
       director_other_films: director_other_films
     }
 
-    {:ok, Map.merge(data, availability)}
+    {:ok, data}
   end
 
   defp fetch_movie_by_slug_or_id(id_or_slug) do
@@ -201,6 +191,16 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
     }
   end
 
+  defp fetch_directors_filmography(directors, exclude_movie_id) do
+    directors
+    |> Enum.map(&director_id/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.flat_map(&fetch_director_filmography(&1, exclude_movie_id))
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.sort_by(&release_sort_date/1, {:desc, Date})
+  end
+
   defp fetch_director_filmography(person_id, exclude_movie_id) do
     from(c in Cinegraph.Movies.Credit,
       where:
@@ -214,6 +214,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
     |> Repo.replica().all()
     |> Enum.map(& &1.movie)
   end
+
+  defp release_sort_date(%{release_date: %Date{} = date}), do: date
+  defp release_sort_date(_), do: ~D[0001-01-01]
+
+  defp director_id(%{person: %{id: id}}), do: id
+  defp director_id(_), do: nil
 
   defp browser_region_candidates(params) when is_map(params) do
     timezone_regions =
@@ -254,11 +260,14 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
 
     explicit_region =
       parts
-      |> Enum.at(1)
-      |> case do
-        <<region::binary-size(2)>> -> String.upcase(region)
-        _ -> nil
-      end
+      |> Enum.drop(1)
+      |> Enum.find_value(fn
+        <<region::binary-size(2)>> ->
+          if String.match?(region, ~r/^[A-Za-z]{2}$/), do: String.upcase(region)
+
+        _ ->
+          nil
+      end)
 
     language_region =
       parts
