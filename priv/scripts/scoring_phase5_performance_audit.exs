@@ -9,7 +9,7 @@
 
 :inets.start()
 
-timestamp = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+timestamp = DateTime.utc_now() |> DateTime.truncate(:millisecond) |> DateTime.to_iso8601()
 
 timestamp_stamp =
   timestamp

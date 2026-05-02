@@ -12,7 +12,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
       keys: [:list_key],
       # 5 minutes
       period: 300,
-      states: [:available, :scheduled, :executing, :retryable]
+      states: [:available, :scheduled, :retryable]
     ]
 
   alias Cinegraph.Movies.MovieLists

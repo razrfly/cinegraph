@@ -395,6 +395,27 @@ defmodule Cinegraph.Movies.MovieLists do
         short_name: "AFI 100",
         icon: "trophy",
         display_order: 9
+      },
+      %{
+        source_key: "cult_movies_400",
+        name: "400 Greatest Cult Movies",
+        description:
+          "A broad IMDb cult-movie source list used as a discovery shelf and candidate pool for Video Clerk recommendations.",
+        source_type: "imdb",
+        source_url: "https://www.imdb.com/list/ls053182933/",
+        source_id: "ls053182933",
+        category: "curated",
+        active: true,
+        tracks_awards: false,
+        metadata: %{
+          "source" => "IMDb user list",
+          "use" => "broad cult candidate pool",
+          "issue" => "857"
+        },
+        slug: "cult-movies-400",
+        short_name: "Cult Movies",
+        icon: "sparkles",
+        display_order: 10
       }
     ]
 
