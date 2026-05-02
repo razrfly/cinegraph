@@ -28,9 +28,9 @@ defmodule Cinegraph.Workers.TMDbCompanyMetadataWorker do
     end
   end
 
-  def perform(%Oban.Job{args: %{"company_id" => company_id}}) when is_binary(company_id) do
+  def perform(%Oban.Job{args: %{"company_id" => company_id}} = job) when is_binary(company_id) do
     case Integer.parse(String.trim(company_id)) do
-      {id, ""} -> perform(%Oban.Job{args: %{"company_id" => id}})
+      {id, ""} -> perform(%{job | args: Map.put(job.args, "company_id", id)})
       _ -> {:discard, :invalid_company_id}
     end
   end

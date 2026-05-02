@@ -91,6 +91,26 @@ defmodule CinegraphWeb.CompanyLiveTest do
       refute html =~ "Not Matching"
       refute html =~ "Companies:"
     end
+
+    test "uses the first available movie poster as fallback meta image", %{conn: conn} do
+      company = insert_company!(name: "Poster Fallback Company")
+      no_poster = insert_movie!(title: "No Poster", release_date: ~D[2025-01-01])
+
+      poster =
+        insert_movie!(
+          title: "Has Poster",
+          poster_path: "/poster.jpg",
+          release_date: ~D[2024-01-01]
+        )
+
+      add_companies!(no_poster, [company])
+      add_companies!(poster, [company])
+
+      {:ok, _view, html} = live(conn, ~p"/companies/#{company.slug}")
+
+      assert html =~
+               ~s(<meta property="og:image" content="https://image.tmdb.org/t/p/w780/poster.jpg")
+    end
   end
 
   defp insert_company!(attrs) do
@@ -110,7 +130,8 @@ defmodule CinegraphWeb.CompanyLiveTest do
       title: "Test Movie",
       original_title: "Test Movie",
       release_date: ~D[2024-01-01],
-      import_status: "full"
+      import_status: "full",
+      poster_path: nil
     }
 
     %Movie{}

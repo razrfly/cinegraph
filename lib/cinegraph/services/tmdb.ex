@@ -8,6 +8,8 @@ defmodule Cinegraph.Services.TMDb do
   alias Cinegraph.Services.TMDb.Extended
   alias Cinegraph.Metrics.ApiTracker
 
+  @company_images_cache_ttl :timer.hours(24)
+
   @doc """
   Fetches detailed information about a specific movie by ID.
 
@@ -236,11 +238,36 @@ defmodule Cinegraph.Services.TMDb do
   @doc """
   Fetches production company images by ID.
   """
-  def get_company_images(company_id) when is_integer(company_id) or is_binary(company_id) do
-    ApiTracker.track_lookup("tmdb", "company_images", to_string(company_id), fn ->
-      Client.get("/company/#{company_id}/images")
-    end)
+  def get_company_images(company_id, fetcher \\ &Client.get/1)
+      when (is_integer(company_id) or is_binary(company_id)) and is_function(fetcher, 1) do
+    company_id = company_id |> to_string() |> String.trim()
+    cache_key = "tmdb:company_images:#{company_id}"
+
+    case Cachex.get(:movies_cache, cache_key) do
+      {:ok, nil} ->
+        fetch_and_cache_company_images(company_id, cache_key, fetcher)
+
+      {:ok, images} ->
+        {:ok, images}
+
+      {:error, _reason} ->
+        fetch_and_cache_company_images(company_id, cache_key, fetcher)
+    end
   end
+
+  defp fetch_and_cache_company_images(company_id, cache_key, fetcher) do
+    ApiTracker.track_lookup("tmdb", "company_images", to_string(company_id), fn ->
+      fetcher.("/company/#{company_id}/images")
+    end)
+    |> cache_successful_company_images(cache_key)
+  end
+
+  defp cache_successful_company_images({:ok, images}, cache_key) do
+    Cachex.put(:movies_cache, cache_key, images, ttl: @company_images_cache_ttl)
+    {:ok, images}
+  end
+
+  defp cache_successful_company_images(result, _cache_key), do: result
 
   @doc """
   Tests the TMDb connection and displays configuration status.

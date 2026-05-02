@@ -4,6 +4,15 @@ defmodule Cinegraph.Workers.TMDbCompanyMetadataWorkerTest do
   alias Cinegraph.Workers.TMDbCompanyMetadataWorker
 
   describe "perform/1" do
+    test "parses and delegates trimmed numeric company_id strings" do
+      id = System.unique_integer([:positive]) + 1_000_000_000
+
+      assert {:error, :not_found} =
+               TMDbCompanyMetadataWorker.perform(%Oban.Job{
+                 args: %{"company_id" => "  #{id}  "}
+               })
+    end
+
     test "discards malformed company_id strings" do
       assert {:discard, :invalid_company_id} =
                TMDbCompanyMetadataWorker.perform(%Oban.Job{

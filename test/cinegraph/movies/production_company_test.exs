@@ -35,6 +35,18 @@ defmodule Cinegraph.Movies.ProductionCompanyTest do
       assert get_change(changeset, :slug) == "studio-ghibli"
     end
 
+    test "falls back to name when explicit slug is whitespace" do
+      changeset =
+        ProductionCompany.changeset(%ProductionCompany{}, %{
+          tmdb_id: 7,
+          name: "Whitespace Slug Studio",
+          slug: "   "
+        })
+
+      assert changeset.valid?
+      assert get_change(changeset, :slug) == "whitespace-slug-studio"
+    end
+
     test "rejects invalid display urls" do
       changeset =
         ProductionCompany.changeset(%ProductionCompany{}, %{

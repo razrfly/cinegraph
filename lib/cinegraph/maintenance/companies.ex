@@ -123,9 +123,7 @@ defmodule Cinegraph.Maintenance.Companies do
         tmdb_id: company.tmdb_id,
         slug: company.slug,
         name: company.name,
-        movie_count:
-          Map.get(company, :movie_count) || Map.get(movie_counts, company.id) ||
-            full_movie_count_for_company(company.id)
+        movie_count: Map.get(company, :movie_count) || Map.get(movie_counts, company.id, 0)
       }
     end)
   end
