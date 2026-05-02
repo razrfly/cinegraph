@@ -79,6 +79,37 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetailsTest do
       refute html =~ "Four"
       refute html =~ "Five"
       assert html =~ "+2"
+      assert html =~ ~s(href="#studios")
+      assert html =~ ~s(data-scroll-to="studios")
+    end
+  end
+
+  describe "studios_section/1" do
+    test "renders all companies as linked logo and name chips" do
+      html =
+        render_component(&ProductionDetails.studios_section/1,
+          production_companies: [
+            %{id: 1, slug: "logo-studio", name: "Logo Studio", logo_path: "/logo.png"},
+            %{id: 2, slug: "name-studio", name: "Name Studio"},
+            %{
+              id: 3,
+              slug: "stored-logo",
+              name: "Stored Logo",
+              logo_url: "https://example.com/stored.svg"
+            },
+            %{id: 4, slug: "fourth-studio", name: "Fourth Studio"}
+          ]
+        )
+
+      assert html =~ "Studios"
+      assert html =~ ~r/>\s*4\s*</
+      assert html =~ ~s(href="/companies/logo-studio")
+      assert html =~ ~s(src="https://image.tmdb.org/t/p/w92/logo.png")
+      assert html =~ ~s(href="/companies/name-studio")
+      assert html =~ "Name Studio"
+      assert html =~ ~s(src="https://example.com/stored.svg")
+      assert html =~ ~s(href="/companies/fourth-studio")
+      assert html =~ "Fourth Studio"
     end
   end
 end

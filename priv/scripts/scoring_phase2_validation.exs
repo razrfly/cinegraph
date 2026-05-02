@@ -19,7 +19,7 @@ required_columns = ~w[
   country_bucket tmdb_popularity_bucket legacy_overall_score mob_score
   critics_score festival_recognition_score time_machine_score auteurs_score
   box_office_score evidence_confidence_baseline evidence_regime present_lens_count
-  validation_target_canonical_any validation_target_award_any canonical_list_count
+  validation_target_canonical_without_time_machine validation_target_award_without_festival canonical_list_count
   festival_nomination_count festival_win_count canonical_list_keys
 ]
 
@@ -27,26 +27,26 @@ target_sets = [
   %{
     key: "canonical_any",
     label: "Canonical target",
-    condition: "validation_target_canonical_any",
+    condition: "validation_target_canonical_without_time_machine",
     description: "Movies present in at least one canonical source."
   },
   %{
     key: "award_any",
     label: "Award/festival target",
-    condition: "validation_target_award_any",
+    condition: "validation_target_award_without_festival",
     description: "Movies with at least one festival or award nomination/win row."
   },
   %{
     key: "canonical_and_festival",
     label: "Canonical + festival intersection",
-    condition: "validation_target_canonical_any AND validation_target_award_any",
+    condition: "validation_target_canonical_without_time_machine AND validation_target_award_without_festival",
     description: "High-confidence positives that appear in canonical and festival/award evidence."
   },
   %{
     key: "sparse_positive",
     label: "Sparse-evidence known positives",
     condition:
-      "(validation_target_canonical_any OR validation_target_award_any) AND present_lens_count BETWEEN 1 AND 3",
+      "(validation_target_canonical_without_time_machine OR validation_target_award_without_festival) AND present_lens_count BETWEEN 1 AND 3",
     description: "Known-positive films with only one to three present score lenses."
   }
 ]
@@ -332,11 +332,11 @@ matrix_checks =
     COUNT(*) AS matrix_rows,
     COUNT(DISTINCT movie_id) AS distinct_movie_ids,
     COUNT(*) FILTER (WHERE legacy_overall_score IS NOT NULL) AS rows_with_score,
-    COUNT(*) FILTER (WHERE validation_target_canonical_any) AS canonical_targets,
-    COUNT(*) FILTER (WHERE validation_target_award_any) AS award_targets,
-    COUNT(*) FILTER (WHERE validation_target_canonical_any AND validation_target_award_any) AS canonical_award_targets,
+    COUNT(*) FILTER (WHERE validation_target_canonical_without_time_machine) AS canonical_targets,
+    COUNT(*) FILTER (WHERE validation_target_award_without_festival) AS award_targets,
+    COUNT(*) FILTER (WHERE validation_target_canonical_without_time_machine AND validation_target_award_without_festival) AS canonical_award_targets,
     COUNT(*) FILTER (
-      WHERE (validation_target_canonical_any OR validation_target_award_any)
+      WHERE (validation_target_canonical_without_time_machine OR validation_target_award_without_festival)
         AND present_lens_count BETWEEN 1 AND 3
     ) AS sparse_positive_targets
   FROM scoring_evidence_matrix
@@ -417,7 +417,8 @@ baseline_results =
         SELECT
           *,
           ROW_NUMBER() OVER (ORDER BY score DESC, movie_id ASC) AS desc_rank,
-          CUME_DIST() OVER (ORDER BY score DESC) AS desc_cume
+          CUME_DIST() OVER (ORDER BY score DESC) AS desc_cume,
+          NTILE(10) OVER (ORDER BY score DESC, movie_id ASC) AS desc_decile
         FROM usable
       ),
       top_n AS (
@@ -432,7 +433,7 @@ baseline_results =
           COUNT(*) AS selected,
           COUNT(*) FILTER (WHERE is_target) AS hits
         FROM ranked_desc
-        WHERE desc_cume <= 0.10
+        WHERE desc_decile = 1
       ),
       false_low AS (
         SELECT
@@ -515,15 +516,15 @@ cohort_rows =
       #{field} AS bucket,
       COUNT(*) AS movies,
       COUNT(*) FILTER (WHERE legacy_overall_score IS NOT NULL) AS scored,
-      COUNT(*) FILTER (WHERE validation_target_canonical_any OR validation_target_award_any) AS known_positives,
+      COUNT(*) FILTER (WHERE validation_target_canonical_without_time_machine OR validation_target_award_without_festival) AS known_positives,
       ROUND(AVG(legacy_overall_score)::numeric, 3) AS avg_current_score,
       ROUND(AVG(evidence_confidence_baseline)::numeric, 3) AS avg_evidence_confidence,
       ROUND(AVG(present_lens_count)::numeric, 3) AS avg_present_lenses,
       ROUND(
         100.0 * COUNT(*) FILTER (
-          WHERE (validation_target_canonical_any OR validation_target_award_any)
+          WHERE (validation_target_canonical_without_time_machine OR validation_target_award_without_festival)
             AND COALESCE(legacy_overall_score, 0) < 2.0
-        ) / NULLIF(COUNT(*) FILTER (WHERE validation_target_canonical_any OR validation_target_award_any), 0),
+        ) / NULLIF(COUNT(*) FILTER (WHERE validation_target_canonical_without_time_machine OR validation_target_award_without_festival), 0),
         2
       ) AS known_positive_false_low_pct
     FROM scoring_evidence_matrix
@@ -540,15 +541,15 @@ calibration_rows =
     evidence_regime,
     COUNT(*) AS movies,
     COUNT(*) FILTER (WHERE legacy_overall_score IS NOT NULL) AS scored,
-    COUNT(*) FILTER (WHERE validation_target_canonical_any OR validation_target_award_any) AS known_positives,
+    COUNT(*) FILTER (WHERE validation_target_canonical_without_time_machine OR validation_target_award_without_festival) AS known_positives,
     ROUND(AVG(legacy_overall_score)::numeric, 3) AS avg_current_score,
     ROUND(AVG(evidence_confidence_baseline)::numeric, 3) AS avg_evidence_confidence,
     ROUND(AVG(present_lens_count)::numeric, 3) AS avg_present_lenses,
     ROUND(
       100.0 * COUNT(*) FILTER (
-        WHERE (validation_target_canonical_any OR validation_target_award_any)
+        WHERE (validation_target_canonical_without_time_machine OR validation_target_award_without_festival)
           AND COALESCE(legacy_overall_score, 0) < 2.0
-      ) / NULLIF(COUNT(*) FILTER (WHERE validation_target_canonical_any OR validation_target_award_any), 0),
+      ) / NULLIF(COUNT(*) FILTER (WHERE validation_target_canonical_without_time_machine OR validation_target_award_without_festival), 0),
       2
     ) AS known_positive_false_low_pct
   FROM scoring_evidence_matrix
@@ -569,7 +570,7 @@ false_negatives =
     festival_win_count,
     ROUND(evidence_confidence_baseline::numeric, 3) AS evidence_confidence
   FROM scoring_evidence_matrix
-  WHERE (validation_target_canonical_any OR validation_target_award_any)
+  WHERE (validation_target_canonical_without_time_machine OR validation_target_award_without_festival)
     AND COALESCE(legacy_overall_score, 0) < 2.0
   ORDER BY present_lens_count ASC, legacy_overall_score ASC NULLS FIRST, festival_win_count DESC, canonical_list_count DESC
   LIMIT 25
@@ -590,8 +591,8 @@ false_positives =
       ROW_NUMBER() OVER (ORDER BY legacy_overall_score DESC NULLS LAST, movie_id ASC) AS rank
     FROM scoring_evidence_matrix
     WHERE legacy_overall_score IS NOT NULL
-      AND NOT validation_target_canonical_any
-      AND NOT validation_target_award_any
+      AND NOT validation_target_canonical_without_time_machine
+      AND NOT validation_target_award_without_festival
   )
   SELECT
     title,

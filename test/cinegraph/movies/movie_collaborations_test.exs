@@ -107,6 +107,33 @@ defmodule Cinegraph.Movies.MovieCollaborationsTest do
       assert length(movies) == 3
     end
 
+    test "director actor reunions only count movies where each person held the expected role" do
+      actor = insert_person!("Role Constrained Actor")
+      director = insert_person!("Role Constrained Director")
+
+      current = insert_movie!("Role Constrained Current", ~D[2024-01-01])
+      correct = insert_movie!("Role Constrained Correct", ~D[2023-01-01])
+      wrong_roles = insert_movie!("Role Constrained Wrong Roles", ~D[2022-01-01])
+
+      current_actor_credit = insert_cast_credit!(current, actor, 0)
+      current_director_credit = insert_director_credit!(current, director)
+      insert_cast_credit!(correct, actor, 0)
+      insert_director_credit!(correct, director)
+      insert_cast_credit!(wrong_roles, actor, 0)
+      insert_cast_credit!(wrong_roles, director, 1)
+
+      assert %{
+               director_actor_reunions: [%{collaboration_count: 2}],
+               notable_collaborations: [%{films_together: 2, movies: movies}]
+             } =
+               MovieCollaborations.get_key_collaborations(
+                 preload_people([current_actor_credit]),
+                 preload_people([current_director_credit])
+               )
+
+      refute Enum.any?(movies, &(&1.title == "Role Constrained Wrong Roles"))
+    end
+
     test "generic crew-crew collaborations are not promoted by default" do
       editor = insert_person!("Crew Hidden Editor")
       composer = insert_person!("Crew Hidden Composer")

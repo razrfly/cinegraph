@@ -210,7 +210,13 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
         :error
 
       addresses ->
-        if Enum.all?(addresses, &public_ip?/1), do: {:ok, List.first(addresses)}, else: :error
+        public_addresses = Enum.filter(addresses, &public_ip?/1)
+
+        if length(public_addresses) == length(addresses) do
+          {:ok, List.first(public_addresses)}
+        else
+          :error
+        end
     end
   end
 
@@ -270,6 +276,8 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
       true -> true
     end
   end
+
+  defp public_ip?({0, 0, 0, 0, 0, 0xFFFF, _g, _h}), do: false
 
   defp public_ip?({0, 0, 0, 0, 0, 0, 0, 0}), do: false
   defp public_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: false

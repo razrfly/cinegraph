@@ -668,6 +668,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       %{id: "watch", label: "Watch", present?: true},
       %{id: "cast", label: "Cast", present?: assigns[:cast] != []},
       %{id: "crew", label: "Crew", present?: assigns[:crew] != []},
+      %{id: "studios", label: "Studios", present?: assigns[:production_companies] != []},
       %{id: "awards", label: "Awards", present?: assigns[:festival_noms] != []},
       %{id: "lists", label: "Lists", present?: assigns[:canon_lists] != []},
       %{id: "collaborations", label: "Collabs", present?: has_collabs},
@@ -838,84 +839,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               :if={@directors != [] || @cast != [] || @production_companies != []}
               class="mt-5 space-y-2.5"
             >
-              <div :if={@directors != []} class="flex items-center gap-2.5 flex-wrap">
-                <span class="text-[10px] font-semibold text-white/55 tracking-[.06em] uppercase shrink-0">
-                  Directed by
-                </span>
-                <div class="flex -space-x-2 shrink-0">
-                  <a
-                    :for={d <- @directors}
-                    href={person_href(d.person)}
-                    title={d.person.name}
-                    class="block no-underline"
-                  >
-                    <img
-                      :if={d.person.profile_path}
-                      src={tmdb_url(d.person.profile_path, "w185")}
-                      alt={d.person.name}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 object-cover bg-mist-800"
-                    />
-                    <div
-                      :if={!d.person.profile_path}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 bg-white/15 grid place-items-center text-[10px] text-white/70"
-                    >
-                      {String.first(d.person.name)}
-                    </div>
-                  </a>
-                </div>
-                <div class="text-[13.5px] text-white/85 min-w-0">
-                  <%= for {d, idx} <- Enum.with_index(@directors) do %>
-                    {if idx > 0, do: ", "}<a
-                      href={person_href(d.person)}
-                      class="text-white/85 hover:text-white no-underline"
-                    >{d.person.name}</a>
-                  <% end %>
-                </div>
-              </div>
-
-              <% top_cast = Enum.take(@cast, 5) %>
-              <div :if={top_cast != []} class="flex items-center gap-2.5 flex-wrap">
-                <span class="text-[10px] font-semibold text-white/55 tracking-[.06em] uppercase shrink-0">
-                  Starring
-                </span>
-                <div class="flex -space-x-2 shrink-0">
-                  <a
-                    :for={c <- top_cast}
-                    href={person_href(c.person)}
-                    title={c.person.name}
-                    class="block no-underline"
-                  >
-                    <img
-                      :if={c.person.profile_path}
-                      src={tmdb_url(c.person.profile_path, "w185")}
-                      alt={c.person.name}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 object-cover bg-mist-800"
-                    />
-                    <div
-                      :if={!c.person.profile_path}
-                      class="w-7 h-7 rounded-full border-2 border-mist-950 bg-white/15 grid place-items-center text-[10px] text-white/70"
-                    >
-                      {String.first(c.person.name)}
-                    </div>
-                  </a>
-                </div>
-                <div class="text-[13.5px] text-white/85 min-w-0">
-                  <%= for {c, idx} <- Enum.with_index(top_cast) do %>
-                    {if idx > 0, do: ", "}<a
-                      href={person_href(c.person)}
-                      class="text-white/85 hover:text-white no-underline"
-                    >{c.person.name}</a>
-                  <% end %>
-                  <a
-                    :if={length(@cast) > 5}
-                    href="#cast"
-                    class="ml-1 text-blue-300 hover:text-blue-200 no-underline"
-                  >
-                    +{length(@cast) - 5} more
-                  </a>
-                </div>
-              </div>
-
+              <ProductionDetails.hero_people directors={@directors} cast={@cast} />
               <ProductionDetails.hero_production_companies production_companies={
                 @production_companies
               } />
@@ -1154,6 +1078,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 </div>
               </div>
             </div>
+          </section>
+
+          <%!-- STUDIOS --%>
+          <section :if={@production_companies != []} id="studios" class="scroll-mt-24">
+            <ProductionDetails.studios_section production_companies={@production_companies} />
           </section>
 
           <%!-- AWARDS BY ORG --%>

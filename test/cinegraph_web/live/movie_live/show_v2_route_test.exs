@@ -155,7 +155,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       refute html =~ "/people-v2/"
     end
 
-    test "renders production companies in hero and technical details", %{conn: conn, movie: movie} do
+    test "renders production companies in hero, full studios section, nav, and technical details",
+         %{
+           conn: conn,
+           movie: movie
+         } do
       logo_company =
         insert_company!(%{
           name: "Hero Logo Studio",
@@ -164,7 +168,13 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
         })
 
       name_company = insert_company!(%{name: "Hero Name Studio", slug: "hero-name-studio"})
-      add_companies!(movie, [logo_company, name_company])
+
+      overflow_company =
+        insert_company!(%{name: "Overflow Studio", slug: "overflow-studio"})
+
+      hidden_company = insert_company!(%{name: "Hidden Studio", slug: "hidden-studio"})
+
+      add_companies!(movie, [logo_company, name_company, overflow_company, hidden_company])
 
       {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
 
@@ -173,6 +183,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ ~s(src="https://image.tmdb.org/t/p/w92/hero-logo.png")
       assert html =~ ~s(href="/companies/hero-name-studio")
       assert html =~ "Hero Name Studio"
+      assert html =~ ~s(href="#studios")
+      assert html =~ ~s(data-scroll-to="studios")
+      assert html =~ ~s(id="studios")
+      assert html =~ ~s(href="/companies/overflow-studio")
+      assert html =~ ~s(href="/companies/hidden-studio")
       assert html =~ "Production"
     end
 

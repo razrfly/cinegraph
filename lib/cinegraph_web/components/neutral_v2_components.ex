@@ -1658,6 +1658,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <a
             href={"##{s.id}"}
             data-section-id={s.id}
+            data-scroll-to={s.id}
             class="block pl-3 py-[6px] -ml-px text-[13px] no-underline border-l-2 border-transparent text-mist-700 hover:text-mist-950 [&.active]:border-mist-950 [&.active]:text-mist-950 [&.active]:font-medium"
           >
             {s.label}

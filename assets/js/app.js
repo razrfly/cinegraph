@@ -69,6 +69,18 @@ topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
+window.addEventListener("click", event => {
+  const trigger = event.target.closest("[data-scroll-to]")
+  if (!trigger) return
+
+  const target = document.getElementById(trigger.dataset.scrollTo)
+  if (!target) return
+
+  event.preventDefault()
+  history.pushState(null, "", `#${target.id}`)
+  target.scrollIntoView({ behavior: "smooth", block: "start" })
+})
+
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 

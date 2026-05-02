@@ -572,6 +572,7 @@ defmodule Cinegraph.Collaborations do
         join: m in Movie,
         on: cd.movie_id == m.id,
         where: c.person_a_id == ^person_a_id and c.person_b_id == ^person_b_id,
+        group_by: [m.id, m.title, m.slug, m.release_date, m.poster_path],
         order_by: [desc: m.release_date],
         select: %{
           id: m.id,
@@ -579,7 +580,7 @@ defmodule Cinegraph.Collaborations do
           slug: m.slug,
           release_date: m.release_date,
           poster_path: m.poster_path,
-          score: cd.movie_rating
+          score: max(cd.movie_rating)
         }
 
     query
