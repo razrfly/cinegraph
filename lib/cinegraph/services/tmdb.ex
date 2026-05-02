@@ -58,6 +58,20 @@ defmodule Cinegraph.Services.TMDb do
   end
 
   @doc """
+  Gets watch-provider catalog entries for movies.
+  """
+  def get_watch_providers(opts \\ []) do
+    Extended.get_watch_providers(opts)
+  end
+
+  @doc """
+  Gets supported watch-provider regions.
+  """
+  def get_watch_provider_regions do
+    Extended.get_watch_provider_regions()
+  end
+
+  @doc """
   Gets trending movies.
   """
   def get_trending_movies(time_window \\ "day", opts \\ []) do

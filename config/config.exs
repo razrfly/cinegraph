@@ -57,6 +57,12 @@ config :cinegraph, :health,
       omdb_stale: {30.0, 60.0},
       rt_metacritic_gap: {30.0, 50.0}
     },
+    availability: %{
+      availability_missing: {5.0, 20.0},
+      availability_stale: {20.0, 50.0},
+      availability_fetch_errors: {1.0, 5.0},
+      availability_provider_catalog_stale: {0, 0}
+    },
     collaborations: %{
       missing_details: {1.0, 10.0},
       queue_backlog: {10_000, 50_000},
@@ -201,10 +207,14 @@ config :cinegraph, Oban,
        # on :tmdb. 5 min after bio sweeper so PersonTmdbRefreshWorker's 1-hour
        # unique constraint dedupes overlapping enqueues.
        {"35 5 * * *", Cinegraph.Workers.ProfileDataRefreshSweeper},
+       # Watch availability provider catalog + supported regions.
+       {"45 5 * * *", Cinegraph.Workers.WatchProviderCatalogRefreshWorker},
        # Festival person-resolver: 2,000/day on :maintenance.
        {"0 6 * * *", Cinegraph.Workers.FestivalPersonResolverSweeper},
        # OMDb null backfill: 5,000/day on :omdb. Canonical-list movies first.
        {"30 6 * * *", Cinegraph.Workers.OmdbBackfillSweeper},
+       # Watch availability refresh: 5,000/day on :tmdb.
+       {"45 6 * * *", Cinegraph.Workers.AvailabilityRefreshSweeper},
        # IMDb-id repair via TMDb fetches: 5,000/day on :tmdb.
        {"0 7 * * *", Cinegraph.Workers.ImdbIdRepairSweeper},
        # Collaboration graph repair: 5,000/day on :collaboration.

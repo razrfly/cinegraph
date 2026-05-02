@@ -264,11 +264,13 @@ defmodule CinegraphWeb.AdminHealthLive.Components do
   @doc false
   def refresh_action_for(:people), do: :tmdb
   def refresh_action_for(:ratings), do: :omdb
+  def refresh_action_for(:availability), do: :availability
   def refresh_action_for(_), do: nil
 
   @doc false
   def refresh_action_label(:people), do: "Queue TMDb refresh"
   def refresh_action_label(:ratings), do: "Queue OMDb refresh"
+  def refresh_action_label(:availability), do: "Queue availability refresh"
   def refresh_action_label(_), do: ""
 
   @doc """

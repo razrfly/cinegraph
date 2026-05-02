@@ -97,6 +97,14 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
     )
   end
 
+  defp do_queue_refresh(:availability, ids, socket) do
+    flash_queue_result(
+      socket,
+      CinegraphWeb.AdminHealth.Actions.queue_availability_refresh(ids),
+      "availability"
+    )
+  end
+
   defp do_queue_refresh(_, _, socket) do
     {:noreply, put_flash(socket, :error, "Unknown domain for refresh action")}
   end
@@ -168,6 +176,7 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   defp parse_domain("movies"), do: :movies
   defp parse_domain("festivals"), do: :festivals
   defp parse_domain("ratings"), do: :ratings
+  defp parse_domain("availability"), do: :availability
   defp parse_domain("collaborations"), do: :collaborations
   defp parse_domain(_), do: nil
 
@@ -175,6 +184,7 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   defp drift_module(:movies), do: Cinegraph.Health.Drift.Movies
   defp drift_module(:festivals), do: Cinegraph.Health.Drift.Festivals
   defp drift_module(:ratings), do: Cinegraph.Health.Drift.Ratings
+  defp drift_module(:availability), do: Cinegraph.Health.Drift.Availability
   defp drift_module(:collaborations), do: Cinegraph.Health.Drift.Collaborations
 
   defp normalize_checks({:error, _}), do: []
@@ -272,6 +282,16 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
     end
   end
 
+  defp headline_for(:availability, checks) do
+    case Enum.find(checks, &(&1.check == :availability_missing)) do
+      %{blocked_reason: nil, affected_pct: pct} ->
+        "#{Float.round(100.0 - pct, 1)}% availability coverage"
+
+      _ ->
+        "availability coverage unavailable — see drawer"
+    end
+  end
+
   defp headline_for(:collaborations, checks) do
     case Enum.find(checks, &(&1.check == :missing_details)) do
       %{blocked_reason: nil, affected_pct: pct} ->
@@ -332,6 +352,7 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   def drawer_title(:movies), do: "Movies drift"
   def drawer_title(:festivals), do: "Festivals drift"
   def drawer_title(:ratings), do: "Ratings drift"
+  def drawer_title(:availability), do: "Availability drift"
   def drawer_title(:collaborations), do: "Collaborations drift"
   def drawer_title(_), do: "Drift"
 end

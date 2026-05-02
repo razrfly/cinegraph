@@ -53,6 +53,23 @@ defmodule CinegraphWeb.AdminHealth.ActionsTest do
     end
   end
 
+  describe "queue_availability_refresh/1" do
+    test "empty list returns {:ok, 0}" do
+      assert {:ok, 0} = Actions.queue_availability_refresh([])
+    end
+
+    test "inserts a forced MovieAvailabilityRefreshWorker job per id" do
+      assert {:ok, 2} = Actions.queue_availability_refresh([1, 2])
+
+      jobs = Repo.all(Oban.Job)
+      assert length(jobs) == 2
+      assert Enum.all?(jobs, &(&1.worker == "Cinegraph.Workers.MovieAvailabilityRefreshWorker"))
+      assert Enum.all?(jobs, &(&1.args["regions"] == ["US"]))
+      assert Enum.all?(jobs, &(&1.args["force"] == true))
+      assert Enum.map(jobs, & &1.args["movie_id"]) |> Enum.sort() == [1, 2]
+    end
+  end
+
   test "Actions source file imports no Cinegraph.Repo (architectural guard)" do
     src = File.read!("lib/cinegraph_web/admin_health/actions.ex")
     refute src =~ "alias Cinegraph.Repo"

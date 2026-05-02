@@ -14,10 +14,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
   import Phoenix.LiveViewTest
 
   alias Cinegraph.Collaborations.Collaboration
+  alias Cinegraph.Movies.Availability
   alias Cinegraph.Movies.Credit
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.Person
   alias Cinegraph.Movies.Search
+  alias Cinegraph.Workers.MovieAvailabilityRefreshWorker
   alias Cinegraph.Repo
 
   defp insert_movie!(attrs) do
@@ -60,6 +62,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
   setup do
     Cachex.clear(:movies_cache)
     Cachex.clear(:filter_options_cache)
+    Repo.delete_all(Oban.Job)
     movie = insert_movie!(%{title: "Routing Smoke Title"})
     %{movie: movie}
   end
@@ -150,6 +153,86 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~
                ~s(href="/movies?people=#{actor_a.slug},#{actor_b.slug}&amp;people_match=all")
     end
+
+    test "renders grouped Where to Watch providers with logo/name sorted by priority", %{
+      conn: conn,
+      movie: movie
+    } do
+      payload = %{
+        "results" => %{
+          "US" => %{
+            "link" => "https://example.test/watch",
+            "flatrate" => [
+              provider(9, "Prime Video", 9),
+              provider(8, "Netflix", 1)
+            ],
+            "ads" => [provider(300, "Tubi", 2)]
+          }
+        }
+      }
+
+      assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Where to Watch"
+      assert html =~ "Streaming"
+      assert html =~ "Free with ads"
+      assert html =~ "Netflix"
+      assert html =~ "Prime Video"
+      assert html =~ "Tubi"
+      assert html =~ "https://image.tmdb.org/t/p/w92/provider-8.jpg"
+      assert html =~ "Updated today."
+      assert html =~ "Availability data from TMDb"
+      assert html =~ ~r/Netflix.*Prime Video/s
+    end
+
+    test "renders stale warning", %{conn: conn, movie: movie} do
+      assert {:ok, _} =
+               Availability.store_tmdb_watch_providers(movie, watch_payload(),
+                 fetched_at: ~U[2026-01-01 00:00:00Z],
+                 stale_after: ~U[2026-01-31 00:00:00Z]
+               )
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability may have changed."
+    end
+
+    test "renders no-results state", %{conn: conn, movie: movie} do
+      assert {:ok, _} =
+               Availability.store_tmdb_watch_providers(movie, %{
+                 "results" => %{"US" => %{"link" => "https://example.test/watch"}}
+               })
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "No availability found for US."
+    end
+
+    test "renders never-fetched state", %{conn: conn, movie: movie} do
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability has not been checked for US yet."
+    end
+
+    test "renders error state", %{conn: conn, movie: movie} do
+      assert {:ok, _} = Availability.record_availability_error(movie, ["US"], :tmdb_down)
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Availability could not be refreshed."
+    end
+
+    test "renders queued state", %{conn: conn, movie: movie} do
+      %{"movie_id" => movie.id, "regions" => ["US"], "force" => true}
+      |> MovieAvailabilityRefreshWorker.new()
+      |> Oban.insert!()
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Refresh queued."
+    end
   end
 
   describe "/movies-v2/:slug — alias" do
@@ -187,5 +270,25 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       )
     )
     |> Repo.insert!()
+  end
+
+  defp watch_payload(provider_id \\ 8, provider_name \\ "Netflix") do
+    %{
+      "results" => %{
+        "US" => %{
+          "link" => "https://example.test/watch",
+          "flatrate" => [provider(provider_id, provider_name)]
+        }
+      }
+    }
+  end
+
+  defp provider(id, name, priority \\ 1) do
+    %{
+      "provider_id" => id,
+      "provider_name" => name,
+      "logo_path" => "/provider-#{id}.jpg",
+      "display_priority" => priority
+    }
   end
 end
