@@ -17,6 +17,7 @@ defmodule Cinegraph.Movies.SearchTest do
   }
 
   alias Cinegraph.Movies.Query.Params
+  alias Cinegraph.Workers.MovieScoreCacheWorker
 
   setup do
     assert {:ok, _} = Cachex.clear(:movies_cache)
@@ -642,7 +643,7 @@ defmodule Cinegraph.Movies.SearchTest do
       disparity_category: "perfect_harmony",
       unpredictability_score: 0.0,
       calculated_at: now,
-      calculation_version: "test"
+      calculation_version: MovieScoreCacheWorker.current_version()
     })
   end
 

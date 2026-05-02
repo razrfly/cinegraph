@@ -61,7 +61,7 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
         {eyebrow}
       </div>
       <h3 class="line-clamp-2 text-[17px] font-semibold leading-snug text-mist-950">
-        {@list.list_name}
+        {ListAppearance.title(@list)}
       </h3>
       <div class="mt-4 flex flex-wrap gap-2">
         <NeutralV2Components.n_pill tone="ink" size="xs">

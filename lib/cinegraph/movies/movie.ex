@@ -135,7 +135,11 @@ defmodule Cinegraph.Movies.Movie do
     field :missing_lens_count, :integer, virtual: true
     field :present_lens_labels, {:array, :string}, virtual: true
     field :missing_lens_labels, {:array, :string}, virtual: true
+    field :evidence_confidence, :float, virtual: true
+    field :cohort_percentile, :float, virtual: true
     field :score_hidden_reason, :string, virtual: true
+    field :score_explanation_short, :string, virtual: true
+    field :score_explanation_detail, :string, virtual: true
 
     timestamps()
   end

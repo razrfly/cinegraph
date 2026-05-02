@@ -9,8 +9,14 @@
 
 :inets.start()
 
-report_path = "docs/scoring/reports/scoring_phase5_performance_2026_05_02.md"
 timestamp = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+date_stamp =
+  Date.utc_today()
+  |> Date.to_iso8601()
+  |> String.replace("-", "_")
+
+report_path = "docs/scoring/reports/scoring_phase5_performance_#{date_stamp}.md"
 
 lens_count_sql = """
 (
@@ -103,7 +109,6 @@ queries = [
     SELECT m.id, m.title,
       CASE WHEN #{lens_count_sql} >= 2 THEN #{sort_score_sql} ELSE NULL END AS cinegraph_sort_score
     FROM movies m
-    JOIN movie_genres mg ON mg.movie_id = m.id
     LEFT JOIN movie_score_caches sc ON sc.movie_id = m.id
     WHERE m.import_status = 'full'
       AND (m.release_date IS NULL OR m.release_date <= CURRENT_DATE)

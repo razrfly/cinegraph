@@ -166,8 +166,19 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
         :ok
 
       list ->
-        # Update to show import is in progress
-        case MovieLists.update_import_stats(list, "pending", 0) do
+        metadata =
+          Map.merge(list.metadata || %{}, %{
+            "last_import_started_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+          })
+
+        attrs = %{
+          last_import_at: DateTime.utc_now(),
+          last_import_status: "pending",
+          metadata: metadata
+        }
+
+        # Update to show import is in progress without counting it as completed.
+        case MovieLists.update_movie_list(list, attrs) do
           {:ok, _} ->
             Logger.info("Updated import stats for #{list_key} - marked as in progress")
             :ok
@@ -201,7 +212,21 @@ defmodule Cinegraph.Workers.CanonicalImportOrchestrator do
 
       list ->
         # Update to show import failed
-        case MovieLists.update_import_stats(list, "failed: #{reason}", 0) do
+        metadata =
+          (list.metadata || %{})
+          |> Map.merge(%{
+            "last_import_error" => reason,
+            "last_import_finished_at" => DateTime.utc_now() |> DateTime.to_iso8601()
+          })
+
+        attrs = %{
+          last_import_at: DateTime.utc_now(),
+          last_import_status: "failed",
+          metadata: metadata,
+          total_imports: (list.total_imports || 0) + 1
+        }
+
+        case MovieLists.update_movie_list(list, attrs) do
           {:ok, _} ->
             Logger.info("Updated import stats for #{list_key} - marked as failed: #{reason}")
             :ok

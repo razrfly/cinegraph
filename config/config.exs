@@ -197,6 +197,9 @@ config :cinegraph, Oban,
        # so new nominations land before the daily person-resolver pass at
        # 06:00 UTC.
        {"0 2 * * *", Cinegraph.Workers.FestivalSyncSweeper},
+       # Monthly canonical IMDb-list refresh — queues a small capped batch
+       # of blank/stale `movie_lists` backed by IMDb `ls...` pages.
+       {"30 1 1 * *", Cinegraph.Workers.CanonicalListRefreshSweeper},
        # Homeostasis sweepers (#735 Phase 3.1, #739 Phase A, #745 Phase 1) —
        # autonomously drain the dashboard's drift backlogs. Capped per-run;
        # idempotent (workers are uniqueness-keyed).
