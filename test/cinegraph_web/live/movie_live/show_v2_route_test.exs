@@ -18,6 +18,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
   alias Cinegraph.Movies.Credit
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.Person
+  alias Cinegraph.Movies.ProductionCompany
   alias Cinegraph.Movies.Search
   alias Cinegraph.Movies.WatchProviderRegion
   alias Cinegraph.Workers.MovieAvailabilityRefreshWorker
@@ -45,6 +46,27 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
     %Person{}
     |> Person.changeset(Map.merge(defaults, attrs))
     |> Repo.insert!()
+  end
+
+  defp insert_company!(attrs) do
+    defaults = %{
+      tmdb_id: System.unique_integer([:positive]),
+      name: "Route Company #{System.unique_integer([:positive])}"
+    }
+
+    %ProductionCompany{}
+    |> ProductionCompany.changeset(Map.merge(defaults, Map.new(attrs)))
+    |> Repo.insert!()
+  end
+
+  defp add_companies!(movie, companies) do
+    rows =
+      Enum.map(companies, fn company ->
+        [movie_id: movie.id, production_company_id: company.id]
+      end)
+
+    Repo.insert_all("movie_production_companies", rows)
+    movie
   end
 
   defp insert_credit!(movie, person, attrs) do
@@ -131,6 +153,27 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert html =~ ~s(href="/people/canonical-cast-person")
       assert html =~ ~s(href="/people/canonical-crew-person")
       refute html =~ "/people-v2/"
+    end
+
+    test "renders production companies in hero and technical details", %{conn: conn, movie: movie} do
+      logo_company =
+        insert_company!(%{
+          name: "Hero Logo Studio",
+          slug: "hero-logo-studio",
+          logo_path: "/hero-logo.png"
+        })
+
+      name_company = insert_company!(%{name: "Hero Name Studio", slug: "hero-name-studio"})
+      add_companies!(movie, [logo_company, name_company])
+
+      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+
+      assert html =~ "Studios"
+      assert html =~ ~s(href="/companies/hero-logo-studio")
+      assert html =~ ~s(src="https://image.tmdb.org/t/p/w92/hero-logo.png")
+      assert html =~ ~s(href="/companies/hero-name-studio")
+      assert html =~ "Hero Name Studio"
+      assert html =~ "Production"
     end
 
     test "notable collaboration count matches the linked all-people movie search", %{conn: conn} do

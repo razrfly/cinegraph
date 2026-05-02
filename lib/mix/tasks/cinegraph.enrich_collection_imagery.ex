@@ -25,6 +25,7 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
     ~r/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i
   ]
 
+  @doc "Fetches and stores missing public Open Graph imagery for movie lists and festival organizations."
   @impl true
   def run(_args) do
     enrich_movie_lists()
@@ -110,22 +111,23 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
   defp fetch_og_image(_url, redirects) when redirects > @max_redirects, do: :error
 
   defp fetch_og_image(url, redirects) do
-    with {:ok, safe_url} <- validate_public_http_url(url) do
-      case HTTPoison.get(safe_url, @headers,
+    with {:ok, request} <- validate_public_http_url(url) do
+      case HTTPoison.get(request.url, request.headers,
              follow_redirect: false,
              timeout: 10_000,
-             recv_timeout: 10_000
+             recv_timeout: 10_000,
+             hackney: request.hackney_options
            ) do
         {:ok, %{status_code: status, headers: headers}} when status in 300..399 ->
           headers
           |> location_header()
-          |> redirect_url(safe_url)
+          |> redirect_url(request.original_url)
           |> fetch_og_image(redirects + 1)
 
         {:ok, %{status_code: status, body: body}} when status in 200..299 ->
           body
           |> og_image_from_html()
-          |> absolute_url(safe_url)
+          |> absolute_url(request.original_url)
 
         _ ->
           :error
@@ -186,8 +188,8 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
 
     with %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) <-
            uri,
-         :ok <- validate_public_host(host) do
-      {:ok, URI.to_string(uri)}
+         {:ok, address} <- validate_public_host(host) do
+      {:ok, safe_request(uri, address)}
     else
       _ -> :error
     end
@@ -203,7 +205,13 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
       |> String.to_charlist()
       |> resolve_addresses()
 
-    if addresses != [] and Enum.all?(addresses, &public_ip?/1), do: :ok, else: :error
+    case addresses do
+      [] ->
+        :error
+
+      addresses ->
+        if Enum.all?(addresses, &public_ip?/1), do: {:ok, List.first(addresses)}, else: :error
+    end
   end
 
   defp resolve_addresses(host) do
@@ -215,6 +223,39 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
       end
     end)
   end
+
+  defp safe_request(uri, address) do
+    host = uri.host
+    headers = [{"host", host_header(uri)} | @headers]
+
+    %{
+      original_url: URI.to_string(uri),
+      url: uri |> Map.put(:host, address_host(address)) |> URI.to_string(),
+      headers: headers,
+      hackney_options: hackney_options(uri, host)
+    }
+  end
+
+  defp hackney_options(%URI{scheme: "https"}, host) do
+    [
+      pool: false,
+      ssl_options: :hackney_ssl.check_hostname_opts(String.to_charlist(host))
+    ]
+  end
+
+  defp hackney_options(_uri, _host), do: [pool: false]
+
+  defp host_header(%URI{scheme: scheme, host: host, port: port})
+       when (scheme == "http" and port == 80) or (scheme == "https" and port == 443) or
+              is_nil(port),
+       do: host
+
+  defp host_header(%URI{host: host, port: port}), do: "#{host}:#{port}"
+
+  defp address_host({_, _, _, _} = address), do: address |> :inet.ntoa() |> to_string()
+
+  defp address_host({_, _, _, _, _, _, _, _} = address),
+    do: "[#{address |> :inet.ntoa() |> to_string()}]"
 
   defp public_ip?({a, b, _c, _d}) do
     cond do

@@ -1218,7 +1218,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         <.n_score_bar
           label="The Mob"
           sublabel="audience"
-          description="Audience consensus from IMDb and TMDb user ratings."
+          description="Audience consensus from IMDb, TMDb, and Rotten Tomatoes audience ratings."
           value={@scores[:mob]}
           weight={@weights[:mob]}
         />
@@ -1272,7 +1272,8 @@ defmodule CinegraphWeb.NeutralV2Components do
   def n_score_bar(assigns) do
     val = score_for_bar(assigns.value)
     pct = score_pct(val)
-    assigns = assigns |> assign(:val, val) |> assign(:pct, pct)
+    tooltip_id = score_bar_tooltip_id(assigns.label, assigns.sublabel)
+    assigns = assigns |> assign(:val, val) |> assign(:pct, pct) |> assign(:tooltip_id, tooltip_id)
 
     ~H"""
     <div>
@@ -1284,6 +1285,7 @@ defmodule CinegraphWeb.NeutralV2Components do
               type="button"
               class="text-[13px] font-semibold text-mist-950 tracking-[-.005em] underline decoration-transparent underline-offset-4 cursor-help focus-visible:outline-none focus-visible:decoration-mist-950/40 group-hover:decoration-mist-950/30"
               aria-label={"#{@label}: #{@description}"}
+              aria-describedby={@tooltip_id}
             >
               {@label}
             </button>
@@ -1295,6 +1297,7 @@ defmodule CinegraphWeb.NeutralV2Components do
             </span>
             <span
               :if={@description}
+              id={@tooltip_id}
               role="tooltip"
               class="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-md border border-mist-950/10 bg-white px-3 py-2 text-left text-[11.5px] font-normal leading-[1.45] text-mist-800 shadow-[0_10px_30px_rgba(20,18,15,.12)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
@@ -1320,6 +1323,18 @@ defmodule CinegraphWeb.NeutralV2Components do
   defp score_for_bar(nil), do: nil
   defp score_for_bar(v) when is_number(v), do: v
   defp score_for_bar(_), do: nil
+
+  defp score_bar_tooltip_id(label, sublabel) do
+    slug =
+      [label, sublabel]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join("-")
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "-")
+      |> String.trim("-")
+
+    "score-bar-tooltip-#{slug}"
+  end
 
   defp score_pct(nil), do: 0
   defp score_pct(v) when is_number(v), do: round(min(max(v, 0), 10) * 10)
@@ -1554,15 +1569,25 @@ defmodule CinegraphWeb.NeutralV2Components do
             class="shrink-0 text-center no-underline text-inherit hover:opacity-75"
             title={m.title}
           >
-            <div class="w-14 h-20 bg-mist-100 border border-mist-950/10 rounded grid place-items-center text-[11px] text-mist-700 tabular-nums">
+            <img
+              :if={movie_poster_url(m)}
+              src={movie_poster_url(m)}
+              alt={m.title}
+              class="w-14 h-20 rounded border border-mist-950/10 object-cover bg-mist-100"
+              loading="lazy"
+            />
+            <div
+              :if={!movie_poster_url(m)}
+              class="w-14 h-20 bg-mist-100 border border-mist-950/10 rounded grid place-items-center text-[11px] text-mist-700 tabular-nums"
+            >
               <%= if m.release_date do %>
                 {m.release_date.year}
               <% else %>
                 —
               <% end %>
             </div>
-            <div :if={m.score} class="mt-1 text-[10.5px] font-semibold text-mist-950 tabular-nums">
-              {Float.round(m.score, 1)}
+            <div :if={m[:score]} class="mt-1 text-[10.5px] font-semibold text-mist-950 tabular-nums">
+              {Float.round(m[:score], 1)}
             </div>
           </.link>
         </div>
@@ -1593,6 +1618,16 @@ defmodule CinegraphWeb.NeutralV2Components do
   end
 
   defp movie_link_attrs(%{id: id}), do: %{href: UrlHelpers.movie_href(nil, id)}
+
+  defp movie_poster_url(%{poster_path: "/" <> _ = path}),
+    do: "https://image.tmdb.org/t/p/w92#{path}"
+
+  defp movie_poster_url(%{poster_path: ""}), do: nil
+
+  defp movie_poster_url(%{poster_path: path}) when is_binary(path),
+    do: "https://image.tmdb.org/t/p/w92/#{path}"
+
+  defp movie_poster_url(_), do: nil
 
   @doc """
   Vertical right-rail "On this page" TOC. Each entry is a map with `:id`,

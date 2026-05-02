@@ -86,5 +86,55 @@ defmodule CinegraphWeb.NeutralV2ComponentsTest do
       refute html =~ "hover:shadow"
       assert html =~ "hover:decoration"
     end
+
+    test "renders poster chips for collaboration movies with poster paths" do
+      html =
+        render_component(&n_collaboration_card/1,
+          collaboration: %{
+            person_a: "Meryl Streep",
+            person_b: "Emily Blunt",
+            films_together: 2,
+            strength: :moderate,
+            movies: [
+              %{
+                id: 1,
+                title: "The Devil Wears Prada",
+                slug: "the-devil-wears-prada",
+                release_date: ~D[2006-06-30],
+                poster_path: "/poster.jpg"
+              }
+            ]
+          }
+        )
+
+      assert html =~ ~s(src="https://image.tmdb.org/t/p/w92/poster.jpg")
+      assert html =~ ~s(alt="The Devil Wears Prada")
+    end
+
+    test "falls back to year tiles for collaboration movies without posters" do
+      html =
+        render_component(&n_collaboration_card/1,
+          collaboration: %{
+            person_a: "Meryl Streep",
+            person_b: "Anne Hathaway",
+            films_together: 1,
+            strength: :moderate,
+            movies: [
+              %{
+                id: 1,
+                title: "Posterless Movie",
+                slug: "posterless-movie",
+                release_date: ~D[2006-06-30],
+                poster_path: nil
+              }
+            ]
+          }
+        )
+
+      text = html |> Floki.parse_document!() |> Floki.text(sep: " ")
+
+      refute html =~ "<img"
+      assert text =~ "2006"
+    end
   end
 end

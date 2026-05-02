@@ -24,11 +24,16 @@ defmodule Cinegraph.Movies.MovieCollaborationsTest do
 
       insert_collaboration!(actor_a, actor_b, %{collaboration_count: 5})
 
-      assert %{actor_partnerships: [%{collaboration_count: 2}]} =
+      assert %{
+               actor_partnerships: [%{collaboration_count: 2}],
+               notable_collaborations: [%{films_together: 2, movies: movies}]
+             } =
                MovieCollaborations.get_key_collaborations(
                  preload_people([current_a, current_b]),
                  []
                )
+
+      assert length(movies) == 2
     end
 
     test "actor partnerships include full movies missing from collaboration details" do
@@ -54,11 +59,20 @@ defmodule Cinegraph.Movies.MovieCollaborationsTest do
 
       # get_key_collaborations/2 uses search results, which intentionally skip
       # the unreleased movie above.
-      assert %{actor_partnerships: [%{collaboration_count: 3}]} =
+      assert %{
+               actor_partnerships: [%{collaboration_count: 3}],
+               notable_collaborations: [%{films_together: 3, movies: movies}]
+             } =
                MovieCollaborations.get_key_collaborations(
                  preload_people([current_a, current_b]),
                  []
                )
+
+      assert Enum.map(movies, & &1.title) |> Enum.sort() == [
+               "Credit Count Credit Only",
+               "Credit Count Current",
+               "Credit Count Detail Backed"
+             ]
     end
 
     test "director actor reunions use the same count as their generated movie search link" do
@@ -81,10 +95,41 @@ defmodule Cinegraph.Movies.MovieCollaborationsTest do
       insert_detail!(collaboration, current, "actor-director")
       insert_detail!(collaboration, detail_backed, "actor-director")
 
-      assert %{director_actor_reunions: [%{collaboration_count: 3}]} =
+      assert %{
+               director_actor_reunions: [%{collaboration_count: 3}],
+               notable_collaborations: [%{films_together: 3, movies: movies}]
+             } =
                MovieCollaborations.get_key_collaborations(
                  preload_people([current_actor_credit]),
                  preload_people([current_director_credit])
+               )
+
+      assert length(movies) == 3
+    end
+
+    test "generic crew-crew collaborations are not promoted by default" do
+      editor = insert_person!("Crew Hidden Editor")
+      composer = insert_person!("Crew Hidden Composer")
+
+      current = insert_movie!("Crew Hidden Current", ~D[2024-01-01])
+      other = insert_movie!("Crew Hidden Other", ~D[2023-01-01])
+
+      current_editor_credit = insert_crew_credit!(current, editor, "Editor")
+      current_composer_credit = insert_crew_credit!(current, composer, "Original Music Composer")
+
+      for movie <- [other] do
+        insert_crew_credit!(movie, editor, "Editor")
+        insert_crew_credit!(movie, composer, "Original Music Composer")
+      end
+
+      collaboration = insert_collaboration!(editor, composer, %{collaboration_count: 2})
+      insert_detail!(collaboration, current, "crew-crew")
+      insert_detail!(collaboration, other, "crew-crew")
+
+      assert %{notable_collaborations: []} =
+               MovieCollaborations.get_key_collaborations(
+                 [],
+                 preload_people([current_editor_credit, current_composer_credit])
                )
     end
   end
@@ -121,6 +166,14 @@ defmodule Cinegraph.Movies.MovieCollaborationsTest do
       credit_type: "crew",
       department: "Directing",
       job: "Director"
+    })
+  end
+
+  defp insert_crew_credit!(movie, person, job) do
+    insert_credit!(movie, person, %{
+      credit_type: "crew",
+      department: "Crew",
+      job: job
     })
   end
 
