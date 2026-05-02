@@ -192,27 +192,29 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
   end
 
   defp fetch_directors_filmography(directors, exclude_movie_id) do
-    directors
-    |> Enum.map(&director_id/1)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-    |> Enum.flat_map(&fetch_director_filmography(&1, exclude_movie_id))
-    |> Enum.uniq_by(& &1.id)
-    |> Enum.sort_by(&release_sort_date/1, {:desc, Date})
-  end
+    person_ids =
+      directors
+      |> Enum.map(&director_id/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
 
-  defp fetch_director_filmography(person_id, exclude_movie_id) do
-    from(c in Cinegraph.Movies.Credit,
-      where:
-        c.person_id == ^person_id and c.credit_type == "crew" and c.job == "Director" and
-          c.movie_id != ^exclude_movie_id,
-      join: m in assoc(c, :movie),
-      preload: [movie: m],
-      order_by: [desc: m.release_date],
-      limit: 4
-    )
-    |> Repo.replica().all()
-    |> Enum.map(& &1.movie)
+    if person_ids == [] do
+      []
+    else
+      from(c in Cinegraph.Movies.Credit,
+        where:
+          c.person_id in ^person_ids and c.credit_type == "crew" and c.job == "Director" and
+            c.movie_id != ^exclude_movie_id,
+        join: m in assoc(c, :movie),
+        preload: [movie: m],
+        order_by: [desc: m.release_date],
+        limit: 8
+      )
+      |> Repo.replica().all()
+      |> Enum.map(& &1.movie)
+      |> Enum.uniq_by(& &1.id)
+      |> Enum.sort_by(&release_sort_date/1, {:desc, Date})
+    end
   end
 
   defp release_sort_date(%{release_date: %Date{} = date}), do: date

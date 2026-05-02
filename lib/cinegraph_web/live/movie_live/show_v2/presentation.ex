@@ -1,11 +1,8 @@
 defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
   @moduledoc false
-
   import CinegraphWeb.PersonHelpers, only: [person_slug_or_id: 1]
-
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.MovieLive.CollaborationHelpers
-
   @dept_priority ~w(Directing Writing Camera Editing Sound Production Art)
   @country_priority ~w(US GB FR DE JP KR IT ES CA AU IN BR MX)
 
@@ -217,11 +214,14 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
   end
 
   def collab_shape(c) do
+    person_a = c[:person_a]
+    person_b = c[:person_b]
+
     %{
-      person_a: c[:person_a].name,
-      person_b: c[:person_b].name,
-      avatar_a: tmdb_url(c[:person_a].profile_path, "w185"),
-      avatar_b: tmdb_url(c[:person_b].profile_path, "w185"),
+      person_a: person_name(person_a),
+      person_b: person_name(person_b),
+      avatar_a: tmdb_url(person_profile_path(person_a), "w185"),
+      avatar_b: tmdb_url(person_profile_path(person_b), "w185"),
       films_together:
         c[:films_together] || length(c[:movies] || []) || c[:collaboration_count] ||
           c[:total_collaborations] || 0,
@@ -239,9 +239,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
     }
   end
 
-  def director_names(directors) do
-    directors |> Enum.map(& &1.person.name) |> Enum.join(" & ")
-  end
+  defp person_name(%{name: name}) when is_binary(name) and name != "", do: name
+  defp person_name(_), do: "Unknown"
+  defp person_profile_path(%{profile_path: path}), do: path
+  defp person_profile_path(_), do: nil
+
+  def director_names(directors), do: directors |> Enum.map(& &1.person.name) |> Enum.join(" & ")
 
   def omdb_awards(%{omdb_data: %{"Awards" => a}}) when is_binary(a) and a != "" and a != "N/A",
     do: a
