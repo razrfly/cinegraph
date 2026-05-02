@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Person do
 
   alias CinegraphWeb.AdminHealth.Actions
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     Mix.Task.run("app.start")
@@ -31,7 +32,7 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Person do
 
       {:partial, %{ok: n, errors: errors}} ->
         Mix.shell().error(
-          "Partially enqueued #{n} PersonTmdbRefreshWorker job(s); failed batches: #{inspect(errors)}"
+          "Partially enqueued #{n} PersonTmdbRefreshWorker job(s); failed person ids: #{inspect(errors)}"
         )
 
         exit({:shutdown, 1})

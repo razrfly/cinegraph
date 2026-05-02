@@ -39,7 +39,6 @@ defmodule Mix.Tasks.Cinegraph.Prod.Movies.BackfillAvailability do
 
     case ProdRpc.eval_json(expr) do
       {:ok, %{"error" => reason}} -> ProdRpc.print_error({:eval_failed, reason})
-      {:ok, %{error: reason}} -> ProdRpc.print_error({:eval_failed, reason})
       {:ok, stats} -> ProdRpc.print(stats, opts)
       {:error, reason} -> ProdRpc.print_error(reason)
     end

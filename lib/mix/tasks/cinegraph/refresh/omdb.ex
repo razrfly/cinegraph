@@ -19,6 +19,7 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Omdb do
 
   alias CinegraphWeb.AdminHealth.Actions
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     Mix.Task.run("app.start")
@@ -35,7 +36,7 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Omdb do
 
       {:partial, %{ok: n, errors: errors}} ->
         Mix.shell().error(
-          "Partially enqueued #{n} OMDbEnrichmentWorker job(s); failed batches: #{inspect(errors)}"
+          "Partially enqueued #{n} OMDbEnrichmentWorker job(s); failed ids: #{inspect(errors)}"
         )
 
         exit({:shutdown, 1})

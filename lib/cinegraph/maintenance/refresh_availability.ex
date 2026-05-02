@@ -131,8 +131,12 @@ defmodule Cinegraph.Maintenance.RefreshAvailability do
     )
   end
 
-  defp recent_cutoff(%DateTime{} = now), do: now |> DateTime.to_date() |> Date.add(-365 * 2)
-  defp recent_cutoff(%Date{} = now), do: Date.add(now, -365 * 2)
+  defp recent_cutoff(%DateTime{} = now), do: now |> DateTime.to_date() |> recent_cutoff()
+
+  defp recent_cutoff(%Date{year: year, month: month, day: day}) do
+    target_year = year - 2
+    Date.new!(target_year, month, min(day, Calendar.ISO.days_in_month(target_year, month)))
+  end
 
   defp enqueue(ids, regions) do
     ids
