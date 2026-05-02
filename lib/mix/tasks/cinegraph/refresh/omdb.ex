@@ -33,6 +33,13 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Omdb do
       {:ok, n} ->
         Mix.shell().info("Enqueued #{n} OMDbEnrichmentWorker job(s) on queue :omdb")
 
+      {:partial, %{ok: n, errors: errors}} ->
+        Mix.shell().error(
+          "Partially enqueued #{n} OMDbEnrichmentWorker job(s); failed batches: #{inspect(errors)}"
+        )
+
+        exit({:shutdown, 1})
+
       {:error, errors} ->
         Mix.shell().error("Enqueue failed: #{inspect(errors)}")
         exit({:shutdown, 1})

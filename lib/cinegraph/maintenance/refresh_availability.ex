@@ -102,7 +102,7 @@ defmodule Cinegraph.Maintenance.RefreshAvailability do
     stale_base(excluded, now, regions)
     |> where(
       [m, r],
-      fragment("? != '{}'::jsonb", m.canonical_sources) or m.release_date >= ^recent_cutoff()
+      fragment("? != '{}'::jsonb", m.canonical_sources) or m.release_date >= ^recent_cutoff(now)
     )
     |> distinct([m, _r], m.id)
     |> order_by([m, r], asc: r.stale_after)
@@ -131,7 +131,8 @@ defmodule Cinegraph.Maintenance.RefreshAvailability do
     )
   end
 
-  defp recent_cutoff, do: Date.utc_today() |> Date.add(-365 * 2)
+  defp recent_cutoff(%DateTime{} = now), do: now |> DateTime.to_date() |> Date.add(-365 * 2)
+  defp recent_cutoff(%Date{} = now), do: Date.add(now, -365 * 2)
 
   defp enqueue(ids, regions) do
     ids

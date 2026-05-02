@@ -29,6 +29,13 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Person do
       {:ok, n} ->
         Mix.shell().info("Enqueued #{n} PersonTmdbRefreshWorker job(s) on queue :tmdb")
 
+      {:partial, %{ok: n, errors: errors}} ->
+        Mix.shell().error(
+          "Partially enqueued #{n} PersonTmdbRefreshWorker job(s); failed batches: #{inspect(errors)}"
+        )
+
+        exit({:shutdown, 1})
+
       {:error, errors} ->
         Mix.shell().error("Enqueue failed: #{inspect(errors)}")
         exit({:shutdown, 1})
