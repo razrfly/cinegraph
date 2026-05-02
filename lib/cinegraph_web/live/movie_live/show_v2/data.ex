@@ -207,11 +207,18 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
             c.movie_id != ^exclude_movie_id,
         join: m in assoc(c, :movie),
         preload: [movie: m],
-        order_by: [desc: m.release_date],
-        limit: 8
+        order_by: [asc: c.person_id, desc: m.release_date]
       )
       |> Repo.replica().all()
-      |> Enum.map(& &1.movie)
+      |> Enum.group_by(& &1.person_id)
+      |> Map.take(person_ids)
+      |> Map.values()
+      |> Enum.flat_map(fn credits ->
+        credits
+        |> Enum.uniq_by(& &1.movie_id)
+        |> Enum.take(4)
+        |> Enum.map(& &1.movie)
+      end)
       |> Enum.uniq_by(& &1.id)
       |> Enum.sort_by(&release_sort_date/1, {:desc, Date})
     end
