@@ -31,6 +31,13 @@ defmodule Cinegraph.Movies.RefreshTest do
            ]
   end
 
+  test "enqueue_movie_external_refresh/2 fails fast for a missing movie" do
+    assert {:error, :movie_not_found} =
+             Refresh.enqueue_movie_external_refresh(-1, omdb: true, availability: true)
+
+    assert Repo.aggregate(Oban.Job, :count, :id) == 0
+  end
+
   defp insert_movie! do
     %Movie{}
     |> Movie.changeset(%{

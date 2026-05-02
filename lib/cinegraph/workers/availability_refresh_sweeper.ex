@@ -20,6 +20,10 @@ defmodule Cinegraph.Workers.AvailabilityRefreshSweeper do
         )
 
         {:ok, stats}
+
+      {:error, reason} ->
+        Logger.error("AvailabilityRefreshSweeper failed: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 end

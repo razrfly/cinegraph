@@ -37,16 +37,19 @@ defmodule Mix.Tasks.Cinegraph.Movies.BackfillAvailability do
 
     Mix.Task.run("app.start")
 
-    {:ok, stats} =
-      AvailabilityBackfill.run(
-        limit: opts[:limit],
-        batch_size: opts[:batch_size] || 500,
-        after_id: opts[:after_id] || 0,
-        regions: opts[:regions] || "US",
-        dry_run: opts[:dry_run] || false
-      )
+    case AvailabilityBackfill.run(
+           limit: opts[:limit],
+           batch_size: opts[:batch_size] || 500,
+           after_id: opts[:after_id] || 0,
+           regions: opts[:regions] || Cinegraph.Movies.Availability.configured_regions(),
+           dry_run: opts[:dry_run] || false
+         ) do
+      {:ok, stats} ->
+        print_stats(stats)
 
-    print_stats(stats)
+      {:error, reason} ->
+        Mix.raise("Availability backfill failed: #{inspect(reason)}")
+    end
   end
 
   defp print_stats(stats) do

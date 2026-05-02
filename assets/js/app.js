@@ -55,7 +55,12 @@ const Hooks = {
 
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: {_csrf_token: csrfToken},
+  params: {
+    _csrf_token: csrfToken,
+    browser_locale: navigator.language || null,
+    browser_locales: navigator.languages || [navigator.language].filter(Boolean),
+    browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null
+  },
   hooks: Hooks
 })
 
@@ -72,4 +77,3 @@ liveSocket.connect()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
-

@@ -68,6 +68,54 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :official, :boolean
   end
 
+  @desc "A region option where watch availability can be displayed"
+  object :availability_region_option do
+    field :region, :string
+    field :label, :string
+  end
+
+  @desc "A streaming/rental provider catalog entry"
+  object :watch_provider do
+    field :source, :string
+    field :source_provider_id, :string
+    field :tmdb_provider_id, :integer
+    field :name, :string
+    field :logo_path, :string
+    field :logo_url, :string
+    field :display_priorities, :json
+  end
+
+  @desc "A movie/provider availability row for a monetization type"
+  object :movie_watch_provider_availability do
+    field :monetization_type, :string
+    field :display_priority, :integer
+    field :tmdb_link, :string
+    field :fetched_at, :string
+    field :stale_after, :string
+    field :provider, :watch_provider
+  end
+
+  @desc "Watch availability providers grouped by monetization type"
+  object :movie_availability_group do
+    field :monetization_type, :string
+    field :label, :string
+    field :providers, list_of(:movie_watch_provider_availability)
+  end
+
+  @desc "Current watch availability for a movie in a selected region"
+  object :movie_availability do
+    field :region, :string
+    field :region_label, :string
+    field :status, :string
+    field :tmdb_link, :string
+    field :fetched_at, :string
+    field :stale_after, :string
+    field :is_stale, :boolean
+    field :refresh_queued, :boolean
+    field :groups, list_of(:movie_availability_group)
+    field :available_regions, list_of(:availability_region_option)
+  end
+
   @desc "A movie with all associated data"
   object :movie do
     field :tmdb_id, :integer
@@ -103,6 +151,11 @@ defmodule CinegraphWeb.Schema.MovieTypes do
 
     field :videos, list_of(:movie_video) do
       resolve(&MovieResolver.videos/3)
+    end
+
+    field :availability, :movie_availability do
+      arg(:region, :string)
+      resolve(&MovieResolver.availability/3)
     end
   end
 end

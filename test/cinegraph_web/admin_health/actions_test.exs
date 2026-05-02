@@ -64,8 +64,9 @@ defmodule CinegraphWeb.AdminHealth.ActionsTest do
       jobs = Repo.all(Oban.Job)
       assert length(jobs) == 2
       assert Enum.all?(jobs, &(&1.worker == "Cinegraph.Workers.MovieAvailabilityRefreshWorker"))
-      assert Enum.all?(jobs, &(&1.args["regions"] == ["US"]))
+      assert Enum.all?(jobs, &(not Map.has_key?(&1.args, "regions")))
       assert Enum.all?(jobs, &(&1.args["force"] == true))
+      assert Enum.all?(jobs, &(&1.args["source"] == "manual"))
       assert Enum.map(jobs, & &1.args["movie_id"]) |> Enum.sort() == [1, 2]
     end
   end

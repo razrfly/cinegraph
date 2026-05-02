@@ -27,17 +27,90 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.MovieLive.CollaborationHelpers
   alias CinegraphWeb.NeutralV2Components
+  alias CinegraphWeb.MovieLive.ShowV2Availability
 
   require Logger
 
   @dept_priority ~w(Directing Writing Camera Editing Sound Production Art)
   @country_priority ~w(US GB FR DE JP KR IT ES CA AU IN BR MX)
+  @language_region_fallbacks %{
+    "pl" => "PL",
+    "en" => "US",
+    "fr" => "FR",
+    "de" => "DE",
+    "es" => "ES",
+    "it" => "IT",
+    "pt" => "PT",
+    "ja" => "JP",
+    "ko" => "KR",
+    "hi" => "IN",
+    "ar" => "EG",
+    "nl" => "NL",
+    "sv" => "SE",
+    "no" => "NO",
+    "da" => "DK",
+    "fi" => "FI",
+    "tr" => "TR",
+    "uk" => "UA"
+  }
+
+  @timezone_region_prefixes [
+    {"Europe/Warsaw", "PL"},
+    {"Europe/London", "GB"},
+    {"Europe/Dublin", "IE"},
+    {"Europe/Paris", "FR"},
+    {"Europe/Berlin", "DE"},
+    {"Europe/Rome", "IT"},
+    {"Europe/Madrid", "ES"},
+    {"Europe/Lisbon", "PT"},
+    {"Europe/Amsterdam", "NL"},
+    {"Europe/Brussels", "BE"},
+    {"Europe/Vienna", "AT"},
+    {"Europe/Zurich", "CH"},
+    {"Europe/Stockholm", "SE"},
+    {"Europe/Oslo", "NO"},
+    {"Europe/Copenhagen", "DK"},
+    {"Europe/Helsinki", "FI"},
+    {"Europe/Athens", "GR"},
+    {"Europe/Istanbul", "TR"},
+    {"Europe/Kyiv", "UA"},
+    {"America/New_York", "US"},
+    {"America/Chicago", "US"},
+    {"America/Denver", "US"},
+    {"America/Los_Angeles", "US"},
+    {"America/Phoenix", "US"},
+    {"America/Anchorage", "US"},
+    {"Pacific/Honolulu", "US"},
+    {"America/Toronto", "CA"},
+    {"America/Vancouver", "CA"},
+    {"America/Mexico_City", "MX"},
+    {"America/Sao_Paulo", "BR"},
+    {"America/Argentina", "AR"},
+    {"Asia/Tokyo", "JP"},
+    {"Asia/Seoul", "KR"},
+    {"Asia/Kolkata", "IN"},
+    {"Asia/Hong_Kong", "HK"},
+    {"Asia/Singapore", "SG"},
+    {"Asia/Taipei", "TW"},
+    {"Asia/Kuala_Lumpur", "MY"},
+    {"Asia/Jakarta", "ID"},
+    {"Asia/Manila", "PH"},
+    {"Asia/Bangkok", "TH"},
+    {"Australia/Sydney", "AU"},
+    {"Australia/Melbourne", "AU"},
+    {"Australia/Brisbane", "AU"},
+    {"Pacific/Auckland", "NZ"},
+    {"Africa/Johannesburg", "ZA"}
+  ]
 
   @impl true
   def mount(_params, _session, socket) do
+    browser_region = browser_region(socket)
+
     {:ok,
      socket
      |> assign(:active_nav, "Movies")
+     |> assign(:availability_browser_region, browser_region)
      |> assign(:show_score_modal, false)
      |> assign(:overview_expanded, false)
      |> assign(:show_full_cast, false)
@@ -52,6 +125,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         {:noreply,
          socket
          |> assign(data)
+         |> assign_availability(data.movie, socket.assigns[:availability_browser_region])
          |> assign_movie_seo(data.movie)}
 
       {:error, :not_found} ->
@@ -151,7 +225,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         _ -> []
       end
 
-    availability = availability_assigns(movie, "US")
+    availability = ShowV2Availability.availability_assigns(movie, Availability.default_region())
 
     data =
       %{
@@ -521,102 +595,85 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     if pair, do: "#{pair.person_a.name} + #{pair.person_b.name}", else: nil
   end
 
-  defp availability_assigns(movie, region) do
-    regions = Availability.available_regions(movie.id)
-    region = if region in regions, do: region, else: "US"
-
-    %{
-      availability_region: region,
-      availability_regions: regions,
-      availability_groups: Availability.list_movie_availability(movie.id, region),
-      availability_freshness: Availability.availability_freshness(movie.id, region),
-      availability_refresh_queued?: Availability.availability_refresh_queued?(movie.id, region)
-    }
-  end
-
-  defp assign_availability(socket, movie, region) do
-    assign(socket, availability_assigns(movie, region))
-  end
-
-  defp availability_group_label("flatrate"), do: "Streaming"
-  defp availability_group_label("free"), do: "Free"
-  defp availability_group_label("ads"), do: "Free with ads"
-  defp availability_group_label("rent"), do: "Rent"
-  defp availability_group_label("buy"), do: "Buy"
-
-  defp availability_group_label(type) do
-    type |> to_string() |> String.replace("_", " ") |> String.capitalize()
-  end
-
-  defp availability_group_order, do: ~w(flatrate free ads rent buy)
-
-  defp availability_has_rows?(groups) when is_map(groups) do
-    Enum.any?(groups, fn {_type, rows} -> rows != [] end)
-  end
-
-  defp availability_has_rows?(_), do: false
-
-  defp availability_provider_logo(%{watch_provider: %{logo_path: path}}),
-    do: tmdb_url(path, "w92")
-
-  defp availability_provider_logo(_), do: nil
-
-  defp availability_provider_name(%{watch_provider: %{name: name}}), do: name
-  defp availability_provider_name(_), do: "Unknown provider"
-
-  defp availability_initials(name) when is_binary(name) do
-    name
-    |> String.split(~r/\s+/, trim: true)
-    |> Enum.take(2)
-    |> Enum.map(&String.first/1)
-    |> Enum.join()
-    |> String.upcase()
-  end
-
-  defp availability_initials(_), do: "?"
-
-  defp availability_status_copy(nil, region),
-    do: "Availability has not been checked for #{region} yet."
-
-  defp availability_status_copy(%{status: "no_results"} = freshness, region) do
-    "No availability found for #{region}. " <> freshness_copy(freshness)
-  end
-
-  defp availability_status_copy(%{status: "error"} = freshness, _region) do
-    "Availability could not be refreshed. " <> freshness_copy(freshness)
-  end
-
-  defp availability_status_copy(freshness, _region), do: freshness_copy(freshness)
-
-  defp freshness_copy(%{fetched_at: fetched_at} = freshness) when not is_nil(fetched_at) do
-    copy = "Updated #{relative_days(fetched_at)}."
-
-    if availability_stale?(freshness) do
-      copy <> " Availability may have changed."
-    else
-      copy
+  defp browser_region(socket) do
+    if connected?(socket) do
+      socket |> get_connect_params() |> browser_region_candidates()
     end
   end
 
-  defp freshness_copy(_), do: ""
+  defp browser_region_candidates(params) when is_map(params) do
+    timezone_regions =
+      params
+      |> Map.get("browser_timezone")
+      |> region_from_timezone()
+      |> List.wrap()
 
-  defp availability_stale?(%{stale_after: nil}), do: false
+    locale_regions =
+      params
+      |> browser_locales()
+      |> Enum.flat_map(&regions_from_locale/1)
 
-  defp availability_stale?(%{stale_after: stale_after}) do
-    DateTime.compare(stale_after, DateTime.utc_now()) == :lt
+    (timezone_regions ++ locale_regions)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
   end
 
-  defp availability_stale?(_), do: false
+  defp browser_region_candidates(_), do: []
 
-  defp relative_days(%DateTime{} = fetched_at) do
-    days = max(div(DateTime.diff(DateTime.utc_now(), fetched_at, :second), 86_400), 0)
-
-    case days do
-      0 -> "today"
-      1 -> "1 day ago"
-      n -> "#{n} days ago"
+  defp browser_locales(params) do
+    params
+    |> Map.get("browser_locales")
+    |> case do
+      locales when is_list(locales) -> locales
+      locale when is_binary(locale) -> String.split(locale, ",", trim: true)
+      _ -> []
     end
+    |> Kernel.++(List.wrap(Map.get(params, "browser_locale")))
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
   end
+
+  defp regions_from_locale(locale) when is_binary(locale) do
+    parts = String.split(locale, ~r/[-_]/, trim: true)
+
+    explicit_region =
+      parts
+      |> Enum.at(1)
+      |> case do
+        <<region::binary-size(2)>> -> String.upcase(region)
+        _ -> nil
+      end
+
+    language_region =
+      parts
+      |> List.first()
+      |> case do
+        language when is_binary(language) ->
+          Map.get(@language_region_fallbacks, String.downcase(language))
+
+        _ ->
+          nil
+      end
+
+    [explicit_region, language_region]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp regions_from_locale(_), do: []
+
+  defp region_from_timezone(timezone) when is_binary(timezone) do
+    Enum.find_value(@timezone_region_prefixes, fn {prefix, region} ->
+      if String.starts_with?(timezone, prefix), do: region
+    end)
+  end
+
+  defp region_from_timezone(_), do: nil
+
+  defp assign_availability(socket, movie, region),
+    do: ShowV2Availability.assign_availability(socket, movie, region)
 
   defp section_nav_items(assigns) do
     has_collabs =
@@ -919,86 +976,15 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           </section>
 
           <%!-- WHERE TO WATCH --%>
-          <section id="watch">
-            <div class="flex items-start justify-between gap-4 mb-5 flex-wrap">
-              <div>
-                <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
-                  Where to Watch
-                </h2>
-                <p class="mt-1 text-[12.5px] text-mist-600">
-                  {availability_status_copy(@availability_freshness, @availability_region)}
-                  <span :if={@availability_refresh_queued?} class="ml-1 font-semibold text-mist-900">
-                    Refresh queued.
-                  </span>
-                </p>
-              </div>
-
-              <form
-                :if={length(@availability_regions) > 1}
-                phx-change="change_availability_region"
-                class="shrink-0"
-              >
-                <select
-                  name="region"
-                  class="rounded-full border border-mist-950/10 bg-mist-50 px-3 py-1.5 text-[12px] font-semibold text-mist-900"
-                >
-                  <option
-                    :for={region <- @availability_regions}
-                    value={region}
-                    selected={region == @availability_region}
-                  >
-                    {region}
-                  </option>
-                </select>
-              </form>
-            </div>
-
-            <div
-              :if={availability_has_rows?(@availability_groups)}
-              class="space-y-5 bg-mist-50 border border-mist-950/10 rounded-lg p-5"
-            >
-              <div
-                :for={type <- availability_group_order()}
-                :if={Map.get(@availability_groups, type, []) != []}
-              >
-                <h3 class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
-                  {availability_group_label(type)}
-                </h3>
-                <div class="flex flex-wrap gap-2.5">
-                  <div
-                    :for={availability <- Map.get(@availability_groups, type, [])}
-                    class="inline-flex items-center gap-2 rounded-full bg-white border border-mist-950/10 px-2.5 py-1.5 shadow-[0_1px_4px_rgba(20,18,15,.03)]"
-                  >
-                    <% provider_name = availability_provider_name(availability) %>
-                    <img
-                      :if={availability_provider_logo(availability)}
-                      src={availability_provider_logo(availability)}
-                      alt=""
-                      class="w-6 h-6 rounded-full object-cover bg-mist-100"
-                    />
-                    <span
-                      :if={!availability_provider_logo(availability)}
-                      class="w-6 h-6 rounded-full bg-mist-950 text-white grid place-items-center text-[9px] font-semibold"
-                    >
-                      {availability_initials(provider_name)}
-                    </span>
-                    <span class="text-[12.5px] font-semibold text-mist-900">{provider_name}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div
-              :if={!availability_has_rows?(@availability_groups)}
-              class="bg-mist-50 border border-mist-950/10 rounded-lg p-5 text-[13px] text-mist-700"
-            >
-              {availability_status_copy(@availability_freshness, @availability_region)}
-            </div>
-
-            <p class="mt-3 text-[11.5px] text-mist-500">
-              Availability data from TMDb. Streaming availability changes often and may vary by region.
-            </p>
-          </section>
+          <ShowV2Availability.where_to_watch
+            availability_freshness={@availability_freshness}
+            availability_region_label={@availability_region_label}
+            availability_refresh_queued={@availability_refresh_queued?}
+            availability_regions={@availability_regions}
+            availability_region_options={@availability_region_options}
+            availability_region={@availability_region}
+            availability_groups={@availability_groups}
+          />
 
           <%!-- WHERE IT LIVES — 4-up summary card --%>
           <% wins = count_award_wins(@festival_noms) %>

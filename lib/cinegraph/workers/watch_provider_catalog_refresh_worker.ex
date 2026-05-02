@@ -17,7 +17,7 @@ defmodule Cinegraph.Workers.WatchProviderCatalogRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
-    regions = Map.get(args, "regions", ["US"])
+    regions = Map.get(args, "regions", [Availability.default_region()])
 
     stats = refresh_catalog(regions: regions)
 
@@ -29,7 +29,7 @@ defmodule Cinegraph.Workers.WatchProviderCatalogRefreshWorker do
   end
 
   def refresh_catalog(opts \\ []) do
-    regions = Keyword.get(opts, :regions, ["US"])
+    regions = Keyword.get(opts, :regions, [Availability.default_region()])
 
     provider_fetch_fun =
       Keyword.get(opts, :provider_fetch_fun, &Cinegraph.Services.TMDb.get_watch_providers/1)

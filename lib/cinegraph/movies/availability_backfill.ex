@@ -12,7 +12,6 @@ defmodule Cinegraph.Movies.AvailabilityBackfill do
   alias Cinegraph.Movies.{Availability, Movie, MovieAvailabilityRefresh}
 
   @default_batch_size 500
-  @default_regions ["US"]
   @default_source "tmdb"
 
   @type stats :: %{
@@ -33,32 +32,39 @@ defmodule Cinegraph.Movies.AvailabilityBackfill do
     * `:limit` - maximum number of eligible movies to inspect
     * `:batch_size` - query batch size, defaults to 500
     * `:after_id` - resume after this movie id
-    * `:regions` - region list, defaults to `["US"]`
+    * `:regions` - region list, defaults to all regions present in the payload
     * `:dry_run` - count only; do not write rows
   """
-  @spec run(keyword()) :: {:ok, stats()}
+  @spec run(keyword()) :: {:ok, stats()} | {:error, term()}
   def run(opts \\ []) do
-    limit = Keyword.get(opts, :limit)
+    try do
+      limit = Keyword.get(opts, :limit)
 
-    batch_size =
-      positive_integer!(Keyword.get(opts, :batch_size, @default_batch_size), :batch_size)
+      batch_size =
+        positive_integer!(Keyword.get(opts, :batch_size, @default_batch_size), :batch_size)
 
-    after_id = non_negative_integer!(Keyword.get(opts, :after_id, 0), :after_id)
-    regions = opts |> Keyword.get(:regions, @default_regions) |> normalize_regions()
-    dry_run? = Keyword.get(opts, :dry_run, false)
-    source = opts |> Keyword.get(:source, @default_source) |> to_string()
+      after_id = non_negative_integer!(Keyword.get(opts, :after_id, 0), :after_id)
 
-    stats = %{
-      processed: 0,
-      success: 0,
-      no_results: 0,
-      error: 0,
-      skipped: 0,
-      last_id: nil,
-      dry_run: dry_run?
-    }
+      regions =
+        opts |> Keyword.get(:regions, Availability.configured_regions()) |> normalize_regions()
 
-    {:ok, do_run(after_id, limit, batch_size, regions, source, dry_run?, stats)}
+      dry_run? = Keyword.get(opts, :dry_run, false)
+      source = opts |> Keyword.get(:source, @default_source) |> to_string()
+
+      stats = %{
+        processed: 0,
+        success: 0,
+        no_results: 0,
+        error: 0,
+        skipped: 0,
+        last_id: nil,
+        dry_run: dry_run?
+      }
+
+      {:ok, do_run(after_id, limit, batch_size, regions, source, dry_run?, stats)}
+    rescue
+      error -> {:error, error}
+    end
   end
 
   defp do_run(_after_id, 0, _batch_size, _regions, _source, _dry_run?, stats), do: stats
@@ -85,6 +91,7 @@ defmodule Cinegraph.Movies.AvailabilityBackfill do
   defp eligible_query(after_id, limit) do
     from(m in Movie,
       where: m.id > ^after_id,
+      where: m.import_status == "full",
       where: fragment("? \\? 'watch_providers'", m.tmdb_data),
       order_by: [asc: m.id],
       limit: ^limit,
@@ -95,13 +102,14 @@ defmodule Cinegraph.Movies.AvailabilityBackfill do
   defp process_movie(movie, stats, regions, source, dry_run?) do
     stats = %{stats | last_id: movie.id}
 
-    if already_normalized?(movie.id, regions, source) do
+    payload = get_in(movie.tmdb_data || %{}, ["watch_providers"])
+    movie_regions = resolve_regions(regions, payload)
+
+    if already_normalized?(movie.id, movie_regions, source) do
       bump(stats, :skipped)
     else
-      payload = get_in(movie.tmdb_data || %{}, ["watch_providers"])
-
       if dry_run? do
-        classify_dry_run(stats, payload, regions)
+        classify_dry_run(stats, payload, movie_regions)
       else
         store_movie(movie, stats, payload, regions, source)
       end
@@ -203,15 +211,31 @@ defmodule Cinegraph.Movies.AvailabilityBackfill do
     |> normalize_regions()
   end
 
+  defp normalize_regions(:all), do: :all
+
   defp normalize_regions(regions) when is_list(regions) do
     regions
     |> Enum.map(&to_string/1)
     |> Enum.map(&String.trim/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.map(&String.upcase/1)
+    |> Enum.uniq()
   end
 
   defp normalize_regions(region), do: normalize_regions([region])
+
+  defp resolve_regions(:all, %{"results" => results}) when is_map(results) do
+    results
+    |> Map.keys()
+    |> normalize_regions()
+    |> case do
+      [] -> [Availability.default_region()]
+      regions -> regions
+    end
+  end
+
+  defp resolve_regions(:all, _payload), do: [Availability.default_region()]
+  defp resolve_regions(regions, _payload), do: regions
 
   defp valid_provider_payload?(%{"provider_id" => provider_id, "provider_name" => provider_name}) do
     not is_nil(provider_id) and is_binary(provider_name) and String.trim(provider_name) != ""

@@ -2,7 +2,7 @@ defmodule Cinegraph.Movies.WatchProvider do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @valid_sources ~w(tmdb justwatch)
+  @valid_sources ~w(tmdb)
 
   schema "watch_providers" do
     field :source, :string, default: "tmdb"
