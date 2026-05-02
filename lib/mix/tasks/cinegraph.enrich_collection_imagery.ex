@@ -277,7 +277,9 @@ defmodule Mix.Tasks.Cinegraph.EnrichCollectionImagery do
     end
   end
 
-  defp public_ip?({0, 0, 0, 0, 0, 0xFFFF, _g, _h}), do: false
+  defp public_ip?({0, 0, 0, 0, 0, 0xFFFF, g, h}) do
+    public_ip?({g >>> 8, g &&& 0xFF, h >>> 8, h &&& 0xFF})
+  end
 
   defp public_ip?({0, 0, 0, 0, 0, 0, 0, 0}), do: false
   defp public_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: false
