@@ -13,7 +13,7 @@ defmodule Cinegraph.Workers.TMDbCompanyMetadataWorker do
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"company_id" => company_id}}) do
+  def perform(%Oban.Job{args: %{"company_id" => company_id}}) when is_integer(company_id) do
     case Movies.refresh_production_company_metadata(company_id) do
       {:ok, company} ->
         Logger.info("Refreshed TMDb company metadata for #{company.name} (#{company.id})")
@@ -27,4 +27,13 @@ defmodule Cinegraph.Workers.TMDbCompanyMetadataWorker do
         {:error, reason}
     end
   end
+
+  def perform(%Oban.Job{args: %{"company_id" => company_id}}) when is_binary(company_id) do
+    case Integer.parse(String.trim(company_id)) do
+      {id, ""} -> perform(%Oban.Job{args: %{"company_id" => id}})
+      _ -> {:discard, :invalid_company_id}
+    end
+  end
+
+  def perform(%Oban.Job{args: _args}), do: {:discard, :invalid_args}
 end

@@ -26,6 +26,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   alias Cinegraph.Workers.MovieScoreCacheWorker
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.MovieLive.CollaborationHelpers
+  alias CinegraphWeb.MovieLive.ShowV2.ProductionDetails
   alias CinegraphWeb.NeutralV2Components
   alias CinegraphWeb.MovieLive.ShowV2Availability
 
@@ -388,16 +389,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   defp pluralize_str(1, w), do: w
   defp pluralize_str(_, w), do: w <> "s"
-
-  defp production_company_name(%{name: n}), do: n
-  defp production_company_name(%{production_company: %{name: n}}), do: n
-  defp production_company_name(_), do: "—"
-
-  defp production_company_slug_or_id(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
-  defp production_company_slug_or_id(%{id: id}), do: id
-
-  defp production_company_slug_or_id(%{production_company: company}),
-    do: production_company_slug_or_id(company)
 
   defp count_award_wins(noms) when is_list(noms) do
     Enum.reduce(noms, 0, fn org, acc ->
@@ -1403,19 +1394,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 class="flex justify-between border-b border-mist-950/10 pb-2"
               >
                 <dt class="text-mist-500">Production</dt>
-                <dd class="text-mist-950 text-right">
-                  <.link
-                    :for={
-                      {company, index} <- @production_companies |> Enum.take(2) |> Enum.with_index()
-                    }
-                    navigate={~p"/companies/#{production_company_slug_or_id(company)}"}
-                    class="underline decoration-mist-950/15 underline-offset-4 hover:text-mist-700"
-                  >
-                    <span :if={index > 0} class="text-mist-500 no-underline"> · </span>{production_company_name(
-                      company
-                    )}
-                  </.link>
-                </dd>
+                <ProductionDetails.production_details production_companies={@production_companies} />
               </div>
               <div class="flex justify-between border-b border-mist-950/10 pb-2">
                 <dt class="text-mist-500">TMDb / IMDb</dt>

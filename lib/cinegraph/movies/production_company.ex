@@ -85,16 +85,41 @@ defmodule Cinegraph.Movies.ProductionCompany do
   defp url_errors(field, _url), do: [{field, "must be a valid HTTP(S) URL"}]
 
   defp maybe_generate_slug(changeset) do
-    case get_field(changeset, :slug) do
-      slug when is_binary(slug) and slug != "" ->
-        put_change(changeset, :slug, slugify(slug))
+    candidate =
+      case get_field(changeset, :slug) do
+        slug when is_binary(slug) and slug != "" ->
+          slugify(slug)
 
-      _ ->
-        case get_field(changeset, :name) do
-          name when is_binary(name) -> put_change(changeset, :slug, slugify(name))
-          _ -> changeset
+        _ ->
+          case get_field(changeset, :name) do
+            name when is_binary(name) -> slugify(name)
+            _ -> nil
+          end
+      end
+
+    case candidate do
+      nil ->
+        changeset
+
+      "" ->
+        case get_field(changeset, :tmdb_id) do
+          id when is_integer(id) -> put_change(changeset, :slug, "company-#{id}")
+          _ -> put_change(changeset, :slug, fallback_slug())
         end
+
+      slug ->
+        put_change(changeset, :slug, slug)
     end
+  end
+
+  defp fallback_slug do
+    suffix =
+      6
+      |> :crypto.strong_rand_bytes()
+      |> Base.url_encode64(padding: false)
+      |> String.downcase()
+
+    "company-#{suffix}"
   end
 
   def slugify(value) when is_binary(value) do

@@ -237,7 +237,9 @@ defmodule Cinegraph.Services.TMDb do
   Fetches production company images by ID.
   """
   def get_company_images(company_id) when is_integer(company_id) or is_binary(company_id) do
-    Client.get("/company/#{company_id}/images")
+    ApiTracker.track_lookup("tmdb", "company_images", to_string(company_id), fn ->
+      Client.get("/company/#{company_id}/images")
+    end)
   end
 
   @doc """

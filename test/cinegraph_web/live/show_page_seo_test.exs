@@ -28,12 +28,24 @@ defmodule CinegraphWeb.ShowPageSEOTest do
       |> Repo.insert!()
 
     {:ok, _view, html} = live(conn, ~p"/lists/#{list.slug}")
+    document = Floki.parse_document!(html)
 
-    assert html =~ ~s(<link rel="canonical" href="https://cinegraph.io/lists/#{list.slug}")
-    assert html =~ ~s(<meta property="og:title" content="SEO Test List")
-    assert html =~ ~s(<meta name="twitter:title" content="SEO Test List")
-    assert html =~ ~s("ItemList")
-    assert html =~ ~s("BreadcrumbList")
+    assert document
+           |> Floki.find(
+             ~s(link[rel="canonical"][href="https://cinegraph.io/lists/#{list.slug}"])
+           )
+           |> Enum.any?()
+
+    assert document
+           |> Floki.find(~s(meta[property="og:title"][content="SEO Test List"]))
+           |> Enum.any?()
+
+    assert document
+           |> Floki.find(~s(meta[name="twitter:title"][content="SEO Test List"]))
+           |> Enum.any?()
+
+    assert json_ld_types(document) |> Enum.member?("ItemList")
+    assert json_ld_types(document) |> Enum.member?("BreadcrumbList")
   end
 
   test "award winners show renders mode-specific SEO tags in the initial HTML", %{conn: conn} do
@@ -47,13 +59,45 @@ defmodule CinegraphWeb.ShowPageSEOTest do
       |> Repo.insert!()
 
     {:ok, _view, html} = live(conn, ~p"/awards/#{organization.slug}/winners")
+    document = Floki.parse_document!(html)
 
-    assert html =~
-             ~s(<link rel="canonical" href="https://cinegraph.io/awards/#{organization.slug}/winners")
+    assert document
+           |> Floki.find(
+             ~s(link[rel="canonical"][href="https://cinegraph.io/awards/#{organization.slug}/winners"])
+           )
+           |> Enum.any?()
 
-    assert html =~ ~s(<meta property="og:title" content="SEO Test Awards Winners")
-    assert html =~ ~s(<meta name="twitter:title" content="SEO Test Awards Winners")
-    assert html =~ ~s("ItemList")
-    assert html =~ ~s("BreadcrumbList")
+    assert document
+           |> Floki.find(~s(meta[property="og:title"][content="SEO Test Awards Winners"]))
+           |> Enum.any?()
+
+    assert document
+           |> Floki.find(~s(meta[name="twitter:title"][content="SEO Test Awards Winners"]))
+           |> Enum.any?()
+
+    assert json_ld_types(document) |> Enum.member?("ItemList")
+    assert json_ld_types(document) |> Enum.member?("BreadcrumbList")
+  end
+
+  defp json_ld_types(document) do
+    document
+    |> Floki.find(~s(script[type="application/ld+json"]))
+    |> Enum.flat_map(fn script ->
+      script
+      |> script_content()
+      |> Jason.decode!()
+      |> List.wrap()
+      |> Enum.map(& &1["@type"])
+    end)
+  end
+
+  defp script_content({_tag, _attrs, children}) do
+    children
+    |> Enum.map(fn
+      child when is_binary(child) -> child
+      child -> Floki.raw_html([child])
+    end)
+    |> Enum.join()
+    |> String.trim()
   end
 end

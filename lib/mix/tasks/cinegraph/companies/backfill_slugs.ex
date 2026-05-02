@@ -19,7 +19,7 @@ defmodule Mix.Tasks.Cinegraph.Companies.BackfillSlugs do
         Mix.shell().info("Backfilled #{count} production-company slug(s)")
 
       {:error, company, changeset} ->
-        Mix.shell().error(
+        Mix.raise(
           "Failed to backfill company #{company.id} (#{company.name}): #{inspect(changeset.errors)}"
         )
     end

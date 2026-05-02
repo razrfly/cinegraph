@@ -29,6 +29,10 @@ defmodule Mix.Tasks.Cinegraph.Companies.RefreshMetadata do
         ]
       )
 
+    if opts[:missing] && opts[:stale] do
+      Mix.raise("Use either --missing or --stale, not both")
+    end
+
     mode = if opts[:stale], do: :stale, else: :missing
 
     {:ok, result} =

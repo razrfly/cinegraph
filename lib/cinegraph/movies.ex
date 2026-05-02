@@ -344,12 +344,17 @@ defmodule Cinegraph.Movies do
   end
 
   def get_production_company_by_id_or_slug(id_or_slug) when is_binary(id_or_slug) do
-    case Integer.parse(id_or_slug) do
-      {id, ""} ->
-        Repo.replica().get(ProductionCompany, id)
+    trimmed = String.trim(id_or_slug)
 
-      _ ->
-        Repo.replica().get_by(ProductionCompany, slug: id_or_slug)
+    case Repo.replica().get_by(ProductionCompany, slug: trimmed) do
+      nil ->
+        case Integer.parse(trimmed) do
+          {id, ""} -> Repo.replica().get(ProductionCompany, id)
+          _ -> nil
+        end
+
+      company ->
+        company
     end
   end
 
