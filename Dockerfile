@@ -45,6 +45,10 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/import.exs config/
 RUN mix deps.compile
 
+# Install asset build tools in a cached layer so deploy does not try to
+# download esbuild/tailwind while compiling assets.
+RUN mix assets.setup
+
 COPY priv priv
 
 COPY lib lib

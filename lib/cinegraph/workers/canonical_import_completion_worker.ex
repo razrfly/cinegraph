@@ -20,6 +20,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
   import Ecto.Query
   require Logger
 
+  @doc false
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     %{
@@ -147,6 +148,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
                %{
                  list_key: list_key,
                  status: :completed,
+                 import_status: status,
                  total_movies: actual_count,
                  expected_movies: expected_count,
                  timestamp: DateTime.utc_now()

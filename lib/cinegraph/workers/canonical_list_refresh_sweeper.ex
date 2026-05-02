@@ -4,17 +4,17 @@ defmodule Cinegraph.Workers.CanonicalListRefreshSweeper do
   remaining blank or stale indefinitely.
   """
 
-  use Oban.Worker, queue: :maintenance, max_attempts: 1, priority: 3
+  use Oban.Worker, queue: :maintenance, max_attempts: 3, priority: 3
 
   alias Cinegraph.Maintenance.RefreshCanonicalLists
 
   require Logger
 
+  @doc false
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     opts = [
       blank_only: true,
-      stale_days: 90,
       limit: 5,
       trigger: "scheduled_canonical_refresh"
     ]
