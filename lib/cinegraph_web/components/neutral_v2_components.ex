@@ -1218,36 +1218,42 @@ defmodule CinegraphWeb.NeutralV2Components do
         <.n_score_bar
           label="The Mob"
           sublabel="audience"
+          description="Audience consensus from IMDb and TMDb user ratings."
           value={@scores[:mob]}
           weight={@weights[:mob]}
         />
         <.n_score_bar
           label="The Critics"
           sublabel="reviews"
+          description="Professional review signal from Rotten Tomatoes Tomatometer and Metacritic Metascore."
           value={@scores[:critics]}
           weight={@weights[:critics]}
         />
         <.n_score_bar
           label="The Insiders"
           sublabel="festivals"
+          description="Festival wins and nominations across Academy, Cannes, Venice, BAFTA, Sundance, and other industry bodies."
           value={@scores[:festival_recognition]}
           weight={@weights[:festival_recognition]}
         />
         <.n_score_bar
           label="Time Machine"
           sublabel="canon lists"
+          description="Long-term cultural staying power from canonical lists like Criterion, AFI, BFI Sight & Sound, and similar sources."
           value={@scores[:time_machine]}
           weight={@weights[:time_machine]}
         />
         <.n_score_bar
           label="The Auteurs"
           sublabel="talent"
+          description="Quality scores for the director, cast, and crew based on their broader film achievements."
           value={@scores[:auteurs]}
           weight={@weights[:auteurs]}
         />
         <.n_score_bar
           label="Box Office"
           sublabel="revenue"
+          description="Commercial performance from revenue and return on investment, weighted 60% revenue and 40% ROI."
           value={@scores[:box_office]}
           weight={@weights[:box_office]}
         />
@@ -1261,6 +1267,7 @@ defmodule CinegraphWeb.NeutralV2Components do
   attr :value, :any, required: true
   attr :weight, :integer, default: nil
   attr :sublabel, :string, default: nil
+  attr :description, :string, default: nil
 
   def n_score_bar(assigns) do
     val = score_for_bar(assigns.value)
@@ -1271,7 +1278,29 @@ defmodule CinegraphWeb.NeutralV2Components do
     <div>
       <div class="flex items-baseline justify-between gap-2 mb-1">
         <div class="flex items-baseline gap-2">
-          <span class="text-[13px] font-semibold text-mist-950 tracking-[-.005em]">{@label}</span>
+          <span class="relative inline-flex items-baseline group">
+            <button
+              :if={@description}
+              type="button"
+              class="text-[13px] font-semibold text-mist-950 tracking-[-.005em] underline decoration-transparent underline-offset-4 cursor-help focus-visible:outline-none focus-visible:decoration-mist-950/40 group-hover:decoration-mist-950/30"
+              aria-label={"#{@label}: #{@description}"}
+            >
+              {@label}
+            </button>
+            <span
+              :if={!@description}
+              class="text-[13px] font-semibold text-mist-950 tracking-[-.005em]"
+            >
+              {@label}
+            </span>
+            <span
+              :if={@description}
+              role="tooltip"
+              class="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-md border border-mist-950/10 bg-white px-3 py-2 text-left text-[11.5px] font-normal leading-[1.45] text-mist-800 shadow-[0_10px_30px_rgba(20,18,15,.12)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+            >
+              {@description}
+            </span>
+          </span>
           <span :if={@sublabel} class="text-[11px] text-mist-500">{@sublabel}</span>
         </div>
         <div class="flex items-baseline gap-2">

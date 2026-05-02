@@ -6,7 +6,7 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://cinegraph.io/sitemap.xml
+Sitemap: https://cinegraph.org/sitemap.xml
 
 # Disallow admin and internal routes
 Disallow: /admin/
@@ -34,4 +34,3 @@ Allow: /
 
 User-agent: DuckDuckBot
 Allow: /
-
