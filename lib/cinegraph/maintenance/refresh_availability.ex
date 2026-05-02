@@ -14,6 +14,16 @@ defmodule Cinegraph.Maintenance.RefreshAvailability do
   @default_limit 5_000
   @insert_chunk_size 500
 
+  @doc """
+  Enqueues refresh jobs for full movies with missing or stale TMDb availability.
+
+  Options:
+
+    * `:limit` - maximum movie ids to enqueue, defaults to 5,000.
+    * `:dry_run` - when true, reports how many jobs would be queued without inserting jobs.
+    * `:regions` - region list or `:all`; `:all` expands to the supported region catalog.
+    * `:now` - timestamp used for deterministic stale checks.
+  """
   def run(opts \\ []) do
     try do
       limit = Keyword.get(opts, :limit, @default_limit)

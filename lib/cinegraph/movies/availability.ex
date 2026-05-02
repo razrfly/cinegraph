@@ -97,12 +97,27 @@ defmodule Cinegraph.Movies.Availability do
     "ZA" => "South Africa"
   }
 
+  @doc """
+  Returns the default region selection used by availability refresh flows.
+  """
   def configured_regions, do: @default_regions
+
+  @doc """
+  Returns the fallback region used when no valid region is supplied.
+  """
   def default_region, do: @default_region
+
+  @doc """
+  Returns the supported ISO 3166-1 alpha-2 regions with built-in display labels.
+  """
   def supported_regions, do: @region_names |> Map.keys() |> Enum.sort()
 
+  @doc """
+  Returns true when a supplied region code is non-blank and in the supported region catalog.
+  """
   def supported_region?(region) when is_binary(region) do
-    Map.has_key?(@region_names, normalize_region(region))
+    region = region |> String.trim() |> String.upcase()
+    region != "" and Map.has_key?(@region_names, region)
   end
 
   def supported_region?(_region), do: false

@@ -23,6 +23,15 @@ defmodule Cinegraph.Health.AvailabilityAudit do
 
   @queue_states ~w(available scheduled executing retryable completed discarded cancelled)
 
+  @doc """
+  Builds an operational report for watch availability coverage and freshness.
+
+  Options:
+
+    * `:region` - ISO 3166-1 alpha-2 region to audit; unsupported values fall back to the default region.
+    * `:limit` - maximum example rows to include per example group.
+    * `:stale_days` - age threshold used for old refresh counts.
+  """
   def audit(opts \\ []) do
     region = opts |> Keyword.get(:region, Availability.default_region()) |> normalize_region()
     limit = opts |> Keyword.get(:limit, 10) |> normalize_positive_integer(10)
@@ -404,8 +413,13 @@ defmodule Cinegraph.Health.AvailabilityAudit do
     |> String.trim()
     |> String.upcase()
     |> case do
-      <<region::binary-size(2)>> -> region
-      _ -> Availability.default_region()
+      <<region::binary-size(2)>> ->
+        if Availability.supported_region?(region),
+          do: region,
+          else: Availability.default_region()
+
+      _ ->
+        Availability.default_region()
     end
   end
 

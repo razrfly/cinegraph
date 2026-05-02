@@ -113,6 +113,19 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
     {:noreply, put_flash(socket, :info, "Queued #{n} #{label} refresh job(s)")}
   end
 
+  defp flash_queue_result(socket, {:partial, %{ok: n, errors: errors}}, label) do
+    Logger.warning(
+      "AdminHealthLive #{label} refresh enqueue partially failed: #{inspect(errors)}"
+    )
+
+    {:noreply,
+     put_flash(
+       socket,
+       :warning,
+       "Queued #{n} #{label} refresh job(s); #{length(errors)} batch(es) failed"
+     )}
+  end
+
   defp flash_queue_result(socket, {:error, reason}, label) do
     Logger.error("AdminHealthLive #{label} refresh enqueue failed: #{inspect(reason)}")
 
