@@ -31,6 +31,9 @@
 /tmp/
 .elixir_ls
 
+# Local database dumps are huge and are never needed in release images.
+/priv/dumps/
+
 # Mix artifacts
 /_build/
 /deps/

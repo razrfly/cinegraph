@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.CanonicalLists do
 
   @shortdoc "Audit production canonical IMDb list freshness and coverage"
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     {opts, _, invalid} =

@@ -14,6 +14,8 @@ defmodule Cinegraph.Movies.Search do
   alias Cinegraph.Metrics.ScoringService
   alias Cinegraph.Workers.MovieScoreCacheWorker
 
+  # A lens only counts as present when it contributes positive signal. Zero and
+  # nil are both treated as missing for confidence and explanation labels.
   defmacrop score_cache_present_lens_count_fragment(sc) do
     quote do
       fragment(

@@ -48,12 +48,21 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalLists do
   end
 
   defp validate_selector!(opts) do
-    if Keyword.get(opts, :list) || Keyword.get(opts, :blank_only) ||
-         Keyword.get(opts, :stale_days) || Keyword.get(opts, :all) do
+    selected =
+      [:list, :blank_only, :stale_days, :all]
+      |> Enum.count(fn key ->
+        case Keyword.get(opts, key) do
+          nil -> false
+          false -> false
+          _ -> true
+        end
+      end)
+
+    if selected == 1 do
       :ok
     else
       raise ArgumentError,
-            "provide one selector: :list, :blank_only, :stale_days, or :all"
+            "provide exactly one selector: :list, :blank_only, :stale_days, or :all"
     end
   end
 
@@ -82,6 +91,8 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalLists do
     raise ArgumentError, ":limit must be a positive integer or nil, got: #{inspect(other)}"
   end
 
+  # Keep per-job inserts so Oban uniqueness is honored and conflicts can be
+  # reported as already queued.
   defp enqueue_each(lists, trigger) do
     Enum.reduce(lists, {0, 0, 0}, fn list, {ok, already, failed} ->
       args = %{

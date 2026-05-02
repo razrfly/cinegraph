@@ -30,6 +30,8 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
   attr :list, :map, required: true
 
   defp card_inner(assigns) do
+    assigns = assign(assigns, :short_name, non_blank(assigns.list.short_name))
+
     ~H"""
     <% image = ListAppearance.image(@list) %>
     <div class={[
@@ -67,8 +69,8 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
         <NeutralV2Components.n_pill tone="ink" size="xs">
           {ListAppearance.rank(@list)}
         </NeutralV2Components.n_pill>
-        <NeutralV2Components.n_pill :if={@list.short_name} tone="neutral" size="xs">
-          {@list.short_name}
+        <NeutralV2Components.n_pill :if={@short_name} tone="neutral" size="xs">
+          {@short_name}
         </NeutralV2Components.n_pill>
       </div>
       <div :if={ListAppearance.href(@list)} class="mt-4 text-[12px] font-semibold text-mist-950">
@@ -77,4 +79,15 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
     </div>
     """
   end
+
+  defp non_blank(value) when is_binary(value) do
+    value
+    |> String.trim()
+    |> case do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp non_blank(_value), do: nil
 end

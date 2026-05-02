@@ -11,12 +11,13 @@
 
 timestamp = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
 
-date_stamp =
-  Date.utc_today()
-  |> Date.to_iso8601()
-  |> String.replace("-", "_")
+timestamp_stamp =
+  timestamp
+  |> String.replace(["-", ":"], "_")
+  |> String.replace("T", "_")
+  |> String.replace("Z", "")
 
-report_path = "docs/scoring/reports/scoring_phase5_performance_#{date_stamp}.md"
+report_path = "docs/scoring/reports/scoring_phase5_performance_#{timestamp_stamp}.md"
 
 lens_count_sql = """
 (

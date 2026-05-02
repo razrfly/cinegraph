@@ -8,6 +8,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Canonical.EnqueueRefresh do
 
   @shortdoc "Enqueue production canonical IMDb list refresh jobs"
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     {opts, _, invalid} =

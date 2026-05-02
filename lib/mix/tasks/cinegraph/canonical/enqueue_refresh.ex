@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Cinegraph.Canonical.EnqueueRefresh do
 
   @shortdoc "Enqueue canonical IMDb list refresh jobs"
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     Mix.Task.run("app.start")

@@ -83,6 +83,12 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalListsTest do
     assert_raise ArgumentError, fn -> RefreshCanonicalLists.run(dry_run: true) end
   end
 
+  test "raises with conflicting selectors" do
+    assert_raise ArgumentError, fn ->
+      RefreshCanonicalLists.run(blank_only: true, all: true, dry_run: true)
+    end
+  end
+
   defp canonical_job_count do
     Repo.aggregate(
       from(j in Oban.Job, where: j.worker == "Cinegraph.Workers.CanonicalImportOrchestrator"),
