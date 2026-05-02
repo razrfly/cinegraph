@@ -244,7 +244,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
   defp person_profile_path(%{profile_path: path}), do: path
   defp person_profile_path(_), do: nil
 
-  def director_names(directors), do: directors |> Enum.map(& &1.person.name) |> Enum.join(" & ")
+  def director_names(directors), do: directors |> Enum.map(&director_name/1) |> Enum.join(" & ")
+
+  defp director_name(%{person: person}), do: person_name(person)
+  defp director_name(_), do: person_name(nil)
 
   def omdb_awards(%{omdb_data: %{"Awards" => a}}) when is_binary(a) and a != "" and a != "N/A",
     do: a
