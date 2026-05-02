@@ -42,6 +42,34 @@ defmodule Cinegraph.Maintenance.RefreshAvailabilityTest do
                RefreshAvailability.run(now: ~U[2026-05-02 00:00:00Z])
     end
 
+    test "stale priority cutoff clamps leap day to a valid date two years prior" do
+      leap_boundary_movie = insert_movie!(%{release_date: ~D[2022-02-28]})
+      older_movie = insert_movie!(%{release_date: ~D[2022-02-27]})
+
+      insert_refresh!(leap_boundary_movie, ~U[2024-01-02 00:00:00Z])
+      insert_refresh!(older_movie, ~U[2024-01-01 00:00:00Z])
+
+      assert {:ok, %{found: 1, enqueued: 1}} =
+               RefreshAvailability.run(limit: 1, regions: ["US"], now: ~U[2024-02-29 00:00:00Z])
+
+      [job] = Repo.all(Oban.Job)
+      assert job.args["movie_id"] == leap_boundary_movie.id
+    end
+
+    test "stale priority cutoff preserves month-end days that exist two years prior" do
+      month_end_movie = insert_movie!(%{release_date: ~D[2024-01-31]})
+      older_movie = insert_movie!(%{release_date: ~D[2024-01-30]})
+
+      insert_refresh!(month_end_movie, ~U[2026-01-02 00:00:00Z])
+      insert_refresh!(older_movie, ~U[2026-01-01 00:00:00Z])
+
+      assert {:ok, %{found: 1, enqueued: 1}} =
+               RefreshAvailability.run(limit: 1, regions: ["US"], now: ~U[2026-01-31 00:00:00Z])
+
+      [job] = Repo.all(Oban.Job)
+      assert job.args["movie_id"] == month_end_movie.id
+    end
+
     test "uses requested regions when selecting missing refresh rows" do
       movie = insert_movie!()
       insert_refresh!(movie, ~U[2026-06-01 00:00:00Z], "US")
