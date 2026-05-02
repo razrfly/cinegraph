@@ -10,25 +10,28 @@ defmodule Cinegraph.Workers.CanonicalListRefreshSweeper do
 
   require Logger
 
-  @doc false
+  @doc """
+  Queues refreshes for blank IMDb lists first, then stale lists that were not
+  already selected by the blank-list pass.
+  """
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    [
-      [blank_only: true],
-      [stale_days: 90]
-    ]
-    |> Enum.map(&run_refresh/1)
+    blank_stats = run_refresh(blank_only: true)
+    stale_stats = run_refresh([stale_days: 90], exclude_source_keys: blank_stats.lists)
+
+    [blank_stats, stale_stats]
     |> combine_stats()
     |> then(&{:ok, &1})
   end
 
-  defp run_refresh(selector_opts) do
+  defp run_refresh(selector_opts, extra_opts \\ []) do
     opts =
-      selector_opts ++
-        [
-          limit: 5,
-          trigger: "scheduled_canonical_refresh"
-        ]
+      selector_opts
+      |> Keyword.merge(
+        limit: 5,
+        trigger: "scheduled_canonical_refresh"
+      )
+      |> Keyword.merge(extra_opts)
 
     {:ok, stats} = RefreshCanonicalLists.run(opts)
 

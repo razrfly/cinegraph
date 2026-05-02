@@ -1,0 +1,281 @@
+<div class="mx-auto w-full max-w-2xl px-6 pt-6 pb-16 md:max-w-3xl lg:max-w-7xl lg:px-10">
+  <nav class="mb-8 text-[12px] text-mist-600">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950">Movies</.link>
+    <span class="mx-2 text-mist-400">/</span>
+    <span class="font-medium text-mist-950">Video Clerk</span>
+  </nav>
+
+  <section class="mb-12 grid gap-8 lg:grid-cols-[1fr_420px] lg:items-end">
+    <div>
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        Anti-collaborative filtering
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <h1 class="mt-2 font-display italic text-[44px] leading-[1.02] text-balance text-mist-950 sm:text-[58px] lg:text-[78px]">
+        The Video Clerk.
+      </h1>
+      <p class="mt-4 max-w-3xl text-[18px] leading-relaxed text-mist-800">
+        Three films in. One human-feeling recommendation out.
+      </p>
+      <p class="mt-4 max-w-3xl text-[15px] leading-relaxed text-mist-700">
+        Built from cult afterlives, cultural relevance, creative relationships, and Cinegraph's own evidence. Not anonymous co-watch sludge.
+      </p>
+      <div class="mt-6 flex flex-wrap gap-2">
+        <.link
+          navigate={~p"/lists/cult-movies-400"}
+          class="inline-flex items-center rounded-md bg-mist-950 px-4 py-2 text-[13px] font-semibold text-mist-50 hover:bg-mist-800"
+        >
+          Browse cult source
+        </.link>
+        <.link
+          navigate={~p"/lists/1001-movies"}
+          class="inline-flex items-center rounded-md border border-mist-950/15 bg-mist-50 px-4 py-2 text-[13px] font-semibold text-mist-950 hover:bg-mist-100"
+        >
+          Browse 1001 source
+        </.link>
+      </div>
+    </div>
+
+    <div class="rounded-lg border border-mist-950/10 bg-mist-50 p-4 shadow-[0_12px_30px_rgba(20,18,15,.07)]">
+      <div class="mb-3 flex items-center justify-between">
+        <span class="text-[12px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          Ask the clerk
+        </span>
+        <span class="rounded-md bg-mist-950 px-2 py-1 text-[11px] font-semibold text-mist-50 tabular-nums">
+          {length(@selected_movies)}/3
+        </span>
+      </div>
+
+      <form phx-change="search_movies" phx-submit="search_movies" autocomplete="off">
+        <input
+          type="text"
+          name="q"
+          value={@search_query}
+          placeholder="Search for a film"
+          phx-debounce="200"
+          class="h-10 w-full rounded-md border border-mist-950/15 bg-white px-3 text-[13px] text-mist-950 placeholder:text-mist-500"
+        />
+      </form>
+
+      <div
+        :if={@search_results != []}
+        class="mt-2 overflow-hidden rounded-md border border-mist-950/10 bg-white"
+      >
+        <button
+          :for={film <- @search_results}
+          type="button"
+          phx-click="select_movie"
+          phx-value-slug={film.slug}
+          class="flex w-full items-center gap-3 border-b border-mist-950/[0.06] px-3 py-2 text-left last:border-b-0 hover:bg-mist-50"
+        >
+          <img
+            :if={film.poster_path}
+            src={Movie.image_url(film.poster_path, "w92")}
+            alt=""
+            class="h-12 w-8 rounded-[3px] object-cover"
+          />
+          <div
+            :if={!film.poster_path}
+            class="grid h-12 w-8 place-items-center rounded-[3px] bg-mist-100 text-[12px] text-mist-500"
+          >
+            Film
+          </div>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-[13px] font-semibold text-mist-950">
+              {film.title}
+            </span>
+            <span class="block text-[12px] text-mist-500">{film.year}</span>
+          </span>
+        </button>
+      </div>
+
+      <div
+        :if={@search_query != "" && @search_results == []}
+        class="mt-2 rounded-md border border-mist-950/10 bg-white px-3 py-3 text-[12px] text-mist-600"
+      >
+        No film matches yet. Try another title.
+      </div>
+
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          phx-click="load_demo"
+          class="rounded-md border border-mist-950/10 bg-white px-2 py-1 text-[11px] font-semibold text-mist-800 hover:bg-mist-100"
+        >
+          Load demo trio
+        </button>
+        <button
+          :if={@selected_movies != []}
+          type="button"
+          phx-click="reset_clerk"
+          class="rounded-md border border-mist-950/10 bg-white px-2 py-1 text-[11px] font-semibold text-mist-600 hover:bg-mist-100"
+        >
+          Reset
+        </button>
+      </div>
+
+      <div class="mt-4 grid gap-2">
+        <div
+          :for={movie <- @selected_movies}
+          class="rounded-md border border-mist-950/10 bg-white px-3 py-3"
+        >
+          <div class="flex items-baseline justify-between gap-3">
+            <span class="text-[13px] font-semibold text-mist-950">{movie.title}</span>
+            <span class="text-[12px] tabular-nums text-mist-500">
+              {Movie.release_year(movie)}
+            </span>
+          </div>
+          <div class="mt-2 flex items-center justify-between gap-3">
+            <p class="text-[12px] leading-snug text-mist-600">Selected taste signal</p>
+            <button
+              type="button"
+              phx-click="remove_movie"
+              phx-value-slug={movie.slug}
+              class="text-[11px] font-semibold text-mist-500 hover:text-mist-950"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+
+        <div
+          :for={slot <- pick_slots(@selected_movies)}
+          class="rounded-md border border-dashed border-mist-950/15 bg-white/60 px-3 py-3"
+        >
+          <div class="text-[13px] font-semibold text-mist-500">
+            Pick {slot + length(@selected_movies)}
+          </div>
+          <p class="mt-1 text-[12px] leading-snug text-mist-500">
+            The clerk works with one film, but three gives it better taste weather.
+          </p>
+        </div>
+      </div>
+
+      <div :if={@recommendation.primary} class="mt-4 rounded-md bg-mist-950 p-4 text-mist-50">
+        <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-300">
+          The clerk says
+        </div>
+        <div class="mt-2 flex items-baseline justify-between gap-3">
+          <a
+            href={@recommendation.primary.href}
+            class="font-display italic text-[28px] leading-none text-mist-50 no-underline hover:text-white"
+          >
+            {@recommendation.primary.title}
+          </a>
+          <span class="text-[13px] tabular-nums text-mist-300">
+            {@recommendation.primary.year}
+          </span>
+        </div>
+        <p class="mt-3 text-[13px] leading-relaxed text-mist-200">
+          {@recommendation.primary.reason}
+        </p>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span
+            :for={route <- @recommendation.route_labels}
+            class="rounded-md border border-mist-50/15 px-2 py-1 text-[11px] font-medium text-mist-100"
+          >
+            {route}
+          </span>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span
+            :for={alternate <- @recommendation.alternates}
+            class="rounded-md border border-mist-50/15 px-2 py-1 text-[11px] font-medium text-mist-100"
+          >
+            {alternate.title}
+          </span>
+        </div>
+      </div>
+
+      <div :if={!@recommendation.primary} class="mt-4 rounded-md bg-mist-950 p-4 text-mist-50">
+        <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-300">
+          The clerk is waiting
+        </div>
+        <p class="mt-3 text-[13px] leading-relaxed text-mist-200">
+          Pick a film, or load the demo trio, and Cinegraph will make a real recommendation from cult lists, canonical memory, and film-graph evidence.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-12 border-y border-mist-950/10 py-9">
+    <div class="grid gap-6 lg:grid-cols-[260px_1fr]">
+      <div>
+        <CinegraphWeb.NeutralV2Components.n_eyebrow>
+          Against the bubble
+        </CinegraphWeb.NeutralV2Components.n_eyebrow>
+        <h2 class="mt-2 font-display italic text-[34px] leading-tight text-mist-950">
+          Taste should not be a padded room.
+        </h2>
+      </div>
+      <div class="max-w-3xl space-y-4 text-[15px] leading-relaxed text-mist-700">
+        <p>
+          Collaborative filtering is good at keeping people inside a familiar loop. Cinegraph should do something more alive: notice the shape of a person's taste, then open a side door.
+        </p>
+        <p>
+          The Video Clerk is our shorthand for that ambition. It is not a faceless average of people like you. It is a recommendation with a point of view, built from films, filmmakers, canons, cult reputations, and the weird evidence that makes movie taste interesting.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mb-12">
+    <CinegraphWeb.NeutralV2Components.n_eyebrow>
+      Routes the clerk can take
+    </CinegraphWeb.NeutralV2Components.n_eyebrow>
+    <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <article
+        :for={route <- @routes}
+        class="rounded-lg border border-mist-950/10 bg-mist-50 p-4"
+      >
+        <h3 class="text-[14px] font-semibold text-mist-950">{route.title}</h3>
+        <p class="mt-2 text-[12.5px] leading-relaxed text-mist-700">{route.body}</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="mb-12 space-y-10">
+    <.shelf
+      title="400 Greatest Cult Movies"
+      eyebrow="Cult Classic Route"
+      movies={@cult_movies}
+      empty="Import cult_movies_400 to turn this shelf on."
+    />
+    <.shelf
+      title="1001 Movies You Must See Before You Die"
+      eyebrow="Cultural Relevance Route"
+      movies={@canon_movies}
+      empty="Import 1001_movies to turn this shelf on."
+    />
+  </section>
+
+  <section class="grid gap-6 rounded-lg border border-mist-950/10 bg-mist-50 p-5 lg:grid-cols-[1fr_360px] lg:items-center">
+    <div>
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        iOS preview
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <h2 class="mt-2 font-display italic text-[34px] leading-tight text-mist-950">
+        From any movie page, ask for the next strange right thing.
+      </h2>
+      <p class="mt-3 max-w-2xl text-[14px] leading-relaxed text-mist-700">
+        Phase 1 is the page. The product move is a reusable recommendation surface: start from one film, or give the clerk three, then let Cinegraph explain why the next pick belongs.
+      </p>
+    </div>
+    <div class="rounded-lg bg-mist-950 p-4 text-mist-50">
+      <div class="rounded-md border border-mist-50/10 p-3">
+        <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-300">
+          After Napoleon Dynamite
+        </div>
+        <div class="mt-4 rounded-md bg-mist-50 p-3 text-mist-950">
+          <div class="text-[12px] text-mist-600">Try next</div>
+          <div class="mt-1 font-display italic text-[28px] leading-none">Harold and Maude</div>
+          <p class="mt-2 text-[12px] leading-relaxed text-mist-700">
+            Outsider comedy with a deeper historical pulse.
+          </p>
+        </div>
+        <button class="mt-3 w-full rounded-md bg-mist-50 px-3 py-2 text-[13px] font-semibold text-mist-950">
+          Ask the Video Clerk
+        </button>
+      </div>
+    </div>
+  </section>
+</div>

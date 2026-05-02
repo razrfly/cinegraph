@@ -50,8 +50,6 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
                 page_results =
                   movie_data
                   |> Enum.map(fn movie ->
-                    # Adjust position for pagination
-                    movie = %{movie | position: (page - 1) * 250 + movie.position}
                     process_canonical_movie(movie, source_key, list_name, options, metadata)
                   end)
 

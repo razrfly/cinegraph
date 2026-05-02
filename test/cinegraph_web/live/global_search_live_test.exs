@@ -162,8 +162,24 @@ defmodule CinegraphWeb.GlobalSearchLiveTest do
       html = render(view)
 
       assert html =~ "Unsafe Recent"
-      assert html =~ ~s|href="#"|
+      assert html =~ ~s|href="/movies?search=Unsafe+Recent"|
       refute html =~ "javascript:alert"
+    end
+
+    test "label-only recents link to movie search", %{conn: conn} do
+      {:ok, view, _} = live_isolated(conn, CinegraphWeb.GlobalSearchLive)
+
+      _ =
+        render_hook(view, "update_recents", %{
+          "recents" => [%{"label" => "Stephen King Simmons"}]
+        })
+
+      _ = render_hook(view, "focus", %{})
+      html = render(view)
+
+      assert html =~ "Stephen King Simmons"
+      assert html =~ ~s|href="/movies?search=Stephen+King+Simmons"|
+      assert html =~ ~s|role="option"|
     end
   end
 

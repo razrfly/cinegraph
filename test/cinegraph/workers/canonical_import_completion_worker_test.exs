@@ -55,6 +55,27 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorkerTest do
     assert updated.metadata["actual_movie_count"] == 1
   end
 
+  test "finalizing an already terminal import does not increment twice" do
+    list = insert_list!(source_key: "duplicate_finalize", last_import_status: "pending")
+    insert_movie!(canonical_sources: %{list.source_key => %{}})
+
+    job = %Oban.Job{
+      args: %{
+        "list_key" => "duplicate_finalize",
+        "expected_count" => 1,
+        "total_pages" => 0
+      }
+    }
+
+    assert {:ok, first} = CanonicalImportCompletionWorker.perform(job)
+    assert first.last_import_status == "success"
+    assert first.total_imports == 1
+
+    assert {:ok, second} = CanonicalImportCompletionWorker.perform(job)
+    assert second.last_import_status == "success"
+    assert second.total_imports == 1
+  end
+
   defp insert_list!(attrs) do
     source_key = Keyword.fetch!(attrs, :source_key)
 

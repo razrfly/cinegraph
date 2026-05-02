@@ -14,6 +14,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   import CinegraphWeb.MovieLive.ShowV2.Presentation
   import CinegraphWeb.SEOHelpers
 
+  alias Cinegraph.VideoClerk
   alias CinegraphWeb.Components.ListAppearanceCard
   alias CinegraphWeb.MovieLive.ShowV2.Data
   alias CinegraphWeb.MovieLive.ShowV2.ProductionDetails
@@ -47,6 +48,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         {:noreply,
          socket
          |> assign(data)
+         |> assign(:video_clerk_recommendation, VideoClerk.recommend([data.movie.id], limit: 3))
          |> assign_availability(data.movie, socket.assigns[:availability_browser_region])
          |> assign_movie_seo(data.movie)}
 
@@ -98,6 +100,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       %{id: "awards", label: "Awards", present?: assigns[:festival_noms] != []},
       %{id: "lists", label: "Lists", present?: assigns[:canon_lists] != []},
       %{id: "collaborations", label: "Collabs", present?: has_collabs},
+      %{
+        id: "video-clerk",
+        label: "Clerk",
+        present?: not is_nil(assigns[:video_clerk_recommendation][:primary])
+      },
       %{
         id: "director",
         label: "Director",
@@ -579,6 +586,59 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             >
               Explore the full collaboration network →
             </a>
+          </section>
+
+          <%!-- VIDEO CLERK --%>
+          <section :if={@video_clerk_recommendation[:primary]} id="video-clerk">
+            <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500">
+                  Video Clerk
+                </div>
+                <h2 class="mt-1 font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+                  Ask for the next strange right thing
+                </h2>
+              </div>
+              <.link
+                navigate={~p"/video-clerk?#{%{seed: movie_slug_or_id(@movie)}}"}
+                class="inline-flex rounded-md bg-mist-950 px-3 py-2 text-[12px] font-semibold text-mist-50 hover:bg-mist-800"
+              >
+                Ask the Video Clerk
+              </.link>
+            </div>
+            <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+              <a
+                :for={
+                  rec <-
+                    [@video_clerk_recommendation.primary | @video_clerk_recommendation.alternates]
+                    |> Enum.reject(&is_nil/1)
+                    |> Enum.take(3)
+                }
+                href={rec.href}
+                class="rounded-lg border border-mist-950/10 bg-mist-50 p-4 no-underline hover:bg-white"
+              >
+                <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500">
+                  {Enum.join(Enum.take(rec.route_labels, 2), " / ")}
+                </div>
+                <div class="mt-2 flex gap-3">
+                  <img
+                    :if={rec.poster_url}
+                    src={rec.poster_url}
+                    alt=""
+                    class="h-24 w-16 rounded-[4px] object-cover"
+                  />
+                  <div class="min-w-0">
+                    <div class="text-[14px] font-semibold leading-snug text-mist-950">
+                      {rec.title}
+                    </div>
+                    <div class="mt-1 text-[12px] text-mist-500">{rec.year}</div>
+                    <p class="mt-2 line-clamp-3 text-[12px] leading-relaxed text-mist-700">
+                      {rec.reason}
+                    </p>
+                  </div>
+                </div>
+              </a>
+            </div>
           </section>
 
           <%!-- MORE FROM DIRECTOR --%>

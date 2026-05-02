@@ -32,6 +32,30 @@ defmodule Cinegraph.Workers.CanonicalListRefreshSweeperTest do
     assert canonical_job_count() == 2
   end
 
+  test "does not count blank stale lists twice or spend stale pass budget on them" do
+    overlap =
+      insert_list!(
+        source_key: "overlap",
+        last_import_at: days_ago(120),
+        last_import_status: "success"
+      )
+
+    stale =
+      insert_list!(
+        source_key: "stale",
+        last_import_at: days_ago(120),
+        last_import_status: "success"
+      )
+
+    insert_movie!(canonical_sources: %{stale.source_key => %{}})
+
+    assert {:ok, %{found: 2, enqueued: 2, already_queued: 0, lists: lists}} =
+             perform_job(CanonicalListRefreshSweeper, %{})
+
+    assert lists == [overlap.source_key, stale.source_key]
+    assert canonical_job_count() == 2
+  end
+
   defp canonical_job_count do
     Repo.aggregate(
       from(j in Oban.Job, where: j.worker == "Cinegraph.Workers.CanonicalImportOrchestrator"),
