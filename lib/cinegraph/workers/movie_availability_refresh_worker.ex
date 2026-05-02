@@ -8,7 +8,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
     max_attempts: 5,
     unique: [
       fields: [:args],
-      keys: [:movie_id, :regions],
+      keys: [:movie_id, :regions, :force],
       period: 3600,
       states: [:available, :scheduled, :executing, :retryable]
     ]
@@ -19,6 +19,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
 
   require Logger
 
+  @doc false
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"movie_id" => movie_id} = args}) do
     regions = Map.get(args, "regions", Availability.configured_regions())
@@ -40,6 +41,12 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
     {:discard, {:missing_movie_id, args}}
   end
 
+  @doc """
+  Refreshes one movie's TMDb watch-provider availability for the selected regions.
+
+  Non-forced refreshes skip the network fetch when every selected region is still fresh.
+  Forced refreshes always fetch and replace normalized rows for the requested regions.
+  """
   def refresh_movie(%Movie{} = movie, opts \\ []) do
     regions = Keyword.get(opts, :regions, Availability.configured_regions())
     force? = Keyword.get(opts, :force, false)

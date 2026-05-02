@@ -33,6 +33,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Drift do
     "availability" => {"Cinegraph.Health.Drift.Availability", [:limit]}
   }
 
+  @doc false
   @impl Mix.Task
   def run([]), do: usage_error("missing domain")
 

@@ -6,7 +6,8 @@ defmodule CinegraphWeb.AdminHealth.Actions do
   read-only by design. Wraps existing Oban workers in a uniform CLI-friendly
   interface so the LiveView's `handle_event/3` can call into one place.
 
-  Returns `{:ok, n_queued}` on success or `{:error, reason}`.
+  Returns `{:ok, n_queued}` when all jobs are queued, `{:partial, result}` when
+  some jobs are queued and some fail, or `{:error, reason}` when none are queued.
   """
 
   alias Cinegraph.Workers.{
@@ -31,7 +32,12 @@ defmodule CinegraphWeb.AdminHealth.Actions do
       Actions.queue_omdb_refresh([])
       #=> {:ok, 0}
   """
-  @spec queue_omdb_refresh([integer()]) :: {:ok, non_neg_integer()} | {:error, term()}
+  @type queue_result ::
+          {:ok, non_neg_integer()}
+          | {:partial, %{ok: non_neg_integer(), errors: list()}}
+          | {:error, term()}
+
+  @spec queue_omdb_refresh([integer()]) :: queue_result()
   def queue_omdb_refresh(movie_ids) when is_list(movie_ids) do
     enqueue(movie_ids, fn id ->
       OMDbEnrichmentWorker.new(%{"movie_id" => id, "force" => true})
@@ -42,7 +48,7 @@ defmodule CinegraphWeb.AdminHealth.Actions do
   Enqueue a TMDb refresh for each given person id. Backed by
   `Cinegraph.Workers.PersonTmdbRefreshWorker`.
   """
-  @spec queue_person_tmdb_refresh([integer()]) :: {:ok, non_neg_integer()} | {:error, term()}
+  @spec queue_person_tmdb_refresh([integer()]) :: queue_result()
   def queue_person_tmdb_refresh(person_ids) when is_list(person_ids) do
     enqueue(person_ids, fn id ->
       PersonTmdbRefreshWorker.new(%{"person_id" => id})
@@ -52,7 +58,7 @@ defmodule CinegraphWeb.AdminHealth.Actions do
   @doc """
   Enqueue a forced availability refresh for each given movie id.
   """
-  @spec queue_availability_refresh([integer()]) :: {:ok, non_neg_integer()} | {:error, term()}
+  @spec queue_availability_refresh([integer()]) :: queue_result()
   def queue_availability_refresh(movie_ids) when is_list(movie_ids) do
     enqueue_availability(movie_ids)
   end
@@ -131,6 +137,6 @@ defmodule CinegraphWeb.AdminHealth.Actions do
       "AdminHealth.Actions enqueue partial failure: #{ok_count} ok, #{length(errors)} errors"
     )
 
-    {:error, %{ok: ok_count, errors: errors}}
+    {:partial, %{ok: ok_count, errors: errors}}
   end
 end

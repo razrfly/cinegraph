@@ -19,6 +19,7 @@ defmodule Mix.Tasks.Cinegraph.Drift do
 
   @shortdoc "Run drift checks for a given domain"
 
+  @doc false
   @impl Mix.Task
   def run([]), do: usage_error("missing domain")
 

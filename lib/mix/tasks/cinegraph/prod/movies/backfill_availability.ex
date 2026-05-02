@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Movies.BackfillAvailability do
 
   @shortdoc "Backfill production watch availability from stored TMDb JSON"
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     {opts, _, invalid} =
@@ -44,7 +45,10 @@ defmodule Mix.Tasks.Cinegraph.Prod.Movies.BackfillAvailability do
 
   @doc false
   def build_expression(opts) do
-    ~s|{:ok, stats} = Cinegraph.Movies.AvailabilityBackfill.run(#{build_opts_kw(opts)}); IO.puts(Jason.encode!(stats))|
+    ~s|case Cinegraph.Movies.AvailabilityBackfill.run(#{build_opts_kw(opts)}) do
+  {:ok, stats} -> IO.puts(Jason.encode!(stats))
+  {:error, reason} -> IO.puts(Jason.encode!(%{error: inspect(reason)}))
+end|
   end
 
   defp build_opts_kw(opts) do

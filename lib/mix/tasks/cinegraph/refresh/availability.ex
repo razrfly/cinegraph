@@ -13,6 +13,7 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Availability do
 
   @shortdoc "Queue availability refresh for one or more movies by id"
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     Mix.Task.run("app.start")
@@ -29,6 +30,13 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Availability do
 
       {:error, errors} ->
         Mix.shell().error("Enqueue failed: #{inspect(errors)}")
+        exit({:shutdown, 1})
+
+      {:partial, %{ok: n, errors: errors}} ->
+        Mix.shell().error(
+          "Partially enqueued #{n} MovieAvailabilityRefreshWorker job(s); failed batches: #{inspect(errors)}"
+        )
+
         exit({:shutdown, 1})
     end
   end

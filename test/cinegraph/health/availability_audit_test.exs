@@ -87,6 +87,12 @@ defmodule Cinegraph.Health.AvailabilityAuditTest do
     assert Jason.encode!(audit)
   end
 
+  test "audit/1 falls back to the default region for unsupported region input" do
+    audit = AvailabilityAudit.audit(region: "ZZ", limit: 1)
+
+    assert audit.region == Availability.default_region()
+  end
+
   defp insert_movie!(attrs) do
     defaults = %{
       tmdb_id: System.unique_integer([:positive]),

@@ -7,10 +7,16 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
 
   alias Cinegraph.Movies.Availability
 
+  @doc """
+  Assigns region-aware watch availability data for the movie show page.
+  """
   def assign_availability(socket, movie, region) do
     assign(socket, availability_assigns(movie, region))
   end
 
+  @doc """
+  Builds the assigns consumed by the Where to Watch component.
+  """
   def availability_assigns(movie, region) do
     regions = Availability.available_regions(movie.id)
     region = choose_availability_region(region, regions)
@@ -28,6 +34,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
     }
   end
 
+  @doc """
+  Renders the Where to Watch section with region selection and provider groups.
+  """
   def where_to_watch(assigns) do
     ~H"""
     <section id="watch">

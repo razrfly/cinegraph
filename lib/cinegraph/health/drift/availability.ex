@@ -21,6 +21,9 @@ defmodule Cinegraph.Health.Drift.Availability do
   @example_limit 10
   @catalog_stale_days 7
 
+  @doc """
+  Runs every availability drift check and returns normalized drift results.
+  """
   def all(opts \\ []) do
     Drift.run_all([
       fn -> availability_missing(opts) end,
@@ -30,6 +33,9 @@ defmodule Cinegraph.Health.Drift.Availability do
     ])
   end
 
+  @doc """
+  Reports full TMDb movies missing an availability refresh row for the default region.
+  """
   def availability_missing(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
@@ -62,6 +68,9 @@ defmodule Cinegraph.Health.Drift.Availability do
     end)
   end
 
+  @doc """
+  Reports default-region availability refresh rows whose stale deadline has passed.
+  """
   def availability_stale(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
@@ -101,6 +110,9 @@ defmodule Cinegraph.Health.Drift.Availability do
     end)
   end
 
+  @doc """
+  Reports default-region availability refresh rows currently in an error state.
+  """
   def availability_fetch_errors(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
@@ -137,6 +149,9 @@ defmodule Cinegraph.Health.Drift.Availability do
     end)
   end
 
+  @doc """
+  Reports stale or missing provider catalog and supported-region metadata.
+  """
   def availability_provider_catalog_stale(_opts \\ []) do
     Drift.cached({:availability, :availability_provider_catalog_stale}, @cache_ttl, fn ->
       cutoff = DateTime.utc_now() |> DateTime.add(-@catalog_stale_days * 86_400, :second)

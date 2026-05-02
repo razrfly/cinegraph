@@ -24,6 +24,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   # Top-level query resolvers
   # ---------------------------------------------------------------------------
 
+  @doc false
   def movie(_, args, _) do
     cond do
       tmdb_id = args[:tmdb_id] ->
@@ -40,6 +41,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end
   end
 
+  @doc false
   def movies(_, %{tmdb_ids: tmdb_ids}, _) do
     movies =
       from(m in Movie, where: m.tmdb_id in ^tmdb_ids)
@@ -48,6 +50,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, movies}
   end
 
+  @doc false
   def search_movies(_, %{query: query} = args, _) do
     limit = Map.get(args, :limit, 10)
     year = Map.get(args, :year)
@@ -74,6 +77,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   # Child field resolvers on Movie — batched via Dataloader
   # ---------------------------------------------------------------------------
 
+  @doc false
   def ratings(movie, _, %{context: %{loader: loader}}) do
     loader = Dataloader.load(loader, :db, {:external_metrics, %{}}, movie)
 
@@ -93,6 +97,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end)
   end
 
+  @doc false
   def awards(movie, _, _) do
     metric =
       Repo.one(
@@ -120,6 +125,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end
   end
 
+  @doc false
   def lens_scores(movie, _, %{context: %{loader: loader}}) do
     loader = Dataloader.load(loader, :db, {:score_cache, %{}}, movie)
 
@@ -150,6 +156,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end)
   end
 
+  @doc false
   def cast(movie, _, _) do
     credits =
       from(c in Credit,
@@ -161,6 +168,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, credits}
   end
 
+  @doc false
   def crew(movie, _, _) do
     credits =
       from(c in Credit,
@@ -172,6 +180,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, credits}
   end
 
+  @doc false
   def videos(movie, _, _) do
     videos =
       from(v in MovieVideo, where: v.movie_id == ^movie.id, order_by: [desc: v.official])
@@ -180,8 +189,9 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, videos}
   end
 
+  @doc false
   def availability(movie, args, %{context: %{loader: loader}}) do
-    batch_key = {:movie_availability, Map.get(args, :region)}
+    batch_key = {:movie_availability, normalize_requested_region(Map.get(args, :region))}
     loader = Dataloader.load(loader, :availability, batch_key, movie.id)
 
     on_load(loader, fn loader ->
@@ -189,10 +199,13 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     end)
   end
 
+  @doc false
   def availability(movie, args, _) do
-    {:ok, load_availability({:movie_availability, Map.get(args, :region)}, [movie.id])[movie.id]}
+    batch_key = {:movie_availability, normalize_requested_region(Map.get(args, :region))}
+    {:ok, load_availability(batch_key, [movie.id])[movie.id]}
   end
 
+  @doc false
   def load_availability({:movie_availability, requested_region}, movie_ids) do
     movie_ids = Enum.to_list(movie_ids)
     source = "tmdb"
@@ -339,7 +352,7 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   end
 
   defp job_matches_region?(%{"regions" => regions}, region) when is_list(regions) do
-    region in Enum.map(regions, &to_string/1)
+    region in Enum.map(regions, &normalize_requested_region/1)
   end
 
   defp job_matches_region?(_args, _region), do: true
@@ -371,11 +384,23 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   defp float_to_int(nil), do: nil
   defp float_to_int(v), do: round(v)
 
+  defp normalize_requested_region(region) when is_binary(region) do
+    region
+    |> String.trim()
+    |> String.upcase()
+    |> case do
+      "" -> nil
+      normalized -> normalized
+    end
+  end
+
+  defp normalize_requested_region(_region), do: nil
+
   defp select_availability_region(region, regions) when is_binary(region) do
-    normalized = region |> String.trim() |> String.upcase()
+    normalized = normalize_requested_region(region)
 
     cond do
-      normalized == "" -> select_availability_region(nil, regions)
+      is_nil(normalized) -> select_availability_region(nil, regions)
       normalized in regions -> normalized
       Availability.supported_region?(normalized) -> normalized
       true -> select_availability_region(nil, regions)

@@ -14,6 +14,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.Availability do
 
   @shortdoc "Audit production watch availability coverage and freshness"
 
+  @doc false
   @impl Mix.Task
   def run(args) do
     {opts, _, invalid} =

@@ -64,8 +64,11 @@ defmodule Mix.Tasks.CinegraphAvailabilityOpsTest do
         regions: "US,GB"
       )
 
-    assert expr ==
-             ~s|{:ok, stats} = Cinegraph.Movies.AvailabilityBackfill.run([limit: 100, after_id: 500, batch_size: 50, regions: "US,GB", dry_run: true]); IO.puts(Jason.encode!(stats))|
+    assert expr =~
+             ~s|case Cinegraph.Movies.AvailabilityBackfill.run([limit: 100, after_id: 500, batch_size: 50, regions: "US,GB", dry_run: true]) do|
+
+    assert expr =~ "{:ok, stats} -> IO.puts(Jason.encode!(stats))"
+    assert expr =~ "{:error, reason} -> IO.puts(Jason.encode!(%{error: inspect(reason)}))"
   end
 
   test "prod availability backfill defaults to all configured regions" do
@@ -75,8 +78,11 @@ defmodule Mix.Tasks.CinegraphAvailabilityOpsTest do
         dry_run: true
       )
 
-    assert expr ==
-             ~s|{:ok, stats} = Cinegraph.Movies.AvailabilityBackfill.run([regions: Cinegraph.Movies.Availability.configured_regions(), dry_run: true]); IO.puts(Jason.encode!(stats))|
+    assert expr =~
+             ~s|case Cinegraph.Movies.AvailabilityBackfill.run([regions: Cinegraph.Movies.Availability.configured_regions(), dry_run: true]) do|
+
+    assert expr =~ "{:ok, stats} -> IO.puts(Jason.encode!(stats))"
+    assert expr =~ "{:error, reason} -> IO.puts(Jason.encode!(%{error: inspect(reason)}))"
   end
 
   test "refresh availability task validates ids and enqueues forced jobs" do

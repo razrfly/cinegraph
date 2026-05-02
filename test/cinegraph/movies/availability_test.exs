@@ -401,6 +401,13 @@ defmodule Cinegraph.Movies.AvailabilityTest do
                {"ZZ", "ZZ"}
              ]
     end
+
+    test "supported_region?/1 rejects blank and unknown region codes" do
+      assert Availability.supported_region?(" us ")
+      refute Availability.supported_region?("")
+      refute Availability.supported_region?("   ")
+      refute Availability.supported_region?("ZZ")
+    end
   end
 
   describe "changeset validations" do
