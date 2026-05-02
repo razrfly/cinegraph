@@ -23,11 +23,30 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetails do
     """
   end
 
-  defp production_company_name(%{name: name}), do: name
-  defp production_company_name(%{production_company: %{name: name}}), do: name
-  defp production_company_name(_company), do: "-"
+  defp production_company_name(%{name: name}) when is_binary(name) do
+    name_or_fallback(name)
+  end
 
-  defp production_company_slug_or_id(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
+  defp production_company_name(%{production_company: %{name: name}}) when is_binary(name) do
+    name_or_fallback(name)
+  end
+
+  defp production_company_name(_company), do: "—"
+
+  defp name_or_fallback(name) do
+    case String.trim(name) do
+      "" -> "—"
+      trimmed -> trimmed
+    end
+  end
+
+  defp production_company_slug_or_id(%{slug: slug, id: id}) when is_binary(slug) do
+    case String.trim(slug) do
+      "" -> id
+      trimmed -> trimmed
+    end
+  end
+
   defp production_company_slug_or_id(%{id: id}), do: id
 
   defp production_company_slug_or_id(%{production_company: company}),

@@ -87,14 +87,14 @@ defmodule Cinegraph.Movies.ProductionCompany do
   defp maybe_generate_slug(changeset) do
     candidate =
       case get_field(changeset, :slug) do
-        slug when is_binary(slug) and slug != "" ->
-          slugify(slug)
+        slug when is_binary(slug) ->
+          case String.trim(slug) do
+            "" -> name_slug_candidate(changeset)
+            trimmed -> slugify(trimmed)
+          end
 
         _ ->
-          case get_field(changeset, :name) do
-            name when is_binary(name) -> slugify(name)
-            _ -> nil
-          end
+          name_slug_candidate(changeset)
       end
 
     case candidate do
@@ -109,6 +109,13 @@ defmodule Cinegraph.Movies.ProductionCompany do
 
       slug ->
         put_change(changeset, :slug, slug)
+    end
+  end
+
+  defp name_slug_candidate(changeset) do
+    case get_field(changeset, :name) do
+      name when is_binary(name) -> slugify(name)
+      _ -> nil
     end
   end
 

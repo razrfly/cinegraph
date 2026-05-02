@@ -158,11 +158,17 @@ defmodule CinegraphWeb.CompanyLive.Show do
     end
   end
 
-  defp maybe_assign_movie_meta_image(socket, [movie | _]) when not is_nil(movie.poster_path) do
-    assign(socket, :meta_image, "https://image.tmdb.org/t/p/w780#{movie.poster_path}")
-  end
+  defp maybe_assign_movie_meta_image(socket, movies) do
+    case Enum.find(movies, fn movie ->
+           is_binary(movie.poster_path) and String.trim(movie.poster_path) != ""
+         end) do
+      %{poster_path: poster_path} ->
+        assign(socket, :meta_image, "https://image.tmdb.org/t/p/w780#{poster_path}")
 
-  defp maybe_assign_movie_meta_image(socket, _movies), do: socket
+      _ ->
+        socket
+    end
+  end
 
   defp empty_pagination_meta do
     %{

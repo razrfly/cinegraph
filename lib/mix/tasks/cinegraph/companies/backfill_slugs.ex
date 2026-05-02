@@ -3,6 +3,11 @@ defmodule Mix.Tasks.Cinegraph.Companies.BackfillSlugs do
   Backfills missing production-company slugs.
 
       mix cinegraph.companies.backfill_slugs
+
+  The underlying backfill stops at the first invalid changeset so operators can
+  inspect and fix the offending company. This task raises on that error so
+  automation receives a non-zero exit instead of treating the partial run as a
+  success.
   """
   use Mix.Task
 
