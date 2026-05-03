@@ -140,6 +140,44 @@ defmodule Cinegraph.Health.ImdbListPaginationAuditTest do
       assert result.summary.safe_to_import == false
     end
 
+    test "classifies block pages as blocked instead of successful zero-movie windows" do
+      result =
+        audit_for_windows(%{
+          1 => "<html><head><title>403 Forbidden</title></head><body>403 Forbidden</body></html>"
+        })
+
+      window = hd(result.windows)
+      assert window.fetch_status == "blocked"
+      assert window.movie_count == 0
+      assert window.html_title == "403 Forbidden"
+      assert window.body_classification == "blocked_403"
+      assert result.summary.safe_to_import == false
+    end
+
+    test "exposes structured blocked errors from fetcher" do
+      diagnostics = %{
+        body_bytes: 117,
+        html_title: "403 Forbidden",
+        title_link_count: 0,
+        ipc_item_count: 0,
+        lister_item_count: 0,
+        body_classification: "blocked_403"
+      }
+
+      result =
+        ImdbListPaginationAudit.audit(
+          list_id: "ls053182933",
+          starts: [1],
+          fetcher: fn _url, :imdb, _opts -> {:error, {:blocked, :forbidden, diagnostics}} end
+        )
+
+      window = hd(result.windows)
+      assert window.fetch_status == "blocked"
+      assert window.error == "{:blocked, :forbidden}"
+      assert window.body_bytes == 117
+      assert window.body_classification == "blocked_403"
+    end
+
     test "resolves --list through movie_lists config" do
       insert_movie_list!("cult_movies_400", "ls053182933")
 
@@ -191,6 +229,9 @@ defmodule Cinegraph.Health.ImdbListPaginationAuditTest do
                scroll: true,
                scroll_interval: 800
              }
+
+      assert hd(result.windows).body_classification == "imdb_list_html"
+      assert hd(result.windows).title_link_count == 1
     end
   end
 

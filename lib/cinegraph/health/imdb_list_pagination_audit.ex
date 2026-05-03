@@ -8,6 +8,7 @@ defmodule Cinegraph.Health.ImdbListPaginationAudit do
   """
 
   alias Cinegraph.Movies.MovieLists
+  alias Cinegraph.Scrapers.Http.BodyDiagnostics
   alias Cinegraph.Scrapers.Http.Client, as: HttpClient
 
   @default_starts [1, 76, 151, 226, 301, 376]
@@ -172,32 +173,54 @@ defmodule Cinegraph.Health.ImdbListPaginationAudit do
 
     case fetcher.(url, :imdb, fetch_opts) do
       {:ok, html} ->
-        success_window(url, start, html, crawlbase_options)
+        success_or_blocked_window(url, start, html, crawlbase_options, nil)
 
-      {:ok, html, _metadata} ->
-        success_window(url, start, html, crawlbase_options)
+      {:ok, html, metadata} ->
+        success_or_blocked_window(url, start, html, crawlbase_options, metadata)
+
+      {:error, {:blocked, reason, diagnostics}} ->
+        error_window(url, start, "blocked", {:blocked, reason}, crawlbase_options, diagnostics)
 
       {:error, reason} ->
-        %{
-          url: url,
-          start: start,
-          fetch_status: "error",
-          error: inspect(reason),
-          movie_count: 0,
-          first_rank: nil,
-          last_rank: nil,
-          first_imdb_id: nil,
-          last_imdb_id: nil,
-          sample_titles: [],
-          duplicate_ids: [],
-          rank_gap_from_previous: nil,
-          parser_layout: "none",
-          crawlbase_options: crawlbase_options
-        }
+        error_window(url, start, "error", reason, crawlbase_options)
     end
   end
 
-  defp success_window(url, start, html, crawlbase_options) do
+  defp success_or_blocked_window(url, start, html, crawlbase_options, metadata) do
+    diagnostics =
+      metadata
+      |> body_diagnostics_from_metadata()
+      |> case do
+        nil -> BodyDiagnostics.diagnostics(url, html)
+        diagnostics -> diagnostics
+      end
+
+    case BodyDiagnostics.blocked_error(url, html) do
+      {:blocked, reason, blocked_diagnostics} ->
+        error_window(
+          url,
+          start,
+          "blocked",
+          {:blocked, reason},
+          crawlbase_options,
+          blocked_diagnostics
+        )
+
+      nil ->
+        success_window(url, start, html, crawlbase_options, diagnostics)
+    end
+  end
+
+  defp body_diagnostics_from_metadata(%{body_diagnostics: diagnostics}) when is_map(diagnostics),
+    do: diagnostics
+
+  defp body_diagnostics_from_metadata(%{"body_diagnostics" => diagnostics})
+       when is_map(diagnostics),
+       do: diagnostics
+
+  defp body_diagnostics_from_metadata(_metadata), do: nil
+
+  defp success_window(url, start, html, crawlbase_options, diagnostics) do
     parsed = parse_window_html(html, start)
     movies = parsed.movies
 
@@ -215,8 +238,53 @@ defmodule Cinegraph.Health.ImdbListPaginationAudit do
       rank_gap_from_previous: nil,
       parser_layout: parsed.parser_layout,
       crawlbase_options: crawlbase_options,
+      body_bytes: diagnostics.body_bytes,
+      html_title: diagnostics.html_title,
+      title_link_count: diagnostics.title_link_count,
+      ipc_item_count: diagnostics.ipc_item_count,
+      lister_item_count: diagnostics.lister_item_count,
+      body_classification: diagnostics.body_classification,
       _ids: Enum.map(movies, & &1.imdb_id)
     }
+  end
+
+  defp error_window(url, start, fetch_status, reason, crawlbase_options, diagnostics \\ %{}) do
+    %{
+      url: url,
+      start: start,
+      fetch_status: fetch_status,
+      error: inspect(reason),
+      movie_count: 0,
+      first_rank: nil,
+      last_rank: nil,
+      first_imdb_id: nil,
+      last_imdb_id: nil,
+      sample_titles: [],
+      duplicate_ids: [],
+      rank_gap_from_previous: nil,
+      parser_layout: "none",
+      crawlbase_options: crawlbase_options
+    }
+    |> Map.merge(body_diagnostics_fields(diagnostics))
+  end
+
+  defp body_diagnostics_fields(diagnostics) when is_map(diagnostics) do
+    %{
+      body_bytes: Map.get(diagnostics, :body_bytes) || Map.get(diagnostics, "body_bytes"),
+      html_title:
+        Map.get(diagnostics, :html_title) || Map.get(diagnostics, "html_title") ||
+          Map.get(diagnostics, :title) || Map.get(diagnostics, "title"),
+      title_link_count:
+        Map.get(diagnostics, :title_link_count) || Map.get(diagnostics, "title_link_count"),
+      ipc_item_count:
+        Map.get(diagnostics, :ipc_item_count) || Map.get(diagnostics, "ipc_item_count"),
+      lister_item_count:
+        Map.get(diagnostics, :lister_item_count) || Map.get(diagnostics, "lister_item_count"),
+      body_classification:
+        Map.get(diagnostics, :body_classification) || Map.get(diagnostics, "body_classification")
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
   end
 
   defp find_movie_items(document) do
