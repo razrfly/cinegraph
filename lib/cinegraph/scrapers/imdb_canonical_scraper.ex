@@ -351,8 +351,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end
   end
 
-  # Helper function for fetch_single_page
-  defp parse_single_page(html, page, tracks_awards) do
+  @doc false
+  def parse_single_page(html, page, tracks_awards \\ false) do
     # Reuse existing parsing logic
     list_config = %{
       name: "Single page",
@@ -450,14 +450,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       {:ok, html} ->
         case parse_imdb_list_html(html, list_config, page) do
           {:ok, movies} when movies != [] ->
-            # Adjust movie positions based on accumulated movies
-            adjusted_movies =
-              movies
-              |> Enum.map(fn movie ->
-                %{movie | position: length(accumulated_movies) + movie.position}
-              end)
-
-            new_accumulated = accumulated_movies ++ adjusted_movies
+            new_accumulated = accumulated_movies ++ movies
 
             # Check if there are more pages by looking for pagination links
             if has_next_page?(html) do
