@@ -6,8 +6,8 @@ defmodule Cinegraph.Movies.CanonicalShelfTest do
   alias Cinegraph.Repo
 
   test "list_canonical_shelf_movies/2 orders by canonical list position" do
-    later = insert_movie!("Later", "cult_movies_400", 9)
-    earlier = insert_movie!("Earlier", "cult_movies_400", 1)
+    later = insert_movie!("A Later", "cult_movies_400", 9)
+    earlier = insert_movie!("Z Earlier", "cult_movies_400", 1)
     _other = insert_movie!("Other", "1001_movies", 1)
 
     assert [earlier.id, later.id] ==

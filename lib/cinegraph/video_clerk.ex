@@ -70,6 +70,11 @@ defmodule Cinegraph.VideoClerk do
   defp candidate_movies(seeds, fingerprint) do
     seed_ids = Enum.map(seeds, & &1.id)
 
+    has_cult = canonical_source?("cult_movies_400")
+    has_canon = canonical_source?("1001_movies")
+    cult_position = canonical_position("cult_movies_400")
+    canon_position = canonical_position("1001_movies")
+
     canonical =
       Movie
       |> where([m], m.import_status == "full")
@@ -80,53 +85,93 @@ defmodule Cinegraph.VideoClerk do
           fragment("? \\? ?", m.canonical_sources, "1001_movies")
       )
       |> where([m], m.id not in ^seed_ids)
-      |> order_by([m],
-        desc: fragment("? \\? ?", m.canonical_sources, "cult_movies_400"),
-        desc: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
-        desc_nulls_last: m.release_date
+      |> order_by(
+        ^[
+          desc: has_cult,
+          asc_nulls_last: cult_position,
+          desc: has_canon,
+          asc_nulls_last: canon_position,
+          desc_nulls_last: :release_date
+        ]
       )
       |> limit(@candidate_limit)
       |> preload([:genres, :keywords, :score_cache])
       |> Repo.replica().all()
 
     graph =
-      graph_candidate_query(seed_ids, fingerprint)
-      |> preload([:genres, :keywords, :score_cache])
-      |> Repo.replica().all()
+      seed_ids
+      |> graph_candidate_ids(fingerprint)
+      |> graph_candidate_movies()
 
     (canonical ++ graph)
     |> Enum.uniq_by(& &1.id)
   end
 
-  defp graph_candidate_query(seed_ids, fingerprint) do
+  defp canonical_source?(source_key) do
+    dynamic([m], fragment("? \\? ?", m.canonical_sources, ^source_key))
+  end
+
+  defp canonical_position(source_key) do
+    dynamic(
+      [m],
+      fragment("NULLIF(?->?->>'list_position', '')::int", m.canonical_sources, ^source_key)
+    )
+  end
+
+  defp graph_candidate_ids(seed_ids, fingerprint) do
     genre_ids = MapSet.to_list(fingerprint.genre_ids)
     keyword_ids = MapSet.to_list(fingerprint.keyword_ids)
     person_ids = MapSet.to_list(fingerprint.person_ids)
 
+    genre_movie_ids =
+      join_candidate_ids("movie_genres", :genre_id, genre_ids, seed_ids, 80)
+
+    keyword_movie_ids =
+      join_candidate_ids("movie_keywords", :keyword_id, keyword_ids, seed_ids, 80)
+
+    people_movie_ids =
+      Credit
+      |> where([c], c.person_id in ^person_ids)
+      |> where([c], c.movie_id not in ^seed_ids)
+      |> group_by([c], c.movie_id)
+      |> order_by([c], desc: count(c.person_id, :distinct))
+      |> limit(80)
+      |> select([c], c.movie_id)
+      |> maybe_empty_ids(person_ids)
+
+    (genre_movie_ids ++ keyword_movie_ids ++ people_movie_ids)
+    |> Enum.uniq()
+    |> Enum.take(@candidate_limit)
+  end
+
+  defp graph_candidate_movies([]), do: []
+
+  defp graph_candidate_movies(movie_ids) do
     Movie
     |> where([m], m.import_status == "full")
     |> where([m], is_nil(m.release_date) or m.release_date <= ^Date.utc_today())
-    |> where([m], m.id not in ^seed_ids)
-    |> join(:left, [m], g in "movie_genres", on: g.movie_id == m.id)
-    |> join(:left, [m, g], k in "movie_keywords", on: k.movie_id == m.id)
-    |> join(:left, [m, g, k], c in Credit, on: c.movie_id == m.id)
-    |> where(
-      [m, g, k, c],
-      g.genre_id in ^genre_ids or k.keyword_id in ^keyword_ids or c.person_id in ^person_ids
-    )
-    |> group_by([m], m.id)
-    |> order_by([m, g, k, c],
-      desc:
-        fragment(
-          "COUNT(DISTINCT ?) + COUNT(DISTINCT ?) + COUNT(DISTINCT ?)",
-          g.genre_id,
-          k.keyword_id,
-          c.person_id
-        ),
-      desc_nulls_last: m.release_date
-    )
-    |> limit(@candidate_limit)
+    |> where([m], m.id in ^movie_ids)
+    |> order_by([m], desc_nulls_last: m.release_date)
+    |> preload([:genres, :keywords, :score_cache])
+    |> Repo.replica().all()
   end
+
+  defp join_candidate_ids(_table, _join_key, [], _seed_ids, _limit), do: []
+
+  defp join_candidate_ids(table, join_key, ids, seed_ids, limit) do
+    from(j in table,
+      where: field(j, ^join_key) in ^ids,
+      where: field(j, :movie_id) not in ^seed_ids,
+      group_by: field(j, :movie_id),
+      order_by: [desc: count(field(j, ^join_key), :distinct)],
+      limit: ^limit,
+      select: field(j, :movie_id)
+    )
+    |> Repo.replica().all()
+  end
+
+  defp maybe_empty_ids(_query, []), do: []
+  defp maybe_empty_ids(query, _ids), do: Repo.replica().all(query)
 
   defp fingerprint(seeds) do
     seed_ids = Enum.map(seeds, & &1.id)

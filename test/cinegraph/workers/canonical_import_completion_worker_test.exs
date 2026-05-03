@@ -76,6 +76,30 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorkerTest do
     assert second.total_imports == 1
   end
 
+  test "failing an already terminal import does not increment twice" do
+    list = insert_list!(source_key: "duplicate_failed_finalize", last_import_status: "pending")
+
+    job = %Oban.Job{
+      args: %{
+        "list_key" => "duplicate_failed_finalize",
+        "expected_count" => 1,
+        "total_pages" => 1
+      }
+    }
+
+    insert_page_job!("duplicate_failed_finalize", 1, "discarded")
+
+    assert {:ok, first} = CanonicalImportCompletionWorker.perform(job)
+    assert first.last_import_status == "failed"
+    assert first.total_imports == 1
+
+    assert {:ok, second} = CanonicalImportCompletionWorker.perform(job)
+    assert second.last_import_status == "failed"
+    assert second.total_imports == 1
+
+    assert Repo.get!(MovieList, list.id).total_imports == 1
+  end
+
   defp insert_list!(attrs) do
     source_key = Keyword.fetch!(attrs, :source_key)
 
@@ -107,5 +131,21 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorkerTest do
     %Movie{}
     |> Movie.changeset(Map.merge(defaults, attrs))
     |> Repo.insert!()
+  end
+
+  defp insert_page_job!(list_key, page, state) do
+    %{
+      list_key: list_key,
+      page: page,
+      total_pages: 1,
+      list_id: "ls#{System.unique_integer([:positive])}",
+      source_key: list_key,
+      list_name: "List #{list_key}",
+      metadata: %{}
+    }
+    |> Cinegraph.Workers.CanonicalPageWorker.new()
+    |> Oban.insert!()
+    |> Ecto.Changeset.change(state: state)
+    |> Repo.update!()
   end
 end

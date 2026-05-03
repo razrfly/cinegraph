@@ -77,6 +77,12 @@ defmodule Mix.Tasks.CinegraphImdbListPaginationAuditTest do
     assert expr =~ "scroll_interval: 800"
   end
 
+  test "prod audit expression fails clearly without a list selector" do
+    assert_raise ArgumentError, "provide either --list or --list-id", fn ->
+      Mix.Tasks.Cinegraph.Prod.Audit.ImdbListPagination.build_expression(starts: "1,76")
+    end
+  end
+
   test "audit module fails clearly without a list selector" do
     assert_raise ArgumentError, "provide either --list or --list-id", fn ->
       Cinegraph.Health.ImdbListPaginationAudit.audit(

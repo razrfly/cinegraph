@@ -29,6 +29,10 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.ImdbListPagination do
   def build_expression(opts) do
     opts = Mix.Tasks.Cinegraph.Audit.ImdbListPagination.audit_opts(opts)
 
+    unless Keyword.has_key?(opts, :list) or Keyword.has_key?(opts, :list_id) do
+      raise ArgumentError, "provide either --list or --list-id"
+    end
+
     ~s|IO.puts(Jason.encode!(Cinegraph.Health.ImdbListPaginationAudit.audit(#{build_opts_kw(opts)})))|
   end
 

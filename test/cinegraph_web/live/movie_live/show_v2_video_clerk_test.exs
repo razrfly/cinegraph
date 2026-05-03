@@ -14,7 +14,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2VideoClerkTest do
         canonical_sources: %{"cult_movies_400" => %{"included" => true}}
       })
 
-    {:ok, _view, html} = live(conn, ~p"/movies/#{seed.slug}")
+    {:ok, view, _html} = live(conn, ~p"/movies/#{seed.slug}")
+    html = render_async(view)
 
     assert html =~ "Ask the Video Clerk"
     assert html =~ ~s(/video-clerk?seed=#{seed.slug})

@@ -48,7 +48,21 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
       {:failed, reason} ->
         # Some pages failed
         Logger.error("Import failed for #{list_key}: #{inspect(reason)}")
-        update_import_failed(list_key, reason)
+
+        case update_import_failed(list_key, reason) do
+          {:ok, updated_list} ->
+            {:ok, updated_list}
+
+          {:skipped, current_list} ->
+            Logger.info(
+              "Failed import already finalized for #{list_key} with status #{inspect(current_list.last_import_status)}"
+            )
+
+            {:ok, current_list}
+
+          other ->
+            other
+        end
     end
   end
 
@@ -188,7 +202,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
         {:ok, updated_list}
 
       {0, []} ->
-        {:skipped, Repo.get!(MovieList, list.id)}
+        skipped_import(list)
     end
   end
 
@@ -198,17 +212,21 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
         :ok
 
       list ->
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
+
         metadata =
           (list.metadata || %{})
           |> Map.put("last_import_error", reason)
-          |> Map.put("last_import_finished_at", DateTime.utc_now() |> DateTime.to_iso8601())
+          |> Map.put("last_import_finished_at", DateTime.to_iso8601(now))
 
-        MovieLists.update_movie_list(list, %{
-          last_import_at: DateTime.utc_now(),
-          last_import_status: "failed",
-          metadata: metadata,
-          total_imports: (list.total_imports || 0) + 1
-        })
+        finalize_pending_import(list, "failed", now, metadata)
+    end
+  end
+
+  defp skipped_import(%MovieList{} = list) do
+    case Repo.get(MovieList, list.id) do
+      nil -> {:skipped, list}
+      current_list -> {:skipped, current_list}
     end
   end
 

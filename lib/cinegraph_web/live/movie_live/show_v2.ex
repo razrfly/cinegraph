@@ -38,7 +38,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
      |> assign(:overview_expanded, false)
      |> assign(:show_full_cast, false)
      |> assign(:show_full_crew, false)
-     |> assign(:show_all_releases, false)}
+     |> assign(:show_all_releases, false)
+     |> assign(:video_clerk_recommendation, empty_video_clerk_recommendation())}
   end
 
   @impl true
@@ -48,7 +49,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         {:noreply,
          socket
          |> assign(data)
-         |> assign(:video_clerk_recommendation, VideoClerk.recommend([data.movie.id], limit: 3))
+         |> assign(:video_clerk_recommendation, empty_video_clerk_recommendation())
+         |> maybe_start_video_clerk_recommendation(data.movie.id)
          |> assign_availability(data.movie, socket.assigns[:availability_browser_region])
          |> assign_movie_seo(data.movie)}
 
@@ -85,8 +87,32 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   def handle_event("stop_propagation", _, socket), do: {:noreply, socket}
 
+  @impl true
+  def handle_async(:video_clerk_recommendation, {:ok, recommendation}, socket) do
+    {:noreply, assign(socket, :video_clerk_recommendation, recommendation)}
+  end
+
+  def handle_async(:video_clerk_recommendation, {:exit, reason}, socket) do
+    Logger.warning("Video Clerk recommendation failed: #{inspect(reason)}")
+    {:noreply, assign(socket, :video_clerk_recommendation, empty_video_clerk_recommendation())}
+  end
+
   defp assign_availability(socket, movie, region),
     do: ShowV2Availability.assign_availability(socket, movie, region)
+
+  defp maybe_start_video_clerk_recommendation(socket, movie_id) do
+    if connected?(socket) do
+      start_async(socket, :video_clerk_recommendation, fn ->
+        VideoClerk.recommend([movie_id], limit: 3)
+      end)
+    else
+      socket
+    end
+  end
+
+  defp empty_video_clerk_recommendation do
+    %{primary: nil, alternates: [], seed_movies: [], route_labels: [], evidence_summary: []}
+  end
 
   defp section_nav_items(assigns) do
     has_collabs = (assigns[:key_collabs][:notable_collaborations] || []) != []

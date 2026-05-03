@@ -104,16 +104,17 @@ defmodule CinegraphWeb.VideoClerkLive do
   end
 
   def handle_event("select_movie", %{"slug" => slug}, socket) do
-    selected =
+    slugs =
       socket.assigns.selected_movies
-      |> add_selected_movie(slug)
+      |> Enum.map(&to_string(&1.slug))
+      |> add_selected_slug(slug)
       |> Enum.take(3)
 
     {:noreply,
      socket
      |> assign(:search_query, "")
      |> assign(:search_results, [])
-     |> push_patch(to: video_clerk_path(selected))}
+     |> push_patch(to: video_clerk_path(slugs))}
   end
 
   def handle_event("remove_movie", %{"slug" => slug}, socket) do
@@ -130,13 +131,12 @@ defmodule CinegraphWeb.VideoClerkLive do
   end
 
   def handle_event("load_demo", _params, socket) do
-    selected =
+    slugs =
       demo_films()
       |> Enum.map(& &1.slug)
-      |> Enum.reduce([], &add_selected_movie(&2, &1))
       |> Enum.take(3)
 
-    {:noreply, push_patch(socket, to: video_clerk_path(selected))}
+    {:noreply, push_patch(socket, to: video_clerk_path(slugs))}
   end
 
   defp load_shelf(source_key) do
@@ -208,7 +208,7 @@ defmodule CinegraphWeb.VideoClerkLive do
     |> Enum.sort_by(fn movie -> Enum.find_index(slugs, &(&1 == to_string(movie.slug))) || 999 end)
   end
 
-  defp add_selected_movie(selected, slug) do
+  defp add_selected_slug(selected, slug) do
     slug = to_string(slug)
 
     cond do
@@ -218,24 +218,16 @@ defmodule CinegraphWeb.VideoClerkLive do
       length(selected) >= 3 ->
         selected
 
-      movie = movie_by_slug(slug) ->
-        selected ++ [movie]
-
       true ->
-        selected
+        selected ++ [slug]
     end
   end
 
-  defp movie_by_slug(slug) do
-    Movie
-    |> where([m], m.slug == ^slug)
-    |> where([m], m.import_status == "full")
-    |> limit(1)
-    |> Repo.replica().one()
-  end
-
   defp selected_slug?(selected, slug) do
-    Enum.any?(selected, &(to_string(&1.slug) == to_string(slug)))
+    Enum.any?(selected, fn
+      %Movie{slug: selected_slug} -> to_string(selected_slug) == to_string(slug)
+      selected_slug -> to_string(selected_slug) == to_string(slug)
+    end)
   end
 
   defp pick_slots(selected) do
@@ -259,7 +251,14 @@ defmodule CinegraphWeb.VideoClerkLive do
   defp video_clerk_path([]), do: ~p"/video-clerk"
 
   defp video_clerk_path(selected) do
-    slugs = selected |> Enum.map(&to_string(&1.slug)) |> Enum.join(",")
+    slugs =
+      selected
+      |> Enum.map(fn
+        %Movie{slug: slug} -> slug
+        slug -> slug
+      end)
+      |> Enum.join(",")
+
     ~p"/video-clerk?#{%{movies: slugs}}"
   end
 
