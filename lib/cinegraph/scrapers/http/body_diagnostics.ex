@@ -26,7 +26,7 @@ defmodule Cinegraph.Scrapers.Http.BodyDiagnostics do
   end
 
   @doc """
-  Return `{:blocked, reason, diagnostics}` for blocked/non-list scraper bodies.
+  Return blocked/non-list scraper diagnostics, or `{:ok, diagnostics}` when accepted.
   """
   def blocked_error(url, body, opts \\ []) when is_binary(body) do
     diagnostics = diagnostics(url, body, opts)
@@ -34,11 +34,15 @@ defmodule Cinegraph.Scrapers.Http.BodyDiagnostics do
     case diagnostics.body_classification do
       "blocked_403" -> {:blocked, :forbidden, diagnostics}
       "blocked_challenge" -> {:blocked, :challenge, diagnostics}
+      "origin_error" -> {:blocked, :origin_error, diagnostics}
       "imdb_non_list_html" -> {:blocked, :non_list_html, diagnostics}
-      _ -> nil
+      _ -> {:ok, diagnostics}
     end
   end
 
+  @doc """
+  Return whether a URL points at an IMDb list page.
+  """
   def imdb_list_url?(url) when is_binary(url) do
     case URI.parse(url) do
       %URI{host: host, path: path} when is_binary(host) and is_binary(path) ->
@@ -64,11 +68,11 @@ defmodule Cinegraph.Scrapers.Http.BodyDiagnostics do
           String.contains?(downcased_body, "unusual traffic") ->
         "blocked_challenge"
 
-      imdb_list_url?(url) and title_link_count == 0 ->
-        "imdb_non_list_html"
-
       is_integer(pc_status) and pc_status >= 400 ->
         "origin_error"
+
+      imdb_list_url?(url) and title_link_count == 0 ->
+        "imdb_non_list_html"
 
       title_link_count > 0 ->
         "imdb_list_html"

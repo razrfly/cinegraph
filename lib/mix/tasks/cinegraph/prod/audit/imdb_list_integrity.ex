@@ -16,8 +16,11 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.ImdbListIntegrity do
   @doc false
   @impl Mix.Task
   def run(args) do
-    {opts, _, invalid} = Mix.Tasks.Cinegraph.Audit.ImdbListIntegrity.parse_args(args)
+    {opts, positional_args, invalid} =
+      Mix.Tasks.Cinegraph.Audit.ImdbListIntegrity.parse_args(args)
+
     raise_invalid_options!(invalid)
+    raise_unexpected_args!(positional_args)
 
     case ProdRpc.eval_json(build_expression(opts)) do
       {:ok, audit} -> ProdRpc.print(audit, opts)
@@ -32,4 +35,7 @@ defmodule Mix.Tasks.Cinegraph.Prod.Audit.ImdbListIntegrity do
 
   defp raise_invalid_options!([]), do: :ok
   defp raise_invalid_options!(invalid), do: Mix.raise("invalid option(s): #{inspect(invalid)}")
+
+  defp raise_unexpected_args!([]), do: :ok
+  defp raise_unexpected_args!(args), do: Mix.raise("unexpected argument(s): #{inspect(args)}")
 end

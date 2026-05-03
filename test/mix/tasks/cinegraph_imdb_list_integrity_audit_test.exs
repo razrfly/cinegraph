@@ -14,6 +14,19 @@ defmodule Mix.Tasks.CinegraphImdbListIntegrityAuditTest do
     assert Keyword.get(opts, :json) == true
   end
 
+  test "local integrity task returns invalid options" do
+    {opts, [], invalid} = Mix.Tasks.Cinegraph.Audit.ImdbListIntegrity.parse_args(["--no-such"])
+
+    assert invalid != []
+    refute Keyword.get(opts, :json, false)
+  end
+
+  test "local integrity task returns positional args" do
+    {_opts, args, []} = Mix.Tasks.Cinegraph.Audit.ImdbListIntegrity.parse_args(["pos"])
+
+    assert args == ["pos"]
+  end
+
   test "prod integrity task builds safe ProdRpc expression" do
     expr = Mix.Tasks.Cinegraph.Prod.Audit.ImdbListIntegrity.build_expression()
 

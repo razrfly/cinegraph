@@ -17,12 +17,21 @@ defmodule Cinegraph.Health.ImdbListIntegrityAudit do
   Return a JSON-safe audit of stored IMDb list membership integrity.
   """
   def audit(_opts \\ []) do
-    lists =
+    movie_lists =
       MovieList
       |> where([ml], ml.active == true and ml.source_type == "imdb")
       |> order_by([ml], asc: ml.source_key)
       |> Repo.replica().all()
-      |> Enum.map(&decorate_list/1)
+
+    memberships_by_source_key =
+      movie_lists
+      |> Enum.map(& &1.source_key)
+      |> memberships_by_source_key()
+
+    lists =
+      Enum.map(movie_lists, fn list ->
+        decorate_list(list, Map.get(memberships_by_source_key, list.source_key, []))
+      end)
 
     %{
       generated_at: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601(),
@@ -32,11 +41,11 @@ defmodule Cinegraph.Health.ImdbListIntegrityAudit do
     }
   end
 
-  defp decorate_list(%MovieList{} = list) do
-    memberships = memberships_for(list.source_key)
+  defp decorate_list(%MovieList{} = list, memberships) do
     positions = Enum.flat_map(memberships, &position_values/1)
     expected = expected_movie_count(list.metadata || %{})
     stored_count = length(memberships)
+    ranked_count = length(positions)
     frequencies = Enum.frequencies(positions)
     duplicate_positions = duplicate_positions(frequencies)
     unique_positions = positions |> MapSet.new() |> MapSet.to_list() |> Enum.sort()
@@ -53,6 +62,7 @@ defmodule Cinegraph.Health.ImdbListIntegrityAudit do
       source_id: list.source_id,
       expected_movie_count: expected,
       stored_movie_count: stored_count,
+      ranked_movie_count: ranked_count,
       min_position: min_position,
       max_position: max_position,
       distinct_positions: length(unique_positions),
@@ -66,11 +76,25 @@ defmodule Cinegraph.Health.ImdbListIntegrityAudit do
     Map.put(row, :status, status(row))
   end
 
-  defp memberships_for(source_key) do
+  defp memberships_by_source_key([]), do: %{}
+
+  defp memberships_by_source_key(source_keys) do
     Movie
-    |> where([m], fragment("? \\? ?", m.canonical_sources, ^source_key))
-    |> select([m], fragment("? -> ?", m.canonical_sources, ^source_key))
+    |> where(
+      [m],
+      fragment("? \\?| ?", m.canonical_sources, type(^source_keys, {:array, :string}))
+    )
+    |> select([m], m.canonical_sources)
     |> Repo.replica().all()
+    |> Enum.reduce(%{}, fn canonical_sources, acc ->
+      Enum.reduce(source_keys, acc, fn source_key, acc ->
+        case Map.get(canonical_sources || %{}, source_key) do
+          nil -> acc
+          metadata -> Map.update(acc, source_key, [metadata], &[metadata | &1])
+        end
+      end)
+    end)
+    |> Map.new(fn {source_key, memberships} -> {source_key, Enum.reverse(memberships)} end)
   end
 
   defp position_values(metadata) when is_map(metadata) do
@@ -127,8 +151,8 @@ defmodule Cinegraph.Health.ImdbListIntegrityAudit do
        when missing > 0 or duplicates != [],
        do: "discontinuous"
 
-  defp status(%{expected_movie_count: expected, stored_movie_count: stored})
-       when is_integer(expected) and stored < expected,
+  defp status(%{expected_movie_count: expected, ranked_movie_count: ranked})
+       when is_integer(expected) and ranked < expected,
        do: "partial"
 
   defp status(%{expected_movie_count: expected}) when is_integer(expected), do: "complete"
@@ -163,13 +187,25 @@ defmodule Cinegraph.Health.ImdbListIntegrityAudit do
   defp count_status(lists, status), do: Enum.count(lists, &(&1.status == status))
 
   defp recommended_commands(lists) do
-    if Enum.any?(lists, &(&1.status != "complete")) do
-      [
-        "mix cinegraph.prod.audit.imdb_list_pagination --list afi_100 --starts 1,76,101 --json",
-        "mix cinegraph.prod.audit.imdb_list_pagination --list cult_movies_400 --starts 1,76,101,151,201,301 --json"
-      ]
-    else
-      []
-    end
+    lists
+    |> Enum.reject(&(&1.status == "complete"))
+    |> Enum.map(fn list ->
+      starts = recommended_starts(list)
+      starts_arg = if starts == [], do: "", else: " --starts #{Enum.join(starts, ",")}"
+
+      "mix cinegraph.prod.audit.imdb_list_pagination --list #{list.source_key}#{starts_arg} --json"
+    end)
+  end
+
+  defp recommended_starts(%{first_missing_positions: positions}) when positions != [] do
+    positions
+    |> Enum.map(&window_start/1)
+    |> Enum.uniq()
+  end
+
+  defp recommended_starts(_list), do: []
+
+  defp window_start(position) do
+    div(position - 1, 75) * 75 + 1
   end
 end

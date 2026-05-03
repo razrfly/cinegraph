@@ -16,10 +16,11 @@ defmodule Mix.Tasks.Cinegraph.Audit.ImdbListIntegrity do
   @doc false
   @impl Mix.Task
   def run(args) do
-    Mix.Task.run("app.start")
-
-    {opts, _, invalid} = parse_args(args)
+    {opts, positional_args, invalid} = parse_args(args)
     raise_invalid_options!(invalid)
+    raise_unexpected_args!(positional_args)
+
+    Mix.Task.run("app.start")
 
     result = ImdbListIntegrityAudit.audit()
 
@@ -87,4 +88,7 @@ defmodule Mix.Tasks.Cinegraph.Audit.ImdbListIntegrity do
 
   defp raise_invalid_options!([]), do: :ok
   defp raise_invalid_options!(invalid), do: Mix.raise("invalid option(s): #{inspect(invalid)}")
+
+  defp raise_unexpected_args!([]), do: :ok
+  defp raise_unexpected_args!(args), do: Mix.raise("unexpected argument(s): #{inspect(args)}")
 end
