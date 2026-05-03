@@ -20,6 +20,7 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
   @behaviour Cinegraph.Scrapers.Http.Adapter
 
   require Logger
+  alias Cinegraph.Scrapers.Http.BodyDiagnostics
 
   @crawlbase_api_url "https://api.crawlbase.com/"
   # Crawlbase JS rendering takes 60-120s for heavy pages (IMDb uses AWS WAF + React SSR).
@@ -73,7 +74,7 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
 
     case HTTPoison.get(request_url, [], http_opts) do
       {:ok, %HTTPoison.Response{status_code: 200, body: response_body}} ->
-        handle_success_response(response_body, mode, start_time)
+        handle_success_response(response_body, mode, start_time, url)
 
       {:ok, %HTTPoison.Response{status_code: 429, headers: resp_headers}} ->
         retry_after = extract_retry_after(resp_headers)
@@ -87,9 +88,9 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
       {:ok, %HTTPoison.Response{status_code: 520, body: response_body, headers: resp_headers}}
       when byte_size(response_body) > 0 ->
         case extract_pc_status_header(resp_headers) do
-          200 ->
+          pc_status when pc_status == 200 ->
             Logger.info("Crawlbase 520 with pc_status:200 — treating as success (WAF bypass)")
-            handle_success_response(response_body, mode, start_time)
+            handle_success_response(response_body, mode, start_time, url, pc_status)
 
           pc_status ->
             Logger.warning("Crawlbase 520 with pc_status:#{inspect(pc_status)} — real error")
@@ -139,7 +140,7 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
     "#{@crawlbase_api_url}?#{URI.encode_query(query_params)}"
   end
 
-  defp handle_success_response(response_body, mode, start_time) do
+  defp handle_success_response(response_body, mode, start_time, url, pc_status \\ nil) do
     duration = System.monotonic_time(:millisecond) - start_time
 
     case Jason.decode(response_body) do
@@ -151,18 +152,18 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
       {:ok, %{"pc_status" => pc_status} = response} when pc_status >= 200 and pc_status < 300 ->
         body = Map.get(response, "body", response_body)
         metadata = %{adapter: name(), duration_ms: duration, mode: mode}
-        {:ok, body, metadata}
+        validate_body(url, body, metadata, pc_status)
 
       {:ok, %{"body" => body}} ->
         metadata = %{adapter: name(), duration_ms: duration, mode: mode}
-        {:ok, body, metadata}
+        validate_body(url, body, metadata, pc_status)
 
       {:ok, response} when is_map(response) ->
         body = Map.get(response, "body", response_body)
 
         if is_binary(body) and String.contains?(body, "<") do
           metadata = %{adapter: name(), duration_ms: duration, mode: mode}
-          {:ok, body, metadata}
+          validate_body(url, body, metadata, pc_status)
         else
           {:error, {:crawlbase_error, 200, "Unexpected response format"}}
         end
@@ -170,10 +171,22 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
       {:error, _decode_error} ->
         if String.contains?(response_body, "<!") or String.contains?(response_body, "<html") do
           metadata = %{adapter: name(), duration_ms: duration, mode: mode}
-          {:ok, response_body, metadata}
+          validate_body(url, response_body, metadata, pc_status)
         else
           {:error, {:crawlbase_error, 200, "JSON decode error"}}
         end
+    end
+  end
+
+  defp validate_body(url, body, metadata, pc_status) do
+    case BodyDiagnostics.blocked_error(url, body, pc_status: pc_status) do
+      {:blocked, reason, diagnostics} ->
+        Logger.warning("Crawlbase returned blocked/non-list body for #{url}: #{inspect(reason)}")
+        {:error, {:blocked, reason, diagnostics}}
+
+      nil ->
+        diagnostics = BodyDiagnostics.diagnostics(url, body, pc_status: pc_status)
+        {:ok, body, Map.put(metadata, :body_diagnostics, diagnostics)}
     end
   end
 
