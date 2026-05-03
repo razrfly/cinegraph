@@ -136,6 +136,30 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Returns a small shelf of full movies from a canonical list ordered by source position.
+  """
+  def list_canonical_shelf_movies(source_key, limit \\ 12)
+      when is_binary(source_key) and is_integer(limit) do
+    position =
+      dynamic(
+        [m],
+        fragment(
+          "NULLIF(?->?->>'list_position', '')::int",
+          m.canonical_sources,
+          ^source_key
+        )
+      )
+
+    from(m in Movie,
+      where: m.import_status == "full",
+      where: fragment("? \\? ?", m.canonical_sources, ^source_key),
+      order_by: ^[asc_nulls_last: position, asc: :release_date, asc: :title],
+      limit: ^limit
+    )
+    |> Repo.replica().all()
+  end
+
+  @doc """
   Returns the list of soft imported movies.
   These are movies that didn't meet quality criteria but are tracked.
   """

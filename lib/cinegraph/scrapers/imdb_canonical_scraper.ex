@@ -262,8 +262,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       |> String.trim()
       |> String.to_integer()
 
-    # Calculate pages (250 items per page)
-    div(total - 1, 250) + 1
+    # IMDb list pages currently expose 100 titles per start offset.
+    div(total - 1, 100) + 1
   end
 
   @doc """
@@ -314,11 +314,11 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     # Count movies on first page
     movie_count = count_movies_on_page(document)
 
-    if movie_count >= 250 do
+    if movie_count >= 100 do
       # For known lists, use hardcoded values
       # This is a fallback - in production, we'd want better detection
       # Default for 1001 Movies list
-      6
+      11
     else
       1
     end
@@ -485,9 +485,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
 
   defp has_next_page?(html) do
-    # For IMDb lists, check if we have the expected number of items
-    # The 1001 Movies list has 1260 movies total, with 250 per page
-    # So there should be 6 pages total (250 * 5 + 10)
+    # For IMDb lists, check if we have the expected number of items.
+    # Modern IMDb list URLs page by `start=` in 100-title windows.
 
     # Check if there's a "Next" button or if we haven't reached the end
     document = Floki.parse_document!(html)
@@ -526,7 +525,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       # If no explicit next button, check if we got a full page of results
       # which might indicate there are more pages
       movie_count = count_movies_on_page(document)
-      movie_count >= 250
+      movie_count >= 100
     end
   end
 
@@ -539,11 +538,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
 
   defp build_imdb_list_url(list_id, page) do
-    if page == 1 do
-      "https://www.imdb.com/list/#{list_id}/"
-    else
-      "https://www.imdb.com/list/#{list_id}/?page=#{page}"
-    end
+    start_index = (page - 1) * 100 + 1
+    "https://www.imdb.com/list/#{list_id}/?sort=list_order,asc&start=#{start_index}&mode=detail"
   end
 
   defp fetch_html(url) do
@@ -594,9 +590,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
       Logger.info("Found #{length(list_items)} potential movie items")
 
-      # Calculate base position based on page number
-      # Page 1: positions 1-250, Page 2: positions 251-500, etc.
-      base_position = (page - 1) * 250
+      # Calculate base position based on IMDb's 100-title `start=` windows.
+      base_position = (page - 1) * 100
 
       movies =
         list_items

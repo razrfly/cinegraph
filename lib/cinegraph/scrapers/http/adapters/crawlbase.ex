@@ -59,8 +59,10 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
     recv_timeout = Keyword.get(opts, :recv_timeout, @default_recv_timeout)
     page_wait = Keyword.get(opts, :page_wait, @default_page_wait)
     ajax_wait = Keyword.get(opts, :ajax_wait, true)
+    scroll = Keyword.get(opts, :scroll, false)
+    scroll_interval = Keyword.get(opts, :scroll_interval)
 
-    request_url = build_request_url(url, mode, page_wait, ajax_wait)
+    request_url = build_request_url(url, mode, page_wait, ajax_wait, scroll, scroll_interval)
 
     http_opts = [
       timeout: timeout,
@@ -107,7 +109,7 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
     end
   end
 
-  defp build_request_url(url, mode, page_wait, ajax_wait) do
+  defp build_request_url(url, mode, page_wait, ajax_wait, scroll, scroll_interval) do
     token = get_token_for_mode(mode)
 
     query_params = %{
@@ -121,6 +123,14 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
         |> Map.put("page_wait", to_string(page_wait))
         |> then(fn params ->
           if ajax_wait, do: Map.put(params, "ajax_wait", "true"), else: params
+        end)
+        |> then(fn params ->
+          if scroll, do: Map.put(params, "scroll", "true"), else: params
+        end)
+        |> then(fn params ->
+          if scroll_interval,
+            do: Map.put(params, "scroll_interval", to_string(scroll_interval)),
+            else: params
         end)
       else
         query_params

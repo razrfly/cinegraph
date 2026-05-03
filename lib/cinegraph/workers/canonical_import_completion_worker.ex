@@ -15,12 +15,15 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
       states: [:available, :scheduled, :retryable]
     ]
 
-  alias Cinegraph.Movies.MovieLists
+  alias Cinegraph.Movies.{MovieList, MovieLists}
   alias Cinegraph.Repo
   import Ecto.Query
   require Logger
 
-  @doc false
+  @doc """
+  Checks whether all page jobs for a canonical list import have finished and
+  finalizes the import once the list reaches a terminal state.
+  """
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
     %{
@@ -119,22 +122,16 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
 
       list ->
         status = completion_status(actual_count, expected_count)
+        now = DateTime.utc_now() |> DateTime.truncate(:second)
 
         updated_metadata =
           (list.metadata || %{})
           |> Map.put("expected_movie_count", expected_count)
           |> Map.put("actual_movie_count", actual_count)
-          |> Map.put("last_import_finished_at", DateTime.utc_now() |> DateTime.to_iso8601())
+          |> Map.put("last_import_finished_at", DateTime.to_iso8601(now))
           |> maybe_put_error(status, actual_count, expected_count)
 
-        attrs = %{
-          last_import_at: DateTime.utc_now(),
-          last_import_status: status,
-          metadata: updated_metadata,
-          total_imports: (list.total_imports || 0) + 1
-        }
-
-        case MovieLists.update_movie_list(list, attrs) do
+        case finalize_pending_import(list, status, now, updated_metadata) do
           {:ok, updated_list} ->
             Logger.info(
               "Import #{status} for #{list_key}: #{actual_count} movies (expected: #{expected_count || "unknown"})"
@@ -151,16 +148,47 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
                  import_status: status,
                  total_movies: actual_count,
                  expected_movies: expected_count,
-                 timestamp: DateTime.utc_now()
+                 timestamp: now
                }}
             )
 
             {:ok, updated_list}
 
-          {:error, changeset} ->
-            Logger.error("Failed to update import stats: #{inspect(changeset.errors)}")
-            {:error, changeset}
+          {:skipped, current_list} ->
+            Logger.info(
+              "Import already finalized for #{list_key} with status #{inspect(current_list.last_import_status)}"
+            )
+
+            {:ok, current_list}
         end
+    end
+  end
+
+  defp finalize_pending_import(%MovieList{} = list, status, now, metadata) do
+    updated_at = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+    query =
+      from movie_list in MovieList,
+        where:
+          movie_list.id == ^list.id and
+            (is_nil(movie_list.last_import_status) or movie_list.last_import_status == "pending"),
+        update: [
+          set: [
+            last_import_at: ^now,
+            last_import_status: ^status,
+            metadata: ^metadata,
+            total_imports: fragment("COALESCE(?, 0) + 1", movie_list.total_imports),
+            updated_at: ^updated_at
+          ]
+        ],
+        select: movie_list
+
+    case Repo.update_all(query, []) do
+      {1, [updated_list]} ->
+        {:ok, updated_list}
+
+      {0, []} ->
+        {:skipped, Repo.get!(MovieList, list.id)}
     end
   end
 

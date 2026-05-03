@@ -21,6 +21,7 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalLists do
     * `:stale_days` - include lists stale by this many days
     * `:all` - include all active IMDb lists
     * `:limit` - positive integer cap
+    * `:exclude_source_keys` - source_keys to skip before applying the limit
     * `:dry_run` - report only
     * `:trigger` - string stored in job args
   """
@@ -33,6 +34,7 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalLists do
     lists =
       audit.lists
       |> select_lists(opts)
+      |> reject_source_keys(Keyword.get(opts, :exclude_source_keys, []))
       |> apply_limit(Keyword.get(opts, :limit))
 
     dry_run? = Keyword.get(opts, :dry_run, false)
@@ -89,6 +91,17 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalLists do
 
   defp apply_limit(_rows, other) do
     raise ArgumentError, ":limit must be a positive integer or nil, got: #{inspect(other)}"
+  end
+
+  defp reject_source_keys(rows, []), do: rows
+
+  defp reject_source_keys(rows, source_keys) when is_list(source_keys) do
+    source_keys = MapSet.new(source_keys)
+    Enum.reject(rows, &MapSet.member?(source_keys, &1.source_key))
+  end
+
+  defp reject_source_keys(_rows, other) do
+    raise ArgumentError, ":exclude_source_keys must be a list, got: #{inspect(other)}"
   end
 
   # Keep per-job inserts so Oban uniqueness is honored and conflicts can be

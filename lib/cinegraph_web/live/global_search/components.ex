@@ -13,7 +13,8 @@ defmodule CinegraphWeb.GlobalSearch.Components do
       </li>
       <li :for={r <- @recents} class="px-2">
         <a
-          href={safe_recent_href(r["href"])}
+          href={recent_href(r)}
+          role="option"
           class="flex items-center gap-2 px-2 py-2 rounded-md text-[13px] text-mist-950 dark:text-white hover:bg-mist-50 dark:hover:bg-white/5 no-underline"
         >
           <span class="text-mist-500 dark:text-mist-400" aria-hidden="true">🕘</span>
@@ -23,6 +24,27 @@ defmodule CinegraphWeb.GlobalSearch.Components do
     </ul>
     """
   end
+
+  defp recent_href(%{"href" => href} = recent) do
+    case safe_recent_href(href) do
+      "#" -> recent_search_href(recent)
+      href -> href
+    end
+  end
+
+  defp recent_href(recent), do: recent_search_href(recent)
+
+  defp recent_search_href(%{"label" => label}) when is_binary(label) do
+    query = String.trim(label)
+
+    if query == "" do
+      "#"
+    else
+      "/movies?search=#{URI.encode_www_form(query)}"
+    end
+  end
+
+  defp recent_search_href(_), do: "#"
 
   defp safe_recent_href(href) when is_binary(href) do
     uri = URI.parse(href)
