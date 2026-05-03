@@ -174,6 +174,9 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
             )
 
             {:ok, current_list}
+
+          {:error, :not_found} ->
+            {:error, :not_found}
         end
     end
   end
@@ -209,7 +212,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
   defp update_import_failed(list_key, reason) do
     case MovieLists.get_active_by_source_key(list_key) do
       nil ->
-        :ok
+        {:error, :not_found}
 
       list ->
         now = DateTime.utc_now() |> DateTime.truncate(:second)
@@ -225,7 +228,7 @@ defmodule Cinegraph.Workers.CanonicalImportCompletionWorker do
 
   defp skipped_import(%MovieList{} = list) do
     case Repo.get(MovieList, list.id) do
-      nil -> {:skipped, list}
+      nil -> {:error, :not_found}
       current_list -> {:skipped, current_list}
     end
   end
