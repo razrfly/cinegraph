@@ -610,7 +610,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
         {:ok, movies}
       else
         Logger.warning("No movies found with primary parsing, trying alternative methods...")
-        alternative_parse(document, list_config)
+        alternative_parse(document, list_config, page)
       end
     rescue
       exception ->
@@ -651,7 +651,9 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end
   end
 
-  defp alternative_parse(document, list_config) do
+  defp alternative_parse(document, list_config, page) do
+    base_position = (page - 1) * 100
+
     Logger.info("Trying alternative parsing methods for #{list_config.name}")
 
     # Try alternative selectors for different IMDb list layouts
@@ -675,8 +677,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       |> Enum.flat_map(fn selector ->
         Floki.find(document, selector)
         |> Enum.with_index(1)
-        |> Enum.map(fn {link, position} ->
-          extract_movie_from_title_link(link, position)
+        |> Enum.map(fn {link, index} ->
+          extract_movie_from_title_link(link, base_position + index)
         end)
         |> Enum.reject(&is_nil/1)
       end)

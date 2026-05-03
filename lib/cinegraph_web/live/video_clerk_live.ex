@@ -136,7 +136,11 @@ defmodule CinegraphWeb.VideoClerkLive do
       |> Enum.map(& &1.slug)
       |> Enum.take(3)
 
-    {:noreply, push_patch(socket, to: video_clerk_path(slugs))}
+    {:noreply,
+     socket
+     |> assign(:search_query, "")
+     |> assign(:search_results, [])
+     |> push_patch(to: video_clerk_path(slugs))}
   end
 
   defp load_shelf(source_key) do
