@@ -195,7 +195,7 @@ defmodule Cinegraph.Health.ImdbListPaginationAudit do
         diagnostics -> diagnostics
       end
 
-    case BodyDiagnostics.blocked_error(url, html) do
+    case BodyDiagnostics.blocked_error(url, html, pc_status: diagnostics.pc_status) do
       {:blocked, reason, blocked_diagnostics} ->
         error_window(
           url,
@@ -206,7 +206,7 @@ defmodule Cinegraph.Health.ImdbListPaginationAudit do
           blocked_diagnostics
         )
 
-      nil ->
+      {:ok, _diagnostics} ->
         success_window(url, start, html, crawlbase_options, diagnostics)
     end
   end

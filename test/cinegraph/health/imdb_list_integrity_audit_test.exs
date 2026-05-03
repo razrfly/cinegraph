@@ -69,6 +69,7 @@ defmodule Cinegraph.Health.ImdbListIntegrityAuditTest do
 
     row = find_row(ImdbListIntegrityAudit.audit(), "unranked")
 
+    assert row.status == "partial"
     assert row.unranked_count == 2
     assert row.distinct_positions == 1
   end

@@ -184,8 +184,7 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
         Logger.warning("Crawlbase returned blocked/non-list body for #{url}: #{inspect(reason)}")
         {:error, {:blocked, reason, diagnostics}}
 
-      nil ->
-        diagnostics = BodyDiagnostics.diagnostics(url, body, pc_status: pc_status)
+      {:ok, diagnostics} ->
         {:ok, body, Map.put(metadata, :body_diagnostics, diagnostics)}
     end
   end

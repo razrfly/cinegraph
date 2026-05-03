@@ -42,9 +42,8 @@ defmodule Cinegraph.Scrapers.Http.BodyDiagnosticsTest do
     </html>
     """
 
-    assert BodyDiagnostics.blocked_error(@imdb_url, html) == nil
+    assert {:ok, diagnostics} = BodyDiagnostics.blocked_error(@imdb_url, html)
 
-    diagnostics = BodyDiagnostics.diagnostics(@imdb_url, html)
     assert diagnostics.body_classification == "imdb_list_html"
     assert diagnostics.title_link_count == 1
   end
@@ -52,9 +51,17 @@ defmodule Cinegraph.Scrapers.Http.BodyDiagnosticsTest do
   test "non-IMDb tiny HTML is not rejected by IMDb-list-specific rule" do
     html = "<html><body>ok</body></html>"
 
-    assert BodyDiagnostics.blocked_error("https://example.com/", html) == nil
+    assert {:ok, diagnostics} = BodyDiagnostics.blocked_error("https://example.com/", html)
 
-    assert BodyDiagnostics.diagnostics("https://example.com/", html).body_classification ==
-             "tiny_html"
+    assert diagnostics.body_classification == "tiny_html"
+  end
+
+  test "origin errors take precedence over IMDb non-list HTML" do
+    html = "<html><body>Not found</body></html>"
+
+    assert {:blocked, :origin_error, diagnostics} =
+             BodyDiagnostics.blocked_error(@imdb_url, html, pc_status: 404)
+
+    assert diagnostics.body_classification == "origin_error"
   end
 end
