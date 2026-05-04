@@ -140,23 +140,23 @@ config :phoenix, :json_library, Jason
 config :cinegraph, Oban,
   repo: Cinegraph.Repo,
   queues: [
-    # All TMDb API work (orchestration, discovery, details) - single rate limit
-    tmdb: 15,
-    # OMDb data enrichment (separate API rate limit)
-    # Temporarily 20 for backfill burst — revert to 5 after backlog cleared
-    omdb: 20,
+    # DB-protective defaults for native Postgres. Production may override these
+    # with OBAN_*_LIMIT env vars in runtime.exs after measuring capacity.
+    # All TMDb API work (orchestration, discovery, details, availability)
+    tmdb: 5,
+    # OMDb data enrichment (separate API rate limit, shared DB budget)
+    omdb: 5,
     # Collaboration processing
-    collaboration: 5,
-    # Web scraping (IMDb, festivals, Oscars) - low concurrency for rate limiting
-    scraping: 5,
+    collaboration: 3,
+    # Web scraping (IMDb, festivals, Oscars)
+    scraping: 3,
     # Festival discovery processing - very low concurrency to prevent overwhelming the system
-    # Each ceremony queues many child jobs, so limit to 2 concurrent ceremonies
-    festival_discovery: 2,
+    # Each ceremony queues many child jobs, so limit to 1 concurrent ceremony
+    festival_discovery: 1,
     # All metrics/calculations (person quality scores, predictions, CRI)
-    # Reduced from 10 to 5 to prevent resource contention during heavy scoring queries
-    metrics: 5,
+    metrics: 2,
     # Background maintenance tasks (cache warming, sitemap, backfills)
-    maintenance: 2
+    maintenance: 1
   ],
   # Give jobs more time to complete during deployments/restarts
   shutdown_grace_period: :timer.seconds(60),
