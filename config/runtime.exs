@@ -151,6 +151,36 @@ if config_env() == :prod do
     timeout: 180_000,
     handshake_timeout: 30_000
 
+  parse_oban_limit = fn env_var, default ->
+    case System.get_env(env_var) do
+      value when is_binary(value) ->
+        case Integer.parse(String.trim(value)) do
+          {limit, ""} when limit > 0 -> limit
+          _ -> default
+        end
+
+      _ ->
+        default
+    end
+  end
+
+  oban_queues = [
+    tmdb: parse_oban_limit.("OBAN_TMDB_LIMIT", 5),
+    omdb: parse_oban_limit.("OBAN_OMDB_LIMIT", 5),
+    collaboration: parse_oban_limit.("OBAN_COLLABORATION_LIMIT", 3),
+    scraping: parse_oban_limit.("OBAN_SCRAPING_LIMIT", 3),
+    festival_discovery: parse_oban_limit.("OBAN_FESTIVAL_DISCOVERY_LIMIT", 1),
+    metrics: parse_oban_limit.("OBAN_METRICS_LIMIT", 2),
+    maintenance: parse_oban_limit.("OBAN_MAINTENANCE_LIMIT", 1)
+  ]
+
+  oban_config =
+    :cinegraph
+    |> Application.fetch_env!(Oban)
+    |> Keyword.put(:queues, oban_queues)
+
+  config :cinegraph, Oban, oban_config
+
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want

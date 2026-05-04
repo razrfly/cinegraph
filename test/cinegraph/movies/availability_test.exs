@@ -74,6 +74,47 @@ defmodule Cinegraph.Movies.AvailabilityTest do
       assert Enum.all?(rows, &(&1.watch_provider_id == provider.id))
     end
 
+    test "updates existing provider metadata during movie availability refreshes" do
+      movie = insert_movie!()
+
+      assert {:ok, [%{status: "success"}]} =
+               Availability.store_tmdb_watch_providers(movie, %{
+                 "results" => %{
+                   "US" => %{
+                     "flatrate" => [provider(8, "Netflix", 3)]
+                   }
+                 }
+               })
+
+      fetched_at = ~U[2026-05-02 12:00:00Z]
+
+      assert {:ok, [%{status: "success"}]} =
+               Availability.store_tmdb_watch_providers(
+                 movie,
+                 %{
+                   "results" => %{
+                     "US" => %{
+                       "flatrate" => [
+                         provider(8, "Netflix Premium", 1)
+                         |> Map.put("logo_path", "/provider-8-new.jpg")
+                       ]
+                     }
+                   }
+                 },
+                 fetched_at: fetched_at
+               )
+
+      assert Repo.aggregate(WatchProvider, :count) == 1
+
+      provider = Repo.one(WatchProvider)
+      assert provider.name == "Netflix Premium"
+      assert provider.logo_path == "/provider-8-new.jpg"
+      assert provider.last_seen_at == fetched_at
+
+      assert provider.metadata["provider_payload"]["provider_name"] == "Netflix Premium"
+      assert provider.metadata["provider_payload"]["logo_path"] == "/provider-8-new.jpg"
+    end
+
     test "creates a success refresh row when provider rows exist" do
       movie = insert_movie!()
 

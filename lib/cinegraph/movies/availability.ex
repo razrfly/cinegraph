@@ -463,11 +463,16 @@ defmodule Cinegraph.Movies.Availability do
       entries
       |> Enum.filter(fn {_type, provider_data} -> valid_provider?(provider_data) end)
       |> Enum.uniq_by(fn {type, provider_data} -> {type, provider_data["provider_id"]} end)
+
+    changed? = entries != valid_entries
+
+    valid_entries =
+      valid_entries
       |> Enum.sort_by(fn {type, provider_data} ->
         {provider_data["provider_id"], type}
       end)
 
-    {valid_entries, entries != valid_entries}
+    {valid_entries, changed?}
   end
 
   defp valid_provider?(%{"provider_id" => provider_id, "provider_name" => provider_name}) do
@@ -499,23 +504,27 @@ defmodule Cinegraph.Movies.Availability do
       metadata: %{"provider_payload" => provider_data}
     }
 
-    provider =
-      %WatchProvider{}
-      |> WatchProvider.changeset(attrs)
-      |> Repo.insert!(
-        on_conflict: :nothing,
-        conflict_target: [:source, :source_provider_id],
-        returning: true
+    conflict_query =
+      from(p in WatchProvider,
+        update: [
+          set: [
+            tmdb_provider_id: ^attrs.tmdb_provider_id,
+            name: ^attrs.name,
+            logo_path: ^attrs.logo_path,
+            active: ^attrs.active,
+            last_seen_at: ^attrs.last_seen_at,
+            metadata: fragment("COALESCE(?, '{}'::jsonb) || ?", p.metadata, ^attrs.metadata)
+          ]
+        ]
       )
 
-    if provider.id do
-      provider
-    else
-      Repo.get_by!(WatchProvider,
-        source: attrs.source,
-        source_provider_id: attrs.source_provider_id
-      )
-    end
+    %WatchProvider{}
+    |> WatchProvider.changeset(attrs)
+    |> Repo.insert!(
+      on_conflict: conflict_query,
+      conflict_target: [:source, :source_provider_id],
+      returning: true
+    )
   end
 
   defp upsert_catalog_provider!(provider_data, region, source, fetched_at) do
