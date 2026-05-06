@@ -129,60 +129,11 @@ defmodule CinegraphWeb.Admin.Components.HealthComponents do
     """
   end
 
-  # ============================================================================
-  # Sparkline
-  # ============================================================================
-
-  @doc """
-  Renders a 7-day mini bar chart.
-
-  ## Examples
-
-      <.sparkline data={[10, 15, 12, 18, 22, 20, 25]} />
-      <.sparkline data={@weekly_counts} highlight_last={false} color={:green} />
-  """
-  attr :data, :list, default: []
-  attr :highlight_last, :boolean, default: true
-  attr :color, :atom, default: :blue
-  attr :height, :integer, default: 16
-
-  def sparkline(assigns) do
-    heights = sparkline_heights(assigns.data)
-
-    bar_color =
-      case assigns.color do
-        :blue -> "bg-blue-500"
-        :green -> "bg-green-500"
-        :gray -> "bg-gray-400"
-        _ -> "bg-blue-500"
-      end
-
-    inactive_color = "bg-gray-300"
-
-    assigns =
-      assigns
-      |> assign(:heights, heights)
-      |> assign(:bar_color, bar_color)
-      |> assign(:inactive_color, inactive_color)
-
-    ~H"""
-    <div
-      class="flex items-end gap-0.5"
-      style={"height: #{@height}px"}
-      title={"Last #{length(@data)} days: #{Enum.join(@data, ", ")}"}
-    >
-      <%= for {height, idx} <- Enum.with_index(@heights) do %>
-        <% is_last = idx == length(@heights) - 1 %>
-        <% color = if @highlight_last && is_last, do: @bar_color, else: @inactive_color %>
-        <div
-          class={"w-1 rounded-t #{color}"}
-          style={"height: #{max(height * (@height / 100), 1)}px"}
-        >
-        </div>
-      <% end %>
-    </div>
-    """
-  end
+  # NOTE: The bar-chart `sparkline/1` originally ported from eventasaurus
+  # was removed in #880 Phase 1 to avoid name collision with the line-chart
+  # `sparkline/1` promoted from AdminHealthLive into DashboardComponents.
+  # Use `CinegraphWeb.Admin.Components.DashboardComponents.sparkline/1` —
+  # `<.sparkline points={...} stroke="..." />`.
 
   # ============================================================================
   # Trend Indicator

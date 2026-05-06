@@ -324,4 +324,285 @@ defmodule CinegraphWeb.Admin.Components.DashboardComponents do
   defp format_time(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
   defp format_time(%NaiveDateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
   defp format_time(_), do: "Unknown"
+
+  # ============================================================================
+  # Homeostasis-style components (ported from AdminHealthLive.Components)
+  #
+  # These were originally local to /admin/health (#723) but they're reusable
+  # KPI/status primitives for any admin page that needs a status pill, hero
+  # banner, KPI tile with sparkline, line-chart sparkline, or queue-state
+  # table. Phase 1 of #880 promotes them to the shared admin namespace.
+  # ============================================================================
+
+  @doc """
+  Status pill — small badge showing GREEN / AMBER / RED / UNKNOWN.
+
+  ## Examples
+
+      <.verdict_pill status={:green} />
+      <.verdict_pill status={:amber} label="warning" />
+  """
+  attr :status, :atom, default: :unknown, values: [:green, :amber, :red, :unknown]
+  attr :label, :string, default: nil
+  attr :class, :string, default: ""
+
+  def verdict_pill(assigns) do
+    ~H"""
+    <span class={[
+      "inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide",
+      pill_classes(@status),
+      @class
+    ]}>
+      <span class={["w-2 h-2 rounded-full mr-2", dot_classes(@status)]}></span>
+      {@label || pill_label(@status)}
+    </span>
+    """
+  end
+
+  @doc """
+  Hero verdict band — large status indicator at the top of a page.
+
+  ## Slots
+
+    * `:controls` — right-side controls (refresh button, timestamp)
+  """
+  attr :status, :atom, required: true, values: [:green, :amber, :red, :unknown]
+  attr :worst_check, :map, default: nil
+  attr :generated_at, DateTime, default: nil
+  slot :controls
+
+  def hero_band(assigns) do
+    ~H"""
+    <div class={["rounded-lg p-6 mb-6 border", hero_band_classes(@status)]}>
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-4">
+          <.verdict_pill status={@status} class="text-base px-4 py-2" />
+          <div>
+            <h1 class="text-xl font-semibold">{hero_headline(@status)}</h1>
+            <p :if={@worst_check} class="text-sm opacity-80 mt-1">
+              Worst: <span class="font-medium">{format_check_name(@worst_check)}</span>
+              <span :if={@worst_check[:affected_pct]} class="ml-1">
+                ({@worst_check.affected_pct}%)
+              </span>
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span :if={@generated_at} class="text-xs opacity-70">
+            {format_pill_dt(@generated_at)}
+          </span>
+          {render_slot(@controls)}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Activity stat tile — label, count, and a 7-day SVG sparkline.
+
+  ## Examples
+
+      <.stat_tile label="Movies+" count={142} sparkline={[10, 15, 22, 30, 24, 18, 12]} />
+  """
+  attr :label, :string, required: true
+  attr :count, :integer, required: true
+  attr :sparkline, :list, default: []
+  attr :tone, :atom, default: :blue, values: [:blue, :green, :amber, :purple, :zinc]
+
+  def stat_tile(assigns) do
+    ~H"""
+    <div class={["rounded-lg p-4 border", tile_classes(@tone)]}>
+      <div class="text-xs uppercase tracking-wide font-medium opacity-80">{@label}</div>
+      <div class="text-3xl font-bold mt-1">{format_int(@count)}</div>
+      <div class="mt-2 h-6">
+        <.sparkline points={@sparkline} stroke={tile_stroke(@tone)} />
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Inline SVG line-chart sparkline. Takes a list of integers; auto-normalizes.
+
+  Renders a 70x20 viewBox path. Empty / 1-element lists render an empty SVG
+  (no error).
+  """
+  attr :points, :list, default: []
+  attr :stroke, :string, default: "currentColor"
+  attr :width, :integer, default: 70
+  attr :height, :integer, default: 20
+
+  def sparkline(assigns) do
+    polyline =
+      case build_sparkline_points(assigns.points, assigns.width, assigns.height) do
+        nil -> nil
+        coords -> Enum.map_join(coords, " ", fn {x, y} -> "#{x},#{y}" end)
+      end
+
+    assigns = assign(assigns, :polyline, polyline)
+
+    ~H"""
+    <svg
+      viewBox={"0 0 #{@width} #{@height}"}
+      class="w-full h-full"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <polyline
+        :if={@polyline}
+        points={@polyline}
+        fill="none"
+        stroke={@stroke}
+        stroke-width="1.5"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
+  Queue state table — renders a `Cinegraph.Health.Queues.snapshot/0` shape.
+  """
+  attr :snapshot, :any, required: true
+
+  def queue_strip(assigns) do
+    ~H"""
+    <div class="rounded-lg border border-zinc-200 bg-white p-4">
+      <%= case @snapshot do %>
+        <% {:error, msg} -> %>
+          <p class="text-sm text-zinc-700">Queue snapshot unavailable: {msg}</p>
+        <% %{queues: queues, total_failures_last_hour: total_fail} -> %>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm uppercase tracking-wide font-semibold text-zinc-500">
+              <a
+                href="/admin/oban"
+                class="hover:text-zinc-900 hover:underline inline-flex items-center gap-1"
+              >
+                Queues <span aria-hidden="true">→</span>
+              </a>
+            </h3>
+            <span :if={total_fail > 0} class="text-xs font-mono text-red-700">
+              {total_fail} failures last hour
+            </span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead class="text-xs uppercase text-zinc-500">
+                <tr>
+                  <th class="text-left py-1 pr-3 font-medium">queue</th>
+                  <th class="text-right py-1 px-2 font-medium">avail</th>
+                  <th class="text-right py-1 px-2 font-medium">exec</th>
+                  <th class="text-right py-1 px-2 font-medium">retry</th>
+                  <th class="text-right py-1 px-2 font-medium">disc</th>
+                  <th class="text-right py-1 px-2 font-medium">fail/hr</th>
+                  <th class="text-right py-1 px-2 font-medium">longest(s)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={q <- queues} class="border-t border-zinc-100">
+                  <td class="py-1 pr-3 font-mono text-zinc-800">{q.name}</td>
+                  <td class="py-1 px-2 text-right font-mono">{q.available}</td>
+                  <td class="py-1 px-2 text-right font-mono">{q.executing}</td>
+                  <td class="py-1 px-2 text-right font-mono">{q.retryable}</td>
+                  <td class="py-1 px-2 text-right font-mono">{q.discarded}</td>
+                  <td class={[
+                    "py-1 px-2 text-right font-mono",
+                    q.failures_last_hour > 0 && "text-red-700 font-semibold"
+                  ]}>
+                    {q.failures_last_hour}
+                  </td>
+                  <td class="py-1 px-2 text-right font-mono">{q.longest_running_seconds}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        <% _ -> %>
+          <p class="text-sm text-zinc-500">No queue data.</p>
+      <% end %>
+    </div>
+    """
+  end
+
+  # ===== Public helpers (used by AdminHealthLive's local components too) =====
+
+  @doc "Formats an integer with thousands separators."
+  def format_int(n) when is_integer(n) do
+    n
+    |> Integer.to_string()
+    |> String.graphemes()
+    |> Enum.reverse()
+    |> Enum.chunk_every(3)
+    |> Enum.intersperse(",")
+    |> List.flatten()
+    |> Enum.reverse()
+    |> Enum.join()
+  end
+
+  def format_int(other), do: to_string(other)
+
+  # ===== Private helpers =====
+
+  defp pill_classes(:green), do: "bg-green-100 text-green-800"
+  defp pill_classes(:amber), do: "bg-amber-100 text-amber-800"
+  defp pill_classes(:red), do: "bg-red-100 text-red-800"
+  defp pill_classes(_), do: "bg-zinc-100 text-zinc-700"
+
+  defp dot_classes(:green), do: "bg-green-500"
+  defp dot_classes(:amber), do: "bg-amber-500"
+  defp dot_classes(:red), do: "bg-red-500"
+  defp dot_classes(_), do: "bg-zinc-400"
+
+  defp pill_label(:green), do: "Healthy"
+  defp pill_label(:amber), do: "Warning"
+  defp pill_label(:red), do: "Critical"
+  defp pill_label(_), do: "Unknown"
+
+  defp hero_band_classes(:green), do: "bg-green-50 border-green-200 text-green-900"
+  defp hero_band_classes(:amber), do: "bg-amber-50 border-amber-200 text-amber-900"
+  defp hero_band_classes(:red), do: "bg-red-50 border-red-200 text-red-900"
+  defp hero_band_classes(_), do: "bg-zinc-50 border-zinc-200 text-zinc-900"
+
+  defp hero_headline(:green), do: "All systems in sync"
+  defp hero_headline(:amber), do: "Some drift detected"
+  defp hero_headline(:red), do: "Critical drift — investigate"
+  defp hero_headline(_), do: "Status unknown"
+
+  defp tile_classes(:blue), do: "bg-blue-50 text-blue-900 border-blue-200"
+  defp tile_classes(:green), do: "bg-green-50 text-green-900 border-green-200"
+  defp tile_classes(:amber), do: "bg-amber-50 text-amber-900 border-amber-200"
+  defp tile_classes(:purple), do: "bg-purple-50 text-purple-900 border-purple-200"
+  defp tile_classes(:zinc), do: "bg-zinc-50 text-zinc-900 border-zinc-200"
+
+  defp tile_stroke(:blue), do: "rgb(37 99 235)"
+  defp tile_stroke(:green), do: "rgb(22 163 74)"
+  defp tile_stroke(:amber), do: "rgb(217 119 6)"
+  defp tile_stroke(:purple), do: "rgb(147 51 234)"
+  defp tile_stroke(:zinc), do: "rgb(82 82 91)"
+
+  defp format_check_name(%{domain: d, check: c}),
+    do: "#{d}/#{c}" |> String.replace("_", " ")
+
+  defp format_check_name(_), do: ""
+
+  defp format_pill_dt(nil), do: ""
+  defp format_pill_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%H:%M:%S UTC")
+
+  defp build_sparkline_points(points, _w, _h) when length(points) < 2, do: nil
+
+  defp build_sparkline_points(points, width, height) do
+    {min, max} = Enum.min_max(points)
+    range = if max == min, do: 1, else: max - min
+    n = length(points)
+    step = if n > 1, do: width / (n - 1), else: 0
+
+    points
+    |> Enum.with_index()
+    |> Enum.map(fn {v, i} ->
+      x = i * step
+      y = height - (v - min) / range * height
+      {Float.round(x, 1), Float.round(y, 1)}
+    end)
+  end
 end

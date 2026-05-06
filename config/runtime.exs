@@ -43,6 +43,29 @@ config :cinegraph, Cinegraph.Services.TMDb.Client, api_key: tmdb_api_key
 # Configure OMDb (optional)
 config :cinegraph, Cinegraph.Services.OMDb.Client, api_key: omdb_api_key
 
+# Stock image search APIs (#880 Phase 2 — optional "Suggest images" picker
+# for festival admin). Each is read at runtime; provider modules return
+# `:disabled` when their key is unset, which the picker uses to hide that
+# source without crashing.
+unsplash_access_key =
+  if config_env() == :dev,
+    do: env!("UNSPLASH_ACCESS_KEY", :string, ""),
+    else: System.get_env("UNSPLASH_ACCESS_KEY") || ""
+
+pexels_api_key =
+  if config_env() == :dev,
+    do: env!("PEXELS_API_KEY", :string, ""),
+    else: System.get_env("PEXELS_API_KEY") || ""
+
+pixabay_api_key =
+  if config_env() == :dev,
+    do: env!("PIXABAY_API_KEY", :string, ""),
+    else: System.get_env("PIXABAY_API_KEY") || ""
+
+config :cinegraph, Cinegraph.Images.Providers.Unsplash, access_key: unsplash_access_key
+config :cinegraph, Cinegraph.Images.Providers.Pexels, api_key: pexels_api_key
+config :cinegraph, Cinegraph.Images.Providers.Pixabay, api_key: pixabay_api_key
+
 # Daily OMDb batch size for RatingsRefreshWorker.
 # Defaults to 100,000 — the full Basic plan daily limit.
 # Override via OMDB_DAILY_BATCH_SIZE env var only if you need to throttle.

@@ -5,7 +5,7 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   Reads exclusively from `Cinegraph.Health.*` so CLI (`mix cinegraph.health`)
   and UI never disagree.
   """
-  use CinegraphWeb, :live_view
+  use CinegraphWeb, :admin_live_view
 
   import CinegraphWeb.AdminHealthLive.Components
 
@@ -316,20 +316,6 @@ defmodule CinegraphWeb.AdminHealthLive.Show do
   end
 
   defp headline_for(_, _), do: ""
-
-  defp format_int(n) when is_integer(n) do
-    n
-    |> Integer.to_string()
-    |> String.graphemes()
-    |> Enum.reverse()
-    |> Enum.chunk_every(3)
-    |> Enum.intersperse(",")
-    |> List.flatten()
-    |> Enum.reverse()
-    |> Enum.join()
-  end
-
-  defp format_int(other), do: to_string(other)
 
   defp collect_errors(values) do
     values

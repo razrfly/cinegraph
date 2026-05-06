@@ -375,9 +375,14 @@ defmodule CinegraphWeb.AdminDashboardLive do
             description: "Festival/awards import orchestration."
           },
           %{
+            title: "Festivals",
+            path: "/admin/festivals",
+            description: "Edit festival organizations: identity, imagery, links to audit."
+          },
+          %{
             title: "Festival events",
             path: "/admin/festival-events",
-            description: "Festival event import-config CRUD."
+            description: "Legacy import-config modal (folds into Festivals editor in Phase 3)."
           },
           %{
             title: "Festival audit",
