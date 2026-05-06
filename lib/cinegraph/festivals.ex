@@ -171,6 +171,47 @@ defmodule Cinegraph.Festivals do
   end
 
   @doc """
+  Updates a festival organization.
+
+  Invalidates the home page's `:ceremonies` and `:festival_pulse` Cachex
+  entries when imagery fields (`logo_url` / `hero_image_url`) change so the
+  /admin/festivals editor reflects on `/` without waiting for the daily TTL.
+  """
+  @spec update_organization(FestivalOrganization.t(), map()) ::
+          {:ok, FestivalOrganization.t()} | {:error, Ecto.Changeset.t()}
+  def update_organization(%FestivalOrganization{} = org, attrs) do
+    imagery_changed? =
+      to_string(Map.get(attrs, :logo_url) || Map.get(attrs, "logo_url") || "") !=
+        to_string(org.logo_url || "") or
+        to_string(Map.get(attrs, :hero_image_url) || Map.get(attrs, "hero_image_url") || "") !=
+          to_string(org.hero_image_url || "")
+
+    case org |> FestivalOrganization.changeset(attrs) |> Repo.update() do
+      {:ok, updated} ->
+        if imagery_changed?, do: invalidate_homepage_festival_caches()
+        {:ok, updated}
+
+      err ->
+        err
+    end
+  end
+
+  defp invalidate_homepage_festival_caches do
+    # Cachex keys live as `{Cinegraph.Homepage, name, date}`. We only need
+    # to clear today's entries — future days haven't been computed yet, and
+    # past days don't matter. Best-effort: silent on failure.
+    today = Date.utc_today()
+
+    try do
+      Cachex.del(:movies_cache, {Cinegraph.Homepage, :ceremonies, today})
+      Cachex.del(:movies_cache, {Cinegraph.Homepage, :festival_pulse, today})
+      Cachex.del(:movies_cache, {Cinegraph.Homepage, :spotlight, today})
+    rescue
+      _ -> :ok
+    end
+  end
+
+  @doc """
   Gets a category by name for a specific organization.
   """
   def get_category_by_name(organization_id, name) do

@@ -233,14 +233,14 @@ defmodule CinegraphWeb.Admin.QueuesLive do
                 {format_pct(coverage.coverage_percent)}
               </dd>
               <dd class="text-xs text-gray-500">
-                {format_int(coverage.people_with_pqs)} / {format_int(coverage.eligible_people)}
+                {format_count(coverage.people_with_pqs)} / {format_count(coverage.eligible_people)}
               </dd>
             </div>
             <div>
               <dt class="text-xs text-gray-500">Freshness</dt>
               <dd class="font-mono text-gray-900">{format_pct(freshness.fresh_percent)}</dd>
               <dd class="text-xs text-gray-500">
-                avg age {format_int(freshness.average_age_days)}d
+                avg age {format_count(freshness.average_age_days)}d
               </dd>
             </div>
           </dl>
@@ -337,10 +337,10 @@ defmodule CinegraphWeb.Admin.QueuesLive do
   defp format_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%H:%M:%S")
   defp format_dt(_), do: "—"
 
-  defp format_int(nil), do: "0"
-  defp format_int(n) when is_integer(n), do: Integer.to_string(n)
-  defp format_int(n) when is_float(n), do: Integer.to_string(round(n))
-  defp format_int(_), do: "—"
+  defp format_count(nil), do: "0"
+  defp format_count(n) when is_integer(n), do: Integer.to_string(n)
+  defp format_count(n) when is_float(n), do: Integer.to_string(round(n))
+  defp format_count(_), do: "—"
 
   defp format_pct(nil), do: "—"
   defp format_pct(p) when is_number(p), do: "#{:erlang.float_to_binary(p * 1.0, decimals: 1)}%"

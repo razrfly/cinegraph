@@ -67,6 +67,12 @@
             assigns={assigns}
           />
           <.sidebar_item
+            path="/admin/festivals"
+            label="Festivals"
+            icon={:film}
+            assigns={assigns}
+          />
+          <.sidebar_item
             path="/admin/festival-events"
             label="Festival events"
             icon={:beaker}
@@ -75,7 +81,7 @@
           <.sidebar_item
             path="/admin/festival"
             label="Festival audit"
-            icon={:film}
+            icon={:duplicate}
             assigns={assigns}
           />
           <.sidebar_item
@@ -244,6 +250,7 @@
             <.mobile_sidebar_item path="/admin/imports" label="Imports" />
             <.mobile_sidebar_item path="/admin/year-imports" label="Year imports" />
             <.mobile_sidebar_item path="/admin/award-imports" label="Award imports" />
+            <.mobile_sidebar_item path="/admin/festivals" label="Festivals" />
             <.mobile_sidebar_item path="/admin/festival-events" label="Festival events" />
             <.mobile_sidebar_item path="/admin/festival" label="Festival audit" />
             <.mobile_sidebar_item path="/admin/lists-manager" label="Lists" />

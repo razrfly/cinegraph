@@ -265,7 +265,11 @@ defmodule CinegraphWeb.Router do
       # Movie Predictions for 1001 Movies list
       live "/predictions", PredictionsLive.Index, :index
 
-      # Festival Events management
+      # Festivals admin (#880 Phase 2) — primary editor for festival_organizations
+      live "/festivals", Admin.FestivalsLive.Index, :index
+
+      # Festival Events management (legacy import-config modal — kept while
+      # /admin/festivals expands to fold this in; tracked in #880 Phase 3)
       live "/festival-events", FestivalEventLive.Index, :index
 
       # Lists Manager (Issue #487)

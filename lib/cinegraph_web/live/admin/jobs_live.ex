@@ -180,13 +180,13 @@ defmodule CinegraphWeb.Admin.JobsLive do
                 </td>
                 <td class="px-4 py-2 text-xs font-mono text-gray-700">{row.entry.queue}</td>
                 <td class="px-4 py-2 text-sm text-right text-gray-900">
-                  {format_int(row.totals.completed)}
+                  {format_count(row.totals.completed)}
                 </td>
                 <td class={"px-4 py-2 text-sm text-right #{count_color(row.totals.discarded)}"}>
-                  {format_int(row.totals.discarded)}
+                  {format_count(row.totals.discarded)}
                 </td>
                 <td class={"px-4 py-2 text-sm text-right #{count_color(row.totals.retryable)}"}>
-                  {format_int(row.totals.retryable)}
+                  {format_count(row.totals.retryable)}
                 </td>
                 <td class="px-4 py-2 text-sm text-right text-gray-700 font-mono">
                   {format_duration(row.avg_duration_seconds)}
@@ -217,7 +217,7 @@ defmodule CinegraphWeb.Admin.JobsLive do
   end
 
   defp kpi_value(:error), do: "—"
-  defp kpi_value(n) when is_integer(n), do: format_int(n)
+  defp kpi_value(n) when is_integer(n), do: format_count(n)
   defp kpi_value(_), do: "—"
 
   defp success_rate(:error, _), do: "—"
@@ -266,9 +266,9 @@ defmodule CinegraphWeb.Admin.JobsLive do
   defp count_color(n) when is_integer(n) and n > 0, do: "text-red-700 font-medium"
   defp count_color(_), do: "text-gray-700"
 
-  defp format_int(nil), do: "0"
+  defp format_count(nil), do: "0"
 
-  defp format_int(n) when is_integer(n) do
+  defp format_count(n) when is_integer(n) do
     n
     |> Integer.to_string()
     |> String.graphemes()
@@ -279,7 +279,7 @@ defmodule CinegraphWeb.Admin.JobsLive do
     |> String.reverse()
   end
 
-  defp format_int(_), do: "—"
+  defp format_count(_), do: "—"
 
   defp format_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M")
   defp format_dt(_), do: "—"
