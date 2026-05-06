@@ -68,3 +68,16 @@ config :cinegraph, :admin_auth_disabled, true
 
 # Use pure-Elixir backend in tests — EXLA requires native XLA artifacts not present in CI
 config :nx, default_backend: Nx.BinaryBackend
+
+# Stub R2 client for tests (#890). Records calls in the test process's
+# dictionary; tests can inject error paths via Cinegraph.Images.R2Stub.put_response/2.
+config :cinegraph, :r2_client, Cinegraph.Images.R2Stub
+
+# Provide deterministic R2 config so configured?/0 returns true in tests
+# that exercise the rehost path. Stub never makes a real call.
+config :cinegraph, :r2,
+  account_id: "test-account",
+  access_key_id: "test-access-key",
+  secret_access_key: "test-secret",
+  bucket: "cinegraph-test",
+  cdn_url: "https://test-cdn.example"

@@ -1,23 +1,33 @@
 defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   @moduledoc """
-  Festival admin index — replaces the bare `/admin/festival-events` modal
-  with a real editor for `festival_organizations`.
+  Festival admin index — editor for `festival_organizations` with
+  R2-backed imagery uploads (#890, follow-up to Phase 2 of #880).
 
-  Phase 2 of #880. Lets a human:
+  Lets a human:
 
   - See every festival org at a glance, with logo / hero image-coverage badges
   - Click into a drawer to edit identity + imagery
-  - Paste a URL for `logo_url` / `hero_image_url`, OR open the "Suggest images"
-    modal to search Unsplash / Pexels / Pixabay and click-to-save a CDN URL
+  - Upload a logo or hero image file (rehosted to R2 on save)
+  - Paste a URL for `logo_url` / `hero_image_url` (rehosted to R2 on save
+    if external; idempotent re-saves of CDN URLs are no-ops)
+  - For hero only: open the "Suggest images" modal to discover stock-photo
+    URLs that fill the URL field; saving rehosts the picked URL to R2
   - Link out to `/admin/festival/:slug` for ceremony audit and to
-    `/admin/festival-events` for import-config edits (until those fold in
-    in a follow-up phase)
+    `/admin/festival-events` for import-config edits
+
+  Logos no longer use the stock-photo "Suggest images" modal — empirical
+  testing in #888 showed those APIs return 0 real festival logos.
   """
   use CinegraphWeb, :admin_live_view
 
   alias Cinegraph.Festivals
   alias Cinegraph.Festivals.FestivalOrganization
   alias Cinegraph.Images.StockImageSearch
+
+  @logo_accept ~w(.png .jpg .jpeg .svg .webp)
+  @hero_accept ~w(.png .jpg .jpeg .webp)
+  @logo_max_bytes 5 * 1024 * 1024
+  @hero_max_bytes 8 * 1024 * 1024
 
   @impl true
   def mount(_params, _session, socket) do
@@ -31,8 +41,20 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
      |> assign(:suggest_results, %{})
      |> assign(:suggest_loading?, false)
      |> assign(:suggest_search_ref, nil)
+     |> allow_upload(:logo_upload,
+       accept: @logo_accept,
+       max_entries: 1,
+       max_file_size: @logo_max_bytes
+     )
+     |> allow_upload(:hero_upload,
+       accept: @hero_accept,
+       max_entries: 1,
+       max_file_size: @hero_max_bytes
+     )
      |> assign_orgs()}
   end
+
+  defp r2_client, do: Application.get_env(:cinegraph, :r2_client, Cinegraph.Images.R2)
 
   defp assign_orgs(socket) do
     orgs = Festivals.list_organizations()
@@ -85,25 +107,34 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   def handle_event("save", %{"organization" => attrs}, socket) do
     org = socket.assigns.editing_org
 
-    case Festivals.update_organization(org, attrs) do
-      {:ok, updated} ->
-        {:noreply,
-         socket
-         |> assign_orgs()
-         |> close_drawer()
-         |> put_flash(:info, "Saved #{updated.name}.")}
+    case process_imagery(socket, org, attrs) do
+      {:ok, attrs, hints, socket} ->
+        case Festivals.update_organization(org, attrs) do
+          {:ok, updated} ->
+            base = "Saved #{updated.name}."
+            message = if hints == [], do: base, else: "#{base} #{Enum.join(hints, " · ")}"
 
-      {:error, changeset} ->
-        {:noreply,
-         socket
-         |> assign(:form, to_form(changeset, as: "organization"))
-         |> put_flash(:error, "Could not save festival — see field errors.")}
+            {:noreply,
+             socket
+             |> assign_orgs()
+             |> close_drawer()
+             |> put_flash(:info, message)}
+
+          {:error, changeset} ->
+            {:noreply,
+             socket
+             |> assign(:form, to_form(changeset, as: "organization"))
+             |> put_flash(:error, "Could not save festival — see field errors.")}
+        end
+
+      {:error, message, socket} ->
+        {:noreply, put_flash(socket, :error, message)}
     end
   end
 
-  def handle_event("open_suggest", %{"field" => field}, socket)
-      when field in ["logo_url", "hero_image_url"] do
-    field_atom = String.to_existing_atom(field)
+  # Stock-photo modal is hero-only — logos use upload or paste URL.
+  def handle_event("open_suggest", %{"field" => "hero_image_url"}, socket) do
+    field_atom = :hero_image_url
     query = socket.assigns.editing_org.name
 
     {:noreply,
@@ -176,6 +207,103 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
        |> assign(:suggest_loading?, false)}
     else
       {:noreply, socket}
+    end
+  end
+
+  # ----- imagery processing (#890) -----
+  #
+  # On save: for each of (logo, hero), if the user uploaded a file, consume
+  # it and push to R2; otherwise, if the URL field changed and isn't already
+  # on our CDN, fetch + rehost. Accumulate flash hints when R2 is disabled.
+  defp process_imagery(socket, org, attrs) do
+    with {:ok, attrs, hints, socket} <-
+           handle_imagery(socket, org, attrs, "logo_url", "logo", :logo_upload, []),
+         {:ok, attrs, hints, socket} <-
+           handle_imagery(socket, org, attrs, "hero_image_url", "hero", :hero_upload, hints) do
+      {:ok, attrs, hints, socket}
+    end
+  end
+
+  defp handle_imagery(socket, org, attrs, attr_key, kind, upload_key, hints) do
+    case socket.assigns.uploads[upload_key].entries do
+      [_entry | _] ->
+        # File was uploaded — takes precedence over the URL field.
+        consume_uploaded_image(socket, org, kind, upload_key, attrs, attr_key, hints)
+
+      [] ->
+        # No upload — check whether the URL field needs rehosting.
+        url = Map.get(attrs, attr_key) || ""
+        rehost_url_if_needed(socket, org, attrs, attr_key, kind, url, hints)
+    end
+  end
+
+  defp consume_uploaded_image(socket, org, kind, upload_key, attrs, attr_key, hints) do
+    r2 = r2_client()
+
+    if r2.configured?() do
+      results =
+        consume_uploaded_entries(socket, upload_key, fn %{path: path}, entry ->
+          binary = File.read!(path)
+
+          case r2.put_curated_image(
+                 "festivals",
+                 org.slug,
+                 kind,
+                 {:upload, entry.client_name, binary}
+               ) do
+            {:ok, cdn_url} -> {:ok, {:ok, cdn_url}}
+            {:error, reason} -> {:ok, {:error, reason}}
+          end
+        end)
+
+      case results do
+        [{:ok, cdn_url}] ->
+          {:ok, Map.put(attrs, attr_key, cdn_url), hints, socket}
+
+        [{:error, reason}] ->
+          {:error, "#{kind |> String.capitalize()} upload failed: #{format_error(reason)}",
+           socket}
+
+        [] ->
+          {:ok, attrs, hints, socket}
+      end
+    else
+      # R2 disabled — drop the upload, persist whatever URL is in the field.
+      _ = consume_uploaded_entries(socket, upload_key, fn _, _ -> {:ok, :discarded} end)
+      hint = "R2 disabled — #{kind} file upload skipped, using URL field"
+      {:ok, attrs, hints ++ [hint], socket}
+    end
+  end
+
+  defp rehost_url_if_needed(socket, org, attrs, attr_key, kind, url, hints) do
+    cdn = Application.get_env(:cinegraph, :r2)[:cdn_url] || ""
+    r2 = r2_client()
+    persisted_url = Map.get(org, String.to_existing_atom(attr_key))
+
+    cond do
+      url in [nil, ""] ->
+        {:ok, attrs, hints, socket}
+
+      url == persisted_url ->
+        # Unchanged from DB — no rehost. Idempotent re-saves don't refetch.
+        {:ok, attrs, hints, socket}
+
+      cdn != "" and String.starts_with?(url, cdn) ->
+        # Already on our CDN.
+        {:ok, attrs, hints, socket}
+
+      not r2.configured?() ->
+        hint = "R2 disabled — saved #{kind} URL as-is (no rehost)"
+        {:ok, attrs, hints ++ [hint], socket}
+
+      true ->
+        case r2.put_curated_image("festivals", org.slug, kind, {:url, url}) do
+          {:ok, cdn_url} ->
+            {:ok, Map.put(attrs, attr_key, cdn_url), hints, socket}
+
+          {:error, reason} ->
+            {:error, "Could not rehost #{kind}: #{format_error(reason)}", socket}
+        end
     end
   end
 
@@ -325,6 +453,8 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
         suggest_query={@suggest_query}
         suggest_results={@suggest_results}
         suggest_loading?={@suggest_loading?}
+        logo_upload={@uploads.logo_upload}
+        hero_upload={@uploads.hero_upload}
       />
     <% end %>
     """
@@ -336,6 +466,8 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   attr :suggest_query, :string, required: true
   attr :suggest_results, :map, required: true
   attr :suggest_loading?, :boolean, required: true
+  attr :logo_upload, :any, required: true
+  attr :hero_upload, :any, required: true
 
   defp drawer(assigns) do
     ~H"""
@@ -442,13 +574,15 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
                 <.image_field
                   form={@form}
                   field={:logo_url}
-                  label="Logo URL"
+                  label="Logo"
+                  upload={@logo_upload}
                   preview_class="h-16 w-16 object-contain bg-gray-50 rounded border"
                 />
                 <.image_field
                   form={@form}
                   field={:hero_image_url}
-                  label="Hero image URL"
+                  label="Hero image"
+                  upload={@hero_upload}
                   preview_class="h-32 w-full object-cover rounded border"
                 />
               </div>
@@ -512,12 +646,17 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   attr :form, :any, required: true
   attr :field, :atom, required: true
   attr :label, :string, required: true
+  attr :upload, :any, required: true
   attr :preview_class, :string, default: "h-16 w-16 object-contain bg-gray-50 rounded border"
 
   defp image_field(assigns) do
     value = Phoenix.HTML.Form.input_value(assigns.form, assigns.field) || ""
+    show_suggest? = assigns.field == :hero_image_url
 
-    assigns = assign(assigns, :value, value)
+    assigns =
+      assigns
+      |> assign(:value, value)
+      |> assign(:show_suggest?, show_suggest?)
 
     ~H"""
     <div>
@@ -535,19 +674,45 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
             type="url"
             name={@form[@field].name}
             value={@value}
-            placeholder="https://..."
+            placeholder="https://... or upload below"
             class="w-full rounded-md border-gray-300 text-sm font-mono"
           />
-          <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              phx-click="open_suggest"
-              phx-value-field={Atom.to_string(@field)}
-              class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-            >
-              ✨ Suggest images
-            </button>
+
+          <%!-- File upload — uploads take precedence over the URL field on save --%>
+          <div class="rounded-md border border-dashed border-gray-300 bg-gray-50 p-2">
+            <.live_file_input upload={@upload} class="text-xs text-gray-700" />
+            <p class="text-[10px] text-gray-500 mt-1">
+              Accepts {Enum.join(@upload.accept |> String.split(","), " ")} · max {trunc(
+                @upload.max_file_size / 1024 / 1024
+              )}MB
+            </p>
+            <%= for entry <- @upload.entries do %>
+              <p class="text-[11px] text-gray-700 mt-1">
+                {entry.client_name} ({trunc(entry.client_size / 1024)}KB) — will upload on save
+              </p>
+              <%= for err <- upload_errors(@upload, entry) do %>
+                <p class="text-[11px] text-red-700 mt-1">
+                  {Phoenix.Naming.humanize(err)}
+                </p>
+              <% end %>
+            <% end %>
+            <%= for err <- upload_errors(@upload) do %>
+              <p class="text-[11px] text-red-700 mt-1">{Phoenix.Naming.humanize(err)}</p>
+            <% end %>
           </div>
+
+          <%= if @show_suggest? do %>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                phx-click="open_suggest"
+                phx-value-field={Atom.to_string(@field)}
+                class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+              >
+                ✨ Suggest images
+              </button>
+            </div>
+          <% end %>
         </div>
       </div>
     </div>
@@ -676,6 +841,10 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
 
   defp format_error(:rate_limited), do: "rate limited"
   defp format_error(:timeout), do: "timeout"
+  defp format_error(:not_configured), do: "R2 not configured"
+  defp format_error(:file_too_large), do: "file too large"
   defp format_error({:http, code}), do: "HTTP #{code}"
+  defp format_error({:http_error, status}), do: "HTTP #{status}"
+  defp format_error({:download_failed, reason}), do: "download failed (#{inspect(reason)})"
   defp format_error(other), do: inspect(other) |> String.slice(0, 80)
 end
