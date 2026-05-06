@@ -194,6 +194,73 @@ defmodule Cinegraph.Festivals do
   end
 
   @doc """
+  Returns up to `limit` most recent ceremonies across all organizations,
+  each enriched with its top winner (first nomination where won=true,
+  preferring categories whose name matches the "best picture/film" pattern).
+
+  Result shape:
+      %{
+        ceremony: %FestivalCeremony{organization: %FestivalOrganization{}},
+        winner_movie: %Movie{} | nil,
+        winner_category: String.t() | nil,
+        nomination_count: non_neg_integer()
+      }
+  """
+  def list_recent_ceremonies_with_winner(limit \\ 6) do
+    ceremonies =
+      from(c in FestivalCeremony,
+        as: :ceremony,
+        where:
+          exists(
+            from n in FestivalNomination,
+              where: n.ceremony_id == parent_as(:ceremony).id,
+              select: 1
+          ),
+        order_by: [desc: c.year, desc: c.id],
+        preload: [:organization],
+        limit: ^limit
+      )
+      |> Repo.replica().all()
+
+    Enum.map(ceremonies, fn ceremony ->
+      winner = top_winner_for_ceremony(ceremony.id)
+      count = count_nominations(ceremony.id)
+
+      %{
+        ceremony: ceremony,
+        winner_movie: winner && winner.movie,
+        winner_category: winner && winner.category && winner.category.name,
+        nomination_count: count
+      }
+    end)
+  end
+
+  defp top_winner_for_ceremony(ceremony_id) do
+    from(n in FestivalNomination,
+      join: cat in assoc(n, :category),
+      join: m in assoc(n, :movie),
+      where: n.ceremony_id == ^ceremony_id,
+      where: n.won == true,
+      where: not is_nil(n.movie_id),
+      order_by: [
+        desc:
+          fragment(
+            "CASE WHEN ? ILIKE '%best picture%' OR ? ILIKE '%best film%' OR ? ILIKE 'palme%' OR ? ILIKE 'golden lion%' OR ? ILIKE 'golden bear%' THEN 1 ELSE 0 END",
+            cat.name,
+            cat.name,
+            cat.name,
+            cat.name,
+            cat.name
+          ),
+        asc: n.id
+      ],
+      preload: [movie: m, category: cat],
+      limit: 1
+    )
+    |> Repo.replica().one()
+  end
+
+  @doc """
   Gets a single festival ceremony by organization and year.
   """
   def get_ceremony_by_year(organization_id, year) do

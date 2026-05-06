@@ -28,6 +28,47 @@ defmodule Cinegraph.Movies do
   require Logger
 
   @doc """
+  Base query for feature films only.
+
+  Excludes adult content, partial imports, and short-form content (TV episodes,
+  sports specials, etc.) by runtime threshold. Use this as the foundation for
+  any "show me movies" query on public surfaces where TV/sports leakage is
+  undesirable. The runtime nil-allowance keeps unimported runtime data from
+  hiding otherwise valid films.
+  """
+  def feature_film_query do
+    from m in Movie,
+      where: m.adult == false,
+      where: m.import_status == "full",
+      where: m.runtime > 45 or is_nil(m.runtime)
+  end
+
+  @doc """
+  Recent theatrical releases for the home page.
+
+  Returns up to `limit` feature films released in the last `days` days,
+  preloading score_cache via left join (so films without a score still appear).
+  Sorted by overall_score desc (nulls last), then release_date desc.
+  """
+  def recent_theatrical_releases(opts \\ []) do
+    today = Elixir.Keyword.get(opts, :today, Date.utc_today())
+    days_back = Elixir.Keyword.get(opts, :days, 60)
+    days_ahead = Elixir.Keyword.get(opts, :days_ahead, 14)
+    limit = Elixir.Keyword.get(opts, :limit, 8)
+    start_date = Date.add(today, -days_back)
+    end_date = Date.add(today, days_ahead)
+
+    from(m in feature_film_query(),
+      left_join: s in assoc(m, :score_cache),
+      where: m.release_date >= ^start_date and m.release_date <= ^end_date,
+      order_by: [desc_nulls_last: s.overall_score, desc: m.release_date, asc: m.id],
+      preload: [score_cache: s],
+      limit: ^limit
+    )
+    |> Repo.replica().all()
+  end
+
+  @doc """
   Returns the list of movies with pagination, filtering, and sorting.
   Only returns fully imported movies by default.
   Includes discovery scores for movie cards when not using discovery metric sorting.
@@ -1801,9 +1842,10 @@ defmodule Cinegraph.Movies do
     offset = Elixir.Keyword.get(opts, :offset, 0)
     order = if category == "perfect_harmony", do: :asc, else: :desc
 
-    from(m in Movie,
+    from(m in feature_film_query(),
       join: s in assoc(m, :score_cache),
       where: s.disparity_category == ^category,
+      where: s.mob_score > 0.0 or s.critics_score > 0.0,
       order_by: [{^order, s.disparity_score}, asc: m.id],
       limit: ^limit,
       offset: ^offset,

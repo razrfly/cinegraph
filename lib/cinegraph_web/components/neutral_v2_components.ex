@@ -358,7 +358,8 @@ defmodule CinegraphWeb.NeutralV2Components do
       %{id: "Movies", href: "/movies"},
       %{id: "People", href: "/people"},
       %{id: "Lists", href: "/lists"},
-      %{id: "Awards", href: "/awards"}
+      %{id: "Awards", href: "/awards"},
+      %{id: "Six-Degrees", href: "/six-degrees"}
     ]
 
     assigns = assign(assigns, :items, items)
@@ -527,6 +528,7 @@ defmodule CinegraphWeb.NeutralV2Components do
 
   @doc "Search hero — focused search + type tabs + genre chips + filter pills."
   attr :genres, :list, required: true
+  attr :counts, :map, default: %{}
 
   def n_search_hero(assigns) do
     tabs = ["Films", "TV", "People", "Companies", "Lists", "Genres", "Years"]
@@ -550,18 +552,18 @@ defmodule CinegraphWeb.NeutralV2Components do
           {t}<span
             :if={t == "Films"}
             class="ml-[6px] text-[10.5px] font-medium text-mist-500 tabular-nums"
-          >16,420</span>
+          >{format_value(@counts[:movies] || 16_420)}</span>
           <span
             :if={t == "People"}
             class="ml-[6px] text-[10.5px] font-medium text-mist-500 tabular-nums"
           >
-            48,923
+            {format_value(@counts[:people] || 48_923)}
           </span>
           <span
             :if={t == "Lists"}
             class="ml-[6px] text-[10.5px] font-medium text-mist-500 tabular-nums"
           >
-            312
+            {format_value(@counts[:lists] || 312)}
           </span>
         </button>
       </div>
@@ -1743,6 +1745,95 @@ defmodule CinegraphWeb.NeutralV2Components do
         </li>
       </ul>
     </nav>
+    """
+  end
+
+  # ──────────────────────────────────────────────────────────────────
+  # HOME PAGE EXTENSIONS
+  # ──────────────────────────────────────────────────────────────────
+
+  @doc """
+  Metric badge — single cell of the home page's six-metric trust strip.
+  Renders a colored dot, an uppercase title, and a one-line blurb.
+  """
+  attr :lens, :map, required: true
+  attr :class, :string, default: ""
+
+  def n_metric_badge(assigns) do
+    ~H"""
+    <div class={[
+      "flex flex-col gap-2 rounded-[8px] border border-mist-950/10 bg-mist-50 p-4",
+      @class
+    ]}>
+      <div class="flex items-center gap-2">
+        <span class={["inline-block h-[10px] w-[10px] rounded-full", metric_dot_color(@lens.accent)]} />
+        <span class="text-[10.5px] font-semibold uppercase tracking-[.1em] text-mist-950">
+          {@lens.title}
+        </span>
+      </div>
+      <p class="text-[12.5px] leading-relaxed text-mist-700">
+        {@lens.description}
+      </p>
+    </div>
+    """
+  end
+
+  defp metric_dot_color("ink"), do: "bg-mist-950"
+  defp metric_dot_color("blue"), do: "bg-blue-600"
+  defp metric_dot_color("amber"), do: "bg-amber-500"
+  defp metric_dot_color("red"), do: "bg-rose-600"
+  defp metric_dot_color("green"), do: "bg-emerald-600"
+  defp metric_dot_color(_), do: "bg-mist-400"
+
+  @doc """
+  Recommendation card — Video Clerk's primary pick, with the cited evidence
+  routes as pills and a one-sentence reason.
+  """
+  attr :recommendation, :map, default: nil
+  attr :empty_label, :string, default: "Pick a starter to get a recommendation."
+
+  def n_recommendation_card(assigns) do
+    ~H"""
+    <div class="rounded-[10px] border border-mist-950/10 bg-white p-4">
+      <%= if @recommendation do %>
+        <a
+          href={@recommendation.href}
+          class="grid gap-4 text-inherit no-underline sm:grid-cols-[112px_1fr]"
+        >
+          <div class="aspect-[2/3] overflow-hidden rounded-[6px] border border-mist-950/10 bg-mist-100">
+            <img
+              :if={@recommendation.poster_url}
+              src={@recommendation.poster_url}
+              alt=""
+              class="h-full w-full object-cover"
+            />
+          </div>
+          <div class="flex flex-col gap-2">
+            <div class="text-[10.5px] font-semibold uppercase tracking-[.1em] text-mist-500">
+              The clerk's pick
+            </div>
+            <div class="font-display italic text-[24px] leading-tight tracking-[-.01em] text-mist-950">
+              {@recommendation.title}
+            </div>
+            <div :if={@recommendation.year} class="text-[12px] text-mist-600">
+              {@recommendation.year}
+            </div>
+            <p class="text-[13px] leading-relaxed text-mist-800">
+              {@recommendation.reason}
+            </p>
+            <div :if={@recommendation.evidence != []} class="mt-1 flex flex-wrap gap-[5px]">
+              <.n_pill :for={label <- @recommendation.evidence} tone="neutral" size="xs">
+                {label}
+              </.n_pill>
+            </div>
+          </div>
+        </a>
+      <% else %>
+        <div class="flex h-32 items-center justify-center text-[13px] text-mist-600">
+          {@empty_label}
+        </div>
+      <% end %>
+    </div>
     """
   end
 end

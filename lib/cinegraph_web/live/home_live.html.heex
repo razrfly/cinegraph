@@ -1,0 +1,479 @@
+<%!-- Cinematic full-bleed hero --%>
+<section
+  class="relative isolate overflow-hidden bg-mist-950 text-white"
+  style={
+    if @snapshot.hero.backdrop_url,
+      do:
+        "background-image: url('#{@snapshot.hero.backdrop_url}'); background-size: cover; background-position: center;",
+      else: nil
+  }
+>
+  <div class="absolute inset-0 bg-gradient-to-t from-mist-950/95 via-mist-950/70 to-mist-950/40" />
+  <div class="relative mx-auto w-full max-w-2xl px-6 py-20 sm:py-24 md:max-w-3xl lg:max-w-7xl lg:px-10 lg:py-32">
+    <div class="text-[11px] font-semibold uppercase tracking-[.18em] text-white/80">
+      {@snapshot.hero.eyebrow}
+    </div>
+    <h1 class="mt-5 max-w-3xl text-balance font-display italic text-[44px] leading-[1.02] tracking-[-.02em] sm:text-[58px] lg:text-[72px]">
+      {@snapshot.hero.title}
+    </h1>
+    <p class="mt-5 max-w-2xl text-[15px] leading-relaxed text-white/85 sm:text-[16px]">
+      {@snapshot.hero.subtitle}
+    </p>
+    <div class="mt-7">
+      <.link
+        navigate={@snapshot.hero.cta_href}
+        class="inline-flex h-11 items-center rounded-[7px] bg-white px-5 text-[14px] font-semibold text-mist-950 no-underline hover:bg-mist-50"
+      >
+        {@snapshot.hero.cta_label} →
+      </.link>
+    </div>
+  </div>
+</section>
+
+<main class="mx-auto w-full max-w-2xl px-6 pt-10 pb-16 md:max-w-3xl lg:max-w-7xl lg:px-10">
+  <%!-- Corpus tagline --%>
+  <p class="mb-12 text-center text-[13px] text-mist-600">
+    Cinegraph · {@snapshot.corpus_tagline.copy}
+  </p>
+
+  <%!-- Six-metric trust badge --%>
+  <section class="mb-12 lg:mb-16">
+    <div class="mb-6 text-center">
+      <CinegraphWeb.NeutralV2Components.n_eyebrow class="justify-center">
+        Why six?
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <p class="mx-auto mt-3 max-w-2xl text-[14px] leading-relaxed text-mist-700">
+        Every Cinegraph score is the consensus of six independent measures, not a feed of strangers' reviews.
+      </p>
+    </div>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <CinegraphWeb.NeutralV2Components.n_metric_badge
+        :for={lens <- @lens_definitions}
+        lens={lens}
+      />
+    </div>
+    <div class="mt-5 text-center">
+      <CinegraphWeb.NeutralV2Components.n_link_action href={~p"/movies/discover"}>
+        How CRI works
+      </CinegraphWeb.NeutralV2Components.n_link_action>
+    </div>
+  </section>
+
+  <%!-- Today's spotlight --%>
+  <section class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="Today's spotlight"
+      subtitle="One film picked from the graph every day."
+    />
+    <.link
+      navigate={@snapshot.spotlight.href}
+      class="grid gap-6 rounded-[10px] border border-mist-950/10 bg-mist-50 p-5 text-inherit no-underline sm:grid-cols-[160px_1fr] lg:p-6"
+    >
+      <div class="aspect-[2/3] overflow-hidden rounded-[6px] border border-mist-950/10 bg-mist-100">
+        <img
+          :if={@snapshot.spotlight.image_url}
+          src={@snapshot.spotlight.image_url}
+          alt=""
+          class="h-full w-full object-cover"
+        />
+        <div
+          :if={!@snapshot.spotlight.image_url}
+          class="grid h-full place-items-center px-4 text-center font-display italic text-[28px] text-mist-700"
+        >
+          Cinegraph
+        </div>
+      </div>
+      <div class="self-center">
+        <CinegraphWeb.NeutralV2Components.n_eyebrow>
+          {@snapshot.spotlight.type}
+        </CinegraphWeb.NeutralV2Components.n_eyebrow>
+        <h2 class="mt-2 font-display italic text-[34px] leading-tight tracking-[-.01em] text-mist-950 lg:text-[44px]">
+          {@snapshot.spotlight.title}
+        </h2>
+        <p class="mt-3 max-w-2xl text-[14px] leading-relaxed text-mist-700">
+          {@snapshot.spotlight.subtitle}
+        </p>
+        <div :if={@snapshot.spotlight.meta != []} class="mt-4 flex flex-wrap gap-2">
+          <CinegraphWeb.NeutralV2Components.n_pill
+            :for={meta <- @snapshot.spotlight.meta}
+            tone="neutral"
+            size="xs"
+          >
+            {meta}
+          </CinegraphWeb.NeutralV2Components.n_pill>
+        </div>
+      </div>
+    </.link>
+  </section>
+
+  <%!-- Popular lists shelf --%>
+  <section :if={@snapshot.popular_lists != []} class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="Popular lists"
+      subtitle="The lists every cinephile should know — curated by critics, festivals, and history."
+    >
+      <:action>
+        <CinegraphWeb.NeutralV2Components.n_link_action href={~p"/lists"}>
+          All lists
+        </CinegraphWeb.NeutralV2Components.n_link_action>
+      </:action>
+    </CinegraphWeb.NeutralV2Components.n_section_header>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <.link
+        :for={list <- @snapshot.popular_lists}
+        navigate={list.href}
+        class="block rounded-lg border border-mist-950/10 bg-white text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
+      >
+        <div class="flex aspect-[8/3] gap-px overflow-hidden rounded-t-lg bg-mist-950/10">
+          <div :for={film <- Enum.take(list.films, 5)} class="flex-1 bg-mist-100">
+            <img
+              :if={film.poster_url}
+              src={film.poster_url}
+              alt=""
+              class="h-full w-full object-cover"
+            />
+          </div>
+        </div>
+        <div class="px-4 pt-[14px] pb-4">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="text-[14px] font-semibold leading-tight text-mist-950">
+                {list.title}
+              </div>
+              <div :if={list.description} class="mt-1 line-clamp-2 text-[12px] text-mist-700">
+                {list.description}
+              </div>
+            </div>
+            <CinegraphWeb.NeutralV2Components.n_pill tone="neutral" size="xs">
+              {list.count}
+            </CinegraphWeb.NeutralV2Components.n_pill>
+          </div>
+        </div>
+      </.link>
+    </div>
+  </section>
+
+  <%!-- Pick a festival --%>
+  <section :if={@snapshot.ceremonies != []} class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="Pick a festival"
+      subtitle="Don't know what to watch? Trust a festival."
+    >
+      <:action>
+        <CinegraphWeb.NeutralV2Components.n_link_action href={~p"/awards"}>
+          All festivals
+        </CinegraphWeb.NeutralV2Components.n_link_action>
+      </:action>
+    </CinegraphWeb.NeutralV2Components.n_section_header>
+    <div class="-mx-6 flex snap-x gap-4 overflow-x-auto px-6 pb-2 lg:mx-0 lg:grid lg:grid-cols-3 lg:gap-4 lg:overflow-visible lg:px-0">
+      <.link
+        :for={c <- @snapshot.ceremonies}
+        navigate={c.href}
+        class="block w-[280px] flex-shrink-0 snap-start rounded-lg border border-mist-950/10 bg-white text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)] lg:w-auto"
+      >
+        <div class="aspect-[16/9] overflow-hidden rounded-t-lg bg-mist-100">
+          <img
+            :if={c.image_url}
+            src={c.image_url}
+            alt=""
+            class="h-full w-full object-cover"
+          />
+          <div
+            :if={!c.image_url}
+            class="grid h-full place-items-center font-display italic text-[24px] text-mist-700"
+          >
+            {c.title}
+          </div>
+        </div>
+        <div class="p-4">
+          <div class="text-[10.5px] font-semibold uppercase tracking-[.1em] text-mist-500">
+            {c.year}
+          </div>
+          <div class="mt-1 text-[16px] font-semibold leading-snug text-mist-950">
+            {c.title}
+          </div>
+          <p :if={c.winner_title} class="mt-2 line-clamp-2 text-[12.5px] text-mist-700">
+            {c.winner_title}
+          </p>
+          <div class="mt-3 text-[11px] text-mist-500">
+            {c.nomination_count} nominations
+          </div>
+        </div>
+      </.link>
+    </div>
+  </section>
+
+  <%!-- Today's lens --%>
+  <section
+    :if={@snapshot.lens.movies != []}
+    class="mb-12 grid grid-cols-1 gap-8 lg:mb-16 lg:grid-cols-[0.95fr_1.25fr]"
+  >
+    <div>
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        This week's lens · 1 of 6
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <h2 class="mt-2 font-display italic text-[34px] leading-tight tracking-[-.01em] text-mist-950">
+        {@snapshot.lens.lens.title}
+      </h2>
+      <p class="mt-3 text-[14px] leading-relaxed text-mist-700">
+        {@snapshot.lens.lens.description}
+      </p>
+      <div class="mt-4">
+        <CinegraphWeb.NeutralV2Components.n_link_action href={@snapshot.lens.href}>
+          Sort the catalogue by this lens
+        </CinegraphWeb.NeutralV2Components.n_link_action>
+      </div>
+    </div>
+    <div class="rounded-lg border border-mist-950/10 bg-mist-50 p-2">
+      <.link
+        :for={{film, i} <- Enum.with_index(@snapshot.lens.movies)}
+        navigate={film.href}
+        class="grid grid-cols-[28px_1fr_auto] items-center gap-3 rounded-[6px] px-3 py-3 text-inherit no-underline hover:bg-mist-950/[0.025]"
+      >
+        <div class="text-[12px] font-semibold tabular-nums text-mist-500">{i + 1}</div>
+        <div>
+          <div class="text-[13.5px] font-semibold text-mist-950">{film.title}</div>
+          <div class="text-[11.5px] text-mist-600">{film.year}</div>
+        </div>
+        <div class="text-[13px] font-semibold tabular-nums text-mist-950">
+          {format_home_score(film.score)}
+        </div>
+      </.link>
+    </div>
+  </section>
+
+  <%!-- Critics vs audiences --%>
+  <section class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="Critics and audiences don't always agree"
+      subtitle="Three doors into the films where consensus breaks down."
+    />
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <.link
+        :for={card <- @snapshot.disparity}
+        navigate={card.href}
+        class="rounded-lg border border-mist-950/10 bg-mist-50 p-4 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
+      >
+        <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          {card.stat}
+        </div>
+        <h3 class="mt-2 text-[18px] font-semibold text-mist-950">{card.title}</h3>
+        <p class="mt-2 text-[13px] leading-relaxed text-mist-700">{card.subtitle}</p>
+        <div :if={card.movie} class="mt-4 text-[12px] font-semibold text-mist-950">
+          {card.movie.title} →
+        </div>
+      </.link>
+    </div>
+  </section>
+
+  <%!-- Ask the Video Clerk --%>
+  <section class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="Ask the Video Clerk"
+      subtitle="Tell us a film you love. We'll pick one for tonight — and tell you why."
+    >
+      <:action>
+        <CinegraphWeb.NeutralV2Components.n_link_action href={~p"/video-clerk"}>
+          Open the full clerk
+        </CinegraphWeb.NeutralV2Components.n_link_action>
+      </:action>
+    </CinegraphWeb.NeutralV2Components.n_section_header>
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.2fr]">
+      <div class="rounded-[10px] border border-mist-950/10 bg-mist-50 p-5">
+        <p class="text-[14px] leading-relaxed text-mist-800">
+          No "people who watched this also watched." No black-box AI. Just the kind of recommendation you used to get from the kid behind the counter at the indie video store — with the receipts to back it up.
+        </p>
+        <p class="mt-3 text-[13px] leading-relaxed text-mist-700">
+          Each pick cites the routes that earned it: shared cast and crew, the cult shelf, cultural memory, mood overlap, taste tension. You always know <em>why</em>.
+        </p>
+      </div>
+      <div>
+        <div class="mb-3 flex flex-wrap gap-2">
+          <button
+            :for={seed <- @clerk_seeds}
+            type="button"
+            phx-click="clerk_demo"
+            phx-value-seed={seed.key}
+            class={[
+              "inline-flex items-center rounded-full border px-3 py-[6px] text-[12px] font-semibold transition-colors",
+              if(seed.key == @active_clerk_seed,
+                do: "border-mist-950 bg-mist-950 text-white",
+                else: "border-mist-950/15 bg-white text-mist-950 hover:bg-mist-50"
+              )
+            ]}
+          >
+            {seed.label}
+          </button>
+        </div>
+        <CinegraphWeb.NeutralV2Components.n_recommendation_card
+          recommendation={@clerk_result && @clerk_result.recommendation}
+          empty_label="Pick a starter above to get a recommendation."
+        />
+      </div>
+    </div>
+  </section>
+
+  <%!-- Cinegraph lets you... --%>
+  <section class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="Cinegraph lets you…"
+      subtitle="Six different ways into a film catalogue you can actually trust."
+    />
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <.link
+        :for={feature <- @lets_you_features}
+        navigate={feature.href}
+        class="flex items-start gap-4 rounded-lg border border-mist-950/10 bg-mist-50 p-4 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
+      >
+        <div class="text-[28px] leading-none">{feature.icon}</div>
+        <p class="text-[14px] font-semibold leading-snug text-mist-950">
+          {feature.title}
+        </p>
+      </.link>
+    </div>
+  </section>
+
+  <%!-- In or near theaters --%>
+  <section :if={@snapshot.theaters != []} class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="In or near theaters"
+      subtitle="Recently released films, sorted by their Cinegraph score."
+    >
+      <:action>
+        <CinegraphWeb.NeutralV2Components.n_link_action href={~p"/movies?sort=release_date_desc"}>
+          See all
+        </CinegraphWeb.NeutralV2Components.n_link_action>
+      </:action>
+    </CinegraphWeb.NeutralV2Components.n_section_header>
+    <div class="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+      <CinegraphWeb.NeutralV2Components.n_film_card
+        :for={film <- @snapshot.theaters}
+        film={film}
+      />
+    </div>
+  </section>
+
+  <%!-- Six degrees + Festival pulse --%>
+  <section class="mb-12 grid grid-cols-1 gap-6 lg:mb-16 lg:grid-cols-[1fr_1fr]">
+    <div class="rounded-[10px] border border-mist-950/10 bg-mist-50 p-5">
+      <CinegraphWeb.NeutralV2Components.n_section_header
+        title="Today's six degrees"
+        subtitle={@snapshot.six_degrees.summary}
+      >
+        <:action>
+          <button
+            type="button"
+            phx-click="shuffle_six_degrees"
+            class="inline-flex items-center gap-1 rounded-full border border-mist-950/15 bg-white px-3 py-[5px] text-[11.5px] font-semibold text-mist-950 hover:bg-mist-50"
+          >
+            ↻ Shuffle
+          </button>
+        </:action>
+      </CinegraphWeb.NeutralV2Components.n_section_header>
+      <div
+        :if={@snapshot.six_degrees.person_a && @snapshot.six_degrees.person_b}
+        class="grid grid-cols-[1fr_auto_1fr] items-center gap-4"
+      >
+        <.person_teaser person={@snapshot.six_degrees.person_a} />
+        <div class="text-center text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500">
+          via<br />{@snapshot.six_degrees.movie.title}
+        </div>
+        <.person_teaser person={@snapshot.six_degrees.person_b} />
+      </div>
+      <div :if={!@snapshot.six_degrees.person_a} class="text-[13px] text-mist-700">
+        Loading recent collaborations…
+      </div>
+      <div class="mt-5 text-center">
+        <CinegraphWeb.NeutralV2Components.n_link_action href={@snapshot.six_degrees.href}>
+          Try your own
+        </CinegraphWeb.NeutralV2Components.n_link_action>
+      </div>
+    </div>
+
+    <div class="rounded-[10px] border border-mist-950/10 bg-mist-50 p-5">
+      <CinegraphWeb.NeutralV2Components.n_section_header
+        title="Festival pulse"
+        subtitle="What's coming up and what just wrapped."
+      >
+        <:action>
+          <CinegraphWeb.NeutralV2Components.n_link_action href={~p"/awards"}>
+            Awards
+          </CinegraphWeb.NeutralV2Components.n_link_action>
+        </:action>
+      </CinegraphWeb.NeutralV2Components.n_section_header>
+      <div class={[
+        "grid gap-3",
+        if(@snapshot.festival_pulse.next && @snapshot.festival_pulse.last,
+          do: "sm:grid-cols-2",
+          else: "sm:grid-cols-1"
+        )
+      ]}>
+        <.festival_teaser
+          :if={@snapshot.festival_pulse.next}
+          card={@snapshot.festival_pulse.next}
+        />
+        <.festival_teaser
+          :if={@snapshot.festival_pulse.last}
+          card={@snapshot.festival_pulse.last}
+        />
+        <div
+          :if={!@snapshot.festival_pulse.next && !@snapshot.festival_pulse.last}
+          class="rounded-[7px] border border-mist-950/10 bg-white p-4 text-[13px] text-mist-700"
+        >
+          Festival dates will appear here as ceremonies are scheduled.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Films the canon agrees on (only when meaningful) --%>
+  <section :if={@snapshot.canon_agreement != []} class="mb-12 lg:mb-16">
+    <CinegraphWeb.NeutralV2Components.n_section_header
+      title="Films the canon agrees on"
+      subtitle="Films that show up across the most canonical lists."
+    >
+      <:action>
+        <CinegraphWeb.NeutralV2Components.n_link_action href={~p"/lists"}>
+          See all
+        </CinegraphWeb.NeutralV2Components.n_link_action>
+      </:action>
+    </CinegraphWeb.NeutralV2Components.n_section_header>
+    <div class="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+      <CinegraphWeb.NeutralV2Components.n_film_card
+        :for={{film, i} <- Enum.with_index(@snapshot.canon_agreement)}
+        film={film}
+        rank={i + 1}
+      />
+    </div>
+  </section>
+
+  <%!-- Activity feed + footer --%>
+  <section class="mb-12 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_0.8fr]">
+    <div>
+      <CinegraphWeb.NeutralV2Components.n_section_header
+        title="What's been added this week"
+        subtitle="A peek behind the curtain."
+      />
+      <div class="rounded-lg border border-mist-950/10 bg-mist-50 px-[18px] pb-2 pt-1">
+        <CinegraphWeb.NeutralV2Components.n_update_row
+          :for={update <- @snapshot.activity}
+          update={update}
+        />
+      </div>
+    </div>
+    <footer class="self-end border-t border-mist-950/10 pt-6 text-[13px] text-mist-700 lg:border-t-0 lg:pt-0">
+      <div class="font-display italic text-[28px] text-mist-950">Cinegraph</div>
+      <p class="mt-2 leading-relaxed">
+        The video store clerk for the streaming era.
+      </p>
+      <nav class="mt-4 flex flex-wrap gap-x-4 gap-y-2 font-semibold text-mist-950">
+        <.link navigate={~p"/movies"}>Movies</.link>
+        <.link navigate={~p"/people"}>People</.link>
+        <.link navigate={~p"/lists"}>Lists</.link>
+        <.link navigate={~p"/awards"}>Awards</.link>
+        <.link navigate={~p"/six-degrees"}>Six-Degrees</.link>
+        <.link navigate={~p"/video-clerk"}>Video Clerk</.link>
+      </nav>
+    </footer>
+  </section>
+</main>
