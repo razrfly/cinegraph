@@ -28,9 +28,11 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
 
   @impl true
   def run(_args) do
+    bucket = configured_bucket()
+
     Mix.shell().info("R2 smoke test — #{DateTime.utc_now() |> DateTime.to_string()}")
-    Mix.shell().info("Bucket: #{Application.get_env(:cinegraph, :r2)[:bucket]}")
-    Mix.shell().info("CDN base: #{Application.get_env(:cinegraph, :r2)[:cdn_url] || "(unset!)"}")
+    Mix.shell().info("Bucket: #{bucket}")
+    Mix.shell().info("CDN base: #{configured_cdn_url()}")
 
     unless R2.configured?() do
       report_missing_config()
@@ -87,15 +89,22 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
 
     case fetch_result do
       {:ok, ctype, body_size} ->
-        Mix.shell().info("✅ Fetch OK — content-type=#{ctype}, body=#{body_size} bytes")
+        cond do
+          not png_content_type?(ctype) ->
+            Mix.shell().error("❌ Unexpected content-type: #{ctype}")
+            System.halt(3)
 
-        if body_size != byte_size(@png_bytes) do
-          Mix.shell().error(
-            "⚠ Body size mismatch — uploaded #{byte_size(@png_bytes)} got #{body_size}"
-          )
+          body_size != byte_size(@png_bytes) ->
+            Mix.shell().error(
+              "❌ Body size mismatch — uploaded #{byte_size(@png_bytes)} got #{body_size}"
+            )
+
+            System.halt(3)
+
+          true ->
+            Mix.shell().info("✅ Fetch OK — content-type=#{ctype}, body=#{body_size} bytes")
+            Mix.shell().info("\n🎉 R2 smoke test passed.")
         end
-
-        Mix.shell().info("\n🎉 R2 smoke test passed.")
 
       {:error, :http_status, status, excerpt} ->
         Mix.shell().error(
@@ -104,7 +113,7 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
 
         Mix.shell().error("""
         Hint: enable public access for the bucket in Cloudflare dashboard:
-          R2 → cinegraph → Settings → Public Access → Allow Access
+          R2 → #{bucket} → Settings → Public Access → Allow Access
         Then set R2_CDN_URL to the bucket's r2.dev URL or a custom domain.
         """)
 
@@ -116,8 +125,25 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
     end
   end
 
+  defp png_content_type?(ctype) do
+    ctype
+    |> String.downcase()
+    |> String.starts_with?("image/png")
+  end
+
+  defp configured_bucket do
+    cfg = Application.get_env(:cinegraph, :r2, [])
+    cfg[:bucket] || System.get_env("R2_BUCKET") || "(unset)"
+  end
+
+  defp configured_cdn_url do
+    cfg = Application.get_env(:cinegraph, :r2, [])
+    cfg[:cdn_url] || System.get_env("R2_CDN_URL") || "(unset!)"
+  end
+
   defp report_missing_config do
     cfg = Application.get_env(:cinegraph, :r2, [])
+    bucket = configured_bucket()
 
     missing =
       [
@@ -136,9 +162,9 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
 
     To generate the S3 credentials:
       1. Cloudflare Dashboard → R2 → Manage R2 API Tokens
-      2. Create API Token → "Object Read & Write" → scope to bucket "cinegraph"
+      2. Create API Token → "Object Read & Write" → scope to bucket "#{bucket}"
       3. Copy the displayed Access Key ID + Secret Access Key into .env
-      4. R2 → cinegraph → Settings → Public Access → Allow Access
+      4. R2 → #{bucket} → Settings → Public Access → Allow Access
          Copy the public r2.dev URL (or attach a custom domain) into R2_CDN_URL
     """)
   end
