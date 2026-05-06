@@ -240,11 +240,11 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   defp consume_uploaded_image(socket, org, kind, upload_key, attrs, attr_key, hints) do
     r2 = r2_client()
     entries = socket.assigns.uploads[upload_key].entries
+    upload_error = upload_entry_error(entries)
 
     cond do
-      upload_entry_error(entries) ->
-        {:error, "#{kind |> String.capitalize()} upload failed: #{upload_entry_error(entries)}",
-         socket}
+      upload_error ->
+        {:error, "#{kind |> String.capitalize()} upload failed: #{upload_error}", socket}
 
       r2.configured?() ->
         results =

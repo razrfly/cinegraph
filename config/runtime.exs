@@ -68,30 +68,30 @@ config :cinegraph, Cinegraph.Images.Providers.Pixabay, api_key: pixabay_api_key
 
 # Cloudflare R2 image storage (#890). Used by Cinegraph.Images.R2 for
 # admin-uploaded festival logos / hero images. S3-compatible API; the
-# CLOUDFLARE_* and R2_CDN_URL env vars are required in prod; R2_BUCKET
-# defaults to "cinegraph". Without R2_CDN_URL we'd be saving bad public
-# URLs even when uploads succeed. config/test.exs sets its own deterministic values for
-# `:cinegraph, :r2` so we skip this block in test env.
+# CLOUDFLARE_*, R2_BUCKET, and R2_CDN_URL env vars are required in prod.
+# Without them we'd be saving bad public URLs even when uploads succeed.
+# config/test.exs sets its own deterministic values for `:cinegraph, :r2` so
+# we skip this block in test env.
 if config_env() != :test do
   r2_account_id =
     if config_env() == :dev,
       do: env!("CLOUDFLARE_ACCOUNT_ID", :string, ""),
-      else: System.get_env("CLOUDFLARE_ACCOUNT_ID") || ""
+      else: System.fetch_env!("CLOUDFLARE_ACCOUNT_ID")
 
   r2_access_key_id =
     if config_env() == :dev,
       do: env!("CLOUDFLARE_ACCESS_KEY_ID", :string, ""),
-      else: System.get_env("CLOUDFLARE_ACCESS_KEY_ID") || ""
+      else: System.fetch_env!("CLOUDFLARE_ACCESS_KEY_ID")
 
   r2_secret_access_key =
     if config_env() == :dev,
       do: env!("CLOUDFLARE_SECRET_ACCESS_KEY", :string, ""),
-      else: System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY") || ""
+      else: System.fetch_env!("CLOUDFLARE_SECRET_ACCESS_KEY")
 
   r2_bucket =
     if config_env() == :dev,
       do: env!("R2_BUCKET", :string, "cinegraph"),
-      else: System.get_env("R2_BUCKET") || "cinegraph"
+      else: System.fetch_env!("R2_BUCKET")
 
   r2_cdn_url =
     if config_env() == :dev,
@@ -170,7 +170,7 @@ if config_env() == :prod do
   # R2 image storage (#890) — required env vars at boot. Without these the
   # festival admin upload flow would silently save broken URLs.
   for var <-
-        ~w(CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCESS_KEY_ID CLOUDFLARE_SECRET_ACCESS_KEY R2_CDN_URL) do
+        ~w(CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCESS_KEY_ID CLOUDFLARE_SECRET_ACCESS_KEY R2_BUCKET R2_CDN_URL) do
     System.fetch_env!(var)
   end
 
