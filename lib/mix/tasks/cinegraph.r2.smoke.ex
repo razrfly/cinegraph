@@ -22,9 +22,9 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
   @requirements ["app.start"]
 
   # 1x1 transparent PNG — minimal valid image, ~67 bytes
-  @png_bytes <<137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1,
-               8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 0, 1,
-               0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130>>
+  @png_bytes <<137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0,
+               1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 0,
+               1, 0, 0, 5, 0, 1, 13, 10, 45, 180, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130>>
 
   @impl true
   def run(_args) do
@@ -53,45 +53,52 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
 
     Mix.shell().info("Fetching CDN URL...")
 
-    case HTTPoison.get(cdn_url, [], timeout: 10_000, recv_timeout: 10_000) do
-      {:ok, %HTTPoison.Response{status_code: 200, headers: headers, body: body}} ->
-        ctype =
-          headers
-          |> Enum.find(fn {k, _} -> String.downcase(k) == "content-type" end)
-          |> case do
-            {_, v} -> v
-            _ -> "(missing)"
+    try do
+      case HTTPoison.get(cdn_url, [], timeout: 10_000, recv_timeout: 10_000) do
+        {:ok, %HTTPoison.Response{status_code: 200, headers: headers, body: body}} ->
+          ctype =
+            headers
+            |> Enum.find(fn {k, _} -> String.downcase(k) == "content-type" end)
+            |> case do
+              {_, v} -> v
+              _ -> "(missing)"
+            end
+
+          Mix.shell().info("✅ Fetch OK — content-type=#{ctype}, body=#{byte_size(body)} bytes")
+
+          if byte_size(body) != byte_size(@png_bytes) do
+            Mix.shell().error(
+              "⚠ Body size mismatch — uploaded #{byte_size(@png_bytes)} got #{byte_size(body)}"
+            )
           end
 
-        Mix.shell().info("✅ Fetch OK — content-type=#{ctype}, body=#{byte_size(body)} bytes")
+        {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
+          Mix.shell().error(
+            "❌ Fetch HTTP #{status} — likely the bucket isn't public. Body excerpt: #{String.slice(body, 0, 200)}"
+          )
 
-        if byte_size(body) != byte_size(@png_bytes) do
-          Mix.shell().error("⚠ Body size mismatch — uploaded #{byte_size(@png_bytes)} got #{byte_size(body)}")
-        end
+          Mix.shell().error("""
+          Hint: enable public access for the bucket in Cloudflare dashboard:
+            R2 → cinegraph → Settings → Public Access → Allow Access
+          Then set R2_CDN_URL to the bucket's r2.dev URL or a custom domain.
+          """)
 
-      {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
-        Mix.shell().error(
-          "❌ Fetch HTTP #{status} — likely the bucket isn't public. Body excerpt: #{String.slice(body, 0, 200)}"
-        )
+          System.halt(3)
 
-        Mix.shell().error("""
-        Hint: enable public access for the bucket in Cloudflare dashboard:
-          R2 → cinegraph → Settings → Public Access → Allow Access
-        Then set R2_CDN_URL to the bucket's r2.dev URL or a custom domain.
-        """)
+        {:error, %HTTPoison.Error{reason: reason}} ->
+          Mix.shell().error("❌ Fetch network error: #{inspect(reason)}")
+          System.halt(4)
+      end
+    after
+      Mix.shell().info("Cleaning up test object...")
 
-        System.halt(3)
+      case R2.delete(key) do
+        :ok ->
+          Mix.shell().info("✅ Delete OK")
 
-      {:error, %HTTPoison.Error{reason: reason}} ->
-        Mix.shell().error("❌ Fetch network error: #{inspect(reason)}")
-        System.halt(4)
-    end
-
-    Mix.shell().info("Cleaning up test object...")
-
-    case R2.delete(key) do
-      :ok -> Mix.shell().info("✅ Delete OK")
-      {:error, reason} -> Mix.shell().error("⚠ Delete failed (object remains): #{inspect(reason)}")
+        {:error, reason} ->
+          Mix.shell().error("⚠ Delete failed (object remains): #{inspect(reason)}")
+      end
     end
 
     Mix.shell().info("\n🎉 R2 smoke test passed.")
@@ -105,6 +112,7 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
         {"CLOUDFLARE_ACCOUNT_ID", cfg[:account_id]},
         {"CLOUDFLARE_ACCESS_KEY_ID", cfg[:access_key_id]},
         {"CLOUDFLARE_SECRET_ACCESS_KEY", cfg[:secret_access_key]},
+        {"R2_BUCKET", cfg[:bucket]},
         {"R2_CDN_URL", cfg[:cdn_url]}
       ]
       |> Enum.filter(fn {_k, v} -> v in [nil, ""] end)

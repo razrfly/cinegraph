@@ -1,5 +1,5 @@
 defmodule Cinegraph.Images.R2Test do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Cinegraph.Images.R2
 
@@ -36,6 +36,7 @@ defmodule Cinegraph.Images.R2Test do
   describe "guess_content_type/1" do
     test "maps common image extensions" do
       assert R2.guess_content_type("foo.png") == "image/png"
+      assert R2.guess_content_type("foo.PNG") == "image/png"
       assert R2.guess_content_type("foo.jpg") == "image/jpeg"
       assert R2.guess_content_type("foo.jpeg") == "image/jpeg"
       assert R2.guess_content_type("foo.svg") == "image/svg+xml"
@@ -80,6 +81,22 @@ defmodule Cinegraph.Images.R2Test do
           :cinegraph,
           :r2,
           Keyword.put(original || [], :access_key_id, "")
+        )
+
+        refute R2.configured?()
+      after
+        Application.put_env(:cinegraph, :r2, original)
+      end
+    end
+
+    test "returns false when required fields are nil" do
+      original = Application.get_env(:cinegraph, :r2)
+
+      try do
+        Application.put_env(
+          :cinegraph,
+          :r2,
+          Keyword.put(original || [], :account_id, nil)
         )
 
         refute R2.configured?()
