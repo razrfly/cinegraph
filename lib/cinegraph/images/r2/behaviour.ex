@@ -26,5 +26,11 @@ defmodule Cinegraph.Images.R2.Behaviour do
             ) ::
               {:ok, cdn_url :: String.t()} | {:error, term()}
 
+  @callback upload_binary(key :: String.t(), binary(), opts :: keyword()) ::
+              {:ok, cdn_url :: String.t()} | {:error, term()}
+
+  @callback upload_from_url(key :: String.t(), source_url :: String.t(), opts :: keyword()) ::
+              {:ok, cdn_url :: String.t()} | {:error, term()}
+
   @callback configured?() :: boolean()
 end

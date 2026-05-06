@@ -54,6 +54,26 @@ defmodule Cinegraph.Images.R2Stub do
   end
 
   @impl true
+  def upload_binary(key, binary, opts \\ []) do
+    record_call(:upload_binary, %{key: key, bytes: byte_size(binary), opts: opts})
+
+    case lookup(:response) do
+      nil -> {:ok, "#{@cdn_base}/#{key}"}
+      response -> response
+    end
+  end
+
+  @impl true
+  def upload_from_url(key, source_url, opts \\ []) do
+    record_call(:upload_from_url, %{key: key, source_url: source_url, opts: opts})
+
+    case lookup(:response) do
+      nil -> {:ok, "#{@cdn_base}/#{key}"}
+      response -> response
+    end
+  end
+
+  @impl true
   def configured? do
     case lookup(:configured) do
       nil -> true

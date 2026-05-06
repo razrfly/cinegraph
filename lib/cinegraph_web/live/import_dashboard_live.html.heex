@@ -27,7 +27,7 @@
           Lists Manager
         </.link>
         <.link
-          navigate={~p"/admin/award-imports"}
+          navigate={~p"/admin/imports?tab=awards"}
           class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
         >
           Award Imports
@@ -129,7 +129,7 @@
           </div>
         <% end %>
         <.link
-          navigate={~p"/admin/year-imports"}
+          navigate={~p"/admin/imports?tab=years"}
           class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800"
         >
           <span>Full Dashboard</span>
@@ -577,7 +577,7 @@
         </p>
       </div>
       <.link
-        navigate={~p"/admin/award-imports"}
+        navigate={~p"/admin/imports?tab=awards"}
         class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
       >
         <span>Award Imports Dashboard</span>

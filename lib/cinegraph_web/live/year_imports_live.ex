@@ -40,11 +40,6 @@ defmodule CinegraphWeb.YearImportsLive do
   end
 
   @impl true
-  def handle_params(_params, _uri, socket) do
-    {:noreply, socket}
-  end
-
-  @impl true
   def handle_event("show_year_details", %{"year" => year_str}, socket) do
     case Integer.parse(year_str) do
       {year, _} ->

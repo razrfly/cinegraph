@@ -362,27 +362,12 @@ defmodule CinegraphWeb.AdminDashboardLive do
           %{
             title: "Imports",
             path: "/admin/imports",
-            description: "Real-time TMDb bulk import progress."
-          },
-          %{
-            title: "Year imports",
-            path: "/admin/year-imports",
-            description: "Year-by-year TMDb completion tracking."
-          },
-          %{
-            title: "Award imports",
-            path: "/admin/award-imports",
-            description: "Festival/awards import orchestration."
+            description: "Tabbed: TMDb bulk · Year backfill · Awards."
           },
           %{
             title: "Festivals",
             path: "/admin/festivals",
             description: "Edit festival organizations: identity, imagery, links to audit."
-          },
-          %{
-            title: "Festival events",
-            path: "/admin/festival-events",
-            description: "Legacy import-config modal (folds into Festivals editor in Phase 3)."
           },
           %{
             title: "Festival audit",

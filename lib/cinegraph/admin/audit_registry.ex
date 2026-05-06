@@ -15,11 +15,8 @@ defmodule Cinegraph.Admin.AuditRegistry do
   3. Run the test suite — `audit_registry_test.exs` will fail loudly if the
      module isn't loadable or the function arity doesn't match.
 
-  ## Skipped — needs upstream refactor
-
-  - `Mix.Tasks.Cinegraph.AuditPeopleScores` — Mix-only task that prints to
-    `Mix.shell()`. To surface here, extract the audit body into a library
-    function returning a map. Out of scope for Phase 3.
+  Phase 4 of #880 promoted `audit_people_scores` from Mix-only to library;
+  it now appears alongside the other audits.
   """
 
   alias Cinegraph.Health
@@ -136,6 +133,17 @@ defmodule Cinegraph.Admin.AuditRegistry do
       description: "Production-company logo, slug, and metadata coverage.",
       speed: :fast,
       destination: :movies
+    },
+    %{
+      id: :people_scores,
+      label: "Auteurs ground-truth scores",
+      module: Health.PeopleScoresAudit,
+      audit_fun: :audit,
+      arity: :opts,
+      args: [],
+      description: "Auteurs score audit against a curated 15-film ground truth.",
+      speed: :fast,
+      destination: :people
     }
   ]
 
