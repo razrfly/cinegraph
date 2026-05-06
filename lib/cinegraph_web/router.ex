@@ -37,7 +37,11 @@ defmodule CinegraphWeb.Router do
   scope "/", CinegraphWeb do
     pipe_through :browser
 
-    get "/", PageController, :coming_soon
+    live_session :v2_home,
+      root_layout: {CinegraphWeb.Layouts, :v2_root},
+      layout: false do
+      live "/", HomeLive, :index
+    end
 
     if Mix.env() != :prod do
       get "/design-preview", DesignPreviewController, :show
