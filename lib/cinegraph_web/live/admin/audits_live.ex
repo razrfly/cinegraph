@@ -100,8 +100,8 @@ defmodule CinegraphWeb.Admin.AuditsLive do
 
   defp build_runtime_opts(entry, form) do
     case entry do
-      %{arity: :required, id: :imdb_event_id} ->
-        case Map.get(form, "event_id") do
+      %{arity: :required} = entry ->
+        case Map.get(form, required_arg_key(entry)) do
           nil -> []
           "" -> []
           val -> [required_arg: val]
@@ -113,9 +113,17 @@ defmodule CinegraphWeb.Admin.AuditsLive do
 
         opts =
           case Map.get(form, "queue") do
-            nil -> opts
-            "" -> opts
-            v -> [{:queue, String.to_atom(v)} | opts]
+            nil ->
+              opts
+
+            "" ->
+              opts
+
+            v ->
+              case safe_to_existing_atom(v) do
+                {:ok, atom} -> [{:queue, atom} | opts]
+                :error -> opts
+              end
           end
 
         opts =
@@ -130,6 +138,26 @@ defmodule CinegraphWeb.Admin.AuditsLive do
       _ ->
         []
     end
+  end
+
+  defp required_arg_key(%{id: :imdb_event_id}), do: "event_id"
+  defp required_arg_key(%{id: id}), do: Atom.to_string(id)
+
+  defp required_arg_label(%{id: :imdb_event_id}), do: "IMDb event id"
+
+  defp required_arg_label(%{label: label}) do
+    label
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+
+  defp required_arg_placeholder(%{id: :imdb_event_id}), do: "ev0000003"
+  defp required_arg_placeholder(%{id: id}), do: Atom.to_string(id)
+
+  defp safe_to_existing_atom(value) do
+    {:ok, String.to_existing_atom(value)}
+  rescue
+    ArgumentError -> :error
   end
 
   @impl true
@@ -177,16 +205,21 @@ defmodule CinegraphWeb.Admin.AuditsLive do
         <%= if @active.arity == :required or @active.id == :queue_failures do %>
           <div class="bg-gray-50 border border-gray-200 rounded-md p-4 mb-4 space-y-3">
             <p class="text-xs font-semibold text-gray-700 uppercase">Required arguments</p>
-            <%= if @active.id == :imdb_event_id do %>
+            <%= if @active.arity == :required do %>
               <input
                 type="text"
                 phx-blur="set_form"
-                phx-value-key="event_id"
-                value={@form_state["event_id"]}
-                placeholder="ev0000003"
+                phx-value-key={required_arg_key(@active)}
+                value={@form_state[required_arg_key(@active)]}
+                placeholder={required_arg_placeholder(@active)}
                 class="w-full rounded-md border-gray-300 text-sm font-mono"
               />
-              <p class="text-xs text-gray-500">IMDb event id (looks like <code>ev0000003</code>)</p>
+              <p class="text-xs text-gray-500">
+                {required_arg_label(@active)}
+                <span :if={@active.id == :imdb_event_id}>
+                  (looks like <code>ev0000003</code>)
+                </span>
+              </p>
             <% end %>
             <%= if @active.id == :queue_failures do %>
               <div class="grid grid-cols-2 gap-3">
