@@ -8,9 +8,11 @@
         </p>
       </div>
       <nav class="text-sm text-zinc-500 space-x-3">
-        <.link navigate={~p"/admin/year-imports"} class="hover:text-zinc-900">Year imports</.link>
+        <.link navigate={~p"/admin/imports?tab=years"} class="hover:text-zinc-900">
+          Year imports
+        </.link>
         <span class="text-zinc-300">·</span>
-        <.link navigate={~p"/admin/award-imports"} class="hover:text-zinc-900">
+        <.link navigate={~p"/admin/imports?tab=awards"} class="hover:text-zinc-900">
           Award imports
         </.link>
         <span class="text-zinc-300">·</span>
@@ -182,14 +184,14 @@
     <:actions>
       <.link
         :if={@drawer_domain == :movies}
-        navigate={~p"/admin/year-imports"}
+        navigate={~p"/admin/imports?tab=years"}
         class="text-sm font-medium text-blue-700 hover:text-blue-900 underline"
       >
         Trigger backfill (Year imports) →
       </.link>
       <.link
         :if={@drawer_domain == :festivals}
-        navigate={~p"/admin/award-imports"}
+        navigate={~p"/admin/imports?tab=awards"}
         class="text-sm font-medium text-blue-700 hover:text-blue-900 underline"
       >
         Resync ceremony (Award imports) →

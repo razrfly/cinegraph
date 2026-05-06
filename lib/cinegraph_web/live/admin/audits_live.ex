@@ -203,6 +203,15 @@ defmodule CinegraphWeb.Admin.AuditsLive do
       <.section_card title={@active.label}>
         <p class="text-sm text-gray-600 mb-4">{@active.description}</p>
 
+        <div :if={@active.id == :people_scores} class="mb-4 text-xs">
+          <.link
+            navigate={~p"/admin/predictions"}
+            class="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+          >
+            <span>← Back to predictions (auteurs criterion)</span>
+          </.link>
+        </div>
+
         <%!-- Args form for required-arg audits --%>
         <%= if @active.arity == :required or @active.id == :queue_failures do %>
           <div class="bg-gray-50 border border-gray-200 rounded-md p-4 mb-4 space-y-3">

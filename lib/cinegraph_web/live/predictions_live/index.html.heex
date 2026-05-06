@@ -236,6 +236,22 @@
                         ""
                     end}
                   </div>
+                  <div :if={criterion == :auteurs} class="mt-2 flex flex-wrap gap-3 text-xs">
+                    <.link
+                      navigate={~p"/admin/audits?audit=people_scores"}
+                      class="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                    >
+                      <span>Audit auteurs scores</span>
+                      <span aria-hidden="true">→</span>
+                    </.link>
+                    <.link
+                      navigate={~p"/admin/people"}
+                      class="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+                    >
+                      <span>People drift (incl. stale PQS)</span>
+                      <span aria-hidden="true">→</span>
+                    </.link>
+                  </div>
                 </div>
               <% end %>
               

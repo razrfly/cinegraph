@@ -18,7 +18,7 @@ defmodule Cinegraph.Images.R2 do
   - `CLOUDFLARE_ACCESS_KEY_ID`
   - `CLOUDFLARE_SECRET_ACCESS_KEY`
   - `R2_CDN_URL`
-  - `R2_BUCKET` (defaults to `"cinegraph"` in dev only)
+  - `R2_BUCKET` (defaults to `"cinegraph"`)
   """
 
   @behaviour Cinegraph.Images.R2.Behaviour
@@ -63,6 +63,7 @@ defmodule Cinegraph.Images.R2 do
   Public for backfill tasks and tests; the LiveView path goes through
   `put_curated_image/4` instead.
   """
+  @impl true
   def upload_binary(key, binary, opts \\ []) when is_binary(key) and is_binary(binary) do
     content_type = Keyword.get(opts, :content_type) || guess_content_type(key)
 
@@ -95,6 +96,7 @@ defmodule Cinegraph.Images.R2 do
 
   Public for backfill tasks; the LiveView path uses `put_curated_image/4`.
   """
+  @impl true
   def upload_from_url(key, source_url, opts \\ [])
       when is_binary(key) and is_binary(source_url) do
     max_bytes = Keyword.get(opts, :max_bytes, 10 * 1024 * 1024)

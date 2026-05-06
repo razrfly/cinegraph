@@ -251,12 +251,13 @@ defmodule CinegraphWeb.Router do
       live "/queues", Admin.QueuesLive, :index
       live "/jobs", Admin.JobsLive, :index
 
-      # Import dashboard
-      live "/imports", ImportDashboardLive, :index
-      # Year-by-year TMDb import management
-      live "/year-imports", YearImportsLive, :index
-      # Awards Import Dashboard (Issue #446)
-      live "/award-imports", AwardImportsLive, :index
+      # Imports — single tabbed page (#880 Phase 4) replaces the trio of
+      # /admin/imports, /admin/year-imports, /admin/award-imports.
+      # ?tab=tmdb|years|awards selects the active sub-dashboard. The two
+      # legacy paths below are redirects kept for backward compatibility.
+      live "/imports", Admin.ImportsLive, :index
+      live "/year-imports", AdminRedirectLive, :year_imports
+      live "/award-imports", AdminRedirectLive, :award_imports
 
       # Metrics dashboard
       live "/metrics", MetricsLive.Index, :index
@@ -282,9 +283,10 @@ defmodule CinegraphWeb.Router do
       # Audits index (#880 Phase 3) — registry-driven tabs page
       live "/audits", Admin.AuditsLive, :index
 
-      # Festival Events management (legacy import-config modal — kept while
-      # /admin/festivals expands to fold this in; tracked in #880 Phase 3)
-      live "/festival-events", FestivalEventLive.Index, :index
+      # /admin/festival-events redirects to /admin/festivals (#880 Phase 4) —
+      # the legacy import-config modal lives inside the new festivals editor
+      # now. Old route kept for one release cycle as a redirect, then removed.
+      live "/festival-events", AdminRedirectLive, :festival_events
 
       # Lists Manager (Issue #487)
       live "/lists-manager", ListsManagerLive, :index

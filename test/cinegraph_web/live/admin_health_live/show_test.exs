@@ -70,7 +70,7 @@ defmodule CinegraphWeb.AdminHealthLive.ShowTest do
       html = render_click(live, "open_drawer", %{"domain" => "movies"})
 
       assert html =~ "Movies drift"
-      assert html =~ "/admin/year-imports"
+      assert html =~ "/admin/imports?tab=years"
     end
 
     test "festivals drawer shows award-imports drill-down link", %{conn: conn} do
@@ -78,7 +78,7 @@ defmodule CinegraphWeb.AdminHealthLive.ShowTest do
       html = render_click(live, "open_drawer", %{"domain" => "festivals"})
 
       assert html =~ "Festivals drift"
-      assert html =~ "/admin/award-imports"
+      assert html =~ "/admin/imports?tab=awards"
     end
 
     test "open_drawer event mounts the drawer for Collaborations", %{conn: conn} do
