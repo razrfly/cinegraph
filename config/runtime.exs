@@ -66,6 +66,46 @@ config :cinegraph, Cinegraph.Images.Providers.Unsplash, access_key: unsplash_acc
 config :cinegraph, Cinegraph.Images.Providers.Pexels, api_key: pexels_api_key
 config :cinegraph, Cinegraph.Images.Providers.Pixabay, api_key: pixabay_api_key
 
+# Cloudflare R2 image storage (#890). Used by Cinegraph.Images.R2 for
+# admin-uploaded festival logos / hero images. S3-compatible API; the
+# four CLOUDFLARE_* and R2_CDN_URL env vars are required in prod —
+# without R2_CDN_URL we'd be saving bad public URLs even when uploads
+# succeed. config/test.exs sets its own deterministic values for
+# `:cinegraph, :r2` so we skip this block in test env.
+if config_env() != :test do
+  r2_account_id =
+    if config_env() == :dev,
+      do: env!("CLOUDFLARE_ACCOUNT_ID", :string, ""),
+      else: System.get_env("CLOUDFLARE_ACCOUNT_ID") || ""
+
+  r2_access_key_id =
+    if config_env() == :dev,
+      do: env!("CLOUDFLARE_ACCESS_KEY_ID", :string, ""),
+      else: System.get_env("CLOUDFLARE_ACCESS_KEY_ID") || ""
+
+  r2_secret_access_key =
+    if config_env() == :dev,
+      do: env!("CLOUDFLARE_SECRET_ACCESS_KEY", :string, ""),
+      else: System.get_env("CLOUDFLARE_SECRET_ACCESS_KEY") || ""
+
+  r2_bucket =
+    if config_env() == :dev,
+      do: env!("R2_BUCKET", :string, "cinegraph"),
+      else: System.get_env("R2_BUCKET") || "cinegraph"
+
+  r2_cdn_url =
+    if config_env() == :dev,
+      do: env!("R2_CDN_URL", :string, ""),
+      else: System.get_env("R2_CDN_URL") || ""
+
+  config :cinegraph, :r2,
+    account_id: r2_account_id,
+    access_key_id: r2_access_key_id,
+    secret_access_key: r2_secret_access_key,
+    bucket: r2_bucket,
+    cdn_url: r2_cdn_url
+end
+
 # Daily OMDb batch size for RatingsRefreshWorker.
 # Defaults to 100,000 — the full Basic plan daily limit.
 # Override via OMDB_DAILY_BATCH_SIZE env var only if you need to throttle.
@@ -127,6 +167,13 @@ if config_env() == :test do
 end
 
 if config_env() == :prod do
+  # R2 image storage (#890) — required env vars at boot. Without these the
+  # festival admin upload flow would silently save broken URLs.
+  for var <-
+        ~w(CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_ACCESS_KEY_ID CLOUDFLARE_SECRET_ACCESS_KEY R2_CDN_URL) do
+    System.fetch_env!(var)
+  end
+
   # Get database credentials from environment variables
   username =
     System.get_env("DATABASE_USERNAME") ||

@@ -90,6 +90,10 @@ config :cinegraph, CinegraphWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :cinegraph, Cinegraph.Mailer, adapter: Swoosh.Adapters.Local
 
+# R2 client module (#890). Real impl in dev/prod; tests override to a stub
+# in config/test.exs so unit tests don't hit live R2.
+config :cinegraph, :r2_client, Cinegraph.Images.R2
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",

@@ -151,6 +151,8 @@ defmodule CinegraphWeb.Admin.AuditsLive do
     |> String.trim()
   end
 
+  defp required_arg_label(%{id: id}), do: Atom.to_string(id)
+
   defp required_arg_placeholder(%{id: :imdb_event_id}), do: "ev0000003"
   defp required_arg_placeholder(%{id: id}), do: Atom.to_string(id)
 
