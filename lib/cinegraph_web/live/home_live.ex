@@ -5,6 +5,7 @@ defmodule CinegraphWeb.HomeLive do
 
   attr :person, :map, required: true
 
+  @doc false
   def person_teaser(assigns) do
     ~H"""
     <.link navigate={@person.href} class="block text-center text-inherit no-underline">
@@ -24,6 +25,7 @@ defmodule CinegraphWeb.HomeLive do
 
   attr :card, :map, default: nil
 
+  @doc false
   def festival_teaser(assigns) do
     ~H"""
     <.link
@@ -40,6 +42,7 @@ defmodule CinegraphWeb.HomeLive do
     """
   end
 
+  @doc false
   def format_home_score(nil), do: "—"
 
   def format_home_score(score) when is_float(score),
@@ -80,7 +83,27 @@ defmodule CinegraphWeb.HomeLive do
     }
   ]
 
+  @doc false
   def lets_you_features, do: @lets_you_features
+
+  @doc false
+  def hero_background_style(nil), do: nil
+
+  def hero_background_style(url) when is_binary(url) do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: "image.tmdb.org"} ->
+        safe_url =
+          url
+          |> String.replace("\\", "")
+          |> String.replace("\"", "%22")
+          |> String.replace(~r/[\r\n\f]/, "")
+
+        "background-image: url(\"#{safe_url}\"); background-size: cover; background-position: center;"
+
+      _ ->
+        nil
+    end
+  end
 
   @impl true
   def mount(_params, _session, socket) do

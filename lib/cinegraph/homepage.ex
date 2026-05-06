@@ -7,6 +7,7 @@ defmodule Cinegraph.Homepage do
   """
 
   import Ecto.Query
+  require Logger
 
   alias Cinegraph.Collaborations.CollaborationDetail
   alias Cinegraph.Events.FestivalDate
@@ -136,7 +137,9 @@ defmodule Cinegraph.Homepage do
 
     movie && Movie.backdrop_url(movie, "w1280")
   rescue
-    _ -> nil
+    exception ->
+      log_homepage_error(:fetch_hero_backdrop, exception, __STACKTRACE__)
+      nil
   end
 
   defp corpus_tagline do
@@ -147,7 +150,9 @@ defmodule Cinegraph.Homepage do
       copy: "#{format_count(count)} films scored across six dimensions — and counting."
     }
   rescue
-    _ -> %{count: 0, copy: "Films scored across six dimensions — and counting."}
+    exception ->
+      log_homepage_error(:corpus_tagline, exception, __STACKTRACE__)
+      %{count: 0, copy: "Films scored across six dimensions — and counting."}
   end
 
   defp feature_film_count do
@@ -314,7 +319,9 @@ defmodule Cinegraph.Homepage do
       []
     end
   rescue
-    _ -> []
+    exception ->
+      log_homepage_error(:canon_agreement, exception, __STACKTRACE__)
+      []
   end
 
   defp pick_canon_pool(candidates) do
@@ -358,7 +365,9 @@ defmodule Cinegraph.Homepage do
       movies: Enum.map(movies, &film_card(&1, lens_key: lens.key, score_field: field))
     }
   rescue
-    _ -> %{lens: List.first(@lens_order), href: "/movies", movies: []}
+    exception ->
+      log_homepage_error(:lens_spotlight, exception, __STACKTRACE__)
+      %{lens: List.first(@lens_order), href: "/movies", movies: []}
   end
 
   defp disparity_cards(date) do
@@ -398,7 +407,9 @@ defmodule Cinegraph.Homepage do
       stat: disparity_stat(movie && movie.score_cache)
     }
   rescue
-    _ ->
+    exception ->
+      log_homepage_error(:disparity_card, exception, __STACKTRACE__)
+
       %{
         title: title,
         subtitle: subtitle,
@@ -422,7 +433,9 @@ defmodule Cinegraph.Homepage do
 
     shape_six_degrees(detail)
   rescue
-    _ -> empty_six_degrees()
+    exception ->
+      log_homepage_error(:six_degrees_teaser, exception, __STACKTRACE__)
+      empty_six_degrees()
   end
 
   @doc """
@@ -440,7 +453,9 @@ defmodule Cinegraph.Homepage do
 
     shape_six_degrees(detail)
   rescue
-    _ -> empty_six_degrees()
+    exception ->
+      log_homepage_error(:six_degrees_teaser_random, exception, __STACKTRACE__)
+      empty_six_degrees()
   end
 
   defp a_lister_collaboration_query do
@@ -494,7 +509,9 @@ defmodule Cinegraph.Homepage do
       []
     end
   rescue
-    _ -> []
+    exception ->
+      log_homepage_error(:theater_movies, exception, __STACKTRACE__)
+      []
   end
 
   defp festival_pulse(date) do
@@ -535,11 +552,16 @@ defmodule Cinegraph.Homepage do
   end
 
   defp popular_lists do
-    MovieLists.all_displayable()
-    |> Enum.take(10)
-    |> Enum.map(fn list ->
-      count = Movies.count_canonical_movies(list.source_key)
-      films = Movies.list_canonical_shelf_movies(list.source_key, 5) |> Enum.map(&film_card(&1))
+    lists = MovieLists.all_displayable() |> Enum.take(10)
+    source_keys = Enum.map(lists, & &1.source_key)
+    counts_by_source_key = Movies.count_movies_by_list_keys(source_keys)
+    shelves_by_source_key = Movies.list_canonical_shelf_movies_by_list_keys(source_keys, 5)
+
+    Enum.map(lists, fn list ->
+      films =
+        shelves_by_source_key
+        |> Map.get(list.source_key, [])
+        |> Enum.map(&film_card(&1))
 
       %{
         id: list.id,
@@ -550,12 +572,14 @@ defmodule Cinegraph.Homepage do
         image_url: list.cover_image_url || list.hero_image_url,
         icon: list.icon,
         category: list.category,
-        count: count,
+        count: Map.get(counts_by_source_key, list.source_key, 0),
         films: films
       }
     end)
   rescue
-    _ -> []
+    exception ->
+      log_homepage_error(:popular_lists, exception, __STACKTRACE__)
+      []
   end
 
   defp recent_ceremonies(_date) do
@@ -576,7 +600,9 @@ defmodule Cinegraph.Homepage do
     end)
     |> Enum.reject(&is_nil(&1.href))
   rescue
-    _ -> []
+    exception ->
+      log_homepage_error(:recent_ceremonies, exception, __STACKTRACE__)
+      []
   end
 
   defp winner_title_for(%{winner_movie: nil}), do: nil
@@ -628,7 +654,9 @@ defmodule Cinegraph.Homepage do
         end
     end
   rescue
-    _ -> empty_clerk_demo(seed)
+    exception ->
+      log_homepage_error(:compute_clerk_demo, exception, __STACKTRACE__)
+      empty_clerk_demo(seed)
   end
 
   defp shape_clerk_recommendation(primary) do
@@ -687,7 +715,9 @@ defmodule Cinegraph.Homepage do
         rows
     end
   rescue
-    _ ->
+    exception ->
+      log_homepage_error(:activity_rows, exception, __STACKTRACE__)
+
       [%{type: :data, text: "Cinegraph activity will appear here as imports run.", ago: "today"}]
   end
 
@@ -781,7 +811,20 @@ defmodule Cinegraph.Homepage do
       _ -> fun.()
     end
   rescue
-    _ -> fun.()
+    exception ->
+      log_homepage_error(:cached, exception, __STACKTRACE__)
+      fun.()
+  end
+
+  defp log_homepage_error(source, exception, stacktrace) do
+    Logger.error(fn ->
+      [
+        "Homepage ",
+        to_string(source),
+        " failed\n",
+        Exception.format(:error, exception, stacktrace)
+      ]
+    end)
   end
 
   defp daily(name, date, fun), do: cached({__MODULE__, name, date}, @daily_ttl, fun)

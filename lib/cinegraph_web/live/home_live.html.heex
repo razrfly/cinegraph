@@ -1,12 +1,7 @@
 <%!-- Cinematic full-bleed hero --%>
 <section
   class="relative isolate overflow-hidden bg-mist-950 text-white"
-  style={
-    if @snapshot.hero.backdrop_url,
-      do:
-        "background-image: url('#{@snapshot.hero.backdrop_url}'); background-size: cover; background-position: center;",
-      else: nil
-  }
+  style={hero_background_style(@snapshot.hero.backdrop_url)}
 >
   <div class="absolute inset-0 bg-gradient-to-t from-mist-950/95 via-mist-950/70 to-mist-950/40" />
   <div class="relative mx-auto w-full max-w-2xl px-6 py-20 sm:py-24 md:max-w-3xl lg:max-w-7xl lg:px-10 lg:py-32">
