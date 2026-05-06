@@ -136,6 +136,10 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Redact secrets from Phoenix request logs. Pixabay's upstream API requires
+# `key=` in the query string, so keep generic key names filtered too.
+config :phoenix, :filter_parameters, ["password", "key", "api_key", "access_key"]
+
 # Configure Oban
 config :cinegraph, Oban,
   repo: Cinegraph.Repo,

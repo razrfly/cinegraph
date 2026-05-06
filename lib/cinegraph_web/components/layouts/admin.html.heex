@@ -114,6 +114,52 @@
           />
         </.sidebar_section>
 
+        <%!-- Data Quality (#880 Phase 3 drilldowns) --%>
+        <.sidebar_section title="Data Quality">
+          <.sidebar_item
+            path="/admin/movies"
+            label="Movies"
+            icon={:film}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/people"
+            label="People"
+            icon={:sparkles}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/ratings"
+            label="Ratings"
+            icon={:chart_bar}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/availability"
+            label="Availability"
+            icon={:globe}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/collaborations"
+            label="Collaborations"
+            icon={:duplicate}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/companies"
+            label="Companies"
+            icon={:building}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/audits"
+            label="Audits"
+            icon={:beaker}
+            assigns={assigns}
+          />
+        </.sidebar_section>
+
         <%!-- Spacer --%>
         <div aria-hidden="true" class="mt-8 flex-1"></div>
       </div>
@@ -260,6 +306,16 @@
             <.mobile_sidebar_item path="/admin/metrics" label="Metrics" />
             <.mobile_sidebar_item path="/admin/predictions" label="Predictions" />
             <.mobile_sidebar_item path="/admin/score-calibration" label="Score calibration" />
+          </.mobile_sidebar_section>
+
+          <.mobile_sidebar_section title="Data Quality">
+            <.mobile_sidebar_item path="/admin/movies" label="Movies" />
+            <.mobile_sidebar_item path="/admin/people" label="People" />
+            <.mobile_sidebar_item path="/admin/ratings" label="Ratings" />
+            <.mobile_sidebar_item path="/admin/availability" label="Availability" />
+            <.mobile_sidebar_item path="/admin/collaborations" label="Collaborations" />
+            <.mobile_sidebar_item path="/admin/companies" label="Companies" />
+            <.mobile_sidebar_item path="/admin/audits" label="Audits" />
           </.mobile_sidebar_section>
 
           <%!-- Spacer --%>

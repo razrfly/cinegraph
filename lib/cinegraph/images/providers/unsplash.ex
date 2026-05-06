@@ -20,6 +20,11 @@ defmodule Cinegraph.Images.Providers.Unsplash do
           source: :unsplash
         }
 
+  @doc """
+  Searches Unsplash for landscape photos and normalizes the response.
+
+  Returns `:disabled` when `UNSPLASH_ACCESS_KEY` is blank.
+  """
   @spec search(String.t(), pos_integer()) ::
           {:ok, [result()]} | {:error, term()} | :disabled
   def search(query, per_page \\ 6) when is_binary(query) and is_integer(per_page) do

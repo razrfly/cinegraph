@@ -12,6 +12,11 @@ defmodule Cinegraph.Images.Providers.Pexels do
 
   @type result :: Cinegraph.Images.Providers.Unsplash.result()
 
+  @doc """
+  Searches Pexels for photos and normalizes the response.
+
+  Returns `:disabled` when `PEXELS_API_KEY` is blank.
+  """
   @spec search(String.t(), pos_integer()) ::
           {:ok, [result()]} | {:error, term()} | :disabled
   def search(query, per_page \\ 6) when is_binary(query) and is_integer(per_page) do

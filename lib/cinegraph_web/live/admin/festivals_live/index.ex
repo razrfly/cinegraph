@@ -29,6 +29,8 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
      |> assign(:suggest_for, nil)
      |> assign(:suggest_query, "")
      |> assign(:suggest_results, %{})
+     |> assign(:suggest_loading?, false)
+     |> assign(:suggest_search_ref, nil)
      |> assign_orgs()}
   end
 
@@ -103,13 +105,12 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
       when field in ["logo_url", "hero_image_url"] do
     field_atom = String.to_existing_atom(field)
     query = socket.assigns.editing_org.name
-    results = StockImageSearch.search(query, 6)
 
     {:noreply,
      socket
      |> assign(:suggest_for, field_atom)
      |> assign(:suggest_query, query)
-     |> assign(:suggest_results, results)}
+     |> start_suggest_search(query)}
   end
 
   def handle_event("close_suggest", _params, socket) do
@@ -117,23 +118,18 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
      socket
      |> assign(:suggest_for, nil)
      |> assign(:suggest_query, "")
-     |> assign(:suggest_results, %{})}
+     |> assign(:suggest_results, %{})
+     |> assign(:suggest_loading?, false)
+     |> assign(:suggest_search_ref, nil)}
   end
 
   def handle_event("suggest_search", %{"q" => q}, socket) do
     query = String.trim(q)
 
-    results =
-      if query == "" do
-        %{}
-      else
-        StockImageSearch.search(query, 6)
-      end
-
     {:noreply,
      socket
      |> assign(:suggest_query, query)
-     |> assign(:suggest_results, results)}
+     |> start_suggest_search(query)}
   end
 
   def handle_event("use_image", %{"url" => url}, socket) do
@@ -165,7 +161,21 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
          socket
          |> assign(:form, to_form(changeset, as: "organization"))
          |> assign(:suggest_for, nil)
-         |> assign(:suggest_results, %{})}
+         |> assign(:suggest_results, %{})
+         |> assign(:suggest_loading?, false)
+         |> assign(:suggest_search_ref, nil)}
+    end
+  end
+
+  @impl true
+  def handle_info({:suggest_results, ref, query, results}, socket) do
+    if socket.assigns.suggest_search_ref == ref and socket.assigns.suggest_query == query do
+      {:noreply,
+       socket
+       |> assign(:suggest_results, results)
+       |> assign(:suggest_loading?, false)}
+    else
+      {:noreply, socket}
     end
   end
 
@@ -184,6 +194,39 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
     |> assign(:suggest_for, nil)
     |> assign(:suggest_query, "")
     |> assign(:suggest_results, %{})
+    |> assign(:suggest_loading?, false)
+    |> assign(:suggest_search_ref, nil)
+  end
+
+  defp start_suggest_search(socket, ""), do: clear_suggest_search(socket)
+
+  defp start_suggest_search(socket, query) do
+    ref = make_ref()
+
+    if connected?(socket) do
+      live_view = self()
+
+      Task.Supervisor.start_child(Cinegraph.Images.TaskSupervisor, fn ->
+        send(live_view, {:suggest_results, ref, query, StockImageSearch.search(query, 6)})
+      end)
+
+      socket
+      |> assign(:suggest_results, %{})
+      |> assign(:suggest_loading?, true)
+      |> assign(:suggest_search_ref, ref)
+    else
+      socket
+      |> assign(:suggest_results, StockImageSearch.search(query, 6))
+      |> assign(:suggest_loading?, false)
+      |> assign(:suggest_search_ref, nil)
+    end
+  end
+
+  defp clear_suggest_search(socket) do
+    socket
+    |> assign(:suggest_results, %{})
+    |> assign(:suggest_loading?, false)
+    |> assign(:suggest_search_ref, nil)
   end
 
   @impl true
@@ -277,6 +320,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
         suggest_for={@suggest_for}
         suggest_query={@suggest_query}
         suggest_results={@suggest_results}
+        suggest_loading?={@suggest_loading?}
       />
     <% end %>
     """
@@ -287,6 +331,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   attr :suggest_for, :any, required: true
   attr :suggest_query, :string, required: true
   attr :suggest_results, :map, required: true
+  attr :suggest_loading?, :boolean, required: true
 
   defp drawer(assigns) do
     ~H"""
@@ -453,6 +498,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
           field={@suggest_for}
           query={@suggest_query}
           results={@suggest_results}
+          loading?={@suggest_loading?}
         />
       <% end %>
     </div>
@@ -507,6 +553,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   attr :field, :atom, required: true
   attr :query, :string, required: true
   attr :results, :map, required: true
+  attr :loading?, :boolean, required: true
 
   defp suggest_modal(assigns) do
     ~H"""
@@ -560,7 +607,9 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
               </h4>
               <%= case result do %>
                 <% nil -> %>
-                  <p class="text-xs text-gray-500">Search to see results.</p>
+                  <p class="text-xs text-gray-500">
+                    {if @loading?, do: "Searching...", else: "Search to see results."}
+                  </p>
                 <% :disabled -> %>
                   <p class="text-xs text-amber-700">
                     {provider_label(provider)} is disabled — set
