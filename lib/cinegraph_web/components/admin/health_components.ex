@@ -46,6 +46,7 @@ defmodule CinegraphWeb.Admin.Components.HealthComponents do
         :sm -> "px-2 py-0.5 text-xs"
         :md -> "px-2.5 py-0.5 text-xs"
         :lg -> "px-3 py-1 text-sm"
+        _ -> "px-2.5 py-0.5 text-xs"
       end
 
     assigns =
@@ -96,6 +97,7 @@ defmodule CinegraphWeb.Admin.Components.HealthComponents do
         :sm -> "h-1.5"
         :md -> "h-2"
         :lg -> "h-3"
+        _ -> "h-2"
       end
 
     bar_color = bar_color_class(assigns.color)
@@ -212,6 +214,7 @@ defmodule CinegraphWeb.Admin.Components.HealthComponents do
         :sm -> "text-xs"
         :md -> "text-sm"
         :lg -> "text-base"
+        _ -> "text-sm"
       end
 
     formatted = format_change(assigns.change)
@@ -245,9 +248,11 @@ defmodule CinegraphWeb.Admin.Components.HealthComponents do
       <.status_badge state="success" />
       <.status_badge state="failure" />
   """
-  attr :state, :string, required: true
+  attr :state, :any, required: true
 
   def status_badge(assigns) do
+    assigns = assign(assigns, :state, normalize_badge_state(assigns.state))
+
     ~H"""
     <span class={badge_classes(@state)}>
       {badge_icon(@state)} {badge_label(@state)}
@@ -308,36 +313,62 @@ defmodule CinegraphWeb.Admin.Components.HealthComponents do
   defp bar_color_class(:indigo), do: "bg-indigo-500"
   defp bar_color_class(_), do: "bg-gray-400"
 
+  defp normalize_badge_state(state) when is_atom(state),
+    do: state |> Atom.to_string() |> normalize_badge_state()
+
+  defp normalize_badge_state(state) when is_binary(state), do: state
+  defp normalize_badge_state(state), do: to_string(state)
+
+  defp badge_base_class,
+    do: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+
   defp badge_classes("success"),
-    do:
-      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+    do: "#{badge_base_class()} bg-green-100 text-green-800"
+
+  defp badge_classes("completed"),
+    do: "#{badge_base_class()} bg-green-100 text-green-800"
 
   defp badge_classes("active"),
-    do:
-      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+    do: "#{badge_base_class()} bg-blue-100 text-blue-800"
+
+  defp badge_classes("executing"),
+    do: "#{badge_base_class()} bg-blue-100 text-blue-800"
+
+  defp badge_classes("available"),
+    do: "#{badge_base_class()} bg-green-100 text-green-800"
+
+  defp badge_classes("scheduled"),
+    do: "#{badge_base_class()} bg-indigo-100 text-indigo-800"
+
+  defp badge_classes("retryable"),
+    do: "#{badge_base_class()} bg-yellow-100 text-yellow-800"
+
+  defp badge_classes("suspended"),
+    do: "#{badge_base_class()} bg-gray-100 text-gray-800"
 
   defp badge_classes("failure"),
-    do:
-      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+    do: "#{badge_base_class()} bg-red-100 text-red-800"
 
   defp badge_classes("cancelled"),
-    do:
-      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800"
+    do: "#{badge_base_class()} bg-orange-100 text-orange-800"
 
   defp badge_classes("discarded"),
-    do:
-      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+    do: "#{badge_base_class()} bg-red-100 text-red-800"
 
   defp badge_classes("inactive"),
-    do:
-      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
+    do: "#{badge_base_class()} bg-gray-100 text-gray-800"
 
   defp badge_classes(_),
-    do:
-      "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
+    do: "#{badge_base_class()} bg-gray-100 text-gray-600"
 
   defp badge_icon("success"), do: "✓"
-  defp badge_icon("active"), do: "✓"
+  defp badge_icon("completed"), do: "✓"
+  defp badge_icon("active"), do: "●"
+  defp badge_icon("executing"), do: "●"
+  defp badge_icon("available"), do: "✓"
+  defp badge_icon("scheduled"), do: "◷"
+  defp badge_icon("retryable"), do: "↻"
+  defp badge_icon("suspended"), do: "Ⅱ"
   defp badge_icon("failure"), do: "✗"
   defp badge_icon("cancelled"), do: "⊘"
   defp badge_icon("discarded"), do: "⊗"
@@ -345,7 +376,13 @@ defmodule CinegraphWeb.Admin.Components.HealthComponents do
   defp badge_icon(_), do: "?"
 
   defp badge_label("success"), do: "Success"
+  defp badge_label("completed"), do: "Completed"
   defp badge_label("active"), do: "Active"
+  defp badge_label("executing"), do: "Running"
+  defp badge_label("available"), do: "Available"
+  defp badge_label("scheduled"), do: "Scheduled"
+  defp badge_label("retryable"), do: "Retryable"
+  defp badge_label("suspended"), do: "Suspended"
   defp badge_label("failure"), do: "Failed"
   defp badge_label("cancelled"), do: "Cancelled"
   defp badge_label("discarded"), do: "Discarded"

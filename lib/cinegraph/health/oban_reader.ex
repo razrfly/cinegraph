@@ -274,6 +274,79 @@ defmodule Cinegraph.Health.ObanReader do
   end
 
   @doc """
+  Returns the average completed-job duration in seconds for a worker over
+  the time window starting at `start_dt` (and ending at `end_dt`, defaults
+  to "now").
+
+  Returns `nil` when the worker has no completed jobs in the window.
+  """
+  @spec avg_duration_for_worker(String.t(), DateTime.t(), DateTime.t() | nil) ::
+          float() | nil
+  def avg_duration_for_worker(worker, %DateTime{} = start_dt, end_dt \\ nil)
+      when is_binary(worker) do
+    base =
+      from(j in Oban.Job,
+        where:
+          j.worker == ^worker and
+            j.state == "completed" and
+            j.completed_at >= ^start_dt and
+            not is_nil(j.attempted_at),
+        select:
+          fragment(
+            "AVG(EXTRACT(EPOCH FROM (?::timestamp - ?::timestamp)))",
+            j.completed_at,
+            j.attempted_at
+          )
+      )
+
+    base = if end_dt, do: from(j in base, where: j.completed_at < ^end_dt), else: base
+
+    case Repo.replica().one(base) do
+      nil -> nil
+      %Decimal{} = d -> Decimal.to_float(d)
+      n when is_number(n) -> n * 1.0
+    end
+  end
+
+  @doc """
+  Returns the most recent N runs of a single worker, regardless of state,
+  newest first.
+
+  Each row is a map with `id, state, queue, attempt, attempted_at, completed_at,
+  duration_seconds, args, last_error` so the per-worker drilldown can render a
+  rich timeline.
+  """
+  @spec recent_runs_for_worker(String.t(), pos_integer()) :: [map()]
+  def recent_runs_for_worker(worker, limit \\ 50) when is_binary(worker) do
+    from(j in Oban.Job,
+      where: j.worker == ^worker,
+      order_by: [desc: j.id],
+      limit: ^limit,
+      select: %{
+        id: j.id,
+        state: j.state,
+        queue: j.queue,
+        attempt: j.attempt,
+        attempted_at: j.attempted_at,
+        completed_at: j.completed_at,
+        cancelled_at: j.cancelled_at,
+        discarded_at: j.discarded_at,
+        scheduled_at: j.scheduled_at,
+        inserted_at: j.inserted_at,
+        args: j.args,
+        last_error:
+          fragment(
+            "CASE WHEN array_length(?, 1) > 0 THEN ?[array_upper(?, 1)] ->> 'error' ELSE NULL END",
+            j.errors,
+            j.errors,
+            j.errors
+          )
+      }
+    )
+    |> Repo.replica().all()
+  end
+
+  @doc """
   Returns the list of queue names configured for Oban (atoms).
   """
   def configured_queues do

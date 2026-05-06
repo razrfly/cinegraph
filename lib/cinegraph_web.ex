@@ -88,7 +88,7 @@ defmodule CinegraphWeb do
   def admin_live_view do
     quote do
       use Phoenix.LiveView,
-        layout: {CinegraphWeb.Layouts, :app}
+        layout: {CinegraphWeb.Layouts, :admin}
 
       unquote(html_helpers())
       unquote(admin_helpers())
