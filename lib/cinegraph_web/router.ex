@@ -243,6 +243,14 @@ defmodule CinegraphWeb.Router do
       # Homeostasis dashboard (#723) — replaces the import-era trio
       live "/health", AdminHealthLive.Show, :show
 
+      # Scheduled jobs (#880 Phase 1) — registry-driven cron table
+      live "/scheduled", Admin.ScheduledLive, :index
+      live "/scheduled/:id", Admin.ScheduledShowLive, :show
+
+      # Queues + Jobs (#880 Phase 1)
+      live "/queues", Admin.QueuesLive, :index
+      live "/jobs", Admin.JobsLive, :index
+
       # Import dashboard
       live "/imports", ImportDashboardLive, :index
       # Year-by-year TMDb import management

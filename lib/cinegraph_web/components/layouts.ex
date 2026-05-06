@@ -95,8 +95,8 @@ defmodule CinegraphWeb.Layouts do
       |> assign(:icon_path, icon_path)
 
     ~H"""
-    <a
-      href={@path}
+    <.link
+      navigate={@path}
       class={[
         "group relative flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-sm/6 font-medium transition-colors",
         @is_active && "text-zinc-950 bg-zinc-950/5",
@@ -113,7 +113,7 @@ defmodule CinegraphWeb.Layouts do
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={@icon_path} />
       </svg>
       <span class="truncate">{@label}</span>
-    </a>
+    </.link>
     """
   end
 
@@ -137,12 +137,12 @@ defmodule CinegraphWeb.Layouts do
 
   def mobile_sidebar_item(assigns) do
     ~H"""
-    <a
-      href={@path}
+    <.link
+      navigate={@path}
       class="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left text-base/6 font-medium text-zinc-700 hover:bg-zinc-950/5"
     >
       {@label}
-    </a>
+    </.link>
     """
   end
 
@@ -234,10 +234,6 @@ defmodule CinegraphWeb.Layouts do
     cond do
       is_binary(socket.assigns[:current_path]) ->
         socket.assigns.current_path
-
-      is_map(socket.assigns[:__changed__]) and
-          is_binary(socket.assigns.__changed__[:current_path]) ->
-        socket.assigns.__changed__[:current_path]
 
       true ->
         "/"

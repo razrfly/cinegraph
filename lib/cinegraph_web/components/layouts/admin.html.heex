@@ -25,6 +25,24 @@
             icon={:chart_bar}
             assigns={assigns}
           />
+          <.sidebar_item
+            path="/admin/queues"
+            label="Queues"
+            icon={:document_chart}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/jobs"
+            label="Jobs"
+            icon={:cog}
+            assigns={assigns}
+          />
+          <.sidebar_item
+            path="/admin/scheduled"
+            label="Scheduled"
+            icon={:clock}
+            assigns={assigns}
+          />
           <.sidebar_item path="/admin/oban" label="Oban" icon={:server} assigns={assigns} />
         </.sidebar_section>
 
@@ -124,8 +142,12 @@
     <div class="py-2.5">
       <button
         type="button"
-        onclick="document.getElementById('admin-mobile-menu').classList.remove('hidden'); document.getElementById('admin-mobile-menu').classList.add('flex');"
+        phx-click={
+          JS.remove_class("hidden", to: "#admin-mobile-menu")
+          |> JS.add_class("flex", to: "#admin-mobile-menu")
+        }
         aria-label="Open navigation"
+        aria-controls="admin-mobile-menu"
         class="-m-2.5 cursor-pointer p-2.5 text-zinc-950"
       >
         <svg
@@ -157,11 +179,15 @@
     class="hidden fixed inset-0 z-50 lg:hidden"
     role="dialog"
     aria-modal="true"
+    aria-labelledby="admin-mobile-menu-title"
   >
     <%!-- Backdrop --%>
     <div
       class="fixed inset-0 bg-black/30"
-      onclick="document.getElementById('admin-mobile-menu').classList.add('hidden'); document.getElementById('admin-mobile-menu').classList.remove('flex');"
+      phx-click={
+        JS.add_class("hidden", to: "#admin-mobile-menu")
+        |> JS.remove_class("flex", to: "#admin-mobile-menu")
+      }
     >
     </div>
 
@@ -172,12 +198,18 @@
         <div class="flex items-center justify-between border-b border-zinc-950/5 p-4">
           <a href="/admin" class="flex items-center gap-3">
             <span class="text-xl">🎬</span>
-            <span class="text-base/6 font-semibold text-zinc-950">Admin</span>
+            <span id="admin-mobile-menu-title" class="text-base/6 font-semibold text-zinc-950">
+              Admin
+            </span>
           </a>
           <button
             type="button"
-            onclick="document.getElementById('admin-mobile-menu').classList.add('hidden'); document.getElementById('admin-mobile-menu').classList.remove('flex');"
+            phx-click={
+              JS.add_class("hidden", to: "#admin-mobile-menu")
+              |> JS.remove_class("flex", to: "#admin-mobile-menu")
+            }
             aria-label="Close navigation"
+            aria-controls="admin-mobile-menu"
             class="-m-2.5 cursor-pointer p-2.5 text-zinc-950"
           >
             <svg
@@ -202,6 +234,9 @@
 
           <.mobile_sidebar_section title="Observability">
             <.mobile_sidebar_item path="/admin/health" label="Health" />
+            <.mobile_sidebar_item path="/admin/queues" label="Queues" />
+            <.mobile_sidebar_item path="/admin/jobs" label="Jobs" />
+            <.mobile_sidebar_item path="/admin/scheduled" label="Scheduled" />
             <.mobile_sidebar_item path="/admin/oban" label="Oban" />
           </.mobile_sidebar_section>
 

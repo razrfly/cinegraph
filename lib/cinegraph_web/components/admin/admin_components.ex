@@ -181,13 +181,15 @@ defmodule CinegraphWeb.Admin.Components.AdminComponents do
 
   def pagination(assigns) do
     total_pages = max(assigns.total_pages, 1)
-    prev_page = max(assigns.page - 1, 1)
-    next_page = assigns.page + 1
-    prev_disabled = assigns.page <= 1
-    next_disabled = assigns.page >= total_pages
+    current_page = assigns.page |> max(1) |> min(total_pages)
+    prev_page = max(current_page - 1, 1)
+    next_page = min(current_page + 1, total_pages)
+    prev_disabled = current_page <= 1
+    next_disabled = current_page >= total_pages
 
     assigns =
       assigns
+      |> assign(:page, current_page)
       |> assign(:display_total_pages, total_pages)
       |> assign(:prev_page, prev_page)
       |> assign(:next_page, next_page)
@@ -285,7 +287,6 @@ defmodule CinegraphWeb.Admin.Components.AdminComponents do
             <tbody class="bg-white divide-y divide-gray-200">
               <tr
                 :for={row <- @rows}
-                phx-click={if @row_click, do: @row_click.(row)}
                 class={[
                   "odd:bg-white even:bg-gray-50/50 hover:bg-gray-50 transition-colors",
                   @row_click && "cursor-pointer"
@@ -298,7 +299,21 @@ defmodule CinegraphWeb.Admin.Components.AdminComponents do
                     align_class(Map.get(col, :align, :left))
                   ]}
                 >
-                  {render_slot(@cell, %{row: row, column: col})}
+                  <button
+                    :if={@row_click && col == List.first(@columns)}
+                    type="button"
+                    phx-click={@row_click.(row)}
+                    aria-label="Open row"
+                    class={[
+                      "block w-full text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+                      align_class(Map.get(col, :align, :left))
+                    ]}
+                  >
+                    {render_slot(@cell, %{row: row, column: col})}
+                  </button>
+                  <%= if !@row_click || col != List.first(@columns) do %>
+                    {render_slot(@cell, %{row: row, column: col})}
+                  <% end %>
                 </td>
               </tr>
             </tbody>
