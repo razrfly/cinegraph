@@ -239,39 +239,46 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
 
   defp consume_uploaded_image(socket, org, kind, upload_key, attrs, attr_key, hints) do
     r2 = r2_client()
+    entries = socket.assigns.uploads[upload_key].entries
 
-    if r2.configured?() do
-      results =
-        consume_uploaded_entries(socket, upload_key, fn %{path: path}, entry ->
-          binary = File.read!(path)
+    cond do
+      upload_entry_error(entries) ->
+        {:error, "#{kind |> String.capitalize()} upload failed: #{upload_entry_error(entries)}",
+         socket}
 
-          case r2.put_curated_image(
-                 "festivals",
-                 org.slug,
-                 kind,
-                 {:upload, entry.client_name, binary}
-               ) do
-            {:ok, cdn_url} -> {:ok, {:ok, cdn_url}}
-            {:error, reason} -> {:ok, {:error, reason}}
-          end
-        end)
+      r2.configured?() ->
+        results =
+          consume_uploaded_entries(socket, upload_key, fn %{path: path}, entry ->
+            binary = File.read!(path)
 
-      case results do
-        [{:ok, cdn_url}] ->
-          {:ok, Map.put(attrs, attr_key, cdn_url), hints, socket}
+            case r2.put_curated_image(
+                   "festivals",
+                   org.slug,
+                   kind,
+                   {:upload, entry.client_name, binary}
+                 ) do
+              {:ok, cdn_url} -> {:ok, {:ok, cdn_url}}
+              {:error, reason} -> {:ok, {:error, reason}}
+            end
+          end)
 
-        [{:error, reason}] ->
-          {:error, "#{kind |> String.capitalize()} upload failed: #{format_error(reason)}",
-           socket}
+        case results do
+          [{:ok, cdn_url}] ->
+            {:ok, Map.put(attrs, attr_key, cdn_url), hints, socket}
 
-        [] ->
-          {:ok, attrs, hints, socket}
-      end
-    else
-      # R2 disabled — drop the upload, persist whatever URL is in the field.
-      _ = consume_uploaded_entries(socket, upload_key, fn _, _ -> {:ok, :discarded} end)
-      hint = "R2 disabled — #{kind} file upload skipped, using URL field"
-      {:ok, attrs, hints ++ [hint], socket}
+          [{:error, reason}] ->
+            {:error, "#{kind |> String.capitalize()} upload failed: #{format_error(reason)}",
+             socket}
+
+          [] ->
+            {:ok, attrs, hints, socket}
+        end
+
+      true ->
+        # R2 disabled — drop the upload, persist whatever URL is in the field.
+        _ = consume_uploaded_entries(socket, upload_key, fn _, _ -> {:ok, :discarded} end)
+        hint = "R2 disabled — #{kind} file upload skipped, using URL field"
+        {:ok, attrs, hints ++ [hint], socket}
     end
   end
 
@@ -288,7 +295,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
         # Unchanged from DB — no rehost. Idempotent re-saves don't refetch.
         {:ok, attrs, hints, socket}
 
-      cdn != "" and String.starts_with?(url, cdn) ->
+      already_on_cdn?(url, cdn) ->
         # Already on our CDN.
         {:ok, attrs, hints, socket}
 
@@ -305,6 +312,28 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
             {:error, "Could not rehost #{kind}: #{format_error(reason)}", socket}
         end
     end
+  end
+
+  defp upload_entry_error(entries) do
+    cond do
+      Enum.any?(entries, &(&1.valid? == false)) ->
+        "file is invalid"
+
+      Enum.any?(entries, &(&1.progress < 100)) ->
+        "file is still uploading"
+
+      true ->
+        nil
+    end
+  end
+
+  defp already_on_cdn?(_url, cdn) when cdn in [nil, ""], do: false
+
+  defp already_on_cdn?(url, cdn) do
+    url_host = URI.parse(url).host
+    cdn_host = URI.parse(cdn).host
+
+    url_host not in [nil, ""] and url_host == cdn_host
   end
 
   defp open_drawer(socket, org) do

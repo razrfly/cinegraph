@@ -9,7 +9,7 @@ defmodule Cinegraph.Images.R2 do
 
   Dev silently no-ops when any required env var is unset (`configured?/0`
   returns false; uploads return `{:error, :not_configured}`). Production
-  raises at boot if any of the four required vars is missing — see
+  raises at boot if any required var is missing — see
   `config/runtime.exs`.
 
   ## Required env
@@ -18,7 +18,7 @@ defmodule Cinegraph.Images.R2 do
   - `CLOUDFLARE_ACCESS_KEY_ID`
   - `CLOUDFLARE_SECRET_ACCESS_KEY`
   - `R2_CDN_URL`
-  - `R2_BUCKET` (defaults to `"cinegraph"`)
+  - `R2_BUCKET` (defaults to `"cinegraph"` in dev only)
   """
 
   @behaviour Cinegraph.Images.R2.Behaviour
@@ -70,8 +70,7 @@ defmodule Cinegraph.Images.R2 do
          {:ok, _resp} <-
            ExAws.S3.put_object(bucket(), key, binary,
              content_type: content_type,
-             cache_control: @cache_control,
-             acl: "public-read"
+             cache_control: @cache_control
            )
            |> ExAws.request(aws_config) do
       Logger.info("R2: uploaded #{byte_size(binary)} bytes to #{key}")
@@ -156,7 +155,8 @@ defmodule Cinegraph.Images.R2 do
   def configured? do
     cfg = config()
 
-    cfg[:account_id] != "" and cfg[:access_key_id] != "" and cfg[:secret_access_key] != "" and
+    cfg[:account_id] not in [nil, ""] and cfg[:access_key_id] not in [nil, ""] and
+      cfg[:secret_access_key] not in [nil, ""] and
       cfg[:cdn_url] not in [nil, ""]
   end
 
@@ -192,6 +192,8 @@ defmodule Cinegraph.Images.R2 do
   Guess a MIME type from a key/filename. Public for testing.
   """
   def guess_content_type(filename) when is_binary(filename) do
+    filename = String.downcase(filename)
+
     cond do
       String.ends_with?(filename, ".jpg") or String.ends_with?(filename, ".jpeg") -> "image/jpeg"
       String.ends_with?(filename, ".png") -> "image/png"
@@ -255,13 +257,13 @@ defmodule Cinegraph.Images.R2 do
     cfg = config()
 
     cond do
-      cfg[:account_id] == "" ->
+      cfg[:account_id] in [nil, ""] ->
         {:error, :not_configured}
 
-      cfg[:access_key_id] == "" ->
+      cfg[:access_key_id] in [nil, ""] ->
         {:error, :not_configured}
 
-      cfg[:secret_access_key] == "" ->
+      cfg[:secret_access_key] in [nil, ""] ->
         {:error, :not_configured}
 
       true ->

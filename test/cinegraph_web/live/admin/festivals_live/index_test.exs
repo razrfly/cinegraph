@@ -190,6 +190,34 @@ defmodule CinegraphWeb.Admin.FestivalsLive.IndexTest do
       assert R2Stub.calls() == []
     end
 
+    test "rehosts CDN lookalike host instead of trusting string prefix", %{
+      conn: conn,
+      org: org
+    } do
+      {:ok, live, _html} = live(conn, ~p"/admin/festivals")
+      _ = render_click(live, "edit_org", %{"id" => to_string(org.id)})
+
+      lookalike_url = "#{@cdn_base}.evil.test/festivals/#{org.slug}/logo-deadbeef.svg"
+
+      _ =
+        render_submit(live, "save", %{
+          "organization" => %{
+            "name" => org.name,
+            "logo_url" => lookalike_url,
+            "hero_image_url" => "",
+            "country" => org.country
+          }
+        })
+
+      reloaded = Repo.get!(FestivalOrganization, org.id)
+
+      assert String.starts_with?(reloaded.logo_url, @cdn_base)
+      refute reloaded.logo_url == lookalike_url
+
+      [{:put_curated_image, args}] = R2Stub.calls()
+      assert args.source == {:url, lookalike_url}
+    end
+
     test "uploads logo file to R2 and updates logo_url", %{conn: conn, org: org} do
       {:ok, live, _html} = live(conn, ~p"/admin/festivals")
       _ = render_click(live, "edit_org", %{"id" => to_string(org.id)})
@@ -222,6 +250,34 @@ defmodule CinegraphWeb.Admin.FestivalsLive.IndexTest do
       [{:put_curated_image, args}] = R2Stub.calls()
       assert args.kind == "logo"
       assert match?({:upload, "test-logo.png", _byte_size}, args.source)
+    end
+
+    test "blocks save while selected upload has not completed", %{conn: conn, org: org} do
+      {:ok, live, _html} = live(conn, ~p"/admin/festivals")
+      _ = render_click(live, "edit_org", %{"id" => to_string(org.id)})
+
+      logo_upload =
+        file_input(live, "#org-form-#{org.id}", :logo_upload, [
+          %{name: "test-logo.png", content: "not-yet-uploaded", type: "image/png"}
+        ])
+
+      assert render_upload(logo_upload, "test-logo.png", 50) =~ "test-logo.png"
+
+      result =
+        render_submit(live, "save", %{
+          "organization" => %{
+            "name" => org.name,
+            "logo_url" => "",
+            "hero_image_url" => "",
+            "country" => org.country
+          }
+        })
+
+      reloaded = Repo.get!(FestivalOrganization, org.id)
+
+      assert result =~ "Logo upload failed: file is still uploading"
+      assert reloaded.logo_url in [nil, ""]
+      assert R2Stub.calls() == []
     end
   end
 end
