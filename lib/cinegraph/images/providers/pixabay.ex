@@ -5,12 +5,22 @@ defmodule Cinegraph.Images.Providers.Pixabay do
 
   Hits `https://pixabay.com/api/`. Auth via `key=` query param. Returns the
   canonical `result()` shape; `:disabled` when `PIXABAY_API_KEY` is unset.
+
+  Pixabay requires API credentials in the `key` query parameter. Keep `key`
+  covered by Phoenix parameter filtering and avoid logging outbound request
+  URLs from this module.
   """
 
   @endpoint "https://pixabay.com/api/"
 
   @type result :: Cinegraph.Images.Providers.Unsplash.result()
 
+  @doc """
+  Searches Pixabay for horizontal photos and normalizes the response.
+
+  Returns `:disabled` when `PIXABAY_API_KEY` is blank. Pixabay requires the API
+  key in the request query string, so callers must not log the generated URL.
+  """
   @spec search(String.t(), pos_integer()) ::
           {:ok, [result()]} | {:error, term()} | :disabled
   def search(query, per_page \\ 6) when is_binary(query) and is_integer(per_page) do

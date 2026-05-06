@@ -6,7 +6,7 @@ defmodule CinegraphWeb.AdminHealthLive.ComponentsTest do
   import CinegraphWeb.AdminHealthLive.Components
   # Five generic primitives moved to DashboardComponents in #880 Phase 1.
   import CinegraphWeb.Admin.Components.DashboardComponents,
-    only: [verdict_pill: 1, hero_band: 1, stat_tile: 1, sparkline: 1, queue_strip: 1]
+    only: [verdict_pill: 1, stat_tile: 1, sparkline: 1, queue_strip: 1]
 
   describe "verdict_pill/1" do
     test "renders status label and color for green/amber/red/unknown" do

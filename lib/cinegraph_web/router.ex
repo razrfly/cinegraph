@@ -268,6 +268,20 @@ defmodule CinegraphWeb.Router do
       # Festivals admin (#880 Phase 2) — primary editor for festival_organizations
       live "/festivals", Admin.FestivalsLive.Index, :index
 
+      # Per-domain drift drilldowns (#880 Phase 3) — one generic LiveView,
+      # five routes via live_action.
+      live "/movies", Admin.DriftDomainLive, :movies
+      live "/people", Admin.DriftDomainLive, :people
+      live "/ratings", Admin.DriftDomainLive, :ratings
+      live "/availability", Admin.DriftDomainLive, :availability
+      live "/collaborations", Admin.DriftDomainLive, :collaborations
+
+      # Production companies admin (#880 Phase 3)
+      live "/companies", Admin.CompaniesLive, :index
+
+      # Audits index (#880 Phase 3) — registry-driven tabs page
+      live "/audits", Admin.AuditsLive, :index
+
       # Festival Events management (legacy import-config modal — kept while
       # /admin/festivals expands to fold this in; tracked in #880 Phase 3)
       live "/festival-events", FestivalEventLive.Index, :index

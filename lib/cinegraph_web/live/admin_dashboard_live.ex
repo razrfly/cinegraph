@@ -397,6 +397,47 @@ defmodule CinegraphWeb.AdminDashboardLive do
         ]
       },
       %{
+        title: "Data Quality",
+        description: "Per-domain drift drilldowns + audits.",
+        cards: [
+          %{
+            title: "Movies",
+            path: "/admin/movies",
+            description: "OMDb / IMDb-id / availability gaps."
+          },
+          %{
+            title: "People",
+            path: "/admin/people",
+            description: "Profile, biography, PQS coverage."
+          },
+          %{
+            title: "Ratings",
+            path: "/admin/ratings",
+            description: "OMDb backlog and stale ratings."
+          },
+          %{
+            title: "Availability",
+            path: "/admin/availability",
+            description: "Watch-availability provider coverage."
+          },
+          %{
+            title: "Collaborations",
+            path: "/admin/collaborations",
+            description: "Collaboration graph health."
+          },
+          %{
+            title: "Companies",
+            path: "/admin/companies",
+            description: "Production companies — logo / slug / metadata."
+          },
+          %{
+            title: "Audits",
+            path: "/admin/audits",
+            description: "Run any registered cinegraph.audit.* task."
+          }
+        ]
+      },
+      %{
         title: "Quality",
         description: "Scoring, calibration, predictions.",
         cards: [

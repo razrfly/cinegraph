@@ -3,8 +3,8 @@ defmodule Cinegraph.Images.StockImageSearch do
   Parallel orchestrator for the festival admin "Suggest images" picker
   (#880 Phase 2).
 
-  Hits Unsplash, Pexels, and Pixabay concurrently via `Task.async` /
-  `Task.yield`. Returns a map keyed by provider with each value being:
+  Hits Unsplash, Pexels, and Pixabay concurrently via the application task
+  supervisor. Returns a map keyed by provider with each value being:
 
   - `{:ok, [result()]}` — list of normalized results
   - `:disabled` — provider's env var is unset
@@ -26,6 +26,7 @@ defmodule Cinegraph.Images.StockImageSearch do
   @timeout_ms 5_000
   @cache_ttl :timer.minutes(10)
   @cache_name :movies_cache
+  @task_supervisor Cinegraph.Images.TaskSupervisor
 
   @type provider :: :unsplash | :pexels | :pixabay
   @type provider_result ::
@@ -33,22 +34,28 @@ defmodule Cinegraph.Images.StockImageSearch do
           | :disabled
           | {:error, term()}
 
+  @doc """
+  Searches every configured stock-image provider and returns provider-keyed results.
+
+  Each provider runs under `Cinegraph.Images.TaskSupervisor` and is bounded by a
+  five-second timeout. Individual provider results are cached in `:movies_cache`
+  for ten minutes.
+  """
   @spec search(String.t(), pos_integer()) :: %{provider() => provider_result()}
   def search(query, per_provider \\ 6) when is_binary(query) and is_integer(per_provider) do
-    @providers
-    |> Enum.map(fn provider ->
-      task = Task.async(fn -> cached_search(provider, query, per_provider) end)
-      {provider, task}
-    end)
-    |> Enum.map(fn {provider, task} ->
-      result =
-        case Task.yield(task, @timeout_ms) || Task.shutdown(task, :brutal_kill) do
-          {:ok, value} -> value
-          nil -> {:error, :timeout}
-          {:exit, reason} -> {:error, {:exit, reason}}
-        end
-
-      {provider, result}
+    @task_supervisor
+    |> Task.Supervisor.async_stream_nolink(
+      @providers,
+      fn provider -> cached_search(provider, query, per_provider) end,
+      timeout: @timeout_ms,
+      on_timeout: :kill_task,
+      max_concurrency: length(@providers)
+    )
+    |> Enum.zip(@providers)
+    |> Enum.map(fn
+      {{:ok, result}, provider} -> {provider, result}
+      {{:exit, :timeout}, provider} -> {provider, {:error, :timeout}}
+      {{:exit, reason}, provider} -> {provider, {:error, {:exit, reason}}}
     end)
     |> Map.new()
   end
@@ -60,9 +67,12 @@ defmodule Cinegraph.Images.StockImageSearch do
   defp cached_search(provider, query, per_provider) do
     key = {__MODULE__, provider, query, per_provider}
 
-    case Cachex.fetch(@cache_name, key, fn ->
-           {:commit, run_provider(provider, query, per_provider), ttl: @cache_ttl}
-         end) do
+    case Cachex.fetch(
+           @cache_name,
+           key,
+           fn -> {:commit, run_provider(provider, query, per_provider)} end,
+           ttl: @cache_ttl
+         ) do
       {:ok, value} -> value
       {:commit, value} -> value
       _ -> run_provider(provider, query, per_provider)
