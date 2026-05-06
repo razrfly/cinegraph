@@ -206,14 +206,18 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
     if connected?(socket) do
       live_view = self()
 
-      Task.Supervisor.start_child(Cinegraph.Images.TaskSupervisor, fn ->
-        send(live_view, {:suggest_results, ref, query, StockImageSearch.search(query, 6)})
-      end)
+      case Task.Supervisor.start_child(Cinegraph.Images.TaskSupervisor, fn ->
+             send(live_view, {:suggest_results, ref, query, StockImageSearch.search(query, 6)})
+           end) do
+        {:ok, _pid} ->
+          socket
+          |> assign(:suggest_results, %{})
+          |> assign(:suggest_loading?, true)
+          |> assign(:suggest_search_ref, ref)
 
-      socket
-      |> assign(:suggest_results, %{})
-      |> assign(:suggest_loading?, true)
-      |> assign(:suggest_search_ref, ref)
+        _ ->
+          clear_suggest_search(socket)
+      end
     else
       socket
       |> assign(:suggest_results, StockImageSearch.search(query, 6))
