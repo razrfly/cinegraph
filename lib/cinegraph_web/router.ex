@@ -230,38 +230,50 @@ defmodule CinegraphWeb.Router do
     # Database metrics reset (protected by admin auth)
     post "/metrics/reset", HealthController, :reset
 
-    # Homeostasis dashboard (#723) — replaces the import-era trio
-    live "/health", AdminHealthLive.Show, :show
+    # All admin LiveViews share the Catalyst chrome (#880 Phase 0).
+    # `:admin_layout` on_mount sets `current_path` so the sidebar can
+    # highlight the active nav item across navigations.
+    live_session :admin_authenticated,
+      root_layout: {CinegraphWeb.Layouts, :admin_root},
+      layout: {CinegraphWeb.Layouts, :admin},
+      on_mount: [{CinegraphWeb.AdminAuthHooks, :admin_layout}] do
+      # Admin home (#880 Phase 0)
+      live "/", AdminDashboardLive, :index
 
-    # Import dashboard
-    live "/imports", ImportDashboardLive, :index
-    # Year-by-year TMDb import management
-    live "/year-imports", YearImportsLive, :index
-    # Awards Import Dashboard (Issue #446)
-    live "/award-imports", AwardImportsLive, :index
+      # Homeostasis dashboard (#723) — replaces the import-era trio
+      live "/health", AdminHealthLive.Show, :show
 
-    # Metrics dashboard
-    live "/metrics", MetricsLive.Index, :index
-    live "/metrics/profile/:name", MetricsLive.Index, :profile
+      # Import dashboard
+      live "/imports", ImportDashboardLive, :index
+      # Year-by-year TMDb import management
+      live "/year-imports", YearImportsLive, :index
+      # Awards Import Dashboard (Issue #446)
+      live "/award-imports", AwardImportsLive, :index
 
-    # Movie Predictions for 1001 Movies list
-    live "/predictions", PredictionsLive.Index, :index
+      # Metrics dashboard
+      live "/metrics", MetricsLive.Index, :index
+      live "/metrics/profile/:name", MetricsLive.Index, :profile
 
-    # Festival Events management
-    live "/festival-events", FestivalEventLive.Index, :index
+      # Movie Predictions for 1001 Movies list
+      live "/predictions", PredictionsLive.Index, :index
 
-    # Lists Manager (Issue #487)
-    live "/lists-manager", ListsManagerLive, :index
+      # Festival Events management
+      live "/festival-events", FestivalEventLive.Index, :index
 
-    # Festival Nomination Audit (Issue #479)
-    live "/festival", FestivalAuditLive, :index
-    live "/festival/:org_slug", FestivalAuditLive, :organization
-    live "/festival/:org_slug/:year", FestivalAuditLive, :ceremony
+      # Lists Manager (Issue #487)
+      live "/lists-manager", ListsManagerLive, :index
 
-    # Score Calibration Admin (Issue #518)
-    live "/score-calibration", ScoreCalibrationLive, :index
+      # Festival Nomination Audit (Issue #479)
+      live "/festival", FestivalAuditLive, :index
+      live "/festival/:org_slug", FestivalAuditLive, :organization
+      live "/festival/:org_slug/:year", FestivalAuditLive, :ceremony
 
-    # Oban job dashboard
+      # Score Calibration Admin (Issue #518)
+      live "/score-calibration", ScoreCalibrationLive, :index
+    end
+
+    # Oban dashboard is a forwarded plug, not a LiveView, so it cannot live
+    # inside `live_session`. It keeps its own embedded styling.
     oban_dashboard("/oban")
   end
 

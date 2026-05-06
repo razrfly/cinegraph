@@ -44,13 +44,15 @@ defmodule CinegraphWeb.AdminHealthLive.ShowTest do
       _opened = render_click(live, "open_drawer", %{"domain" => "people"})
       closed = render_click(live, "close_drawer", %{})
 
-      refute closed =~ ~s(role="dialog")
+      # The admin layout's mobile menu also uses role="dialog", so use the
+      # drift drawer's unique close-button aria-label as the discriminator.
+      refute closed =~ ~s(aria-label="Close drawer")
     end
 
     test "open_drawer with unknown domain is a no-op (does not crash)", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/admin/health")
       html = render_click(live, "open_drawer", %{"domain" => "bogus"})
-      refute html =~ ~s(role="dialog")
+      refute html =~ ~s(aria-label="Close drawer")
     end
 
     test "renders all 5 domain cards including collaborations", %{conn: conn} do

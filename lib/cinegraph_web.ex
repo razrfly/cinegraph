@@ -80,6 +80,34 @@ defmodule CinegraphWeb do
     end
   end
 
+  @doc """
+  Use for LiveViews under the `/admin/*` scope. Adds the admin component
+  imports on top of the standard live_view setup. The admin chrome layout
+  is set via `live_session` in the router (see `CinegraphWeb.Router`).
+  """
+  def admin_live_view do
+    quote do
+      use Phoenix.LiveView,
+        layout: {CinegraphWeb.Layouts, :app}
+
+      unquote(html_helpers())
+      unquote(admin_helpers())
+    end
+  end
+
+  @doc "Use for admin-only HEEx function components."
+  def admin_html do
+    quote do
+      use Phoenix.Component
+
+      import Phoenix.Controller,
+        only: [get_csrf_token: 0, view_module: 1, view_template: 1]
+
+      unquote(html_helpers())
+      unquote(admin_helpers())
+    end
+  end
+
   defp html_helpers do
     quote do
       # Translation
@@ -98,6 +126,14 @@ defmodule CinegraphWeb do
 
       # Routes generation with the ~p sigil
       unquote(verified_routes())
+    end
+  end
+
+  defp admin_helpers do
+    quote do
+      import CinegraphWeb.Admin.Components.AdminComponents
+      import CinegraphWeb.Admin.Components.DashboardComponents
+      import CinegraphWeb.Admin.Components.HealthComponents
     end
   end
 
