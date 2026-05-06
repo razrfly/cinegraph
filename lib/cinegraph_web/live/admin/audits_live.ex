@@ -162,6 +162,19 @@ defmodule CinegraphWeb.Admin.AuditsLive do
     ArgumentError -> :error
   end
 
+  defp people_scores_navigation(assigns) do
+    ~H"""
+    <div :if={@active.id == :people_scores} class="mb-4 text-xs">
+      <.link
+        navigate={~p"/admin/predictions"}
+        class="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
+      >
+        <span>← Back to predictions (auteurs criterion)</span>
+      </.link>
+    </div>
+    """
+  end
+
   @impl true
   def render(assigns) do
     active = active_entry(assigns)
@@ -203,14 +216,7 @@ defmodule CinegraphWeb.Admin.AuditsLive do
       <.section_card title={@active.label}>
         <p class="text-sm text-gray-600 mb-4">{@active.description}</p>
 
-        <div :if={@active.id == :people_scores} class="mb-4 text-xs">
-          <.link
-            navigate={~p"/admin/predictions"}
-            class="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-          >
-            <span>← Back to predictions (auteurs criterion)</span>
-          </.link>
-        </div>
+        <.people_scores_navigation active={@active} />
 
         <%!-- Args form for required-arg audits --%>
         <%= if @active.arity == :required or @active.id == :queue_failures do %>

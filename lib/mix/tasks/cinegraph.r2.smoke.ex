@@ -53,55 +53,67 @@ defmodule Mix.Tasks.Cinegraph.R2.Smoke do
 
     Mix.shell().info("Fetching CDN URL...")
 
-    try do
-      case HTTPoison.get(cdn_url, [], timeout: 10_000, recv_timeout: 10_000) do
-        {:ok, %HTTPoison.Response{status_code: 200, headers: headers, body: body}} ->
-          ctype =
-            headers
-            |> Enum.find(fn {k, _} -> String.downcase(k) == "content-type" end)
-            |> case do
-              {_, v} -> v
-              _ -> "(missing)"
-            end
+    fetch_result =
+      try do
+        case HTTPoison.get(cdn_url, [], timeout: 10_000, recv_timeout: 10_000) do
+          {:ok, %HTTPoison.Response{status_code: 200, headers: headers, body: body}} ->
+            ctype =
+              headers
+              |> Enum.find(fn {k, _} -> String.downcase(k) == "content-type" end)
+              |> case do
+                {_, v} -> v
+                _ -> "(missing)"
+              end
 
-          Mix.shell().info("✅ Fetch OK — content-type=#{ctype}, body=#{byte_size(body)} bytes")
+            {:ok, ctype, byte_size(body)}
 
-          if byte_size(body) != byte_size(@png_bytes) do
-            Mix.shell().error(
-              "⚠ Body size mismatch — uploaded #{byte_size(@png_bytes)} got #{byte_size(body)}"
-            )
-          end
+          {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
+            {:error, :http_status, status, String.slice(body, 0, 200)}
 
-        {:ok, %HTTPoison.Response{status_code: status, body: body}} ->
+          {:error, %HTTPoison.Error{reason: reason}} ->
+            {:error, :network, reason}
+        end
+      after
+        Mix.shell().info("Cleaning up test object...")
+
+        case R2.delete(key) do
+          :ok ->
+            Mix.shell().info("✅ Delete OK")
+
+          {:error, reason} ->
+            Mix.shell().error("⚠ Delete failed (object remains): #{inspect(reason)}")
+        end
+      end
+
+    case fetch_result do
+      {:ok, ctype, body_size} ->
+        Mix.shell().info("✅ Fetch OK — content-type=#{ctype}, body=#{body_size} bytes")
+
+        if body_size != byte_size(@png_bytes) do
           Mix.shell().error(
-            "❌ Fetch HTTP #{status} — likely the bucket isn't public. Body excerpt: #{String.slice(body, 0, 200)}"
+            "⚠ Body size mismatch — uploaded #{byte_size(@png_bytes)} got #{body_size}"
           )
+        end
 
-          Mix.shell().error("""
-          Hint: enable public access for the bucket in Cloudflare dashboard:
-            R2 → cinegraph → Settings → Public Access → Allow Access
-          Then set R2_CDN_URL to the bucket's r2.dev URL or a custom domain.
-          """)
+        Mix.shell().info("\n🎉 R2 smoke test passed.")
 
-          System.halt(3)
+      {:error, :http_status, status, excerpt} ->
+        Mix.shell().error(
+          "❌ Fetch HTTP #{status} — likely the bucket isn't public. Body excerpt: #{excerpt}"
+        )
 
-        {:error, %HTTPoison.Error{reason: reason}} ->
-          Mix.shell().error("❌ Fetch network error: #{inspect(reason)}")
-          System.halt(4)
-      end
-    after
-      Mix.shell().info("Cleaning up test object...")
+        Mix.shell().error("""
+        Hint: enable public access for the bucket in Cloudflare dashboard:
+          R2 → cinegraph → Settings → Public Access → Allow Access
+        Then set R2_CDN_URL to the bucket's r2.dev URL or a custom domain.
+        """)
 
-      case R2.delete(key) do
-        :ok ->
-          Mix.shell().info("✅ Delete OK")
+        System.halt(3)
 
-        {:error, reason} ->
-          Mix.shell().error("⚠ Delete failed (object remains): #{inspect(reason)}")
-      end
+      {:error, :network, reason} ->
+        Mix.shell().error("❌ Fetch network error: #{inspect(reason)}")
+        System.halt(4)
     end
-
-    Mix.shell().info("\n🎉 R2 smoke test passed.")
   end
 
   defp report_missing_config do

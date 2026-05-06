@@ -11,6 +11,7 @@ defmodule Cinegraph.Health.PeopleScoresAudit do
 
   alias Cinegraph.Movies.{Movie, MovieScoring}
   alias Cinegraph.Repo
+  import Ecto.Query
 
   # {tmdb_id, expected_title, min_acceptable_score (out of 10)}
   @ground_truth [
@@ -49,7 +50,8 @@ defmodule Cinegraph.Health.PeopleScoresAudit do
             min_score: float(),
             score: float() | nil,        # nil when movie is missing
             below_threshold: boolean(),
-            top_people: [String.t()]
+            top_people: [String.t()],
+            missing: boolean()
           },
           ...
         ]
@@ -57,9 +59,13 @@ defmodule Cinegraph.Health.PeopleScoresAudit do
   """
   @spec audit(keyword()) :: map()
   def audit(_opts \\ []) do
+    movies_by_tmdb_id = preload_ground_truth_movies()
+
     rows =
       Enum.map(@ground_truth, fn {tmdb_id, title, min_score} ->
-        evaluate_row(tmdb_id, title, min_score)
+        movies_by_tmdb_id
+        |> Map.get(tmdb_id)
+        |> evaluate_row(tmdb_id, title, min_score)
       end)
 
     %{
@@ -69,38 +75,44 @@ defmodule Cinegraph.Health.PeopleScoresAudit do
     }
   end
 
-  defp evaluate_row(tmdb_id, title, min_score) do
-    case Repo.get_by(Movie, tmdb_id: tmdb_id) do
-      nil ->
-        %{
-          tmdb_id: tmdb_id,
-          title: title,
-          min_score: min_score,
-          score: nil,
-          below_threshold: false,
-          top_people: [],
-          missing: true
-        }
+  defp preload_ground_truth_movies do
+    tmdb_ids = Enum.map(@ground_truth, fn {tmdb_id, _title, _min_score} -> tmdb_id end)
 
-      movie ->
-        info = MovieScoring.explain_auteurs_score(movie.id)
-        score_10 = (info.avg_top10 || 0.0) / 10.0
+    from(m in Movie, where: m.tmdb_id in ^tmdb_ids, select: {m.tmdb_id, m})
+    |> Repo.all()
+    |> Map.new()
+  end
 
-        top_people =
-          info.top_people
-          |> Enum.take(3)
-          |> Enum.map(fn {name, _job, _score, _weight} -> name end)
+  defp evaluate_row(nil, tmdb_id, title, min_score) do
+    %{
+      tmdb_id: tmdb_id,
+      title: title,
+      min_score: min_score,
+      score: nil,
+      below_threshold: false,
+      top_people: [],
+      missing: true
+    }
+  end
 
-        %{
-          tmdb_id: tmdb_id,
-          title: title,
-          min_score: min_score,
-          score: Float.round(score_10 * 1.0, 2),
-          below_threshold: score_10 < min_score,
-          top_people: top_people,
-          missing: false
-        }
-    end
+  defp evaluate_row(movie, tmdb_id, title, min_score) do
+    info = MovieScoring.explain_auteurs_score(movie.id)
+    score_10 = (info.avg_top10 || 0.0) / 10.0
+
+    top_people =
+      info.top_people
+      |> Enum.take(3)
+      |> Enum.map(fn {name, _job, _score, _weight} -> name end)
+
+    %{
+      tmdb_id: tmdb_id,
+      title: title,
+      min_score: min_score,
+      score: Float.round(score_10 * 1.0, 2),
+      below_threshold: score_10 < min_score,
+      top_people: top_people,
+      missing: false
+    }
   end
 
   defp summarize(rows) do
