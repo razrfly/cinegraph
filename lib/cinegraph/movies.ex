@@ -201,6 +201,46 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Returns small shelves of full movies for multiple canonical lists in one query.
+  """
+  def list_canonical_shelf_movies_by_list_keys(list_keys, limit \\ 12)
+      when is_list(list_keys) and is_integer(limit) do
+    list_keys = Enum.uniq(Enum.filter(list_keys, &is_binary/1))
+
+    if list_keys == [] do
+      %{}
+    else
+      rows =
+        from(m in Movie,
+          join:
+            key in fragment(
+              "SELECT unnest(?::text[]) AS list_key",
+              type(^list_keys, {:array, :string})
+            ),
+          on: fragment("? \\? ?", m.canonical_sources, field(key, :list_key)),
+          where: m.import_status == "full",
+          order_by: [
+            asc: field(key, :list_key),
+            asc_nulls_last:
+              fragment(
+                "NULLIF(?->?->>'list_position', '')::int",
+                m.canonical_sources,
+                field(key, :list_key)
+              ),
+            asc: m.release_date,
+            asc: m.title
+          ],
+          select: {field(key, :list_key), m}
+        )
+        |> Repo.replica().all()
+
+      rows
+      |> Enum.group_by(fn {list_key, _movie} -> list_key end, fn {_list_key, movie} -> movie end)
+      |> Map.new(fn {list_key, movies} -> {list_key, Enum.take(movies, limit)} end)
+    end
+  end
+
+  @doc """
   Returns the list of soft imported movies.
   These are movies that didn't meet quality criteria but are tracked.
   """

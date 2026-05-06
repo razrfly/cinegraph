@@ -7,6 +7,9 @@ defmodule Cinegraph.HomepageTest do
   alias Cinegraph.Movies.{Movie, MovieList, MovieScoreCache, Person}
   alias Cinegraph.Repo
 
+  @fixed_calculated_at ~U[2026-05-05 00:00:00Z]
+  @fixed_inserted_at ~N[2026-05-05 00:00:00]
+
   setup do
     Cachex.clear(:movies_cache)
     Cachex.clear(:health_cache)
@@ -41,9 +44,7 @@ defmodule Cinegraph.HomepageTest do
     # The home "in or near theaters" section requires >= 4 recent releases
     # before it renders; seed three additional sparse rows so the test data
     # crosses that bar.
-    for n <- 1..3 do
-      insert_movie!("Filler Release #{n}", Date.add(~D[2026-05-10], -n), %{})
-    end
+    insert_filler_releases!(3, ~D[2026-05-10])
 
     insert_score_cache!(canon, 9.2, [8.0, 9.5, 7.0, 9.9, 8.2, 6.0], "polarizer")
     insert_score_cache!(theater, 7.4, [7.4, 7.0, 3.0, 4.0, 5.0, 6.0], "peoples_champion")
@@ -122,9 +123,30 @@ defmodule Cinegraph.HomepageTest do
       disparity_score: abs(mob - critics),
       disparity_category: category,
       unpredictability_score: 0.0,
-      calculated_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      calculated_at: @fixed_calculated_at,
       calculation_version: "test"
     })
+  end
+
+  defp insert_filler_releases!(count, release_date) do
+    rows =
+      Enum.map(1..count, fn n ->
+        title = "Filler Release #{n}"
+
+        %{
+          tmdb_id: System.unique_integer([:positive]),
+          title: title,
+          release_date: Date.add(release_date, -n),
+          poster_path: "/#{String.replace(title, " ", "_")}.jpg",
+          canonical_sources: %{},
+          adult: false,
+          import_status: "full",
+          inserted_at: @fixed_inserted_at,
+          updated_at: @fixed_inserted_at
+        }
+      end)
+
+    Repo.insert_all(Movie, rows)
   end
 
   defp insert_collaboration!(person_a, person_b) do

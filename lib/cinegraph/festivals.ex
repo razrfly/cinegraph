@@ -222,9 +222,13 @@ defmodule Cinegraph.Festivals do
       )
       |> Repo.replica().all()
 
+    ceremony_ids = Enum.map(ceremonies, & &1.id)
+    winners_by_ceremony_id = top_winners_by_ceremony_id(ceremony_ids)
+    nomination_counts_by_ceremony_id = nomination_counts_by_ceremony_id(ceremony_ids)
+
     Enum.map(ceremonies, fn ceremony ->
-      winner = top_winner_for_ceremony(ceremony.id)
-      count = count_nominations(ceremony.id)
+      winner = Map.get(winners_by_ceremony_id, ceremony.id)
+      count = Map.get(nomination_counts_by_ceremony_id, ceremony.id, 0)
 
       %{
         ceremony: ceremony,
@@ -235,14 +239,18 @@ defmodule Cinegraph.Festivals do
     end)
   end
 
-  defp top_winner_for_ceremony(ceremony_id) do
+  defp top_winners_by_ceremony_id([]), do: %{}
+
+  defp top_winners_by_ceremony_id(ceremony_ids) do
     from(n in FestivalNomination,
       join: cat in assoc(n, :category),
       join: m in assoc(n, :movie),
-      where: n.ceremony_id == ^ceremony_id,
+      where: n.ceremony_id in ^ceremony_ids,
       where: n.won == true,
       where: not is_nil(n.movie_id),
+      distinct: n.ceremony_id,
       order_by: [
+        asc: n.ceremony_id,
         desc:
           fragment(
             "CASE WHEN ? ILIKE '%best picture%' OR ? ILIKE '%best film%' OR ? ILIKE 'palme%' OR ? ILIKE 'golden lion%' OR ? ILIKE 'golden bear%' THEN 1 ELSE 0 END",
@@ -255,9 +263,22 @@ defmodule Cinegraph.Festivals do
         asc: n.id
       ],
       preload: [movie: m, category: cat],
-      limit: 1
+      select: n
     )
-    |> Repo.replica().one()
+    |> Repo.replica().all()
+    |> Map.new(&{&1.ceremony_id, &1})
+  end
+
+  defp nomination_counts_by_ceremony_id([]), do: %{}
+
+  defp nomination_counts_by_ceremony_id(ceremony_ids) do
+    from(n in FestivalNomination,
+      where: n.ceremony_id in ^ceremony_ids,
+      group_by: n.ceremony_id,
+      select: {n.ceremony_id, count(n.id)}
+    )
+    |> Repo.replica().all()
+    |> Map.new()
   end
 
   @doc """
