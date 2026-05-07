@@ -12,7 +12,9 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.RefreshTest do
     end
 
     test "returns false for an unknown table or view" do
-      refute Refresh.has_unique_index?("definitely_does_not_exist_#{System.unique_integer([:positive])}")
+      refute Refresh.has_unique_index?(
+               "definitely_does_not_exist_#{System.unique_integer([:positive])}"
+             )
     end
 
     test "returns false for a regular table without any unique index" do
@@ -31,6 +33,28 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.RefreshTest do
         Repo.query!(~s|CREATE UNIQUE INDEX ON "#{table}" (id)|)
         # Unique index added → true
         assert Refresh.has_unique_index?(table) == true
+      after
+        Repo.query!(~s|DROP TABLE IF EXISTS "#{table}"|)
+      end
+    end
+
+    test "returns false for partial and expression unique indexes" do
+      table = "tmp_unqualified_unique_idx_#{System.unique_integer([:positive])}"
+      partial_index = "#{table}_partial_idx"
+      expression_index = "#{table}_expression_idx"
+
+      Repo.query!(~s|CREATE TABLE "#{table}" (id int, val int)|)
+
+      try do
+        Repo.query!(
+          ~s|CREATE UNIQUE INDEX "#{partial_index}" ON "#{table}" (id) WHERE val IS NOT NULL|
+        )
+
+        assert Refresh.has_unique_index?(table) == false
+
+        Repo.query!(~s|DROP INDEX IF EXISTS "#{partial_index}"|)
+        Repo.query!(~s|CREATE UNIQUE INDEX "#{expression_index}" ON "#{table}" ((val + 1))|)
+        assert Refresh.has_unique_index?(table) == false
       after
         Repo.query!(~s|DROP TABLE IF EXISTS "#{table}"|)
       end

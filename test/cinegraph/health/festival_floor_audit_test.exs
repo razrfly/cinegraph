@@ -111,12 +111,13 @@ defmodule Cinegraph.Health.FestivalFloorAuditTest do
   end
 
   defp insert_ceremony!(org, year) do
-    %FestivalCeremony{
+    %FestivalCeremony{}
+    |> FestivalCeremony.changeset(%{
       organization_id: org.id,
       year: year,
       name: "#{org.name} #{year}",
       data_source: "test"
-    }
+    })
     |> Repo.insert!()
   end
 

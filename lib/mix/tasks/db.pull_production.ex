@@ -187,7 +187,8 @@ defmodule Mix.Tasks.Db.PullProduction do
         [
           {"Checking pg_restore in PATH", &check_pg_restore/0},
           {"Checking createdb in PATH", &check_createdb/0},
-          {"Checking local PostgreSQL", &check_local_postgres/0}
+          {"Checking local PostgreSQL", &check_local_postgres/0},
+          {"Checking disk space (≥ 20 GB free in #{@dump_dir})", &check_disk_space/0}
         ]
       else
         [
@@ -302,8 +303,12 @@ defmodule Mix.Tasks.Db.PullProduction do
         end
 
       _ ->
-        # df failed (unusual environment); skip rather than block the import.
-        :ok
+        if File.dir?(@dump_dir) do
+          # df failed in an unusual environment; skip rather than block.
+          :ok
+        else
+          {:error, "missing dump dir #{@dump_dir}"}
+        end
     end
   end
 
@@ -883,7 +888,25 @@ defmodule Mix.Tasks.Db.PullProduction do
   # CONCURRENTLY refresh requires a unique index on the view. #897 Phase B.
   defp has_unique_index?(view_name) do
     case Cinegraph.Repo.query(
-           "SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1 AND indexdef LIKE '%UNIQUE%')",
+           """
+           SELECT EXISTS(
+             SELECT 1
+             FROM pg_class c
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             JOIN pg_index i ON i.indrelid = c.oid
+             WHERE n.nspname = 'public'
+               AND c.relname = $1
+               AND i.indisunique
+               AND i.indisvalid
+               AND i.indisready
+               AND i.indpred IS NULL
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM unnest(i.indkey) AS key(attnum)
+                 WHERE key.attnum = 0
+               )
+           )
+           """,
            [view_name]
          ) do
       {:ok, %{rows: [[exists]]}} -> exists

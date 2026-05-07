@@ -64,36 +64,12 @@ defmodule Cinegraph.Health.Drift.People do
 
     Drift.cached({:people, :missing_profile_path, limit}, @cache_ttl, fn ->
       total = Scopes.canonical_people_count()
+      query = canonical_people_with_missing_profile_path()
 
-      affected =
-        Repo.replica().one(
-          from p in "people",
-            join: mc in "movie_credits",
-            on: mc.person_id == p.id,
-            join: m in "movies",
-            on: m.id == mc.movie_id,
-            where:
-              is_nil(p.profile_path) and
-                fragment("? != '{}'::jsonb", m.canonical_sources),
-            select: count(p.id, :distinct)
-        ) || 0
+      affected = count_distinct_people(query)
 
       examples =
-        from(p in "people",
-          join: mc in "movie_credits",
-          on: mc.person_id == p.id,
-          join: m in "movies",
-          on: m.id == mc.movie_id,
-          where:
-            is_nil(p.profile_path) and
-              fragment("? != '{}'::jsonb", m.canonical_sources),
-          distinct: p.id,
-          select: %{id: p.id, name: p.name},
-          order_by: [desc: p.id],
-          limit: ^limit
-        )
-        |> Repo.replica().all()
-        |> Enum.map(&Map.put(&1, :reason, "profile_path IS NULL (canonical-list scope)"))
+        canonical_people_examples(query, "profile_path IS NULL (canonical-list scope)", limit)
 
       Drift.result(:people, :missing_profile_path, total, affected, examples)
     end)
@@ -111,36 +87,16 @@ defmodule Cinegraph.Health.Drift.People do
 
     Drift.cached({:people, :missing_biography, limit}, @cache_ttl, fn ->
       total = Scopes.canonical_people_count()
+      query = canonical_people_with_missing_biography()
 
-      affected =
-        Repo.replica().one(
-          from p in "people",
-            join: mc in "movie_credits",
-            on: mc.person_id == p.id,
-            join: m in "movies",
-            on: m.id == mc.movie_id,
-            where:
-              (is_nil(p.biography) or p.biography == "") and
-                fragment("? != '{}'::jsonb", m.canonical_sources),
-            select: count(p.id, :distinct)
-        ) || 0
+      affected = count_distinct_people(query)
 
       examples =
-        from(p in "people",
-          join: mc in "movie_credits",
-          on: mc.person_id == p.id,
-          join: m in "movies",
-          on: m.id == mc.movie_id,
-          where:
-            (is_nil(p.biography) or p.biography == "") and
-              fragment("? != '{}'::jsonb", m.canonical_sources),
-          distinct: p.id,
-          select: %{id: p.id, name: p.name},
-          order_by: [desc: p.id],
-          limit: ^limit
+        canonical_people_examples(
+          query,
+          "biography missing or blank (canonical-list scope)",
+          limit
         )
-        |> Repo.replica().all()
-        |> Enum.map(&Map.put(&1, :reason, "biography missing or blank (canonical-list scope)"))
 
       Drift.result(:people, :missing_biography, total, affected, examples)
     end)
@@ -376,6 +332,42 @@ defmodule Cinegraph.Health.Drift.People do
   end
 
   # ===== private =====
+
+  defp canonical_people_with_missing_profile_path do
+    canonical_people_query()
+    |> where([p, _mc, _m], is_nil(p.profile_path))
+  end
+
+  defp canonical_people_with_missing_biography do
+    canonical_people_query()
+    |> where([p, _mc, _m], is_nil(p.biography) or p.biography == "")
+  end
+
+  defp canonical_people_query do
+    from p in "people",
+      join: mc in "movie_credits",
+      on: mc.person_id == p.id,
+      join: m in "movies",
+      on: m.id == mc.movie_id,
+      where: fragment("? != '{}'::jsonb", m.canonical_sources)
+  end
+
+  defp count_distinct_people(query) do
+    query
+    |> select([p], count(p.id, :distinct))
+    |> Repo.replica().one() || 0
+  end
+
+  defp canonical_people_examples(query, reason, limit) do
+    from(p in query,
+      distinct: p.id,
+      select: %{id: p.id, name: p.name},
+      order_by: [desc: p.id],
+      limit: ^limit
+    )
+    |> Repo.replica().all()
+    |> Enum.map(&Map.put(&1, :reason, reason))
+  end
 
   defp total_people do
     Drift.cached({:people, :total}, @cache_ttl, fn ->

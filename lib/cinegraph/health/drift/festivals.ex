@@ -32,8 +32,27 @@ defmodule Cinegraph.Health.Drift.Festivals do
   def nominations_below_floor(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
     org_filter = build_org_filter(opts)
+    cache_key = {:festivals, :nominations_below_floor, org_filter, limit}
 
-    Drift.cached({:festivals, :nominations_below_floor, org_filter, limit}, @cache_ttl, fn ->
+    case org_filter do
+      {:not_found, slug} ->
+        Drift.result(
+          :festivals,
+          :nominations_below_floor,
+          0,
+          0,
+          [],
+          "organization not found: #{slug}"
+        )
+
+      _ ->
+        if Keyword.get(opts, :bypass_cache, false), do: Cachex.del(:health_cache, cache_key)
+        nominations_below_floor_cached(org_filter, limit, cache_key)
+    end
+  end
+
+  defp nominations_below_floor_cached(org_filter, limit, cache_key) do
+    Drift.cached(cache_key, @cache_ttl, fn ->
       {org_clause, org_params} = sql_org_clause(org_filter, "c")
 
       sql = """
@@ -215,7 +234,7 @@ defmodule Cinegraph.Health.Drift.Festivals do
 
         case Ecto.Adapters.SQL.query!(Repo.replica(), sql, [slug]) do
           %{rows: [[id]]} -> id
-          _ -> nil
+          _ -> {:not_found, slug}
         end
     end
   end
