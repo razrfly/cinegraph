@@ -59,7 +59,11 @@ defmodule Cinegraph.Health.Drift do
   error with `blocked_reason`.
   """
   def run_all(check_funs, opts \\ []) when is_list(check_funs) do
-    timeout = Keyword.get(opts, :timeout, 60_000)
+    # Per-check timeout. Bumped from 60_000 in #896 Phase 4.1 because
+    # cold-cache full-table scans (pqs_stale, availability_stale, etc.)
+    # routinely exceed 60s and surface as `crashed/UNKNOWN` in the CLI.
+    # Outer per-domain timeout in `Cinegraph.Health.Facade` is 240_000.
+    timeout = Keyword.get(opts, :timeout, 180_000)
     max_concurrency = Keyword.get(opts, :max_concurrency, 4)
 
     check_funs

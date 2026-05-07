@@ -228,7 +228,9 @@ config :cinegraph, Oban,
        {"45 6 * * *", Cinegraph.Workers.AvailabilityRefreshSweeper},
        # IMDb-id repair via TMDb fetches: 5,000/day on :tmdb.
        {"0 7 * * *", Cinegraph.Workers.ImdbIdRepairSweeper},
-       # Collaboration graph repair: 5,000/day on :collaboration.
+       # Collaboration graph repair: 5,000 movies/day enqueued.
+       # Sweeper itself runs on :maintenance; the per-movie rebuilds it
+       # enqueues run on :collaboration (concurrency 3).
        {"30 7 * * *", Cinegraph.Workers.CollaborationRepairSweeper},
        # Zero-credits cleanup — two phases. Sunday 04:00 enqueues TMDb
        # refetches for orphan people; Monday 04:00 deletes those that

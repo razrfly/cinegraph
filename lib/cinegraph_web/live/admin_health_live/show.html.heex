@@ -167,6 +167,49 @@
     <% end %>
   </section>
 
+  <% festival_floor_orgs = festival_floor_data(@festival_floor) %>
+  <section :if={festival_floor_orgs != []} class="mt-10 mb-6">
+    <h2 class="text-sm uppercase tracking-wide text-zinc-500 font-semibold mb-3">
+      Below-floor ceremonies, by organization
+      <span class="ml-2 text-zinc-400 normal-case font-normal">
+        ({festival_floor_total(festival_floor_orgs)} ceremonies — see
+        <code class="text-xs">mix cinegraph.audit.festival_floor</code>
+        for full output)
+      </span>
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <%= for org_block <- festival_floor_orgs do %>
+        <div class="rounded-lg border border-zinc-200 bg-white p-4">
+          <div class="flex items-baseline justify-between mb-2">
+            <div class="text-sm font-semibold text-zinc-800">
+              {format_org_label(org_block.organization)}
+            </div>
+            <div class="text-xs text-zinc-500">
+              {org_block.below_floor_count} below · median {format_median(org_block.median)}
+            </div>
+          </div>
+          <ul class="text-xs space-y-1">
+            <%= for ceremony <- Enum.take(org_block.ceremonies, 3) do %>
+              <li class="flex justify-between">
+                <span class="text-zinc-700">
+                  {ceremony.year} · noms={ceremony.nominations}
+                </span>
+                <span class={festival_delta_class(ceremony.delta_pct)}>
+                  {format_delta_value(ceremony.delta_pct)}
+                </span>
+              </li>
+            <% end %>
+            <%= if length(org_block.ceremonies) > 3 do %>
+              <li class="text-zinc-400 italic pt-1">
+                +{length(org_block.ceremonies) - 3} more
+              </li>
+            <% end %>
+          </ul>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
   <section class="mt-10 mb-6">
     <.queue_strip snapshot={@queues} />
   </section>

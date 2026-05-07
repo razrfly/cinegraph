@@ -33,7 +33,7 @@ defmodule Cinegraph.Health.Drift.Festivals do
     limit = Keyword.get(opts, :limit, @example_limit)
     org_filter = build_org_filter(opts)
 
-    Drift.cached({:festivals, :nominations_below_floor, org_filter}, @cache_ttl, fn ->
+    Drift.cached({:festivals, :nominations_below_floor, org_filter, limit}, @cache_ttl, fn ->
       {org_clause, org_params} = sql_org_clause(org_filter, "c")
 
       sql = """

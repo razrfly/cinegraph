@@ -16,16 +16,37 @@ defmodule Cinegraph.Health.Drift.PeopleTest do
   # layer (Verdict colors it downstream); the regression signal is
   # `blocked_reason == nil` and a real `affected_count`.
 
-  describe "missing_profile_path/0 (regression: schemaless subquery select)" do
-    test "returns a real result instead of crashing on Ecto.SubQueryError" do
-      insert_person!(%{tmdb_id: 1, name: "No Photo", profile_path: nil})
-      insert_person!(%{tmdb_id: 2, name: "Has Photo", profile_path: "/abc.jpg"})
+  describe "missing_profile_path/0 (#896 Phase 1.1 — canonical-list scope)" do
+    test "counts only people with credits on canonical-list movies and missing profile_path" do
+      canonical_movie = insert_movie!(canonical: true)
+      non_canonical_movie = insert_movie!(canonical: false)
+
+      # Should count: in canonical list, missing profile_path
+      counted =
+        insert_person!(%{tmdb_id: 200, name: "Canonical NoPhoto", profile_path: nil})
+
+      insert_credit!(counted, canonical_movie)
+
+      # Should NOT count: not in any canonical list
+      _excluded_non_canonical =
+        insert_person!(%{tmdb_id: 201, name: "Non-Canonical NoPhoto", profile_path: nil})
+        |> tap(&insert_credit!(&1, non_canonical_movie))
+
+      # Should NOT count: in canonical list but profile_path populated
+      _excluded_has_photo =
+        insert_person!(%{tmdb_id: 202, name: "Canonical HasPhoto", profile_path: "/p.jpg"})
+        |> tap(&insert_credit!(&1, canonical_movie))
+
+      # Should NOT count: no credits at all
+      _orphan = insert_person!(%{tmdb_id: 203, name: "Orphan", profile_path: nil})
 
       result = Drift.People.missing_profile_path()
 
       assert result.check == :missing_profile_path
       assert result.blocked_reason == nil
-      assert result.affected_count >= 1
+      assert result.affected_count == 1
+      # Total reflects the canonical-list scope, not the full people table
+      assert result.total_population == 2
     end
   end
 

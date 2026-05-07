@@ -1,6 +1,7 @@
 defmodule Mix.Tasks.Cinegraph.Health do
   @moduledoc """
-  Overall health verdict — runs all 4 drift domains and rolls them up
+  Overall health verdict — runs all 6 drift domains (people, movies,
+  festivals, ratings, availability, collaborations) and rolls them up
   to green/amber/red.
 
   ## Usage
@@ -8,6 +9,8 @@ defmodule Mix.Tasks.Cinegraph.Health do
       mix cinegraph.health
       mix cinegraph.health --json
       mix cinegraph.health --domain people
+      mix cinegraph.health --domain availability
+      mix cinegraph.health --domain collaborations
   """
   use Mix.Task
 
@@ -63,15 +66,18 @@ defmodule Mix.Tasks.Cinegraph.Health do
     end
   end
 
-  defp normalize_domain(nil), do: :none
-  defp normalize_domain("people"), do: {:ok, :people}
-  defp normalize_domain("movies"), do: {:ok, :movies}
-  defp normalize_domain("festivals"), do: {:ok, :festivals}
-  defp normalize_domain("ratings"), do: {:ok, :ratings}
+  @doc false
+  def normalize_domain(nil), do: :none
+  def normalize_domain("people"), do: {:ok, :people}
+  def normalize_domain("movies"), do: {:ok, :movies}
+  def normalize_domain("festivals"), do: {:ok, :festivals}
+  def normalize_domain("ratings"), do: {:ok, :ratings}
+  def normalize_domain("availability"), do: {:ok, :availability}
+  def normalize_domain("collaborations"), do: {:ok, :collaborations}
 
-  defp normalize_domain(other) do
+  def normalize_domain(other) do
     {:error,
-     "invalid domain: #{inspect(other)}. valid domains: people, movies, festivals, ratings"}
+     "invalid domain: #{inspect(other)}. valid domains: people, movies, festivals, ratings, availability, collaborations"}
   end
 
   defp serialize(verdict) do

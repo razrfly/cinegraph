@@ -195,7 +195,8 @@ defmodule Mix.Tasks.Db.PullProduction do
           {"Checking pg_dump on remote", &check_remote_pg_dump/0},
           {"Checking pg_restore in PATH", &check_pg_restore/0},
           {"Checking createdb in PATH", &check_createdb/0},
-          {"Checking local PostgreSQL", &check_local_postgres/0}
+          {"Checking local PostgreSQL", &check_local_postgres/0},
+          {"Checking disk space (≥ 20 GB free in #{@dump_dir})", &check_disk_space/0}
         ]
       end
 
@@ -261,6 +262,48 @@ defmodule Mix.Tasks.Db.PullProduction do
         else
           {:error, "Cannot connect to local PostgreSQL: #{String.trim(output)}"}
         end
+    end
+  end
+
+  # 20 GB threshold = ~6 GB dump + ~25 GB restored DB + ~5 GB pgsql_tmp during
+  # materialized view refresh. The last `db.pull_production` failed mid-restore
+  # because pgsql_tmp ran out of disk while refreshing `person_collaboration_trends`
+  # — this check catches that earlier (#896 Phase 4.3).
+  defp check_disk_space do
+    threshold_gb = 20
+
+    case System.cmd("df", ["-Pk", @dump_dir], stderr_to_stdout: true) do
+      {output, 0} ->
+        case String.split(output, "\n", trim: true) do
+          [_header | [data_line | _]] ->
+            case String.split(data_line) do
+              [_fs, _blocks, _used, available_kb_str | _] ->
+                case Integer.parse(available_kb_str) do
+                  {available_kb, _} ->
+                    available_gb = available_kb / 1_048_576
+
+                    if available_gb >= threshold_gb do
+                      :ok
+                    else
+                      {:error,
+                       "only #{Float.round(available_gb, 1)} GB free in #{@dump_dir}, need ≥ #{threshold_gb} GB"}
+                    end
+
+                  :error ->
+                    :ok
+                end
+
+              _ ->
+                :ok
+            end
+
+          _ ->
+            :ok
+        end
+
+      _ ->
+        # df failed (unusual environment); skip rather than block the import.
+        :ok
     end
   end
 
@@ -796,20 +839,29 @@ defmodule Mix.Tasks.Db.PullProduction do
   defp refresh_materialized_views do
     verbose_info("  → Refreshing materialized views...")
 
-    # Find all materialized views; quote_ident ensures the returned names are safe to
-    # interpolate directly into the subsequent REFRESH MATERIALIZED VIEW statement.
+    # Find all materialized views in `public`. We fetch the bare matviewname
+    # (for the unique-index lookup) plus the quote_ident-safe qualified form
+    # (for interpolation into REFRESH MATERIALIZED VIEW).
     query = """
-    SELECT quote_ident(schemaname) || '.' || quote_ident(matviewname)
+    SELECT matviewname,
+           quote_ident(schemaname) || '.' || quote_ident(matviewname)
     FROM pg_matviews
     WHERE schemaname = 'public'
     """
 
     case Cinegraph.Repo.query(query) do
       {:ok, %{rows: rows}} ->
-        Enum.each(rows, fn [view_name] ->
-          verbose_info("    Refreshing #{view_name}...")
+        Enum.each(rows, fn [matviewname, qualified] ->
+          stmt =
+            if has_unique_index?(matviewname) do
+              "REFRESH MATERIALIZED VIEW CONCURRENTLY #{qualified}"
+            else
+              "REFRESH MATERIALIZED VIEW #{qualified}"
+            end
 
-          case Cinegraph.Repo.query("REFRESH MATERIALIZED VIEW #{view_name}") do
+          verbose_info("    #{stmt}...")
+
+          case Cinegraph.Repo.query(stmt) do
             {:ok, _} -> :ok
             {:error, reason} -> verbose_info("    Warning: #{inspect(reason)}")
           end
@@ -826,6 +878,17 @@ defmodule Mix.Tasks.Db.PullProduction do
     end
 
     :ok
+  end
+
+  # CONCURRENTLY refresh requires a unique index on the view. #897 Phase B.
+  defp has_unique_index?(view_name) do
+    case Cinegraph.Repo.query(
+           "SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1 AND indexdef LIKE '%UNIQUE%')",
+           [view_name]
+         ) do
+      {:ok, %{rows: [[exists]]}} -> exists
+      _ -> false
+    end
   end
 
   # ============================================================================

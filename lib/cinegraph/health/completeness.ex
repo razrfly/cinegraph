@@ -9,11 +9,16 @@ defmodule Cinegraph.Health.Completeness do
   """
 
   import Ecto.Query
-  alias Cinegraph.Health.CompletenessLog
+  alias Cinegraph.Health.{CompletenessLog, Scopes}
   alias Cinegraph.Repo
 
   @doc """
   Computes a snapshot **without** persisting.
+
+  Movies and people counters are scoped to the canonical-list catalog
+  (#896 Phase 1.5) — this is what we measure data quality against, not
+  the bulk-TMDb long-tail. Festivals are not scoped (the `festival_*`
+  tables don't have a long-tail problem).
 
   Returns a map suitable for serialization to the `completeness_log.payload`
   JSONB column or `Jason.encode!`.
@@ -22,13 +27,13 @@ defmodule Cinegraph.Health.Completeness do
 
       %{
         generated_at: ~U[...],
-        movies: %{total: 1_140_646, with_omdb: 985_400, with_omdb_pct: 86.4,
-                   with_imdb_id: 1_123_400, with_imdb_id_pct: 98.5},
-        people: %{total: 671_186, with_profile: 658_705, with_profile_pct: 98.1,
-                   with_biography: 540_000, with_biography_pct: 80.4,
-                   with_known_for: 670_000, with_known_for_pct: 99.8},
-        festivals: %{ceremonies: 480, nominations: 18_400, with_movie_pct: 99.9},
-        overall_completeness_pct: 90.5
+        movies: %{total: 12_400, with_omdb: 12_000, with_omdb_pct: 96.8,
+                   with_imdb_id: 12_350, with_imdb_id_pct: 99.6},
+        people: %{total: 25_400, with_profile: 25_100, with_profile_pct: 98.8,
+                   with_biography: 8_200, with_biography_pct: 32.3,
+                   with_known_for: 25_400, with_known_for_pct: 100.0},
+        festivals: %{ceremonies: 969, nominations: 43_890, with_movie_pct: 100.0},
+        overall_completeness_pct: 87.9
       }
   """
   def run do
@@ -101,9 +106,21 @@ defmodule Cinegraph.Health.Completeness do
     |> Repo.replica().all()
   end
 
+  # Canonical-scoped (#896 Phase 1.5). Bulk TMDb long-tail movies
+  # legitimately lack OMDb / IMDb id and are excluded — averaging them
+  # in dragged the Coverage tile to ~60% on data we never intend to
+  # enrich.
+  #
+  # OMDb semantics note: `with_omdb` here counts movies where
+  # `omdb_data IS NOT NULL` (data present). `Cinegraph.Health.Drift.Movies.missing_omdb`
+  # counts movies missing an `external_metrics` row for OMDb (never
+  # attempted). A movie attempted-and-failed counts as "missing" here
+  # but "not missing" there. Both are intentional: completeness = "do
+  # we have the data?", drift = "did we attempt?". Don't try to
+  # harmonize them.
   defp movies_completeness do
     %{total: total, with_omdb: with_omdb, with_imdb_id: with_imdb} =
-      from(m in "movies",
+      from(m in Scopes.canonical_movies(),
         select: %{
           total: count(m.id),
           with_omdb: filter(count(m.id), not is_nil(m.omdb_data)),
@@ -121,6 +138,10 @@ defmodule Cinegraph.Health.Completeness do
     }
   end
 
+  # Canonical-scoped (#896 Phase 1.5) — distinct people who appear in
+  # `movie_credits` for at least one canonical movie. Counters use
+  # `count(p.id, :distinct)` because a person can have credits across
+  # multiple canonical movies.
   defp people_completeness do
     %{
       total: total,
@@ -129,11 +150,17 @@ defmodule Cinegraph.Health.Completeness do
       with_known_for: with_known
     } =
       from(p in "people",
+        join: mc in "movie_credits",
+        on: mc.person_id == p.id,
+        join: m in "movies",
+        on: m.id == mc.movie_id,
+        where: fragment("? != '{}'::jsonb", m.canonical_sources),
         select: %{
-          total: count(p.id),
-          with_profile: filter(count(p.id), not is_nil(p.profile_path)),
-          with_biography: filter(count(p.id), not is_nil(p.biography) and p.biography != ""),
-          with_known_for: filter(count(p.id), not is_nil(p.known_for_department))
+          total: count(p.id, :distinct),
+          with_profile: filter(count(p.id, :distinct), not is_nil(p.profile_path)),
+          with_biography:
+            filter(count(p.id, :distinct), not is_nil(p.biography) and p.biography != ""),
+          with_known_for: filter(count(p.id, :distinct), not is_nil(p.known_for_department))
         }
       )
       |> Repo.replica().one()

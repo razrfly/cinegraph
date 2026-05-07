@@ -197,7 +197,16 @@ defmodule Cinegraph.Health.Drift.Availability do
     end)
   end
 
+  # Canonical-list movies that we've fully imported from TMDb. Drift
+  # checks in this domain measure availability coverage against this
+  # population, not the bulk-ingest long-tail (#896 Phase 1.4) — most
+  # non-canonical movies legitimately have no streaming availability
+  # data and reporting against them was a measurement artifact.
   defp full_movies_with_tmdb do
-    from(m in Movie, where: m.import_status == "full", where: not is_nil(m.tmdb_id))
+    from(m in Movie,
+      where: m.import_status == "full",
+      where: not is_nil(m.tmdb_id),
+      where: fragment("? != '{}'::jsonb", m.canonical_sources)
+    )
   end
 end
