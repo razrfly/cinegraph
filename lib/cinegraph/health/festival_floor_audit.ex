@@ -41,6 +41,7 @@ defmodule Cinegraph.Health.FestivalFloorAudit do
       opts
       |> Keyword.take([:org])
       |> Keyword.put(:limit, @audit_limit)
+      |> maybe_force_refresh(opts)
 
     drift = Festivals.nominations_below_floor(drift_opts)
     org_ids = drift.examples |> Enum.map(& &1.organization_id) |> Enum.uniq()
@@ -68,6 +69,14 @@ defmodule Cinegraph.Health.FestivalFloorAudit do
   end
 
   defp decorate_ceremony(c), do: Map.put(c, :delta_pct, nil)
+
+  defp maybe_force_refresh(drift_opts, opts) do
+    if Keyword.get(opts, :bypass_cache, false) do
+      Keyword.put(drift_opts, :bypass_cache, true)
+    else
+      drift_opts
+    end
+  end
 
   defp load_orgs([]), do: %{}
 

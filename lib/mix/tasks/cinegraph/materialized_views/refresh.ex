@@ -29,10 +29,19 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
 
     {opts, _, _} = OptionParser.parse(args, strict: [view: :string])
 
+    views = list_views()
+
     views =
       case opts[:view] do
-        nil -> list_views()
-        name -> [name]
+        nil ->
+          views
+
+        name ->
+          if name in views do
+            [name]
+          else
+            Mix.raise("Unknown materialized view public.#{name}")
+          end
       end
 
     Enum.each(views, &refresh_view!/1)
@@ -54,25 +63,55 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
   # view is present (#897 Phase B). CONCURRENTLY is non-blocking for readers
   # but requires a unique index. Falls back to plain REFRESH otherwise.
   defp refresh_view!(name) do
+    qualified = quoted_public_name(name)
+
     if has_unique_index?(name) do
       Mix.shell().info("Refreshing public.#{name} (CONCURRENTLY)...")
 
       Repo.query!(
-        ~s(REFRESH MATERIALIZED VIEW CONCURRENTLY public."#{name}"),
+        "REFRESH MATERIALIZED VIEW CONCURRENTLY #{qualified}",
         [],
         timeout: :infinity
       )
     else
       Mix.shell().info("Refreshing public.#{name} (locking — no unique index)...")
-      Repo.query!(~s(REFRESH MATERIALIZED VIEW public."#{name}"), [], timeout: :infinity)
+      Repo.query!("REFRESH MATERIALIZED VIEW #{qualified}", [], timeout: :infinity)
     end
+  end
+
+  defp quoted_public_name(name) do
+    %{rows: [[qualified]]} =
+      Repo.query!(
+        "SELECT quote_ident('public') || '.' || quote_ident($1)",
+        [name]
+      )
+
+    qualified
   end
 
   @doc false
   def has_unique_index?(view_name) do
     %{rows: [[exists]]} =
       Repo.query!(
-        "SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1 AND indexdef LIKE '%UNIQUE%')",
+        """
+        SELECT EXISTS(
+          SELECT 1
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          JOIN pg_index i ON i.indrelid = c.oid
+          WHERE n.nspname = 'public'
+            AND c.relname = $1
+            AND i.indisunique
+            AND i.indisvalid
+            AND i.indisready
+            AND i.indpred IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM unnest(i.indkey) AS key(attnum)
+              WHERE key.attnum = 0
+            )
+        )
+        """,
         [view_name]
       )
 
