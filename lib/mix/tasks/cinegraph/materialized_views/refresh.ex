@@ -19,6 +19,7 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
   """
   use Mix.Task
 
+  alias Cinegraph.Database.Utils, as: DatabaseUtils
   alias Cinegraph.Repo
 
   @shortdoc "Refresh PostgreSQL materialized views in the public schema"
@@ -65,7 +66,7 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
   defp refresh_view!(name) do
     qualified = quoted_public_name(name)
 
-    if has_unique_index?(name) do
+    if DatabaseUtils.has_unique_index?(name) do
       Mix.shell().info("Refreshing public.#{name} (CONCURRENTLY)...")
 
       Repo.query!(
@@ -87,34 +88,5 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
       )
 
     qualified
-  end
-
-  @doc false
-  def has_unique_index?(view_name) do
-    %{rows: [[exists]]} =
-      Repo.query!(
-        """
-        SELECT EXISTS(
-          SELECT 1
-          FROM pg_class c
-          JOIN pg_namespace n ON n.oid = c.relnamespace
-          JOIN pg_index i ON i.indrelid = c.oid
-          WHERE n.nspname = 'public'
-            AND c.relname = $1
-            AND i.indisunique
-            AND i.indisvalid
-            AND i.indisready
-            AND i.indpred IS NULL
-            AND NOT EXISTS (
-              SELECT 1
-              FROM unnest(i.indkey) AS key(attnum)
-              WHERE key.attnum = 0
-            )
-        )
-        """,
-        [view_name]
-      )
-
-    exists
   end
 end

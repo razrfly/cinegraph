@@ -65,7 +65,7 @@ defmodule CinegraphWeb.AdminHealthLive.DomainHelpers do
   # crashed/uncached checks fall through to an explicit unavailable string.
   defp headline_for(:people, checks) do
     case Enum.find(checks, &(&1.check == :missing_profile_path)) do
-      %{blocked_reason: nil, affected_pct: pct} ->
+      %{blocked_reason: nil, affected_pct: pct} when is_number(pct) ->
         "#{Float.round(100.0 - pct, 1)}% of people have a profile photo"
 
       _ ->
@@ -75,7 +75,8 @@ defmodule CinegraphWeb.AdminHealthLive.DomainHelpers do
 
   defp headline_for(:movies, checks) do
     case Enum.find(checks, &(&1.check == :year_gap)) do
-      %{blocked_reason: nil, total_population: total, affected_count: missing} when total > 0 ->
+      %{blocked_reason: nil, total_population: total, affected_count: missing}
+      when is_integer(total) and is_integer(missing) and total > 0 ->
         "#{format_int(total - missing)} / #{format_int(total)} vs TMDb"
 
       _ ->
@@ -85,7 +86,8 @@ defmodule CinegraphWeb.AdminHealthLive.DomainHelpers do
 
   defp headline_for(:festivals, checks) do
     case Enum.find(checks, &(&1.check == :nominations_below_floor)) do
-      %{blocked_reason: nil, total_population: total, affected_count: affected} ->
+      %{blocked_reason: nil, total_population: total, affected_count: affected}
+      when is_integer(total) and is_integer(affected) ->
         healthy = max(total - affected, 0)
         "#{healthy} / #{total} ceremonies fully synced"
 
@@ -96,7 +98,7 @@ defmodule CinegraphWeb.AdminHealthLive.DomainHelpers do
 
   defp headline_for(:ratings, checks) do
     case Enum.find(checks, &(&1.check == :omdb_null_backlog)) do
-      %{blocked_reason: nil, affected_pct: pct} ->
+      %{blocked_reason: nil, affected_pct: pct} when is_number(pct) ->
         "#{Float.round(100.0 - pct, 1)}% OMDb coverage"
 
       _ ->
@@ -106,7 +108,7 @@ defmodule CinegraphWeb.AdminHealthLive.DomainHelpers do
 
   defp headline_for(:availability, checks) do
     case Enum.find(checks, &(&1.check == :availability_missing)) do
-      %{blocked_reason: nil, affected_pct: pct} ->
+      %{blocked_reason: nil, affected_pct: pct} when is_number(pct) ->
         "#{Float.round(100.0 - pct, 1)}% availability coverage"
 
       _ ->
@@ -116,7 +118,7 @@ defmodule CinegraphWeb.AdminHealthLive.DomainHelpers do
 
   defp headline_for(:collaborations, checks) do
     case Enum.find(checks, &(&1.check == :missing_details)) do
-      %{blocked_reason: nil, affected_pct: pct} ->
+      %{blocked_reason: nil, affected_pct: pct} when is_number(pct) ->
         "#{Float.round(100.0 - pct, 1)}% collaboration coverage"
 
       _ ->

@@ -114,14 +114,14 @@ to drain.
 ```sh
 # Did the sweeper fire today and last 2 weeks?
 psql -d cinegraph_prod -c "
-SELECT date_trunc('day', completed_at)::date AS day, state, count(*)
+SELECT date_trunc('day', COALESCE(completed_at, discarded_at))::date AS day, state, count(*)
 FROM oban_jobs
 WHERE worker IN (
   'Cinegraph.Workers.BiographyRefreshSweeper',
   'Cinegraph.Workers.FestivalPersonResolverSweeper'
 )
 AND state IN ('completed', 'failed', 'discarded')
-AND completed_at > now() - interval '14 days'
+AND COALESCE(completed_at, discarded_at) > now() - interval '14 days'
 GROUP BY 1, 2 ORDER BY 1 DESC, 2;"
 
 # Live backlog (requires SSH)
