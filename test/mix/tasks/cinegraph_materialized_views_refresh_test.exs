@@ -1,18 +1,18 @@
 defmodule Mix.Tasks.Cinegraph.MaterializedViews.RefreshTest do
   use Cinegraph.DataCase, async: false
 
-  alias Mix.Tasks.Cinegraph.MaterializedViews.Refresh
+  alias Cinegraph.Database.Utils, as: DatabaseUtils
 
-  describe "has_unique_index?/1 (#897 Phase B)" do
+  describe "DatabaseUtils.has_unique_index?/1 (#897 Phase B)" do
     # The migration `20250730130132_create_collaboration_materialized_view.exs`
     # creates `person_collaboration_trends` with a UNIQUE index on (person_id, year).
     # Schema migrations run before this test, so the view exists at test time.
     test "returns true for matview with a unique index" do
-      assert Refresh.has_unique_index?("person_collaboration_trends") == true
+      assert DatabaseUtils.has_unique_index?("person_collaboration_trends") == true
     end
 
     test "returns false for an unknown table or view" do
-      refute Refresh.has_unique_index?(
+      refute DatabaseUtils.has_unique_index?(
                "definitely_does_not_exist_#{System.unique_integer([:positive])}"
              )
     end
@@ -24,15 +24,15 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.RefreshTest do
 
       try do
         # No PK, no unique index → false
-        assert Refresh.has_unique_index?(table) == false
+        assert DatabaseUtils.has_unique_index?(table) == false
 
         Repo.query!(~s|CREATE INDEX ON "#{table}" (val)|)
         # Non-unique index added → still false
-        assert Refresh.has_unique_index?(table) == false
+        assert DatabaseUtils.has_unique_index?(table) == false
 
         Repo.query!(~s|CREATE UNIQUE INDEX ON "#{table}" (id)|)
         # Unique index added → true
-        assert Refresh.has_unique_index?(table) == true
+        assert DatabaseUtils.has_unique_index?(table) == true
       after
         Repo.query!(~s|DROP TABLE IF EXISTS "#{table}"|)
       end
@@ -50,11 +50,11 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.RefreshTest do
           ~s|CREATE UNIQUE INDEX "#{partial_index}" ON "#{table}" (id) WHERE val IS NOT NULL|
         )
 
-        assert Refresh.has_unique_index?(table) == false
+        assert DatabaseUtils.has_unique_index?(table) == false
 
         Repo.query!(~s|DROP INDEX IF EXISTS "#{partial_index}"|)
         Repo.query!(~s|CREATE UNIQUE INDEX "#{expression_index}" ON "#{table}" ((val + 1))|)
-        assert Refresh.has_unique_index?(table) == false
+        assert DatabaseUtils.has_unique_index?(table) == false
       after
         Repo.query!(~s|DROP TABLE IF EXISTS "#{table}"|)
       end

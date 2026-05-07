@@ -48,6 +48,8 @@ defmodule Mix.Tasks.Db.PullProduction do
   use Mix.Task
   require Logger
 
+  alias Cinegraph.Database.Utils, as: DatabaseUtils
+
   @shortdoc "Pull production DB locally via SSH (cinegraph_prod → cinegraph_dev)"
 
   # Static configuration (compile-time)
@@ -858,7 +860,7 @@ defmodule Mix.Tasks.Db.PullProduction do
       {:ok, %{rows: rows}} ->
         Enum.each(rows, fn [matviewname, qualified] ->
           stmt =
-            if has_unique_index?(matviewname) do
+            if DatabaseUtils.has_unique_index?(matviewname) do
               "REFRESH MATERIALIZED VIEW CONCURRENTLY #{qualified}"
             else
               "REFRESH MATERIALIZED VIEW #{qualified}"
@@ -883,35 +885,6 @@ defmodule Mix.Tasks.Db.PullProduction do
     end
 
     :ok
-  end
-
-  # CONCURRENTLY refresh requires a unique index on the view. #897 Phase B.
-  defp has_unique_index?(view_name) do
-    case Cinegraph.Repo.query(
-           """
-           SELECT EXISTS(
-             SELECT 1
-             FROM pg_class c
-             JOIN pg_namespace n ON n.oid = c.relnamespace
-             JOIN pg_index i ON i.indrelid = c.oid
-             WHERE n.nspname = 'public'
-               AND c.relname = $1
-               AND i.indisunique
-               AND i.indisvalid
-               AND i.indisready
-               AND i.indpred IS NULL
-               AND NOT EXISTS (
-                 SELECT 1
-                 FROM unnest(i.indkey) AS key(attnum)
-                 WHERE key.attnum = 0
-               )
-           )
-           """,
-           [view_name]
-         ) do
-      {:ok, %{rows: [[exists]]}} -> exists
-      _ -> false
-    end
   end
 
   # ============================================================================
