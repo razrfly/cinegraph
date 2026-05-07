@@ -200,7 +200,13 @@ if config_env() == :prod do
     hostname: hostname,
     port: port_num,
     database: database,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+    # Pool sized to cover the sum of Oban queue concurrencies (currently 23:
+    # tmdb 5 + omdb 5 + collaboration 3 + scraping 3 + metrics 2 + maintenance 4
+    # + festival_discovery 1) plus headroom for Phoenix request handlers and
+    # ad-hoc admin queries. Bump alongside oban_queues below if concurrencies
+    # change. Was 10, raised to 25 in #897 Phase B after MovieAvailabilityRefreshWorker
+    # logged 1,578 DBConnection pool-exhaustion discards.
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "25"),
     socket_options: socket_opts,
     connect_timeout: 30_000,
     # Increased from 15s to 180s to allow complex scoring queries in Oban jobs
@@ -241,7 +247,11 @@ if config_env() == :prod do
     scraping: parse_oban_limit.("OBAN_SCRAPING_LIMIT", 3),
     festival_discovery: parse_oban_limit.("OBAN_FESTIVAL_DISCOVERY_LIMIT", 1),
     metrics: parse_oban_limit.("OBAN_METRICS_LIMIT", 2),
-    maintenance: parse_oban_limit.("OBAN_MAINTENANCE_LIMIT", 1)
+    # `:maintenance` runs cron-fired sweepers + cache warmers (HealthCacheWarmer
+    # every 4 min, MoviesCacheWarmer, etc.). Was `1` until #897 Phase A turned up
+    # a stuck producer that wedged for 73 hours — at limit 1 a single slow job
+    # blocks the whole queue. Raised to 4 in #897 Phase B.
+    maintenance: parse_oban_limit.("OBAN_MAINTENANCE_LIMIT", 4)
   ]
 
   oban_config =

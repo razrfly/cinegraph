@@ -90,6 +90,53 @@ All backfills run automatically via `Oban.Plugins.Cron` (`config/config.exs`):
 You don't need to run the one-shot mix tasks unless you want to drain faster
 than the daily caps allow, or you want to debug a specific batch.
 
+## Drain timelines (#896 Phase 3 — captured 2026-05-07)
+
+The two RED checks remaining after #896 Phase 1+2 have predictable drain
+windows given their daily caps and current backlogs. Re-check
+`mix cinegraph.health` against these dates to confirm draining is on
+track.
+
+| Sweeper | Backlog 2026-05-07 | Cap/day | AMBER by | GREEN by | Full drain |
+|---|---|---|---|---|---|
+| `BiographyRefreshSweeper` (drains `people.missing_biography`) | 17,180 / 25,427 (67.57%) | 5,000 | 2026-05-08 | 2026-05-09 | 2026-05-10 |
+| `FestivalPersonResolverSweeper` (drains `people.person_required_nomination_missing_person` + festivals dup) | 10,281 / 12,525 (82.08%) | 2,000 | 2026-05-12 | 2026-05-13 | 2026-05-13 |
+
+Math: `drain_date = today + ceil((current - threshold_count) / cap)`.
+Threshold counts come from `config/config.exs` `:health` thresholds —
+biography `{30%, 60%}`, person-required-nomination `{2%, 10%}`.
+
+**Re-check on 2026-05-13.** Run `mix cinegraph.health` and confirm both
+checks are at AMBER or GREEN. If either is still RED, run the
+operational queries below to figure out which day(s) the sweeper failed
+to drain.
+
+```sh
+# Did the sweeper fire today and last 2 weeks?
+psql -d cinegraph_prod -c "
+SELECT date_trunc('day', completed_at)::date AS day, count(*)
+FROM oban_jobs
+WHERE worker IN (
+  'Cinegraph.Workers.BiographyRefreshSweeper',
+  'Cinegraph.Workers.FestivalPersonResolverSweeper'
+)
+AND state = 'completed' AND completed_at > now() - interval '14 days'
+GROUP BY 1 ORDER BY 1 DESC;"
+
+# Live backlog (requires SSH)
+ssh "$HOST" "$APP_BIN eval 'IO.inspect(Cinegraph.Maintenance.RefreshBiographies.run(dry_run: true))'"
+ssh "$HOST" "$APP_BIN eval 'IO.inspect(Cinegraph.Maintenance.ResolvePersons.run(dry_run: true))'"
+```
+
+**Phase 2.2 still open** — `collaborations.missing_details` (109,117)
+showed a 25× throughput drop between 2026-05-04 and 2026-05-05 with no
+errors. The 2026-05-06 prod dump captured no `BiographyRefreshSweeper`
+or `FestivalPersonResolverSweeper` completions on May 5 or 6 either,
+which suggests the throughput collapse may be cron-wide rather than
+specific to collaborations. Prod-side log inspection at 05:30 / 06:00 /
+07:30 UTC for May 5+6 will tell us whether the schedules fired at all.
+Tracked in [issue #896 Phase 2.2 comment](https://github.com/razrfly/cinegraph/issues/896#issuecomment-4392613299).
+
 ## Available one-shot commands
 
 The `Cinegraph.Maintenance.*` modules behind each sweeper also have:

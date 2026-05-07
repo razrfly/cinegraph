@@ -14,7 +14,11 @@ defmodule Cinegraph.Health.Facade do
 
   @cache_name :health_cache
   @task_supervisor Cinegraph.Health.TaskSupervisor
-  @drift_timeout 120_000
+  # Outer per-domain timeout. Each domain's `mod.all()` (which itself runs
+  # checks in parallel via `Drift.run_all/2`, default per-check 180s) must
+  # complete within this window or the whole domain renders as
+  # `crashed/UNKNOWN`. Bumped from 120_000 in #896 Phase 4.1.
+  @drift_timeout 240_000
 
   @doc """
   Run all 5 drift domains in parallel, roll them up via `Verdict.compute/1`.

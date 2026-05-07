@@ -22,20 +22,27 @@ defmodule Cinegraph.Health.Drift.AvailabilityTest do
              ]
   end
 
-  test "availability_missing reports full movies without refresh rows" do
-    movie = insert_movie!()
+  describe "availability_missing/0 (#896 Phase 1.4 — canonical-list scope)" do
+    test "counts only canonical-list full movies without refresh rows" do
+      # Should count: canonical + full + no refresh row
+      canonical_full = insert_movie!(canonical: true)
 
-    result = Availability.availability_missing()
+      # Should NOT count: full but not canonical (out of scope)
+      _excluded_non_canonical = insert_movie!(canonical: false)
 
-    assert result.domain == :availability
-    assert result.check == :availability_missing
-    assert result.affected_count == 1
-    assert [%{id: id}] = result.examples
-    assert id == movie.id
+      result = Availability.availability_missing()
+
+      assert result.domain == :availability
+      assert result.check == :availability_missing
+      assert result.affected_count == 1
+      assert result.total_population == 1
+      assert [%{id: id}] = result.examples
+      assert id == canonical_full.id
+    end
   end
 
   test "availability_fetch_errors reports error refresh rows" do
-    movie = insert_movie!()
+    movie = insert_movie!(canonical: true)
     insert_refresh!(movie, "error", ~U[2026-06-01 00:00:00Z], "boom")
 
     result = Availability.availability_fetch_errors()
@@ -45,13 +52,17 @@ defmodule Cinegraph.Health.Drift.AvailabilityTest do
     assert id == movie.id
   end
 
-  defp insert_movie! do
+  defp insert_movie!(opts) do
+    canonical = Keyword.get(opts, :canonical, false)
+    canonical_sources = if canonical, do: %{"1001_movies" => %{"included" => true}}, else: %{}
+
     %Movie{}
     |> Movie.changeset(%{
       tmdb_id: System.unique_integer([:positive]),
       title: "Availability Drift Movie",
       original_title: "Availability Drift Movie",
-      import_status: "full"
+      import_status: "full",
+      canonical_sources: canonical_sources
     })
     |> Repo.insert!()
   end

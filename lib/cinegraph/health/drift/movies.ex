@@ -5,7 +5,9 @@ defmodule Cinegraph.Health.Drift.Movies do
   Each public function returns `Cinegraph.Health.Drift.result/5`.
   """
 
-  alias Cinegraph.Health.Drift
+  import Ecto.Query
+
+  alias Cinegraph.Health.{Drift, Scopes}
   alias Cinegraph.Repo
   alias Cinegraph.Services.TMDb.GapAnalysis
 
@@ -118,45 +120,52 @@ defmodule Cinegraph.Health.Drift.Movies do
   end
 
   @doc """
-  Movies with no row in `external_metrics` where `source='omdb'`. This is
-  the per-spec definition of "missing OMDb" — fetch attempts and failures
-  are recorded in `external_metrics`, so absence there means we never
-  successfully reached OMDb for the movie.
+  Canonical-list movies with no row in `external_metrics` where
+  `source='omdb'` (#896 Phase 1.2). Scoped to canonical movies — bulk
+  TMDb long-tail entries that never had an OMDb fetch attempt are
+  excluded since we don't intend to enrich them.
+
+  Fetch attempts and failures are both recorded in `external_metrics`,
+  so absence there means we never *attempted* to fetch — this is the
+  actionable backlog signal ("if we never tried, we can try").
+
+  Note: `Cinegraph.Health.Completeness.movies_completeness/0` measures
+  OMDb differently — it counts movies where `omdb_data IS NOT NULL`
+  (data present). A movie attempted-and-failed counts as "not missing"
+  here but as "missing" there. Both are intentional: drift = "did we
+  attempt?", completeness = "do we have the data?". Don't try to
+  harmonize them.
   """
   def missing_omdb(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
     Drift.cached({:movies, :missing_omdb, limit}, @cache_ttl, fn ->
-      total = total_movies()
+      total = Scopes.canonical_movies_count()
 
-      affected =
-        scalar("""
-        SELECT count(*)::bigint FROM movies m
-        WHERE NOT EXISTS (
-          SELECT 1 FROM external_metrics em
-          WHERE em.movie_id = m.id AND em.source = 'omdb'
+      missing_base =
+        from(m in Scopes.canonical_movies(),
+          where:
+            fragment(
+              "NOT EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb')",
+              m.id
+            )
         )
-        """)
+
+      affected = Repo.replica().one(from(m in missing_base, select: count(m.id))) || 0
 
       examples =
-        examples_query(
-          """
-          SELECT m.id, m.title, m.release_date FROM movies m
-          WHERE NOT EXISTS (
-            SELECT 1 FROM external_metrics em
-            WHERE em.movie_id = m.id AND em.source = 'omdb'
+        from(m in missing_base,
+          select: %{id: m.id, title: m.title, release_date: m.release_date},
+          order_by: [desc: m.id],
+          limit: ^limit
+        )
+        |> Repo.replica().all()
+        |> Enum.map(
+          &Map.put(
+            &1,
+            :reason,
+            "no external_metrics row with source='omdb' (canonical-list scope)"
           )
-          ORDER BY m.id DESC LIMIT $1
-          """,
-          [limit],
-          fn [id, title, release_date] ->
-            %{
-              id: id,
-              title: title,
-              release_date: release_date,
-              reason: "no external_metrics row with source='omdb'"
-            }
-          end
         )
 
       Drift.result(:movies, :missing_omdb, total, affected, examples)
@@ -216,32 +225,35 @@ defmodule Cinegraph.Health.Drift.Movies do
     end)
   end
 
-  @doc "Movies with `imdb_id IS NULL` — blocks OMDb lookup."
+  @doc """
+  Canonical-list movies with `imdb_id IS NULL` (#896 Phase 1.3) —
+  blocks OMDb lookup. Scoped to canonical movies because the bulk TMDb
+  long-tail legitimately lacks IMDb cross-references and isn't a drift
+  signal we can act on.
+  """
   def missing_imdb_id(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
 
     Drift.cached({:movies, :missing_imdb_id, limit}, @cache_ttl, fn ->
-      total = total_movies()
+      total = Scopes.canonical_movies_count()
 
-      affected =
-        scalar("SELECT count(*)::bigint FROM movies WHERE imdb_id IS NULL OR imdb_id = ''")
-
-      examples =
-        examples_query(
-          "SELECT id, title, release_date FROM movies WHERE imdb_id IS NULL OR imdb_id = '' ORDER BY id DESC LIMIT $1",
-          [limit],
-          fn [id, title, release_date] ->
-            %{id: id, title: title, release_date: release_date, reason: "imdb_id IS NULL"}
-          end
+      missing_base =
+        from(m in Scopes.canonical_movies(),
+          where: is_nil(m.imdb_id) or m.imdb_id == ""
         )
 
-      Drift.result(:movies, :missing_imdb_id, total, affected, examples)
-    end)
-  end
+      affected = Repo.replica().one(from(m in missing_base, select: count(m.id))) || 0
 
-  defp total_movies do
-    Drift.cached({:movies, :total}, @cache_ttl, fn ->
-      scalar("SELECT count(*)::bigint FROM movies")
+      examples =
+        from(m in missing_base,
+          select: %{id: m.id, title: m.title, release_date: m.release_date},
+          order_by: [desc: m.id],
+          limit: ^limit
+        )
+        |> Repo.replica().all()
+        |> Enum.map(&Map.put(&1, :reason, "imdb_id IS NULL (canonical-list scope)"))
+
+      Drift.result(:movies, :missing_imdb_id, total, affected, examples)
     end)
   end
 

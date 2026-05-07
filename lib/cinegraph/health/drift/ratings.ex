@@ -5,17 +5,20 @@ defmodule Cinegraph.Health.Drift.Ratings do
 
   ## Population scoping
 
-  `rt_metacritic_gap` is scoped to canonical-list movies
-  (`movies.canonical_sources != '{}'`) — see #735 Phase 1.3. Most
-  non-canonical movies legitimately have no RT/MC score, so reporting
-  against the full 1.14M-movie catalog was a measurement artifact, not
-  real drift. Other ratings checks (`omdb_null_backlog`, `omdb_stale`)
-  remain scoped to the full `movies` table since OMDb coverage is a real
-  catalog-wide drift signal. The denominator difference is intentional.
+  All checks in this module are canonical-scoped (`movies.canonical_sources
+  != '{}'`). Bulk-TMDb long-tail movies legitimately lack RT/MC/OMDb
+  coverage and reporting against them was a measurement artifact rather
+  than real drift.
+
+    * `rt_metacritic_gap` — inline canonical scope (#735 Phase 1.3),
+      now via `Cinegraph.Health.Scopes.canonical_movies/0`.
+    * `omdb_null_backlog`, `omdb_stale` — delegate to
+      `Cinegraph.Health.Drift.Movies` and inherit its canonical scope
+      (#896 Phase 1.2).
   """
 
   import Ecto.Query
-  alias Cinegraph.Health.Drift
+  alias Cinegraph.Health.{Drift, Scopes}
   alias Cinegraph.Repo
 
   @cache_ttl :timer.minutes(5)
@@ -59,10 +62,7 @@ defmodule Cinegraph.Health.Drift.Ratings do
     limit = Keyword.get(opts, :limit, @example_limit)
 
     Drift.cached({:ratings, :rt_metacritic_gap, limit}, @cache_ttl, fn ->
-      canonical_base =
-        from(m in "movies",
-          where: fragment("? != '{}'::jsonb", m.canonical_sources)
-        )
+      canonical_base = Scopes.canonical_movies()
 
       missing_both_base =
         from(m in canonical_base,
