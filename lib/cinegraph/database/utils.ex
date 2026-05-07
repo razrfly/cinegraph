@@ -3,6 +3,8 @@ defmodule Cinegraph.Database.Utils do
   Shared database catalog helpers.
   """
 
+  require Logger
+
   alias Cinegraph.Repo
 
   @doc """
@@ -13,8 +15,18 @@ defmodule Cinegraph.Database.Utils do
   """
   def has_unique_index?(relation_name) do
     case Repo.query(unique_index_query(), [relation_name]) do
-      {:ok, %{rows: [[exists]]}} -> exists
-      _ -> false
+      {:ok, %{rows: [[exists]]}} ->
+        exists
+
+      {:error, reason} ->
+        Logger.warning(
+          "has_unique_index? query failed for #{inspect(relation_name)}: #{inspect(reason)}"
+        )
+
+        false
+
+      _ ->
+        false
     end
   end
 
