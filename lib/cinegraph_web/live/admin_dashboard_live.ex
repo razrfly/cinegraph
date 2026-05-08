@@ -12,21 +12,24 @@ defmodule CinegraphWeb.AdminDashboardLive do
 
   alias Cinegraph.Health.{Activity, Completeness, Facade, Queues}
 
-  @refresh_interval 30_000
-
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Process.send_after(self(), :refresh, @refresh_interval)
-
+    # Stats fan-out (Facade/Activity/Queues/Completeness) was hanging mount under
+    # Repo.Replica pool starvation. Render with `:error` placeholders; users can
+    # hit Refresh to load on demand. Auto-refresh disabled until pool is sized
+    # for it.
     {:ok,
      socket
      |> assign(:page_title, "Admin")
-     |> assign_data()}
+     |> assign(:verdict, :error)
+     |> assign(:activity, :error)
+     |> assign(:queues, :error)
+     |> assign(:completeness_history, :error)
+     |> assign(:loaded_at, DateTime.utc_now())}
   end
 
   @impl true
   def handle_info(:refresh, socket) do
-    Process.send_after(self(), :refresh, @refresh_interval)
     {:noreply, assign_data(socket)}
   end
 
