@@ -11,4 +11,8 @@ defmodule CinegraphWeb.PageController do
     # Temporary landing page while app is in development
     render(conn, :coming_soon, layout: false)
   end
+
+  def redirect_to_movies(conn, _params) do
+    redirect(conn, to: "/movies")
+  end
 end

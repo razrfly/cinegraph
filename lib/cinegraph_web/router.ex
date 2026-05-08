@@ -37,11 +37,10 @@ defmodule CinegraphWeb.Router do
   scope "/", CinegraphWeb do
     pipe_through :browser
 
-    live_session :v2_home,
-      root_layout: {CinegraphWeb.Layouts, :v2_root},
-      layout: false do
-      live "/", HomeLive, :index
-    end
+    # HomeLive temporarily disabled — its Homepage.snapshot/1 fan-out was
+    # exhausting the Repo.Replica pool under bot-driven mount-retry storms.
+    # Redirect "/" to "/movies" until the homepage can be optimized.
+    get "/", PageController, :redirect_to_movies
 
     if Mix.env() != :prod do
       get "/design-preview", DesignPreviewController, :show
