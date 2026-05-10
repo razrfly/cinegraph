@@ -42,7 +42,7 @@ RUN mkdir config
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
-COPY config/config.exs config/${MIX_ENV}.exs config/import.exs config/
+COPY config/config.exs config/${MIX_ENV}.exs config/import.exs config/appsignal.exs config/
 RUN mix deps.compile
 
 # Install asset build tools in a cached layer so deploy does not try to
