@@ -119,3 +119,5 @@ config :swoosh, :api_client, false
 # TMDb and OMDb API configuration
 # These are now configured in config/runtime.exs using Dotenvy
 # Set TMDB_API_KEY and OMDB_API_KEY in your .env file
+
+config :appsignal, :config, active: true
