@@ -81,7 +81,8 @@ defmodule Cinegraph.MixProject do
       {:scholar, "~> 0.4"},
       {:ex_aws, "~> 2.5"},
       {:ex_aws_s3, "~> 2.5"},
-      {:sweet_xml, "~> 0.7"}
+      {:sweet_xml, "~> 0.7"},
+      {:appsignal_phoenix, "~> 2.0"}
     ]
   end
 
