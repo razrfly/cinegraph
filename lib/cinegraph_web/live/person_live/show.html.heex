@@ -543,10 +543,7 @@
                           {Float.round(vote_avg, 1)}
                         </div>
                       <% end %>
-                      <% revenue =
-                        if Map.has_key?(credit.movie.tmdb_data || %{}, "revenue"),
-                          do: credit.movie.tmdb_data["revenue"],
-                          else: nil %>
+                      <% revenue = Map.get(@revenue_map, credit.movie_id) %>
                       <%= if revenue && revenue > 0 do %>
                         <div class="text-sm font-medium text-green-700 bg-green-50 px-2 py-1 rounded-lg">
                           ${div(revenue, 1_000_000)}M

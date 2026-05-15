@@ -430,10 +430,7 @@
                   <%= if vote_avg do %>
                     <span>★ {Float.round(vote_avg, 1)}</span>
                   <% end %>
-                  <% revenue =
-                    if Map.has_key?(credit.movie.tmdb_data || %{}, "revenue"),
-                      do: credit.movie.tmdb_data["revenue"],
-                      else: nil %>
+                  <% revenue = Map.get(@revenue_map, credit.movie_id) %>
                   <%= if revenue && revenue > 0 do %>
                     <span>${div(revenue, 1_000_000)}M</span>
                   <% end %>

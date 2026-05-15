@@ -14,6 +14,7 @@ defmodule CinegraphWeb.SEOHelpers do
   """
 
   import Phoenix.Component, only: [assign: 3]
+  alias Cinegraph.Repo
   alias CinegraphWeb.SEO
 
   @site_url "https://cinegraph.org"
@@ -27,6 +28,12 @@ defmodule CinegraphWeb.SEOHelpers do
     title = movie_title(movie)
     description = movie_description(movie)
     image = movie_image_url(movie)
+
+    # #913 PR A pt 2: SEO.movie_schema/1 reads aggregateRating from
+    # :external_metrics and productionCompany from :production_companies, both
+    # of which need to be preloaded for the schema to populate (it now refuses
+    # to fall back to JSONB).
+    movie = Repo.replica().preload(movie, [:external_metrics, :production_companies])
 
     socket
     |> assign(:page_title, movie.title)

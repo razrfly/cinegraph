@@ -64,6 +64,36 @@ defmodule Cinegraph.ExternalSourcesTest do
       assert length(rows) == 1
       assert hd(rows).metric_type == "rating_average"
     end
+
+    test "accepts a single source name as a binary filter" do
+      movie = insert_movie!()
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      Repo.insert_all(ExternalMetric, [
+        %{
+          movie_id: movie.id,
+          source: "imdb",
+          metric_type: "rating_average",
+          value: 8.0,
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        },
+        %{
+          movie_id: movie.id,
+          source: "tmdb",
+          metric_type: "rating_average",
+          value: 7.0,
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
+
+      [row] = ExternalSources.get_movie_ratings(movie.id, "imdb")
+      assert row.source.name == "imdb"
+      assert row.value == 8.0
+    end
   end
 
   describe "get_movie_metrics/2" do
@@ -144,6 +174,36 @@ defmodule Cinegraph.ExternalSourcesTest do
       ])
 
       [row] = ExternalSources.get_movie_metrics(movie.id, ["content_rating"], ["omdb"])
+      assert row.text_value == "PG-13"
+      assert row.source.name == "omdb"
+    end
+
+    test "accepts a single source name as a binary filter" do
+      movie = insert_movie!()
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      Repo.insert_all(ExternalMetric, [
+        %{
+          movie_id: movie.id,
+          source: "omdb",
+          metric_type: "content_rating",
+          text_value: "PG-13",
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        },
+        %{
+          movie_id: movie.id,
+          source: "other_source",
+          metric_type: "content_rating",
+          text_value: "R",
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
+
+      [row] = ExternalSources.get_movie_metrics(movie.id, ["content_rating"], "omdb")
       assert row.text_value == "PG-13"
       assert row.source.name == "omdb"
     end

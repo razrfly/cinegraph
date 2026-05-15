@@ -422,29 +422,64 @@ defmodule Cinegraph.People do
     end
   end
 
+  # #913 PR A pt 2: was iterating movies and reading movie.tmdb_data["revenue"]
+  # per row. Now a single query against external_metrics. The four
+  # `normalize_revenue/1` clauses that handled int/float/string/nil JSONB
+  # values are gone — external_metrics stores `value` as float, so the only
+  # transformation needed is `trunc(sum)`.
   defp calculate_total_revenue(movies) do
-    movies
-    |> Enum.map(fn movie ->
-      normalize_revenue(movie.tmdb_data["revenue"])
-    end)
-    |> Enum.sum()
-  end
+    movie_ids = movies |> Enum.map(& &1.id) |> Enum.uniq()
 
-  defp normalize_revenue(nil), do: 0
-  defp normalize_revenue(revenue) when is_integer(revenue), do: revenue
-  defp normalize_revenue(revenue) when is_float(revenue), do: trunc(revenue)
+    if movie_ids == [] do
+      0
+    else
+      sum =
+        Repo.replica().one(
+          from em in Cinegraph.Movies.ExternalMetric,
+            where:
+              em.movie_id in ^movie_ids and
+                em.source == "tmdb" and
+                em.metric_type == "revenue_worldwide",
+            select: sum(em.value)
+        )
 
-  defp normalize_revenue(revenue) when is_binary(revenue) do
-    # Handle string revenue values (may contain commas, spaces, etc.)
-    cleaned = String.replace(revenue, ~r/[^\d.]/, "")
-
-    case Float.parse(cleaned) do
-      {value, _} -> trunc(value)
-      :error -> 0
+      case sum do
+        nil -> 0
+        s when is_number(s) -> trunc(s)
+      end
     end
   end
 
-  defp normalize_revenue(_), do: 0
+  @doc """
+  Builds a `%{movie_id => revenue_int}` map for the given movie IDs.
+
+  Reads TMDb `revenue_worldwide` rows from `external_metrics` so templates
+  can render per-credit revenue without touching `tmdb_data` JSONB.
+  """
+  def revenue_map_for_movie_ids([]), do: %{}
+
+  def revenue_map_for_movie_ids(movie_ids) when is_list(movie_ids) do
+    ids = movie_ids |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    if ids == [] do
+      %{}
+    else
+      from(em in Cinegraph.Movies.ExternalMetric,
+        where:
+          em.movie_id in ^ids and
+            em.source == "tmdb" and
+            em.metric_type == "revenue_worldwide",
+        distinct: em.movie_id,
+        order_by: [asc: em.movie_id, desc: em.fetched_at, desc: em.id],
+        select: {em.movie_id, em.value}
+      )
+      |> Repo.replica().all()
+      |> Map.new(fn {id, value} ->
+        revenue = if is_number(value), do: trunc(value), else: 0
+        {id, revenue}
+      end)
+    end
+  end
 
   defp calculate_average_rating(movies) do
     ratings =

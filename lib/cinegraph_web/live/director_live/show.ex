@@ -28,15 +28,18 @@ defmodule CinegraphWeb.DirectorLive.Show do
             Enum.any?(director.crew_credits, &(&1.job == "Director"))
 
         if is_director do
+          revenue_map = build_revenue_map(director)
+
           socket =
             socket
             |> assign(:page_title, "Director Analysis: #{director.name}")
             |> assign(:director, director)
-            |> assign(:director_stats, get_director_stats(director))
+            |> assign(:revenue_map, revenue_map)
+            |> assign(:director_stats, get_director_stats(director, revenue_map))
             |> assign(:frequent_actors, get_frequent_actors(id))
-            |> assign(:genre_analysis, analyze_genres(director))
+            |> assign(:genre_analysis, analyze_genres(director, revenue_map))
             |> assign(:rating_trends, get_rating_trends(director))
-            |> assign(:box_office_trends, get_box_office_trends(director))
+            |> assign(:box_office_trends, get_box_office_trends(director, revenue_map))
             |> assign(:collaboration_network, get_collaboration_network(id))
 
           {:noreply, socket}
@@ -53,11 +56,20 @@ defmodule CinegraphWeb.DirectorLive.Show do
 
   # Private functions
 
-  defp get_director_stats(director) do
+  defp build_revenue_map(director) do
+    crew = Map.get(director, :crew_credits, []) || []
+    cast = Map.get(director, :cast_credits, []) || []
+
+    (crew ++ cast)
+    |> Enum.map(& &1.movie_id)
+    |> People.revenue_map_for_movie_ids()
+  end
+
+  defp get_director_stats(director, revenue_map) do
     directing_credits = Enum.filter(director.crew_credits, &(&1.job == "Director"))
     movies = Enum.map(directing_credits, & &1.movie) |> Enum.uniq_by(& &1.id)
 
-    total_revenue = Enum.sum(Enum.map(movies, &revenue/1))
+    total_revenue = Enum.sum(Enum.map(movies, &revenue(&1, revenue_map)))
     avg_rating = calculate_average_rating(movies)
 
     %{
@@ -67,7 +79,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
       avg_rating: avg_rating,
       highest_rated:
         Enum.max_by(movies, &(Cinegraph.Movies.Movie.vote_average(&1) || 0), fn -> nil end),
-      highest_grossing: Enum.max_by(movies, &revenue/1, fn -> nil end),
+      highest_grossing: Enum.max_by(movies, &revenue(&1, revenue_map), fn -> nil end),
       years_active: calculate_years_active(movies)
     }
   end
@@ -87,7 +99,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
     end)
   end
 
-  defp analyze_genres(director) do
+  defp analyze_genres(director, revenue_map) do
     directing_credits = Enum.filter(director.crew_credits, &(&1.job == "Director"))
     movies = Enum.map(directing_credits, & &1.movie)
 
@@ -112,7 +124,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
           end)
 
         avg_rating = calculate_average_rating(genre_movies)
-        total_revenue = Enum.sum(Enum.map(genre_movies, &revenue/1))
+        total_revenue = Enum.sum(Enum.map(genre_movies, &revenue(&1, revenue_map)))
 
         %{
           genre: genre,
@@ -188,7 +200,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
     end
   end
 
-  defp get_box_office_trends(director) do
+  defp get_box_office_trends(director, revenue_map) do
     directing_credits =
       director.crew_credits
       |> Enum.filter(&(&1.job == "Director"))
@@ -197,7 +209,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
     movies_with_revenue =
       directing_credits
       |> Enum.map(& &1.movie)
-      |> Enum.filter(fn m -> revenue(m) > 0 && m.release_date end)
+      |> Enum.filter(fn m -> revenue(m, revenue_map) > 0 && m.release_date end)
 
     if length(movies_with_revenue) > 0 do
       # Calculate cumulative box office
@@ -206,17 +218,17 @@ defmodule CinegraphWeb.DirectorLive.Show do
         |> Enum.scan(%{year: nil, total: 0}, fn movie, acc ->
           %{
             year: movie.release_date.year,
-            total: acc.total + revenue(movie),
+            total: acc.total + revenue(movie, revenue_map),
             movie: movie.title
           }
         end)
 
       %{
         cumulative_revenue: cumulative,
-        highest_year: find_highest_revenue_year(movies_with_revenue),
+        highest_year: find_highest_revenue_year(movies_with_revenue, revenue_map),
         average_per_film:
           div(
-            Enum.sum(Enum.map(movies_with_revenue, &revenue/1)),
+            Enum.sum(Enum.map(movies_with_revenue, &revenue(&1, revenue_map))),
             length(movies_with_revenue)
           )
       }
@@ -338,21 +350,15 @@ defmodule CinegraphWeb.DirectorLive.Show do
     end
   end
 
-  defp find_highest_revenue_year(movies) do
+  defp find_highest_revenue_year(movies, revenue_map) do
     movies
     |> Enum.group_by(& &1.release_date.year)
     |> Enum.map(fn {year, year_movies} ->
-      {year, Enum.sum(Enum.map(year_movies, &revenue/1))}
+      {year, Enum.sum(Enum.map(year_movies, &revenue(&1, revenue_map)))}
     end)
     |> Enum.max_by(fn {_year, revenue} -> revenue end, fn -> {nil, 0} end)
     |> elem(0)
   end
 
-  # Helper to extract revenue from movie, checking tmdb_data
-  defp revenue(movie) do
-    case movie.tmdb_data do
-      %{"revenue" => rev} when is_number(rev) -> rev
-      _ -> 0
-    end
-  end
+  defp revenue(movie, revenue_map), do: Map.get(revenue_map, movie.id, 0)
 end
