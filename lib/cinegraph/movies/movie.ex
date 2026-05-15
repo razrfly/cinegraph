@@ -76,8 +76,14 @@ defmodule Cinegraph.Movies.Movie do
     field :collection_id, :integer
 
     # System Fields
-    field :tmdb_data, :map
-    field :omdb_data, :map
+    # #913 / #923: load_in_query: false stops Postgres from shipping these
+    # multi-MB JSONB blobs over the wire on every Movie-rooted SELECT. The
+    # display path already reads from external_metrics (#917 / #918 / #919).
+    # Callers that still need the raw blob (data_repair_worker re-extraction,
+    # availability_backfill, predictions budget/revenue) must opt in via
+    # `select_merge: %{tmdb_data: m.tmdb_data}` on their query.
+    field :tmdb_data, :map, load_in_query: false
+    field :omdb_data, :map, load_in_query: false
     field :import_status, :string, default: "full"
     field :canonical_sources, :map, default: %{}
 

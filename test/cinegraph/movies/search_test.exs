@@ -779,9 +779,10 @@ defmodule Cinegraph.Movies.SearchTest do
         })
         |> Repo.insert!()
 
-      # Force the generic query path (not the DiscoveryRankings shortcut) with
-      # a non-default sort. Flop's validate_and_run must preserve the
-      # select_merge baked in by Cinegraph.Movies.exclude_jsonb_blobs/1.
+      # Force the generic query path (not the DiscoveryRankings shortcut)
+      # with a non-default sort. With Movie's tmdb_data / omdb_data marked
+      # load_in_query: false (#923), the column is absent from the emitted
+      # SELECT regardless of which sub-path the query takes.
       assert {:ok, {movies, _meta}} =
                Search.search_movies(%{"sort" => "title_asc", "per_page" => "10"})
 
