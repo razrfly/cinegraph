@@ -1,20 +1,44 @@
 defmodule Cinegraph.Movies.JsonbExclusionTest do
   @moduledoc """
-  #913 PR B regression guards: every list-query leaf that returns `%Movie{}`
-  structs must nil out `tmdb_data` and `omdb_data` on the result projection.
-  Multi-MB JSONB blobs loaded into the BEAM heap were the OOM driver.
+  #913 / #923 regression guards: every `%Movie{}` loaded from a default
+  `from m in Movie` query must have `tmdb_data` and `omdb_data` come back
+  as `nil` — not because we overlay nil after the load (that was the
+  no-op #920 mechanism), but because the schema marks those fields
+  `load_in_query: false` and Ecto omits them from the SELECT entirely.
 
   PR A (#918, #919) already moved every display read off these fields, so
-  nilling them on list results is a no-op for the UI.
+  the columns being absent on list results is a no-op for the UI.
   """
 
   use Cinegraph.DataCase, async: false
+
+  import Ecto.Query
 
   alias Cinegraph.Movies
   alias Cinegraph.Movies.{DiscoveryRankings, Movie}
   alias Cinegraph.Movies.Query.Params
 
-  describe "Movies list-query JSONB exclusion (#913 PR B)" do
+  describe "SQL-level JSONB exclusion (#923 — proves the fix isn't a no-op)" do
+    # PR #920's `select_merge: %{m | tmdb_data: nil}` mechanism passed every
+    # functional test by setting the BEAM field to nil after load. It did
+    # nothing for the OOM because Postgres still shipped the bytes. These
+    # tests pin that the columns are absent from the SQL itself.
+
+    test "default Movie SELECT omits tmdb_data and omdb_data" do
+      {sql, _} = Repo.to_sql(:all, from(m in Movie))
+      refute sql =~ ~s("tmdb_data"), "tmdb_data must not appear in default SELECT"
+      refute sql =~ ~s("omdb_data"), "omdb_data must not appear in default SELECT"
+    end
+
+    test "explicit select_merge can opt back in to tmdb_data" do
+      {sql, _} =
+        Repo.to_sql(:all, from(m in Movie, select_merge: %{tmdb_data: m.tmdb_data}))
+
+      assert sql =~ ~s("tmdb_data"), "explicit opt-in must still emit tmdb_data in SELECT"
+    end
+  end
+
+  describe "Movies list-query JSONB exclusion (#923)" do
     test "list_movies/1 returns Movie structs with tmdb_data and omdb_data nilled" do
       insert_movie_with_blobs!("List Movies Blob")
 
@@ -71,12 +95,10 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
     end
 
     test "feature_film_query/0 base inheritance — composed queries inherit the slim projection" do
-      import Ecto.Query
-
       insert_movie_with_blobs!("Feature Film Inheritance Blob")
 
       # Compose a custom query on top of feature_film_query/0 — the
-      # select_merge baked into the base must carry forward.
+      # schema-level load_in_query: false must carry forward.
       movies =
         Movies.feature_film_query()
         |> limit(5)
@@ -92,13 +114,34 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
     end
   end
 
-  describe "DiscoveryRankings.list_default/1 JSONB exclusion (#913 PR B — hottest path)" do
+  describe "Predictions opt-in to tmdb_data (#923 — Greptile P1 regression guard)" do
+    # PR #924 review caught: get_movie_scoring_details/2 used `Repo.get!(Movie)`
+    # without an explicit select_merge, so post-load_in_query the function
+    # silently passed `tmdb_data: nil` to CriteriaScoring.score_cultural_impact/1,
+    # making budget/revenue/roi_score always 0. This test pins the opt-in.
+
+    test "get_movie_scoring_details/1 returns a Movie with tmdb_data loaded" do
+      movie = insert_movie_with_blobs!("Predictions Detail Blob")
+      details = Cinegraph.Predictions.MoviePredictor.get_movie_scoring_details(movie.id)
+
+      assert %Movie{} = details.movie
+      assert details.movie.id == movie.id
+
+      refute is_nil(details.movie.tmdb_data),
+             "get_movie_scoring_details/2 must select tmdb_data — score_cultural_impact reads it for budget/revenue"
+
+      assert details.movie.tmdb_data["marker"] == "pr-b-must-be-nilled"
+    end
+  end
+
+  describe "DiscoveryRankings.list_default/1 JSONB exclusion (#923 — hottest path)" do
     # The MV is created empty by migration and refreshed by an Oban worker in
     # prod. In tests we refresh inline (non-concurrently) so the MV picks up
     # the row we just inserted. Non-concurrent REFRESH runs inside the sandbox
     # transaction and rolls back with it — no cross-test pollution.
     test "result rows have tmdb_data and omdb_data nilled (regression guard for the OOM path)" do
-      now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      now_utc = DateTime.utc_now() |> DateTime.truncate(:second)
 
       movie =
         insert_movie_with_blobs!("Discovery Default Blob",
@@ -115,27 +158,27 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
           source: "tmdb",
           metric_type: "rating_votes",
           value: 50_000.0,
-          fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          fetched_at: now_utc,
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         %{
           movie_id: movie.id,
           source: "tmdb",
           metric_type: "rating_average",
           value: 8.5,
-          fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          fetched_at: now_utc,
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         %{
           movie_id: movie.id,
           source: "tmdb",
           metric_type: "popularity_score",
           value: 250.0,
-          fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          fetched_at: now_utc,
+          inserted_at: now_naive,
+          updated_at: now_naive
         }
       ])
 

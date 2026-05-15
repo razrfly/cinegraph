@@ -9,6 +9,7 @@ defmodule Cinegraph.ExternalSourcesTest do
       movie = insert_movie!()
 
       now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
       Repo.insert_all(ExternalMetric, [
         %{
@@ -18,8 +19,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           value: 8.5,
           metadata: %{"scale" => "1-10"},
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         }
       ])
 
@@ -37,6 +38,7 @@ defmodule Cinegraph.ExternalSourcesTest do
     test "filters to the rating-related metric_types whitelist" do
       movie = insert_movie!()
       now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
       Repo.insert_all(ExternalMetric, [
         %{
@@ -45,8 +47,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "rating_average",
           value: 8.0,
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         # text-typed metric — must NOT come back from get_movie_ratings/1
         %{
@@ -55,8 +57,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "content_rating",
           text_value: "PG-13",
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         }
       ])
 
@@ -68,6 +70,7 @@ defmodule Cinegraph.ExternalSourcesTest do
     test "accepts a single source name as a binary filter" do
       movie = insert_movie!()
       now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
       Repo.insert_all(ExternalMetric, [
         %{
@@ -76,8 +79,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "rating_average",
           value: 8.0,
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         %{
           movie_id: movie.id,
@@ -85,8 +88,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "rating_average",
           value: 7.0,
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         }
       ])
 
@@ -100,6 +103,7 @@ defmodule Cinegraph.ExternalSourcesTest do
     test "filters to requested metric_types and includes text_value" do
       movie = insert_movie!()
       now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
       Repo.insert_all(ExternalMetric, [
         %{
@@ -108,8 +112,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "content_rating",
           text_value: "PG-13",
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         %{
           movie_id: movie.id,
@@ -117,8 +121,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "awards_summary",
           text_value: "Won 2 Oscars",
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         # NOT requested — must be excluded
         %{
@@ -127,8 +131,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "rating_average",
           value: 8.0,
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         }
       ])
 
@@ -151,6 +155,7 @@ defmodule Cinegraph.ExternalSourcesTest do
     test "filters to requested source names" do
       movie = insert_movie!()
       now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
       Repo.insert_all(ExternalMetric, [
         %{
@@ -159,8 +164,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "content_rating",
           text_value: "PG-13",
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         %{
           movie_id: movie.id,
@@ -168,8 +173,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "content_rating",
           text_value: "R",
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         }
       ])
 
@@ -181,6 +186,7 @@ defmodule Cinegraph.ExternalSourcesTest do
     test "accepts a single source name as a binary filter" do
       movie = insert_movie!()
       now = DateTime.utc_now() |> DateTime.truncate(:second)
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
       Repo.insert_all(ExternalMetric, [
         %{
@@ -189,8 +195,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "content_rating",
           text_value: "PG-13",
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         },
         %{
           movie_id: movie.id,
@@ -198,8 +204,8 @@ defmodule Cinegraph.ExternalSourcesTest do
           metric_type: "content_rating",
           text_value: "R",
           fetched_at: now,
-          inserted_at: now,
-          updated_at: now
+          inserted_at: now_naive,
+          updated_at: now_naive
         }
       ])
 

@@ -181,11 +181,6 @@ defmodule Cinegraph.Movies.Search do
         filtered_query
       end
 
-    # #913 PR B: drop the JSONB blobs from result rows so list traffic stops
-    # blowing the BEAM heap. PR A (#918 + #919) already moved every display
-    # read to external_metrics, so nilling these is a no-op for the UI.
-    sorted_query = Cinegraph.Movies.exclude_jsonb_blobs(sorted_query)
-
     # Convert params to Flop format
     flop_params = Params.to_flop_params(validated_params)
 
@@ -404,9 +399,6 @@ defmodule Cinegraph.Movies.Search do
     |> offset(^offset)
     |> select([sc, m], m)
     |> select_merge([sc, _m], %{
-      # #913 PR B: nil the JSONB blobs from the row projection.
-      tmdb_data: nil,
-      omdb_data: nil,
       overall_score: sc.overall_score,
       raw_cinegraph_score: sc.overall_score,
       score_confidence: sc.score_confidence,
@@ -477,9 +469,6 @@ defmodule Cinegraph.Movies.Search do
     |> offset(^offset)
     |> select([m, sc], m)
     |> select_merge([_m, sc], %{
-      # #913 PR B: nil the JSONB blobs from the row projection.
-      tmdb_data: nil,
-      omdb_data: nil,
       overall_score: nil,
       raw_cinegraph_score: sc.overall_score,
       cinegraph_display_score: nil,

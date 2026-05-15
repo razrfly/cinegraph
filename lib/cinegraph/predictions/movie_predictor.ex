@@ -32,13 +32,19 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     # Get the most engagement-signaled movies from the decade.
     # order_by ensures notable films are fetched first; limit keeps worker time bounded.
     # (HistoricalValidator runs unbounded for backtest accuracy — this function is UI-only.)
+    # #913 / #923: Movie schema marks tmdb_data as load_in_query: false to
+    # keep multi-MB JSONB out of every default SELECT. CriteriaScoring's
+    # score_cultural_impact/1 still reads movie.tmdb_data for budget /
+    # revenue, so opt back in here. (Long-term: migrate those reads to
+    # external_metrics so this select_merge can come out.)
     all_movies_query =
       from m in Movie,
         where: m.release_date >= ^start_date,
         where: m.release_date <= ^end_date,
         where: m.import_status == "full",
         order_by: [desc: fragment("COALESCE((? ->> 'vote_count')::numeric, 0)", m.tmdb_data)],
-        limit: 5000
+        limit: 5000,
+        select_merge: %{tmdb_data: m.tmdb_data}
 
     all_decade_movies = Repo.all(all_movies_query, timeout: :timer.seconds(120))
     scored = CriteriaScoring.batch_score_movies(all_decade_movies, weights)
@@ -81,7 +87,17 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   Get detailed scoring breakdown for a specific movie.
   """
   def get_movie_scoring_details(movie_id, profile_or_weights \\ nil) do
-    movie = Repo.get!(Movie, movie_id)
+    # #923: Movie schema marks tmdb_data load_in_query: false. CriteriaScoring's
+    # score_cultural_impact/1 reads movie.tmdb_data for budget/revenue, so the
+    # single-row fetch here must opt back in too — same as the three batch
+    # queries below. Without this, ROI score is silently 0 for every movie.
+    movie =
+      from(m in Movie,
+        where: m.id == ^movie_id,
+        select_merge: %{tmdb_data: m.tmdb_data}
+      )
+      |> Repo.one!()
+
     prediction = calculate_movie_prediction(movie, profile_or_weights)
 
     %{
@@ -99,12 +115,15 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   def get_confirmed_2020s_additions(profile_or_weights \\ nil) do
     weights = get_criteria_weights(profile_or_weights)
 
+    # #923: opt back in to tmdb_data — CriteriaScoring needs it for
+    # score_cultural_impact's budget/revenue read.
     query =
       from m in Movie,
         where: fragment("EXTRACT(YEAR FROM ?) >= 2020", m.release_date),
         where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
         order_by: [desc: m.release_date],
-        limit: 100
+        limit: 100,
+        select_merge: %{tmdb_data: m.tmdb_data}
 
     Repo.all(query, timeout: :timer.seconds(120))
     |> CriteriaScoring.batch_score_movies(weights)
@@ -123,12 +142,14 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         do: min_score * 100.0,
         else: min_score * 1.0
 
+    # #923: opt back in to tmdb_data for CriteriaScoring budget/revenue.
     query =
       from m in Movie,
         where: m.release_date >= ^~D[2020-01-01],
         where: m.release_date < ^~D[2030-01-01],
         where: m.import_status == "full",
-        where: is_nil(fragment("? -> ?", m.canonical_sources, "1001_movies"))
+        where: is_nil(fragment("? -> ?", m.canonical_sources, "1001_movies")),
+        select_merge: %{tmdb_data: m.tmdb_data}
 
     Repo.all(query, timeout: :timer.seconds(120))
     |> CriteriaScoring.batch_score_movies(weights)
