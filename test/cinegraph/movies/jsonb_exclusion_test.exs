@@ -93,23 +93,64 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
   end
 
   describe "DiscoveryRankings.list_default/1 JSONB exclusion (#913 PR B — hottest path)" do
-    @describetag :skip
-    # Requires `movie_discovery_rankings_mv` to be populated; covered by the
-    # integration suite. Local CI runs against an empty MV. The `select_merge`
-    # is also exercised structurally by the parse + compile checks.
-    test "result rows have tmdb_data and omdb_data nilled" do
-      insert_movie_with_blobs!("Discovery Default Blob")
+    # The MV is created empty by migration and refreshed by an Oban worker in
+    # prod. In tests we refresh inline (non-concurrently) so the MV picks up
+    # the row we just inserted. Non-concurrent REFRESH runs inside the sandbox
+    # transaction and rolls back with it — no cross-test pollution.
+    test "result rows have tmdb_data and omdb_data nilled (regression guard for the OOM path)" do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      params = %Params{sort: "discovery_score_desc"}
-      {:ok, {movies, _meta}} = DiscoveryRankings.list_default(params)
+      movie =
+        insert_movie_with_blobs!("Discovery Default Blob",
+          # release_date must be ≤ CURRENT_DATE so the MV's is_released = true.
+          release_date: ~D[2024-01-01]
+        )
 
-      assert length(movies) > 0
+      # The MV's metric_pivot CTE looks for source="tmdb" rows at these three
+      # metric_types. Seed one so the movie has a non-NULL discovery score
+      # and rises above any stale rows that may exist in the shared schema.
+      Repo.insert_all(Cinegraph.Movies.ExternalMetric, [
+        %{
+          movie_id: movie.id,
+          source: "tmdb",
+          metric_type: "rating_votes",
+          value: 50_000.0,
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        },
+        %{
+          movie_id: movie.id,
+          source: "tmdb",
+          metric_type: "rating_average",
+          value: 8.5,
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        },
+        %{
+          movie_id: movie.id,
+          source: "tmdb",
+          metric_type: "popularity_score",
+          value: 250.0,
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
 
-      for movie <- movies do
-        assert %Movie{} = movie
-        assert movie.tmdb_data == nil
-        assert movie.omdb_data == nil
-      end
+      Ecto.Adapters.SQL.query!(Repo, "REFRESH MATERIALIZED VIEW movie_discovery_rankings_mv")
+
+      params = %Params{sort: "discovery_score_desc", per_page: 50}
+      assert {:ok, {movies, _meta}} = DiscoveryRankings.list_default(params)
+
+      hit = Enum.find(movies, &(&1.id == movie.id))
+      assert hit, "inserted movie should appear in the default browse path"
+
+      assert %Movie{} = hit
+      assert hit.tmdb_data == nil
+      assert hit.omdb_data == nil
+      assert hit.title == "Discovery Default Blob"
     end
   end
 
