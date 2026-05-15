@@ -87,7 +87,17 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   Get detailed scoring breakdown for a specific movie.
   """
   def get_movie_scoring_details(movie_id, profile_or_weights \\ nil) do
-    movie = Repo.get!(Movie, movie_id)
+    # #923: Movie schema marks tmdb_data load_in_query: false. CriteriaScoring's
+    # score_cultural_impact/1 reads movie.tmdb_data for budget/revenue, so the
+    # single-row fetch here must opt back in too — same as the three batch
+    # queries below. Without this, ROI score is silently 0 for every movie.
+    movie =
+      from(m in Movie,
+        where: m.id == ^movie_id,
+        select_merge: %{tmdb_data: m.tmdb_data}
+      )
+      |> Repo.one!()
+
     prediction = calculate_movie_prediction(movie, profile_or_weights)
 
     %{

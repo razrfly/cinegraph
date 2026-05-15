@@ -95,12 +95,10 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
     end
 
     test "feature_film_query/0 base inheritance — composed queries inherit the slim projection" do
-      import Ecto.Query
-
       insert_movie_with_blobs!("Feature Film Inheritance Blob")
 
       # Compose a custom query on top of feature_film_query/0 — the
-      # select_merge baked into the base must carry forward.
+      # schema-level load_in_query: false must carry forward.
       movies =
         Movies.feature_film_query()
         |> limit(5)
@@ -113,6 +111,26 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
         assert movie.tmdb_data == nil
         assert movie.omdb_data == nil
       end
+    end
+  end
+
+  describe "Predictions opt-in to tmdb_data (#923 — Greptile P1 regression guard)" do
+    # PR #924 review caught: get_movie_scoring_details/2 used `Repo.get!(Movie)`
+    # without an explicit select_merge, so post-load_in_query the function
+    # silently passed `tmdb_data: nil` to CriteriaScoring.score_cultural_impact/1,
+    # making budget/revenue/roi_score always 0. This test pins the opt-in.
+
+    test "get_movie_scoring_details/1 returns a Movie with tmdb_data loaded" do
+      movie = insert_movie_with_blobs!("Predictions Detail Blob")
+      details = Cinegraph.Predictions.MoviePredictor.get_movie_scoring_details(movie.id)
+
+      assert %Movie{} = details.movie
+      assert details.movie.id == movie.id
+
+      refute is_nil(details.movie.tmdb_data),
+             "get_movie_scoring_details/2 must select tmdb_data — score_cultural_impact reads it for budget/revenue"
+
+      assert details.movie.tmdb_data["marker"] == "pr-b-must-be-nilled"
     end
   end
 
