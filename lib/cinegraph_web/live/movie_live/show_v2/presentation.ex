@@ -27,8 +27,15 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
     end
   end
 
-  def content_rating(%{omdb_data: %{"Rated" => r}}) when is_binary(r) and r != "" and r != "N/A",
-    do: r
+  # #913 PR A: reads from external_metrics preload (`@metrics` from data.ex),
+  # not the `omdb_data` JSONB blob on the movie struct.
+  @doc "Returns the OMDb content rating from preloaded external metrics."
+  def content_rating(metrics) when is_list(metrics) do
+    case find_metric(metrics, "omdb", "content_rating") do
+      %{text_value: v} when is_binary(v) and v != "" and v != "N/A" -> v
+      _ -> nil
+    end
+  end
 
   def content_rating(_), do: nil
 
@@ -76,6 +83,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
 
   def format_money(n) when is_number(n), do: "$#{n}"
 
+  @doc "Finds a rating metric by source key and metric type."
   def rating_value(ratings, source_key, type \\ "rating_average") do
     Enum.find(ratings, fn r ->
       key =
@@ -249,10 +257,24 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
   defp director_name(%{person: person}), do: person_name(person)
   defp director_name(_), do: person_name(nil)
 
-  def omdb_awards(%{omdb_data: %{"Awards" => a}}) when is_binary(a) and a != "" and a != "N/A",
-    do: a
+  # #913 PR A: reads from external_metrics preload, not omdb_data JSONB.
+  @doc "Returns the OMDb awards summary from preloaded external metrics."
+  def omdb_awards(metrics) when is_list(metrics) do
+    case find_metric(metrics, "omdb", "awards_summary") do
+      %{text_value: v} when is_binary(v) and v != "" and v != "N/A" -> v
+      _ -> nil
+    end
+  end
 
   def omdb_awards(_), do: nil
+
+  # Shared lookup for the migrated reads above — matches the row shape returned
+  # by ExternalSources.get_movie_metrics/2 (and get_movie_ratings/1 post-#913).
+  defp find_metric(metrics, source_name, metric_type) do
+    Enum.find(metrics, fn r ->
+      r[:metric_type] == metric_type and get_in(r, [:source, :name]) == source_name
+    end)
+  end
 
   def top_org_names(noms) when is_list(noms) do
     noms

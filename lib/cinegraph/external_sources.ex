@@ -181,18 +181,71 @@ defmodule Cinegraph.ExternalSources do
 
     metrics = Repo.replica().all(query)
 
-    # Convert metrics to a format compatible with the old ratings structure
+    # #913 Session 2: the returned key was historically `rating_type` while the
+    # underlying schema field is `metric_type` — and consumers like
+    # `ShowV2.Presentation.rating_value/3` match on `r[:metric_type]`, so the
+    # mismatch meant ratings were silently never found and the show page fell
+    # back to JSONB reads. Single key now matches the schema.
     Enum.map(metrics, fn metric ->
       %{
         id: metric.id,
         movie_id: metric.movie_id,
-        rating_type: metric.metric_type,
+        metric_type: metric.metric_type,
         value: metric.value,
         metadata: metric.metadata,
         fetched_at: metric.fetched_at,
         source: %{
           name: metric.source,
           # No longer have separate source table
+          id: nil
+        }
+      }
+    end)
+  end
+
+  @doc """
+  Returns external_metrics rows for a movie, filtered to the requested
+  metric_types. Same row shape as `get_movie_ratings/1` but with `text_value`
+  included (needed by display callers reading text-typed metrics like
+  `content_rating` and `awards_summary`).
+
+  Uses the read replica. Latest-first by `fetched_at`.
+
+  ## Examples
+
+      iex> get_movie_metrics(42, ["content_rating", "awards_summary"], ["omdb"])
+      [%{metric_type: "content_rating", text_value: "PG-13", source: %{name: "omdb", id: nil}, ...}]
+  """
+  def get_movie_metrics(movie_id, metric_types, source_names \\ nil) when is_list(metric_types) do
+    import Ecto.Query
+    alias Cinegraph.Movies.ExternalMetric
+
+    query =
+      from em in ExternalMetric,
+        where: em.movie_id == ^movie_id,
+        where: em.metric_type in ^metric_types,
+        order_by: [desc: em.fetched_at]
+
+    query =
+      if source_names do
+        from em in query, where: em.source in ^source_names
+      else
+        query
+      end
+
+    query
+    |> Repo.replica().all()
+    |> Enum.map(fn metric ->
+      %{
+        id: metric.id,
+        movie_id: metric.movie_id,
+        metric_type: metric.metric_type,
+        value: metric.value,
+        text_value: metric.text_value,
+        metadata: metric.metadata,
+        fetched_at: metric.fetched_at,
+        source: %{
+          name: metric.source,
           id: nil
         }
       }
