@@ -6,6 +6,11 @@ defmodule Cinegraph.Workers.DataRepairWorker do
   - missing_director_credits: Fetches credits from TMDb for movies missing director data
   - extract_jsonb_credits: Extracts credits from tmdb_data JSONB into movie_credits table
     (fixes issue #550 where ~56K movies have credits in JSONB but not in the credits table)
+  - backfill_external_metrics_omdb / backfill_external_metrics_tmdb: Re-runs
+    ExternalMetric.from_omdb/2 and from_tmdb/2 against existing JSONB blobs to
+    fill external_metrics rows that were missed when the extractor was added
+    after the catalog was already ingested. Idempotent via on_conflict: :nothing
+    on the (movie_id, source, metric_type) unique index (#913 Session 1).
   """
 
   use Oban.Worker,
@@ -15,6 +20,7 @@ defmodule Cinegraph.Workers.DataRepairWorker do
     unique: [period: 600]
 
   alias Cinegraph.{Repo, Movies, Repairs}
+  alias Cinegraph.Movies.ExternalMetric
   alias Cinegraph.Services.TMDb
   import Ecto.Query
   require Logger
@@ -22,6 +28,9 @@ defmodule Cinegraph.Workers.DataRepairWorker do
   @batch_size 50
   @rate_limit_delay 250
   @jsonb_batch_size 100
+  @metrics_backfill_batch_size 200
+  # Throttle between batches so we don't re-create the OOM pressure from #910.
+  @metrics_backfill_delay 500
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"repair_type" => "missing_director_credits"} = args} = job) do
@@ -126,6 +135,16 @@ defmodule Cinegraph.Workers.DataRepairWorker do
           new_last_id
         )
     end
+  end
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"repair_type" => "backfill_external_metrics_omdb"} = args} = job) do
+    process_metric_backfill_batch(job, args, :omdb)
+  end
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"repair_type" => "backfill_external_metrics_tmdb"} = args} = job) do
+    process_metric_backfill_batch(job, args, :tmdb)
   end
 
   def perform(%Oban.Job{args: args}) do
@@ -365,6 +384,166 @@ defmodule Cinegraph.Workers.DataRepairWorker do
       "batch_size" => batch_size,
       "total_estimated" => total,
       "total_processed" => 0
+    }
+    |> __MODULE__.new()
+    |> Oban.insert()
+  end
+
+  # ============================================================================
+  # External Metrics Backfill (#913 Session 1)
+  # ============================================================================
+
+  defp process_metric_backfill_batch(job, args, source) when source in [:omdb, :tmdb] do
+    last_id = args["last_id"] || 0
+    batch_size = args["batch_size"] || @metrics_backfill_batch_size
+    total_processed = args["total_processed"] || 0
+    total_inserted = args["total_inserted"] || 0
+    source_label = Atom.to_string(source)
+
+    Logger.info(
+      "DataRepairWorker: external_metrics backfill (#{source_label}), batch after id #{last_id}"
+    )
+
+    case get_movies_with_jsonb(source, last_id, batch_size) do
+      [] ->
+        update_job_meta(job, %{
+          status: "completed",
+          total_processed: total_processed,
+          total_inserted: total_inserted,
+          completed_at: DateTime.utc_now()
+        })
+
+        Logger.info(
+          "DataRepairWorker: Completed external_metrics backfill (#{source_label}). " <>
+            "Scanned: #{total_processed}, inserted: #{total_inserted}."
+        )
+
+        :ok
+
+      movies ->
+        {inserted, scanned} = process_metric_batch(movies, source)
+        new_last_id = List.last(movies).id
+        new_total_processed = total_processed + scanned
+        new_total_inserted = total_inserted + inserted
+
+        update_job_meta(job, %{
+          status: "in_progress",
+          last_id: new_last_id,
+          batch_scanned: scanned,
+          batch_inserted: inserted,
+          total_processed: new_total_processed,
+          total_inserted: new_total_inserted
+        })
+
+        Logger.info(
+          "DataRepairWorker: external_metrics batch (#{source_label}) — " <>
+            "scanned #{scanned}, inserted #{inserted} (cumulative inserted #{new_total_inserted})"
+        )
+
+        # Throttle between batches so the replica is not hammered.
+        Process.sleep(@metrics_backfill_delay)
+
+        schedule_next_batch(
+          args
+          |> Map.put("total_processed", new_total_processed)
+          |> Map.put("total_inserted", new_total_inserted),
+          new_last_id
+        )
+    end
+  end
+
+  defp get_movies_with_jsonb(:omdb, last_id, limit) do
+    from(m in Movies.Movie,
+      where: m.id > ^last_id,
+      where: not is_nil(m.omdb_data),
+      order_by: [asc: m.id],
+      limit: ^limit,
+      select: %{id: m.id, omdb_data: m.omdb_data}
+    )
+    |> Repo.all(timeout: 60_000)
+  end
+
+  defp get_movies_with_jsonb(:tmdb, last_id, limit) do
+    from(m in Movies.Movie,
+      where: m.id > ^last_id,
+      where: not is_nil(m.tmdb_data),
+      order_by: [asc: m.id],
+      limit: ^limit,
+      select: %{id: m.id, tmdb_data: m.tmdb_data}
+    )
+    |> Repo.all(timeout: 60_000)
+  end
+
+  defp process_metric_batch(movies, source) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    rows =
+      movies
+      |> Enum.flat_map(fn movie ->
+        movie
+        |> extract_metric_rows(source)
+        |> Enum.map(fn row ->
+          row
+          |> Map.put(:inserted_at, now)
+          |> Map.put(:updated_at, now)
+        end)
+      end)
+
+    scanned = length(movies)
+
+    inserted =
+      case rows do
+        [] ->
+          0
+
+        rows ->
+          {count, _} =
+            Repo.insert_all(ExternalMetric, rows,
+              on_conflict: :nothing,
+              conflict_target: [:movie_id, :source, :metric_type]
+            )
+
+          count
+      end
+
+    {inserted, scanned}
+  end
+
+  defp extract_metric_rows(%{id: movie_id, omdb_data: data}, :omdb) when is_map(data),
+    do: ExternalMetric.from_omdb(movie_id, data)
+
+  defp extract_metric_rows(%{id: movie_id, tmdb_data: data}, :tmdb) when is_map(data),
+    do: ExternalMetric.from_tmdb(movie_id, data)
+
+  defp extract_metric_rows(_movie, _source), do: []
+
+  @doc """
+  Starts the external_metrics backfill for a given source (#913 Session 1).
+
+  Re-runs `ExternalMetric.from_omdb/2` (or `from_tmdb/2`) against every movie
+  with the corresponding JSONB blob populated, inserting any missing rows.
+  Idempotent — existing rows are skipped via the unique index on
+  `(movie_id, source, metric_type)`.
+
+  ## Example
+
+      Cinegraph.Workers.DataRepairWorker.start_external_metrics_backfill(:omdb)
+      Cinegraph.Workers.DataRepairWorker.start_external_metrics_backfill(:tmdb, batch_size: 100)
+  """
+  def start_external_metrics_backfill(source, opts \\ []) when source in [:omdb, :tmdb] do
+    batch_size = Keyword.get(opts, :batch_size, @metrics_backfill_batch_size)
+    repair_type = "backfill_external_metrics_#{source}"
+
+    Logger.info(
+      "DataRepairWorker: enqueuing external_metrics backfill for #{source} (batch_size=#{batch_size})"
+    )
+
+    %{
+      "repair_type" => repair_type,
+      "batch_size" => batch_size,
+      "last_id" => 0,
+      "total_processed" => 0,
+      "total_inserted" => 0
     }
     |> __MODULE__.new()
     |> Oban.insert()
