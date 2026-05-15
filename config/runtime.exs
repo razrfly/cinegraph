@@ -66,6 +66,17 @@ config :cinegraph, Cinegraph.Images.Providers.Unsplash, access_key: unsplash_acc
 config :cinegraph, Cinegraph.Images.Providers.Pexels, api_key: pexels_api_key
 config :cinegraph, Cinegraph.Images.Providers.Pixabay, api_key: pixabay_api_key
 
+# AppSignal push API key is read at runtime so releases can receive the secret
+# from the deployment environment instead of baking it in at build time.
+appsignal_push_api_key =
+  cond do
+    config_env() == :dev -> env!("APPSIGNAL_PUSH_API_KEY", :string, nil)
+    config_env() == :prod -> System.fetch_env!("APPSIGNAL_PUSH_API_KEY")
+    true -> System.get_env("APPSIGNAL_PUSH_API_KEY")
+  end
+
+config :appsignal, :config, push_api_key: appsignal_push_api_key
+
 # Cloudflare R2 image storage (#890). Used by Cinegraph.Images.R2 for
 # admin-uploaded festival logos / hero images. S3-compatible API; the
 # CLOUDFLARE_*, R2_BUCKET, and R2_CDN_URL env vars are required in prod.
@@ -209,21 +220,28 @@ if config_env() == :prod do
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "25"),
     socket_options: socket_opts,
     connect_timeout: 30_000,
+    queue_target: String.to_integer(System.get_env("DB_QUEUE_TARGET_MS") || "5000"),
+    queue_interval: String.to_integer(System.get_env("DB_QUEUE_INTERVAL_MS") || "10000"),
     # Increased from 15s to 180s to allow complex scoring queries in Oban jobs
     # Per-query timeouts can override this for specific operations
     timeout: 180_000,
     handshake_timeout: 30_000
 
   # Read replica points to same database (no separate replica on local Postgres)
+  # Public read-heavy pages can issue multiple replica queries per request. Keep
+  # this pool large enough for concurrent crawlers/browsing bursts; otherwise
+  # ordinary page loads fail with DBConnection queue drops before query timeout.
   config :cinegraph, Cinegraph.Repo.Replica,
     username: username,
     password: password,
     hostname: hostname,
     port: port_num,
     database: database,
-    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "5"),
+    pool_size: String.to_integer(System.get_env("REPLICA_POOL_SIZE") || "15"),
     socket_options: socket_opts,
     connect_timeout: 30_000,
+    queue_target: String.to_integer(System.get_env("DB_REPLICA_QUEUE_TARGET_MS") || "5000"),
+    queue_interval: String.to_integer(System.get_env("DB_REPLICA_QUEUE_INTERVAL_MS") || "10000"),
     timeout: 180_000,
     handshake_timeout: 30_000
 
@@ -295,6 +313,7 @@ if config_env() == :prod do
       "https://cinegraph.org",
       "https://www.cinegraph.org"
     ],
+    force_ssl: [rewrite_on: [:x_forwarded_proto], hsts: true],
     secret_key_base: secret_key_base
 
   # ## SSL Support
