@@ -422,32 +422,16 @@ defmodule Cinegraph.People do
     end
   end
 
-  # #913 PR A pt 2: was iterating movies and reading movie.tmdb_data["revenue"]
-  # per row. Now a single query against external_metrics. The four
-  # `normalize_revenue/1` clauses that handled int/float/string/nil JSONB
-  # values are gone — external_metrics stores `value` as float, so the only
-  # transformation needed is `trunc(sum)`.
+  # Delegates to `revenue_map_for_movie_ids/1` so the per-movie deduplication
+  # (DISTINCT ON, latest fetched_at wins) lives in exactly one place. A plain
+  # `sum()` over external_metrics would double-count any movie with multiple
+  # `revenue_worldwide` rows from re-fetches.
   defp calculate_total_revenue(movies) do
-    movie_ids = movies |> Enum.map(& &1.id) |> Enum.uniq()
-
-    if movie_ids == [] do
-      0
-    else
-      sum =
-        Repo.replica().one(
-          from em in Cinegraph.Movies.ExternalMetric,
-            where:
-              em.movie_id in ^movie_ids and
-                em.source == "tmdb" and
-                em.metric_type == "revenue_worldwide",
-            select: sum(em.value)
-        )
-
-      case sum do
-        nil -> 0
-        s when is_number(s) -> trunc(s)
-      end
-    end
+    movies
+    |> Enum.map(& &1.id)
+    |> revenue_map_for_movie_ids()
+    |> Map.values()
+    |> Enum.sum()
   end
 
   @doc """
