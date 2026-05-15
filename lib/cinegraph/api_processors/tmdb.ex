@@ -11,6 +11,7 @@ defmodule Cinegraph.ApiProcessors.TMDb do
   alias Cinegraph.Repo
   alias Cinegraph.Movies
   alias Cinegraph.Movies.Movie
+  import Ecto.Query
   require Logger
 
   @impl true
@@ -53,8 +54,16 @@ defmodule Cinegraph.ApiProcessors.TMDb do
 
   # Private functions
 
+  # #923: Movie schema marks tmdb_data load_in_query: false. has_data?/1 above
+  # pattern-matches on %Movie{tmdb_data: data} so the field MUST be selected
+  # here — without the explicit opt-in, fetch_and_update_movie always falls
+  # open and the TMDb API gets called even for already-enriched movies.
   defp get_movie(movie_id) do
-    case Repo.get(Movie, movie_id) do
+    case Repo.one(
+           from m in Movie,
+             where: m.id == ^movie_id,
+             select_merge: %{tmdb_data: m.tmdb_data}
+         ) do
       nil -> {:error, :movie_not_found}
       movie -> {:ok, movie}
     end

@@ -12,61 +12,58 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
     # 1 hour uniqueness
     unique: [fields: [:args], keys: [:movie_id], period: 3600]
 
-  alias Cinegraph.Movies
   alias Cinegraph.Metrics
   alias Cinegraph.ApiProcessors.OMDb
   require Logger
 
   @impl Oban.Worker
+  # #923: do NOT add an outer "already has omdb_data?" guard here — the schema
+  # marks omdb_data load_in_query: false, so any naive `Movies.get_movie!/1`
+  # would silently see nil and call the OMDb API for every job, burning quota.
+  # OMDb.process_movie/2 owns the skip decision: it selects omdb_data
+  # explicitly AND verifies a matching external_metrics row exists.
   def perform(%Oban.Job{args: %{"movie_id" => movie_id} = args}) do
     Logger.info("OMDb Enrichment Worker processing movie #{movie_id}")
-
-    try do
-      movie = Movies.get_movie!(movie_id)
-
-      force = Map.get(args, "force", false)
-
-      if movie.omdb_data && !force do
-        Logger.info("Movie #{movie_id} already has OMDb data, skipping")
-        :ok
-      else
-        process_omdb_data(movie, args)
-      end
-    rescue
-      Ecto.NoResultsError ->
-        Logger.error("Movie #{movie_id} not found")
-        {:error, :movie_not_found}
-    end
+    force = Map.get(args, "force", false)
+    process_omdb_data(movie_id, force)
   end
 
-  defp process_omdb_data(movie, _args) do
-    case OMDb.process_movie(movie.id) do
+  defp process_omdb_data(movie_id, force) do
+    case OMDb.process_movie(movie_id, force_refresh: force) do
       {:ok, updated_movie} ->
-        Logger.info("Successfully enriched movie #{movie.id} with OMDb data")
+        Logger.info("Successfully enriched movie #{movie_id} with OMDb data")
         {:ok, updated_movie}
+
+      {:error, :movie_not_found} ->
+        Logger.error("Movie #{movie_id} not found")
+        {:error, :movie_not_found}
+
+      {:error, :invalid_imdb_id} ->
+        Logger.info("Invalid IMDb ID for movie #{movie_id}, skipping")
+        :ok
 
       {:error, :rate_limited} ->
         # OMDb has strict rate limits (1000/day for free tier)
         # Reschedule for later
-        Logger.warning("OMDb rate limited, rescheduling movie #{movie.id}")
+        Logger.warning("OMDb rate limited, rescheduling movie #{movie_id}")
         # Retry in 1 hour
         {:snooze, 3600}
 
       {:error, reason} when reason in ["Error getting data.", "Incorrect IMDb ID."] ->
-        Logger.info("OMDb unavailable for movie #{movie.id} (#{reason}), recording fetch attempt")
-        record_fetch_attempt(movie.id, reason)
+        Logger.info("OMDb unavailable for movie #{movie_id} (#{reason}), recording fetch attempt")
+        record_fetch_attempt(movie_id, reason)
         :ok
 
       {:error, %Jason.DecodeError{}} ->
         Logger.warning(
-          "OMDb returned malformed JSON for movie #{movie.id}, recording fetch attempt"
+          "OMDb returned malformed JSON for movie #{movie_id}, recording fetch attempt"
         )
 
-        record_fetch_attempt(movie.id, "malformed_response")
+        record_fetch_attempt(movie_id, "malformed_response")
         :ok
 
       {:error, reason} ->
-        Logger.error("Failed to enrich movie #{movie.id} with OMDb: #{inspect(reason)}")
+        Logger.error("Failed to enrich movie #{movie_id} with OMDb: #{inspect(reason)}")
         {:error, reason}
     end
   end

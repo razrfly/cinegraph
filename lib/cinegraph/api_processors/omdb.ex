@@ -55,8 +55,17 @@ defmodule Cinegraph.ApiProcessors.OMDb do
 
   # Private functions
 
+  # #923: Movie schema marks omdb_data load_in_query: false. has_data?/1 below
+  # pattern-matches on %Movie{omdb_data: data} so the field MUST be selected
+  # here — without the explicit opt-in, should_skip_processing? always falls
+  # open and the OMDb API gets called even for already-enriched movies,
+  # burning quota.
   defp get_movie(movie_id) do
-    case Repo.get(Movie, movie_id) do
+    case Repo.one(
+           from m in Movie,
+             where: m.id == ^movie_id,
+             select_merge: %{omdb_data: m.omdb_data}
+         ) do
       nil -> {:error, :movie_not_found}
       movie -> {:ok, movie}
     end

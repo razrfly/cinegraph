@@ -114,6 +114,65 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
     end
   end
 
+  describe "OMDb processor opts in to omdb_data (#923 — re-audit P1 regression guard)" do
+    # Re-audit of #924 caught: OMDbEnrichmentWorker did
+    # `movie = Movies.get_movie!(movie_id); if movie.omdb_data && !force`,
+    # but with load_in_query: false on the schema field that guard ALWAYS sees
+    # nil and re-calls the OMDb API for every job. The worker now delegates
+    # the skip decision to OMDb.process_movie/2, whose `get_movie/1` opts back
+    # in to omdb_data via select_merge. This test pins that opt-in: if the
+    # select_merge regresses, this test hits the OMDb client which raises
+    # "OMDB_API_KEY not configured" in the test env.
+    test "OMDb.process_movie/2 skips already-enriched movie via inner guard" do
+      imdb_id = "tt#{:rand.uniform(89_999_999) + 10_000_000}"
+
+      movie =
+        insert_movie_with_blobs!("OMDb Skip Blob",
+          imdb_id: imdb_id
+        )
+
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      now_utc = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      # should_skip_processing? requires BOTH has_data?(movie) AND a matching
+      # external_metrics row — seed one for source="omdb".
+      Repo.insert_all(Cinegraph.Movies.ExternalMetric, [
+        %{
+          movie_id: movie.id,
+          source: "omdb",
+          metric_type: "rating_average",
+          value: 8.5,
+          fetched_at: now_utc,
+          inserted_at: now_naive,
+          updated_at: now_naive
+        }
+      ])
+
+      # Capture pre-call state. If the skip path doesn't trigger,
+      # OMDb.Client.get_movie_by_imdb_id raises ("OMDB_API_KEY not configured"
+      # in test env) AND/OR new external_metrics rows are written.
+      metrics_before = Repo.aggregate(Cinegraph.Movies.ExternalMetric, :count, :id)
+      reloaded_before = Repo.get!(Movie, movie.id)
+
+      assert {:ok, returned} = Cinegraph.ApiProcessors.OMDb.process_movie(movie.id)
+
+      # Skip path returns the loaded movie. With select_merge in get_movie/1,
+      # the opt-in omdb_data must survive the load — if it doesn't, the bug
+      # this test guards against is back.
+      assert returned.id == movie.id
+      assert returned.omdb_data["marker"] == "pr-b-must-be-nilled"
+
+      metrics_after = Repo.aggregate(Cinegraph.Movies.ExternalMetric, :count, :id)
+      reloaded_after = Repo.get!(Movie, movie.id)
+
+      assert metrics_after == metrics_before,
+             "skip path must not insert external_metrics rows"
+
+      assert reloaded_after.updated_at == reloaded_before.updated_at,
+             "skip path must not update the movie row"
+    end
+  end
+
   describe "Predictions opt-in to tmdb_data (#923 — Greptile P1 regression guard)" do
     # PR #924 review caught: get_movie_scoring_details/2 used `Repo.get!(Movie)`
     # without an explicit select_merge, so post-load_in_query the function
