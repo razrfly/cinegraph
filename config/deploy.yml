@@ -27,6 +27,12 @@ env:
     PHX_HOST: cinegraph.org
     PHX_SERVER: "true"
     PORT: "4000"
+    # Phase 0 of #910 — the previous default of 5 caused request pile-up,
+    # LongPoll process memory growth, and kernel OOMs every 20-60s (255
+    # restarts over 2026-05-10 → 2026-05-15). #908 raised the default to 15
+    # and added queue_target/queue_interval; this env override holds the
+    # prod-tested value of 25 to mirror POOL_SIZE.
+    REPLICA_POOL_SIZE: "25"
   secret:
     - SECRET_KEY_BASE
     - DATABASE_USERNAME
