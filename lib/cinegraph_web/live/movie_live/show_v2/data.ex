@@ -124,6 +124,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
     directors = Enum.filter(crew, &(&1.job == "Director"))
 
     ratings = ExternalSources.get_movie_ratings(movie.id)
+    # #913 PR A: text-valued metrics that used to be read off omdb_data JSONB.
+    metrics = ExternalSources.get_movie_metrics(movie.id, ["content_rating", "awards_summary"], ["omdb"])
     festival_noms = Cultural.get_movie_all_festival_nominations(movie.id) || []
     canon_lists = Cultural.get_list_movies_for_movie(movie.id) || []
     keywords = Movies.get_movie_keywords(movie.id) || []
@@ -146,6 +148,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Data do
       crew: crew,
       directors: directors,
       ratings: ratings,
+      metrics: metrics,
       festival_noms: festival_noms,
       canon_lists: canon_lists,
       keywords: keywords,

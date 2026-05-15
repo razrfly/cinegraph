@@ -219,7 +219,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
               <span :if={@movie.runtime}>{" · #{format_runtime(@movie.runtime)}"}</span>
-              <span :if={content_rating(@movie)}>{" · #{content_rating(@movie)}"}</span>
+              <span :if={content_rating(@metrics)}>{" · #{content_rating(@metrics)}"}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -559,7 +559,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 )}
               </span>
             </h2>
-            <div :if={a = omdb_awards(@movie)} class="mb-6 text-[13.5px] text-mist-700 italic">
+            <div :if={a = omdb_awards(@metrics)} class="mb-6 text-[13.5px] text-mist-700 italic">
               {a}
             </div>
             <div class="space-y-4">
