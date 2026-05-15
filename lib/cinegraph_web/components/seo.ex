@@ -489,10 +489,26 @@ defmodule CinegraphWeb.SEO do
 
   defp get_genres(_), do: []
 
-  # Extract rating from external metrics or tmdb_data
+  # #913 PR A pt 2: reads from preloaded :external_metrics association on the
+  # movie. The previous "external_metrics" clause matched on `vote_average`/
+  # `vote_count` keys that the current ExternalMetric schema doesn't have
+  # (`source`/`metric_type`/`value`), so it was dead and we silently fell
+  # back to tmdb_data JSONB. Seo_helpers now preloads the association.
   defp get_rating(%{external_metrics: metrics}) when is_list(metrics) do
-    case Enum.find(metrics, &(&1.source == "tmdb")) do
-      %{vote_average: avg, vote_count: count} when is_number(avg) and is_number(count) ->
+    avg_metric =
+      Enum.find(metrics, &(&1.source == "tmdb" and &1.metric_type == "rating_average"))
+
+    votes_metric =
+      Enum.find(metrics, &(&1.source == "tmdb" and &1.metric_type == "rating_votes"))
+
+    case avg_metric do
+      %{value: avg} when is_number(avg) ->
+        count =
+          case votes_metric do
+            %{value: c} when is_number(c) -> trunc(c)
+            _ -> 0
+          end
+
         {Float.round(avg, 1), count}
 
       _ ->
@@ -500,21 +516,12 @@ defmodule CinegraphWeb.SEO do
     end
   end
 
-  defp get_rating(%{tmdb_data: %{"vote_average" => avg, "vote_count" => count}})
-       when is_number(avg) and is_number(count) do
-    {Float.round(avg, 1), count}
-  end
-
   defp get_rating(_), do: {0, 0}
 
-  # Extract production companies
+  # Extract production companies. #913 PR A pt 2: dropped tmdb_data fallback —
+  # the relational association is always available now (seo_helpers preloads).
   defp get_production_companies(%{production_companies: companies}) when is_list(companies) do
     Enum.map(companies, & &1.name)
-  end
-
-  defp get_production_companies(%{tmdb_data: %{"production_companies" => companies}})
-       when is_list(companies) do
-    Enum.map(companies, & &1["name"])
   end
 
   defp get_production_companies(_), do: []

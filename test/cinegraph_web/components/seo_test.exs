@@ -118,4 +118,127 @@ defmodule CinegraphWeb.SEOTest do
       refute html =~ ~S|property="og:image:height"|
     end
   end
+
+  describe "movie_schema/1 (#913 PR A pt 2 — reads external_metrics, not JSONB)" do
+    test "populates aggregateRating from external_metrics" do
+      movie = %{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        original_title: "Test Movie",
+        overview: nil,
+        release_date: nil,
+        runtime: nil,
+        poster_path: nil,
+        original_language: nil,
+        imdb_id: nil,
+        tmdb_id: nil,
+        origin_country: nil,
+        external_metrics: [
+          %{source: "tmdb", metric_type: "rating_average", value: 8.456},
+          %{source: "tmdb", metric_type: "rating_votes", value: 12_345.0}
+        ],
+        production_companies: []
+      }
+
+      schema = SEO.movie_schema(movie)
+
+      assert schema["aggregateRating"]["@type"] == "AggregateRating"
+      # Float.round to 1 decimal place
+      assert schema["aggregateRating"]["ratingValue"] == 8.5
+      # trunc on float
+      assert schema["aggregateRating"]["ratingCount"] == 12_345
+      assert schema["aggregateRating"]["bestRating"] == 10
+    end
+
+    test "omits aggregateRating when external_metrics is empty" do
+      movie = %{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        original_title: "Test Movie",
+        overview: nil,
+        release_date: nil,
+        runtime: nil,
+        poster_path: nil,
+        original_language: nil,
+        imdb_id: nil,
+        tmdb_id: nil,
+        origin_country: nil,
+        external_metrics: [],
+        production_companies: []
+      }
+
+      refute Map.has_key?(SEO.movie_schema(movie), "aggregateRating")
+    end
+
+    test "omits aggregateRating when rating_average is missing" do
+      movie = %{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        original_title: "Test Movie",
+        overview: nil,
+        release_date: nil,
+        runtime: nil,
+        poster_path: nil,
+        original_language: nil,
+        imdb_id: nil,
+        tmdb_id: nil,
+        origin_country: nil,
+        # rating_votes alone is not enough
+        external_metrics: [%{source: "tmdb", metric_type: "rating_votes", value: 12_345.0}],
+        production_companies: []
+      }
+
+      refute Map.has_key?(SEO.movie_schema(movie), "aggregateRating")
+    end
+
+    test "populates productionCompany from production_companies association" do
+      movie = %{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        original_title: "Test Movie",
+        overview: nil,
+        release_date: nil,
+        runtime: nil,
+        poster_path: nil,
+        original_language: nil,
+        imdb_id: nil,
+        tmdb_id: nil,
+        origin_country: nil,
+        external_metrics: [],
+        production_companies: [
+          %{name: "A24"},
+          %{name: "Plan B Entertainment"}
+        ]
+      }
+
+      schema = SEO.movie_schema(movie)
+      assert schema["productionCompany"]["@type"] == "Organization"
+      assert schema["productionCompany"]["name"] == "A24"
+    end
+
+    test "omits productionCompany when association is empty" do
+      movie = %{
+        id: 1,
+        title: "Test Movie",
+        slug: "test-movie",
+        original_title: "Test Movie",
+        overview: nil,
+        release_date: nil,
+        runtime: nil,
+        poster_path: nil,
+        original_language: nil,
+        imdb_id: nil,
+        tmdb_id: nil,
+        origin_country: nil,
+        external_metrics: [],
+        production_companies: []
+      }
+
+      refute Map.has_key?(SEO.movie_schema(movie), "productionCompany")
+    end
+  end
 end

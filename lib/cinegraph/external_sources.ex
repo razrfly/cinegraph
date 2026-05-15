@@ -172,9 +172,11 @@ defmodule Cinegraph.ExternalSources do
         where: em.metric_type in ["rating_average", "tomatometer", "metascore", "audience_score"],
         order_by: [desc: em.fetched_at]
 
+    normalized_sources = normalize_source_names(source_names)
+
     query =
-      if source_names do
-        from em in query, where: em.source in ^source_names
+      if normalized_sources != [] do
+        from em in query, where: em.source in ^normalized_sources
       else
         query
       end
@@ -226,9 +228,11 @@ defmodule Cinegraph.ExternalSources do
         where: em.metric_type in ^metric_types,
         order_by: [desc: em.fetched_at]
 
+    normalized_sources = normalize_source_names(source_names)
+
     query =
-      if source_names do
-        from em in query, where: em.source in ^source_names
+      if normalized_sources != [] do
+        from em in query, where: em.source in ^normalized_sources
       else
         query
       end
@@ -251,6 +255,11 @@ defmodule Cinegraph.ExternalSources do
       }
     end)
   end
+
+  defp normalize_source_names(nil), do: []
+  defp normalize_source_names(names) when is_list(names), do: names
+  defp normalize_source_names(name) when is_binary(name), do: [name]
+  defp normalize_source_names(_), do: []
 
   @doc """
   Gets normalized scores across all sources for a movie from external_metrics.

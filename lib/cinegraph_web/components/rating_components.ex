@@ -487,112 +487,33 @@ defmodule CinegraphWeb.RatingComponents do
     """
   end
 
-  # Build hero ratings from movie data (with URLs where available)
+  # #913 PR A pt 2: build entirely from movie.external_ratings (the preloaded
+  # ExternalSources.get_movie_ratings/1 shape, keyed by :metric_type since
+  # Session 2). No more JSONB reads — IMDb/Metacritic/RT/TMDb all flow through
+  # external_metrics now. URLs derive from first-class imdb_id/tmdb_id columns.
   defp build_hero_ratings(movie) do
-    ratings = []
-
-    # Get external IDs for building URLs
     imdb_id = Map.get(movie, :imdb_id)
     tmdb_id = Map.get(movie, :tmdb_id)
 
-    # IMDb from omdb_data
-    ratings =
-      case get_in(movie.omdb_data || %{}, ["imdbRating"]) do
-        nil ->
-          ratings
-
-        "N/A" ->
-          ratings
-
-        value ->
-          url = if imdb_id, do: "https://www.imdb.com/title/#{imdb_id}/", else: nil
-          ratings ++ [%{source: "imdb", value: value, url: url}]
+    external_ratings =
+      case Map.get(movie, :external_ratings) do
+        list when is_list(list) -> list
+        _ -> []
       end
 
-    # Metacritic from omdb_data (no reliable URL without their slug)
-    ratings =
-      case get_in(movie.omdb_data || %{}, ["Metascore"]) do
-        nil -> ratings
-        "N/A" -> ratings
-        value -> ratings ++ [%{source: "metacritic", value: value, url: nil}]
-      end
-
-    # Rotten Tomatoes from omdb_data Ratings array (no reliable URL without their slug)
-    ratings =
-      case find_omdb_rating(movie.omdb_data, "Rotten Tomatoes") do
-        nil -> ratings
-        value -> ratings ++ [%{source: "rotten_tomatoes", value: parse_rt_value(value), url: nil}]
-      end
-
-    # TMDb from tmdb_data
-    ratings =
-      case get_in(movie.tmdb_data || %{}, ["vote_average"]) do
-        nil ->
-          ratings
-
-        0 ->
-          ratings
-
-        value when value == 0.0 ->
-          ratings
-
-        value ->
-          url = if tmdb_id, do: "https://www.themoviedb.org/movie/#{tmdb_id}", else: nil
-          ratings ++ [%{source: "tmdb", value: value, url: url}]
-      end
-
-    # Add from external_ratings if available (for Letterboxd, etc.)
-    ratings =
-      if Map.has_key?(movie, :external_ratings) && is_list(movie.external_ratings) do
-        Enum.reduce(movie.external_ratings, ratings, fn rating, acc ->
-          source_name =
-            rating.metadata["source_name"] ||
-              (rating.source && rating.source.name) ||
-              "Unknown"
-
-          source_key = normalize_source(source_name)
-
-          # Skip if we already have this source from omdb/tmdb
-          if Enum.any?(acc, fn r -> r.source == source_key end) do
-            acc
-          else
-            acc ++ [%{source: source_key, value: rating.value}]
-          end
-        end)
-      else
-        ratings
-      end
-
-    ratings
+    external_ratings
+    |> Enum.map(fn rating ->
+      source_name = get_in(rating, [:source, :name]) || "unknown"
+      source_key = source_name |> normalize_source() |> derive_hero_source_key(rating[:metric_type])
+      url = build_rating_url(source_key, imdb_id, tmdb_id)
+      %{source: source_key, value: rating[:value], url: url}
+    end)
+    |> Enum.reject(fn r -> is_nil(r.value) or r.value == 0 or r.value == 0.0 end)
+    |> Enum.uniq_by(& &1.source)
   end
 
-  defp find_omdb_rating(nil, _source), do: nil
-
-  defp find_omdb_rating(omdb_data, source) do
-    case omdb_data["Ratings"] do
-      nil ->
-        nil
-
-      ratings when is_list(ratings) ->
-        Enum.find_value(ratings, fn
-          %{"Source" => ^source, "Value" => value} -> value
-          _ -> nil
-        end)
-
-      _ ->
-        nil
-    end
-  end
-
-  defp parse_rt_value(value) when is_binary(value) do
-    # Handle "92%" format
-    case Integer.parse(String.replace(value, "%", "")) do
-      {num, _} -> num
-      :error -> value
-    end
-  end
-
-  defp parse_rt_value(value), do: value
+  defp derive_hero_source_key("rotten_tomatoes", "audience_score"), do: "rotten_tomatoes_audience"
+  defp derive_hero_source_key(source_key, _metric_type), do: source_key
 
   # Private helper functions
 

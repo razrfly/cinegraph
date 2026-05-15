@@ -422,29 +422,48 @@ defmodule Cinegraph.People do
     end
   end
 
+  # Delegates to `revenue_map_for_movie_ids/1` so the per-movie deduplication
+  # (DISTINCT ON, latest fetched_at wins) lives in exactly one place. A plain
+  # `sum()` over external_metrics would double-count any movie with multiple
+  # `revenue_worldwide` rows from re-fetches.
   defp calculate_total_revenue(movies) do
     movies
-    |> Enum.map(fn movie ->
-      normalize_revenue(movie.tmdb_data["revenue"])
-    end)
+    |> Enum.map(& &1.id)
+    |> revenue_map_for_movie_ids()
+    |> Map.values()
     |> Enum.sum()
   end
 
-  defp normalize_revenue(nil), do: 0
-  defp normalize_revenue(revenue) when is_integer(revenue), do: revenue
-  defp normalize_revenue(revenue) when is_float(revenue), do: trunc(revenue)
+  @doc """
+  Builds a `%{movie_id => revenue_int}` map for the given movie IDs.
 
-  defp normalize_revenue(revenue) when is_binary(revenue) do
-    # Handle string revenue values (may contain commas, spaces, etc.)
-    cleaned = String.replace(revenue, ~r/[^\d.]/, "")
+  Reads TMDb `revenue_worldwide` rows from `external_metrics` so templates
+  can render per-credit revenue without touching `tmdb_data` JSONB.
+  """
+  def revenue_map_for_movie_ids([]), do: %{}
 
-    case Float.parse(cleaned) do
-      {value, _} -> trunc(value)
-      :error -> 0
+  def revenue_map_for_movie_ids(movie_ids) when is_list(movie_ids) do
+    ids = movie_ids |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    if ids == [] do
+      %{}
+    else
+      from(em in Cinegraph.Movies.ExternalMetric,
+        where:
+          em.movie_id in ^ids and
+            em.source == "tmdb" and
+            em.metric_type == "revenue_worldwide",
+        distinct: em.movie_id,
+        order_by: [asc: em.movie_id, desc: em.fetched_at, desc: em.id],
+        select: {em.movie_id, em.value}
+      )
+      |> Repo.replica().all()
+      |> Map.new(fn {id, value} ->
+        revenue = if is_number(value), do: trunc(value), else: 0
+        {id, revenue}
+      end)
     end
   end
-
-  defp normalize_revenue(_), do: 0
 
   defp calculate_average_rating(movies) do
     ratings =

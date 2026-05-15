@@ -283,31 +283,20 @@ defmodule Cinegraph.Calibration.RecallCalculator do
 
   defp analyze_genre_gaps(missed_ids, _references) when missed_ids == [], do: []
 
+  # #913 PR A pt 2: was reading tmdb_data->'genres' via SQL fragment. Genres
+  # live in the `genres` table joined through `movie_genres`; query that
+  # directly instead of the JSONB blob.
   defp analyze_genre_gaps(missed_ids, _references) do
-    from(m in Movie,
-      where: m.id in ^missed_ids,
-      where: not is_nil(m.tmdb_data),
-      select: fragment("?->'genres'", m.tmdb_data)
+    from(g in Cinegraph.Movies.Genre,
+      join: mg in "movie_genres",
+      on: mg.genre_id == g.id,
+      where: mg.movie_id in ^missed_ids,
+      group_by: g.name,
+      order_by: [desc: count(mg.movie_id)],
+      limit: 3,
+      select: {g.name, count(mg.movie_id)}
     )
     |> Repo.all()
-    |> Enum.flat_map(fn genres ->
-      case genres do
-        genres when is_list(genres) ->
-          Enum.map(genres, fn g ->
-            cond do
-              is_map(g) -> Map.get(g, "name") || Map.get(g, :name)
-              true -> nil
-            end
-          end)
-
-        _ ->
-          []
-      end
-    end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.frequencies()
-    |> Enum.sort_by(fn {_, count} -> count end, :desc)
-    |> Enum.take(3)
     |> Enum.map(fn {genre, count} ->
       %{
         category: "genre",

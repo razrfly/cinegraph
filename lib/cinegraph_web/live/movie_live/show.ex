@@ -196,6 +196,11 @@ defmodule CinegraphWeb.MovieLive.Show do
     # Load external sources data
     external_ratings = ExternalSources.get_movie_ratings(id)
 
+    # #913 PR A pt 2: text-typed metrics (content_rating, awards_summary) come
+    # from external_metrics now, not omdb_data JSONB.
+    metrics_list =
+      ExternalSources.get_movie_metrics(id, ["content_rating", "awards_summary"], ["omdb"])
+
     # Load ALL other connected data
     keywords = Movies.get_movie_keywords(id)
     videos = Movies.get_movie_videos(id)
@@ -240,6 +245,7 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:cultural_lists, cultural_lists)
     |> Map.put(:all_festival_nominations, all_festival_nominations)
     |> Map.put(:external_ratings, external_ratings)
+    |> Map.put(:metrics, metrics_list)
     |> Map.put(:keywords, keywords)
     |> Map.put(:videos, videos)
     |> Map.put(:release_dates, release_dates)

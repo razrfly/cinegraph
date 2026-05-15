@@ -78,7 +78,7 @@
               {@movie.runtime} min
             </span>
           <% end %>
-          <%= if (rating = get_in(@movie.omdb_data, ["Rated"])) && rating != "N/A" do %>
+          <%= if rating = CinegraphWeb.MovieLive.ShowV2.Presentation.content_rating(@movie.metrics) do %>
             <span class="bg-white/20 backdrop-blur px-3 py-1 rounded-full">
               {rating}
             </span>
@@ -848,7 +848,8 @@
       <% total_wins = Enum.sum(Enum.map(all_noms, & &1.total_wins)) %>
       <% total_nominations = Enum.sum(Enum.map(all_noms, & &1.total_nominations)) %>
 
-      <%= if length(all_noms) > 0 || (@movie.omdb_data && @movie.omdb_data["Awards"] && @movie.omdb_data["Awards"] != "N/A") do %>
+      <% awards_summary = CinegraphWeb.MovieLive.ShowV2.Presentation.omdb_awards(@movie.metrics) %>
+      <%= if length(all_noms) > 0 || awards_summary do %>
         <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-lg shadow p-6 mb-8">
           <div class="flex items-start gap-4">
             <div class="text-4xl">🏆</div>
@@ -868,8 +869,8 @@
                   </span>
                 <% end %>
               </div>
-              <%= if @movie.omdb_data && @movie.omdb_data["Awards"] && @movie.omdb_data["Awards"] != "N/A" do %>
-                <p class="text-amber-700 mt-3 text-sm">{@movie.omdb_data["Awards"]}</p>
+              <%= if awards_summary do %>
+                <p class="text-amber-700 mt-3 text-sm">{awards_summary}</p>
                 <p class="text-xs text-amber-600 mt-1">Additional data from OMDb / IMDb</p>
               <% end %>
             </div>
@@ -1022,7 +1023,7 @@
         </div>
       <% end %>
 
-      <%= if length(@movie.all_festival_nominations) == 0 && length(@movie.cultural_lists) == 0 && (!@movie.omdb_data || !@movie.omdb_data["Awards"] || @movie.omdb_data["Awards"] == "N/A") do %>
+      <%= if length(@movie.all_festival_nominations) == 0 && length(@movie.cultural_lists) == 0 && is_nil(awards_summary) do %>
         <div class="bg-white rounded-lg shadow p-6">
           <p class="text-gray-600 text-center">
             No awards or cultural list appearances recorded.

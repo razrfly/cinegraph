@@ -69,6 +69,7 @@ defmodule CinegraphWeb.PersonLive.Show do
     collaboration_stats = get_collaboration_stats(person.id)
     frequent_collaborators = get_frequent_collaborators(person)
     award_stats = Festivals.get_person_nomination_stats(person.id)
+    revenue_map = build_revenue_map(person)
 
     socket
     |> assign(:person, person)
@@ -76,11 +77,21 @@ defmodule CinegraphWeb.PersonLive.Show do
     |> assign(:collaboration_stats, collaboration_stats)
     |> assign(:frequent_collaborators, frequent_collaborators)
     |> assign(:award_stats, award_stats)
+    |> assign(:revenue_map, revenue_map)
     |> assign(:show_six_degrees, false)
     |> assign(:six_degrees_target, nil)
     |> assign(:six_degrees_path, nil)
     |> assign(:six_degrees_loading, false)
     |> assign_person_seo(person)
+  end
+
+  defp build_revenue_map(person) do
+    cast = Map.get(person, :cast_credits, []) || []
+    crew = Map.get(person, :crew_credits, []) || []
+
+    (cast ++ crew)
+    |> Enum.map(& &1.movie_id)
+    |> People.revenue_map_for_movie_ids()
   end
 
   @impl true
