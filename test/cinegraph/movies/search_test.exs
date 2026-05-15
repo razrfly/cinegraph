@@ -761,4 +761,37 @@ defmodule Cinegraph.Movies.SearchTest do
   end
 
   defp movie_titles(movies), do: Enum.map(movies, & &1.title)
+
+  describe "JSONB exclusion (#913 PR B)" do
+    test "search_movies/1 (Flop path) returns Movie structs with JSONB blobs nilled" do
+      movie =
+        %Movie{}
+        |> Movie.changeset(%{
+          tmdb_id: System.unique_integer([:positive]),
+          title: "Flop Path Blob Movie",
+          original_title: "Flop Path Blob Movie",
+          release_date: ~D[2024-01-01],
+          import_status: "full",
+          adult: false,
+          runtime: 120,
+          tmdb_data: %{"vote_average" => 7.5, "marker" => "pr-b-must-be-nilled"},
+          omdb_data: %{"imdbRating" => "8.0", "marker" => "pr-b-must-be-nilled"}
+        })
+        |> Repo.insert!()
+
+      # Force the generic query path (not the DiscoveryRankings shortcut) with
+      # a non-default sort. Flop's validate_and_run must preserve the
+      # select_merge baked in by Cinegraph.Movies.exclude_jsonb_blobs/1.
+      assert {:ok, {movies, _meta}} =
+               Search.search_movies(%{"sort" => "title_asc", "per_page" => "10"})
+
+      assert Enum.any?(movies, &(&1.id == movie.id))
+
+      for m <- movies do
+        assert %Movie{} = m
+        assert m.tmdb_data == nil
+        assert m.omdb_data == nil
+      end
+    end
+  end
 end

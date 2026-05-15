@@ -37,10 +37,23 @@ defmodule Cinegraph.Movies do
   hiding otherwise valid films.
   """
   def feature_film_query do
-    from m in Movie,
+    from(m in Movie,
       where: m.adult == false,
       where: m.import_status == "full",
       where: m.runtime > 45 or is_nil(m.runtime)
+    )
+    |> exclude_jsonb_blobs()
+  end
+
+  # #913 PR B: nil the two giant JSONB columns out of `Movie`-rooted list-query
+  # result rows so the BEAM stops loading multi-MB blobs per row under traffic.
+  # Schema unchanged — only the read projection changes. PR A (#918 + #919)
+  # already migrated every display read off these fields, so this is a no-op
+  # for the UI. `select_merge` on a struct overlay preserves preloads + joins
+  # and only overwrites the two named fields.
+  @doc false
+  def exclude_jsonb_blobs(query) do
+    from(m in query, select_merge: %{m | tmdb_data: nil, omdb_data: nil})
   end
 
   @doc """
@@ -94,6 +107,7 @@ defmodule Cinegraph.Movies do
 
     query
     |> Filters.apply_sorting(params)
+    |> exclude_jsonb_blobs()
     |> paginate(params)
   end
 
@@ -197,6 +211,7 @@ defmodule Cinegraph.Movies do
       order_by: ^[asc_nulls_last: position, asc: :release_date, asc: :title],
       limit: ^limit
     )
+    |> exclude_jsonb_blobs()
     |> Repo.replica().all()
   end
 
@@ -208,6 +223,7 @@ defmodule Cinegraph.Movies do
     Movie
     |> where([m], m.import_status == "soft")
     |> apply_sorting(params)
+    |> exclude_jsonb_blobs()
     |> paginate(params)
   end
 

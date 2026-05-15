@@ -77,6 +77,7 @@ defmodule Cinegraph.Movies.DiscoveryRankings do
       )
       |> limit(^per_page)
       |> offset(^offset)
+      |> select_merge([m, _r], %{m | tmdb_data: nil, omdb_data: nil})
       |> Repo.replica().all()
 
     total_count = count_default()
