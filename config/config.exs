@@ -237,24 +237,17 @@ config :cinegraph, Oban,
        # remained orphaned (gives the refetches 24h to land).
        {"0 4 * * 0", Cinegraph.Workers.ZeroCreditsCleanupSweeper},
        {"0 4 * * 1", Cinegraph.Workers.ZeroCreditsCleanupDeleteSweeper},
-       # PQS staleness recurring recalc (#745 Phase 1.4) — re-enabled.
-       # Each entry is a separate cron-fire of `PersonQualityScoreWorker`
-       # with a different batch shape; the worker has dedicated clauses
-       # for each.
-       {"0 3 * * *", Cinegraph.Workers.PersonQualityScoreWorker,
-        args: %{
-          "batch" => "daily_incremental",
-          "trigger" => "daily_scheduled",
-          "min_credits" => 1
-        }},
+       # PQS recurring recalc — only the two functional cron entries (weekly_full,
+       # monthly_deep) remain. Removed in #928: daily_incremental, health_check,
+       # stale_cleanup — those args don't match any worker perform/1 clause and
+       # discarded 100% every fire. For autonomous stale-score handling, see
+       # `Cinegraph.Metrics.PQSScheduler` (schedule_daily_incremental/0,
+       # schedule_stale_cleanup/1, check_system_health/0) which look up the
+       # right person_ids before enqueueing.
        {"0 2 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
         args: %{"batch" => "weekly_full", "trigger" => "weekly_scheduled", "min_credits" => 5}},
        {"0 1 1-7 * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
-        args: %{"batch" => "monthly_deep", "trigger" => "monthly_scheduled", "min_credits" => 1}},
-       {"0 */6 * * *", Cinegraph.Workers.PersonQualityScoreWorker,
-        args: %{"batch" => "health_check", "trigger" => "health_scheduled"}},
-       {"0 */12 * * *", Cinegraph.Workers.PersonQualityScoreWorker,
-        args: %{"batch" => "stale_cleanup", "trigger" => "stale_scheduled", "max_age_days" => 7}}
+        args: %{"batch" => "monthly_deep", "trigger" => "monthly_scheduled", "min_credits" => 1}}
      ]}
   ]
 
