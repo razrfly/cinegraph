@@ -149,12 +149,11 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
       assert 2018 in years
     end
 
-    test "known_good_year is tried before current year, skipping unavailable years" do
+    test "falls through to base candidates when known_good_year hint itself fails" do
       current = Date.utc_today().year
-      # Only 2018 returns success — current year and current-1 fail
-      FestivalHttpStub.set_response("/#{current}/", {:error, :forbidden})
-      FestivalHttpStub.set_response("/#{current - 1}/", {:error, :forbidden})
-      FestivalHttpStub.set_response("/2018/", {:ok, next_data_html([2018, 2017])})
+      # hint fails; chain must continue to base candidates and find current year
+      FestivalHttpStub.set_response("/2018/", {:error, :forbidden})
+      FestivalHttpStub.set_response("/#{current}/", {:ok, next_data_html([current - 1, current - 2])})
 
       assert {:ok, years} =
                UnifiedFestivalScraper.fetch_available_years("ev0000001",
@@ -162,7 +161,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
                  max_attempts: 3
                )
 
-      assert 2018 in years
+      assert (current - 1) in years
     end
   end
 
@@ -172,6 +171,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
 
   describe "integration: New Horizons (ev0002561)" do
     @describetag :integration
+    @describetag timeout: 300_000
 
     setup do
       saved = Application.get_env(:cinegraph, :festival_http_client)
@@ -188,6 +188,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
 
   describe "integration: Locarno (ev0000400)" do
     @describetag :integration
+    @describetag timeout: 300_000
 
     setup do
       saved = Application.get_env(:cinegraph, :festival_http_client)
