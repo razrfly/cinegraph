@@ -135,35 +135,23 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
   @spec calculate_all_person_scores(integer()) :: {:ok, map()} | {:error, any()}
   def calculate_all_person_scores(min_credits \\ 5) do
     try do
-      # Get all people with significant film involvement
-      people_with_credits = get_people_with_min_credits(min_credits)
+      person_ids = get_people_with_min_credits(min_credits)
 
-      results =
-        Enum.map(people_with_credits, fn person ->
-          case calculate_person_score(person.id) do
+      {total, successful} =
+        Enum.reduce(person_ids, {0, 0}, fn person_id, {t, s} ->
+          case calculate_person_score(person_id) do
             {:ok, score, components} ->
-              case store_person_score(person.id, score, components) do
-                {:ok, _} -> {:ok, person.id, score}
-                error -> {:error, person.id, error}
+              case store_person_score(person_id, score, components) do
+                {:ok, _} -> {t + 1, s + 1}
+                _ -> {t + 1, s}
               end
 
-            {:error, error} ->
-              {:error, person.id, error}
+            _ ->
+              {t + 1, s}
           end
         end)
 
-      successful =
-        Enum.filter(results, fn
-          {:ok, _, _} -> true
-          _ -> false
-        end)
-
-      {:ok,
-       %{
-         total: length(results),
-         successful: length(successful),
-         results: results
-       }}
+      {:ok, %{total: total, successful: successful}}
     rescue
       error ->
         {:error, error}
@@ -241,12 +229,9 @@ defmodule Cinegraph.Metrics.PersonQualityScore do
     from(mc in "movie_credits",
       group_by: mc.person_id,
       having: count(mc.movie_id) >= ^min_credits,
-      select: %{id: mc.person_id}
+      select: mc.person_id
     )
     |> Repo.all()
-    |> Enum.map(fn %{id: person_id} ->
-      People.get_person!(person_id)
-    end)
   end
 
   defp count_canonical_appearances(movies) do

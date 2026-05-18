@@ -69,17 +69,21 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
   """
   def queue_all(opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 500)
+    do_queue_all(0, batch_size)
+    Cinegraph.Movies.Cache.invalidate_search_results()
+  end
 
-    from(m in Movie, select: m.id)
-    |> Repo.all()
-    |> Enum.chunk_every(batch_size)
-    |> Enum.each(fn batch ->
+  defp do_queue_all(after_id, batch_size) do
+    ids =
+      from(m in Movie, where: m.id > ^after_id, order_by: m.id, limit: ^batch_size, select: m.id)
+      |> Repo.all()
+
+    unless ids == [] do
       jobs =
-        Enum.map(batch, fn id -> new(%{"movie_id" => id, "skip_cache_invalidation" => true}) end)
+        Enum.map(ids, fn id -> new(%{"movie_id" => id, "skip_cache_invalidation" => true}) end)
 
       Oban.insert_all(jobs)
-    end)
-
-    Cinegraph.Movies.Cache.invalidate_search_results()
+      do_queue_all(List.last(ids), batch_size)
+    end
   end
 end

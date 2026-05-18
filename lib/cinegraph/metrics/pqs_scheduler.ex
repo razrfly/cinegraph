@@ -151,8 +151,8 @@ defmodule Cinegraph.Metrics.PQSScheduler do
     [
       # Daily incremental at 3 AM
       {"0 3 * * *", __MODULE__, :schedule_daily_incremental, []},
-      # Weekly full recalculation at 2 AM Sunday  
-      {"0 2 * * SUN", __MODULE__, :schedule_weekly_full, []},
+      # Weekly full recalculation at 3:30 AM Sunday (staggered away from sitemap/festival sweep)
+      {"30 3 * * SUN", __MODULE__, :schedule_weekly_full, []},
       # Monthly deep recalculation at 1 AM first Sunday of month
       {"0 1 1-7 * SUN", __MODULE__, :schedule_monthly_deep, []},
       # Health check every 6 hours (single source of truth for health checks)
