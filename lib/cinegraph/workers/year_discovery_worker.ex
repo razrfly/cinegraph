@@ -87,7 +87,6 @@ defmodule Cinegraph.Workers.YearDiscoveryWorker do
   end
 
   defp discover_years_for_event(%FestivalEvent{} = festival_event) do
-    # Get IMDb event ID from either the new field or source_config
     event_id = get_imdb_event_id(festival_event)
 
     if event_id do
@@ -95,7 +94,10 @@ defmodule Cinegraph.Workers.YearDiscoveryWorker do
         "YearDiscoveryWorker: Discovering years for #{festival_event.source_key} (#{event_id})"
       )
 
-      case UnifiedFestivalScraper.fetch_available_years(event_id) do
+      known_good_year = derive_known_good_year(festival_event)
+      opts = if known_good_year, do: [known_good_year: known_good_year], else: []
+
+      case UnifiedFestivalScraper.fetch_available_years(event_id, opts) do
         {:ok, years} ->
           update_discovered_years(festival_event, years, event_id)
 
@@ -114,6 +116,12 @@ defmodule Cinegraph.Workers.YearDiscoveryWorker do
       {:ok, :skipped}
     end
   end
+
+  defp derive_known_good_year(%FestivalEvent{max_available_year: y}) when is_integer(y) and y > 0,
+    do: y
+
+  defp derive_known_good_year(%FestivalEvent{discovered_years: [_ | _] = ys}), do: Enum.max(ys)
+  defp derive_known_good_year(_), do: nil
 
   defp get_imdb_event_id(%FestivalEvent{} = festival_event) do
     # First check the dedicated field, then fall back to source_config

@@ -77,42 +77,80 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
   @doc """
   Fetch available years for an IMDb event.
 
-  Extracts the `historyEventEditions` array from IMDb's `__NEXT_DATA__` JSON,
-  which contains all years that have data for this event.
+  Tries candidate years in descending order starting from the current year,
+  falling back to earlier years if the current-year IMDb page doesn't exist
+  (403, empty editions, missing __NEXT_DATA__, etc.). Bounded by `max_attempts`
+  to avoid runaway API calls.
 
   ## Parameters
     * event_id - IMDb event ID (e.g., "ev0000147" for Cannes, "ev0000003" for Oscars)
+    * opts
+      * `:known_good_year` - hint from DB (tried first, skips fallback for warm events)
+      * `:max_attempts` - max candidate years to try (default 15)
 
   ## Returns
     * {:ok, [years]} - List of years (integers) sorted descending
-    * {:error, reason} - Error details
-
-  ## Examples
-
-      iex> fetch_available_years("ev0000147")
-      {:ok, [2025, 2024, 2023, ...]}
+    * {:error, :no_year_with_editions} - all candidates exhausted
+    * {:error, reason} - other error
 
   """
-  def fetch_available_years(event_id) when is_binary(event_id) do
-    # Use current year to fetch the page - historyEventEditions is available on any year's page
-    current_year = Date.utc_today().year
-    url = "https://www.imdb.com/event/#{event_id}/#{current_year}/1/"
+  def fetch_available_years(event_id, opts \\ []) when is_binary(event_id) do
+    max_attempts = Keyword.get(opts, :max_attempts, 15)
+    known_good_year = Keyword.get(opts, :known_good_year)
+    candidates = build_candidate_years(known_good_year, max_attempts)
 
-    Logger.info("Fetching available years for event #{event_id} from: #{url}")
+    Logger.info(
+      "Fetching available years for event #{event_id} (#{length(candidates)} candidates, hint: #{inspect(known_good_year)})"
+    )
 
     ApiTracker.track_lookup("festival_scraper", "fetch_years", event_id, fn ->
-      case HttpClient.fetch(url, :imdb) do
-        {:ok, html} ->
-          extract_available_years(html, event_id)
-
-        {:error, reason} ->
-          Logger.error("Failed to fetch years for event #{event_id}: #{inspect(reason)}")
-          {:error, reason}
-      end
+      try_years(event_id, candidates)
     end)
   end
 
-  defp extract_available_years(html, event_id) do
+  @doc false
+  def build_candidate_years(known_good_year, max_attempts \\ 15) do
+    current = Date.utc_today().year
+    base = for offset <- 0..(max_attempts - 1), do: current - offset
+
+    candidates =
+      if known_good_year do
+        [known_good_year | Enum.reject(base, &(&1 == known_good_year))]
+      else
+        base
+      end
+
+    Enum.take(candidates, max_attempts)
+  end
+
+  defp try_years(event_id, candidates), do: try_years(event_id, candidates, nil)
+
+  defp try_years(_event_id, [], last_reason) do
+    Logger.warning(
+      "YearDiscovery: exhausted all candidates, last failure: #{inspect(last_reason)}"
+    )
+
+    {:error, :no_year_with_editions}
+  end
+
+  defp try_years(event_id, [year | rest], _last_reason) do
+    url = "https://www.imdb.com/event/#{event_id}/#{year}/1/"
+    Logger.debug("YearDiscovery: trying #{url}")
+
+    with {:ok, html} <- http_client().fetch(url, :imdb),
+         {:ok, years} <- extract_available_years(html, event_id) do
+      {:ok, years}
+    else
+      error -> try_years(event_id, rest, error)
+    end
+  end
+
+  defp http_client do
+    Application.get_env(:cinegraph, :festival_http_client, HttpClient)
+  end
+
+  @doc false
+  def extract_available_years(html, event_id) do
     case Regex.run(~r/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s, html) do
       [_, json_content] ->
         case Jason.decode(json_content) do
