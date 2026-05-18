@@ -38,13 +38,19 @@ defmodule Cinegraph.Scrapers.Http.Client do
   """
   def fetch(url, source, opts \\ []) do
     adapters = resolve_adapter_chain(source)
+    merged_opts = Keyword.merge(source_default_opts(source), opts)
 
     Logger.info(
       "Fetching #{url} for :#{source} with chain: #{inspect(Enum.map(adapters, & &1.name()))}"
     )
 
-    try_adapters(adapters, url, opts)
+    try_adapters(adapters, url, merged_opts)
   end
+
+  # IMDb pages are Next.js SSR — __NEXT_DATA__ is present in static HTML.
+  # Crawlbase confirmed Normal token has higher success rate for this domain.
+  defp source_default_opts(:imdb), do: [mode: :normal]
+  defp source_default_opts(_), do: []
 
   defp resolve_adapter_chain(source) do
     strategies = Application.get_env(:cinegraph, :scraping_strategies, %{})

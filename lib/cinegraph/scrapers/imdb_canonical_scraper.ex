@@ -562,7 +562,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       end
 
     ApiTracker.track_lookup("imdb_scraper", "fetch_list", list_id, fn ->
-      HttpClient.fetch(url, :imdb, mode: :javascript)
+      HttpClient.fetch(url, :imdb)
     end)
   end
 

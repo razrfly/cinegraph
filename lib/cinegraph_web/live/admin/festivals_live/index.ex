@@ -20,6 +20,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   """
   use CinegraphWeb, :admin_live_view
 
+  alias Cinegraph.Events
   alias Cinegraph.Festivals
   alias Cinegraph.Festivals.FestivalOrganization
   alias Cinegraph.Images.StockImageSearch
@@ -35,6 +36,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
      socket
      |> assign(:page_title, "Festivals")
      |> assign(:editing_org, nil)
+     |> assign(:editing_event, nil)
      |> assign(:form, nil)
      |> assign(:suggest_for, nil)
      |> assign(:suggest_query, "")
@@ -104,13 +106,15 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
     end
   end
 
-  def handle_event("save", %{"organization" => attrs}, socket) do
+  def handle_event("save", %{"organization" => attrs} = params, socket) do
     org = socket.assigns.editing_org
+    event_params = Map.get(params, "festival_event", %{})
 
     case process_imagery(socket, org, attrs) do
       {:ok, attrs, hints, socket} ->
         case Festivals.update_organization(org, attrs) do
           {:ok, updated} ->
+            maybe_update_event(socket.assigns.editing_event, event_params)
             base = "Saved #{updated.name}."
             message = if hints == [], do: base, else: "#{base} #{Enum.join(hints, " · ")}"
 
@@ -336,17 +340,24 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
     url_host not in [nil, ""] and url_host == cdn_host
   end
 
+  defp maybe_update_event(nil, _params), do: :ok
+  defp maybe_update_event(_event, params) when map_size(params) == 0, do: :ok
+  defp maybe_update_event(event, params), do: Events.update_festival_event(event, params)
+
   defp open_drawer(socket, org) do
     changeset = FestivalOrganization.changeset(org, %{})
+    event = Events.get_active_by_source_key(org.slug)
 
     socket
     |> assign(:editing_org, org)
+    |> assign(:editing_event, event)
     |> assign(:form, to_form(changeset, as: "organization"))
   end
 
   defp close_drawer(socket) do
     socket
     |> assign(:editing_org, nil)
+    |> assign(:editing_event, nil)
     |> assign(:form, nil)
     |> assign(:suggest_for, nil)
     |> assign(:suggest_query, "")
@@ -477,6 +488,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
     <%= if @editing_org do %>
       <.drawer
         org={@editing_org}
+        event={@editing_event}
         form={@form}
         suggest_for={@suggest_for}
         suggest_query={@suggest_query}
@@ -490,6 +502,7 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
   end
 
   attr :org, :map, required: true
+  attr :event, :map, default: nil
   attr :form, :any, required: true
   attr :suggest_for, :any, required: true
   attr :suggest_query, :string, required: true
@@ -622,21 +635,36 @@ defmodule CinegraphWeb.Admin.FestivalsLive.Index do
               <h3 class="text-sm font-semibold uppercase tracking-wide text-zinc-500 mb-3">
                 Health & related
               </h3>
-              <div class="text-sm text-gray-700 space-y-2">
-                <p>Detailed import config + ceremony audit live in their own pages:</p>
-                <div class="flex flex-wrap gap-2">
-                  <.link
-                    navigate={"/admin/festival/#{@org.slug}"}
-                    class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                  >
-                    Ceremony audit →
-                  </.link>
-                  <.link
-                    navigate="/admin/festival-events"
-                    class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                  >
-                    Import config →
-                  </.link>
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-700 mb-1">IMDb event ID</label>
+                  <input
+                    type="text"
+                    name="festival_event[imdb_event_id]"
+                    value={if @event, do: @event.imdb_event_id || "", else: ""}
+                    placeholder="ev0000839"
+                    class="w-full rounded-md border-gray-300 text-sm font-mono"
+                  />
+                  <p class="text-[10px] text-gray-500 mt-1">
+                    Used for year discovery (e.g. ev0000147 for Cannes). Find at imdb.com/event/evXXXXXXX
+                  </p>
+                </div>
+                <div class="text-sm text-gray-700 space-y-2">
+                  <p>Detailed import config + ceremony audit live in their own pages:</p>
+                  <div class="flex flex-wrap gap-2">
+                    <.link
+                      navigate={"/admin/festival/#{@org.slug}"}
+                      class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      Ceremony audit →
+                    </.link>
+                    <.link
+                      navigate="/admin/festival-events"
+                      class="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      Import config →
+                    </.link>
+                  </div>
                 </div>
               </div>
             </section>
