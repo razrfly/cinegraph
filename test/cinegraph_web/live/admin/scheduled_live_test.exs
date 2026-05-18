@@ -4,18 +4,18 @@ defmodule CinegraphWeb.Admin.ScheduledLiveTest do
   import Phoenix.LiveViewTest
 
   describe "GET /admin/scheduled" do
-    test "renders the scheduled jobs table with all 24 cron entries", %{conn: conn} do
+    test "renders the scheduled jobs table with all 21 cron entries", %{conn: conn} do
       {:ok, _live, html} = live(conn, ~p"/admin/scheduled")
 
-      # Page header + subtitle reference all 24 entries
+      # Page header + subtitle reference all 21 entries
       assert html =~ "Scheduled jobs"
-      assert html =~ "24 cron entries"
+      assert html =~ "21 cron entries"
 
       # A representative entry from each section
       assert html =~ "Biography refresh sweeper"
       assert html =~ "OMDb backfill sweeper"
       assert html =~ "Festival sync sweeper"
-      assert html =~ "PQS — daily incremental"
+      assert html =~ "PQS — weekly full"
       assert html =~ "Movies cache warmer"
 
       # Each entry exposes its cron + queue + run-now button
@@ -28,7 +28,7 @@ defmodule CinegraphWeb.Admin.ScheduledLiveTest do
 
       filtered = render_change(live, "filter", %{"q" => "PQS"})
 
-      assert filtered =~ "PQS — daily incremental"
+      assert filtered =~ "PQS — weekly full"
       refute filtered =~ "Biography refresh sweeper"
     end
 
@@ -45,10 +45,10 @@ defmodule CinegraphWeb.Admin.ScheduledLiveTest do
       {:ok, live, html} = live(conn, ~p"/admin/scheduled")
 
       # PQS args are not visible by default
-      refute html =~ ~s("daily_incremental")
+      refute html =~ ~s("weekly_full")
 
       after_toggle = render_click(live, "toggle_args", %{})
-      assert after_toggle =~ "daily_incremental"
+      assert after_toggle =~ "weekly_full"
     end
 
     test "trigger event with unknown id flashes an error", %{conn: conn} do

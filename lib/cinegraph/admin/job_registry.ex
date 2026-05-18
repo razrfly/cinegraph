@@ -318,28 +318,11 @@ defmodule Cinegraph.Admin.JobRegistry do
       doc_url: nil
     },
     %{
-      id: :pqs_daily_incremental,
-      label: "PQS — daily incremental",
-      worker: Workers.PersonQualityScoreWorker,
-      queue: :metrics,
-      schedule: "0 3 * * *",
-      args: %{
-        "batch" => "daily_incremental",
-        "trigger" => "daily_scheduled",
-        "min_credits" => 1
-      },
-      trigger_action: :enqueue_now,
-      mutating: true,
-      description: "PQS staleness recurring recalc — daily incremental",
-      destination: :people,
-      doc_url: nil
-    },
-    %{
       id: :pqs_weekly_full,
       label: "PQS — weekly full",
       worker: Workers.PersonQualityScoreWorker,
       queue: :metrics,
-      schedule: "0 2 * * SUN",
+      schedule: "30 3 * * SUN",
       args: %{
         "batch" => "weekly_full",
         "trigger" => "weekly_scheduled",
@@ -368,37 +351,6 @@ defmodule Cinegraph.Admin.JobRegistry do
       destination: :people,
       doc_url: nil
     },
-    %{
-      id: :pqs_health_check,
-      label: "PQS — health check",
-      worker: Workers.PersonQualityScoreWorker,
-      queue: :metrics,
-      schedule: "0 */6 * * *",
-      args: %{"batch" => "health_check", "trigger" => "health_scheduled"},
-      trigger_action: :enqueue_now,
-      mutating: false,
-      description: "PQS staleness recurring recalc — 6-hourly health check",
-      destination: :people,
-      doc_url: nil
-    },
-    %{
-      id: :pqs_stale_cleanup,
-      label: "PQS — stale cleanup",
-      worker: Workers.PersonQualityScoreWorker,
-      queue: :metrics,
-      schedule: "0 */12 * * *",
-      args: %{
-        "batch" => "stale_cleanup",
-        "trigger" => "stale_scheduled",
-        "max_age_days" => 7
-      },
-      trigger_action: :enqueue_now,
-      mutating: true,
-      description: "PQS staleness recurring recalc — 12-hourly stale cleanup",
-      destination: :people,
-      doc_url: nil
-    },
-
     # =========================================================================
     # On-demand entries — workers that other code enqueues, surfaced here so
     # the admin can offer a "Run for..." form. `schedule: nil` excludes them

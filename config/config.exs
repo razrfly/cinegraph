@@ -244,7 +244,7 @@ config :cinegraph, Oban,
        # `Cinegraph.Metrics.PQSScheduler` (schedule_daily_incremental/0,
        # schedule_stale_cleanup/1, check_system_health/0) which look up the
        # right person_ids before enqueueing.
-       {"0 2 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
+       {"30 3 * * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
         args: %{"batch" => "weekly_full", "trigger" => "weekly_scheduled", "min_credits" => 5}},
        {"0 1 1-7 * SUN", Cinegraph.Workers.PersonQualityScoreWorker,
         args: %{"batch" => "monthly_deep", "trigger" => "monthly_scheduled", "min_credits" => 1}}
