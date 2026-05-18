@@ -73,6 +73,11 @@ config :nx, default_backend: Nx.BinaryBackend
 # dictionary; tests can inject error paths via Cinegraph.Images.R2Stub.put_response/2.
 config :cinegraph, :r2_client, Cinegraph.Images.R2Stub
 
+# Stub HTTP client for festival year-discovery tests (#932). Tests register
+# URL → response mappings via FestivalHttpStub.set_response/2 and reset between
+# cases via FestivalHttpStub.reset!/0.
+config :cinegraph, :festival_http_client, Cinegraph.Scrapers.FestivalHttpStub
+
 # Provide deterministic R2 config so configured?/0 returns true in tests
 # that exercise the rehost path. Stub never makes a real call.
 config :cinegraph, :r2,
