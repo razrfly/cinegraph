@@ -12,8 +12,8 @@ defmodule Cinegraph.Scrapers.FestivalHttpStub do
       FestivalHttpStub.set_response("/2026/", {:error, :forbidden})
       FestivalHttpStub.reset!()
 
-  URL matching is substring-based: the first registered key that `String.contains?`
-  the requested URL wins.
+  URL matching is substring-based: the longest registered key that `String.contains?`
+  the requested URL wins (most-specific match, deterministic regardless of ETS hash order).
   """
 
   @table :festival_http_stub
@@ -43,6 +43,7 @@ defmodule Cinegraph.Scrapers.FestivalHttpStub do
   @doc "Implements the same interface as `Cinegraph.Scrapers.Http.Client.fetch/2`."
   def fetch(url, _mode) do
     :ets.tab2list(@table)
+    |> Enum.sort_by(fn {key, _} -> -byte_size(key) end)
     |> Enum.find(fn {key, _} -> String.contains?(url, key) end)
     |> case do
       {_key, response} -> response
