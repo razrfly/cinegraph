@@ -82,33 +82,40 @@ defmodule Cinegraph.Maintenance.SyncFestivals do
 
   defp trigger_discoveries(events, false) do
     Enum.reduce(events, {0, 0, 0}, fn event, {ok, already, err} ->
-      case YearDiscoveryWorker.queue_discovery(event.source_key) do
-        # Fresh insert.
-        {:ok, %Oban.Job{conflict?: false}} ->
-          {ok + 1, already, err}
+      imdb_id =
+        event.imdb_event_id || get_in(event.source_config || %{}, ["imdb_event_id"])
 
-        # Uniqueness collision — Oban returned the *existing* job; we did
-        # not enqueue a new one. Tracked separately from failures so that
-        # repeated runs within the unique-window report
-        # `discoveries=0 already=15` rather than misleadingly counting them
-        # as fresh enqueues.
-        {:ok, %Oban.Job{conflict?: true}} ->
-          {ok, already + 1, err}
+      if is_nil(imdb_id) do
+        {ok, already, err}
+      else
+        case YearDiscoveryWorker.queue_discovery(event.source_key) do
+          # Fresh insert.
+          {:ok, %Oban.Job{conflict?: false}} ->
+            {ok + 1, already, err}
 
-        # Old/legacy form — also benign, treat as an enqueue.
-        {:ok, _job} ->
-          {ok + 1, already, err}
+          # Uniqueness collision — Oban returned the *existing* job; we did
+          # not enqueue a new one. Tracked separately from failures so that
+          # repeated runs within the unique-window report
+          # `discoveries=0 already=15` rather than misleadingly counting them
+          # as fresh enqueues.
+          {:ok, %Oban.Job{conflict?: true}} ->
+            {ok, already + 1, err}
 
-        # Genuine errors (changeset validation, etc.).
-        {:error, %Ecto.Changeset{}} ->
-          {ok, already + 1, err}
+          # Old/legacy form — also benign, treat as an enqueue.
+          {:ok, _job} ->
+            {ok + 1, already, err}
 
-        {:error, reason} ->
-          Logger.warning(
-            "SyncFestivals: discovery enqueue failed for #{event.source_key}: #{inspect(reason)}"
-          )
+          # Genuine errors (changeset validation, etc.).
+          {:error, %Ecto.Changeset{}} ->
+            {ok, already + 1, err}
 
-          {ok, already, err + 1}
+          {:error, reason} ->
+            Logger.warning(
+              "SyncFestivals: discovery enqueue failed for #{event.source_key}: #{inspect(reason)}"
+            )
+
+            {ok, already, err + 1}
+        end
       end
     end)
   end

@@ -166,11 +166,11 @@ defmodule Cinegraph.Admin.JobRegistry do
       label: "Festival sync sweeper",
       worker: Workers.FestivalSyncSweeper,
       queue: :festival_discovery,
-      schedule: "0 2 * * *",
+      schedule: "0 2 1 * *",
       args: %{},
       trigger_action: :enqueue_now,
       mutating: true,
-      description: "Daily festival sync — discovers new ceremony years for active festivals",
+      description: "Monthly festival sync — discovers new ceremony years for active festivals",
       destination: :festivals,
       doc_url: nil
     },

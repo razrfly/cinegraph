@@ -23,9 +23,6 @@ defmodule Cinegraph.ProdRpcTest do
 
   describe "build_kamal_args/1" do
     test "constructs `app exec --reuse --quiet --primary` invocation with unset PHX_SERVER" do
-      # Use a double-quote-free expression here so we can assert on the
-      # plain wrapped form. The escape-for-outer-shell behavior is covered
-      # in the dedicated test below.
       args = ProdRpc.build_kamal_args(~s|:ok|)
 
       assert "app" in args and "exec" in args
@@ -37,76 +34,80 @@ defmodule Cinegraph.ProdRpcTest do
       assert String.ends_with?(shell_cmd, ~s|"|)
     end
 
-    test "wraps expression with app startup and disables short-lived background processors" do
+    test "eval argument contains no semicolons (shell-quoting safe)" do
+      # Semicolons in the eval arg become shell command separators when kamal
+      # wraps the shell_command in its own outer quoting — the root cause of
+      # the zsh:1: command not found: oban_config failure in #931.
       args = ProdRpc.build_kamal_args(~s|:ok|)
       shell_cmd = List.last(args)
+      [_, eval_arg] = String.split(shell_cmd, "bin/cinegraph eval ", parts: 2)
 
-      disable_background =
-        "Application.put_env(:cinegraph, :start_background_children, false)"
-
-      capture_known_queues =
-        "Application.put_env(:cinegraph, :known_oban_queues, Keyword.keys(Keyword.get(oban_config, :queues, [])))"
-
-      disable_oban_processing =
-        "Application.put_env(:cinegraph, Oban, Keyword.merge(oban_config, queues: [], plugins: []))"
-
-      ensure_started = "Application.ensure_all_started(:cinegraph)"
-
-      fetch_config_index =
-        assert_index(shell_cmd, "oban_config = Application.fetch_env!(:cinegraph, Oban)")
-
-      capture_queues_index = assert_index(shell_cmd, capture_known_queues)
-      background_index = assert_index(shell_cmd, disable_background)
-      oban_config_index = assert_index(shell_cmd, disable_oban_processing)
-      ensure_started_index = assert_index(shell_cmd, ensure_started)
-
-      assert fetch_config_index < capture_queues_index
-      assert capture_queues_index < background_index
-      assert background_index < oban_config_index
-      assert oban_config_index < ensure_started_index
-      refute String.contains?(shell_cmd, "Application.put_env(:cinegraph, :start_oban, false)")
+      refute String.contains?(eval_arg, ";"),
+             "eval argument must not contain bare semicolons — they become shell separators"
     end
 
-    test "single-quotes the wrapped expression for the container shell" do
-      args = ProdRpc.build_kamal_args(~s|:ok|)
+    test "base64-decoded eval argument contains preamble and user expression in order" do
+      expr = ~s|IO.puts(Jason.encode!(%{ok: true}))|
+      args = ProdRpc.build_kamal_args(expr)
       shell_cmd = List.last(args)
-      # Inside the outer double-quoted sh -c, the bin/cinegraph eval arg is
-      # single-quoted so the eval expression survives intact. The full
-      # wrapped form prepends a logger-silence call and ensure_all_started
-      # before the user expression.
+
+      [_, rest] = String.split(shell_cmd, ~s|Code.eval_string(Base.decode64!(\\"|, parts: 2)
+      [encoded | _] = String.split(rest, ~s|\\"|)
+      decoded = Base.decode64!(encoded)
+
+      assert String.contains?(decoded, "Application.ensure_all_started(:cinegraph)")
+
       assert String.contains?(
-               shell_cmd,
-               ~s|':logger.set_primary_config(:level, :critical); oban_config = Application.fetch_env!(:cinegraph, Oban); Application.put_env(:cinegraph, :known_oban_queues, Keyword.keys(Keyword.get(oban_config, :queues, []))); Application.put_env(:cinegraph, :start_background_children, false); Application.put_env(:cinegraph, Oban, Keyword.merge(oban_config, queues: [], plugins: [])); Application.ensure_all_started(:cinegraph); :ok'|
+               decoded,
+               "Application.put_env(:cinegraph, :start_background_children, false)"
              )
+
+      assert String.contains?(decoded, expr)
+      {preamble_pos, _} = :binary.match(decoded, "ensure_all_started")
+      {expr_pos, _} = :binary.match(decoded, "IO.puts")
+      assert preamble_pos < expr_pos
     end
 
-    test "escapes embedded single quotes (POSIX-safe)" do
-      # Input `a'b` becomes `a'\''b` (POSIX), which is then escaped for the
-      # outer double-quoted layer: `\` → `\\`. Net substring: `a'\\''b`.
-      args = ProdRpc.build_kamal_args(~s|a'b|)
+    test "user expression containing semicolons is safely encoded" do
+      expr = ~s|a = 1; IO.puts(a)|
+      args = ProdRpc.build_kamal_args(expr)
       shell_cmd = List.last(args)
-      assert String.contains?(shell_cmd, ~s|a'\\\\''b|)
+      [_, eval_arg] = String.split(shell_cmd, "bin/cinegraph eval ", parts: 2)
+
+      refute String.contains?(eval_arg, ";"),
+             "semicolons in user expression must not appear in the shell eval argument"
     end
 
-    test "escapes embedded double quotes for the outer remote shell" do
-      # `IO.puts("hi")` would otherwise terminate the outer `sh -c "..."`
-      # at the first inner `"`, so the container shell would see the
-      # malformed expression `IO.puts(hi)` and fail. The escape ensures the
-      # `"` survives as a literal char inside the inner single-quoted arg.
-      args = ProdRpc.build_kamal_args(~s|IO.puts("hi")|)
+    test "user expression with single quotes is preserved in decoded payload" do
+      # With base64 encoding the expression is opaque in the shell command —
+      # no POSIX escaping is visible at the shell level. The expression must
+      # survive intact in the base64-decoded payload.
+      expr = ~s|a'b|
+      args = ProdRpc.build_kamal_args(expr)
       shell_cmd = List.last(args)
-      assert String.contains?(shell_cmd, ~S|IO.puts(\"hi\")|)
-      refute String.contains?(shell_cmd, ~s|IO.puts("hi")|)
+      refute String.contains?(shell_cmd, expr), "raw expression must not appear in shell_cmd"
+      assert String.contains?(decoded_expr(shell_cmd), expr)
     end
 
-    test "escapes outer-shell metacharacters ($ and backtick)" do
-      # `$x` and `` `cmd` `` would trigger variable / command substitution
-      # in the outer double-quoted region; both must be escaped so the
-      # container shell sees them as literal text inside the inner quotes.
-      args = ProdRpc.build_kamal_args(~s|"$x" <> "`cmd`"|)
+    test "user expression with double quotes is preserved in decoded payload" do
+      # Previously required escaping `"` → `\"` in the outer double-quoted region.
+      # Now the expression is base64-encoded so no char-level escaping is needed.
+      expr = ~s|IO.puts("hi")|
+      args = ProdRpc.build_kamal_args(expr)
       shell_cmd = List.last(args)
-      assert String.contains?(shell_cmd, ~S|\$x|)
-      assert String.contains?(shell_cmd, ~S|\`cmd\`|)
+      refute String.contains?(shell_cmd, expr)
+      assert String.contains?(decoded_expr(shell_cmd), expr)
+    end
+
+    test "user expression with shell metacharacters is preserved in decoded payload" do
+      # `$x` and backtick would trigger substitution in a double-quoted region;
+      # base64 encoding makes them invisible to the shell entirely.
+      expr = ~s|"$x" <> "`cmd`"|
+      args = ProdRpc.build_kamal_args(expr)
+      shell_cmd = List.last(args)
+      refute String.contains?(shell_cmd, "$x")
+      refute String.contains?(shell_cmd, "`cmd`")
+      assert String.contains?(decoded_expr(shell_cmd), expr)
     end
   end
 
@@ -125,13 +126,10 @@ defmodule Cinegraph.ProdRpcTest do
     end
   end
 
-  defp assert_index(string, substring) do
-    case :binary.match(string, substring) do
-      {index, _length} ->
-        index
-
-      :nomatch ->
-        flunk("expected #{inspect(string)} to contain #{inspect(substring)}")
-    end
+  # Extract and base64-decode the eval payload from a shell_command string.
+  defp decoded_expr(shell_cmd) do
+    [_, rest] = String.split(shell_cmd, ~s|Code.eval_string(Base.decode64!(\\"|, parts: 2)
+    [encoded | _] = String.split(rest, ~s|\\"|)
+    Base.decode64!(encoded)
   end
 end

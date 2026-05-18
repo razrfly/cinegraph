@@ -1,11 +1,12 @@
 defmodule Cinegraph.Workers.FestivalSyncSweeper do
   @moduledoc """
-  Daily sweep that discovers new festival years and imports any ceremonies
+  Monthly sweep that discovers new festival years and imports any ceremonies
   missing locally (#745 Phase 2). Wraps
   `Cinegraph.Maintenance.SyncFestivals.run/1`.
 
-  Schedule: `0 2 * * *` UTC — runs before all other homeostasis sweepers
-  so new nominations land before the daily person-resolver pass at 06:00 UTC.
+  Schedule: `0 2 1 * *` UTC (1st of each month). Festival year lists change
+  at most annually; daily runs were burning Crawlbase tokens on stable data.
+  Use `mix cinegraph.festivals.sync` for an immediate manual run.
   """
 
   use Oban.Worker, queue: :maintenance, max_attempts: 1, priority: 3
