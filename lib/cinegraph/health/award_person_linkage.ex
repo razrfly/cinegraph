@@ -12,11 +12,10 @@ defmodule Cinegraph.Health.AwardPersonLinkage do
     `nominee_names` string; resolver can try credit/TMDb fallback.
   - `has_people_in_details` — NULL person_id with empty name/imdb_ids, but
     details has the raw `people` list preserved (Phase 0 fix was applied
-    during import); resolver may be able to use that data.
-  - `empty_person_payload` — NULL person_id, no usable name, imdb_ids, or
-    people list; row needs a source reimport to recover.
-  - `needs_reimport` — subset of empty_payload that also lacks `people` in
-    details (i.e., imported before the Phase 0 fix).
+    during import); resolver may be able to extract name/id from it.
+  - `empty_person_payload` / `needs_reimport` — NULL person_id, no usable
+    name, imdb_ids, OR people list; row needs a source reimport to recover.
+    These two counters are always equal: every truly-empty row needs reimport.
   """
 
   import Ecto.Query
@@ -49,7 +48,7 @@ defmodule Cinegraph.Health.AwardPersonLinkage do
         recoverable_with_name: counts.with_name_only,
         has_people_in_details: counts.with_people_in_details,
         empty_person_payload: counts.empty_payload,
-        needs_reimport: max(0, counts.empty_payload - counts.with_people_in_details)
+        needs_reimport: counts.empty_payload
       },
       examples: examples
     }
@@ -113,7 +112,9 @@ defmodule Cinegraph.Health.AwardPersonLinkage do
         from([n] in missing,
           where:
             fragment(
-              "(? ->> 'nominee_names' IS NULL OR ? ->> 'nominee_names' = '') AND (? -> 'person_imdb_ids' IS NULL OR ? -> 'person_imdb_ids' = '[]'::jsonb)",
+              "(? ->> 'nominee_names' IS NULL OR ? ->> 'nominee_names' = '') AND (? -> 'person_imdb_ids' IS NULL OR ? -> 'person_imdb_ids' = '[]'::jsonb) AND (? -> 'people' IS NULL OR jsonb_array_length(? -> 'people') = 0)",
+              n.details,
+              n.details,
               n.details,
               n.details,
               n.details,
