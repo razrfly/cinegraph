@@ -93,62 +93,37 @@ defmodule Cinegraph.ProdRpc do
 
   @doc false
   def build_kamal_args(expression) when is_binary(expression) do
-    # `kamal app exec --reuse --quiet --primary "<cmd>"` runs <cmd> inside the
-    # already-running cinegraph container. The container shell sees:
+    # Base64-encode the entire wrapped expression so the eval argument contains
+    # no semicolons or quotes. The kamal → SSHKit → ssh → docker exec chain
+    # applies its own outer quoting; any inner single-quoting we add can break
+    # out of that context and turn Elixir preamble semicolons into bare shell
+    # commands. Base64 chars [A-Za-z0-9+/=] are safe through every quoting layer.
     #
-    #   sh -c "unset PHX_SERVER; bin/cinegraph eval '<wrapped_expression>'"
-    #
-    # `bin/cinegraph eval` boots a fresh BEAM in the container with no
-    # supervision tree started. Health/Facade calls reach for
-    # `Cinegraph.Health.TaskSupervisor` which only exists once the app is
-    # supervised, so we prepend `Application.ensure_all_started(:cinegraph)`.
-    # We `unset PHX_SERVER` (see comment near `shell_command` below) to keep
-    # the eval'd BEAM from binding port 4000.
-    # Silence prod-side logging *before* starting the app, otherwise Repo.Metrics,
-    # DashboardStats, MoviesCacheWarmer, etc. flood stdout with INFO/WARNING
-    # lines that mix with the JSON we want to parse. We still start Oban because
-    # maintenance evals enqueue jobs; clearing queues/plugins prevents this
-    # short-lived eval BEAM from processing jobs or firing cron/plugins itself.
-    wrapped =
-      ":logger.set_primary_config(:level, :critical); " <>
-        "oban_config = Application.fetch_env!(:cinegraph, Oban); " <>
-        "Application.put_env(:cinegraph, :known_oban_queues, Keyword.keys(Keyword.get(oban_config, :queues, []))); " <>
-        "Application.put_env(:cinegraph, :start_background_children, false); " <>
-        "Application.put_env(:cinegraph, Oban, Keyword.merge(oban_config, queues: [], plugins: [])); " <>
-        "Application.ensure_all_started(:cinegraph); " <>
-        expression
+    # `unset PHX_SERVER`: runtime.exs checks for the var's *presence* — the
+    # container starts with PHX_SERVER=true, so we must clear it or the eval
+    # BEAM tries to bind port 4000 (already held) and supervision rolls back.
+    wrapped = eval_preamble() <> "\n" <> expression
+    encoded = Base.encode64(wrapped)
+    eval_expr = ~s|Code.eval_string(Base.decode64!("#{encoded}"))|
+    quoted = single_quote(eval_expr)
+    escaped = escape_for_double_quoted(quoted)
+    shell_command = ~s|sh -c "unset PHX_SERVER; bin/cinegraph eval #{escaped}"|
 
-    quoted_expr = single_quote(wrapped)
-    # The full pipeline: System.cmd → kamal → SSHKit → ssh → remote-shell →
-    # docker exec → container-shell. Splitting `sh -c 'cmd'` across multiple
-    # System.cmd args gets dropped (kamal only forwards the first positional).
-    # Passing the whole thing as ONE arg lets the remote shell parse the
-    # quotes, then docker exec correctly invokes `sh -c "..."` in the
-    # container. Outer double quotes survive ssh; inner single quotes survive
-    # the container shell wrap.
-    #
-    # The remote shell parses the *outer* double-quoted region, where `"`,
-    # `\`, `$`, and `` ` `` are still special. `single_quote/1` only handles
-    # the inner POSIX single-quoting; we must additionally escape the outer
-    # specials so an expression like `IO.puts("hi")` doesn't break out of
-    # the outer `"..."` and reach the container shell as `IO.puts(hi)`.
-    #
-    # `unset PHX_SERVER` (rather than =false): runtime.exs checks for the
-    # var's *presence*, not value. The container starts with PHX_SERVER=true;
-    # we have to clear it entirely or the endpoint will try to bind port 4000
-    # (already held by the live BEAM in this container) and the whole
-    # supervision tree will roll back with :eaddrinuse.
-    escaped_for_outer = escape_for_double_quoted(quoted_expr)
-    shell_command = ~s|sh -c "unset PHX_SERVER; bin/cinegraph eval #{escaped_for_outer}"|
+    ["app", "exec", "--reuse", "--quiet", "--primary", shell_command]
+  end
 
-    [
-      "app",
-      "exec",
-      "--reuse",
-      "--quiet",
-      "--primary",
-      shell_command
-    ]
+  # Preamble run before every eval expression in the prod container:
+  # - silence logging so JSON output is not polluted
+  # - capture Oban config before disabling queue processing and plugins
+  # - prevent the short-lived eval BEAM from processing jobs or firing cron
+  # Uses newlines (not semicolons) so the base64 payload contains no `;`.
+  defp eval_preamble do
+    ":logger.set_primary_config(:level, :critical)\n" <>
+      "oban_config = Application.fetch_env!(:cinegraph, Oban)\n" <>
+      "Application.put_env(:cinegraph, :known_oban_queues, Keyword.keys(Keyword.get(oban_config, :queues, [])))\n" <>
+      "Application.put_env(:cinegraph, :start_background_children, false)\n" <>
+      "Application.put_env(:cinegraph, Oban, Keyword.merge(oban_config, queues: [], plugins: []))\n" <>
+      "Application.ensure_all_started(:cinegraph)"
   end
 
   @doc false
