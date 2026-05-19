@@ -22,7 +22,7 @@ defmodule Cinegraph.Workers.FestivalPersonResolverSweeper do
 
   require Logger
 
-  @per_run_limit 2_000
+  @per_run_limit 5_000
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do

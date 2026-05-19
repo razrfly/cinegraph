@@ -1,6 +1,6 @@
 defmodule Cinegraph.Maintenance.SyncFestivals do
   @moduledoc """
-  Daily festival sync (#745 Phase 2). For every active `FestivalEvent`:
+  Monthly festival sync (#745 Phase 2). For every active `FestivalEvent`:
 
   1. **Discovery pass** — enqueue `YearDiscoveryWorker` so the upstream
      source's available-years list lands in `festival_events.discovered_years`.
@@ -9,7 +9,8 @@ defmodule Cinegraph.Maintenance.SyncFestivals do
      call `Cinegraph.Cultural.import_festival_year/2` for every missing year.
 
   Reachable from:
-  - `Cinegraph.Workers.FestivalSyncSweeper` (Oban Cron daily 02:00 UTC)
+  - `Cinegraph.Workers.FestivalSyncSweeper` (Oban Cron `0 2 1 * *`,
+    monthly at 02:00 UTC on the 1st)
   - `mix cinegraph.festivals.sync` (dev / ad-hoc)
   - `bin/cinegraph eval "Cinegraph.Maintenance.SyncFestivals.run([])"` (one-shot)
 
@@ -17,8 +18,8 @@ defmodule Cinegraph.Maintenance.SyncFestivals do
 
   The discovery pass enqueues async jobs; the import pass reads
   `discovered_years` as it currently exists in the DB. Worst-case lag from
-  "new year appears upstream" → "ceremony imported" is **24h** (today's
-  discovery → tomorrow's import). Acceptable.
+  "new year appears upstream" → "ceremony imported" is roughly **one month**
+  (this month's discovery → next month's import). Acceptable.
 
   ## Options
 
@@ -86,6 +87,11 @@ defmodule Cinegraph.Maintenance.SyncFestivals do
         event.imdb_event_id || get_in(event.source_config || %{}, ["imdb_event_id"])
 
       if is_nil(imdb_id) do
+        Logger.debug(
+          "SyncFestivals: skipping discovery for #{event.source_key} " <>
+            "(event_id=#{event.id}, missing imdb_event_id)"
+        )
+
         {ok, already, err}
       else
         case YearDiscoveryWorker.queue_discovery(event.source_key) do

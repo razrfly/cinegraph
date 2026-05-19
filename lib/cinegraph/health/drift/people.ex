@@ -222,7 +222,16 @@ defmodule Cinegraph.Health.Drift.People do
           join: c in "festival_categories",
           on: n.category_id == c.id,
           where: c.tracks_person == true and is_nil(n.person_id),
-          select: %{id: n.id, category: c.name, ceremony_id: n.ceremony_id, movie_id: n.movie_id},
+          select: %{
+            id: n.id,
+            category: c.name,
+            ceremony_id: n.ceremony_id,
+            movie_id: n.movie_id,
+            has_people_data:
+              fragment(
+                "(details->'people') IS NOT NULL AND jsonb_array_length(details->'people') > 0"
+              )
+          },
           limit: ^limit
         )
         |> Repo.replica().all()
