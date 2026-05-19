@@ -555,11 +555,28 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     end
   end
 
+  @doc false
+  def extract_nominee_person_data(nominee) do
+    people_list = nominee["people"] || nominee[:people] || []
+
+    # Scraper emits atom-keyed maps %{imdb_id: "nm...", name: "..."};
+    # legacy/manual callers may use string keys — check both.
+    nominee_name =
+      nominee["name"] || nominee[:name] ||
+        (List.first(people_list) || %{}) |> then(fn p -> p[:name] || p["name"] end)
+
+    person_imdb_ids =
+      nominee["person_imdb_ids"] || nominee[:person_imdb_ids] ||
+        people_list
+        |> Enum.map(fn p -> p[:imdb_id] || p["imdb_id"] end)
+        |> Enum.reject(&is_nil/1)
+
+    {nominee_name, person_imdb_ids, people_list}
+  end
+
   defp create_nomination(movie, nominee, category, ceremony) do
-    # Handle both atom and string keys
     is_winner = nominee["winner"] || nominee[:winner] || false
-    nominee_name = nominee["name"] || nominee[:name]
-    person_imdb_ids = nominee["person_imdb_ids"] || nominee[:person_imdb_ids] || []
+    {nominee_name, person_imdb_ids, people_list} = extract_nominee_person_data(nominee)
 
     # Try to find the person if this is a person category. Run the resolver
     # whenever EITHER imdb ids OR a non-empty nominee name is available — the
@@ -584,7 +601,8 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       won: is_winner,
       details: %{
         "nominee_names" => nominee_name,
-        "person_imdb_ids" => person_imdb_ids
+        "person_imdb_ids" => person_imdb_ids,
+        "people" => people_list
       }
     }
 
@@ -603,6 +621,18 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
       Logger.debug(
         "Nomination already exists for #{movie.title} in #{category.name} (found #{existing_count})"
       )
+
+      # Backfill: patch any NULL person_id rows if we resolved one now.
+      if not is_nil(person_id) do
+        from(n in FestivalNomination,
+          where:
+            n.ceremony_id == ^ceremony.id and
+              n.category_id == ^category.id and
+              n.movie_id == ^movie.id and
+              is_nil(n.person_id)
+        )
+        |> Repo.update_all(set: [person_id: person_id, details: attrs.details])
+      end
 
       %{action: :existing, movie_id: movie.id, title: movie.title}
     else

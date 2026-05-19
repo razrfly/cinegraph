@@ -199,11 +199,10 @@ config :cinegraph, Oban,
        # they expire. Plus a one-shot warm fires from `Cinegraph.Application`
        # on app boot (so the very first request after deploy is also fast).
        {"*/4 * * * *", Cinegraph.Workers.HealthCacheWarmer},
-       # Daily festival sync (#745 Phase 2) — discovers new ceremony years
+       # Monthly festival sync (#745 Phase 2) — discovers new ceremony years
        # for active festivals + enqueues imports for any year not yet in
-       # the DB. Runs at 02:00 UTC, before all other homeostasis sweepers,
-       # so new nominations land before the daily person-resolver pass at
-       # 06:00 UTC.
+       # the DB. Runs at 02:00 UTC on the 1st of each month to avoid burning
+       # Crawlbase tokens on stable year lists.
        {"0 2 1 * *", Cinegraph.Workers.FestivalSyncSweeper},
        # Monthly canonical IMDb-list refresh — queues a small capped batch
        # of blank/stale `movie_lists` backed by IMDb `ls...` pages.
