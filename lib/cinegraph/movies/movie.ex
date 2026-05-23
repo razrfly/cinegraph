@@ -86,8 +86,10 @@ defmodule Cinegraph.Movies.Movie do
     field :omdb_data, :map, load_in_query: false
     field :import_status, :string, default: "full"
     field :canonical_sources, :map, default: %{}
+    field :now_playing_last_seen, :utc_datetime_usec
+    field :now_playing_region_last_seen, :map
 
-    # Associations  
+    # Associations
     has_many :movie_credits, Cinegraph.Movies.Credit, foreign_key: :movie_id
     many_to_many :people, Cinegraph.Movies.Person, join_through: Cinegraph.Movies.Credit
 

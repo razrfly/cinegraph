@@ -73,6 +73,38 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
     {:ok, results}
   end
 
+  @doc false
+  def now_playing_movies(_, args, _) do
+    limit = Map.get(args, :limit, 100)
+    recency_days = Map.get(args, :recency_days)
+    region = Map.get(args, :region)
+    stamp_cutoff = DateTime.add(DateTime.utc_now(), -3, :day)
+
+    movies =
+      Cinegraph.Movies.Cache.now_playing_movies()
+      |> then(fn list ->
+        if recency_days do
+          date_cutoff = Date.add(Date.utc_today(), -recency_days)
+
+          Enum.filter(list, fn m ->
+            m.release_date && Date.compare(m.release_date, date_cutoff) in [:gt, :eq]
+          end)
+        else
+          list
+        end
+      end)
+      |> then(fn list ->
+        if region do
+          Enum.filter(list, &Cinegraph.Movies.region_active?(&1, region, stamp_cutoff))
+        else
+          list
+        end
+      end)
+      |> Enum.take(limit)
+
+    {:ok, movies}
+  end
+
   # ---------------------------------------------------------------------------
   # Child field resolvers on Movie — batched via Dataloader
   # ---------------------------------------------------------------------------

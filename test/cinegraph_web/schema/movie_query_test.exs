@@ -526,6 +526,307 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
     end
   end
 
+  describe "nowPlayingMovies query (#943)" do
+    setup do
+      Cinegraph.Movies.Cache.invalidate_now_playing()
+      :ok
+    end
+
+    test "returns empty list when no movies have been stamped" do
+      insert_movie(%{tmdb_id: 80_001, title: "Unstamped Movie"})
+
+      query = """
+      query {
+        nowPlayingMovies {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => []}}} = run_query(query)
+    end
+
+    test "returns movies stamped within the last 3 days" do
+      fresh = insert_movie(%{tmdb_id: 80_002, title: "Fresh Film"})
+
+      Repo.update_all(
+        from(m in Cinegraph.Movies.Movie, where: m.id == ^fresh.id),
+        set: [now_playing_last_seen: DateTime.utc_now()]
+      )
+
+      query = """
+      query {
+        nowPlayingMovies {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => results}}} = run_query(query)
+      assert Enum.any?(results, &(&1["title"] == "Fresh Film"))
+    end
+
+    test "excludes movies whose stamp is older than 3 days" do
+      stale = insert_movie(%{tmdb_id: 80_003, title: "Stale Film"})
+      four_days_ago = DateTime.add(DateTime.utc_now(), -4, :day)
+
+      Repo.update_all(
+        from(m in Cinegraph.Movies.Movie, where: m.id == ^stale.id),
+        set: [now_playing_last_seen: four_days_ago]
+      )
+
+      query = """
+      query {
+        nowPlayingMovies {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => results}}} = run_query(query)
+      refute Enum.any?(results, &(&1["title"] == "Stale Film"))
+    end
+
+    test "respects the limit argument" do
+      for i <- 1..5 do
+        movie = insert_movie(%{tmdb_id: 81_000 + i, title: "Playing #{i}"})
+
+        Repo.update_all(
+          from(m in Cinegraph.Movies.Movie, where: m.id == ^movie.id),
+          set: [now_playing_last_seen: DateTime.utc_now()]
+        )
+      end
+
+      query = """
+      query {
+        nowPlayingMovies(limit: 3) {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => results}}} = run_query(query)
+      assert length(results) <= 3
+    end
+  end
+
+  describe "nowPlayingMovies region and recencyDays args (#944)" do
+    setup do
+      Cinegraph.Movies.Cache.invalidate_now_playing()
+      :ok
+    end
+
+    defp stamp_movie_regions(movie, regions_map) do
+      Repo.update_all(
+        from(m in Movie, where: m.id == ^movie.id),
+        set: [
+          now_playing_last_seen: DateTime.utc_now(),
+          now_playing_region_last_seen: regions_map
+        ]
+      )
+    end
+
+    test "region: filter returns only movies active in that region" do
+      us_movie = insert_movie(%{tmdb_id: 90_001, title: "US Only"})
+      de_movie = insert_movie(%{tmdb_id: 90_002, title: "DE Only"})
+
+      now = DateTime.utc_now() |> DateTime.to_iso8601()
+      stamp_movie_regions(us_movie, %{"US" => now})
+      stamp_movie_regions(de_movie, %{"DE" => now})
+
+      query = """
+      query {
+        nowPlayingMovies(region: "US") {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => results}}} = run_query(query)
+      titles = Enum.map(results, & &1["title"])
+      assert "US Only" in titles
+      refute "DE Only" in titles
+    end
+
+    test "region: filter excludes movies with stale region timestamp" do
+      movie = insert_movie(%{tmdb_id: 90_003, title: "Stale US"})
+      four_days_ago = DateTime.add(DateTime.utc_now(), -4, :day) |> DateTime.to_iso8601()
+
+      Repo.update_all(
+        from(m in Movie, where: m.id == ^movie.id),
+        set: [
+          now_playing_last_seen: DateTime.utc_now(),
+          now_playing_region_last_seen: %{"US" => four_days_ago}
+        ]
+      )
+
+      query = """
+      query {
+        nowPlayingMovies(region: "US") {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => results}}} = run_query(query)
+      refute Enum.any?(results, &(&1["title"] == "Stale US"))
+    end
+
+    test "recencyDays filters by release_date, excluding old repertoire" do
+      old_film = insert_movie(%{tmdb_id: 90_004, title: "Old Repertoire Film"})
+      new_film = insert_movie(%{tmdb_id: 90_005, title: "New Release Film"})
+
+      forty_days_ago = Date.add(Date.utc_today(), -40)
+      ten_days_ago = Date.add(Date.utc_today(), -10)
+      now = DateTime.utc_now()
+
+      Repo.update_all(
+        from(m in Movie, where: m.id == ^old_film.id),
+        set: [now_playing_last_seen: now, release_date: forty_days_ago]
+      )
+
+      Repo.update_all(
+        from(m in Movie, where: m.id == ^new_film.id),
+        set: [now_playing_last_seen: now, release_date: ten_days_ago]
+      )
+
+      query = """
+      query {
+        nowPlayingMovies(recencyDays: 30) {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => results}}} = run_query(query)
+      refute Enum.any?(results, &(&1["title"] == "Old Repertoire Film"))
+      assert Enum.any?(results, &(&1["title"] == "New Release Film"))
+    end
+
+    test "recencyDays absent includes all stamped movies regardless of release year" do
+      old_film = insert_movie(%{tmdb_id: 90_006, title: "Classic Film"})
+      forty_years_ago = Date.add(Date.utc_today(), -365 * 40)
+
+      Repo.update_all(
+        from(m in Movie, where: m.id == ^old_film.id),
+        set: [now_playing_last_seen: DateTime.utc_now(), release_date: forty_years_ago]
+      )
+
+      query = """
+      query {
+        nowPlayingMovies {
+          title
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"nowPlayingMovies" => results}}} = run_query(query)
+      assert Enum.any?(results, &(&1["title"] == "Classic Film"))
+    end
+  end
+
+  describe "movie now-playing fields (#944)" do
+    setup do
+      Cinegraph.Movies.Cache.invalidate_now_playing()
+      Application.put_env(:cinegraph, :cinegraph_base_url, "https://test.cinegraph.app")
+      on_exit(fn -> Application.delete_env(:cinegraph, :cinegraph_base_url) end)
+      :ok
+    end
+
+    test "cinegraphUrl returns full URL using configured base" do
+      movie = insert_movie(%{tmdb_id: 91_001, title: "URL Test"})
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          slug
+          cinegraphUrl
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      assert result["cinegraphUrl"] == "https://test.cinegraph.app/movies/#{result["slug"]}"
+    end
+
+    test "cinegraphUrl falls back to /movies/tmdb/:id when slug is nil" do
+      movie = insert_movie(%{tmdb_id: 91_010, title: "Slugless Movie"})
+      Repo.update_all(from(m in Movie, where: m.id == ^movie.id), set: [slug: nil])
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          cinegraphUrl
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      assert result["cinegraphUrl"] == "https://test.cinegraph.app/movies/tmdb/#{movie.tmdb_id}"
+    end
+
+    test "isCurrentlyInTheaters is true when a region is fresh" do
+      movie = insert_movie(%{tmdb_id: 91_002, title: "In Theaters"})
+      now = DateTime.utc_now() |> DateTime.to_iso8601()
+
+      Repo.update_all(
+        from(m in Movie, where: m.id == ^movie.id),
+        set: [now_playing_region_last_seen: %{"US" => now}]
+      )
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          isCurrentlyInTheaters
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      assert result["isCurrentlyInTheaters"] == true
+    end
+
+    test "isCurrentlyInTheaters is false when field is nil" do
+      movie = insert_movie(%{tmdb_id: 91_003, title: "Not In Theaters"})
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          isCurrentlyInTheaters
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      assert result["isCurrentlyInTheaters"] == false
+    end
+
+    test "nowPlayingRegions returns active region codes" do
+      movie = insert_movie(%{tmdb_id: 91_004, title: "Multi Region"})
+      now = DateTime.utc_now() |> DateTime.to_iso8601()
+      stale = DateTime.add(DateTime.utc_now(), -4, :day) |> DateTime.to_iso8601()
+
+      Repo.update_all(
+        from(m in Movie, where: m.id == ^movie.id),
+        set: [now_playing_region_last_seen: %{"US" => now, "GB" => now, "DE" => stale}]
+      )
+
+      query = """
+      query {
+        movie(tmdbId: #{movie.tmdb_id}) {
+          nowPlayingRegions
+        }
+      }
+      """
+
+      assert {:ok, %{data: %{"movie" => result}}} = run_query(query)
+      regions = result["nowPlayingRegions"]
+      assert "US" in regions
+      assert "GB" in regions
+      refute "DE" in regions
+    end
+  end
+
   describe "authentication" do
     setup do
       Application.put_env(:cinegraph, :api_key, "secret-key")

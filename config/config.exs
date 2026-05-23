@@ -199,6 +199,11 @@ config :cinegraph, Oban,
        # they expire. Plus a one-shot warm fires from `Cinegraph.Application`
        # on app boot (so the very first request after deploy is also fast).
        {"*/4 * * * *", Cinegraph.Workers.HealthCacheWarmer},
+       # Now Playing sweep (#943) — polls TMDB /movie/now_playing across 5
+       # regions (US, GB, DE, FR, PL) and stamps `now_playing_last_seen` on
+       # matched movies. Films missing from all regions for >3 days go stale
+       # naturally. ~60 TMDB requests/day total (5 regions × 3 pages × 4 runs).
+       {"0 */6 * * *", Cinegraph.Workers.NowPlayingSweeper},
        # Monthly festival sync (#745 Phase 2) — discovers new ceremony years
        # for active festivals + enqueues imports for any year not yet in
        # the DB. Runs at 02:00 UTC on the 1st of each month to avoid burning

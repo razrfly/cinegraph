@@ -191,6 +191,7 @@ defmodule CinegraphWeb.Router do
     live_session :v2_collections,
       root_layout: {CinegraphWeb.Layouts, :v2_root},
       layout: false do
+      live "/now-playing", NowPlayingLive, :index
       live "/video-clerk", VideoClerkLive, :show
       live "/lists", ListLive.Index, :index
       live "/lists/:slug", ListLive.Show, :show
