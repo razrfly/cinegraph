@@ -14,6 +14,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   import CinegraphWeb.MovieLive.ShowV2.Presentation
   import CinegraphWeb.SEOHelpers
 
+  alias Cinegraph.Movies.Availability
   alias Cinegraph.VideoClerk
   alias CinegraphWeb.Components.ListAppearanceCard
   alias CinegraphWeb.MovieLive.ShowV2.Data
@@ -357,7 +358,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 :for={region <- @active_regions}
                 class="inline-flex items-center gap-1 rounded-full bg-white/80 border border-indigo-100 px-2 py-0.5"
               >
-                <span>{region_to_flag(region)}</span>
+                <span>{Availability.flag_emoji(region)}</span>
                 <span class="text-[11px] font-semibold text-indigo-700">{region}</span>
               </span>
             </div>

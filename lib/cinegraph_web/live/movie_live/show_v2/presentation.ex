@@ -6,31 +6,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
   @dept_priority ~w(Directing Writing Camera Editing Sound Production Art)
   @country_priority ~w(US GB FR DE JP KR IT ES CA AU IN BR MX)
 
-  def region_to_flag(code) when is_binary(code) do
-    code
-    |> String.upcase()
-    |> String.to_charlist()
-    |> Enum.map_join("", fn c -> <<0x1F1A5 + c::utf8>> end)
-  end
-
-  @region_names %{
-    "US" => "United States",
-    "GB" => "United Kingdom",
-    "DE" => "Germany",
-    "FR" => "France",
-    "PL" => "Poland",
-    "CA" => "Canada",
-    "AU" => "Australia",
-    "JP" => "Japan",
-    "KR" => "South Korea",
-    "IT" => "Italy",
-    "ES" => "Spain",
-    "BR" => "Brazil",
-    "MX" => "Mexico",
-    "IN" => "India"
-  }
-  def region_name(code), do: Map.get(@region_names, String.upcase(code), code)
-
   def tmdb_url(nil, _), do: nil
   def tmdb_url("", _), do: nil
   def tmdb_url("/" <> _ = path, size), do: "https://image.tmdb.org/t/p/#{size}#{path}"
