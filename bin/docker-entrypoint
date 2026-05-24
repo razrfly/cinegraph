@@ -1,10 +1,14 @@
 #!/bin/bash -e
 
 if [ "${1}" == "/app/bin/server" ]; then
-  # Run migrations in the background so the server can start — and pass health
-  # checks — without waiting for long CONCURRENTLY index builds on large tables.
-  # Safe only when pending migrations are additive (nullable columns, new indexes).
-  /app/bin/migrate &
+  # Default: run synchronously to guarantee schema compatibility before serving.
+  # Set MIGRATE_ASYNC=true for deploys with long CONCURRENTLY index builds on
+  # large tables where additive-only migrations make background startup safe.
+  if [ "${MIGRATE_ASYNC:-false}" == "true" ]; then
+    /app/bin/migrate &
+  else
+    /app/bin/migrate
+  fi
 fi
 
 exec "${@}"
