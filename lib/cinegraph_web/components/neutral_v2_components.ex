@@ -78,7 +78,7 @@ defmodule CinegraphWeb.NeutralV2Components do
 
   def n_eyebrow(assigns) do
     ~H"""
-    <div class={["text-[11px] font-semibold tracking-[.1em] uppercase text-mist-500", @class]}>
+    <div class={["text-[11px] font-semibold tracking-[.1em] uppercase text-mist-500 dark:text-mist-400", @class]}>
       {render_slot(@inner_block)}
     </div>
     """
@@ -101,10 +101,10 @@ defmodule CinegraphWeb.NeutralV2Components do
     <div class={["flex items-end justify-between gap-6 mb-[18px]", @class]}>
       <div>
         <.n_eyebrow :if={@kicker} class="mb-[6px]">{@kicker}</.n_eyebrow>
-        <h2 class="font-display italic text-[28px] tracking-[-.01em] text-mist-950 leading-[1.1]">
+        <h2 class="font-display italic text-[28px] tracking-[-.01em] text-mist-950 dark:text-white leading-[1.1]">
           {@title}
         </h2>
-        <div :if={@subtitle} class="text-[13.5px] text-mist-700 mt-2">
+        <div :if={@subtitle} class="text-[13.5px] text-mist-700 dark:text-mist-300 mt-2">
           {@subtitle}
         </div>
       </div>
@@ -124,7 +124,7 @@ defmodule CinegraphWeb.NeutralV2Components do
     ~H"""
     <a
       href={@href}
-      class="inline-flex items-center gap-[6px] text-[12.5px] font-semibold text-mist-900 no-underline border-b border-mist-950/15 pb-px"
+      class="inline-flex items-center gap-[6px] text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 no-underline border-b border-mist-950/15 dark:border-white/20 pb-px"
     >
       {render_slot(@inner_block)}<span class="text-[11px] opacity-70">{@icon}</span>
     </a>
@@ -628,7 +628,7 @@ defmodule CinegraphWeb.NeutralV2Components do
 
     ~H"""
     <a href={@href} class="block no-underline text-inherit">
-      <div class="relative aspect-[2/3] rounded-[6px] overflow-hidden bg-mist-100 border border-mist-950/10">
+      <div class="relative aspect-[2/3] rounded-[6px] overflow-hidden bg-mist-100 dark:bg-mist-800 border border-mist-950/10 dark:border-white/10">
         <img
           :if={@poster}
           src={@poster}
@@ -637,7 +637,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         />
         <div
           :if={!@poster}
-          class="w-full h-full grid place-items-center bg-gradient-to-br from-mist-200 to-mist-300 text-mist-700 font-display italic text-[14px] text-center px-3"
+          class="w-full h-full grid place-items-center bg-gradient-to-br from-mist-200 to-mist-300 dark:from-mist-800 dark:to-mist-700 text-mist-700 dark:text-mist-300 font-display italic text-[14px] text-center px-3"
         >
           {@film.title}
         </div>
@@ -667,14 +667,14 @@ defmodule CinegraphWeb.NeutralV2Components do
       </div>
       <div class="pt-[10px]">
         <div class="flex items-baseline justify-between gap-2">
-          <div class="text-[13.5px] font-semibold text-mist-950 tracking-[-.005em] leading-[1.25] whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0">
+          <div class="text-[13.5px] font-semibold text-mist-950 dark:text-white tracking-[-.005em] leading-[1.25] whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0">
             {@film.title}
           </div>
-          <div class="text-[12px] text-mist-500 tabular-nums shrink-0">{@film.year}</div>
+          <div class="text-[12px] text-mist-500 dark:text-mist-400 tabular-nums shrink-0">{@film.year}</div>
         </div>
         <div
           :if={!@compact && (@film[:dir] || Map.has_key?(@film, :delta))}
-          class="flex items-center gap-2 mt-[5px] text-[11.5px] text-mist-700"
+          class="flex items-center gap-2 mt-[5px] text-[11.5px] text-mist-700 dark:text-mist-300"
         >
           <span class="whitespace-nowrap overflow-hidden text-ellipsis flex-1 min-w-0">
             {@film[:dir]}
@@ -698,7 +698,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         </div>
         <div
           :if={!@compact && @film[:reason]}
-          class="mt-[5px] pl-2 border-l-2 border-mist-950/30 italic text-[11px] text-mist-500 truncate"
+          class="mt-[5px] pl-2 border-l-2 border-mist-950/30 dark:border-white/30 italic text-[11px] text-mist-500 dark:text-mist-400 truncate"
         >
           {@film.reason}
         </div>
@@ -1197,38 +1197,38 @@ defmodule CinegraphWeb.NeutralV2Components do
 
   def n_score_panel(assigns) do
     ~H"""
-    <div class="bg-mist-50 border border-mist-950/10 rounded-[10px] p-6 lg:p-8">
+    <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-[10px] p-6 lg:p-8">
       <div class="flex items-start justify-between gap-6 flex-wrap mb-6">
         <div>
           <.n_eyebrow>Cinegraph score</.n_eyebrow>
           <%= if @scores[:overall] do %>
             <div class="flex items-baseline gap-3 mt-1">
-              <div class="font-display italic text-[64px] tracking-[-.02em] text-mist-950 leading-none tabular-nums">
+              <div class="font-display italic text-[64px] tracking-[-.02em] text-mist-950 dark:text-white leading-none tabular-nums">
                 {format_score(@scores[:overall])}
               </div>
               <div class="text-[14px] text-mist-500 tabular-nums">/ 10</div>
             </div>
           <% else %>
-            <div class="mt-2 font-display italic text-[34px] tracking-[-.01em] text-mist-950 leading-tight">
+            <div class="mt-2 font-display italic text-[34px] tracking-[-.01em] text-mist-950 dark:text-white leading-tight">
               Not enough evidence yet
             </div>
           <% end %>
           <div :if={@scoreability} class="mt-2 flex items-center gap-2 flex-wrap">
-            <span class="inline-flex items-center rounded-md border border-mist-950/10 bg-white px-2 py-1 text-[11.5px] font-semibold text-mist-800">
+            <span class="inline-flex items-center rounded-md border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-800 px-2 py-1 text-[11.5px] font-semibold text-mist-800 dark:text-mist-200">
               {Scoreability.confidence_badge(@scoreability)}
             </span>
-            <span class="text-[12.5px] text-mist-700">
+            <span class="text-[12.5px] text-mist-700 dark:text-mist-300">
               {Scoreability.lens_summary(@scoreability)}
             </span>
           </div>
-          <p :if={@scoreability} class="mt-2 max-w-2xl text-[12.5px] leading-[1.5] text-mist-700">
+          <p :if={@scoreability} class="mt-2 max-w-2xl text-[12.5px] leading-[1.5] text-mist-700 dark:text-mist-300">
             {Scoreability.detail_explanation(@scoreability)}
           </p>
           <div :if={@disparity_label} class="mt-2 flex items-center gap-2 flex-wrap">
-            <span class="font-display italic text-[16px] text-mist-950">
+            <span class="font-display italic text-[16px] text-mist-950 dark:text-white">
               {@disparity_label}
             </span>
-            <span :if={@disparity_summary} class="text-[12.5px] text-mist-700">
+            <span :if={@disparity_summary} class="text-[12.5px] text-mist-700 dark:text-mist-300">
               — {@disparity_summary}
             </span>
           </div>
@@ -1244,28 +1244,28 @@ defmodule CinegraphWeb.NeutralV2Components do
         class="mb-5 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11.5px]"
       >
         <div>
-          <div class="mb-1 font-semibold text-mist-950">Available evidence</div>
+          <div class="mb-1 font-semibold text-mist-950 dark:text-white">Available evidence</div>
           <div class="flex flex-wrap gap-1.5">
             <span
               :for={
                 lens <-
                   Scoreability.human_lens_labels(Scoreability.present_lens_labels(@scoreability))
               }
-              class="rounded-md border border-mist-950/10 bg-white px-2 py-1 text-mist-800"
+              class="rounded-md border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-800 px-2 py-1 text-mist-800 dark:text-mist-200"
             >
               {lens}
             </span>
           </div>
         </div>
         <div>
-          <div class="mb-1 font-semibold text-mist-950">Missing evidence</div>
+          <div class="mb-1 font-semibold text-mist-950 dark:text-white">Missing evidence</div>
           <div class="flex flex-wrap gap-1.5">
             <span
               :for={
                 lens <-
                   Scoreability.human_lens_labels(Scoreability.missing_lens_labels(@scoreability))
               }
-              class="rounded-md border border-mist-950/10 bg-mist-100 px-2 py-1 text-mist-600"
+              class="rounded-md border border-mist-950/10 dark:border-white/10 bg-mist-100 dark:bg-mist-800 px-2 py-1 text-mist-600 dark:text-mist-400"
             >
               {lens}
             </span>
@@ -1349,7 +1349,7 @@ defmodule CinegraphWeb.NeutralV2Components do
             <button
               :if={@description}
               type="button"
-              class="text-[13px] font-semibold text-mist-950 tracking-[-.005em] underline decoration-transparent underline-offset-4 cursor-help focus-visible:outline-none focus-visible:decoration-mist-950/40 group-hover:decoration-mist-950/30"
+              class="text-[13px] font-semibold text-mist-950 dark:text-white tracking-[-.005em] underline decoration-transparent underline-offset-4 cursor-help focus-visible:outline-none focus-visible:decoration-mist-950/40 dark:focus-visible:decoration-white/40 group-hover:decoration-mist-950/30 dark:group-hover:decoration-white/30"
               aria-label={"#{@label}: #{@description}"}
               aria-describedby={@tooltip_id}
             >
@@ -1357,7 +1357,7 @@ defmodule CinegraphWeb.NeutralV2Components do
             </button>
             <span
               :if={!@description}
-              class="text-[13px] font-semibold text-mist-950 tracking-[-.005em]"
+              class="text-[13px] font-semibold text-mist-950 dark:text-white tracking-[-.005em]"
             >
               {@label}
             </span>
@@ -1365,26 +1365,26 @@ defmodule CinegraphWeb.NeutralV2Components do
               :if={@description}
               id={@tooltip_id}
               role="tooltip"
-              class="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-md border border-mist-950/10 bg-white px-3 py-2 text-left text-[11.5px] font-normal leading-[1.45] text-mist-800 shadow-[0_10px_30px_rgba(20,18,15,.12)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+              class="pointer-events-none absolute left-0 top-full z-20 mt-2 w-64 max-w-[calc(100vw-3rem)] rounded-md border border-mist-950/10 dark:border-white/15 bg-white dark:bg-mist-800 px-3 py-2 text-left text-[11.5px] font-normal leading-[1.45] text-mist-800 dark:text-mist-200 shadow-[0_10px_30px_rgba(20,18,15,.12)] dark:shadow-[0_10px_30px_rgba(0,0,0,.4)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
               {@description}
             </span>
           </span>
-          <span :if={@sublabel} class="text-[11px] text-mist-500">{@sublabel}</span>
+          <span :if={@sublabel} class="text-[11px] text-mist-500 dark:text-mist-400">{@sublabel}</span>
         </div>
         <div class="flex items-baseline gap-2">
           <span class={[
             "text-[14px] font-semibold tabular-nums",
-            if(@missing, do: "text-mist-500", else: "text-mist-950")
+            if(@missing, do: "text-mist-500 dark:text-mist-400", else: "text-mist-950 dark:text-white")
           ]}>
             {if @missing, do: "No data", else: format_score(@val)}
           </span>
-          <span :if={@weight} class="text-[10px] text-mist-500 tabular-nums">{@weight}%</span>
+          <span :if={@weight} class="text-[10px] text-mist-500 dark:text-mist-400 tabular-nums">{@weight}%</span>
         </div>
       </div>
-      <div class="h-[5px] w-full bg-mist-950/[0.05] rounded-full overflow-hidden">
+      <div class="h-[5px] w-full bg-mist-950/[0.05] dark:bg-white/10 rounded-full overflow-hidden">
         <div
-          class={if(@missing, do: "h-full bg-mist-950/[0.12]", else: "h-full bg-mist-950")}
+          class={if(@missing, do: "h-full bg-mist-950/[0.12] dark:bg-white/20", else: "h-full bg-mist-950 dark:bg-white")}
           style={"width: #{@pct}%"}
         >
         </div>
@@ -1439,48 +1439,48 @@ defmodule CinegraphWeb.NeutralV2Components do
 
   def n_award_org_block(assigns) do
     ~H"""
-    <section class="rounded-lg border border-mist-950/10 bg-mist-50 overflow-hidden">
-      <header class="flex items-baseline justify-between gap-4 px-5 py-4 border-b border-mist-950/10 bg-mist-950/[0.025]">
-        <h3 class="font-display italic text-[20px] tracking-[-.01em] text-mist-950 leading-tight">
+    <section class="rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-900 overflow-hidden">
+      <header class="flex items-baseline justify-between gap-4 px-5 py-4 border-b border-mist-950/10 dark:border-white/10 bg-mist-950/[0.025] dark:bg-white/5">
+        <h3 class="font-display italic text-[20px] tracking-[-.01em] text-mist-950 dark:text-white leading-tight">
           {@org_name}
         </h3>
-        <div class="flex items-baseline gap-3 text-[11.5px] text-mist-700 tabular-nums shrink-0">
+        <div class="flex items-baseline gap-3 text-[11.5px] text-mist-700 dark:text-mist-300 tabular-nums shrink-0">
           <span :if={@total_wins > 0}>
-            <b class="text-mist-950 font-semibold">{@total_wins}</b> {pluralize(@total_wins, "win")}
+            <b class="text-mist-950 dark:text-white font-semibold">{@total_wins}</b> {pluralize(@total_wins, "win")}
           </span>
           <span :if={@total_nominations > 0}>
-            <b class="text-mist-950 font-semibold">{@total_nominations}</b>
+            <b class="text-mist-950 dark:text-white font-semibold">{@total_nominations}</b>
             {pluralize(@total_nominations, "nomination")}
           </span>
         </div>
       </header>
-      <ul role="list" class="divide-y divide-mist-950/[0.05]">
+      <ul role="list" class="divide-y divide-mist-950/[0.05] dark:divide-white/10">
         <li :for={n <- @nominations} class="px-5 py-3 flex items-baseline gap-3">
-          <span :if={n[:won]} class="text-amber-600 text-[12px] shrink-0" aria-label="Winner">★</span>
+          <span :if={n[:won]} class="text-amber-600 dark:text-amber-400 text-[12px] shrink-0" aria-label="Winner">★</span>
           <span :if={!n[:won]} class="w-[12px] shrink-0"></span>
-          <div class="flex-1 min-w-0 text-[13px] text-mist-950">
+          <div class="flex-1 min-w-0 text-[13px] text-mist-950 dark:text-white">
             <span class="font-medium">{n.category}</span>
-            <span :if={n[:person_name]} class="text-mist-700">
+            <span :if={n[:person_name]} class="text-mist-700 dark:text-mist-300">
               <span class="mx-1">—</span>{n.person_name}
             </span>
             <span
               :if={n[:film_title]}
-              class="text-mist-700"
+              class="text-mist-700 dark:text-mist-300"
             >
               for
               <a
                 :if={n[:film_href]}
                 href={n[:film_href]}
-                class="underline decoration-mist-950/15 underline-offset-2 hover:text-mist-950"
+                class="underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
               >
                 {n.film_title}
               </a>
               <span :if={!n[:film_href]}>{n.film_title}</span>
             </span>
           </div>
-          <div class="text-[11px] text-mist-500 tabular-nums shrink-0">
+          <div class="text-[11px] text-mist-500 dark:text-mist-400 tabular-nums shrink-0">
             {n[:year]}
-            <span :if={n[:won]} class="text-amber-700 font-medium ml-1">winner</span>
+            <span :if={n[:won]} class="text-amber-700 dark:text-amber-400 font-medium ml-1">winner</span>
             <span :if={!n[:won]}> · nominated</span>
           </div>
         </li>
@@ -1506,41 +1506,41 @@ defmodule CinegraphWeb.NeutralV2Components do
     ~H"""
     <a
       href={@credit[:href] || "#"}
-      class="flex items-center gap-3 px-3 py-2 -mx-3 rounded-md hover:bg-mist-950/[0.025] no-underline text-inherit"
+      class="flex items-center gap-3 px-3 py-2 -mx-3 rounded-md hover:bg-mist-950/[0.025] dark:hover:bg-white/5 no-underline text-inherit"
     >
       <img
         :if={@credit[:avatar_url]}
         src={@credit.avatar_url}
         alt=""
-        class="w-9 h-9 rounded-full shrink-0 border border-mist-950/10 object-cover bg-mist-100"
+        class="w-9 h-9 rounded-full shrink-0 border border-mist-950/10 dark:border-white/10 object-cover bg-mist-100 dark:bg-mist-700"
       />
       <img
         :if={@credit[:poster_url] && !@credit[:avatar_url]}
         src={@credit.poster_url}
         alt=""
-        class="w-9 h-[54px] shrink-0 rounded-[3px] border border-mist-950/10 object-cover bg-mist-100"
+        class="w-9 h-[54px] shrink-0 rounded-[3px] border border-mist-950/10 dark:border-white/10 object-cover bg-mist-100 dark:bg-mist-700"
       />
       <div
         :if={!@credit[:avatar_url] && !@credit[:poster_url]}
-        class="w-9 h-9 rounded-full shrink-0 bg-mist-950/[0.05] grid place-items-center text-[10px] text-mist-500"
+        class="w-9 h-9 rounded-full shrink-0 bg-mist-950/[0.05] dark:bg-white/10 grid place-items-center text-[10px] text-mist-500 dark:text-mist-400"
       >
         ?
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-[13.5px] font-semibold text-mist-950 tracking-[-.005em] truncate">
+        <div class="text-[13.5px] font-semibold text-mist-950 dark:text-white tracking-[-.005em] truncate">
           {@credit[:name] || @credit[:title]}
         </div>
-        <div class="text-[11.5px] text-mist-700 truncate">
+        <div class="text-[11.5px] text-mist-700 dark:text-mist-300 truncate">
           <span :if={@credit[:character]}>{@credit.character}</span>
           <span :if={@credit[:job]}>{@credit.job}</span>
           <span :if={@credit[:role]}>{@credit.role}</span>
         </div>
       </div>
       <div :if={@credit[:year] || @credit[:score]} class="flex items-center gap-3 shrink-0">
-        <span :if={@credit[:score]} class="text-[12px] font-bold text-mist-950 tabular-nums">
+        <span :if={@credit[:score]} class="text-[12px] font-bold text-mist-950 dark:text-white tabular-nums">
           {format_score(@credit.score)}
         </span>
-        <span :if={@credit[:year]} class="text-[11.5px] text-mist-500 tabular-nums">
+        <span :if={@credit[:year]} class="text-[11.5px] text-mist-500 dark:text-mist-400 tabular-nums">
           {@credit.year}
         </span>
       </div>
@@ -1577,41 +1577,41 @@ defmodule CinegraphWeb.NeutralV2Components do
       |> assign(:strength_classes, strength_classes)
 
     ~H"""
-    <div class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit">
+    <div class="block bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5 no-underline text-inherit">
       <div class="flex items-center gap-3 mb-3">
         <div class="flex -space-x-3 shrink-0">
           <img
             :if={@c[:avatar_a]}
             src={@c.avatar_a}
             alt=""
-            class="w-10 h-10 rounded-full border-2 border-mist-50 object-cover bg-mist-100"
+            class="w-10 h-10 rounded-full border-2 border-mist-50 dark:border-mist-900 object-cover bg-mist-100 dark:bg-mist-800"
           />
           <img
             :if={@c[:avatar_b]}
             src={@c.avatar_b}
             alt=""
-            class="w-10 h-10 rounded-full border-2 border-mist-50 object-cover bg-mist-100"
+            class="w-10 h-10 rounded-full border-2 border-mist-50 dark:border-mist-900 object-cover bg-mist-100 dark:bg-mist-800"
           />
         </div>
         <div class="flex-1 min-w-0">
           <% person_a = @c[:person_a] %>
           <% person_b = @c[:person_b] %>
-          <div class="text-[13.5px] font-semibold text-mist-950 truncate">
+          <div class="text-[13.5px] font-semibold text-mist-950 dark:text-white truncate">
             <.link
               :if={@c[:href]}
               navigate={@c.href}
-              class="text-inherit underline decoration-mist-950/15 underline-offset-4 hover:decoration-mist-950/45"
+              class="text-inherit underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 hover:decoration-mist-950/45 dark:hover:decoration-white/45"
             >
-              <span :if={person_a}>{person_a} <span class="text-mist-500 mx-1">·</span></span>{person_b}
+              <span :if={person_a}>{person_a} <span class="text-mist-500 dark:text-mist-400 mx-1">·</span></span>{person_b}
             </.link>
             <span :if={!@c[:href]}>
-              <span :if={person_a}>{person_a} <span class="text-mist-500 mx-1">·</span></span>{person_b}
+              <span :if={person_a}>{person_a} <span class="text-mist-500 dark:text-mist-400 mx-1">·</span></span>{person_b}
             </span>
           </div>
-          <div class="text-[11.5px] text-mist-700">
-            <b class="text-mist-950 font-semibold tabular-nums">{@c[:films_together]}</b>
+          <div class="text-[11.5px] text-mist-700 dark:text-mist-300">
+            <b class="text-mist-950 dark:text-white font-semibold tabular-nums">{@c[:films_together]}</b>
             {pluralize(@c[:films_together] || 0, "film")} together
-            <span :if={@c[:year_range]} class="text-mist-500">
+            <span :if={@c[:year_range]} class="text-mist-500 dark:text-mist-400">
               <span class="mx-1">·</span>{@c.year_range}
             </span>
           </div>
@@ -1619,26 +1619,26 @@ defmodule CinegraphWeb.NeutralV2Components do
       </div>
 
       <div class="flex items-center gap-2 mb-2">
-        <div class="h-[4px] flex-1 bg-mist-950/[0.05] rounded-full overflow-hidden">
+        <div class="h-[4px] flex-1 bg-mist-950/[0.05] dark:bg-white/10 rounded-full overflow-hidden">
           <div class={["h-full", @strength_classes]} style={"width: #{@strength_pct}%"}></div>
         </div>
-        <span class="text-[10.5px] text-mist-700 font-medium shrink-0">{@strength_label}</span>
+        <span class="text-[10.5px] text-mist-700 dark:text-mist-300 font-medium shrink-0">{@strength_label}</span>
       </div>
 
       <div
         :if={@c[:avg_score] || @c[:total_revenue]}
-        class="flex items-center gap-4 text-[11px] text-mist-500 tabular-nums"
+        class="flex items-center gap-4 text-[11px] text-mist-500 dark:text-mist-400 tabular-nums"
       >
         <span :if={@c[:avg_score]}>
-          avg <b class="text-mist-950 font-semibold">{format_score(@c.avg_score)}</b>
+          avg <b class="text-mist-950 dark:text-white font-semibold">{format_score(@c.avg_score)}</b>
         </span>
         <span :if={@c[:total_revenue] && @c.total_revenue > 0}>
-          rev <b class="text-mist-950 font-semibold">${format_revenue(@c.total_revenue)}</b>
+          rev <b class="text-mist-950 dark:text-white font-semibold">${format_revenue(@c.total_revenue)}</b>
         </span>
       </div>
 
-      <div :if={@c[:movies] && @c.movies != []} class="mt-3 pt-3 border-t border-mist-950/10">
-        <div class="text-[10px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-2">
+      <div :if={@c[:movies] && @c.movies != []} class="mt-3 pt-3 border-t border-mist-950/10 dark:border-white/10">
+        <div class="text-[10px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase mb-2">
           Films together
         </div>
         <div class="flex gap-2 overflow-x-auto">
@@ -1652,12 +1652,12 @@ defmodule CinegraphWeb.NeutralV2Components do
               :if={movie_poster_url(m)}
               src={movie_poster_url(m)}
               alt={m.title}
-              class="w-14 h-20 rounded border border-mist-950/10 object-cover bg-mist-100"
+              class="w-14 h-20 rounded border border-mist-950/10 dark:border-white/10 object-cover bg-mist-100 dark:bg-mist-800"
               loading="lazy"
             />
             <div
               :if={!movie_poster_url(m)}
-              class="w-14 h-20 bg-mist-100 border border-mist-950/10 rounded grid place-items-center text-[11px] text-mist-700 tabular-nums"
+              class="w-14 h-20 bg-mist-100 dark:bg-mist-800 border border-mist-950/10 dark:border-white/10 rounded grid place-items-center text-[11px] text-mist-700 dark:text-mist-300 tabular-nums"
             >
               <%= if m.release_date do %>
                 {m.release_date.year}
@@ -1665,7 +1665,7 @@ defmodule CinegraphWeb.NeutralV2Components do
                 —
               <% end %>
             </div>
-            <div :if={m[:score]} class="mt-1 text-[10.5px] font-semibold text-mist-950 tabular-nums">
+            <div :if={m[:score]} class="mt-1 text-[10.5px] font-semibold text-mist-950 dark:text-white tabular-nums">
               {Float.round(m[:score], 1)}
             </div>
           </.link>
@@ -1729,16 +1729,16 @@ defmodule CinegraphWeb.NeutralV2Components do
       class="sticky top-[80px]"
       aria-label="On this page"
     >
-      <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+      <div class="text-[10.5px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase mb-3">
         On this page
       </div>
-      <ul class="border-l border-mist-950/10">
+      <ul class="border-l border-mist-950/10 dark:border-white/10">
         <li :for={s <- @visible}>
           <a
             href={"##{s.id}"}
             data-section-id={s.id}
             data-scroll-to={s.id}
-            class="block pl-3 py-[6px] -ml-px text-[13px] no-underline border-l-2 border-transparent text-mist-700 hover:text-mist-950 [&.active]:border-mist-950 [&.active]:text-mist-950 [&.active]:font-medium"
+            class="block pl-3 py-[6px] -ml-px text-[13px] no-underline border-l-2 border-transparent text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white [&.active]:border-mist-950 dark:[&.active]:border-white [&.active]:text-mist-950 dark:[&.active]:text-white [&.active]:font-medium"
           >
             {s.label}
           </a>

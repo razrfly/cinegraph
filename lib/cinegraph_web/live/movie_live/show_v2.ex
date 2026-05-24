@@ -341,7 +341,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     </section>
 
     <%!-- In Theaters Now — absent entirely when not currently playing --%>
-    <div :if={@in_theaters} class="border-b border-indigo-100 bg-linear-to-r from-indigo-50 to-violet-50">
+    <div :if={@in_theaters} class="border-b border-indigo-100 dark:border-indigo-800/30 bg-linear-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30">
       <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-4 flex items-center gap-6">
         <div class="flex-1 min-w-0 flex items-center gap-3">
           <span class="relative flex size-2 shrink-0">
@@ -349,17 +349,17 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             <span class="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
           </span>
           <div>
-            <p class="text-[13px] font-semibold text-indigo-900">In Theaters Now</p>
-            <p class="text-[12px] text-indigo-600/70 mt-0.5">
+            <p class="text-[13px] font-semibold text-indigo-900 dark:text-indigo-200">In Theaters Now</p>
+            <p class="text-[12px] text-indigo-600/70 dark:text-indigo-400/70 mt-0.5">
               Currently showing in {length(@active_regions)} {if length(@active_regions) == 1, do: "country", else: "countries"} based on TMDB data
             </p>
             <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span
                 :for={region <- @active_regions}
-                class="inline-flex items-center gap-1 rounded-full bg-white/80 border border-indigo-100 px-2 py-0.5"
+                class="inline-flex items-center gap-1 rounded-full bg-white/80 dark:bg-mist-800/60 border border-indigo-100 dark:border-indigo-800/30 px-2 py-0.5"
               >
                 <span>{Availability.flag_emoji(region)}</span>
-                <span class="text-[11px] font-semibold text-indigo-700">{region}</span>
+                <span class="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">{region}</span>
               </span>
             </div>
           </div>
@@ -390,13 +390,13 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               <button
                 type="button"
                 phx-click="show_score_modal"
-                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+                class="text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
               >
                 How is this score calculated?
               </button>
               <a
                 href={~p"/movies/discover"}
-                class="text-[12.5px] font-semibold text-mist-700 underline decoration-mist-950/10 underline-offset-4"
+                class="text-[12.5px] font-semibold text-mist-700 dark:text-mist-300 underline decoration-mist-950/10 dark:decoration-white/15 underline-offset-4"
               >
                 Tune weights →
               </a>
@@ -425,101 +425,101 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             :if={wins + noms > 0 || canon_count > 0 || reunions > 0 || top_win}
             class="-mt-4"
           >
-            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
+            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 dark:text-white mb-4">
               Where it lives
             </h2>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <a
                 :if={wins + noms > 0}
                 href="#awards"
-                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+                class="block bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] dark:hover:shadow-[0_4px_14px_rgba(0,0,0,.3)] transition-shadow"
               >
-                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                <div class="text-[10.5px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase mb-3">
                   Awards
                 </div>
-                <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
+                <div class="font-display italic text-[28px] text-mist-950 dark:text-white leading-none mb-1 tabular-nums">
                   {wins} {pluralize_str(wins, "win")}
                 </div>
-                <div class="text-[12px] text-mist-700 tabular-nums mb-3">
+                <div class="text-[12px] text-mist-700 dark:text-mist-300 tabular-nums mb-3">
                   {noms} {pluralize_str(noms, "nomination")}
                 </div>
                 <div
                   :if={t = top_org_names(@festival_noms)}
-                  class="text-[11.5px] text-mist-500 truncate"
+                  class="text-[11.5px] text-mist-500 dark:text-mist-400 truncate"
                 >
                   {t}
                 </div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
               </a>
 
               <a
                 :if={canon_count > 0}
                 href="#lists"
-                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+                class="block bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] dark:hover:shadow-[0_4px_14px_rgba(0,0,0,.3)] transition-shadow"
               >
-                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                <div class="text-[10.5px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase mb-3">
                   Lists
                 </div>
-                <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
+                <div class="font-display italic text-[28px] text-mist-950 dark:text-white leading-none mb-1 tabular-nums">
                   on {canon_count}
                 </div>
-                <div class="text-[12px] text-mist-700 mb-3">
+                <div class="text-[12px] text-mist-700 dark:text-mist-300 mb-3">
                   canonical {pluralize_str(canon_count, "list")}
                 </div>
                 <div
                   :if={t = top_canon_authorities(@canon_lists)}
-                  class="text-[11.5px] text-mist-500 truncate"
+                  class="text-[11.5px] text-mist-500 dark:text-mist-400 truncate"
                 >
                   {t}
                 </div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
               </a>
 
               <a
                 :if={top_win}
                 href="#awards"
-                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+                class="block bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] dark:hover:shadow-[0_4px_14px_rgba(0,0,0,.3)] transition-shadow"
               >
-                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                <div class="text-[10.5px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase mb-3">
                   Festivals
                 </div>
-                <div class="font-display italic text-[20px] text-mist-950 leading-tight mb-1">
+                <div class="font-display italic text-[20px] text-mist-950 dark:text-white leading-tight mb-1">
                   {top_win.org}
-                  <span :if={top_win.year} class="text-mist-500 tabular-nums">{top_win.year}</span>
+                  <span :if={top_win.year} class="text-mist-500 dark:text-mist-400 tabular-nums">{top_win.year}</span>
                 </div>
-                <div :if={top_win.category} class="text-[12px] text-mist-700 mb-3 truncate">
+                <div :if={top_win.category} class="text-[12px] text-mist-700 dark:text-mist-300 mb-3 truncate">
                   {top_win.category}
                 </div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
               </a>
 
               <a
                 :if={reunions > 0}
                 href="#collaborations"
-                class="block bg-mist-50 border border-mist-950/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow"
+                class="block bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5 no-underline text-inherit hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] dark:hover:shadow-[0_4px_14px_rgba(0,0,0,.3)] transition-shadow"
               >
-                <div class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+                <div class="text-[10.5px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase mb-3">
                   Collaborations
                 </div>
-                <div class="font-display italic text-[28px] text-mist-950 leading-none mb-1 tabular-nums">
+                <div class="font-display italic text-[28px] text-mist-950 dark:text-white leading-none mb-1 tabular-nums">
                   {reunions} {pluralize_str(reunions, "reunion")}
                 </div>
-                <div class="text-[12px] text-mist-700 mb-3">in this film</div>
-                <div :if={top_pair} class="text-[11.5px] text-mist-500 truncate">{top_pair}</div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900">See all →</div>
+                <div class="text-[12px] text-mist-700 dark:text-mist-300 mb-3">in this film</div>
+                <div :if={top_pair} class="text-[11.5px] text-mist-500 dark:text-mist-400 truncate">{top_pair}</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
               </a>
             </div>
           </section>
 
           <%!-- KEYWORDS --%>
           <section :if={@keywords != []}>
-            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-4">
+            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 dark:text-white mb-4">
               Themes & keywords
             </h2>
             <div class="flex flex-wrap gap-2">
               <span
                 :for={kw <- @keywords}
-                class="inline-flex items-center px-3 py-1 rounded-full bg-mist-950/[0.025] border border-mist-950/10 text-[13px] text-mist-700"
+                class="inline-flex items-center px-3 py-1 rounded-full bg-mist-950/[0.025] dark:bg-white/5 border border-mist-950/10 dark:border-white/10 text-[13px] text-mist-700 dark:text-mist-300"
               >
                 {kw.name}
               </span>
@@ -529,9 +529,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <%!-- CAST --%>
           <section :if={@cast != []} id="cast" class="scroll-mt-24">
             <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white">
                 Cast
-                <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
                   {length(@cast)}
                 </span>
               </h2>
@@ -539,7 +539,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 :if={length(@cast) > 12}
                 type="button"
                 phx-click="toggle_full_cast"
-                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+                class="text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
               >
                 {if @show_full_cast, do: "Show top 12 only", else: "Show all #{length(@cast)}"}
               </button>
@@ -558,9 +558,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             if @show_full_crew, do: crew_groups, else: Enum.take(crew_groups, 3) %>
           <section :if={crew_groups != []} id="crew">
             <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white">
                 Crew
-                <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
                   {length(@crew)}
                 </span>
               </h2>
@@ -568,7 +568,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 :if={length(crew_groups) > 3}
                 type="button"
                 phx-click="toggle_full_crew"
-                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+                class="text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
               >
                 {if @show_full_crew,
                   do: "Show top 3 departments",
@@ -577,9 +577,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             </div>
             <div class="space-y-7">
               <div :for={{dept, members} <- visible_crew_groups}>
-                <div class="font-display italic text-[15px] text-mist-500 tracking-[-.005em] mb-3">
+                <div class="font-display italic text-[15px] text-mist-500 dark:text-mist-400 tracking-[-.005em] mb-3">
                   {dept}
-                  <span class="text-mist-500/60 text-[12px] font-sans not-italic tabular-nums ml-1">
+                  <span class="text-mist-500/60 dark:text-mist-400/60 text-[12px] font-sans not-italic tabular-nums ml-1">
                     {length(members)}
                   </span>
                 </div>
@@ -601,9 +601,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
           <%!-- AWARDS BY ORG --%>
           <section :if={@festival_noms != [] && is_list(@festival_noms)} id="awards">
-            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               Awards & recognition
-              <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+              <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
                 {count_award_wins(@festival_noms)} {pluralize_str(
                   count_award_wins(@festival_noms),
                   "win"
@@ -613,7 +613,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 )}
               </span>
             </h2>
-            <div :if={a = omdb_awards(@metrics)} class="mb-6 text-[13.5px] text-mist-700 italic">
+            <div :if={a = omdb_awards(@metrics)} class="mb-6 text-[13.5px] text-mist-700 dark:text-mist-300 italic">
               {a}
             </div>
             <div class="space-y-4">
@@ -635,9 +635,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
           <%!-- CANONICAL LISTS --%>
           <section :if={@canon_lists != []} id="lists">
-            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               On canonical lists
-              <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+              <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
                 {length(@canon_lists)} {pluralize_str(length(@canon_lists), "appearance")}
               </span>
             </h2>
@@ -651,7 +651,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             :if={(@key_collabs[:notable_collaborations] || []) != []}
             id="collaborations"
           >
-            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               Notable collaborations
             </h2>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -662,7 +662,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             </div>
             <a
               href={~p"/six-degrees"}
-              class="mt-4 inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+              class="mt-4 inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
             >
               Explore the full collaboration network →
             </a>
@@ -672,10 +672,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <section :if={@video_clerk_recommendation[:primary]} id="video-clerk">
             <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500">
+                <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500 dark:text-mist-400">
                   Video Clerk
                 </div>
-                <h2 class="mt-1 font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+                <h2 class="mt-1 font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white">
                   Ask for the next strange right thing
                 </h2>
               </div>
@@ -695,9 +695,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                     |> Enum.take(3)
                 }
                 href={rec.href}
-                class="rounded-lg border border-mist-950/10 bg-mist-50 p-4 no-underline hover:bg-white"
+                class="rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-900 p-4 no-underline hover:bg-white dark:hover:bg-mist-800"
               >
-                <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500">
+                <div class="text-[11px] font-semibold uppercase tracking-[.08em] text-mist-500 dark:text-mist-400">
                   {Enum.join(Enum.take(rec.route_labels, 2), " / ")}
                 </div>
                 <div class="mt-2 flex gap-3">
@@ -708,11 +708,11 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                     class="h-24 w-16 rounded-[4px] object-cover"
                   />
                   <div class="min-w-0">
-                    <div class="text-[14px] font-semibold leading-snug text-mist-950">
+                    <div class="text-[14px] font-semibold leading-snug text-mist-950 dark:text-white">
                       {rec.title}
                     </div>
-                    <div class="mt-1 text-[12px] text-mist-500">{rec.year}</div>
-                    <p class="mt-2 line-clamp-3 text-[12px] leading-relaxed text-mist-700">
+                    <div class="mt-1 text-[12px] text-mist-500 dark:text-mist-400">{rec.year}</div>
+                    <p class="mt-2 line-clamp-3 text-[12px] leading-relaxed text-mist-700 dark:text-mist-300">
                       {rec.reason}
                     </p>
                   </div>
@@ -723,7 +723,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
           <%!-- MORE FROM DIRECTOR --%>
           <section :if={@director_other_films != [] && @directors != []} id="director">
-            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               More from {director_names(@directors)}
             </h2>
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-[18px]">
@@ -736,7 +736,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
           <%!-- SIMILAR FILMS --%>
           <section :if={@related_movies != []} id="similar">
-            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               Similar films
             </h2>
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-[18px]">
@@ -749,7 +749,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
           <%!-- MEDIA --%>
           <section :if={@videos != []} id="media">
-            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               Media
             </h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px]">
@@ -758,9 +758,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 href={"https://www.youtube.com/watch?v=#{v.key}"}
                 target="_blank"
                 rel="noopener"
-                class="block bg-mist-50 border border-mist-950/10 rounded-lg overflow-hidden hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] transition-shadow no-underline text-inherit"
+                class="block bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg overflow-hidden hover:shadow-[0_4px_14px_rgba(20,18,15,.06)] dark:hover:shadow-[0_4px_14px_rgba(0,0,0,.3)] transition-shadow no-underline text-inherit"
               >
-                <div class="relative aspect-video bg-mist-200">
+                <div class="relative aspect-video bg-mist-200 dark:bg-mist-800">
                   <img
                     src={"https://img.youtube.com/vi/#{v.key}/hqdefault.jpg"}
                     alt={v.name}
@@ -773,8 +773,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                   </div>
                 </div>
                 <div class="px-4 py-3">
-                  <div class="text-[13px] font-semibold text-mist-950 truncate">{v.name}</div>
-                  <div class="text-[11.5px] text-mist-500">{v.type}</div>
+                  <div class="text-[13px] font-semibold text-mist-950 dark:text-white truncate">{v.name}</div>
+                  <div class="text-[11.5px] text-mist-500 dark:text-mist-400">{v.type}</div>
                 </div>
               </a>
             </div>
@@ -786,9 +786,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             if @show_all_releases, do: all_releases, else: Enum.take(all_releases, 8) %>
           <section :if={all_releases != []} id="releases">
             <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+              <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white">
                 Release information
-                <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+                <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
                   {length(all_releases)}
                 </span>
               </h2>
@@ -796,7 +796,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 :if={length(all_releases) > 8}
                 type="button"
                 phx-click="toggle_all_releases"
-                class="text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+                class="text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
               >
                 {if @show_all_releases, do: "Show top 8", else: "Show all #{length(all_releases)}"}
               </button>
@@ -804,12 +804,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               <div
                 :for={r <- visible_releases}
-                class="bg-mist-50 border border-mist-950/10 rounded-lg p-4"
+                class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-4"
               >
-                <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+                <div class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase">
                   {r.country_code}
                 </div>
-                <div class="mt-1 text-[13px] text-mist-950 tabular-nums">
+                <div class="mt-1 text-[13px] text-mist-950 dark:text-white tabular-nums">
                   <%= if r.release_date do %>
                     {Calendar.strftime(r.release_date, "%Y-%m-%d")}
                   <% else %>
@@ -818,7 +818,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 </div>
                 <span
                   :if={r.certification}
-                  class="inline-block mt-2 px-2 py-[2px] rounded text-[10.5px] font-semibold bg-mist-100 text-mist-700 border border-mist-950/10"
+                  class="inline-block mt-2 px-2 py-[2px] rounded text-[10.5px] font-semibold bg-mist-100 dark:bg-mist-800 text-mist-700 dark:text-mist-300 border border-mist-950/10 dark:border-white/10"
                 >
                   {r.certification}
                 </span>
@@ -828,41 +828,41 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
           <%!-- TECHNICAL DETAILS --%>
           <section id="details">
-            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 mb-6">
+            <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               Technical details
             </h2>
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-[13px]">
               <div
                 :if={format_money(Map.get(@movie, :budget))}
-                class="flex justify-between border-b border-mist-950/10 pb-2"
+                class="flex justify-between border-b border-mist-950/10 dark:border-white/10 pb-2"
               >
-                <dt class="text-mist-500">Budget</dt>
-                <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :budget))}</dd>
+                <dt class="text-mist-500 dark:text-mist-400">Budget</dt>
+                <dd class="text-mist-950 dark:text-white tabular-nums">{format_money(Map.get(@movie, :budget))}</dd>
               </div>
               <div
                 :if={format_money(Map.get(@movie, :revenue))}
-                class="flex justify-between border-b border-mist-950/10 pb-2"
+                class="flex justify-between border-b border-mist-950/10 dark:border-white/10 pb-2"
               >
-                <dt class="text-mist-500">Revenue</dt>
-                <dd class="text-mist-950 tabular-nums">{format_money(Map.get(@movie, :revenue))}</dd>
+                <dt class="text-mist-500 dark:text-mist-400">Revenue</dt>
+                <dd class="text-mist-950 dark:text-white tabular-nums">{format_money(Map.get(@movie, :revenue))}</dd>
               </div>
               <div
                 :if={@movie.original_language}
-                class="flex justify-between border-b border-mist-950/10 pb-2"
+                class="flex justify-between border-b border-mist-950/10 dark:border-white/10 pb-2"
               >
-                <dt class="text-mist-500">Language</dt>
-                <dd class="text-mist-950">{@movie.original_language}</dd>
+                <dt class="text-mist-500 dark:text-mist-400">Language</dt>
+                <dd class="text-mist-950 dark:text-white">{@movie.original_language}</dd>
               </div>
               <div
                 :if={@production_companies != []}
-                class="flex justify-between border-b border-mist-950/10 pb-2"
+                class="flex justify-between border-b border-mist-950/10 dark:border-white/10 pb-2"
               >
-                <dt class="text-mist-500">Production</dt>
+                <dt class="text-mist-500 dark:text-mist-400">Production</dt>
                 <ProductionDetails.production_details production_companies={@production_companies} />
               </div>
-              <div class="flex justify-between border-b border-mist-950/10 pb-2">
-                <dt class="text-mist-500">TMDb / IMDb</dt>
-                <dd class="text-mist-950 tabular-nums">
+              <div class="flex justify-between border-b border-mist-950/10 dark:border-white/10 pb-2">
+                <dt class="text-mist-500 dark:text-mist-400">TMDb / IMDb</dt>
+                <dd class="text-mist-950 dark:text-white tabular-nums">
                   {@movie.tmdb_id}<span :if={@movie.imdb_id}> · {@movie.imdb_id}</span>
                 </dd>
               </div>
@@ -885,22 +885,22 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     >
       <div
         phx-click="stop_propagation"
-        class="bg-mist-50 rounded-[10px] border border-mist-950/10 max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto"
+        class="bg-mist-50 dark:bg-mist-900 rounded-[10px] border border-mist-950/10 dark:border-white/10 max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto"
       >
         <div class="flex items-center justify-between mb-4">
-          <h3 class="font-display italic text-[28px] tracking-[-.01em] text-mist-950">
+          <h3 class="font-display italic text-[28px] tracking-[-.01em] text-mist-950 dark:text-white">
             How the score works
           </h3>
           <button
             type="button"
             phx-click="hide_score_modal"
-            class="text-mist-500 hover:text-mist-950 text-[20px]"
+            class="text-mist-500 dark:text-mist-400 hover:text-mist-950 dark:hover:text-white text-[20px]"
             aria-label="Close"
           >
             ×
           </button>
         </div>
-        <div class="space-y-4 text-[13.5px] text-mist-900 leading-[1.65]">
+        <div class="space-y-4 text-[13.5px] text-mist-900 dark:text-mist-200 leading-[1.65]">
           <p>
             Cinegraph's score blends six independent lenses, each measuring a different
             dimension of how a film lives in the world.
@@ -922,7 +922,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           <p>
             The overall score is the weighted sum. Custom weights can be tuned in the <a
               href={~p"/movies/discover"}
-              class="underline decoration-mist-950/15 underline-offset-4"
+              class="underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
             >discovery tuner</a>.
           </p>
         </div>

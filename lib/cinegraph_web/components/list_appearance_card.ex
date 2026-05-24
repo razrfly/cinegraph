@@ -15,12 +15,12 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
     <%= if @href do %>
       <.link
         navigate={@href}
-        class="group block overflow-hidden rounded-lg border border-mist-950/10 bg-mist-50 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
+        class="group block overflow-hidden rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-900 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)] dark:hover:shadow-[0_8px_24px_rgba(0,0,0,.3)]"
       >
         <.card_inner list={@list} />
       </.link>
     <% else %>
-      <div class="overflow-hidden rounded-lg border border-mist-950/10 bg-mist-50">
+      <div class="overflow-hidden rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-900">
         <.card_inner list={@list} />
       </div>
     <% end %>
@@ -47,22 +47,22 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
       />
       <div
         :if={!image}
-        class="grid h-full w-full place-items-center px-5 text-center font-display italic text-[34px] leading-none text-mist-950"
+        class="grid h-full w-full place-items-center px-5 text-center font-display italic text-[34px] leading-none text-mist-950 dark:text-white"
       >
         {ListAppearance.initials(@list)}
       </div>
-      <div class="absolute bottom-3 right-3 rounded-md bg-mist-50/90 px-2 py-1 text-[13px] font-semibold text-mist-950 shadow-sm">
+      <div class="absolute bottom-3 right-3 rounded-md bg-mist-50/90 dark:bg-mist-900/90 px-2 py-1 text-[13px] font-semibold text-mist-950 dark:text-white shadow-sm dark:shadow-none">
         {ListAppearance.rank(@list)}
       </div>
     </div>
     <div class="px-4 py-4">
       <div
         :if={eyebrow = ListAppearance.eyebrow(@list)}
-        class="mb-2 text-[10.5px] font-semibold uppercase tracking-[.08em] text-mist-500"
+        class="mb-2 text-[10.5px] font-semibold uppercase tracking-[.08em] text-mist-500 dark:text-mist-400"
       >
         {eyebrow}
       </div>
-      <h3 class="line-clamp-2 text-[17px] font-semibold leading-snug text-mist-950">
+      <h3 class="line-clamp-2 text-[17px] font-semibold leading-snug text-mist-950 dark:text-white">
         {ListAppearance.title(@list)}
       </h3>
       <div class="mt-4 flex flex-wrap gap-2">
@@ -73,7 +73,7 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
           {@short_name}
         </NeutralV2Components.n_pill>
       </div>
-      <div :if={ListAppearance.href(@list)} class="mt-4 text-[12px] font-semibold text-mist-950">
+      <div :if={ListAppearance.href(@list)} class="mt-4 text-[12px] font-semibold text-mist-950 dark:text-white">
         View list →
       </div>
     </div>
