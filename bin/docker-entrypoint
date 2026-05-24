@@ -1,8 +1,10 @@
 #!/bin/bash -e
 
-# If running the Phoenix server, run migrations first
 if [ "${1}" == "/app/bin/server" ]; then
-  /app/bin/migrate
+  # Run migrations in the background so the server can start — and pass health
+  # checks — without waiting for long CONCURRENTLY index builds on large tables.
+  # Safe only when pending migrations are additive (nullable columns, new indexes).
+  /app/bin/migrate &
 fi
 
 exec "${@}"

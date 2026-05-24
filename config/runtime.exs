@@ -80,16 +80,8 @@ config :cinegraph, Cinegraph.Images.Providers.Unsplash, access_key: unsplash_acc
 config :cinegraph, Cinegraph.Images.Providers.Pexels, api_key: pexels_api_key
 config :cinegraph, Cinegraph.Images.Providers.Pixabay, api_key: pixabay_api_key
 
-# AppSignal push API key is read at runtime so releases can receive the secret
-# from the deployment environment instead of baking it in at build time.
-appsignal_push_api_key =
-  cond do
-    config_env() == :dev -> env!("APPSIGNAL_PUSH_API_KEY", :string, nil)
-    config_env() == :prod -> System.fetch_env!("APPSIGNAL_PUSH_API_KEY")
-    true -> System.get_env("APPSIGNAL_PUSH_API_KEY")
-  end
-
-config :appsignal, :config, push_api_key: appsignal_push_api_key
+# Honeybadger — missing key disables reporting silently rather than crashing startup.
+config :honeybadger, api_key: System.get_env("HONEYBADGER_API_KEY")
 
 # Cloudflare R2 image storage (#890). Used by Cinegraph.Images.R2 for
 # admin-uploaded festival logos / hero images. S3-compatible API; the

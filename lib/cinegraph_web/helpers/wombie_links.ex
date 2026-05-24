@@ -8,6 +8,7 @@ defmodule CinegraphWeb.Helpers.WombieLinks do
 
   @doc """
   Returns a Wombie showtimes URL for the given movie and campaign surface.
+  Returns `nil` when the movie has no slug.
 
   ## Campaigns
     - `"now_playing"` — now-playing feed card
@@ -15,12 +16,22 @@ defmodule CinegraphWeb.Helpers.WombieLinks do
     - `"graphql"` — API consumers
   """
   def showtimes_url(movie, campaign \\ "now_playing") do
-    base =
-      :cinegraph
-      |> Application.get_env(:wombie_base_url, "https://wombie.com")
-      |> String.trim_trailing("/")
+    if movie.slug && movie.slug != "" do
+      base = wombie_base()
 
-    "#{base}/movies/#{movie.slug}-#{movie.tmdb_id}" <>
-      "?utm_source=cinegraph&utm_medium=referral&utm_campaign=#{campaign}"
+      "#{base}/movies/#{movie.slug}-#{movie.tmdb_id}" <>
+        "?utm_source=cinegraph&utm_medium=referral&utm_campaign=#{campaign}"
+    end
+  end
+
+  @doc "Returns the Wombie homepage URL with UTM attribution for a given campaign surface."
+  def homepage_url(campaign) do
+    "#{wombie_base()}?utm_source=cinegraph&utm_medium=referral&utm_campaign=#{campaign}"
+  end
+
+  defp wombie_base do
+    :cinegraph
+    |> Application.get_env(:wombie_base_url, "https://wombie.com")
+    |> String.trim_trailing("/")
   end
 end

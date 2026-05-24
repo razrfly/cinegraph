@@ -77,13 +77,15 @@
           </div>
           <button
             phx-click="toggle_classics"
+            aria-expanded={to_string(@show_classics)}
+            aria-controls="classic-screenings-grid"
             class="shrink-0 text-[12.5px] font-medium text-mist-700 hover:text-mist-950 border border-mist-950/15 rounded-[6px] px-3 py-1.5 transition-colors"
           >
             {if @show_classics, do: "Hide", else: "Show #{length(@classic_cards)}"}
           </button>
         </div>
         <%= if @show_classics do %>
-          <div class="mt-6 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <div id="classic-screenings-grid" class="mt-6 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             <div :for={film <- @classic_cards} class="flex flex-col">
               <CinegraphWeb.NeutralV2Components.n_film_card film={film} />
               <a
@@ -107,7 +109,7 @@
         🎬 Find showtimes and plan with friends at wombie.com
       </p>
       <a
-        href="https://wombie.com?utm_source=cinegraph&utm_medium=referral&utm_campaign=now_playing_footer"
+        href={CinegraphWeb.Helpers.WombieLinks.homepage_url("now_playing_footer")}
         target="_blank"
         rel="noopener noreferrer"
         class="shrink-0 text-[13px] font-semibold text-indigo-700 hover:text-indigo-900 border-b border-indigo-300 whitespace-nowrap"
