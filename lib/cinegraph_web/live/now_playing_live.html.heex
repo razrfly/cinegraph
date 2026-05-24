@@ -17,21 +17,103 @@
     </p>
   </header>
 
-  <%= if Enum.empty?(@film_cards) do %>
+  <%= if Enum.empty?(@new_release_cards) && Enum.empty?(@classic_cards) do %>
     <div class="rounded-[10px] border border-mist-950/10 bg-mist-50 px-8 py-16 text-center">
       <p class="text-[15px] text-mist-600">
         No theatrical data yet — the sweeper runs every 6 hours.
       </p>
     </div>
   <% else %>
-    <p class="mb-6 text-[13px] text-mist-500">
-      {@movie_count} {if @movie_count == 1, do: "film", else: "films"} in theaters now
-    </p>
-    <div class="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-      <CinegraphWeb.NeutralV2Components.n_film_card
-        :for={film <- @film_cards}
-        film={film}
-      />
+    <%!-- New Releases --%>
+    <section class="mb-16">
+      <div class="flex items-baseline justify-between mb-6">
+        <div>
+          <CinegraphWeb.NeutralV2Components.n_eyebrow class="mb-1">
+            New Releases
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <p class="text-[13px] text-mist-500">
+            {length(@new_release_cards)} {if length(@new_release_cards) == 1,
+              do: "film",
+              else: "films"} · newest first
+            <%= if freshness = format_freshness(@last_updated_at) do %>
+              · updated {freshness}
+            <% end %>
+          </p>
+        </div>
+      </div>
+      <%= if Enum.empty?(@new_release_cards) do %>
+        <p class="text-[14px] text-mist-400 italic">No new releases in the current data.</p>
+      <% else %>
+        <div class="grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <div :for={film <- @new_release_cards} class="flex flex-col">
+            <CinegraphWeb.NeutralV2Components.n_film_card film={film} />
+            <a
+              :if={film[:wombie_url]}
+              href={film[:wombie_url]}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-[5px] text-[11.5px] text-indigo-600 hover:text-indigo-800 font-medium truncate"
+            >
+              Showtimes on Wombie →
+            </a>
+          </div>
+        </div>
+      <% end %>
+    </section>
+
+    <%!-- Classic Screenings --%>
+    <%= if Enum.any?(@classic_cards) do %>
+      <section>
+        <div class="flex items-center justify-between py-4 border-t border-mist-950/10">
+          <div>
+            <CinegraphWeb.NeutralV2Components.n_eyebrow class="mb-1">
+              Classic Screenings
+            </CinegraphWeb.NeutralV2Components.n_eyebrow>
+            <p class="text-[13px] text-mist-500">
+              {length(@classic_cards)} older {if length(@classic_cards) == 1,
+                do: "film",
+                else: "films"} · anniversary runs &amp; repertoire cinema
+            </p>
+          </div>
+          <button
+            phx-click="toggle_classics"
+            class="shrink-0 text-[12.5px] font-medium text-mist-700 hover:text-mist-950 border border-mist-950/15 rounded-[6px] px-3 py-1.5 transition-colors"
+          >
+            {if @show_classics, do: "Hide", else: "Show #{length(@classic_cards)}"}
+          </button>
+        </div>
+        <%= if @show_classics do %>
+          <div class="mt-6 grid grid-cols-2 gap-[18px] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+            <div :for={film <- @classic_cards} class="flex flex-col">
+              <CinegraphWeb.NeutralV2Components.n_film_card film={film} />
+              <a
+                :if={film[:wombie_url]}
+                href={film[:wombie_url]}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="mt-[5px] text-[11.5px] text-indigo-600 hover:text-indigo-800 font-medium truncate"
+              >
+                Showtimes on Wombie →
+              </a>
+            </div>
+          </div>
+        <% end %>
+      </section>
+    <% end %>
+
+    <%!-- Footer CTA --%>
+    <div class="mt-16 rounded-[10px] border border-indigo-200 bg-indigo-50 px-6 py-5 flex items-center justify-between gap-4">
+      <p class="text-[14px] text-indigo-900 font-medium">
+        🎬 Find showtimes and plan with friends at wombie.com
+      </p>
+      <a
+        href="https://wombie.com?utm_source=cinegraph&utm_medium=referral&utm_campaign=now_playing_footer"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="shrink-0 text-[13px] font-semibold text-indigo-700 hover:text-indigo-900 border-b border-indigo-300 whitespace-nowrap"
+      >
+        Open Wombie →
+      </a>
     </div>
   <% end %>
 </div>

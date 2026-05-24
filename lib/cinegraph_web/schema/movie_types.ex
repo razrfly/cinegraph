@@ -146,7 +146,10 @@ defmodule CinegraphWeb.Schema.MovieTypes do
 
     field :cinegraph_url, :string do
       resolve(fn movie, _, _ ->
-        base = Application.get_env(:cinegraph, :cinegraph_base_url, "")
+        base =
+          :cinegraph
+          |> Application.get_env(:cinegraph_base_url, "")
+          |> String.trim_trailing("/")
 
         path =
           if movie.slug && movie.slug != "",
@@ -160,6 +163,17 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :is_currently_in_theaters, :boolean do
       resolve(fn movie, _, _ ->
         {:ok, Cinegraph.Movies.currently_in_theaters?(movie)}
+      end)
+    end
+
+    field :wombie_url, :string,
+      description: "Showtimes link on wombie.com — nil when movie is not currently in theaters" do
+      resolve(fn movie, _, _ ->
+        if Cinegraph.Movies.currently_in_theaters?(movie) do
+          {:ok, CinegraphWeb.Helpers.WombieLinks.showtimes_url(movie, "graphql")}
+        else
+          {:ok, nil}
+        end
       end)
     end
 

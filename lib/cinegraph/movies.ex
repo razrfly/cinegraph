@@ -94,8 +94,7 @@ defmodule Cinegraph.Movies do
         left_join: s in assoc(m, :score_cache),
         where: m.now_playing_last_seen >= ^stamp_cutoff,
         order_by: [desc_nulls_last: s.overall_score, desc: m.release_date, asc: m.id],
-        preload: [score_cache: s],
-        limit: ^limit
+        preload: [score_cache: s]
       )
 
     base
@@ -110,9 +109,11 @@ defmodule Cinegraph.Movies do
     |> Repo.replica().all()
     |> then(fn movies ->
       if region do
-        Enum.filter(movies, &region_active?(&1, region, stamp_cutoff))
-      else
         movies
+        |> Enum.filter(&region_active?(&1, region, stamp_cutoff))
+        |> Enum.take(limit)
+      else
+        Enum.take(movies, limit)
       end
     end)
   end
@@ -140,14 +141,39 @@ defmodule Cinegraph.Movies do
     end)
   end
 
-  @doc "Returns true if any region has a fresh now_playing timestamp."
+  @doc """
+  Returns true if the movie is currently playing in theaters.
+
+  Prefers per-region JSONB data when available. Falls back to the global
+  `now_playing_last_seen` stamp for movies where the sweeper has run but
+  the per-region map hasn't been populated yet (e.g. immediately after
+  clearing bad data or on first sweep after migration).
+  """
   def currently_in_theaters?(movie, cutoff \\ nil) do
-    active_now_playing_regions(movie, cutoff) != []
+    cutoff = cutoff || DateTime.add(DateTime.utc_now(), -3, :day)
+
+    if movie.now_playing_region_last_seen do
+      active_now_playing_regions(movie, cutoff) != []
+    else
+      global_stamp_fresh?(movie.now_playing_last_seen, cutoff)
+    end
   end
 
   @doc "Returns true if the given region has a fresh now_playing timestamp."
   def region_active?(movie, region, cutoff \\ nil) do
     region in active_now_playing_regions(movie, cutoff)
+  end
+
+  defp global_stamp_fresh?(nil, _cutoff), do: false
+
+  defp global_stamp_fresh?(%DateTime{} = ts, cutoff),
+    do: DateTime.compare(ts, cutoff) in [:gt, :eq]
+
+  defp global_stamp_fresh?(%NaiveDateTime{} = ts, cutoff) do
+    ts
+    |> DateTime.from_naive!("Etc/UTC")
+    |> DateTime.compare(cutoff)
+    |> Kernel.in([:gt, :eq])
   end
 
   @doc """

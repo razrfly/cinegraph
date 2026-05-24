@@ -114,37 +114,41 @@ defmodule Cinegraph.Workers.NowPlayingSweeper do
 
     existing_map = Map.new(existing)
     existing_tmdb_ids = Map.keys(existing_map)
-
-    {stamped, _} =
-      from(m in Movie, where: m.tmdb_id in ^existing_tmdb_ids)
-      |> Repo.update_all(set: [now_playing_last_seen: now])
-
     now_iso = DateTime.to_iso8601(now)
 
-    Enum.each(region_map, fn {region, region_ids} ->
-      region_tmdb_ids =
-        region_ids
-        |> MapSet.to_list()
-        |> Enum.filter(&Map.has_key?(existing_map, &1))
+    {:ok, stamped} =
+      Repo.transaction(fn ->
+        {stamped, _} =
+          from(m in Movie, where: m.tmdb_id in ^existing_tmdb_ids)
+          |> Repo.update_all(set: [now_playing_last_seen: now])
 
-      unless region_tmdb_ids == [] do
-        region_json = Jason.encode!(%{region => now_iso})
+        Enum.each(region_map, fn {region, region_ids} ->
+          region_tmdb_ids =
+            region_ids
+            |> MapSet.to_list()
+            |> Enum.filter(&Map.has_key?(existing_map, &1))
 
-        from(m in Movie,
-          where: m.tmdb_id in ^region_tmdb_ids,
-          update: [
-            set: [
-              now_playing_region_last_seen:
-                fragment(
-                  "COALESCE(now_playing_region_last_seen, '{}'::jsonb) || ?::jsonb",
-                  ^region_json
-                )
-            ]
-          ]
-        )
-        |> Repo.update_all([])
-      end
-    end)
+          unless region_tmdb_ids == [] do
+            region_data = %{region => now_iso}
+
+            from(m in Movie,
+              where: m.tmdb_id in ^region_tmdb_ids,
+              update: [
+                set: [
+                  now_playing_region_last_seen:
+                    fragment(
+                      "COALESCE(now_playing_region_last_seen, '{}'::jsonb) || ?",
+                      type(^region_data, :map)
+                    )
+                ]
+              ]
+            )
+            |> Repo.update_all([])
+          end
+        end)
+
+        stamped
+      end)
 
     unknown_ids = all_ids -- existing_tmdb_ids
 

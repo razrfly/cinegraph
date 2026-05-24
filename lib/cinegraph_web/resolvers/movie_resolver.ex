@@ -75,8 +75,15 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
 
   @doc false
   def now_playing_movies(_, args, _) do
-    limit = Map.get(args, :limit, 100)
-    recency_days = Map.get(args, :recency_days)
+    limit = args |> Map.get(:limit, 100) |> max(0) |> min(500)
+
+    recency_days =
+      case Map.get(args, :recency_days) do
+        nil -> nil
+        n when is_integer(n) and n >= 0 -> n
+        _ -> nil
+      end
+
     region = Map.get(args, :region)
     stamp_cutoff = DateTime.add(DateTime.utc_now(), -3, :day)
 

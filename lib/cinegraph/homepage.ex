@@ -486,7 +486,7 @@ defmodule Cinegraph.Homepage do
   end
 
   defp theater_movies(date) do
-    movies = Movies.now_playing_movies() |> Enum.take(8)
+    movies = Cinegraph.Movies.Cache.now_playing_movies() |> Enum.take(8)
 
     if length(movies) >= 4 do
       Enum.map(movies, &film_card(&1))
