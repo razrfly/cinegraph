@@ -677,10 +677,13 @@ defmodule Cinegraph.Movies.Availability do
     end
   end
 
-  defp flag_emoji(<<first::utf8, second::utf8>>)
-       when first in ?A..?Z and second in ?A..?Z do
+  def flag_emoji(<<first::utf8, second::utf8>>)
+      when first in ?A..?Z and second in ?A..?Z do
     <<0x1F1E6 + first - ?A::utf8, 0x1F1E6 + second - ?A::utf8>>
   end
 
-  defp flag_emoji(_region), do: nil
+  def flag_emoji(_region), do: nil
+
+  def region_name(code) when is_binary(code),
+    do: Map.get(@region_names, String.upcase(code), code)
 end
