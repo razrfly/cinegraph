@@ -1,5 +1,6 @@
 defmodule CinegraphWeb.Router do
   use CinegraphWeb, :router
+  use Honeybadger.Plug
 
   pipeline :browser do
     plug :accepts, ["html"]

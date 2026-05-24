@@ -340,7 +340,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             Currently in theaters
           </p>
           <p class="text-[13px] text-mist-600">
-            Confirmed playing now across TMDB regions
+            Confirmed playing now in at least one TMDB region
           </p>
         </div>
         <a

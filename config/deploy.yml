@@ -13,6 +13,8 @@ proxy:
     path: /health
     interval: 3
 
+deploy_timeout: 120
+
 registry:
   server: ghcr.io
   username: razrfly

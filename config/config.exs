@@ -140,6 +140,17 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Honeybadger error monitoring. API key injected at runtime via runtime.exs.
+# Disabled in dev/test; active in prod automatically via exclude_envs.
+config :honeybadger,
+  environment_name: config_env(),
+  exclude_envs: [:dev, :test],
+  filter_keys: [:password, :key, :api_key, :access_key],
+  insights_enabled: true,
+  insights_config: %{
+    oban: %{telemetry_events: [[:oban, :job, :stop], [:oban, :job, :exception]]}
+  }
+
 # Redact secrets from Phoenix request logs. Pixabay's upstream API requires
 # `key=` in the query string, so keep generic key names filtered too.
 config :phoenix, :filter_parameters, ["password", "key", "api_key", "access_key"]
@@ -257,9 +268,6 @@ config :cinegraph, Oban,
 
 # Import movie import configuration
 import_config "import.exs"
-
-# Import AppSignal base config before environment-specific overrides.
-import_config "appsignal.exs"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

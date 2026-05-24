@@ -152,7 +152,9 @@ defmodule Cinegraph.Movies do
   def currently_in_theaters?(movie, cutoff \\ nil) do
     cutoff = cutoff || DateTime.add(DateTime.utc_now(), -3, :day)
 
-    if movie.now_playing_region_last_seen do
+    regions = movie.now_playing_region_last_seen
+
+    if is_map(regions) and map_size(regions) > 0 do
       active_now_playing_regions(movie, cutoff) != []
     else
       global_stamp_fresh?(movie.now_playing_last_seen, cutoff)
