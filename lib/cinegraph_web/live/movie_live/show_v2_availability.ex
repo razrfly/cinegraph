@@ -42,12 +42,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
     <section id="watch">
       <div class="flex items-start justify-between gap-4 mb-5 flex-wrap">
         <div>
-          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+          <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white">
             Where to Watch
           </h2>
-          <p class="mt-1 text-[12.5px] text-mist-600">
+          <p class="mt-1 text-[12.5px] text-mist-600 dark:text-mist-400">
             {availability_status_copy(@availability_freshness, @availability_region_label)}
-            <span :if={@availability_refresh_queued} class="ml-1 font-semibold text-mist-900">
+            <span :if={@availability_refresh_queued} class="ml-1 font-semibold text-mist-900 dark:text-mist-100">
               Refresh queued.
             </span>
           </p>
@@ -63,7 +63,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
           <select
             id="availability-region-select"
             name="region"
-            class="w-full min-w-[240px] rounded-full border border-mist-950/10 bg-mist-50 py-2 pl-3.5 pr-10 text-[13px] font-semibold text-mist-900"
+            class="w-full min-w-[240px] rounded-full border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-900 py-2 pl-3.5 pr-10 text-[13px] font-semibold text-mist-900 dark:text-mist-100"
           >
             <option
               :for={{region, label} <- @availability_region_options}
@@ -78,34 +78,34 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
 
       <div
         :if={availability_has_rows?(@availability_groups)}
-        class="space-y-5 bg-mist-50 border border-mist-950/10 rounded-lg p-5"
+        class="space-y-5 bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5"
       >
         <div
           :for={type <- availability_group_order()}
           :if={Map.get(@availability_groups, type, []) != []}
         >
-          <h3 class="text-[10.5px] font-semibold text-mist-500 tracking-[.06em] uppercase mb-3">
+          <h3 class="text-[10.5px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase mb-3">
             {availability_group_label(type)}
           </h3>
           <div class="flex flex-wrap gap-2.5">
             <div
               :for={availability <- Map.get(@availability_groups, type, [])}
-              class="inline-flex items-center gap-2 rounded-full bg-white border border-mist-950/10 px-2.5 py-1.5 shadow-[0_1px_4px_rgba(20,18,15,.03)]"
+              class="inline-flex items-center gap-2 rounded-full bg-white dark:bg-mist-800 border border-mist-950/10 dark:border-white/10 px-2.5 py-1.5 shadow-[0_1px_4px_rgba(20,18,15,.03)] dark:shadow-none"
             >
               <% provider_name = availability_provider_name(availability) %>
               <img
                 :if={availability_provider_logo(availability)}
                 src={availability_provider_logo(availability)}
                 alt=""
-                class="w-6 h-6 rounded-full object-cover bg-mist-100"
+                class="w-6 h-6 rounded-full object-cover bg-mist-100 dark:bg-mist-700"
               />
               <span
                 :if={!availability_provider_logo(availability)}
-                class="w-6 h-6 rounded-full bg-mist-950 text-white grid place-items-center text-[9px] font-semibold"
+                class="w-6 h-6 rounded-full bg-mist-950 dark:bg-mist-700 text-white grid place-items-center text-[9px] font-semibold"
               >
                 {availability_initials(provider_name)}
               </span>
-              <span class="text-[12.5px] font-semibold text-mist-900">{provider_name}</span>
+              <span class="text-[12.5px] font-semibold text-mist-900 dark:text-mist-100">{provider_name}</span>
             </div>
           </div>
         </div>
@@ -113,12 +113,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
 
       <div
         :if={!availability_has_rows?(@availability_groups)}
-        class="bg-mist-50 border border-mist-950/10 rounded-lg p-5 text-[13px] text-mist-700"
+        class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5 text-[13px] text-mist-700 dark:text-mist-300"
       >
         {availability_status_copy(@availability_freshness, @availability_region_label)}
       </div>
 
-      <p class="mt-3 text-[11.5px] text-mist-500">
+      <p class="mt-3 text-[11.5px] text-mist-500 dark:text-mist-400">
         Availability data from TMDb. Streaming availability changes often and may vary by region.
       </p>
     </section>

@@ -135,9 +135,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetails do
     ~H"""
     <div :if={@production_companies != []}>
       <div class="flex items-end justify-between mb-6 flex-wrap gap-3">
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white">
           Studios
-          <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+          <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
             {length(@production_companies)}
           </span>
         </h2>
@@ -147,9 +147,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetails do
         <.link
           :for={company <- @production_companies}
           navigate={~p"/companies/#{production_company_slug_or_id(company)}"}
-          class="group flex items-center gap-3 min-h-[56px] rounded-lg border border-mist-950/10 bg-white px-3 py-2 no-underline hover:border-mist-950/25 hover:bg-mist-50"
+          class="group flex items-center gap-3 min-h-[56px] rounded-lg border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 px-3 py-2 no-underline hover:border-mist-950/25 dark:hover:border-white/20 hover:bg-mist-50 dark:hover:bg-mist-800"
         >
-          <div class="h-9 w-16 shrink-0 rounded-md border border-mist-950/10 bg-mist-50 grid place-items-center overflow-hidden">
+          <div class="h-9 w-16 shrink-0 rounded-md border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-800 grid place-items-center overflow-hidden">
             <img
               :if={hero_company_logo_url(company)}
               src={hero_company_logo_url(company)}
@@ -159,12 +159,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetails do
             />
             <span
               :if={!hero_company_logo_url(company)}
-              class="text-[11px] font-semibold text-mist-500"
+              class="text-[11px] font-semibold text-mist-500 dark:text-mist-400"
             >
               {company_initial(company)}
             </span>
           </div>
-          <span class="min-w-0 text-[13px] font-semibold text-mist-950 group-hover:text-mist-700 truncate">
+          <span class="min-w-0 text-[13px] font-semibold text-mist-950 dark:text-white group-hover:text-mist-700 dark:group-hover:text-mist-300 truncate">
             {production_company_name(company)}
           </span>
         </.link>
@@ -178,13 +178,13 @@ defmodule CinegraphWeb.MovieLive.ShowV2.ProductionDetails do
 
   def production_details(assigns) do
     ~H"""
-    <dd class="text-mist-950 text-right">
+    <dd class="text-mist-950 dark:text-white text-right">
       <.link
         :for={{company, index} <- @production_companies |> Enum.take(2) |> Enum.with_index()}
         navigate={~p"/companies/#{production_company_slug_or_id(company)}"}
-        class="underline decoration-mist-950/15 underline-offset-4 hover:text-mist-700"
+        class="underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 hover:text-mist-700 dark:hover:text-mist-300"
       >
-        <span :if={index > 0} class="text-mist-500 no-underline"> · </span>{production_company_name(
+        <span :if={index > 0} class="text-mist-500 dark:text-mist-400 no-underline"> · </span>{production_company_name(
           company
         )}
       </.link>
