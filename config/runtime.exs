@@ -33,6 +33,13 @@ cinegraph_base_url =
 
 config :cinegraph, :cinegraph_base_url, cinegraph_base_url
 
+wombie_base_url =
+  if config_env() == :dev,
+    do: env!("WOMBIE_BASE_URL", :string, "https://wombie.com"),
+    else: System.get_env("WOMBIE_BASE_URL") || "https://wombie.com"
+
+config :cinegraph, :wombie_base_url, wombie_base_url
+
 crawlbase_api_key =
   if config_env() == :dev,
     do: env!("CRAWLBASE_API_KEY", :string, ""),

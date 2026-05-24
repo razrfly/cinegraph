@@ -46,9 +46,19 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   def handle_params(%{"slug" => slug}, _uri, socket) do
     case Data.load_movie(slug) do
       {:ok, data} ->
+        in_theaters = Cinegraph.Movies.currently_in_theaters?(data.movie)
+
         {:noreply,
          socket
          |> assign(data)
+         |> assign(:in_theaters, in_theaters)
+         |> assign(
+           :wombie_url,
+           if(in_theaters,
+             do: CinegraphWeb.Helpers.WombieLinks.showtimes_url(data.movie, "movie_show"),
+             else: nil
+           )
+         )
          |> assign(:video_clerk_recommendation, empty_video_clerk_recommendation())
          |> maybe_start_video_clerk_recommendation(data.movie.id)
          |> assign_availability(data.movie, socket.assigns[:availability_browser_region])
@@ -320,6 +330,29 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         </div>
       </div>
     </section>
+
+    <%!-- In Theaters Now — absent entirely when not currently playing --%>
+    <div :if={@in_theaters} class="border-b border-mist-950/8 bg-white">
+      <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-4 flex items-center gap-4">
+        <div class="w-[3px] self-stretch rounded-full bg-indigo-500 shrink-0"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[12px] font-semibold tracking-[.06em] uppercase text-indigo-600 mb-0.5">
+            Currently in theaters
+          </p>
+          <p class="text-[13px] text-mist-600">
+            Confirmed playing now across TMDB regions
+          </p>
+        </div>
+        <a
+          href={@wombie_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="shrink-0 inline-flex items-center gap-1.5 rounded-[6px] border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+        >
+          🎬 Find Showtimes on Wombie
+        </a>
+      </div>
+    </div>
 
     <main class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-12 lg:py-16">
       <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_180px] lg:gap-12 lg:items-start">
