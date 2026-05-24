@@ -359,7 +359,7 @@ defmodule CinegraphWeb.NeutralV2Components do
       %{id: "People", href: "/people"},
       %{id: "Lists", href: "/lists"},
       %{id: "Awards", href: "/awards"},
-      %{id: "Six-Degrees", href: "/six-degrees"}
+      %{id: "Now Showing", href: "/now-playing"}
     ]
 
     assigns = assign(assigns, :items, items)
