@@ -29,7 +29,6 @@ env:
     PHX_HOST: cinegraph.org
     PHX_SERVER: "true"
     PORT: "4000"
-    MIGRATE_ASYNC: "true"
     # Phase 0 of #910 — the previous default of 5 caused request pile-up,
     # LongPoll process memory growth, and kernel OOMs every 20-60s (255
     # restarts over 2026-05-10 → 2026-05-15). #908 raised the default to 15

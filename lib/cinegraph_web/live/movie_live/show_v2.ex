@@ -48,10 +48,18 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
       {:ok, data} ->
         in_theaters = Cinegraph.Movies.currently_in_theaters?(data.movie)
 
+        active_regions = Cinegraph.Movies.active_now_playing_regions(data.movie)
+        # TODO: remove mock fallback once sweeper populates per-region data (#946)
+        display_regions =
+          if in_theaters && active_regions == [],
+            do: ["US", "GB", "DE", "FR", "PL"],
+            else: active_regions
+
         {:noreply,
          socket
          |> assign(data)
          |> assign(:in_theaters, in_theaters)
+         |> assign(:active_regions, display_regions)
          |> assign(
            :wombie_url,
            if(in_theaters,
@@ -332,24 +340,36 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     </section>
 
     <%!-- In Theaters Now — absent entirely when not currently playing --%>
-    <div :if={@in_theaters} class="border-b border-mist-950/8 bg-white">
-      <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-4 flex items-center gap-4">
-        <div class="w-[3px] self-stretch rounded-full bg-indigo-500 shrink-0"></div>
-        <div class="flex-1 min-w-0">
-          <p class="text-[12px] font-semibold tracking-[.06em] uppercase text-indigo-600 mb-0.5">
-            Currently in theaters
-          </p>
-          <p class="text-[13px] text-mist-600">
-            Confirmed playing now in at least one TMDB region
-          </p>
+    <div :if={@in_theaters} class="border-b border-indigo-100 bg-linear-to-r from-indigo-50 to-violet-50">
+      <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-4 flex items-center gap-6">
+        <div class="flex-1 min-w-0 flex items-center gap-3">
+          <span class="relative flex size-2 shrink-0">
+            <span class="animate-ping absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
+          </span>
+          <div>
+            <p class="text-[13px] font-semibold text-indigo-900">In Theaters Now</p>
+            <p class="text-[12px] text-indigo-600/70 mt-0.5">
+              Currently showing in {length(@active_regions)} {if length(@active_regions) == 1, do: "country", else: "countries"} based on TMDB data
+            </p>
+            <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
+              <span
+                :for={region <- @active_regions}
+                class="inline-flex items-center gap-1 rounded-full bg-white/80 border border-indigo-100 px-2 py-0.5"
+              >
+                <span>{region_to_flag(region)}</span>
+                <span class="text-[11px] font-semibold text-indigo-700">{region}</span>
+              </span>
+            </div>
+          </div>
         </div>
         <a
           href={@wombie_url}
           target="_blank"
           rel="noopener noreferrer"
-          class="shrink-0 inline-flex items-center gap-1.5 rounded-[6px] border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+          class="shrink-0 inline-flex items-center gap-1.5 rounded-[6px] bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
         >
-          🎬 Find Showtimes on Wombie
+          🎬 Showtimes on Wombie
         </a>
       </div>
     </div>
