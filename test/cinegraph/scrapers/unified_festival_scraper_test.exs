@@ -153,7 +153,11 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
       current = Date.utc_today().year
       # hint fails; chain must continue to base candidates and find current year
       FestivalHttpStub.set_response("/2018/", {:error, :forbidden})
-      FestivalHttpStub.set_response("/#{current}/", {:ok, next_data_html([current - 1, current - 2])})
+
+      FestivalHttpStub.set_response(
+        "/#{current}/",
+        {:ok, next_data_html([current - 1, current - 2])}
+      )
 
       assert {:ok, years} =
                UnifiedFestivalScraper.fetch_available_years("ev0000001",

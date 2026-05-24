@@ -81,5 +81,15 @@ defmodule CinegraphWeb.Schema do
       middleware(ApiAuth)
       resolve(&SearchResolver.global_search/3)
     end
+
+    @desc "Movies currently playing in theaters, sourced from TMDB and updated every 6 hours"
+    field :now_playing_movies, list_of(:movie) do
+      arg(:limit, :integer, default_value: 100)
+      arg(:recency_days, :integer)
+      arg(:region, :string)
+
+      middleware(ApiAuth)
+      resolve(&MovieResolver.now_playing_movies/3)
+    end
   end
 end

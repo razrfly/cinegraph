@@ -70,6 +70,87 @@ defmodule Cinegraph.Movies do
   end
 
   @doc """
+  Returns movies currently playing in theaters, as confirmed by the NowPlayingSweeper.
+
+  Only includes fully-imported movies with `now_playing_last_seen` within the last
+  3 days (the sweep staleness window). Returns an empty list (not an error) when
+  the sweeper has never run.
+
+  Options:
+  - `:limit` — max results (default 100)
+  - `:recency_days` — filter to movies with release_date within the last N days,
+    useful for excluding old repertoire films (nil = no filter, default)
+  - `:region` — filter to movies actively playing in the given ISO 3166-1 region
+    (e.g. "US"), checked against per-region timestamps in now_playing_region_last_seen
+  """
+  def now_playing_movies(opts \\ []) do
+    limit = Elixir.Keyword.get(opts, :limit, 100)
+    recency_days = Elixir.Keyword.get(opts, :recency_days)
+    region = Elixir.Keyword.get(opts, :region)
+    stamp_cutoff = DateTime.add(DateTime.utc_now(), -3, :day)
+
+    base =
+      from(m in feature_film_query(),
+        left_join: s in assoc(m, :score_cache),
+        where: m.now_playing_last_seen >= ^stamp_cutoff,
+        order_by: [desc_nulls_last: s.overall_score, desc: m.release_date, asc: m.id],
+        preload: [score_cache: s],
+        limit: ^limit
+      )
+
+    base
+    |> then(fn q ->
+      if recency_days do
+        date_cutoff = Date.add(Date.utc_today(), -recency_days)
+        where(q, [m], m.release_date >= ^date_cutoff)
+      else
+        q
+      end
+    end)
+    |> Repo.replica().all()
+    |> then(fn movies ->
+      if region do
+        Enum.filter(movies, &region_active?(&1, region, stamp_cutoff))
+      else
+        movies
+      end
+    end)
+  end
+
+  @doc """
+  Returns the region codes where a movie is currently playing, based on per-region
+  timestamps in `now_playing_region_last_seen`. A region is active if its timestamp
+  is within `cutoff` (defaults to 3 days ago).
+  """
+  def active_now_playing_regions(movie, cutoff \\ nil) do
+    cutoff = cutoff || DateTime.add(DateTime.utc_now(), -3, :day)
+    regions = movie.now_playing_region_last_seen || %{}
+
+    Enum.filter(Map.keys(regions), fn region ->
+      case Map.get(regions, region) do
+        nil ->
+          false
+
+        ts ->
+          case DateTime.from_iso8601(ts) do
+            {:ok, dt, _} -> DateTime.compare(dt, cutoff) in [:gt, :eq]
+            _ -> false
+          end
+      end
+    end)
+  end
+
+  @doc "Returns true if any region has a fresh now_playing timestamp."
+  def currently_in_theaters?(movie, cutoff \\ nil) do
+    active_now_playing_regions(movie, cutoff) != []
+  end
+
+  @doc "Returns true if the given region has a fresh now_playing timestamp."
+  def region_active?(movie, region, cutoff \\ nil) do
+    region in active_now_playing_regions(movie, cutoff)
+  end
+
+  @doc """
   Returns the list of movies with pagination, filtering, and sorting.
   Only returns fully imported movies by default.
   Includes discovery scores for movie cards when not using discovery metric sorting.

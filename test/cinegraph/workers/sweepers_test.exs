@@ -12,11 +12,22 @@ defmodule Cinegraph.Workers.SweepersTest do
     FestivalPersonResolverSweeper,
     FestivalSyncSweeper,
     ImdbIdRepairSweeper,
+    NowPlayingSweeper,
     OmdbBackfillSweeper,
     ProfileDataRefreshSweeper,
     ZeroCreditsCleanupDeleteSweeper,
     ZeroCreditsCleanupSweeper
   }
+
+  describe "NowPlayingSweeper.perform/1 (#943)" do
+    test "returns :ok with zero stamps when all regions fail (no TMDB key in test env)" do
+      assert {:ok, stats} = NowPlayingSweeper.perform(%Oban.Job{})
+      assert stats.stamped == 0
+      assert stats.queued_imports == 0
+      assert is_list(stats.region_errors)
+      assert is_integer(stats.pages_fetched)
+    end
+  end
 
   describe "FestivalPersonResolverSweeper.perform/1" do
     test "returns :ok with zero found on empty DB" do

@@ -144,6 +144,31 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :backdrop_path, :string
     field :canonical_sources, :json
 
+    field :cinegraph_url, :string do
+      resolve(fn movie, _, _ ->
+        base = Application.get_env(:cinegraph, :cinegraph_base_url, "")
+
+        path =
+          if movie.slug && movie.slug != "",
+            do: "/movies/#{movie.slug}",
+            else: "/movies/tmdb/#{movie.tmdb_id}"
+
+        {:ok, "#{base}#{path}"}
+      end)
+    end
+
+    field :is_currently_in_theaters, :boolean do
+      resolve(fn movie, _, _ ->
+        {:ok, Cinegraph.Movies.currently_in_theaters?(movie)}
+      end)
+    end
+
+    field :now_playing_regions, list_of(:string) do
+      resolve(fn movie, _, _ ->
+        {:ok, Cinegraph.Movies.active_now_playing_regions(movie)}
+      end)
+    end
+
     field :ratings, :movie_ratings do
       resolve(&MovieResolver.ratings/3)
     end

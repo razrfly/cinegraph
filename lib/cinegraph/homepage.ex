@@ -486,12 +486,14 @@ defmodule Cinegraph.Homepage do
   end
 
   defp theater_movies(date) do
-    movies = Movies.recent_theatrical_releases(today: date, days: 60, limit: 8)
+    movies = Movies.now_playing_movies() |> Enum.take(8)
 
     if length(movies) >= 4 do
       Enum.map(movies, &film_card(&1))
     else
-      []
+      # Fall back to date heuristic while the sweeper bootstraps on first deploy.
+      fallback = Movies.recent_theatrical_releases(today: date, days: 60, limit: 8)
+      if length(fallback) >= 4, do: Enum.map(fallback, &film_card(&1)), else: []
     end
   rescue
     _ -> []

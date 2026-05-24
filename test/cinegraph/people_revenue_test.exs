@@ -138,5 +138,4 @@ defmodule Cinegraph.PeopleRevenueTest do
 
     movie
   end
-
 end

@@ -26,6 +26,13 @@ omdb_api_key =
     do: env!("OMDB_API_KEY", :string, ""),
     else: System.get_env("OMDB_API_KEY") || ""
 
+cinegraph_base_url =
+  if config_env() == :dev,
+    do: env!("CINEGRAPH_BASE_URL", :string, "http://localhost:4000"),
+    else: System.get_env("CINEGRAPH_BASE_URL") || "https://cinegraph.app"
+
+config :cinegraph, :cinegraph_base_url, cinegraph_base_url
+
 crawlbase_api_key =
   if config_env() == :dev,
     do: env!("CRAWLBASE_API_KEY", :string, ""),

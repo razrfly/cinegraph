@@ -67,7 +67,7 @@ defmodule Cinegraph.Admin.JobRegistry do
 
   @entries [
     # =========================================================================
-    # Scheduled entries (24 — must match config.exs crontab exactly)
+    # Scheduled entries (25 — must match config.exs crontab exactly)
     # =========================================================================
 
     %{
@@ -159,6 +159,19 @@ defmodule Cinegraph.Admin.JobRegistry do
       mutating: false,
       description: "Pre-compute drift checks every 4 minutes (Cachex 5-min TTL)",
       destination: :system,
+      doc_url: nil
+    },
+    %{
+      id: :now_playing_sweeper,
+      label: "Now Playing sweeper",
+      worker: Workers.NowPlayingSweeper,
+      queue: :maintenance,
+      schedule: "0 */6 * * *",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: true,
+      description: "Stamps now_playing_last_seen across 5 TMDB regions every 6 hours (#943)",
+      destination: :movies,
       doc_url: nil
     },
     %{

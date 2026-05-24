@@ -67,7 +67,10 @@ defmodule Mix.Tasks.Cinegraph.Metrics.BackfillFromJsonb do
       Mix.shell().info("\n✅ All in-scope metrics have dest >= source. No backfill needed.")
       :ok
     else
-      Mix.shell().info("\n❌ Gaps detected. Run without --dry-run (or with --source=...) to backfill.")
+      Mix.shell().info(
+        "\n❌ Gaps detected. Run without --dry-run (or with --source=...) to backfill."
+      )
+
       exit({:shutdown, 1})
     end
   end

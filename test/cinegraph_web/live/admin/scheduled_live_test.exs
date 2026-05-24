@@ -4,12 +4,12 @@ defmodule CinegraphWeb.Admin.ScheduledLiveTest do
   import Phoenix.LiveViewTest
 
   describe "GET /admin/scheduled" do
-    test "renders the scheduled jobs table with all 21 cron entries", %{conn: conn} do
+    test "renders the scheduled jobs table with all 22 cron entries", %{conn: conn} do
       {:ok, _live, html} = live(conn, ~p"/admin/scheduled")
 
-      # Page header + subtitle reference all 21 entries
+      # Page header + subtitle reference all 22 entries
       assert html =~ "Scheduled jobs"
-      assert html =~ "21 cron entries"
+      assert html =~ "22 cron entries"
 
       # A representative entry from each section
       assert html =~ "Biography refresh sweeper"

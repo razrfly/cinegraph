@@ -504,7 +504,10 @@ defmodule CinegraphWeb.RatingComponents do
     external_ratings
     |> Enum.map(fn rating ->
       source_name = get_in(rating, [:source, :name]) || "unknown"
-      source_key = source_name |> normalize_source() |> derive_hero_source_key(rating[:metric_type])
+
+      source_key =
+        source_name |> normalize_source() |> derive_hero_source_key(rating[:metric_type])
+
       url = build_rating_url(source_key, imdb_id, tmdb_id)
       %{source: source_key, value: rating[:value], url: url}
     end)

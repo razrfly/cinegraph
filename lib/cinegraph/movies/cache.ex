@@ -371,4 +371,26 @@ defmodule Cinegraph.Movies.Cache do
     Logger.info("[Movies.Cache] Cache warming complete: #{length(warmed_keys)} queries warmed")
     warmed_keys
   end
+
+  @now_playing_key "now_playing_movies"
+  @now_playing_ttl :timer.minutes(30)
+
+  @doc """
+  Returns cached now-playing movies, or fetches and caches them with a 30-minute TTL.
+  Always caches the full list (up to 100 films); callers that need fewer should
+  use `Enum.take/2` rather than passing a smaller limit, so all callers share one
+  cache entry.
+  """
+  def now_playing_movies do
+    fetch_or_compute(@now_playing_key, @now_playing_ttl, fn ->
+      Cinegraph.Movies.now_playing_movies()
+    end)
+  end
+
+  @doc """
+  Invalidates the now-playing cache. Call after a manual sweeper run or in tests.
+  """
+  def invalidate_now_playing do
+    Cachex.del(@cache_name, @now_playing_key)
+  end
 end
