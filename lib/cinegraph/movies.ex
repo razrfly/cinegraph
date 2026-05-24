@@ -125,7 +125,11 @@ defmodule Cinegraph.Movies do
   """
   def active_now_playing_regions(movie, cutoff \\ nil) do
     cutoff = cutoff || DateTime.add(DateTime.utc_now(), -3, :day)
-    regions = movie.now_playing_region_last_seen || %{}
+    regions =
+      case movie.now_playing_region_last_seen do
+        map when is_map(map) -> map
+        _ -> %{}
+      end
 
     Enum.filter(Map.keys(regions), fn region ->
       case Map.get(regions, region) do

@@ -143,6 +143,7 @@ config :phoenix, :json_library, Jason
 # Honeybadger error monitoring. API key injected at runtime via runtime.exs.
 # Disabled in dev/test; active in prod automatically via exclude_envs.
 config :honeybadger,
+  app: :cinegraph,
   environment_name: config_env(),
   exclude_envs: [:dev, :test],
   filter_keys: [:password, :key, :api_key, :access_key],
