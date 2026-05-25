@@ -341,7 +341,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     </section>
 
     <%!-- In Theaters Now — absent entirely when not currently playing --%>
-    <div :if={@in_theaters} class="border-b border-indigo-100 dark:border-indigo-800/30 bg-linear-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/30">
+    <div :if={@in_theaters} class="border-b border-indigo-100 dark:border-white/10 bg-linear-to-r from-indigo-50 to-violet-50 dark:from-mist-950 dark:to-mist-950">
       <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-4 flex items-center gap-6">
         <div class="flex-1 min-w-0 flex items-center gap-3">
           <span class="relative flex size-2 shrink-0">
@@ -349,17 +349,17 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             <span class="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
           </span>
           <div>
-            <p class="text-[13px] font-semibold text-indigo-900 dark:text-indigo-200">In Theaters Now</p>
-            <p class="text-[12px] text-indigo-600/70 dark:text-indigo-400/70 mt-0.5">
+            <p class="text-[13px] font-semibold text-indigo-900 dark:text-white">In Theaters Now</p>
+            <p class="text-[12px] text-indigo-600/70 dark:text-mist-400 mt-0.5">
               Currently showing in {length(@active_regions)} {if length(@active_regions) == 1, do: "country", else: "countries"} based on TMDB data
             </p>
             <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span
                 :for={region <- @active_regions}
-                class="inline-flex items-center gap-1 rounded-full bg-white/80 dark:bg-mist-800/60 border border-indigo-100 dark:border-indigo-800/30 px-2 py-0.5"
+                class="inline-flex items-center gap-1 rounded-full bg-white/80 dark:bg-white/10 border border-indigo-100 dark:border-white/15 px-2 py-0.5"
               >
                 <span>{Availability.flag_emoji(region)}</span>
-                <span class="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">{region}</span>
+                <span class="text-[11px] font-semibold text-indigo-700 dark:text-mist-200">{region}</span>
               </span>
             </div>
           </div>
@@ -368,7 +368,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           href={@wombie_url}
           target="_blank"
           rel="noopener noreferrer"
-          class="shrink-0 inline-flex items-center gap-1.5 rounded-[6px] bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
+          class="shrink-0 inline-flex items-center gap-1.5 rounded-[6px] bg-indigo-600 dark:bg-mist-800 px-4 py-2 text-[13px] font-semibold text-white hover:bg-indigo-700 dark:hover:bg-mist-700 transition-colors shadow-sm dark:shadow-none"
         >
           🎬 Showtimes on Wombie
         </a>

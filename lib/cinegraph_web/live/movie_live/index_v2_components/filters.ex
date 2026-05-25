@@ -48,8 +48,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
     <section class="mb-6 space-y-4">
       <%!-- Search --%>
       <form phx-change="search" phx-submit="search">
-        <div class="relative flex items-center bg-mist-50 rounded-lg border border-mist-950/15 h-11 px-[14px]">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" class="shrink-0 text-mist-500">
+        <div class="relative flex items-center bg-mist-50 dark:bg-mist-900 rounded-lg border border-mist-950/15 dark:border-white/15 h-11 px-[14px]">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" class="shrink-0 text-mist-500 dark:text-mist-400">
             <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4" />
             <path
               d="M11 11 L14 14"
@@ -64,9 +64,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
             placeholder="Search films, people, lists, companies…"
             phx-debounce="350"
             autocomplete="off"
-            class="flex-1 ml-[9px] text-mist-950 bg-transparent border-0 outline-none min-w-0 font-[inherit] text-[14.5px]"
+            class="flex-1 ml-[9px] text-mist-950 dark:text-white bg-transparent border-0 outline-none min-w-0 font-[inherit] text-[14.5px] placeholder:text-mist-400 dark:placeholder:text-mist-500"
           />
-          <kbd class="font-mono text-[10.5px] font-semibold px-[6px] py-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-[4px] text-mist-700">
+          <kbd class="font-mono text-[10.5px] font-semibold px-[6px] py-[3px] bg-mist-950/[0.025] dark:bg-white/5 border border-mist-950/10 dark:border-white/10 rounded-[4px] text-mist-700 dark:text-mist-300">
             ⌘K
           </kbd>
         </div>
@@ -74,10 +74,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
 
       <%!-- Sort row --%>
       <div class="flex items-center gap-3 flex-wrap">
-        <span class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase shrink-0">
+        <span class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase shrink-0">
           SORT
         </span>
-        <div class="inline-flex p-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-lg gap-[2px]">
+        <div class="inline-flex p-[3px] bg-mist-950/[0.025] dark:bg-white/5 border border-mist-950/10 dark:border-white/10 rounded-lg gap-[2px]">
           <button
             :for={opt <- @primary_sort_options}
             type="button"
@@ -86,8 +86,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
             class={[
               "px-3 py-[6px] text-[12.5px] border-0 rounded-[6px] cursor-pointer tracking-[-.005em]",
               if(@sort_criteria == opt.value,
-                do: "font-semibold text-mist-950 bg-mist-50 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-                else: "font-medium text-mist-700 bg-transparent hover:text-mist-950"
+                do: "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+                else: "font-medium text-mist-700 dark:text-mist-300 bg-transparent hover:text-mist-950 dark:hover:text-white"
               )
             ]}
             title={SortLabels.tooltip(opt)}
@@ -103,8 +103,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
             <summary class={[
               "list-none px-3 py-[6px] text-[12.5px] rounded-[6px] cursor-pointer tracking-[-.005em] select-none",
               if(@sort_criteria not in Enum.map(@primary_sort_options, & &1.value),
-                do: "font-semibold text-mist-950 bg-mist-50 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-                else: "font-medium text-mist-700 hover:text-mist-950"
+                do: "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+                else: "font-medium text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white"
               )
             ]}>
               {SortLabels.overflow_summary(
@@ -114,9 +114,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
                 @overflow_sort_options
               )}
             </summary>
-            <div class="absolute right-0 mt-2 z-30 bg-mist-50 border border-mist-950/10 rounded-lg shadow-[0_8px_24px_rgba(20,18,15,.10)] min-w-[280px] py-2">
+            <div class="absolute right-0 mt-2 z-30 bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg shadow-[0_8px_24px_rgba(20,18,15,.10)] dark:shadow-[0_8px_24px_rgba(0,0,0,.4)] min-w-[280px] py-2">
               <div :for={{header, opts} <- @overflow_groups} class="px-1 pb-1">
-                <h4 class="px-3 pt-2 pb-1 text-[10.5px] font-semibold tracking-[.08em] uppercase text-mist-500">
+                <h4 class="px-3 pt-2 pb-1 text-[10.5px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400">
                   {header}
                 </h4>
                 <div
@@ -124,8 +124,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
                   class={[
                     "flex items-center justify-between gap-2 mx-1 rounded-[6px]",
                     if(@sort_criteria == opt.value,
-                      do: "bg-mist-950/[0.05]",
-                      else: "hover:bg-mist-950/[0.03]"
+                      do: "bg-mist-950/[0.05] dark:bg-white/[0.05]",
+                      else: "hover:bg-mist-950/[0.03] dark:hover:bg-white/[0.03]"
                     )
                   ]}
                 >
@@ -137,8 +137,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
                     class={[
                       "flex-1 text-left px-3 py-1.5 text-[12.5px]",
                       if(@sort_criteria == opt.value,
-                        do: "font-semibold text-mist-950",
-                        else: "font-medium text-mist-800"
+                        do: "font-semibold text-mist-950 dark:text-white",
+                        else: "font-medium text-mist-800 dark:text-mist-200"
                       )
                     ]}
                   >
@@ -153,17 +153,17 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
                         do: "Switch to ascending",
                         else: "Switch to descending"
                     }
-                    class="px-2 py-1 mr-1 text-[12px] text-mist-700 hover:text-mist-950 tabular-nums"
+                    class="px-2 py-1 mr-1 text-[12px] text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white tabular-nums"
                   >
                     {if @sort_direction == :desc, do: "↓", else: "↑"}
                   </button>
                 </div>
               </div>
-              <div class="border-t border-mist-950/10 mt-1 pt-1 px-3">
+              <div class="border-t border-mist-950/10 dark:border-white/10 mt-1 pt-1 px-3">
                 <button
                   type="button"
                   phx-click="show_scoring_info"
-                  class="w-full text-left text-[12px] text-mist-700 hover:text-mist-950 underline decoration-mist-950/15 underline-offset-4 py-1.5"
+                  class="w-full text-left text-[12px] text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 py-1.5"
                 >
                   How does Cinegraph score? →
                 </button>
@@ -175,7 +175,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
         <button
           type="button"
           phx-click="toggle_drawer"
-          class="ml-auto inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-4 py-2 text-[12.5px] font-medium text-mist-950 hover:bg-mist-950/[0.025]"
+          class="ml-auto inline-flex items-center gap-2 rounded-full border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 px-4 py-2 text-[12.5px] font-medium text-mist-950 dark:text-white hover:bg-mist-950/[0.025] dark:hover:bg-white/5"
         >
           <svg
             width="14"
@@ -202,7 +202,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
       </div>
 
       <div :if={@genres != []} class="flex items-center gap-[6px] flex-wrap">
-        <span class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase shrink-0 mr-1">
+        <span class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase shrink-0 mr-1">
           GENRE
         </span>
         <NeutralV2Components.n_chip_toggle
@@ -219,10 +219,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
           :if={length(@genres) > @visible_genre_count}
           class="relative"
         >
-          <summary class="list-none px-[11px] py-[5px] text-[12px] rounded-full cursor-pointer text-mist-700 hover:text-mist-950 select-none">
+          <summary class="list-none px-[11px] py-[5px] text-[12px] rounded-full cursor-pointer text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white select-none">
             + {length(@genres) - @visible_genre_count} more
           </summary>
-          <div class="absolute left-0 mt-2 z-30 bg-mist-50 border border-mist-950/10 rounded-lg shadow-lg p-2 flex flex-wrap gap-[6px] max-w-[420px]">
+          <div class="absolute left-0 mt-2 z-30 bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg shadow-lg dark:shadow-[0_8px_24px_rgba(0,0,0,.4)] p-2 flex flex-wrap gap-[6px] max-w-[420px]">
             <NeutralV2Components.n_chip_toggle
               :for={genre <- Enum.drop(@genres, @visible_genre_count)}
               active={Genre.slug(genre) in @selected_genres}

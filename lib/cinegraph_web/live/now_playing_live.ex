@@ -44,6 +44,7 @@ defmodule CinegraphWeb.NowPlayingLive do
     {:ok,
      socket
      |> assign(:page_title, "Now Playing")
+     |> assign(:active_nav, "Now Showing")
      |> assign(:new_release_cards, Enum.map(new_releases, &build_film_card/1))
      |> assign(:classic_cards, Enum.map(classic_screenings, &build_film_card/1))
      |> assign(:last_updated_at, last_updated_at)

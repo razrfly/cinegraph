@@ -45,12 +45,26 @@ defmodule CinegraphWeb.NeutralV2Components do
   defp pill_size("md"), do: "px-3 py-[5px] text-[13px]"
   defp pill_size(_), do: "px-[9px] py-[3px] text-[11.5px]"
 
-  defp pill_tone("blue"), do: "bg-blue-50 text-blue-800 border-transparent"
-  defp pill_tone("green"), do: "bg-emerald-50 text-emerald-800 border-transparent"
-  defp pill_tone("amber"), do: "bg-amber-50 text-amber-800 border-transparent"
-  defp pill_tone("red"), do: "bg-rose-50 text-rose-800 border-transparent"
-  defp pill_tone("ink"), do: "bg-mist-950 text-mist-50 border-transparent"
-  defp pill_tone(_), do: "bg-mist-950/[0.025] text-mist-900 border-mist-950/10"
+  defp pill_tone("blue"),
+    do: "bg-blue-50 text-blue-800 border-transparent dark:bg-blue-950/50 dark:text-blue-300"
+
+  defp pill_tone("green"),
+    do:
+      "bg-emerald-50 text-emerald-800 border-transparent dark:bg-emerald-950/50 dark:text-emerald-300"
+
+  defp pill_tone("amber"),
+    do: "bg-amber-50 text-amber-800 border-transparent dark:bg-amber-950/50 dark:text-amber-300"
+
+  defp pill_tone("red"),
+    do: "bg-rose-50 text-rose-800 border-transparent dark:bg-rose-950/50 dark:text-rose-300"
+
+  defp pill_tone("ink"),
+    do:
+      "bg-mist-950 text-mist-50 border-transparent dark:bg-white dark:text-mist-950"
+
+  defp pill_tone(_),
+    do:
+      "bg-mist-950/[0.025] text-mist-900 border-mist-950/10 dark:bg-white/10 dark:text-mist-200 dark:border-white/15"
 
   @doc "Delta indicator — ▲/▼ with green/red, tabular numerals."
   attr :value, :integer, required: true
@@ -161,13 +175,16 @@ defmodule CinegraphWeb.NeutralV2Components do
   defp btn_size(_), do: "px-[14px] py-2 h-9 text-[13px]"
 
   defp btn_variant("primary"),
-    do: "bg-mist-950 text-mist-50 border-mist-950 hover:bg-mist-900"
+    do:
+      "bg-mist-950 text-mist-50 border-mist-950 hover:bg-mist-900 dark:bg-white dark:text-mist-950 dark:border-white dark:hover:bg-mist-100"
 
   defp btn_variant("ghost"),
-    do: "bg-transparent text-mist-900 border-transparent hover:bg-mist-950/[0.05]"
+    do:
+      "bg-transparent text-mist-900 border-transparent hover:bg-mist-950/[0.05] dark:text-mist-100 dark:hover:bg-white/10"
 
   defp btn_variant(_),
-    do: "bg-mist-50 text-mist-950 border-mist-950/15 hover:bg-mist-950/[0.025]"
+    do:
+      "bg-mist-50 text-mist-950 border-mist-950/15 hover:bg-mist-950/[0.025] dark:bg-mist-900 dark:text-white dark:border-white/15 dark:hover:bg-white/5"
 
   @doc """
   Chip toggle — pill-shaped chip used for multi-select / single-select filters
@@ -190,9 +207,9 @@ defmodule CinegraphWeb.NeutralV2Components do
       class={[
         "px-[11px] py-[5px] text-[12px] rounded-full cursor-pointer whitespace-nowrap shrink-0 transition-colors",
         if(@active,
-          do: "font-semibold text-mist-50 bg-mist-950 border border-mist-950",
+          do: "font-semibold text-mist-50 bg-mist-950 border border-mist-950 dark:bg-white dark:text-mist-950 dark:border-white",
           else:
-            "font-medium text-mist-900 bg-mist-50 border border-mist-950/10 hover:bg-mist-950/[0.025]"
+            "font-medium text-mist-900 dark:text-mist-200 bg-mist-50 dark:bg-mist-800 border border-mist-950/10 dark:border-white/15 hover:bg-mist-950/[0.025] dark:hover:bg-mist-700"
         ),
         @class
       ]}
@@ -239,22 +256,22 @@ defmodule CinegraphWeb.NeutralV2Components do
         aria-modal="true"
         aria-labelledby={"#{@id}-title"}
         class={[
-          "absolute top-0 right-0 h-full w-full sm:w-[420px] bg-mist-50 border-l border-mist-950/10 shadow-2xl flex flex-col transition-transform duration-200 ease-out",
+          "absolute top-0 right-0 h-full w-full sm:w-[420px] bg-mist-50 dark:bg-mist-900 border-l border-mist-950/10 dark:border-white/10 shadow-2xl dark:shadow-none flex flex-col transition-transform duration-200 ease-out",
           if(@show, do: "translate-x-0", else: "translate-x-full"),
           @class
         ]}
       >
-        <header class="flex items-center justify-between px-5 py-4 border-b border-mist-950/10">
+        <header class="flex items-center justify-between px-5 py-4 border-b border-mist-950/10 dark:border-white/10">
           <h2
             id={"#{@id}-title"}
-            class="font-display italic text-[20px] text-mist-950 leading-tight"
+            class="font-display italic text-[20px] text-mist-950 dark:text-white leading-tight"
           >
             {@title}
           </h2>
           <button
             type="button"
             phx-click={@on_close}
-            class="text-mist-500 hover:text-mist-950 text-[18px] leading-none px-1"
+            class="text-mist-500 dark:text-mist-400 hover:text-mist-950 dark:hover:text-white text-[18px] leading-none px-1"
             aria-label="Close drawer"
           >
             ✕
@@ -265,7 +282,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         </div>
         <footer
           :if={@footer != []}
-          class="border-t border-mist-950/10 px-5 py-4 bg-mist-50"
+          class="border-t border-mist-950/10 dark:border-white/10 px-5 py-4 bg-mist-50 dark:bg-mist-900"
         >
           {render_slot(@footer)}
         </footer>
@@ -287,7 +304,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         class="shrink-0"
         aria-hidden="true"
       >
-        <rect x="2" y="2" width="20" height="20" rx="4" fill="#16140f" />
+        <rect x="2" y="2" width="20" height="20" rx="4" class="fill-mist-950 dark:fill-mist-600" />
         <path
           d="M7 12 L11 8 L15 14 L17 11"
           fill="none"
@@ -302,7 +319,7 @@ defmodule CinegraphWeb.NeutralV2Components do
         <circle cx="17" cy="11" r="1.4" fill="#fff" />
       </svg>
       <span
-        class="font-semibold tracking-[-.018em] text-mist-950"
+        class="font-semibold tracking-[-.018em] text-mist-950 dark:text-white"
         style={"font-size: #{@size - 2}px"}
       >
         Cinegraph
@@ -314,23 +331,63 @@ defmodule CinegraphWeb.NeutralV2Components do
   @doc "Tabs — segmented switch on subtle surface."
   attr :tabs, :list, required: true
   attr :value, :string, required: true
+  attr :rest, :global, include: ~w(phx-click phx-value-key)
 
   def n_tabs(assigns) do
     ~H"""
-    <div class="inline-flex p-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-lg gap-[2px]">
+    <div class="inline-flex p-[3px] bg-mist-950/[0.025] dark:bg-white/5 border border-mist-950/10 dark:border-white/10 rounded-lg gap-[2px]">
       <button
         :for={t <- @tabs}
         type="button"
         class={[
           "px-3 py-[6px] text-[12.5px] border-0 rounded-[6px] cursor-pointer tracking-[-.005em]",
           if(t == @value,
-            do: "font-semibold text-mist-950 bg-mist-50 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-            else: "font-medium text-mist-700 bg-transparent"
+            do: "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+            else: "font-medium text-mist-700 dark:text-mist-300 bg-transparent hover:text-mist-950 dark:hover:text-white"
           )
         ]}
+        {@rest}
       >
         {t}
       </button>
+    </div>
+    """
+  end
+
+  @doc """
+  Nav tabs — link-based segmented control for category/filter navigation.
+  Each tab is a slot with `patch`, `navigate`, and `active` attributes.
+  """
+  attr :class, :string, default: ""
+
+  slot :tab do
+    attr :patch, :string
+    attr :navigate, :string
+    attr :active, :boolean
+  end
+
+  def n_nav_tabs(assigns) do
+    ~H"""
+    <div class={[
+      "inline-flex gap-[2px] rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-950/[0.025] dark:bg-white/5 p-[3px]",
+      @class
+    ]}>
+      <.link
+        :for={tab <- @tab}
+        patch={tab[:patch]}
+        navigate={tab[:navigate]}
+        class={[
+          "rounded-[6px] px-3 py-[6px] text-[12.5px] whitespace-nowrap",
+          if(tab[:active],
+            do:
+              "bg-mist-50 dark:bg-mist-800 font-semibold text-mist-950 dark:text-white shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+            else:
+              "font-medium text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white"
+          )
+        ]}
+      >
+        {render_slot(tab)}
+      </.link>
     </div>
     """
   end
@@ -372,6 +429,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           <.link
             :for={item <- @items}
             navigate={item.href}
+            data-nav-href={item.href}
             class={[
               "inline-flex items-center gap-[6px] px-3 py-[7px] rounded-md text-[13.5px] no-underline tracking-[-.005em]",
               if(item.id == @active,
@@ -492,11 +550,12 @@ defmodule CinegraphWeb.NeutralV2Components do
     ~H"""
     <div class="relative">
       <div class={[
-        "relative flex items-center bg-mist-50 rounded-lg transition-colors",
+        "relative flex items-center bg-mist-50 dark:bg-mist-900 rounded-lg transition-colors",
         if(@compact, do: "h-9 px-3", else: "h-11 px-[14px]"),
         if(@focused,
-          do: "border border-mist-950 shadow-[0_0_0_3px_rgba(0,0,0,.04)]",
-          else: "border border-mist-950/15"
+          do:
+            "border border-mist-950 dark:border-white shadow-[0_0_0_3px_rgba(0,0,0,.04)] dark:shadow-[0_0_0_3px_rgba(255,255,255,.06)]",
+          else: "border border-mist-950/15 dark:border-white/15"
         )
       ]}>
         <svg
@@ -504,7 +563,7 @@ defmodule CinegraphWeb.NeutralV2Components do
           height={if @compact, do: "13", else: "15"}
           viewBox="0 0 16 16"
           fill="none"
-          class="shrink-0 text-mist-500"
+          class="shrink-0 text-mist-500 dark:text-mist-400"
         >
           <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4" />
           <path d="M11 11 L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
@@ -512,17 +571,60 @@ defmodule CinegraphWeb.NeutralV2Components do
         <input
           placeholder={@placeholder}
           class={[
-            "flex-1 ml-[9px] text-mist-950 bg-transparent border-0 outline-none min-w-0 font-[inherit]",
+            "flex-1 ml-[9px] text-mist-950 dark:text-white bg-transparent border-0 outline-none min-w-0 font-[inherit] placeholder:text-mist-400 dark:placeholder:text-mist-500",
             if(@compact, do: "text-[13px]", else: "text-[14.5px]")
           ]}
         />
         <div :if={!@compact} class="flex items-center gap-[6px] shrink-0">
-          <kbd class="font-mono text-[10.5px] font-semibold px-[6px] py-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-[4px] text-mist-700">
+          <kbd class="font-mono text-[10.5px] font-semibold px-[6px] py-[3px] bg-mist-950/[0.025] dark:bg-white/5 border border-mist-950/10 dark:border-white/10 rounded-[4px] text-mist-700 dark:text-mist-300">
             ⌘K
           </kbd>
         </div>
       </div>
     </div>
+    """
+  end
+
+  @doc "Filter input — compact text input for index page search/filter bars."
+  attr :name, :string, required: true
+  attr :value, :string, default: ""
+  attr :placeholder, :string, default: "Search…"
+  attr :class, :string, default: ""
+  attr :rest, :global, include: ~w(phx-debounce id type list min max step autocomplete)
+
+  def n_filter_input(assigns) do
+    ~H"""
+    <input
+      name={@name}
+      value={@value}
+      placeholder={@placeholder}
+      class={[
+        "h-10 rounded-lg border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 px-3 text-[13px] text-mist-950 dark:text-white placeholder:text-mist-500 dark:placeholder:text-mist-500",
+        @class
+      ]}
+      {@rest}
+    />
+    """
+  end
+
+  @doc "Filter select — compact select for index page sort/filter bars."
+  attr :name, :string, required: true
+  attr :class, :string, default: ""
+  attr :rest, :global, include: ~w(id multiple size)
+  slot :inner_block, required: true
+
+  def n_filter_select(assigns) do
+    ~H"""
+    <select
+      name={@name}
+      class={[
+        "h-10 rounded-lg border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 pl-3 pr-10 text-[13px] text-mist-950 dark:text-white",
+        @class
+      ]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </select>
     """
   end
 
@@ -873,7 +975,7 @@ defmodule CinegraphWeb.NeutralV2Components do
     ~H"""
     <.link
       navigate={@href}
-      class="group block overflow-hidden rounded-lg border border-mist-950/10 bg-mist-50 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)]"
+      class="group block overflow-hidden rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-900 text-inherit no-underline transition-shadow hover:shadow-[0_8px_24px_rgba(20,18,15,.08)] dark:hover:shadow-[0_8px_24px_rgba(0,0,0,.4)]"
     >
       <div class={["relative aspect-[8/5] overflow-hidden", @seed_class]}>
         <img
@@ -885,13 +987,13 @@ defmodule CinegraphWeb.NeutralV2Components do
         />
         <div
           :if={!@image_url}
-          class="grid h-full w-full place-items-center px-5 text-center font-display italic text-[34px] leading-none text-mist-950"
+          class="grid h-full w-full place-items-center px-5 text-center font-display italic text-[34px] leading-none text-mist-950 dark:text-mist-100"
         >
           {@initials}
         </div>
         <div
           :if={@icon}
-          class="absolute bottom-3 right-3 rounded-md bg-mist-50/90 px-2 py-1 text-[13px] font-semibold text-mist-950 shadow-sm"
+          class="absolute bottom-3 right-3 rounded-md bg-mist-50/90 dark:bg-mist-900/90 px-2 py-1 text-[13px] font-semibold text-mist-950 dark:text-white shadow-sm"
         >
           {@icon}
         </div>
@@ -899,14 +1001,14 @@ defmodule CinegraphWeb.NeutralV2Components do
       <div class="px-4 py-4">
         <div
           :if={@eyebrow}
-          class="mb-2 text-[10.5px] font-semibold uppercase tracking-[.08em] text-mist-500"
+          class="mb-2 text-[10.5px] font-semibold uppercase tracking-[.08em] text-mist-500 dark:text-mist-400"
         >
           {@eyebrow}
         </div>
-        <h2 class="text-[17px] font-semibold leading-snug text-mist-950">
+        <h2 class="text-[17px] font-semibold leading-snug text-mist-950 dark:text-white">
           {@title}
         </h2>
-        <p :if={@description} class="mt-2 line-clamp-2 text-[13px] leading-relaxed text-mist-700">
+        <p :if={@description} class="mt-2 line-clamp-2 text-[13px] leading-relaxed text-mist-700 dark:text-mist-300">
           {@description}
         </p>
         <div :if={@meta != []} class="mt-4 flex flex-wrap gap-2">
@@ -914,7 +1016,7 @@ defmodule CinegraphWeb.NeutralV2Components do
             {item.label}
           </.n_pill>
         </div>
-        <div class="mt-4 text-[12px] font-semibold text-mist-950">
+        <div class="mt-4 text-[12px] font-semibold text-mist-950 dark:text-white">
           Browse →
         </div>
       </div>
@@ -948,10 +1050,10 @@ defmodule CinegraphWeb.NeutralV2Components do
       |> :erlang.phash2(4)
 
     case seed do
-      0 -> "bg-gradient-to-br from-mist-100 to-mist-300"
-      1 -> "bg-gradient-to-br from-emerald-50 to-mist-200"
-      2 -> "bg-gradient-to-br from-amber-50 to-mist-200"
-      _ -> "bg-gradient-to-br from-blue-50 to-mist-200"
+      0 -> "bg-gradient-to-br from-mist-100 to-mist-300 dark:from-mist-800 dark:to-mist-700"
+      1 -> "bg-gradient-to-br from-emerald-50 to-mist-200 dark:from-emerald-950 dark:to-mist-800"
+      2 -> "bg-gradient-to-br from-amber-50 to-mist-200 dark:from-amber-950 dark:to-mist-800"
+      _ -> "bg-gradient-to-br from-blue-50 to-mist-200 dark:from-blue-950 dark:to-mist-800"
     end
   end
 

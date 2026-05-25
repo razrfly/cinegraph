@@ -85,6 +85,24 @@ window.addEventListener("click", event => {
   target.scrollIntoView({ behavior: "smooth", block: "start" })
 })
 
+// Sync top-nav active state — root layout is static and doesn't re-render on live navigation,
+// so we update active classes in JS both on initial load and after every live navigation.
+function syncNavActive() {
+  const path = window.location.pathname
+  const active = ["font-semibold", "text-mist-950", "dark:text-white", "bg-mist-950/[0.025]", "dark:bg-white/10"]
+  const inactive = ["font-medium", "text-mist-700", "dark:text-mist-400", "bg-transparent"]
+  document.querySelectorAll("[data-nav-href]").forEach(el => {
+    const href = el.dataset.navHref
+    const isActive = path === href || path.startsWith(href + "/")
+    isActive ? el.classList.add(...active) : el.classList.remove(...active)
+    isActive ? el.classList.remove(...inactive) : el.classList.add(...inactive)
+  })
+}
+// phx:navigate fires on live navigation within the same live_session
+window.addEventListener("phx:navigate", syncNavActive)
+// phx:page-loading-stop fires when any page finishes loading (including full-reload cross-session navigations)
+window.addEventListener("phx:page-loading-stop", syncNavActive)
+
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 

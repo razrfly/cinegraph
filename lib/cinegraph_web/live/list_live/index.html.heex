@@ -1,25 +1,25 @@
 <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16">
-  <nav class="mb-8 text-[12px] text-mist-600">
-    <.link navigate={~p"/movies"} class="hover:text-mist-950">Movies</.link>
-    <span class="mx-2 text-mist-400">/</span>
-    <span class="font-medium text-mist-950">Lists</span>
+  <nav class="mb-8 text-[12px] text-mist-600 dark:text-mist-400">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950 dark:hover:text-white">Movies</.link>
+    <span class="mx-2 text-mist-400 dark:text-mist-600">/</span>
+    <span class="font-medium text-mist-950 dark:text-white">Lists</span>
   </nav>
 
   <section class="mb-8 lg:mb-10">
     <CinegraphWeb.NeutralV2Components.n_eyebrow>
       Curated Lists
     </CinegraphWeb.NeutralV2Components.n_eyebrow>
-    <h1 class="mt-2 font-display italic text-[44px] sm:text-[56px] lg:text-[72px] text-balance text-mist-950 leading-[1.02]">
+    <h1 class="mt-2 font-display italic text-[44px] sm:text-[56px] lg:text-[72px] text-balance text-mist-950 dark:text-white leading-[1.02]">
       Lists.
     </h1>
-    <p class="mt-3 max-w-2xl text-[15px] leading-relaxed text-mist-700">
+    <p class="mt-3 max-w-2xl text-[15px] leading-relaxed text-mist-700 dark:text-mist-300">
       Canonical film canons, critic picks, and audience-voted collections.
     </p>
   </section>
 
   <section class="mb-7 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-    <div class="inline-flex gap-[2px] rounded-lg border border-mist-950/10 bg-mist-950/[0.025] p-[3px]">
-      <.link
+    <CinegraphWeb.NeutralV2Components.n_nav_tabs>
+      <:tab
         :for={
           {id, label} <- [
             {"all", "All"},
@@ -29,40 +29,30 @@
           ]
         }
         patch={~p"/lists?#{%{category: id, search: @search, sort: @sort}}"}
-        class={[
-          "rounded-[6px] px-3 py-[6px] text-[12.5px]",
-          if(@category == id,
-            do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-            else: "font-medium text-mist-700 hover:text-mist-950"
-          )
-        ]}
+        active={@category == id}
       >
         {label}
-      </.link>
-    </div>
+      </:tab>
+    </CinegraphWeb.NeutralV2Components.n_nav_tabs>
 
     <form class="flex flex-col gap-2 sm:flex-row" phx-change="filter" phx-submit="filter">
       <input type="hidden" name="category" value={@category} />
-      <input
+      <CinegraphWeb.NeutralV2Components.n_filter_input
         name="search"
         value={@search}
         placeholder="Search lists"
         phx-debounce="350"
-        class="h-10 rounded-lg border border-mist-950/15 bg-mist-50 px-3 text-[13px] text-mist-950 placeholder:text-mist-500"
       />
-      <select
-        name="sort"
-        class="h-10 min-w-[150px] rounded-lg border border-mist-950/15 bg-mist-50 pl-3 pr-10 text-[13px] text-mist-950"
-      >
+      <CinegraphWeb.NeutralV2Components.n_filter_select name="sort" class="min-w-[150px]">
         <option value="display" selected={@sort == "display"}>Featured</option>
         <option value="name" selected={@sort == "name"}>Name</option>
         <option value="films" selected={@sort == "films"}>Film count</option>
-      </select>
+      </CinegraphWeb.NeutralV2Components.n_filter_select>
     </form>
   </section>
 
   <div :if={@lists == []} class="py-20 text-center">
-    <p class="font-display italic text-[28px] text-mist-700">No lists match these filters.</p>
+    <p class="font-display italic text-[28px] text-mist-700 dark:text-mist-300">No lists match these filters.</p>
   </div>
 
   <section

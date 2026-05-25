@@ -62,46 +62,51 @@
     </div>
   </section>
 
-  <section class="mb-7 inline-flex gap-[2px] rounded-lg border border-mist-950/10 bg-mist-950/[0.025] p-[3px]">
-    <button
-      phx-click="change_role"
-      phx-value-role="all"
-      class={[
-        "rounded-[6px] px-3 py-[6px] text-[12.5px]",
-        if(@role_scope == :all,
-          do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-          else: "font-medium text-mist-700 hover:text-mist-950"
-        )
-      ]}
-    >
-      All Films
-    </button>
-    <button
-      phx-click="change_role"
-      phx-value-role="acting"
-      class={[
-        "rounded-[6px] px-3 py-[6px] text-[12.5px]",
-        if(@role_scope == :acting,
-          do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-          else: "font-medium text-mist-700 hover:text-mist-950"
-        )
-      ]}
-    >
-      Acting
-    </button>
-    <button
-      phx-click="change_role"
-      phx-value-role="directing"
-      class={[
-        "rounded-[6px] px-3 py-[6px] text-[12.5px]",
-        if(@role_scope == :directing,
-          do: "bg-mist-50 font-semibold text-mist-950 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-          else: "font-medium text-mist-700 hover:text-mist-950"
-        )
-      ]}
-    >
-      Directing
-    </button>
+  <section class="mb-7">
+    <div class="inline-flex gap-[2px] rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-950/[0.025] dark:bg-white/5 p-[3px]">
+      <button
+        phx-click="change_role"
+        phx-value-role="all"
+        class={[
+          "rounded-[6px] px-3 py-[6px] text-[12.5px]",
+          if(@role_scope == :all,
+            do:
+              "bg-mist-50 dark:bg-mist-800 font-semibold text-mist-950 dark:text-white shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+            else: "font-medium text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white"
+          )
+        ]}
+      >
+        All Films
+      </button>
+      <button
+        phx-click="change_role"
+        phx-value-role="acting"
+        class={[
+          "rounded-[6px] px-3 py-[6px] text-[12.5px]",
+          if(@role_scope == :acting,
+            do:
+              "bg-mist-50 dark:bg-mist-800 font-semibold text-mist-950 dark:text-white shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+            else: "font-medium text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white"
+          )
+        ]}
+      >
+        Acting
+      </button>
+      <button
+        phx-click="change_role"
+        phx-value-role="directing"
+        class={[
+          "rounded-[6px] px-3 py-[6px] text-[12.5px]",
+          if(@role_scope == :directing,
+            do:
+              "bg-mist-50 dark:bg-mist-800 font-semibold text-mist-950 dark:text-white shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+            else: "font-medium text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white"
+          )
+        ]}
+      >
+        Directing
+      </button>
+    </div>
   </section>
 
   <CinegraphWeb.MovieLive.IndexV2Components.discovery_body
