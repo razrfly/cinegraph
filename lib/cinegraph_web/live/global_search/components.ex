@@ -3,6 +3,8 @@ defmodule CinegraphWeb.GlobalSearch.Components do
 
   use Phoenix.Component
 
+  import CinegraphWeb.CoreComponents, only: [icon: 1]
+
   alias Cinegraph.Movies.{Movie, ProductionCompany}
 
   def render_recents(assigns) do
@@ -209,10 +211,14 @@ defmodule CinegraphWeb.GlobalSearch.Components do
       class="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-mist-50 dark:hover:bg-white/5 no-underline"
     >
       <div
-        class="w-10 h-10 rounded bg-mist-100 dark:bg-white/5 grid place-items-center shrink-0 text-lg"
+        class="w-10 h-10 rounded bg-mist-100 dark:bg-white/5 grid place-items-center shrink-0"
         aria-hidden="true"
       >
-        {@list.icon || "📜"}
+        <%= if @list.icon do %>
+          <.icon name={"hero-" <> @list.icon} class="w-5 h-5 text-mist-500 dark:text-mist-400" />
+        <% else %>
+          <span class="text-lg">📜</span>
+        <% end %>
       </div>
       <div class="flex-1 min-w-0">
         <div class="text-[13.5px] text-mist-950 dark:text-white truncate">{@list.name}</div>

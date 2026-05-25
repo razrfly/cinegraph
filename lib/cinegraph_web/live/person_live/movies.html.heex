@@ -67,6 +67,7 @@
       <button
         phx-click="change_role"
         phx-value-role="all"
+        aria-pressed={@role_scope == :all}
         class={[
           "rounded-[6px] px-3 py-[6px] text-[12.5px]",
           if(@role_scope == :all,
@@ -81,6 +82,7 @@
       <button
         phx-click="change_role"
         phx-value-role="acting"
+        aria-pressed={@role_scope == :acting}
         class={[
           "rounded-[6px] px-3 py-[6px] text-[12.5px]",
           if(@role_scope == :acting,
@@ -95,6 +97,7 @@
       <button
         phx-click="change_role"
         phx-value-role="directing"
+        aria-pressed={@role_scope == :directing}
         class={[
           "rounded-[6px] px-3 py-[6px] text-[12.5px]",
           if(@role_scope == :directing,

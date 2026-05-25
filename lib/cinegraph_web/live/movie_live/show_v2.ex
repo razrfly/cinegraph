@@ -341,7 +341,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     </section>
 
     <%!-- In Theaters Now — absent entirely when not currently playing --%>
-    <div :if={@in_theaters} class="border-b border-indigo-100 dark:border-white/10 bg-linear-to-r from-indigo-50 to-violet-50 dark:from-mist-950 dark:to-mist-950">
+    <div :if={@in_theaters} class="border-b border-indigo-100 dark:border-white/10 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-mist-950 dark:to-mist-950">
       <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-4 flex items-center gap-6">
         <div class="flex-1 min-w-0 flex items-center gap-3">
           <span class="relative flex size-2 shrink-0">

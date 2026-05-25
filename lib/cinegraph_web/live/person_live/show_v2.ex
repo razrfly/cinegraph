@@ -606,6 +606,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               type="button"
               phx-click="set_role"
               phx-value-role={key}
+              aria-pressed={@role_filter == key}
               class={[
                 "px-3 py-[6px] text-[12.5px] border-0 rounded-[6px] cursor-pointer tracking-[-.005em]",
                 if(@role_filter == key,
@@ -710,6 +711,8 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               type="number"
               name="target_person_id"
               placeholder="Target person ID"
+              min="1"
+              step="1"
               required
               disabled={@six_degrees_loading}
               class="flex-1 min-w-[200px] h-10 px-3 rounded-lg border border-mist-950/15 dark:border-white/15 bg-white dark:bg-mist-800 text-[14px] text-mist-950 dark:text-white outline-none focus:border-mist-950 dark:focus:border-white placeholder:text-mist-500"

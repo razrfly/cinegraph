@@ -37,13 +37,16 @@
 
     <form class="flex flex-col gap-2 sm:flex-row" phx-change="filter" phx-submit="filter">
       <input type="hidden" name="category" value={@category} />
+      <label for="award_search" class="sr-only">Search awards</label>
       <CinegraphWeb.NeutralV2Components.n_filter_input
+        id="award_search"
         name="search"
         value={@search}
         placeholder="Search awards"
         phx-debounce="350"
       />
-      <CinegraphWeb.NeutralV2Components.n_filter_select name="sort" class="min-w-[150px]">
+      <label for="award_sort" class="sr-only">Sort awards</label>
+      <CinegraphWeb.NeutralV2Components.n_filter_select id="award_sort" name="sort" class="min-w-[150px]">
         <option value="name" selected={@sort == "name"}>Name</option>
         <option value="films" selected={@sort == "films"}>Film count</option>
         <option value="winners" selected={@sort == "winners"}>Winner count</option>
