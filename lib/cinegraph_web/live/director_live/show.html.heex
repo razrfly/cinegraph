@@ -104,7 +104,7 @@
               </p>
             <% end %>
             <p class="text-sm font-medium text-green-600">
-              ${div(@director_stats.highest_grossing.revenue || 0, 1_000_000)}M
+              ${div(Map.get(@director_stats.highest_grossing, :revenue) || 0, 1_000_000)}M
             </p>
           </div>
         </.link>
