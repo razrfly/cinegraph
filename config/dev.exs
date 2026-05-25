@@ -116,6 +116,9 @@ config :phoenix_live_view,
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 
+# AppSignal disabled in dev — only report production errors.
+config :appsignal, :config, active: false
+
 # TMDb and OMDb API configuration
 # These are now configured in config/runtime.exs using Dotenvy
 # Set TMDB_API_KEY and OMDB_API_KEY in your .env file
