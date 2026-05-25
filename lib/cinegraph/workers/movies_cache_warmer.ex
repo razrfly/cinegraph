@@ -30,6 +30,7 @@ defmodule Cinegraph.Workers.MoviesCacheWarmer do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("[MoviesCacheWarmer] Starting cache warming job")
 
     start_time = System.monotonic_time(:millisecond)

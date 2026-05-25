@@ -36,11 +36,14 @@ defmodule CinegraphWeb.DirectorLive.Show do
             |> assign(:director, director)
             |> assign(:revenue_map, revenue_map)
             |> assign(:director_stats, get_director_stats(director, revenue_map))
-            |> assign(:frequent_actors, get_frequent_actors(id))
+            |> assign(:frequent_actors, [])
             |> assign(:genre_analysis, analyze_genres(director, revenue_map))
             |> assign(:rating_trends, get_rating_trends(director))
             |> assign(:box_office_trends, get_box_office_trends(director, revenue_map))
-            |> assign(:collaboration_network, get_collaboration_network(id))
+            |> assign(:collaboration_network, [])
+            |> start_async(:director_network_data, fn ->
+              {get_frequent_actors(id), get_collaboration_network(id)}
+            end)
 
           {:noreply, socket}
         else
@@ -52,6 +55,23 @@ defmodule CinegraphWeb.DirectorLive.Show do
           {:noreply, socket}
         end
     end
+  end
+
+  @impl true
+  def handle_async(
+        :director_network_data,
+        {:ok, {frequent_actors, collaboration_network}},
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:frequent_actors, frequent_actors)
+     |> assign(:collaboration_network, collaboration_network)}
+  end
+
+  @impl true
+  def handle_async(:director_network_data, {:exit, _reason}, socket) do
+    {:noreply, socket}
   end
 
   # Private functions
@@ -238,20 +258,19 @@ defmodule CinegraphWeb.DirectorLive.Show do
   end
 
   defp get_collaboration_network(director_id) do
-    # Get key crew members this director works with frequently
     query = """
-    SELECT 
+    SELECT
       p.id,
       p.name,
       c2.job,
       c2.department,
       COUNT(DISTINCT c1.movie_id) as collaborations,
       AVG(m.vote_average) as avg_rating
-    FROM credits c1
-    JOIN credits c2 ON c1.movie_id = c2.movie_id AND c1.person_id != c2.person_id
+    FROM movie_credits c1
+    JOIN movie_credits c2 ON c1.movie_id = c2.movie_id AND c1.person_id != c2.person_id
     JOIN people p ON c2.person_id = p.id
     JOIN movies m ON c1.movie_id = m.id
-    WHERE c1.person_id = $1 
+    WHERE c1.person_id = $1
       AND c1.job = 'Director'
       AND c2.department IN ('Writing', 'Camera', 'Editing', 'Sound', 'Production')
     GROUP BY p.id, p.name, c2.job, c2.department
@@ -263,7 +282,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
     director_id_int =
       if is_binary(director_id), do: String.to_integer(director_id), else: director_id
 
-    case Cinegraph.Repo.query(query, [director_id_int]) do
+    case Cinegraph.Repo.replica().query(query, [director_id_int]) do
       {:ok, %{rows: rows}} ->
         Enum.map(rows, fn [id, name, job, department, collaborations, avg_rating] ->
           %{

@@ -225,40 +225,45 @@ defmodule Cinegraph.People do
   @doc """
   Finds people who frequently work with the given person.
   """
-  def find_frequent_collaborators(person_id, credits \\ nil) do
-    # If credits aren't provided, fetch them
-    credits = credits || get_person_credits(person_id)
+  def find_frequent_collaborators(person_id, _credits \\ nil) do
+    query = """
+    SELECT
+      p.id, p.name, p.slug, p.profile_path, p.known_for_department,
+      COUNT(DISTINCT c2.movie_id) as movies_together,
+      ARRAY_AGG(DISTINCT
+        CASE WHEN c2.credit_type = 'cast' THEN 'Actor'
+             WHEN c2.job IS NOT NULL THEN c2.job
+             ELSE 'Crew' END
+      ) as roles
+    FROM movie_credits c1
+    JOIN movie_credits c2 ON c1.movie_id = c2.movie_id
+      AND c2.person_id != $1
+    JOIN people p ON p.id = c2.person_id
+    WHERE c1.person_id = $1
+    GROUP BY p.id, p.name, p.slug, p.profile_path, p.known_for_department
+    ORDER BY movies_together DESC
+    LIMIT 20
+    """
 
-    movie_ids = Enum.map(credits, & &1.movie_id) |> Enum.uniq()
+    case Repo.replica().query(query, [person_id]) do
+      {:ok, %{rows: rows}} ->
+        Enum.map(rows, fn [id, name, slug, profile_path, department, movies_together, roles] ->
+          %{
+            person: %Person{
+              id: id,
+              name: name,
+              slug: slug,
+              profile_path: profile_path,
+              known_for_department: department
+            },
+            movies_together: movies_together,
+            roles: roles || []
+          }
+        end)
 
-    # Find all other people who worked on the same movies
-    # Uses read replica for better load distribution
-    collaborator_credits =
-      Credit
-      |> where([c], c.movie_id in ^movie_ids and c.person_id != ^person_id)
-      |> join(:inner, [c], p in Person, on: c.person_id == p.id)
-      |> preload([c, p], person: p)
-      |> Repo.replica().all()
-
-    # Group by person and count collaborations
-    collaborator_credits
-    |> Enum.group_by(& &1.person_id)
-    |> Enum.map(fn {_person_id, person_credits} ->
-      person = hd(person_credits).person
-      movies_together = Enum.map(person_credits, & &1.movie_id) |> Enum.uniq() |> length()
-
-      %{
-        person: person,
-        movies_together: movies_together,
-        roles:
-          Enum.map(person_credits, fn c ->
-            if c.credit_type == "cast", do: "Actor", else: c.job
-          end)
-          |> Enum.uniq()
-      }
-    end)
-    |> Enum.sort_by(& &1.movies_together, :desc)
-    |> Enum.take(20)
+      {:error, _} ->
+        []
+    end
   end
 
   @doc """
@@ -381,8 +386,8 @@ defmodule Cinegraph.People do
   @doc """
   Gets career statistics for a person.
   """
-  def get_career_stats(person_id) do
-    credits = get_person_credits(person_id)
+  def get_career_stats(person_id, credits \\ nil) do
+    credits = credits || get_person_credits(person_id)
 
     movies = Enum.map(credits, & &1.movie) |> Enum.uniq_by(& &1.id)
 

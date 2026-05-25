@@ -42,7 +42,6 @@ defmodule CinegraphWeb.Router do
     # exhausting the Repo.Replica pool under bot-driven mount-retry storms.
     # Redirect "/" to "/movies" until the homepage can be optimized.
     get "/", PageController, :redirect_to_movies
-    get "/appsignal-test-7x9k", PageController, :appsignal_test
 
     if Mix.env() != :prod do
       get "/design-preview", DesignPreviewController, :show

@@ -41,7 +41,8 @@ defmodule CinegraphWeb.PersonLive.ShowLegacy do
   end
 
   defp load_person_data(socket, person) do
-    career_stats = People.get_career_stats(person.id)
+    all_credits = (person.cast_credits || []) ++ (person.crew_credits || [])
+    career_stats = People.get_career_stats(person.id, all_credits)
     collaboration_stats = get_collaboration_stats(person.id)
     frequent_collaborators = get_frequent_collaborators(person)
     revenue_map = build_revenue_map(person)
@@ -140,7 +141,7 @@ defmodule CinegraphWeb.PersonLive.ShowLegacy do
     WHERE c.person_a_id = $1 OR c.person_b_id = $1
     """
 
-    case Cinegraph.Repo.query(query, [person_id_int]) do
+    case Cinegraph.Repo.replica().query(query, [person_id_int]) do
       {:ok, %{rows: [[total, directors, recurring]]}} ->
         # Get peak collaboration year
         trends = Collaborations.get_person_collaboration_trends(person_id_int)
@@ -172,43 +173,61 @@ defmodule CinegraphWeb.PersonLive.ShowLegacy do
   defp get_frequent_collaborators(person) do
     person_id = if is_binary(person.id), do: String.to_integer(person.id), else: person.id
 
-    # Get top collaborators with enhanced data
     query = """
     SELECT
-      CASE
-        WHEN c.person_a_id = $1 THEN c.person_b_id
-        ELSE c.person_a_id
-      END as collaborator_id,
+      CASE WHEN c.person_a_id = $1 THEN c.person_b_id ELSE c.person_a_id END as collaborator_id,
       c.collaboration_count,
       c.first_collaboration_date,
       c.latest_collaboration_date,
       c.avg_movie_rating,
       c.total_revenue,
-      STRING_AGG(DISTINCT cd.collaboration_type, ', ') as collaboration_types
+      STRING_AGG(DISTINCT cd.collaboration_type, ', ') as collaboration_types,
+      p.id, p.name, p.slug, p.profile_path, p.known_for_department
     FROM collaborations c
     JOIN collaboration_details cd ON cd.collaboration_id = c.id
+    JOIN people p ON p.id = (CASE WHEN c.person_a_id = $1 THEN c.person_b_id ELSE c.person_a_id END)
     WHERE (c.person_a_id = $1 OR c.person_b_id = $1)
       AND c.collaboration_count >= 2
     GROUP BY c.id, c.person_a_id, c.person_b_id, c.collaboration_count,
              c.first_collaboration_date, c.latest_collaboration_date,
-             c.avg_movie_rating, c.total_revenue
+             c.avg_movie_rating, c.total_revenue,
+             p.id, p.name, p.slug, p.profile_path, p.known_for_department
     ORDER BY c.collaboration_count DESC, c.latest_collaboration_date DESC
     LIMIT 12
     """
 
-    case Cinegraph.Repo.query(query, [person_id]) do
-      {:ok, %{rows: rows}} ->
-        Enum.map(rows, fn [collab_id, count, first_date, last_date, avg_rating, revenue, types] ->
-          collaborator = Cinegraph.People.get_person!(collab_id)
+    alias Cinegraph.Movies.Person
 
+    case Cinegraph.Repo.replica().query(query, [person_id]) do
+      {:ok, %{rows: rows}} ->
+        Enum.map(rows, fn [
+                            _collab_id,
+                            count,
+                            first_date,
+                            last_date,
+                            avg_rating,
+                            revenue,
+                            types,
+                            pid,
+                            name,
+                            slug,
+                            profile_path,
+                            department
+                          ] ->
           %{
-            person: collaborator,
+            person: %Person{
+              id: pid,
+              name: name,
+              slug: slug,
+              profile_path: profile_path,
+              known_for_department: department
+            },
             collaboration_count: count,
             first_date: first_date,
             latest_date: last_date,
             avg_rating: avg_rating,
             total_revenue: revenue,
-            collaboration_types: String.split(types, ", "),
+            collaboration_types: String.split(types || "", ", "),
             strength:
               cond do
                 count >= 10 -> :very_strong

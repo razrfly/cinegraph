@@ -160,50 +160,56 @@ defmodule CinegraphWeb.CollaborationLive.Index do
   end
 
   defp get_trending_collaborations do
-    # Get collaborations from the last 2 years
     current_year = Date.utc_today().year
-    start_year = current_year - 2
+    collabs = Collaborations.find_trending_collaborations(current_year - 2, limit: 12)
+    ids = Enum.map(collabs, & &1.id)
+    details_map = batch_collaboration_details(ids)
 
-    Collaborations.find_trending_collaborations(start_year, limit: 12)
-    |> Enum.map(fn collab ->
-      # Get additional details
-      details = get_collaboration_details(collab)
-      Map.merge(collab, details)
+    Enum.map(collabs, fn collab ->
+      Map.merge(collab, Map.get(details_map, collab.id, default_collab_details()))
     end)
   end
 
-  defp get_collaboration_details(collaboration) do
+  defp batch_collaboration_details([]), do: %{}
+
+  defp batch_collaboration_details(ids) do
     query = """
-    SELECT 
-      cd.collaboration_type,
+    SELECT cd.collaboration_id, cd.collaboration_type,
       AVG(cd.movie_rating) as avg_rating,
       SUM(cd.movie_revenue) as total_revenue,
       COUNT(DISTINCT cd.movie_id) as movie_count,
       MAX(cd.year) as latest_year
     FROM collaboration_details cd
-    WHERE cd.collaboration_id = $1
-    GROUP BY cd.collaboration_type
+    WHERE cd.collaboration_id = ANY($1)
+    GROUP BY cd.collaboration_id, cd.collaboration_type
     """
 
-    case Cinegraph.Repo.query(query, [collaboration.id]) do
-      {:ok, %{rows: [[type, avg_rating, revenue, count, year]]}} ->
-        %{
-          collaboration_type: type,
-          avg_rating: avg_rating,
-          total_revenue: revenue || 0,
-          movie_count: count,
-          latest_year: year
-        }
+    case Cinegraph.Repo.replica().query(query, [ids]) do
+      {:ok, %{rows: rows}} ->
+        Map.new(rows, fn [id, type, avg_rating, revenue, count, year] ->
+          {id,
+           %{
+             collaboration_type: type,
+             avg_rating: avg_rating,
+             total_revenue: revenue || 0,
+             movie_count: count,
+             latest_year: year
+           }}
+        end)
 
       _ ->
-        %{
-          collaboration_type: "unknown",
-          avg_rating: nil,
-          total_revenue: 0,
-          movie_count: 0,
-          latest_year: nil
-        }
+        %{}
     end
+  end
+
+  defp default_collab_details do
+    %{
+      collaboration_type: "unknown",
+      avg_rating: nil,
+      total_revenue: 0,
+      movie_count: 0,
+      latest_year: nil
+    }
   end
 
   defp get_person_top_collaborations(person_id) do
@@ -227,7 +233,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
     LIMIT 20
     """
 
-    case Cinegraph.Repo.query(query, [person_id]) do
+    case Cinegraph.Repo.replica().query(query, [person_id]) do
       {:ok, %{rows: rows}} ->
         person = safe_get_person(person_id)
 
@@ -261,8 +267,8 @@ defmodule CinegraphWeb.CollaborationLive.Index do
   end
 
   defp get_collaboration_by_id(id) do
-    Cinegraph.Repo.get(Collaborations.Collaboration, id)
-    |> Cinegraph.Repo.preload([:person_a, :person_b])
+    Cinegraph.Repo.replica().get(Collaborations.Collaboration, id)
+    |> Cinegraph.Repo.replica().preload([:person_a, :person_b])
   end
 
   defp format_rating(%Decimal{} = value), do: value |> Decimal.to_float() |> Float.round(1)

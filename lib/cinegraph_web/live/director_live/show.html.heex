@@ -180,7 +180,9 @@
                 </span>
               </p>
               <%= if actor.avg_rating do %>
-                <p class="text-xs text-gray-500">★ {Float.round(actor.avg_rating, 1)} avg</p>
+                <p class="text-xs text-gray-500">
+                  ★ {Float.round(Decimal.to_float(actor.avg_rating), 1)} avg
+                </p>
               <% end %>
             </div>
           </.link>

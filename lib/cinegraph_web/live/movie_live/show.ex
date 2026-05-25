@@ -91,17 +91,23 @@ defmodule CinegraphWeb.MovieLive.Show do
   def handle_params(%{"id_or_slug" => id_or_slug}, _url, socket) do
     movie = load_movie_by_id_or_slug(id_or_slug)
 
-    # Redirect to canonical URL if accessed by ID
     socket =
       if is_numeric_id?(id_or_slug) and movie.slug do
-        socket
-        |> push_navigate(to: ~p"/movies/#{movie.slug}")
+        push_navigate(socket, to: ~p"/movies/#{movie.slug}")
       else
         loaded_movie = load_movie_with_all_data(movie.id)
+        cast = Map.get(loaded_movie, :cast, [])
+        crew = Map.get(loaded_movie, :crew, [])
 
         socket
         |> assign(:movie, loaded_movie)
         |> assign_movie_seo(loaded_movie)
+        |> start_async(:collaboration_data, fn ->
+          key = MovieCollaborations.get_key_collaborations(cast, crew)
+          rel = MovieCollaborations.get_related_movies_by_collaboration(loaded_movie, cast, crew)
+          tl = MovieCollaborations.get_collaboration_timelines(loaded_movie, key)
+          {key, rel, tl}
+        end)
       end
 
     {:noreply, socket}
@@ -130,6 +136,22 @@ defmodule CinegraphWeb.MovieLive.Show do
   @impl true
   def handle_event("toggle_overview", _params, socket) do
     {:noreply, assign(socket, :overview_expanded, !socket.assigns.overview_expanded)}
+  end
+
+  @impl true
+  def handle_async(:collaboration_data, {:ok, {key, rel, tl}}, socket) do
+    updated_movie =
+      socket.assigns.movie
+      |> Map.put(:key_collaborations, key)
+      |> Map.put(:related_movies, rel)
+      |> Map.put(:collaboration_timelines, tl)
+
+    {:noreply, assign(socket, :movie, updated_movie)}
+  end
+
+  @impl true
+  def handle_async(:collaboration_data, {:exit, _reason}, socket) do
+    {:noreply, socket}
   end
 
   defp load_movie_by_id_or_slug(id_or_slug) do
@@ -226,16 +248,6 @@ defmodule CinegraphWeb.MovieLive.Show do
       external_ratings_count: length(external_ratings)
     }
 
-    # Get key collaborations for this movie using context module
-    key_collaborations = MovieCollaborations.get_key_collaborations(cast, crew)
-
-    # Get related movies by collaboration using context module
-    related_movies = MovieCollaborations.get_related_movies_by_collaboration(movie, cast, crew)
-
-    # Get collaboration timelines for key partnerships using context module
-    collaboration_timelines =
-      MovieCollaborations.get_collaboration_timelines(movie, key_collaborations)
-
     movie
     # Add metrics data (budget, revenue, etc.)
     |> Map.merge(metrics)
@@ -252,11 +264,17 @@ defmodule CinegraphWeb.MovieLive.Show do
     |> Map.put(:production_companies, production_companies)
     |> Map.put(:all_external_sources, all_external_sources)
     |> Map.put(:missing_data, missing_data)
-    |> Map.put(:key_collaborations, key_collaborations)
+    |> Map.put(:key_collaborations, %{
+      director_actor_reunions: [],
+      actor_partnerships: [],
+      director_director_reunions: [],
+      notable_collaborations: [],
+      total_reunions: 0
+    })
     |> Map.put(:display_scores, display_scores)
     |> Map.put(:disparity_data, disparity_data)
-    |> Map.put(:related_movies, related_movies)
-    |> Map.put(:collaboration_timelines, collaboration_timelines)
+    |> Map.put(:related_movies, [])
+    |> Map.put(:collaboration_timelines, [])
   end
 
   # Helper functions for TMDb ID lookup route
