@@ -214,7 +214,7 @@ defmodule CinegraphWeb.GlobalSearch.Components do
         class="w-10 h-10 rounded bg-mist-100 dark:bg-white/5 grid place-items-center shrink-0"
         aria-hidden="true"
       >
-        <%= if @list.icon && @list.icon != "" do %>
+        <%= if is_binary(@list.icon) && String.trim(@list.icon) != "" do %>
           <.icon name={"hero-" <> @list.icon} class="w-5 h-5 text-mist-500 dark:text-mist-400" />
         <% else %>
           <span class="text-lg">📜</span>
