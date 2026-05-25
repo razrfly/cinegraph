@@ -60,12 +60,16 @@ defmodule Cinegraph.Repo do
   """
   @spec replica() :: module()
   def replica do
-    if replica_enabled?() do
-      Cinegraph.Repo.Replica
-    else
-      # Kill switch active - use primary for all queries
-      __MODULE__
-    end
+    # When called from an Oban worker context, the process dict may hold a
+    # dedicated worker pool module (e.g. Repo.Worker) so that background jobs
+    # don't compete with web requests for the Replica connection pool.
+    Process.get(:cinegraph_job_repo) ||
+      if replica_enabled?() do
+        Cinegraph.Repo.Replica
+      else
+        # Kill switch active - use primary for all queries
+        __MODULE__
+      end
   end
 
   # Check if replica is enabled via environment variable

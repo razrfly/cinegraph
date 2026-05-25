@@ -46,7 +46,11 @@
         phx-debounce="350"
       />
       <label for="list_sort" class="sr-only">Sort lists</label>
-      <CinegraphWeb.NeutralV2Components.n_filter_select id="list_sort" name="sort" class="min-w-[150px]">
+      <CinegraphWeb.NeutralV2Components.n_filter_select
+        id="list_sort"
+        name="sort"
+        class="min-w-[150px]"
+      >
         <option value="display" selected={@sort == "display"}>Featured</option>
         <option value="name" selected={@sort == "name"}>Name</option>
         <option value="films" selected={@sort == "films"}>Film count</option>
@@ -55,7 +59,9 @@
   </section>
 
   <div :if={@lists == []} class="py-20 text-center">
-    <p class="font-display italic text-[28px] text-mist-700 dark:text-mist-300">No lists match these filters.</p>
+    <p class="font-display italic text-[28px] text-mist-700 dark:text-mist-300">
+      No lists match these filters.
+    </p>
   </div>
 
   <section

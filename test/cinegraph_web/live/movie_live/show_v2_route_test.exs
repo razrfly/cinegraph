@@ -323,7 +323,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
       assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
 
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Where to Watch"
       assert html =~ "Streaming"
@@ -360,16 +361,18 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
 
       assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
 
-      {:ok, view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability for 🇺🇸 United States."
       assert html =~ "Netflix"
       assert html =~ "United Kingdom"
 
-      html =
-        view
-        |> form("#availability-region-form", region: "GB")
-        |> render_change()
+      view
+      |> form("#availability-region-form", region: "GB")
+      |> render_change()
+
+      html = render_async(view)
 
       assert html =~ "Availability for 🇬🇧 United Kingdom."
       assert html =~ "Apple TV"
@@ -387,7 +390,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
 
       conn = put_connect_params(conn, %{"browser_locale" => "en-GB"})
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability for 🇬🇧 United Kingdom."
       assert html =~ "Apple TV"
@@ -411,7 +415,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
           "browser_timezone" => "Europe/Warsaw"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability for 🇵🇱 Poland."
       assert html =~ "Apple TV"
@@ -437,7 +442,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
           "browser_timezone" => "Europe/Warsaw"
         })
 
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability for 🇬🇧 United Kingdom."
       assert html =~ "Apple TV"
@@ -458,7 +464,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       assert {:ok, _} = Availability.store_tmdb_watch_providers(movie, payload)
 
       conn = put_connect_params(conn, %{"browser_locale" => "fr-FR"})
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability for 🇺🇸 United States."
       assert html =~ "Netflix"
@@ -472,7 +479,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
                  stale_after: ~U[2026-01-31 00:00:00Z]
                )
 
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability may have changed."
     end
@@ -483,13 +491,15 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
                  "results" => %{"US" => %{"link" => "https://example.test/watch"}}
                })
 
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "No availability found for 🇺🇸 United States."
     end
 
     test "renders never-fetched state", %{conn: conn, movie: movie} do
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability for 🇺🇸 United States has not been checked yet."
     end
@@ -497,7 +507,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
     test "renders error state", %{conn: conn, movie: movie} do
       assert {:ok, _} = Availability.record_availability_error(movie, ["US"], :tmdb_down)
 
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Availability for 🇺🇸 United States could not be refreshed."
     end
@@ -507,7 +518,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2RouteTest do
       |> MovieAvailabilityRefreshWorker.new()
       |> Oban.insert!()
 
-      {:ok, _view, html} = live(conn, ~p"/movies/#{movie.slug}")
+      {:ok, view, _html} = live(conn, ~p"/movies/#{movie.slug}")
+      html = render_async(view)
 
       assert html =~ "Refresh queued."
     end

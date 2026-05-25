@@ -49,7 +49,13 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
       <%!-- Search --%>
       <form phx-change="search" phx-submit="search">
         <div class="relative flex items-center bg-mist-50 dark:bg-mist-900 rounded-lg border border-mist-950/15 dark:border-white/15 h-11 px-[14px]">
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" class="shrink-0 text-mist-500 dark:text-mist-400">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 16 16"
+            fill="none"
+            class="shrink-0 text-mist-500 dark:text-mist-400"
+          >
             <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4" />
             <path
               d="M11 11 L14 14"
@@ -86,8 +92,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
             class={[
               "px-3 py-[6px] text-[12.5px] border-0 rounded-[6px] cursor-pointer tracking-[-.005em]",
               if(@sort_criteria == opt.value,
-                do: "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
-                else: "font-medium text-mist-700 dark:text-mist-300 bg-transparent hover:text-mist-950 dark:hover:text-white"
+                do:
+                  "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+                else:
+                  "font-medium text-mist-700 dark:text-mist-300 bg-transparent hover:text-mist-950 dark:hover:text-white"
               )
             ]}
             title={SortLabels.tooltip(opt)}
@@ -103,8 +111,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
             <summary class={[
               "list-none px-3 py-[6px] text-[12.5px] rounded-[6px] cursor-pointer tracking-[-.005em] select-none",
               if(@sort_criteria not in Enum.map(@primary_sort_options, & &1.value),
-                do: "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
-                else: "font-medium text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white"
+                do:
+                  "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+                else:
+                  "font-medium text-mist-700 dark:text-mist-300 hover:text-mist-950 dark:hover:text-white"
               )
             ]}>
               {SortLabels.overflow_summary(

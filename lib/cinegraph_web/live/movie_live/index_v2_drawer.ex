@@ -143,8 +143,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             class={[
               "flex flex-col items-center justify-center gap-[1px] rounded-lg border px-2 py-3 text-center transition-colors",
               if(rating_preset_active?(@rating_preset, value),
-                do: "bg-mist-950 border-mist-950 text-mist-50 dark:bg-white dark:border-white dark:text-mist-950",
-                else: "bg-mist-50 dark:bg-mist-800 border-mist-950/15 dark:border-white/15 text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.025] dark:hover:bg-mist-700"
+                do:
+                  "bg-mist-950 border-mist-950 text-mist-50 dark:bg-white dark:border-white dark:text-mist-950",
+                else:
+                  "bg-mist-50 dark:bg-mist-800 border-mist-950/15 dark:border-white/15 text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.025] dark:hover:bg-mist-700"
               )
             ]}
           >
@@ -195,7 +197,10 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             Clear filters
           </button>
           <div class="flex items-center gap-3">
-            <span :if={@active_filter_count > 0} class="text-[12px] text-mist-500 dark:text-mist-400 tabular-nums">
+            <span
+              :if={@active_filter_count > 0}
+              class="text-[12px] text-mist-500 dark:text-mist-400 tabular-nums"
+            >
               {@active_filter_count} active
             </span>
             <button
@@ -241,7 +246,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             <div class="text-2xl flex-shrink-0">{emoji}</div>
             <div>
               <div class="font-semibold text-mist-950 dark:text-white text-[14px]">{name}</div>
-              <div class="text-[11px] text-mist-500 dark:text-mist-400 italic mb-0.5">"{tagline}"</div>
+              <div class="text-[11px] text-mist-500 dark:text-mist-400 italic mb-0.5">
+                "{tagline}"
+              </div>
               <div class="text-[13px] text-mist-700 dark:text-mist-300">{desc}</div>
             </div>
           </div>

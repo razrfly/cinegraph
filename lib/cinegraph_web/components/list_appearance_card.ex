@@ -73,7 +73,10 @@ defmodule CinegraphWeb.Components.ListAppearanceCard do
           {@short_name}
         </NeutralV2Components.n_pill>
       </div>
-      <div :if={ListAppearance.href(@list)} class="mt-4 text-[12px] font-semibold text-mist-950 dark:text-white">
+      <div
+        :if={ListAppearance.href(@list)}
+        class="mt-4 text-[12px] font-semibold text-mist-950 dark:text-white"
+      >
         View list →
       </div>
     </div>

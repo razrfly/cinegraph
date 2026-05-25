@@ -47,7 +47,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
           </h2>
           <p class="mt-1 text-[12.5px] text-mist-600 dark:text-mist-400">
             {availability_status_copy(@availability_freshness, @availability_region_label)}
-            <span :if={@availability_refresh_queued} class="ml-1 font-semibold text-mist-900 dark:text-mist-100">
+            <span
+              :if={@availability_refresh_queued}
+              class="ml-1 font-semibold text-mist-900 dark:text-mist-100"
+            >
               Refresh queued.
             </span>
           </p>
@@ -105,7 +108,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2Availability do
               >
                 {availability_initials(provider_name)}
               </span>
-              <span class="text-[12.5px] font-semibold text-mist-900 dark:text-mist-100">{provider_name}</span>
+              <span class="text-[12.5px] font-semibold text-mist-900 dark:text-mist-100">
+                {provider_name}
+              </span>
             </div>
           </div>
         </div>

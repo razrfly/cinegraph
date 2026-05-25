@@ -553,7 +553,10 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
             </div>
             <div class="mt-2 text-[12px] text-mist-700 dark:text-mist-300">
               frequent partners
-              <span :if={format_revenue_money(@revenue)} class="text-emerald-700 dark:text-emerald-400">
+              <span
+                :if={format_revenue_money(@revenue)}
+                class="text-emerald-700 dark:text-emerald-400"
+              >
                 · {format_revenue_money(@revenue)} box office
               </span>
             </div>
@@ -612,7 +615,8 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
                 if(@role_filter == key,
                   do:
                     "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
-                  else: "font-medium text-mist-700 dark:text-mist-300 bg-transparent hover:text-mist-950 dark:hover:text-white"
+                  else:
+                    "font-medium text-mist-700 dark:text-mist-300 bg-transparent hover:text-mist-950 dark:hover:text-white"
                 )
               ]}
             >

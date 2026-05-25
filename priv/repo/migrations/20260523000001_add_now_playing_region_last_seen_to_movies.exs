@@ -16,16 +16,16 @@ defmodule Cinegraph.Repo.Migrations.AddNowPlayingRegionLastSeenToMovies do
     execute "DROP INDEX CONCURRENTLY IF EXISTS movies_now_playing_region_last_seen_gin_index"
 
     create_if_not_exists index(:movies, [:now_playing_region_last_seen],
-      using: :gin,
-      name: :movies_now_playing_region_last_seen_gin_index,
-      concurrently: true
-    )
+                           using: :gin,
+                           name: :movies_now_playing_region_last_seen_gin_index,
+                           concurrently: true
+                         )
   end
 
   def down do
     drop_if_exists index(:movies, [:now_playing_region_last_seen],
-      name: :movies_now_playing_region_last_seen_gin_index
-    )
+                     name: :movies_now_playing_region_last_seen_gin_index
+                   )
 
     alter table(:movies) do
       remove_if_exists :now_playing_region_last_seen, :map

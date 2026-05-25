@@ -35,6 +35,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
      socket
      |> assign(:active_nav, "Movies")
      |> assign(:availability_browser_region, browser_region)
+     |> assign(:availability_loaded, false)
      |> assign(:show_score_modal, false)
      |> assign(:overview_expanded, false)
      |> assign(:show_full_cast, false)
@@ -70,7 +71,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
          )
          |> assign(:video_clerk_recommendation, empty_video_clerk_recommendation())
          |> maybe_start_video_clerk_recommendation(data.movie.id)
-         |> assign_availability(data.movie, socket.assigns[:availability_browser_region])
+         |> assign(empty_availability_assigns())
+         |> start_async_availability(data.movie, socket.assigns[:availability_browser_region])
          |> assign_movie_seo(data.movie)}
 
       {:error, :not_found} ->
@@ -101,7 +103,14 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     do: {:noreply, assign(socket, :show_all_releases, !socket.assigns.show_all_releases)}
 
   def handle_event("change_availability_region", %{"region" => region}, socket) do
-    {:noreply, assign_availability(socket, socket.assigns.movie, region)}
+    movie = socket.assigns.movie
+
+    {:noreply,
+     socket
+     |> assign(:availability_loaded, false)
+     |> start_async(:availability, fn ->
+       ShowV2Availability.availability_assigns(movie, region)
+     end)}
   end
 
   def handle_event("stop_propagation", _, socket), do: {:noreply, socket}
@@ -116,8 +125,37 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     {:noreply, assign(socket, :video_clerk_recommendation, empty_video_clerk_recommendation())}
   end
 
-  defp assign_availability(socket, movie, region),
-    do: ShowV2Availability.assign_availability(socket, movie, region)
+  def handle_async(:availability, {:ok, assigns}, socket) do
+    {:noreply, socket |> assign(assigns) |> assign(:availability_loaded, true)}
+  end
+
+  def handle_async(:availability, {:exit, reason}, socket) do
+    Logger.warning("Availability load failed: #{inspect(reason)}")
+    {:noreply, assign(socket, :availability_loaded, true)}
+  end
+
+  defp empty_availability_assigns do
+    %{
+      availability_loaded: false,
+      availability_region: Availability.default_region(),
+      availability_region_label: nil,
+      availability_regions: [],
+      availability_region_options: [],
+      availability_groups: %{},
+      availability_freshness: nil,
+      availability_refresh_queued: false
+    }
+  end
+
+  defp start_async_availability(socket, movie, region) do
+    if connected?(socket) do
+      start_async(socket, :availability, fn ->
+        ShowV2Availability.availability_assigns(movie, region)
+      end)
+    else
+      socket
+    end
+  end
 
   defp maybe_start_video_clerk_recommendation(socket, movie_id) do
     if connected?(socket) do
@@ -341,17 +379,23 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
     </section>
 
     <%!-- In Theaters Now — absent entirely when not currently playing --%>
-    <div :if={@in_theaters} class="border-b border-indigo-100 dark:border-white/10 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-mist-950 dark:to-mist-950">
+    <div
+      :if={@in_theaters}
+      class="border-b border-indigo-100 dark:border-white/10 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-mist-950 dark:to-mist-950"
+    >
       <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 py-4 flex items-center gap-6">
         <div class="flex-1 min-w-0 flex items-center gap-3">
           <span class="relative flex size-2 shrink-0">
-            <span class="animate-ping absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="animate-ping absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75">
+            </span>
             <span class="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
           </span>
           <div>
             <p class="text-[13px] font-semibold text-indigo-900 dark:text-white">In Theaters Now</p>
             <p class="text-[12px] text-indigo-600/70 dark:text-mist-400 mt-0.5">
-              Currently showing in {length(@active_regions)} {if length(@active_regions) == 1, do: "country", else: "countries"} based on TMDB data
+              Currently showing in {length(@active_regions)} {if length(@active_regions) == 1,
+                do: "country",
+                else: "countries"} based on TMDB data
             </p>
             <div class="flex items-center gap-1.5 flex-wrap mt-1.5">
               <span
@@ -359,7 +403,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 class="inline-flex items-center gap-1 rounded-full bg-white/80 dark:bg-white/10 border border-indigo-100 dark:border-white/15 px-2 py-0.5"
               >
                 <span>{Availability.flag_emoji(region)}</span>
-                <span class="text-[11px] font-semibold text-indigo-700 dark:text-mist-200">{region}</span>
+                <span class="text-[11px] font-semibold text-indigo-700 dark:text-mist-200">
+                  {region}
+                </span>
               </span>
             </div>
           </div>
@@ -404,15 +450,22 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           </section>
 
           <%!-- WHERE TO WATCH --%>
-          <ShowV2Availability.where_to_watch
-            availability_freshness={@availability_freshness}
-            availability_region_label={@availability_region_label}
-            availability_refresh_queued={@availability_refresh_queued}
-            availability_regions={@availability_regions}
-            availability_region_options={@availability_region_options}
-            availability_region={@availability_region}
-            availability_groups={@availability_groups}
-          />
+          <%= if @availability_loaded do %>
+            <ShowV2Availability.where_to_watch
+              availability_freshness={@availability_freshness}
+              availability_region_label={@availability_region_label}
+              availability_refresh_queued={@availability_refresh_queued}
+              availability_regions={@availability_regions}
+              availability_region_options={@availability_region_options}
+              availability_region={@availability_region}
+              availability_groups={@availability_groups}
+            />
+          <% else %>
+            <section id="watch">
+              <div class="h-8 w-48 rounded bg-mist-200 dark:bg-mist-800 animate-pulse mb-5" />
+              <div class="h-32 rounded-lg border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-mist-900 animate-pulse" />
+            </section>
+          <% end %>
 
           <%!-- WHERE IT LIVES — 4-up summary card --%>
           <% wins = count_award_wins(@festival_noms) %>
@@ -449,7 +502,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 >
                   {t}
                 </div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">
+                  See all →
+                </div>
               </a>
 
               <a
@@ -472,7 +527,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 >
                   {t}
                 </div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">
+                  See all →
+                </div>
               </a>
 
               <a
@@ -485,12 +542,19 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 </div>
                 <div class="font-display italic text-[20px] text-mist-950 dark:text-white leading-tight mb-1">
                   {top_win.org}
-                  <span :if={top_win.year} class="text-mist-500 dark:text-mist-400 tabular-nums">{top_win.year}</span>
+                  <span :if={top_win.year} class="text-mist-500 dark:text-mist-400 tabular-nums">
+                    {top_win.year}
+                  </span>
                 </div>
-                <div :if={top_win.category} class="text-[12px] text-mist-700 dark:text-mist-300 mb-3 truncate">
+                <div
+                  :if={top_win.category}
+                  class="text-[12px] text-mist-700 dark:text-mist-300 mb-3 truncate"
+                >
                   {top_win.category}
                 </div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">
+                  See all →
+                </div>
               </a>
 
               <a
@@ -505,8 +569,12 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                   {reunions} {pluralize_str(reunions, "reunion")}
                 </div>
                 <div class="text-[12px] text-mist-700 dark:text-mist-300 mb-3">in this film</div>
-                <div :if={top_pair} class="text-[11.5px] text-mist-500 dark:text-mist-400 truncate">{top_pair}</div>
-                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">See all →</div>
+                <div :if={top_pair} class="text-[11.5px] text-mist-500 dark:text-mist-400 truncate">
+                  {top_pair}
+                </div>
+                <div class="mt-3 text-[11.5px] font-semibold text-mist-900 dark:text-mist-100">
+                  See all →
+                </div>
               </a>
             </div>
           </section>
@@ -613,7 +681,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 )}
               </span>
             </h2>
-            <div :if={a = omdb_awards(@metrics)} class="mb-6 text-[13.5px] text-mist-700 dark:text-mist-300 italic">
+            <div
+              :if={a = omdb_awards(@metrics)}
+              class="mb-6 text-[13.5px] text-mist-700 dark:text-mist-300 italic"
+            >
               {a}
             </div>
             <div class="space-y-4">
@@ -773,7 +844,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                   </div>
                 </div>
                 <div class="px-4 py-3">
-                  <div class="text-[13px] font-semibold text-mist-950 dark:text-white truncate">{v.name}</div>
+                  <div class="text-[13px] font-semibold text-mist-950 dark:text-white truncate">
+                    {v.name}
+                  </div>
                   <div class="text-[11.5px] text-mist-500 dark:text-mist-400">{v.type}</div>
                 </div>
               </a>
@@ -837,14 +910,18 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 class="flex justify-between border-b border-mist-950/10 dark:border-white/10 pb-2"
               >
                 <dt class="text-mist-500 dark:text-mist-400">Budget</dt>
-                <dd class="text-mist-950 dark:text-white tabular-nums">{format_money(Map.get(@movie, :budget))}</dd>
+                <dd class="text-mist-950 dark:text-white tabular-nums">
+                  {format_money(Map.get(@movie, :budget))}
+                </dd>
               </div>
               <div
                 :if={format_money(Map.get(@movie, :revenue))}
                 class="flex justify-between border-b border-mist-950/10 dark:border-white/10 pb-2"
               >
                 <dt class="text-mist-500 dark:text-mist-400">Revenue</dt>
-                <dd class="text-mist-950 dark:text-white tabular-nums">{format_money(Map.get(@movie, :revenue))}</dd>
+                <dd class="text-mist-950 dark:text-white tabular-nums">
+                  {format_money(Map.get(@movie, :revenue))}
+                </dd>
               </div>
               <div
                 :if={@movie.original_language}
