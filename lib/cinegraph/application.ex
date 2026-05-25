@@ -14,6 +14,9 @@ defmodule Cinegraph.Application do
         # Read replica for PlanetScale - offloads read queries from primary
         # Only started if configured (production with DATABASE_REPLICA_ENABLED=true)
         replica_child_spec(),
+        # Dedicated pool for Oban background jobs — isolates from the Replica
+        # pool so slow workers can't starve web page loads (#955).
+        worker_child_spec(),
         {DNSCluster, query: Application.get_env(:cinegraph, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Cinegraph.PubSub},
         # Start the Finch HTTP client for sending emails
@@ -119,6 +122,20 @@ defmodule Cinegraph.Application do
       # Using restart: :temporary prevents supervisor from trying to restart this no-op task
       %{
         id: :replica_placeholder,
+        start: {Task, :start_link, [fn -> :ok end]},
+        restart: :temporary
+      }
+    end
+  end
+
+  # Returns child spec for the worker repo if configured, otherwise a no-op.
+  # Only starts in production where the runtime.exs block configures it.
+  defp worker_child_spec do
+    if Application.get_env(:cinegraph, Cinegraph.Repo.Worker) do
+      Cinegraph.Repo.Worker
+    else
+      %{
+        id: :worker_placeholder,
         start: {Task, :start_link, [fn -> :ok end]},
         restart: :temporary
       }

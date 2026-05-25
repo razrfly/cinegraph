@@ -59,16 +59,22 @@ defmodule Cinegraph.Health.Drift do
   error with `blocked_reason`.
   """
   def run_all(check_funs, opts \\ []) when is_list(check_funs) do
-    # Per-check timeout. Bumped from 60_000 in #896 Phase 4.1 because
-    # cold-cache full-table scans (pqs_stale, availability_stale, etc.)
-    # routinely exceed 60s and surface as `crashed/UNKNOWN` in the CLI.
-    # Outer per-domain timeout in `Cinegraph.Health.Facade` is 240_000.
-    timeout = Keyword.get(opts, :timeout, 180_000)
-    max_concurrency = Keyword.get(opts, :max_concurrency, 4)
+    # Per-check timeout. Reduced from 180_000 in #955 to align with the new
+    # outer per-domain timeout of 20_000 in Facade. Checks that exceed 15s
+    # surface as :unknown/blocked_reason rather than holding connections.
+    timeout = Keyword.get(opts, :timeout, 15_000)
+    # Reduced from 4 → 2 in #955: caps per-domain DB connections so
+    # Repo.Worker pool (size 5) can serve 2 concurrent domains with headroom.
+    max_concurrency = Keyword.get(opts, :max_concurrency, 2)
+    # Propagate the job-repo process-dict key into each child task so that
+    # Repo.replica() routes to Repo.Worker when called from the health warmer.
+    job_repo = Process.get(:cinegraph_job_repo)
 
     check_funs
     |> Task.async_stream(
       fn fun ->
+        if job_repo, do: Process.put(:cinegraph_job_repo, job_repo)
+
         try do
           {:ok, fun.()}
         rescue

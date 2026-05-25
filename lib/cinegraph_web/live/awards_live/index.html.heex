@@ -46,7 +46,11 @@
         phx-debounce="350"
       />
       <label for="award_sort" class="sr-only">Sort awards</label>
-      <CinegraphWeb.NeutralV2Components.n_filter_select id="award_sort" name="sort" class="min-w-[150px]">
+      <CinegraphWeb.NeutralV2Components.n_filter_select
+        id="award_sort"
+        name="sort"
+        class="min-w-[150px]"
+      >
         <option value="name" selected={@sort == "name"}>Name</option>
         <option value="films" selected={@sort == "films"}>Film count</option>
         <option value="winners" selected={@sort == "winners"}>Winner count</option>
@@ -55,7 +59,9 @@
   </section>
 
   <div :if={@organizations == []} class="py-20 text-center">
-    <p class="font-display italic text-[28px] text-mist-700 dark:text-mist-300">No awards match these filters.</p>
+    <p class="font-display italic text-[28px] text-mist-700 dark:text-mist-300">
+      No awards match these filters.
+    </p>
   </div>
 
   <section

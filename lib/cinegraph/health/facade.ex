@@ -14,10 +14,11 @@ defmodule Cinegraph.Health.Facade do
 
   @cache_name :health_cache
   @task_supervisor Cinegraph.Health.TaskSupervisor
-  # Outer per-domain timeout. The largest domain currently runs 7 checks in
-  # batches of 4 via `Drift.run_all/2`; with a 180s per-check timeout that can
-  # legitimately require two batches.
-  @drift_timeout 360_000
+  # Outer per-domain timeout. Reduced from 360_000 in #955: with max_concurrency: 3
+  # and 6 domains, worst-case warmer = 2 batches × 20s = 40s. Domains that exceed
+  # this surface as :unknown/blocked_reason in the health dashboard (graceful
+  # degradation) rather than holding DB connections for minutes.
+  @drift_timeout 20_000
 
   @doc """
   Run all 5 drift domains in parallel, roll them up via `Verdict.compute/1`.
@@ -46,10 +47,16 @@ defmodule Cinegraph.Health.Facade do
       @task_supervisor
       |> Task.Supervisor.async_stream_nolink(
         domains,
-        fn {domain, mod} -> {domain, mod.all()} end,
+        fn {domain, mod} ->
+          if Application.get_env(:cinegraph, Cinegraph.Repo.Worker) do
+            Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+          end
+
+          {domain, mod.all()}
+        end,
         timeout: @drift_timeout,
         on_timeout: :kill_task,
-        max_concurrency: length(domains)
+        max_concurrency: 3
       )
       |> Enum.zip(domains)
       |> Enum.map(fn

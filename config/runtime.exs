@@ -251,6 +251,23 @@ if config_env() == :prod do
     timeout: 180_000,
     handshake_timeout: 30_000
 
+  # Dedicated pool for background Oban jobs and health-check drift tasks.
+  # Keeps job DB usage off the Replica pool so slow workers can't starve page loads.
+  # Routes via Repo.replica() when :cinegraph_job_repo is set in the process dict.
+  config :cinegraph, Cinegraph.Repo.Worker,
+    username: username,
+    password: password,
+    hostname: hostname,
+    port: port_num,
+    database: database,
+    pool_size: String.to_integer(System.get_env("WORKER_POOL_SIZE") || "5"),
+    socket_options: socket_opts,
+    connect_timeout: 30_000,
+    queue_target: 5_000,
+    queue_interval: 10_000,
+    timeout: 180_000,
+    handshake_timeout: 30_000
+
   parse_oban_limit = fn env_var, default ->
     case System.get_env(env_var) do
       value when is_binary(value) ->

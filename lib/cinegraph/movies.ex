@@ -125,6 +125,7 @@ defmodule Cinegraph.Movies do
   """
   def active_now_playing_regions(movie, cutoff \\ nil) do
     cutoff = cutoff || DateTime.add(DateTime.utc_now(), -3, :day)
+
     regions =
       case movie.now_playing_region_last_seen do
         map when is_map(map) -> map
