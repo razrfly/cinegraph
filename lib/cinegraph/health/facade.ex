@@ -14,8 +14,8 @@ defmodule Cinegraph.Health.Facade do
 
   @cache_name :health_cache
   @task_supervisor Cinegraph.Health.TaskSupervisor
-  # Outer per-domain timeout. Reduced from 360_000 in #955: with max_concurrency: 3
-  # and 6 domains, worst-case warmer = 2 batches × 20s = 40s. Domains that exceed
+  # Outer per-domain timeout. Reduced from 360_000 in #955: with max_concurrency: 2
+  # and 6 domains, worst-case warmer = 3 batches × 20s = 60s. Domains that exceed
   # this surface as :unknown/blocked_reason in the health dashboard (graceful
   # degradation) rather than holding DB connections for minutes.
   @drift_timeout 20_000
@@ -56,7 +56,7 @@ defmodule Cinegraph.Health.Facade do
         end,
         timeout: @drift_timeout,
         on_timeout: :kill_task,
-        max_concurrency: 3
+        max_concurrency: 2
       )
       |> Enum.zip(domains)
       |> Enum.map(fn

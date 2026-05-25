@@ -107,10 +107,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
     {:noreply,
      socket
-     |> assign(:availability_loaded, false)
-     |> start_async(:availability, fn ->
-       ShowV2Availability.availability_assigns(movie, region)
-     end)}
+     |> assign(empty_availability_assigns())
+     |> assign(:availability_region, region)
+     |> start_async_availability(movie, region)}
   end
 
   def handle_event("stop_propagation", _, socket), do: {:noreply, socket}
@@ -131,7 +130,14 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
 
   def handle_async(:availability, {:exit, reason}, socket) do
     Logger.warning("Availability load failed: #{inspect(reason)}")
-    {:noreply, assign(socket, :availability_loaded, true)}
+    region = socket.assigns.availability_region
+
+    {:noreply,
+     socket
+     |> assign(empty_availability_assigns())
+     |> assign(:availability_region, region)
+     |> assign(:availability_region_label, region)
+     |> assign(:availability_loaded, true)}
   end
 
   defp empty_availability_assigns do
