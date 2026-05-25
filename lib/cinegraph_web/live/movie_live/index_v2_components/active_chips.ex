@@ -29,20 +29,20 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
 
     ~H"""
     <section :if={@chips != []} class="mb-6 flex items-center gap-2 flex-wrap">
-      <span class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+      <span class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase">
         ACTIVE
       </span>
       <span
         :for={{key, label, value_label} <- @chips}
-        class="inline-flex items-center gap-1.5 rounded-full bg-mist-950/[0.04] border border-mist-950/10 px-[10px] py-[3px] text-[11.5px] text-mist-900"
+        class="inline-flex items-center gap-1.5 rounded-full bg-mist-950/[0.04] dark:bg-white/5 border border-mist-950/10 dark:border-white/10 px-[10px] py-[3px] text-[11.5px] text-mist-900 dark:text-mist-100"
       >
-        <span class="text-mist-500">{label}:</span>
+        <span class="text-mist-500 dark:text-mist-400">{label}:</span>
         <span class="font-medium">{value_label}</span>
         <button
           type="button"
           phx-click="remove_filter"
           phx-value-filter={key}
-          class="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 text-mist-500 hover:text-mist-950"
+          class="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 text-mist-500 dark:text-mist-400 hover:text-mist-950 dark:hover:text-white"
           title="Remove"
         >
           ×
@@ -51,7 +51,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
       <button
         type="button"
         phx-click="clear_filters"
-        class="ml-2 text-[11.5px] font-medium text-mist-700 underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950"
+        class="ml-2 text-[11.5px] font-medium text-mist-700 dark:text-mist-300 underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 hover:text-mist-950 dark:hover:text-white"
       >
         Clear all
       </button>

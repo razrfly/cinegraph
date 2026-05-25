@@ -17,7 +17,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
     ~H"""
     <section class="mb-8">
       <div :if={@movies == []} class="py-20 text-center">
-        <p class="font-display italic text-[28px] text-mist-700">
+        <p class="font-display italic text-[28px] text-mist-700 dark:text-mist-300">
           No films match these filters.
         </p>
         <button

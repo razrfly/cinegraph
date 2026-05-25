@@ -393,38 +393,38 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
           />
           <div
             :if={!@person.profile_path}
-            class="w-full aspect-[4/5] rounded-lg bg-mist-200 grid place-items-center text-mist-500 text-[12px]"
+            class="w-full aspect-[4/5] rounded-lg bg-mist-200 dark:bg-mist-800 grid place-items-center text-mist-500 dark:text-mist-400 text-[12px]"
           >
             No portrait
           </div>
         </div>
 
         <div class="flex-1 min-w-0">
-          <div class="text-[12px] font-semibold text-mist-700 tracking-[.06em] uppercase mb-2">
+          <div class="text-[12px] font-semibold text-mist-700 dark:text-mist-300 tracking-[.06em] uppercase mb-2">
             {@person.known_for_department || "Person"}
             <span :if={@years_active_str}>
               · Active {@years_active_str}
             </span>
           </div>
 
-          <h1 class="font-display italic text-[44px] sm:text-[64px] lg:text-[80px] tracking-[-.02em] text-balance text-mist-950 leading-[0.95]">
+          <h1 class="font-display italic text-[44px] sm:text-[64px] lg:text-[80px] tracking-[-.02em] text-balance text-mist-950 dark:text-white leading-[0.95]">
             {@person.name}
           </h1>
 
-          <div class="mt-4 flex items-center gap-4 flex-wrap text-[13px] text-mist-700">
+          <div class="mt-4 flex items-center gap-4 flex-wrap text-[13px] text-mist-700 dark:text-mist-300">
             <span :if={@person.birthday}>
               Born {format_date(@person.birthday)}
               <span :if={@person.deathday}>
                 — died {format_date(@person.deathday)}
               </span>
             </span>
-            <span :if={@person.place_of_birth} class="text-mist-500">
+            <span :if={@person.place_of_birth} class="text-mist-500 dark:text-mist-400">
               · {@person.place_of_birth}
             </span>
           </div>
 
           <div :if={@person.biography && @person.biography != ""} class="mt-5 max-w-2xl">
-            <p class="text-[15px] leading-[1.65] text-mist-900 whitespace-pre-line">
+            <p class="text-[15px] leading-[1.65] text-mist-900 dark:text-mist-100 whitespace-pre-line">
               <%= if @bio_expanded || !@has_long_bio do %>
                 {@person.biography}
               <% else %>
@@ -435,7 +435,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               :if={@has_long_bio}
               type="button"
               phx-click="toggle_bio"
-              class="mt-2 text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+              class="mt-2 text-[12.5px] font-semibold text-mist-900 dark:text-white underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
             >
               {if @bio_expanded, do: "Show less", else: "Read more"}
             </button>
@@ -447,7 +447,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               href={"https://www.imdb.com/name/#{@person.imdb_id}"}
               target="_blank"
               rel="noopener"
-              class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-3 py-1.5 text-[12.5px] font-semibold text-mist-900 hover:bg-mist-950/[0.025]"
+              class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 px-3 py-1.5 text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.025] dark:hover:bg-white/5"
             >
               IMDb ↗
             </a>
@@ -456,7 +456,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               href={"https://www.themoviedb.org/person/#{@person.tmdb_id}"}
               target="_blank"
               rel="noopener"
-              class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-3 py-1.5 text-[12.5px] font-semibold text-mist-900 hover:bg-mist-950/[0.025]"
+              class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 px-3 py-1.5 text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.025] dark:hover:bg-white/5"
             >
               TMDb ↗
             </a>
@@ -464,14 +464,14 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               href={"https://en.wikipedia.org/wiki/Special:Search?search=#{URI.encode(@person.name)}"}
               target="_blank"
               rel="noopener"
-              class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-3 py-1.5 text-[12.5px] font-semibold text-mist-900 hover:bg-mist-950/[0.025]"
+              class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 px-3 py-1.5 text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.025] dark:hover:bg-white/5"
             >
               Wikipedia ↗
             </a>
             <a
               :if={@person.known_for_department == "Directing"}
               href={"/directors/#{@person.id}"}
-              class="inline-flex items-center gap-2 rounded-full bg-mist-950 px-3 py-1.5 text-[12.5px] font-semibold text-mist-100 hover:bg-mist-900"
+              class="inline-flex items-center gap-2 rounded-full bg-mist-950 dark:bg-white px-3 py-1.5 text-[12.5px] font-semibold text-mist-100 dark:text-mist-950 hover:bg-mist-900 dark:hover:bg-mist-100"
             >
               Director analysis →
             </a>
@@ -484,38 +484,38 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
       <%!-- CAREER AT A GLANCE --%>
       <section>
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+          <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5">
+            <div class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase">
               Films
             </div>
-            <div class="mt-2 font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
+            <div class="mt-2 font-display italic text-[36px] text-mist-950 dark:text-white tabular-nums leading-none">
               {@career[:total_movies] || 0}
             </div>
-            <div class="mt-2 text-[12px] text-mist-700 tabular-nums">
+            <div class="mt-2 text-[12px] text-mist-700 dark:text-mist-300 tabular-nums">
               <span :if={@career[:as_actor]}>{@career.as_actor} acting</span>
               <span :if={@career[:as_actor] && @career[:as_crew]}> · </span>
               <span :if={@career[:as_crew]}>{@career.as_crew} crew</span>
             </div>
           </div>
 
-          <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+          <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5">
+            <div class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase">
               Awards
             </div>
-            <div class="mt-2 font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
+            <div class="mt-2 font-display italic text-[36px] text-mist-950 dark:text-white tabular-nums leading-none">
               {@award_stats[:total_wins] || 0}
             </div>
-            <div class="mt-2 text-[12px] text-mist-700 tabular-nums">
+            <div class="mt-2 text-[12px] text-mist-700 dark:text-mist-300 tabular-nums">
               wins · {@award_stats[:total_nominations] || 0} nominations
             </div>
           </div>
 
-          <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+          <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5">
+            <div class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase">
               Avg score
             </div>
             <div class="mt-2 flex items-end justify-between gap-2">
-              <span class="font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
+              <span class="font-display italic text-[36px] text-mist-950 dark:text-white tabular-nums leading-none">
                 <%= if @avg_score do %>
                   {Float.round(@avg_score, 1)}
                 <% else %>
@@ -527,7 +527,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
                 :if={@trend_points != []}
                 width="100"
                 height="28"
-                class="text-mist-700"
+                class="text-mist-700 dark:text-mist-400"
               >
                 <path
                   d={sparkline_path(@trend_points)}
@@ -539,21 +539,21 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
                 />
               </svg>
             </div>
-            <div class="mt-2 text-[12px] text-mist-700">
+            <div class="mt-2 text-[12px] text-mist-700 dark:text-mist-300">
               from rated films
             </div>
           </div>
 
-          <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
-            <div class="text-[11px] font-semibold text-mist-500 tracking-[.06em] uppercase">
+          <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5">
+            <div class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase">
               Collaborators
             </div>
-            <div class="mt-2 font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
+            <div class="mt-2 font-display italic text-[36px] text-mist-950 dark:text-white tabular-nums leading-none">
               {length(@frequent_collabs)}
             </div>
-            <div class="mt-2 text-[12px] text-mist-700">
+            <div class="mt-2 text-[12px] text-mist-700 dark:text-mist-300">
               frequent partners
-              <span :if={format_revenue_money(@revenue)} class="text-emerald-700">
+              <span :if={format_revenue_money(@revenue)} class="text-emerald-700 dark:text-emerald-400">
                 · {format_revenue_money(@revenue)} box office
               </span>
             </div>
@@ -563,7 +563,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
       <%!-- KNOWN FOR --%>
       <section :if={@known_for != []}>
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
           Known for
         </h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-[18px]">
@@ -578,29 +578,29 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
       <section>
         <div class="flex items-end justify-between gap-4 mb-6 flex-wrap">
           <div>
-            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950">
+            <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white">
               Filmography
-              <span class="text-mist-500 text-[14px] font-sans not-italic tabular-nums ml-2">
+              <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
                 {@filmography_total}
               </span>
             </h2>
             <div class="mt-2 flex flex-wrap items-center gap-3">
               <a
                 href={person_movies_path(@person, @role_filter)}
-                class="inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+                class="inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
               >
                 {person_movies_cta_label(@role_filter)} →
               </a>
               <a
                 :if={@role_filter != "all"}
                 href={person_movies_path(@person, "all")}
-                class="inline-flex items-center gap-2 text-[12.5px] font-medium text-mist-600 underline decoration-mist-950/10 underline-offset-4"
+                class="inline-flex items-center gap-2 text-[12.5px] font-medium text-mist-600 dark:text-mist-300 underline decoration-mist-950/10 dark:decoration-white/15 underline-offset-4"
               >
                 Open full filmography
               </a>
             </div>
           </div>
-          <div class="inline-flex p-[3px] bg-mist-950/[0.025] border border-mist-950/10 rounded-lg gap-[2px]">
+          <div class="inline-flex p-[3px] bg-mist-950/[0.025] dark:bg-white/5 border border-mist-950/10 dark:border-white/10 rounded-lg gap-[2px]">
             <button
               :for={{key, label} <- role_options()}
               type="button"
@@ -609,8 +609,9 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               class={[
                 "px-3 py-[6px] text-[12.5px] border-0 rounded-[6px] cursor-pointer tracking-[-.005em]",
                 if(@role_filter == key,
-                  do: "font-semibold text-mist-950 bg-mist-50 shadow-[0_1px_2px_rgba(20,18,15,.06)]",
-                  else: "font-medium text-mist-700 bg-transparent"
+                  do:
+                    "font-semibold text-mist-950 dark:text-white bg-mist-50 dark:bg-mist-800 shadow-[0_1px_2px_rgba(20,18,15,.06)] dark:shadow-none",
+                  else: "font-medium text-mist-700 dark:text-mist-300 bg-transparent hover:text-mist-950 dark:hover:text-white"
                 )
               ]}
             >
@@ -620,25 +621,25 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
         </div>
 
         <div :if={@grouped_filmography == []} class="py-12 text-center">
-          <p class="font-display italic text-[20px] text-mist-700">
+          <p class="font-display italic text-[20px] text-mist-700 dark:text-mist-300">
             No films match this filter.
           </p>
         </div>
 
         <div :for={{year, credits} <- @grouped_filmography} class="mb-6">
-          <div class="sticky top-[64px] z-[1] flex items-baseline gap-3 py-2 bg-mist-100/[0.92] backdrop-blur-md mb-2">
-            <span class="font-display italic text-[18px] text-mist-950 tabular-nums">
+          <div class="sticky top-[64px] z-[1] flex items-baseline gap-3 py-2 bg-mist-100/[0.92] dark:bg-mist-950/[0.92] backdrop-blur-md mb-2">
+            <span class="font-display italic text-[18px] text-mist-950 dark:text-white tabular-nums">
               <%= if year do %>
                 {year}
               <% else %>
                 Year unknown
               <% end %>
             </span>
-            <span class="text-[11.5px] text-mist-500 tabular-nums">
+            <span class="text-[11.5px] text-mist-500 dark:text-mist-400 tabular-nums">
               {length(credits)} {if length(credits) == 1, do: "film", else: "films"}
             </span>
           </div>
-          <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-2">
+          <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-2">
             <NeutralV2Components.n_credit_row
               :for={c <- credits}
               credit={credit_to_filmography_shape(c)}
@@ -650,7 +651,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
       <%!-- COLLABORATORS --%>
       <section :if={@frequent_collabs != []}>
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
           Frequent collaborators
         </h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -661,7 +662,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
         </div>
         <a
           href={"/collaborations?person_id=#{@person.id}"}
-          class="mt-4 inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 underline decoration-mist-950/15 underline-offset-4"
+          class="mt-4 inline-flex items-center gap-2 text-[12.5px] font-semibold text-mist-900 dark:text-mist-100 underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
         >
           See full collaboration network →
         </a>
@@ -669,26 +670,26 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
       <%!-- AWARDS SUMMARY --%>
       <section :if={(@award_stats[:total_nominations] || 0) > 0}>
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-6">
+        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
           Awards & festivals
         </h2>
-        <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-6">
+        <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-6">
           <div class="flex items-baseline gap-4 flex-wrap">
             <div>
-              <div class="font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
+              <div class="font-display italic text-[36px] text-mist-950 dark:text-white tabular-nums leading-none">
                 {@award_stats[:total_wins] || 0}
               </div>
-              <div class="text-[12px] text-mist-700 mt-1">wins</div>
+              <div class="text-[12px] text-mist-700 dark:text-mist-300 mt-1">wins</div>
             </div>
-            <div class="text-mist-300">·</div>
+            <div class="text-mist-300 dark:text-mist-700">·</div>
             <div>
-              <div class="font-display italic text-[36px] text-mist-950 tabular-nums leading-none">
+              <div class="font-display italic text-[36px] text-mist-950 dark:text-white tabular-nums leading-none">
                 {@award_stats[:total_nominations] || 0}
               </div>
-              <div class="text-[12px] text-mist-700 mt-1">nominations</div>
+              <div class="text-[12px] text-mist-700 dark:text-mist-300 mt-1">nominations</div>
             </div>
           </div>
-          <p class="mt-4 text-[13px] text-mist-700 max-w-prose">
+          <p class="mt-4 text-[13px] text-mist-700 dark:text-mist-300 max-w-prose">
             Career nominations across Academy Awards, BAFTA, Golden Globes, festival juries (Cannes, Venice, Berlin, Sundance, etc.), and other tracked organizations.
           </p>
         </div>
@@ -696,14 +697,14 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
       <%!-- SIX DEGREES INLINE --%>
       <section>
-        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 mb-3">
+        <h2 class="font-display italic text-[28px] sm:text-[32px] tracking-[-.01em] text-mist-950 dark:text-white mb-3">
           Six degrees
         </h2>
-        <p class="text-[14px] text-mist-700 mb-4 max-w-2xl">
+        <p class="text-[14px] text-mist-700 dark:text-mist-300 mb-4 max-w-2xl">
           Find the connection path between {@person.name} and any other person in the
           Cinegraph database.
         </p>
-        <div class="bg-mist-50 border border-mist-950/10 rounded-lg p-5">
+        <div class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-5">
           <form phx-submit="search_six_degrees" class="flex items-center gap-3 flex-wrap">
             <input
               type="number"
@@ -711,18 +712,18 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
               placeholder="Target person ID"
               required
               disabled={@six_degrees_loading}
-              class="flex-1 min-w-[200px] h-10 px-3 rounded-lg border border-mist-950/15 bg-white text-[14px] text-mist-950 outline-none focus:border-mist-950"
+              class="flex-1 min-w-[200px] h-10 px-3 rounded-lg border border-mist-950/15 dark:border-white/15 bg-white dark:bg-mist-800 text-[14px] text-mist-950 dark:text-white outline-none focus:border-mist-950 dark:focus:border-white placeholder:text-mist-500"
             />
             <button
               type="submit"
               disabled={@six_degrees_loading}
-              class="inline-flex items-center gap-2 rounded-full bg-mist-950 px-4 py-2 text-sm font-medium text-mist-100 hover:bg-mist-900 disabled:opacity-40 disabled:cursor-not-allowed"
+              class="inline-flex items-center gap-2 rounded-full bg-mist-950 dark:bg-white px-4 py-2 text-sm font-medium text-mist-100 dark:text-mist-950 hover:bg-mist-900 dark:hover:bg-mist-100 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {if @six_degrees_loading, do: "Searching…", else: "Find path"}
             </button>
             <a
               href={~p"/six-degrees"}
-              class="text-[12.5px] font-semibold text-mist-700 underline decoration-mist-950/15 underline-offset-4"
+              class="text-[12.5px] font-semibold text-mist-700 dark:text-mist-300 underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4"
             >
               Open full explorer →
             </a>
@@ -730,18 +731,18 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
 
           <div
             :if={@six_degrees_path == :no_path}
-            class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded text-[13.5px] text-amber-900"
+            class="mt-4 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded text-[13.5px] text-amber-900 dark:text-amber-300"
           >
             No path found within 6 degrees.
           </div>
 
           <div :if={is_list(@six_degrees_path)} class="mt-4 space-y-2">
-            <div class="text-[12.5px] text-mist-700 font-semibold">
+            <div class="text-[12.5px] text-mist-700 dark:text-mist-300 font-semibold">
               Path found ({length(@six_degrees_path)} {if length(@six_degrees_path) == 1,
                 do: "degree",
                 else: "degrees"})
             </div>
-            <ol class="list-decimal pl-5 text-[13.5px] text-mist-900 space-y-1">
+            <ol class="list-decimal pl-5 text-[13.5px] text-mist-900 dark:text-mist-100 space-y-1">
               <li :for={hop <- @six_degrees_path}>
                 {format_hop(hop)}
               </li>

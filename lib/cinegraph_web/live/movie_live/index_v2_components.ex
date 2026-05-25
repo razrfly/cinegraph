@@ -17,24 +17,24 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
   def hero(assigns) do
     ~H"""
     <section class="mb-8 lg:mb-12">
-      <h1 class="font-display italic text-[44px] sm:text-[56px] lg:text-[72px] tracking-[-.02em] text-balance text-mist-950 leading-[1.02]">
+      <h1 class="font-display italic text-[44px] sm:text-[56px] lg:text-[72px] tracking-[-.02em] text-balance text-mist-950 dark:text-white leading-[1.02]">
         Movies.
       </h1>
-      <p class="text-[15px] text-mist-700 mt-2 max-w-2xl">
+      <p class="text-[15px] text-mist-700 dark:text-mist-300 mt-2 max-w-2xl">
         {format_count(@total_count)} films across canonical lists, festivals, and critical canon.
       </p>
-      <div class="flex items-center gap-3 mt-1.5 text-[14px] text-mist-700">
+      <div class="flex items-center gap-3 mt-1.5 text-[14px] text-mist-700 dark:text-mist-300">
         <a
           href="/movies/discover"
-          class="underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950"
+          class="underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 hover:text-mist-950 dark:hover:text-white"
         >
           Tunable scoring →
         </a>
-        <span class="text-mist-500" aria-hidden="true">·</span>
+        <span class="text-mist-500 dark:text-mist-400" aria-hidden="true">·</span>
         <button
           type="button"
           phx-click="show_scoring_info"
-          class="underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950 bg-transparent border-0 p-0 cursor-pointer font-[inherit] text-[14px] text-mist-700"
+          class="underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 hover:text-mist-950 dark:hover:text-white bg-transparent border-0 p-0 cursor-pointer font-[inherit] text-[14px] text-mist-700 dark:text-mist-300"
         >
           How we score?
         </button>
@@ -135,22 +135,22 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
     ~H"""
     <nav
       :if={@meta && @meta.total_pages && @meta.total_pages > 1}
-      class="flex items-center justify-between gap-4 pt-6 border-t border-mist-950/10 text-[13px] text-mist-700"
+      class="flex items-center justify-between gap-4 pt-6 border-t border-mist-950/10 dark:border-white/10 text-[13px] text-mist-700 dark:text-mist-300"
     >
       <button
         type="button"
         phx-click="page"
         phx-value-page={max(1, (@meta.current_page || 1) - 1)}
         disabled={(@meta.current_page || 1) <= 1}
-        class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-4 py-2 font-medium text-mist-950 hover:bg-mist-950/[0.025] disabled:opacity-40 disabled:cursor-not-allowed"
+        class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 px-4 py-2 font-medium text-mist-950 dark:text-white hover:bg-mist-950/[0.025] dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         ← Previous
       </button>
 
       <div class="text-[12px] tabular-nums">
-        Page <b class="text-mist-950 font-semibold">{@meta.current_page}</b>
-        of <b class="text-mist-950 font-semibold">{@meta.total_pages}</b>
-        <span class="text-mist-500">
+        Page <b class="text-mist-950 dark:text-white font-semibold">{@meta.current_page}</b>
+        of <b class="text-mist-950 dark:text-white font-semibold">{@meta.total_pages}</b>
+        <span class="text-mist-500 dark:text-mist-400">
           · {format_count(@meta.total_count)} films
         </span>
       </div>
@@ -160,7 +160,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
         phx-click="page"
         phx-value-page={min(@meta.total_pages, (@meta.current_page || 1) + 1)}
         disabled={(@meta.current_page || 1) >= @meta.total_pages}
-        class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 bg-mist-50 px-4 py-2 font-medium text-mist-950 hover:bg-mist-950/[0.025] disabled:opacity-40 disabled:cursor-not-allowed"
+        class="inline-flex items-center gap-2 rounded-full border border-mist-950/15 dark:border-white/15 bg-mist-50 dark:bg-mist-900 px-4 py-2 font-medium text-mist-950 dark:text-white hover:bg-mist-950/[0.025] dark:hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Next →
       </button>

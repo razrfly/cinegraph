@@ -42,26 +42,26 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
 
         <%!-- ─── Canonical Lists ─── --%>
         <section :if={!list_scope?(@scope)}>
-          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400 mb-3">
             Canonical Lists
           </h3>
           <div class="space-y-2.5">
             <label
               :for={list <- @filter_options[:lists] || []}
-              class="flex items-start gap-2.5 text-[13.5px] text-mist-900 cursor-pointer hover:text-mist-950 leading-snug"
+              class="flex items-start gap-2.5 text-[13.5px] text-mist-900 dark:text-mist-100 cursor-pointer hover:text-mist-950 dark:hover:text-white leading-snug"
             >
               <input
                 type="checkbox"
                 name="filters[lists][]"
                 value={list.key}
                 checked={list_selected?(list, @selected_lists)}
-                class="mt-[2px] shrink-0 rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
+                class="mt-[2px] shrink-0 rounded border-mist-950/30 dark:border-white/30 text-mist-950 dark:text-white focus:ring-mist-950 dark:focus:ring-white/50 focus:ring-offset-0"
               />
               <span class="flex-1">{list.name}</span>
             </label>
             <p
               :if={@filter_options[:lists] in [nil, []]}
-              class="text-[12px] text-mist-500 italic"
+              class="text-[12px] text-mist-500 dark:text-mist-400 italic"
             >
               No lists configured.
             </p>
@@ -70,20 +70,20 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
 
         <%!-- ─── Festivals / Awards ─── --%>
         <section :if={!festival_scope?(@scope)}>
-          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400 mb-3">
             Festivals / Awards
           </h3>
           <div class="space-y-2.5 max-h-64 overflow-y-auto pr-1">
             <label
               :for={fest <- @filter_options[:festivals] || []}
-              class="flex items-start gap-2.5 text-[13.5px] text-mist-900 cursor-pointer hover:text-mist-950 leading-snug"
+              class="flex items-start gap-2.5 text-[13.5px] text-mist-900 dark:text-mist-100 cursor-pointer hover:text-mist-950 dark:hover:text-white leading-snug"
             >
               <input
                 type="checkbox"
                 name="filters[festivals][]"
                 value={to_string(fest.id)}
                 checked={festival_selected?(fest, @selected_festivals)}
-                class="mt-[2px] shrink-0 rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
+                class="mt-[2px] shrink-0 rounded border-mist-950/30 dark:border-white/30 text-mist-950 dark:text-white focus:ring-mist-950 dark:focus:ring-white/50 focus:ring-offset-0"
               />
               <span class="flex-1">{fest.name}</span>
             </label>
@@ -91,7 +91,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
         </section>
         <%!-- ─── Cast & Crew ─── --%>
         <section>
-          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400 mb-3">
             Cast &amp; Crew
           </h3>
           <.live_component
@@ -111,7 +111,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
 
       <%!-- ─── Decade (single-select pills) ─── --%>
       <section :if={(@filter_options[:decades] || []) != []}>
-        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400 mb-3">
           Decade
         </h3>
         <div class="flex flex-wrap gap-2">
@@ -130,7 +130,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
 
       <%!-- ─── Rating Quality (segmented control) ─── --%>
       <section>
-        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400 mb-3">
           Rating Quality
         </h3>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Rating Quality">
@@ -143,8 +143,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             class={[
               "flex flex-col items-center justify-center gap-[1px] rounded-lg border px-2 py-3 text-center transition-colors",
               if(rating_preset_active?(@rating_preset, value),
-                do: "bg-mist-950 border-mist-950 text-mist-50",
-                else: "bg-mist-50 border-mist-950/15 text-mist-900 hover:bg-mist-950/[0.025]"
+                do: "bg-mist-950 border-mist-950 text-mist-50 dark:bg-white dark:border-white dark:text-mist-950",
+                else: "bg-mist-50 dark:bg-mist-800 border-mist-950/15 dark:border-white/15 text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.025] dark:hover:bg-mist-700"
               )
             ]}
           >
@@ -154,8 +154,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
               class={[
                 "text-[10.5px] leading-tight",
                 if(rating_preset_active?(@rating_preset, value),
-                  do: "text-mist-300",
-                  else: "text-mist-500"
+                  do: "text-mist-300 dark:text-mist-600",
+                  else: "text-mist-500 dark:text-mist-400"
                 )
               ]}
             >
@@ -168,17 +168,17 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
       <%!-- ─── Other ─── --%>
       <form phx-change="apply_filters">
         <section>
-          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 mb-3">
+          <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400 mb-3">
             Other
           </h3>
-          <label class="flex items-center gap-2.5 text-[13.5px] text-mist-900 cursor-pointer">
+          <label class="flex items-center gap-2.5 text-[13.5px] text-mist-900 dark:text-mist-100 cursor-pointer">
             <input type="hidden" name="filters[show_unreleased]" value="" />
             <input
               type="checkbox"
               name="filters[show_unreleased]"
               value="true"
               checked={@show_unreleased == "true"}
-              class="rounded border-mist-950/30 text-mist-950 focus:ring-mist-950 focus:ring-offset-0"
+              class="rounded border-mist-950/30 dark:border-white/30 text-mist-950 dark:text-white focus:ring-mist-950 dark:focus:ring-white/50 focus:ring-offset-0"
             />
             <span>Include unreleased films</span>
           </label>
@@ -190,12 +190,12 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
           <button
             type="button"
             phx-click="clear_filters"
-            class="text-[13px] font-medium text-mist-700 underline decoration-mist-950/15 underline-offset-4 hover:text-mist-950"
+            class="text-[13px] font-medium text-mist-700 dark:text-mist-300 underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 hover:text-mist-950 dark:hover:text-white"
           >
             Clear filters
           </button>
           <div class="flex items-center gap-3">
-            <span :if={@active_filter_count > 0} class="text-[12px] text-mist-500 tabular-nums">
+            <span :if={@active_filter_count > 0} class="text-[12px] text-mist-500 dark:text-mist-400 tabular-nums">
               {@active_filter_count} active
             </span>
             <button
@@ -219,18 +219,18 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
     <div :if={@show} class="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div class="fixed inset-0 bg-mist-950/50"></div>
       <div
-        class="relative bg-mist-50 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-mist-950/10"
+        class="relative bg-mist-50 dark:bg-mist-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl dark:shadow-none border border-mist-950/10 dark:border-white/10"
         phx-click-away="hide_scoring_info"
         phx-window-keydown="hide_scoring_info"
         phx-key="Escape"
       >
         <div class="flex justify-between items-start mb-5">
-          <h2 class="font-display italic text-[24px] text-mist-950">
+          <h2 class="font-display italic text-[24px] text-mist-950 dark:text-white">
             How Cinegraph Scores Movies
           </h2>
           <button
             phx-click="hide_scoring_info"
-            class="text-mist-500 hover:text-mist-950 text-[18px] leading-none"
+            class="text-mist-500 dark:text-mist-400 hover:text-mist-950 dark:hover:text-white text-[18px] leading-none"
             aria-label="Close"
           >
             ✕
@@ -240,9 +240,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
           <div :for={{emoji, name, tagline, desc} <- scoring_lenses()} class="flex gap-3">
             <div class="text-2xl flex-shrink-0">{emoji}</div>
             <div>
-              <div class="font-semibold text-mist-950 text-[14px]">{name}</div>
-              <div class="text-[11px] text-mist-500 italic mb-0.5">"{tagline}"</div>
-              <div class="text-[13px] text-mist-700">{desc}</div>
+              <div class="font-semibold text-mist-950 dark:text-white text-[14px]">{name}</div>
+              <div class="text-[11px] text-mist-500 dark:text-mist-400 italic mb-0.5">"{tagline}"</div>
+              <div class="text-[13px] text-mist-700 dark:text-mist-300">{desc}</div>
             </div>
           </div>
         </div>
