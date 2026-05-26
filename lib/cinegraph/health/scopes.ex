@@ -16,7 +16,7 @@ defmodule Cinegraph.Health.Scopes do
   alias Cinegraph.Health.Drift
   alias Cinegraph.Repo
 
-  @cache_ttl :timer.minutes(5)
+  @cache_ttl :timer.minutes(35)
 
   @doc """
   Composable Ecto query for canonical movies. Schemaless to match the

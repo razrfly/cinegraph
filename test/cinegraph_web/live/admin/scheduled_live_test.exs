@@ -19,7 +19,7 @@ defmodule CinegraphWeb.Admin.ScheduledLiveTest do
       assert html =~ "Movies cache warmer"
 
       # Each entry exposes its cron + queue + run-now button
-      assert html =~ "*/4 * * * *"
+      assert html =~ "*/30 * * * *"
       assert html =~ "Run now"
     end
 

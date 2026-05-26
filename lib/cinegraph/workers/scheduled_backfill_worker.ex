@@ -59,32 +59,37 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
 
     Repo.Worker.checkout(fn ->
       Repo.Worker.query!("SET statement_timeout = '120s'")
-      Logger.info("ScheduledBackfill: Starting hourly health check...")
 
-      # Update baseline from TMDb export if stale (daily)
-      maybe_update_baseline()
+      try do
+        Logger.info("ScheduledBackfill: Starting hourly health check...")
 
-      pending = count_pending_tmdb_jobs()
+        # Update baseline from TMDb export if stale (daily)
+        maybe_update_baseline()
 
-      total_pending =
-        pending.available + pending.scheduled + pending.executing + pending.retryable
+        pending = count_pending_tmdb_jobs()
 
-      Logger.info(
-        "ScheduledBackfill: Queue status - #{total_pending} total pending " <>
-          "(#{pending.available} available, #{pending.scheduled} scheduled, " <>
-          "#{pending.executing} executing, #{pending.retryable} retryable)"
-      )
+        total_pending =
+          pending.available + pending.scheduled + pending.executing + pending.retryable
 
-      cond do
-        total_pending >= @pending_threshold ->
-          Logger.info(
-            "ScheduledBackfill: Queue healthy (#{total_pending} >= #{@pending_threshold}), skipping batch"
-          )
+        Logger.info(
+          "ScheduledBackfill: Queue status - #{total_pending} total pending " <>
+            "(#{pending.available} available, #{pending.scheduled} scheduled, " <>
+            "#{pending.executing} executing, #{pending.retryable} retryable)"
+        )
 
-          :ok
+        cond do
+          total_pending >= @pending_threshold ->
+            Logger.info(
+              "ScheduledBackfill: Queue healthy (#{total_pending} >= #{@pending_threshold}), skipping batch"
+            )
 
-        true ->
-          queue_batch(total_pending)
+            :ok
+
+          true ->
+            queue_batch(total_pending)
+        end
+      after
+        Repo.Worker.query!("SET statement_timeout = DEFAULT")
       end
     end)
   end
