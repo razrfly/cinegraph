@@ -6,7 +6,7 @@ defmodule Cinegraph.Health.Drift.Collaborations do
   alias Cinegraph.Health.Drift
   alias Cinegraph.Maintenance.Collaborations, as: CollaborationMaintenance
 
-  @cache_ttl :timer.minutes(5)
+  @cache_ttl :timer.minutes(35)
   @example_limit 10
 
   def all(opts \\ []) do

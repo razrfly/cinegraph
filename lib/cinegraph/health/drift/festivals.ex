@@ -6,7 +6,7 @@ defmodule Cinegraph.Health.Drift.Festivals do
   alias Cinegraph.Health.Drift
   alias Cinegraph.Repo
 
-  @cache_ttl :timer.minutes(5)
+  @cache_ttl :timer.minutes(35)
   @example_limit 10
   @floor_factor 0.5
 

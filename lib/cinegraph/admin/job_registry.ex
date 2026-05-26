@@ -153,11 +153,11 @@ defmodule Cinegraph.Admin.JobRegistry do
       label: "Health cache warmer",
       worker: Workers.HealthCacheWarmer,
       queue: :maintenance,
-      schedule: "*/4 * * * *",
+      schedule: "*/30 * * * *",
       args: %{},
       trigger_action: :enqueue_now,
       mutating: false,
-      description: "Pre-compute drift checks every 4 minutes (Cachex 5-min TTL)",
+      description: "Pre-compute drift checks every 30 minutes (Cachex 35-min TTL)",
       destination: :system,
       doc_url: nil
     },

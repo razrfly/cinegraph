@@ -30,8 +30,8 @@ defmodule Cinegraph.Health.Drift.People do
   alias Cinegraph.Health.{Drift, Scopes}
   alias Cinegraph.Repo
 
-  @cache_ttl :timer.minutes(5)
-  @pqs_cache_ttl :timer.minutes(15)
+  @cache_ttl :timer.minutes(35)
+  @pqs_cache_ttl :timer.minutes(35)
   @example_limit 10
   @stale_days 180
   @pqs_metric_type "quality_score"

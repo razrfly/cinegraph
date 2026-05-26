@@ -11,7 +11,7 @@ defmodule Cinegraph.Health.Drift.Movies do
   alias Cinegraph.Repo
   alias Cinegraph.Services.TMDb.GapAnalysis
 
-  @cache_ttl :timer.minutes(5)
+  @cache_ttl :timer.minutes(35)
   @example_limit 10
   @stale_omdb_days 180
 

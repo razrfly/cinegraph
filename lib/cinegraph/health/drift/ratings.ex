@@ -21,7 +21,7 @@ defmodule Cinegraph.Health.Drift.Ratings do
   alias Cinegraph.Health.{Drift, Scopes}
   alias Cinegraph.Repo
 
-  @cache_ttl :timer.minutes(5)
+  @cache_ttl :timer.minutes(35)
   @example_limit 10
 
   @doc "Run all 3 ratings checks in parallel. Accepts `:limit`."

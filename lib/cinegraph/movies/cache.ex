@@ -374,11 +374,18 @@ defmodule Cinegraph.Movies.Cache do
             Logger.debug("[Movies.Cache] Skipping already-warm key: #{cache_key}")
             cache_key
 
-          {:error, _} ->
+          {:error, reason} ->
             case search_fn.(params) do
               {:ok, {movies, meta}} ->
                 Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @warmer_query_ttl)
                 cache_key
+
+              {:error, search_reason} ->
+                Logger.warning(
+                  "[Movies.Cache] Failed to warm cache for #{cache_key} (cachex error: #{inspect(reason)}): #{inspect(search_reason)}"
+                )
+
+                nil
 
               _ ->
                 nil

@@ -207,10 +207,10 @@ config :cinegraph, Oban,
        {"5 5 * * *", Cinegraph.Workers.CompletenessSnapshotWorker},
        # Health-cache warmer (#745 Phase 3.3) — keeps `:health_cache` warm
        # so `/admin/health` cold-paint stays sub-second. Drift checks have a
-       # 5-min Cachex TTL; warm every 4 min so rows are recomputed before
+       # 35-min Cachex TTL; warm every 30 min so rows are recomputed before
        # they expire. Plus a one-shot warm fires from `Cinegraph.Application`
        # on app boot (so the very first request after deploy is also fast).
-       {"*/4 * * * *", Cinegraph.Workers.HealthCacheWarmer},
+       {"*/30 * * * *", Cinegraph.Workers.HealthCacheWarmer},
        # Now Playing sweep (#943) — polls TMDB /movie/now_playing across 5
        # regions (US, GB, DE, FR, PL) and stamps `now_playing_last_seen` on
        # matched movies. Films missing from all regions for >3 days go stale
