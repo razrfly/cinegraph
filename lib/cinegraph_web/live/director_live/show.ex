@@ -1,6 +1,8 @@
 defmodule CinegraphWeb.DirectorLive.Show do
   use CinegraphWeb, :live_view
 
+  require Logger
+
   alias Cinegraph.People
   alias Cinegraph.Collaborations
   import CinegraphWeb.CollaborationComponents
@@ -70,7 +72,8 @@ defmodule CinegraphWeb.DirectorLive.Show do
   end
 
   @impl true
-  def handle_async(:director_network_data, {:exit, _reason}, socket) do
+  def handle_async(:director_network_data, {:exit, reason}, socket) do
+    Logger.warning("DirectorLive: async network data failed: #{inspect(reason)}")
     {:noreply, socket}
   end
 

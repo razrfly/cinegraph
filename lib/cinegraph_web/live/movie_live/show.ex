@@ -150,7 +150,8 @@ defmodule CinegraphWeb.MovieLive.Show do
   end
 
   @impl true
-  def handle_async(:collaboration_data, {:exit, _reason}, socket) do
+  def handle_async(:collaboration_data, {:exit, reason}, socket) do
+    Logger.warning("MovieLive: async collaboration_data failed: #{inspect(reason)}")
     {:noreply, socket}
   end
 

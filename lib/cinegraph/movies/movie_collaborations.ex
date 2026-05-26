@@ -160,7 +160,6 @@ defmodule Cinegraph.Movies.MovieCollaborations do
     GROUP BY m.id, m.title, m.slug, m.poster_path, m.release_date
     HAVING COUNT(DISTINCT mc.person_id) >= 2
     ORDER BY m.release_date DESC
-    LIMIT 50
     """
 
     case Repo.replica().query(query, [person_ids, Date.utc_today()]) do

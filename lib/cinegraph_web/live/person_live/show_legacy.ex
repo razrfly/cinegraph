@@ -227,7 +227,7 @@ defmodule CinegraphWeb.PersonLive.ShowLegacy do
             latest_date: last_date,
             avg_rating: avg_rating,
             total_revenue: revenue,
-            collaboration_types: String.split(types || "", ", "),
+            collaboration_types: String.split(types || "", ", ", trim: true),
             strength:
               cond do
                 count >= 10 -> :very_strong

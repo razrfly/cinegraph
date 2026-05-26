@@ -56,32 +56,37 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
-    Repo.Worker.query!("SET statement_timeout = '120s'")
-    Logger.info("ScheduledBackfill: Starting hourly health check...")
 
-    # Update baseline from TMDb export if stale (daily)
-    maybe_update_baseline()
+    Repo.Worker.checkout(fn ->
+      Repo.Worker.query!("SET statement_timeout = '120s'")
+      Logger.info("ScheduledBackfill: Starting hourly health check...")
 
-    pending = count_pending_tmdb_jobs()
-    total_pending = pending.available + pending.scheduled + pending.executing + pending.retryable
+      # Update baseline from TMDb export if stale (daily)
+      maybe_update_baseline()
 
-    Logger.info(
-      "ScheduledBackfill: Queue status - #{total_pending} total pending " <>
-        "(#{pending.available} available, #{pending.scheduled} scheduled, " <>
-        "#{pending.executing} executing, #{pending.retryable} retryable)"
-    )
+      pending = count_pending_tmdb_jobs()
 
-    cond do
-      total_pending >= @pending_threshold ->
-        Logger.info(
-          "ScheduledBackfill: Queue healthy (#{total_pending} >= #{@pending_threshold}), skipping batch"
-        )
+      total_pending =
+        pending.available + pending.scheduled + pending.executing + pending.retryable
 
-        :ok
+      Logger.info(
+        "ScheduledBackfill: Queue status - #{total_pending} total pending " <>
+          "(#{pending.available} available, #{pending.scheduled} scheduled, " <>
+          "#{pending.executing} executing, #{pending.retryable} retryable)"
+      )
 
-      true ->
-        queue_batch(total_pending)
-    end
+      cond do
+        total_pending >= @pending_threshold ->
+          Logger.info(
+            "ScheduledBackfill: Queue healthy (#{total_pending} >= #{@pending_threshold}), skipping batch"
+          )
+
+          :ok
+
+        true ->
+          queue_batch(total_pending)
+      end
+    end)
   end
 
   # Update baseline if it's stale (older than 24 hours)
