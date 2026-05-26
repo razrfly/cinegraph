@@ -20,12 +20,12 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
 
   # Handle database profile by name
   def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
-    ScoringService.apply_scoring(query, profile_name, options)
+    ScoringService.apply_scoring_from_cache(query, profile_name, options)
   end
 
   # Handle database profile struct
   def apply_scoring(query, %Cinegraph.Metrics.MetricWeightProfile{} = profile, options) do
-    ScoringService.apply_scoring(query, profile, options)
+    ScoringService.apply_scoring_from_cache(query, profile, options)
   end
 
   # New-style weight map with mob/critics — delegate to ScoringService
@@ -46,7 +46,7 @@ defmodule Cinegraph.Movies.DiscoveryScoringSimple do
       is_default: false
     }
 
-    ScoringService.apply_scoring(query, synthetic_profile, options)
+    ScoringService.apply_scoring_from_cache(query, synthetic_profile, options)
   end
 
   @doc """

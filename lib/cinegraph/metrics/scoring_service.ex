@@ -7,6 +7,7 @@ defmodule Cinegraph.Metrics.ScoringService do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Metrics.MetricWeightProfile
+  alias Cinegraph.Movies.MovieScoreCache
   alias Cinegraph.Scoring.Lenses
 
   require Logger
@@ -177,6 +178,64 @@ defmodule Cinegraph.Metrics.ScoringService do
       nil -> apply_scoring(query, get_default_profile(), options)
       profile -> apply_scoring(query, profile, options)
     end
+  end
+
+  @doc """
+  Fast path: applies discovery scoring by joining the precomputed `movie_score_caches`
+  table instead of re-joining all source data. Returns movies ordered by the weighted
+  sum of the 6 lens scores. Movies with no cache row are excluded (INNER JOIN).
+
+  Use this for interactive/user-facing queries. Keep `apply_scoring/3` for offline
+  computations or contexts where cache coverage may be incomplete.
+  """
+  def apply_scoring_from_cache(query, profile_or_name, options \\ %{})
+
+  def apply_scoring_from_cache(query, %MetricWeightProfile{} = profile, options) do
+    discovery_weights = profile_to_discovery_weights(profile)
+    normalized = normalize_weights(discovery_weights)
+    apply_cache_scoring(query, normalized, options)
+  end
+
+  def apply_scoring_from_cache(query, profile_name, options) when is_binary(profile_name) do
+    case get_profile(profile_name) do
+      nil -> apply_scoring_from_cache(query, get_default_profile(), options)
+      profile -> apply_scoring_from_cache(query, profile, options)
+    end
+  end
+
+  defp apply_cache_scoring(query, weights, options) do
+    min_score = Map.get(options, :min_score, 0.0)
+    mob = Map.get(weights, :mob, 0.0)
+    critics = Map.get(weights, :critics, 0.0)
+    festival = Map.get(weights, :festival_recognition, 0.0)
+    time_m = Map.get(weights, :time_machine, 0.0)
+    auteurs = Map.get(weights, :auteurs, 0.0)
+    box_office = Map.get(weights, :box_office, 0.0)
+
+    from m in query,
+      join: sc in MovieScoreCache,
+      on: sc.movie_id == m.id,
+      as: :score_cache,
+      where: sc.overall_score >= ^min_score,
+      order_by: [
+        desc_nulls_last:
+          fragment(
+            "?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0)",
+            ^mob,
+            sc.mob_score,
+            ^critics,
+            sc.critics_score,
+            ^festival,
+            sc.festival_recognition_score,
+            ^time_m,
+            sc.time_machine_score,
+            ^auteurs,
+            sc.auteurs_score,
+            ^box_office,
+            sc.box_office_score
+          )
+      ],
+      select: m
   end
 
   @doc """
