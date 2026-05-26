@@ -270,6 +270,11 @@ config :cinegraph, Oban,
 # Import movie import configuration
 import_config "import.exs"
 
+config :appsignal, :config,
+  otp_app: :cinegraph,
+  name: "cinegraph",
+  env: config_env()
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

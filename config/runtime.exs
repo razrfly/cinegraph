@@ -83,6 +83,9 @@ config :cinegraph, Cinegraph.Images.Providers.Pixabay, api_key: pixabay_api_key
 # Honeybadger — missing key disables reporting silently rather than crashing startup.
 config :honeybadger, api_key: System.get_env("HONEYBADGER_API_KEY")
 
+# AppSignal — push_api_key set at runtime so it's never baked into the image.
+config :appsignal, :config, push_api_key: System.get_env("APPSIGNAL_PUSH_API_KEY")
+
 # Cloudflare R2 image storage (#890). Used by Cinegraph.Images.R2 for
 # admin-uploaded festival logos / hero images. S3-compatible API; the
 # CLOUDFLARE_*, R2_BUCKET, and R2_CDN_URL env vars are required in prod.
