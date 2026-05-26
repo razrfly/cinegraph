@@ -842,13 +842,14 @@ defmodule Cinegraph.Collaborations do
   """
   def find_trending_collaborations(start_year, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
-    start_date = Date.new!(start_year, 1, 1)
 
     query =
       from c in Collaboration,
-        where: c.first_collaboration_date >= ^start_date,
-        where: c.collaboration_count >= 2,
-        order_by: [desc: c.total_revenue, desc: c.avg_movie_rating],
+        join: cd in assoc(c, :details),
+        where: cd.year >= ^start_year,
+        group_by: c.id,
+        having: count(cd.id) >= 2,
+        order_by: [desc: sum(cd.movie_revenue), desc: avg(cd.movie_rating)],
         limit: ^limit,
         preload: [:person_a, :person_b]
 

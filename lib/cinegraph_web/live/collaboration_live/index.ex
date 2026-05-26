@@ -174,22 +174,23 @@ defmodule CinegraphWeb.CollaborationLive.Index do
 
   defp batch_collaboration_details(ids) do
     query = """
-    SELECT cd.collaboration_id, cd.collaboration_type,
+    SELECT cd.collaboration_id,
+      STRING_AGG(DISTINCT cd.collaboration_type, ', ') as collaboration_types,
       AVG(cd.movie_rating) as avg_rating,
       SUM(cd.movie_revenue) as total_revenue,
       COUNT(DISTINCT cd.movie_id) as movie_count,
       MAX(cd.year) as latest_year
     FROM collaboration_details cd
     WHERE cd.collaboration_id = ANY($1)
-    GROUP BY cd.collaboration_id, cd.collaboration_type
+    GROUP BY cd.collaboration_id
     """
 
     case Cinegraph.Repo.replica().query(query, [ids]) do
       {:ok, %{rows: rows}} ->
-        Map.new(rows, fn [id, type, avg_rating, revenue, count, year] ->
+        Map.new(rows, fn [id, types, avg_rating, revenue, count, year] ->
           {id,
            %{
-             collaboration_type: type,
+             collaboration_types: String.split(types || "", ", ", trim: true),
              avg_rating: avg_rating,
              total_revenue: revenue || 0,
              movie_count: count,
@@ -204,7 +205,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
 
   defp default_collab_details do
     %{
-      collaboration_type: "unknown",
+      collaboration_types: [],
       avg_rating: nil,
       total_revenue: 0,
       movie_count: 0,
