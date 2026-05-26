@@ -121,6 +121,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
       people_match={@params["people_match"]}
       selected_decade={@params["decade"]}
       rating_preset={@params["rating_preset"]}
+      max_age={@params["max_age"]}
       show_unreleased={@params["show_unreleased"]}
       active_filter_count={@active_filter_count}
       scope={@scope}

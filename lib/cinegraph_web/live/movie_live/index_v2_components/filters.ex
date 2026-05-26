@@ -12,7 +12,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.Filters do
   alias CinegraphWeb.NeutralV2Components
 
   @primary_sort_keys ~w(release_date score popularity)
-  @basic_filter_keys ~w(search genres decade lists festivals companies people rating_preset show_unreleased)
+  @basic_filter_keys ~w(search genres decade lists festivals companies people rating_preset max_age show_unreleased)
 
   attr :search_term, :string, default: ""
   attr :sort_options, :list, required: true

@@ -42,6 +42,7 @@ defmodule Cinegraph.Movies.Query.Params do
     field :runtime_min, :integer
     field :runtime_max, :integer
     field :rating_min, :float
+    field :max_age, :integer
 
     # Award filters
     field :award_status, :string
@@ -125,6 +126,7 @@ defmodule Cinegraph.Movies.Query.Params do
       :runtime_min,
       :runtime_max,
       :rating_min,
+      :max_age,
       :award_status,
       :festival_id,
       :award_category_id,
@@ -155,6 +157,7 @@ defmodule Cinegraph.Movies.Query.Params do
     |> validate_number(:runtime_min, greater_than_or_equal_to: 0)
     |> validate_number(:runtime_max, greater_than_or_equal_to: 0)
     |> validate_number(:rating_min, greater_than_or_equal_to: 0, less_than_or_equal_to: 10)
+    |> validate_number(:max_age, greater_than_or_equal_to: 0, less_than_or_equal_to: 99)
     |> validate_year_range()
   end
 
@@ -311,7 +314,7 @@ defmodule Cinegraph.Movies.Query.Params do
     numeric_fields = ~w(page per_page year year_from year_to decade 
                         runtime_min runtime_max festival_id award_category_id
                         award_year_from award_year_to genres countries festivals
-                        production_company_ids)
+                        production_company_ids max_age)
 
     float_fields = ~w(rating_min festival_recognition_min time_machine_min auteurs_min)
 

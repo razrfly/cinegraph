@@ -5,6 +5,7 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
   """
 
   import Ecto.Query
+  alias Cinegraph.Movies.ContentRating
   alias Cinegraph.Movies.Query.Params
 
   def apply_all(query, %Params{} = params) do
@@ -17,6 +18,7 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
     |> filter_by_decade(params.decade)
     |> filter_by_runtime(params)
     |> filter_by_rating(params.rating_min)
+    |> filter_by_max_age(params.max_age)
     |> filter_by_awards(params)
     |> filter_by_rating_preset(params.rating_preset)
     |> filter_by_discovery_preset(params.discovery_preset)
@@ -162,6 +164,120 @@ defmodule Cinegraph.Movies.Query.CustomFilters do
         "(SELECT value FROM external_metrics WHERE movie_id = ? AND source = 'tmdb' AND metric_type = 'rating_average' ORDER BY fetched_at DESC LIMIT 1) >= ?",
         m.id,
         ^min_rating
+      )
+    )
+  end
+
+  defp filter_by_max_age(query, nil), do: query
+
+  defp filter_by_max_age(query, max_age) when is_integer(max_age) do
+    allowed = ContentRating.certifications_for_max_age("US", max_age)
+
+    if allowed == [] do
+      where(query, [m], false)
+    else
+      excluded = ContentRating.certifications_for_max_age("US", 99) -- allowed
+      apply_age_filter(query, allowed, excluded)
+    end
+  end
+
+  defp filter_by_max_age(query, _), do: query
+
+  defp apply_age_filter(query, allowed, []) do
+    where(
+      query,
+      [m],
+      fragment(
+        """
+        (
+          EXISTS (
+            SELECT 1
+            FROM external_metrics em
+            WHERE em.movie_id = ?
+              AND em.source = 'omdb'
+              AND em.metric_type = 'content_rating'
+              AND upper(regexp_replace(trim(em.text_value), '^RATED\\s+', '', 'i')) = ANY(?)
+          )
+          OR (
+            NOT EXISTS (
+              SELECT 1
+              FROM external_metrics em2
+              WHERE em2.movie_id = ?
+                AND em2.source = 'omdb'
+                AND em2.metric_type = 'content_rating'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM movie_release_dates mrd
+              WHERE mrd.movie_id = ?
+                AND mrd.country_code = 'US'
+                AND mrd.certification IS NOT NULL
+                AND mrd.certification != ''
+                AND upper(regexp_replace(trim(mrd.certification), '^RATED\\s+', '', 'i')) = ANY(?)
+            )
+          )
+        )
+        """,
+        m.id,
+        ^allowed,
+        m.id,
+        m.id,
+        ^allowed
+      )
+    )
+  end
+
+  defp apply_age_filter(query, allowed, excluded) do
+    where(
+      query,
+      [m],
+      fragment(
+        """
+        (
+          EXISTS (
+            SELECT 1
+            FROM external_metrics em
+            WHERE em.movie_id = ?
+              AND em.source = 'omdb'
+              AND em.metric_type = 'content_rating'
+              AND upper(regexp_replace(trim(em.text_value), '^RATED\\s+', '', 'i')) = ANY(?)
+          )
+          OR (
+            NOT EXISTS (
+              SELECT 1
+              FROM external_metrics em2
+              WHERE em2.movie_id = ?
+                AND em2.source = 'omdb'
+                AND em2.metric_type = 'content_rating'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM movie_release_dates mrd
+              WHERE mrd.movie_id = ?
+                AND mrd.country_code = 'US'
+                AND mrd.certification IS NOT NULL
+                AND mrd.certification != ''
+                AND upper(regexp_replace(trim(mrd.certification), '^RATED\\s+', '', 'i')) = ANY(?)
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM movie_release_dates mrd2
+              WHERE mrd2.movie_id = ?
+                AND mrd2.country_code = 'US'
+                AND mrd2.certification IS NOT NULL
+                AND mrd2.certification != ''
+                AND upper(regexp_replace(trim(mrd2.certification), '^RATED\\s+', '', 'i')) = ANY(?)
+            )
+          )
+        )
+        """,
+        m.id,
+        ^allowed,
+        m.id,
+        m.id,
+        ^allowed,
+        m.id,
+        ^excluded
       )
     )
   end

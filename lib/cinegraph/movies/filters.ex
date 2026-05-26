@@ -5,6 +5,7 @@ defmodule Cinegraph.Movies.Filters do
   """
 
   import Ecto.Query
+  alias Cinegraph.Movies.ContentRating
 
   @doc """
   Apply all filters to a movie query.
@@ -21,6 +22,7 @@ defmodule Cinegraph.Movies.Filters do
     |> filter_by_lists(params["lists"])
     |> filter_by_runtime(params["runtime_min"], params["runtime_max"])
     |> filter_by_rating(params["rating_min"])
+    |> filter_by_max_age(params["max_age"])
     |> filter_unreleased(params["show_unreleased"])
     # New advanced filters
     |> filter_by_awards(params)
@@ -39,6 +41,132 @@ defmodule Cinegraph.Movies.Filters do
     else
       query
     end
+  end
+
+  defp filter_by_max_age(query, nil), do: query
+  defp filter_by_max_age(query, ""), do: query
+
+  defp filter_by_max_age(query, max_age) when is_binary(max_age) do
+    case Integer.parse(max_age) do
+      {age, ""} -> filter_by_max_age(query, age)
+      _ -> query
+    end
+  end
+
+  defp filter_by_max_age(query, max_age) when is_integer(max_age) do
+    allowed = ContentRating.certifications_for_max_age("US", max_age)
+
+    if allowed == [] do
+      where(query, [m], false)
+    else
+      # Certs that are too strict for max_age (used to enforce most-conservative
+      # TMDb logic — if any US cert is stricter, the TMDb branch must not pass).
+      excluded = ContentRating.certifications_for_max_age("US", 99) -- allowed
+      apply_age_filter(query, allowed, excluded)
+    end
+  end
+
+  defp filter_by_max_age(query, _), do: query
+
+  # When excluded is empty every known cert qualifies — skip the NOT EXISTS clause
+  # to avoid binding an empty array, which PostgreSQL cannot type-infer.
+  defp apply_age_filter(query, allowed, []) do
+    where(
+      query,
+      [m],
+      fragment(
+        """
+        (
+          EXISTS (
+            SELECT 1
+            FROM external_metrics em
+            WHERE em.movie_id = ?
+              AND em.source = 'omdb'
+              AND em.metric_type = 'content_rating'
+              AND upper(regexp_replace(trim(em.text_value), '^RATED\\s+', '', 'i')) = ANY(?)
+          )
+          OR (
+            NOT EXISTS (
+              SELECT 1
+              FROM external_metrics em2
+              WHERE em2.movie_id = ?
+                AND em2.source = 'omdb'
+                AND em2.metric_type = 'content_rating'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM movie_release_dates mrd
+              WHERE mrd.movie_id = ?
+                AND mrd.country_code = 'US'
+                AND mrd.certification IS NOT NULL
+                AND mrd.certification != ''
+                AND upper(regexp_replace(trim(mrd.certification), '^RATED\\s+', '', 'i')) = ANY(?)
+            )
+          )
+        )
+        """,
+        m.id,
+        ^allowed,
+        m.id,
+        m.id,
+        ^allowed
+      )
+    )
+  end
+
+  defp apply_age_filter(query, allowed, excluded) do
+    where(
+      query,
+      [m],
+      fragment(
+        """
+        (
+          EXISTS (
+            SELECT 1
+            FROM external_metrics em
+            WHERE em.movie_id = ?
+              AND em.source = 'omdb'
+              AND em.metric_type = 'content_rating'
+              AND upper(regexp_replace(trim(em.text_value), '^RATED\\s+', '', 'i')) = ANY(?)
+          )
+          OR (
+            NOT EXISTS (
+              SELECT 1
+              FROM external_metrics em2
+              WHERE em2.movie_id = ?
+                AND em2.source = 'omdb'
+                AND em2.metric_type = 'content_rating'
+            )
+            AND EXISTS (
+              SELECT 1
+              FROM movie_release_dates mrd
+              WHERE mrd.movie_id = ?
+                AND mrd.country_code = 'US'
+                AND mrd.certification IS NOT NULL
+                AND mrd.certification != ''
+                AND upper(regexp_replace(trim(mrd.certification), '^RATED\\s+', '', 'i')) = ANY(?)
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM movie_release_dates mrd2
+              WHERE mrd2.movie_id = ?
+                AND mrd2.country_code = 'US'
+                AND mrd2.certification IS NOT NULL
+                AND mrd2.certification != ''
+                AND upper(regexp_replace(trim(mrd2.certification), '^RATED\\s+', '', 'i')) = ANY(?)
+            )
+          )
+        )
+        """,
+        m.id,
+        ^allowed,
+        m.id,
+        m.id,
+        ^allowed,
+        m.id,
+        ^excluded
+      )
+    )
   end
 
   defp has_joins?(%Ecto.Query{joins: joins}) when length(joins) > 0, do: true

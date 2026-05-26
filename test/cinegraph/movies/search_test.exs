@@ -9,6 +9,7 @@ defmodule Cinegraph.Movies.SearchTest do
     ExternalMetric,
     Genre,
     Movie,
+    MovieReleaseDate,
     MovieScoreCache,
     MovieList,
     Person,
@@ -134,6 +135,135 @@ defmodule Cinegraph.Movies.SearchTest do
 
       assert movie_titles(movies) == ["Genre Malformed Drama"]
       assert meta.total_count == 1
+    end
+  end
+
+  describe "search_movies/1 max_age filter" do
+    test "returns movies with OMDb content ratings at or below the selected age" do
+      g = insert_movie!("Age Filter G")
+      pg = insert_movie!("Age Filter PG")
+      pg13 = insert_movie!("Age Filter PG-13")
+      r = insert_movie!("Age Filter R")
+      unknown = insert_movie!("Age Filter Unknown")
+
+      add_omdb_content_rating!(g, "G")
+      add_omdb_content_rating!(pg, "PG")
+      add_omdb_content_rating!(pg13, "PG-13")
+      add_omdb_content_rating!(r, "R")
+      add_omdb_content_rating!(unknown, "NR")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "max_age" => "12",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Age Filter G", "Age Filter PG"]
+      assert meta.total_count == 2
+    end
+
+    test "excludes movies without known content ratings while active" do
+      _unrated = insert_movie!("Age Filter Missing Rating")
+      pg = insert_movie!("Age Filter Known PG")
+
+      add_omdb_content_rating!(pg, "Rated PG")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "max_age" => "12",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Age Filter Known PG"]
+      assert meta.total_count == 1
+    end
+
+    test "falls back to TMDb US certification when no OMDb content_rating row exists" do
+      pg_via_tmdb = insert_movie!("TMDb Cert PG")
+      r_via_tmdb = insert_movie!("TMDb Cert R")
+
+      add_tmdb_us_cert!(pg_via_tmdb, "PG")
+      add_tmdb_us_cert!(r_via_tmdb, "R")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "max_age" => "12",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["TMDb Cert PG"]
+      assert meta.total_count == 1
+    end
+
+    test "TMDb cert and OMDb cert compose correctly — both sources contribute" do
+      omdb_pg = insert_movie!("Dual Source OMDb PG")
+      tmdb_pg = insert_movie!("Dual Source TMDb PG")
+      r_only = insert_movie!("Dual Source R Only")
+
+      add_omdb_content_rating!(omdb_pg, "PG")
+      add_tmdb_us_cert!(tmdb_pg, "PG")
+      add_omdb_content_rating!(r_only, "R")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "max_age" => "12",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Dual Source OMDb PG", "Dual Source TMDb PG"]
+      assert meta.total_count == 2
+    end
+
+    test "OMDb R blocks movie even when TMDb US cert is PG" do
+      movie = insert_movie!("Precedence OMDb R TMDb PG")
+      add_omdb_content_rating!(movie, "R")
+      add_tmdb_us_cert!(movie, "PG")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "max_age" => "12",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == []
+      assert meta.total_count == 0
+    end
+
+    test "OMDb PG passes even when TMDb US cert is R — OMDb decides, TMDb not consulted" do
+      movie = insert_movie!("Precedence OMDb PG TMDb R")
+      add_omdb_content_rating!(movie, "PG")
+      add_tmdb_us_cert!(movie, "R")
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "max_age" => "12",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == ["Precedence OMDb PG TMDb R"]
+      assert meta.total_count == 1
+    end
+
+    test "stricter TMDb US cert blocks movie even when a more lenient US cert also exists" do
+      movie = insert_movie!("TMDb Conflict R Theatrical PG Digital")
+      add_tmdb_us_cert!(movie, "R", release_type: 3)
+      add_tmdb_us_cert!(movie, "PG", release_type: 4)
+
+      assert {:ok, {movies, meta}} =
+               Search.search_movies_uncached(%{
+                 "max_age" => "12",
+                 "per_page" => "10",
+                 "sort" => "title_asc"
+               })
+
+      assert movie_titles(movies) == []
+      assert meta.total_count == 0
     end
   end
 
@@ -615,6 +745,33 @@ defmodule Cinegraph.Movies.SearchTest do
         fetched_at: fetched_at
       })
     end)
+
+    movie
+  end
+
+  defp add_omdb_content_rating!(movie, rating) do
+    Repo.insert!(%ExternalMetric{
+      movie_id: movie.id,
+      source: "omdb",
+      metric_type: "content_rating",
+      text_value: rating,
+      fetched_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+
+    movie
+  end
+
+  defp add_tmdb_us_cert!(movie, certification, opts \\ []) do
+    release_type = Keyword.get(opts, :release_type, 3)
+
+    %MovieReleaseDate{}
+    |> MovieReleaseDate.changeset(%{
+      movie_id: movie.id,
+      country_code: "US",
+      certification: certification,
+      release_type: release_type
+    })
+    |> Repo.insert!()
 
     movie
   end

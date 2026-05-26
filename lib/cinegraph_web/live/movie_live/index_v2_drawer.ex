@@ -22,6 +22,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
   attr :people_match, :string, default: nil
   attr :selected_decade, :string, default: nil
   attr :rating_preset, :string, default: nil
+  attr :max_age, :string, default: nil
   attr :show_unreleased, :string, default: nil
   attr :active_filter_count, :integer, default: 0
   attr :scope, :map, default: %{}
@@ -124,6 +125,25 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             phx-value-mode="single"
           >
             {d.label}
+          </NeutralV2Components.n_chip_toggle>
+        </div>
+      </section>
+
+      <%!-- ─── Age Rating (single-select pills) ─── --%>
+      <section>
+        <h3 class="text-[11px] font-semibold tracking-[.08em] uppercase text-mist-500 dark:text-mist-400 mb-3">
+          Age Rating
+        </h3>
+        <div class="flex flex-wrap gap-2">
+          <NeutralV2Components.n_chip_toggle
+            :for={{value, label} <- age_rating_options()}
+            active={to_string(@max_age || "") == value}
+            phx-click="toggle_chip"
+            phx-value-key="max_age"
+            phx-value-id={value}
+            phx-value-mode="single"
+          >
+            {label}
           </NeutralV2Components.n_chip_toggle>
         </div>
       </section>
@@ -264,6 +284,15 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
       {"highly_rated", "7.5+", "Acclaimed"},
       {"well_reviewed", "6.0+", "Solid"},
       {"critically_acclaimed", "Top tier", "Critics' picks"}
+    ]
+  end
+
+  defp age_rating_options do
+    [
+      {"6", "All ages"},
+      {"12", "7+"},
+      {"16", "13+"},
+      {"99", "17+"}
     ]
   end
 
