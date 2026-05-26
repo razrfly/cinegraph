@@ -81,7 +81,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
   def format_money(n) when is_number(n) and n >= 1_000_000,
     do: "$#{Float.round(n / 1_000_000, 1)}M"
 
-  def format_money(n) when is_number(n), do: "$#{n}"
+  def format_money(n) when is_number(n),
+    do: "$#{Number.Delimit.number_to_delimited(trunc(n), delimiter: ",", separator: ".")}"
 
   @doc "Finds a rating metric by source key and metric type."
   def rating_value(ratings, source_key, type \\ "rating_average") do

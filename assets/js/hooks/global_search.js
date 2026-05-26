@@ -42,11 +42,25 @@ const GlobalSearch = {
   mounted() {
     this.input = this.el.querySelector("#global-search-input")
     this.listboxId = "global-search-listbox"
+    this._blurTimer = null
 
     // Push current recents to the LiveView so the empty-state panel renders.
     const recents = readRecents()
     if (recents.length > 0) {
       this.pushEventTo(this.el, "update_recents", { recents })
+    }
+
+    // Drive focus/blur from JS so we can delay the blur long enough for a
+    // click on a dropdown item to complete before the server closes it.
+    this.handleFocus = () => {
+      clearTimeout(this._blurTimer)
+      this.pushEventTo(this.el, "focus", {})
+    }
+
+    this.handleBlur = () => {
+      this._blurTimer = setTimeout(() => {
+        this.pushEventTo(this.el, "blur", {})
+      }, 150)
     }
 
     this.handleWindowKeydown = (e) => {
@@ -99,6 +113,8 @@ const GlobalSearch = {
 
     window.addEventListener("keydown", this.handleWindowKeydown)
     this.input?.addEventListener("keydown", this.handleInputKeydown)
+    this.input?.addEventListener("focus", this.handleFocus)
+    this.input?.addEventListener("blur",  this.handleBlur)
     this.el.addEventListener("click", this.handleClick)
   },
 
@@ -109,8 +125,11 @@ const GlobalSearch = {
   },
 
   destroyed() {
+    clearTimeout(this._blurTimer)
     window.removeEventListener("keydown", this.handleWindowKeydown)
     this.input?.removeEventListener("keydown", this.handleInputKeydown)
+    this.input?.removeEventListener("focus", this.handleFocus)
+    this.input?.removeEventListener("blur",  this.handleBlur)
     this.el.removeEventListener("click", this.handleClick)
   },
 

@@ -20,7 +20,7 @@ defmodule CinegraphWeb.GlobalSearch.Components do
           class="flex items-center gap-2 px-2 py-2 rounded-md text-[13px] text-mist-950 dark:text-white hover:bg-mist-50 dark:hover:bg-white/5 no-underline"
         >
           <span class="text-mist-500 dark:text-mist-400" aria-hidden="true">🕘</span>
-          {r["label"]}
+          <span class="text-mist-950 dark:text-white truncate">{r["label"]}</span>
         </a>
       </li>
     </ul>

@@ -123,8 +123,6 @@ defmodule CinegraphWeb.GlobalSearchLive do
             value={@query}
             placeholder="Search films, people, lists, companies…"
             phx-debounce="200"
-            phx-focus="focus"
-            phx-blur="blur"
             role="combobox"
             aria-haspopup="listbox"
             aria-expanded={if dropdown_visible?(assigns), do: "true", else: "false"}
@@ -139,7 +137,6 @@ defmodule CinegraphWeb.GlobalSearchLive do
         <div
           id="global-search-listbox"
           role="listbox"
-          phx-mousedown-prevent
           class="absolute top-[calc(100%+6px)] left-0 right-0 bg-white dark:bg-mist-900 rounded-lg border border-mist-950/10 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,.08)] dark:shadow-[0_8px_32px_rgba(0,0,0,.5)] overflow-hidden z-10 max-h-[70vh] overflow-y-auto"
         >
           <%= cond do %>
