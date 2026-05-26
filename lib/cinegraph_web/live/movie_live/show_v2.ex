@@ -880,24 +880,29 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 {if @show_all_releases, do: "Show top 8", else: "Show all #{length(all_releases)}"}
               </button>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+
+            <div class="flex flex-wrap gap-2">
               <div
                 :for={r <- visible_releases}
-                class="bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-lg p-4"
+                class="inline-flex items-center gap-2 bg-mist-50 dark:bg-mist-900 border border-mist-950/10 dark:border-white/10 rounded-full px-3 py-[7px]"
               >
-                <div class="text-[11px] font-semibold text-mist-500 dark:text-mist-400 tracking-[.06em] uppercase">
+                <span class="text-[15px] leading-none">
+                  {Availability.flag_emoji(r.country_code) || "🌐"}
+                </span>
+                <span class="text-[11.5px] font-semibold text-mist-950 dark:text-white">
                   {r.country_code}
-                </div>
-                <div class="mt-1 text-[13px] text-mist-950 dark:text-white tabular-nums">
+                </span>
+                <span class="text-mist-300 dark:text-mist-600 text-[10px]">·</span>
+                <span class="text-[11px] text-mist-600 dark:text-mist-400 tabular-nums">
                   <%= if r.release_date do %>
-                    {Calendar.strftime(r.release_date, "%Y-%m-%d")}
+                    {Calendar.strftime(r.release_date, "%b %Y")}
                   <% else %>
                     —
                   <% end %>
-                </div>
+                </span>
                 <span
                   :if={r.certification}
-                  class="inline-block mt-2 px-2 py-[2px] rounded text-[10.5px] font-semibold bg-mist-100 dark:bg-mist-800 text-mist-700 dark:text-mist-300 border border-mist-950/10 dark:border-white/10"
+                  class="px-[5px] py-[1px] rounded text-[9.5px] font-bold bg-mist-200 dark:bg-mist-800 text-mist-700 dark:text-mist-300"
                 >
                   {r.certification}
                 </span>
@@ -910,6 +915,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             <h2 class="font-display italic text-[24px] tracking-[-.01em] text-mist-950 dark:text-white mb-6">
               Technical details
             </h2>
+
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-[13px]">
               <div
                 :if={format_money(Map.get(@movie, :budget))}
