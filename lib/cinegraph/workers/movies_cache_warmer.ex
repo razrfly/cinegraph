@@ -23,7 +23,8 @@ defmodule Cinegraph.Workers.MoviesCacheWarmer do
   use Oban.Worker,
     queue: :maintenance,
     max_attempts: 3,
-    priority: 2
+    priority: 2,
+    unique: [period: 1800]
 
   require Logger
   alias Cinegraph.Movies.{Cache, Search}

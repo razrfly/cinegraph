@@ -135,7 +135,6 @@ defmodule Cinegraph.Movies.ProductionCompanyTest do
       stats_company = Enum.find(companies, &(&1.id == company.id))
       refute Enum.any?(companies, &(&1.id == orphan.id))
       assert stats_company.movie_count == 1
-      assert stats_company.latest_movie_title == "Full Movie"
     end
 
     test "audit detects SVG logo metadata and missing company metadata" do

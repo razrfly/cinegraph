@@ -573,13 +573,7 @@ defmodule Cinegraph.Movies do
           inserted_at: c.inserted_at,
           updated_at: c.updated_at,
           movie_count: count(m.id),
-          latest_movie_release_date: max(m.release_date),
-          latest_movie_title:
-            fragment(
-              "(array_remove(array_agg(? ORDER BY ? DESC NULLS LAST), NULL))[1]",
-              m.title,
-              m.release_date
-            )
+          latest_movie_release_date: max(m.release_date)
         }
       )
 

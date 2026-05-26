@@ -7,6 +7,7 @@ defmodule CinegraphWeb.ListLive.Index do
 
   alias Cinegraph.Lists.ListSlugs
   alias Cinegraph.Movies
+  alias Cinegraph.Movies.Cache
 
   @categories ~w(all critics curated registry)
 
@@ -80,13 +81,15 @@ defmodule CinegraphWeb.ListLive.Index do
   defp normalize_category(_category), do: "all"
 
   defp lists_with_counts do
-    lists = ListSlugs.all()
-    counts_by_key = Movies.count_movies_by_list_keys(Enum.map(lists, & &1.key))
+    Cache.fetch_or_compute("list_live_counts", :timer.hours(1), fn ->
+      lists = ListSlugs.all()
+      counts_by_key = Movies.count_movies_by_list_keys(Enum.map(lists, & &1.key))
 
-    Enum.map(lists, fn list ->
-      list
-      |> Map.put(:movie_count, Map.get(counts_by_key, list.key, 0))
-      |> Map.put(:category, list[:category] || list["category"] || "curated")
+      Enum.map(lists, fn list ->
+        list
+        |> Map.put(:movie_count, Map.get(counts_by_key, list.key, 0))
+        |> Map.put(:category, list[:category] || list["category"] || "curated")
+      end)
     end)
   end
 end
