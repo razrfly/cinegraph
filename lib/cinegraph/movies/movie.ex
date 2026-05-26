@@ -148,6 +148,7 @@ defmodule Cinegraph.Movies.Movie do
     field :score_hidden_reason, :string, virtual: true
     field :score_explanation_short, :string, virtual: true
     field :score_explanation_detail, :string, virtual: true
+    field :cert_label, :string, virtual: true
 
     timestamps()
   end

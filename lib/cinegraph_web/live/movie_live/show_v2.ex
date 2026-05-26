@@ -60,6 +60,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
         {:noreply,
          socket
          |> assign(data)
+         |> assign(:age_rating, age_rating_badge(data.metrics, data.release_dates))
          |> assign(:in_theaters, in_theaters)
          |> assign(:active_regions, display_regions)
          |> assign(
@@ -282,7 +283,6 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             <div class="text-[12px] font-semibold text-white/70 tracking-[.06em] uppercase mb-3">
               {year_of(@movie.release_date)}
               <span :if={@movie.runtime}>{" · #{format_runtime(@movie.runtime)}"}</span>
-              <span :if={content_rating(@metrics)}>{" · #{content_rating(@metrics)}"}</span>
               <span
                 :if={disparity_label(@disparity_data[:disparity_category])}
                 class="ml-3 text-amber-300 font-display italic normal-case tracking-normal"
@@ -301,6 +301,23 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
             >
               "{@movie.tagline}"
             </p>
+
+            <%!-- MPAA-style rating badge --%>
+            <% rating = content_rating(@metrics) %>
+            <div :if={rating || @age_rating} class="mt-4 flex items-center gap-2.5">
+              <span
+                :if={rating}
+                class="inline-flex items-center justify-center min-w-[36px] h-9 px-1.5 border-2 border-white/80 text-white text-[16px] font-black tracking-tight rounded-[3px] leading-none"
+              >
+                {rating}
+              </span>
+              <span
+                :if={@age_rating}
+                class="text-white/60 text-[12px] font-semibold uppercase tracking-[.06em]"
+              >
+                {age_label(@age_rating)}
+              </span>
+            </div>
 
             <%!-- Ratings strip — V1 hero_ratings_row inspired --%>
             <div class="mt-5 flex items-center gap-x-6 gap-y-2 flex-wrap text-white">
@@ -870,6 +887,19 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 <span class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic tabular-nums ml-2">
                   {length(all_releases)}
                 </span>
+                <span
+                  :if={@age_rating}
+                  class="text-mist-500 dark:text-mist-400 text-[14px] font-sans not-italic ml-1"
+                >
+                  ·
+                  <button
+                    id="age-rating-badge"
+                    phx-click={JS.toggle(to: "#age-rating-popover")}
+                    class="inline-flex items-center px-[7px] py-[2px] rounded text-[11.5px] font-bold bg-mist-200 dark:bg-mist-800 text-mist-700 dark:text-mist-300 hover:bg-mist-300 dark:hover:bg-mist-700 transition-colors"
+                  >
+                    {age_label(@age_rating)}
+                  </button>
+                </span>
               </h2>
               <button
                 :if={length(all_releases) > 8}
@@ -879,6 +909,31 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
               >
                 {if @show_all_releases, do: "Show top 8", else: "Show all #{length(all_releases)}"}
               </button>
+            </div>
+
+            <div
+              :if={@age_rating}
+              id="age-rating-popover"
+              class="hidden mb-5 max-w-xs rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-4 shadow-lg"
+            >
+              <div class="text-[11px] font-semibold tracking-[.06em] uppercase text-mist-500 dark:text-mist-400 mb-1">
+                Cinegraph Age Rating
+              </div>
+              <div class="text-[22px] font-display italic text-mist-950 dark:text-white mb-3">
+                {age_label(@age_rating)}
+              </div>
+              <div class="space-y-[6px] mb-3">
+                <div
+                  :for={{_age, cert, source} <- age_rating_sources(@metrics, @release_dates)}
+                  class="flex items-center justify-between text-[12px]"
+                >
+                  <span class="text-mist-600 dark:text-mist-400">{source_label(source)}</span>
+                  <span class="font-semibold text-mist-950 dark:text-white">{cert}</span>
+                </div>
+              </div>
+              <p class="text-[11px] text-mist-500 dark:text-mist-400">
+                Where sources disagree, we use the most conservative rating.
+              </p>
             </div>
 
             <div class="flex flex-wrap gap-2">

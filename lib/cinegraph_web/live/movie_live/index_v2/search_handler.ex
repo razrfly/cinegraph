@@ -56,6 +56,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2.SearchHandler do
     case Search.search_movies(query_params) do
       {:ok, {movies, meta}} ->
         movies = Results.preload_card_assocs(movies, active_lens_key)
+        movies = if params["max_age"], do: Results.preload_cert_labels(movies), else: movies
 
         socket
         |> assign(:movies, movies)

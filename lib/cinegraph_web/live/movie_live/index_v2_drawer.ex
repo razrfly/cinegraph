@@ -146,6 +146,9 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
             {label}
           </NeutralV2Components.n_chip_toggle>
         </div>
+        <p class="text-[11px] text-mist-500 dark:text-mist-400 mt-2">
+          Unrated films are hidden when this filter is active.
+        </p>
       </section>
 
       <%!-- ─── Rating Quality (segmented control) ─── --%>
@@ -289,6 +292,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Drawer do
 
   defp age_rating_options do
     [
+      {"", "All"},
       {"6", "All ages"},
       {"12", "7+"},
       {"16", "13+"},
