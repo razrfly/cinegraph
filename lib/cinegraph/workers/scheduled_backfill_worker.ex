@@ -55,6 +55,8 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Repo.Worker.query!("SET statement_timeout = '120s'")
     Logger.info("ScheduledBackfill: Starting hourly health check...")
 
     # Update baseline from TMDb export if stale (daily)

@@ -34,7 +34,9 @@ env:
     # restarts over 2026-05-10 → 2026-05-15). #908 raised the default to 15
     # and added queue_target/queue_interval; this env override holds the
     # prod-tested value of 25 to mirror POOL_SIZE.
-    REPLICA_POOL_SIZE: "25"
+    # Bumped to 40 (#963) — pool exhaustion still active at 25 while Phase 3
+    # slow-query fixes are in progress; 40+25+5=70 total, well under pg max_connections.
+    REPLICA_POOL_SIZE: "40"
   secret:
     - SECRET_KEY_BASE
     - DATABASE_USERNAME

@@ -15,8 +15,4 @@ defmodule CinegraphWeb.PageController do
   def redirect_to_movies(conn, _params) do
     redirect(conn, to: "/movies")
   end
-
-  def appsignal_test(_conn, _params) do
-    raise "AppSignal test error — delete this action after verifying"
-  end
 end

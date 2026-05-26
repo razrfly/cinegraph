@@ -7,7 +7,7 @@ defmodule Cinegraph.Movies.MovieCollaborations do
   import Ecto.Query, warn: false
 
   alias Cinegraph.Repo
-  alias Cinegraph.Movies.{Credit, Movie, MovieScoring}
+  alias Cinegraph.Movies.MovieScoring
 
   @movie_show_collaboration_policy %{
     included_types: [:actor_actor, :director_actor, :director_director],
@@ -19,146 +19,177 @@ defmodule Cinegraph.Movies.MovieCollaborations do
   Get key collaborations (director-actor reunions and actor partnerships) for a movie.
   """
   def get_key_collaborations(cast, crew) do
-    # Get directors
     directors = Enum.filter(crew, &(&1.job == "Director"))
-
-    # Get top actors
     top_actors = Enum.take(cast, 10)
 
-    # Director-Actor reunions
-    director_actor_reunions =
-      for director <- directors,
-          actor <- top_actors do
-        movies = linked_movies(actor.person, :actor, director.person, :director)
+    director_person_ids =
+      directors |> Enum.map(& &1.person) |> Enum.map(&person_id/1) |> Enum.reject(&is_nil/1)
 
-        if length(movies) >= @movie_show_collaboration_policy.min_films_together do
-          %{
-            type: :director_actor,
-            display_category: :actor_director,
-            roles_summary: "actor/director partnership",
-            person_a: actor.person,
-            person_b: director.person,
-            collaboration_count: length(movies),
-            films_together: length(movies),
-            movies: movies,
-            is_reunion: true
-          }
+    actor_person_ids =
+      top_actors |> Enum.map(& &1.person) |> Enum.map(&person_id/1) |> Enum.reject(&is_nil/1)
+
+    all_person_ids = Enum.uniq(director_person_ids ++ actor_person_ids)
+
+    if length(all_person_ids) < 2 do
+      empty_collaborations()
+    else
+      movies_batch = batch_linked_movies(all_person_ids)
+
+      director_actor_reunions =
+        for director <- directors,
+            actor <- top_actors,
+            director_id = person_id(director.person),
+            actor_id = person_id(actor.person),
+            not is_nil(director_id),
+            not is_nil(actor_id) do
+          shared =
+            movies_batch
+            |> Enum.filter(fn m ->
+              director_id in (m.director_ids || []) and actor_id in (m.actor_ids || [])
+            end)
+            |> Enum.map(&shape_timeline_movie/1)
+
+          if length(shared) >= @movie_show_collaboration_policy.min_films_together do
+            %{
+              type: :director_actor,
+              display_category: :actor_director,
+              roles_summary: "actor/director partnership",
+              person_a: actor.person,
+              person_b: director.person,
+              collaboration_count: length(shared),
+              films_together: length(shared),
+              movies: shared,
+              is_reunion: true
+            }
+          end
         end
-      end
-      |> Enum.reject(&is_nil/1)
+        |> Enum.reject(&is_nil/1)
 
-    # Actor-Actor partnerships
-    actor_partnerships =
-      for {actor1, idx} <- Enum.with_index(top_actors),
-          actor2 <- Enum.drop(top_actors, idx + 1) do
-        movies = linked_movies(actor1.person, :actor, actor2.person, :actor)
+      actor_partnerships =
+        for {actor1, idx} <- Enum.with_index(top_actors),
+            actor2 <- Enum.drop(top_actors, idx + 1),
+            id1 = person_id(actor1.person),
+            id2 = person_id(actor2.person),
+            not is_nil(id1),
+            not is_nil(id2) do
+          shared =
+            movies_batch
+            |> Enum.filter(fn m ->
+              id1 in (m.actor_ids || []) and id2 in (m.actor_ids || [])
+            end)
+            |> Enum.map(&shape_timeline_movie/1)
 
-        if length(movies) >= @movie_show_collaboration_policy.min_films_together do
-          %{
-            type: :actor_actor,
-            display_category: :actor_pair,
-            roles_summary: "acting partnership",
-            person_a: actor1.person,
-            person_b: actor2.person,
-            collaboration_count: length(movies),
-            films_together: length(movies),
-            movies: movies,
-            is_reunion: true
-          }
+          if length(shared) >= @movie_show_collaboration_policy.min_films_together do
+            %{
+              type: :actor_actor,
+              display_category: :actor_pair,
+              roles_summary: "acting partnership",
+              person_a: actor1.person,
+              person_b: actor2.person,
+              collaboration_count: length(shared),
+              films_together: length(shared),
+              movies: shared,
+              is_reunion: true
+            }
+          end
         end
-      end
-      |> Enum.reject(&is_nil/1)
+        |> Enum.reject(&is_nil/1)
 
-    director_director_reunions =
-      for {director1, idx} <- Enum.with_index(directors),
-          director2 <- Enum.drop(directors, idx + 1) do
-        movies = linked_movies(director1.person, :director, director2.person, :director)
+      director_director_reunions =
+        for {director1, idx} <- Enum.with_index(directors),
+            director2 <- Enum.drop(directors, idx + 1),
+            id1 = person_id(director1.person),
+            id2 = person_id(director2.person),
+            not is_nil(id1),
+            not is_nil(id2) do
+          shared =
+            movies_batch
+            |> Enum.filter(fn m ->
+              id1 in (m.director_ids || []) and id2 in (m.director_ids || [])
+            end)
+            |> Enum.map(&shape_timeline_movie/1)
 
-        if length(movies) >= @movie_show_collaboration_policy.min_films_together do
-          %{
-            type: :director_director,
-            display_category: :director_pair,
-            roles_summary: "director partnership",
-            person_a: director1.person,
-            person_b: director2.person,
-            collaboration_count: length(movies),
-            films_together: length(movies),
-            movies: movies,
-            is_reunion: true
-          }
+          if length(shared) >= @movie_show_collaboration_policy.min_films_together do
+            %{
+              type: :director_director,
+              display_category: :director_pair,
+              roles_summary: "director partnership",
+              person_a: director1.person,
+              person_b: director2.person,
+              collaboration_count: length(shared),
+              films_together: length(shared),
+              movies: shared,
+              is_reunion: true
+            }
+          end
         end
-      end
-      |> Enum.reject(&is_nil/1)
+        |> Enum.reject(&is_nil/1)
 
-    full_collaborations =
-      (director_actor_reunions ++ actor_partnerships ++ director_director_reunions)
-      |> Enum.filter(&(&1.type in @movie_show_collaboration_policy.included_types))
+      full_collaborations =
+        (director_actor_reunions ++ actor_partnerships ++ director_director_reunions)
+        |> Enum.filter(&(&1.type in @movie_show_collaboration_policy.included_types))
 
-    all_collaborations =
-      full_collaborations
-      |> hydrate_collaboration_scores()
-      |> Enum.sort_by(&collaboration_rank/1, :desc)
-      |> Enum.take(@movie_show_collaboration_policy.limit)
+      all_collaborations =
+        full_collaborations
+        |> hydrate_collaboration_scores()
+        |> Enum.sort_by(&collaboration_rank/1, :desc)
+        |> Enum.take(@movie_show_collaboration_policy.limit)
 
-    %{
-      director_actor_reunions: Enum.filter(all_collaborations, &(&1.type == :director_actor)),
-      actor_partnerships: Enum.filter(all_collaborations, &(&1.type == :actor_actor)),
-      director_director_reunions:
-        Enum.filter(all_collaborations, &(&1.type == :director_director)),
-      notable_collaborations: all_collaborations,
-      total_reunions: length(full_collaborations)
-    }
+      %{
+        director_actor_reunions: Enum.filter(all_collaborations, &(&1.type == :director_actor)),
+        actor_partnerships: Enum.filter(all_collaborations, &(&1.type == :actor_actor)),
+        director_director_reunions:
+          Enum.filter(all_collaborations, &(&1.type == :director_director)),
+        notable_collaborations: all_collaborations,
+        total_reunions: length(full_collaborations)
+      }
+    end
   end
 
-  defp linked_movies(person_a, role_a, person_b, role_b) do
-    with person_a_id when not is_nil(person_a_id) <- person_id(person_a),
-         person_b_id when not is_nil(person_b_id) <- person_id(person_b) do
-      Movie
-      |> join(:inner, [m], credit_a in Credit, on: credit_a.movie_id == m.id)
-      |> join(:inner, [m, credit_a], credit_b in Credit, on: credit_b.movie_id == m.id)
-      |> where([m], m.import_status == "full")
-      |> where([m], is_nil(m.release_date) or m.release_date <= ^Date.utc_today())
-      |> where([m, credit_a], credit_a.person_id == ^person_a_id)
-      |> where([m, credit_a], ^role_condition(role_a, :a))
-      |> where([m, credit_a, credit_b], credit_b.person_id == ^person_b_id)
-      |> where([m, credit_a, credit_b], ^role_condition(role_b, :b))
-      |> distinct([m], m.id)
-      |> order_by([m], desc: m.release_date)
-      |> limit(50)
-      |> select([m], %{
-        id: m.id,
-        title: m.title,
-        slug: m.slug,
-        release_date: m.release_date,
-        poster_path: m.poster_path
-      })
-      |> Repo.replica().all()
-      |> Enum.map(&shape_timeline_movie/1)
-    else
+  defp batch_linked_movies(person_ids) do
+    query = """
+    SELECT
+      m.id, m.title, m.slug, m.poster_path, m.release_date,
+      ARRAY_AGG(DISTINCT mc.person_id) FILTER (WHERE mc.credit_type = 'cast') as actor_ids,
+      ARRAY_AGG(DISTINCT mc.person_id) FILTER (WHERE mc.credit_type = 'crew' AND mc.job = 'Director') as director_ids
+    FROM movies m
+    JOIN movie_credits mc ON mc.movie_id = m.id
+    WHERE mc.person_id = ANY($1::int[])
+      AND m.import_status = 'full'
+      AND (m.release_date IS NULL OR m.release_date <= $2)
+    GROUP BY m.id, m.title, m.slug, m.poster_path, m.release_date
+    HAVING COUNT(DISTINCT mc.person_id) >= 2
+    ORDER BY m.release_date DESC
+    LIMIT 50
+    """
+
+    case Repo.replica().query(query, [person_ids, Date.utc_today()]) do
+      {:ok, %{rows: rows}} ->
+        Enum.map(rows, fn [id, title, slug, poster_path, release_date, actor_ids, director_ids] ->
+          %{
+            id: id,
+            title: title,
+            slug: slug,
+            poster_path: poster_path,
+            release_date: release_date,
+            actor_ids: actor_ids || [],
+            director_ids: director_ids || []
+          }
+        end)
+
       _ ->
         []
     end
   end
 
-  defp role_condition(:actor, :a), do: dynamic([_m, credit_a], credit_a.credit_type == "cast")
-
-  defp role_condition(:actor, :b),
-    do: dynamic([_m, _credit_a, credit_b], credit_b.credit_type == "cast")
-
-  defp role_condition(:director, :a) do
-    dynamic(
-      [_m, credit_a],
-      credit_a.credit_type == "crew" and credit_a.department == "Directing" and
-        credit_a.job == "Director"
-    )
-  end
-
-  defp role_condition(:director, :b) do
-    dynamic(
-      [_m, _credit_a, credit_b],
-      credit_b.credit_type == "crew" and credit_b.department == "Directing" and
-        credit_b.job == "Director"
-    )
+  defp empty_collaborations do
+    %{
+      director_actor_reunions: [],
+      actor_partnerships: [],
+      director_director_reunions: [],
+      notable_collaborations: [],
+      total_reunions: 0
+    }
   end
 
   defp collaboration_rank(collaboration) do
@@ -261,7 +292,7 @@ defmodule Cinegraph.Movies.MovieCollaborations do
       LIMIT 8
       """
 
-      case Repo.query(query, [person_ids, movie.id]) do
+      case Repo.replica().query(query, [person_ids, movie.id]) do
         {:ok, %{rows: rows}} ->
           Enum.map(rows, fn [
                               id,
