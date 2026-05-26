@@ -2,6 +2,7 @@ defmodule CinegraphWeb.CollaborationLive.Index do
   use CinegraphWeb, :live_view
 
   alias Cinegraph.Collaborations
+  alias Cinegraph.Movies.Cache
   alias Cinegraph.People
 
   @impl true
@@ -161,12 +162,16 @@ defmodule CinegraphWeb.CollaborationLive.Index do
 
   defp get_trending_collaborations do
     current_year = Date.utc_today().year
-    collabs = Collaborations.find_trending_collaborations(current_year - 2, limit: 12)
-    ids = Enum.map(collabs, & &1.id)
-    details_map = batch_collaboration_details(ids)
+    cache_key = "trending_collaborations_#{current_year - 2}"
 
-    Enum.map(collabs, fn collab ->
-      Map.merge(collab, Map.get(details_map, collab.id, default_collab_details()))
+    Cache.fetch_or_compute(cache_key, :timer.hours(1), fn ->
+      collabs = Collaborations.find_trending_collaborations(current_year - 2, limit: 12)
+      ids = Enum.map(collabs, & &1.id)
+      details_map = batch_collaboration_details(ids)
+
+      Enum.map(collabs, fn collab ->
+        Map.merge(collab, Map.get(details_map, collab.id, default_collab_details()))
+      end)
     end)
   end
 

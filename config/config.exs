@@ -190,8 +190,8 @@ config :cinegraph, Oban,
     # Cache warming and daily imports cron jobs
     {Oban.Plugins.Cron,
      crontab: [
-       # Warm movies page cache every 10 minutes
-       {"*/10 * * * *", Cinegraph.Workers.MoviesCacheWarmer},
+       # Warm movies page cache every 30 minutes
+       {"*/30 * * * *", Cinegraph.Workers.MoviesCacheWarmer},
        # Daily year-by-year TMDb import at 4 AM UTC
        # Imports one year at a time, working backwards from current year
        {"0 4 * * *", Cinegraph.Workers.DailyYearImportWorker},

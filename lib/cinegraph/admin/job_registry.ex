@@ -75,7 +75,7 @@ defmodule Cinegraph.Admin.JobRegistry do
       label: "Movies cache warmer",
       worker: Workers.MoviesCacheWarmer,
       queue: :maintenance,
-      schedule: "*/10 * * * *",
+      schedule: "*/30 * * * *",
       args: %{},
       trigger_action: :enqueue_now,
       mutating: false,

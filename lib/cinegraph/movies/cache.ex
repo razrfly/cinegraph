@@ -21,6 +21,8 @@ defmodule Cinegraph.Movies.Cache do
   @filter_options_ttl :timer.hours(1)
   @search_cache_version 2
   @query_results_ttl :timer.minutes(15)
+  # Warmer TTL must exceed the cron interval (30 min) so skip-warm-keys logic fires on the next run.
+  @warmer_query_ttl :timer.minutes(35)
   @discovery_scores_ttl :timer.hours(24)
 
   @doc """
@@ -353,22 +355,39 @@ defmodule Cinegraph.Movies.Cache do
       Enum.map(popular_queries, fn params ->
         cache_key = build_search_cache_key(params)
 
-        case search_fn.(params) do
-          {:ok, {movies, meta}} ->
-            Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @query_results_ttl)
+        case Cachex.get(@cache_name, cache_key) do
+          {:ok, nil} ->
+            case search_fn.(params) do
+              {:ok, {movies, meta}} ->
+                Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @warmer_query_ttl)
+                cache_key
+
+              {:error, reason} ->
+                Logger.warning(
+                  "[Movies.Cache] Failed to warm cache for #{cache_key}: #{inspect(reason)}"
+                )
+
+                nil
+            end
+
+          {:ok, _cached} ->
+            Logger.debug("[Movies.Cache] Skipping already-warm key: #{cache_key}")
             cache_key
 
-          {:error, reason} ->
-            Logger.warning(
-              "[Movies.Cache] Failed to warm cache for #{cache_key}: #{inspect(reason)}"
-            )
+          {:error, _} ->
+            case search_fn.(params) do
+              {:ok, {movies, meta}} ->
+                Cachex.put(@cache_name, cache_key, {movies, meta}, ttl: @warmer_query_ttl)
+                cache_key
 
-            nil
+              _ ->
+                nil
+            end
         end
       end)
       |> Enum.reject(&is_nil/1)
 
-    Logger.info("[Movies.Cache] Cache warming complete: #{length(warmed_keys)} queries warmed")
+    Logger.info("[Movies.Cache] Cache warming complete: #{length(warmed_keys)} keys warm")
     warmed_keys
   end
 
