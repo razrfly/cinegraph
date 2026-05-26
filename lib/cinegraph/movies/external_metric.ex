@@ -352,22 +352,30 @@ defmodule Cinegraph.Movies.ExternalMetric do
         metrics
       end
 
-    # Content Rating (MPAA)
+    # Content Rating (MPAA) — normalize before exclusion check so mixed-case
+    # values from OMDb ("Unrated", "Not Rated") don't slip through as usable ratings.
     metrics =
-      if omdb_data["Rated"] &&
-           omdb_data["Rated"] not in ["N/A", "NOT RATED", "UNRATED", "NR"] do
-        [
-          %{
-            movie_id: movie_id,
-            source: "omdb",
-            metric_type: "content_rating",
-            text_value: omdb_data["Rated"],
-            fetched_at: now
-          }
-          | metrics
-        ]
-      else
-        metrics
+      case omdb_data["Rated"] do
+        rated when is_binary(rated) ->
+          normalized = rated |> String.trim() |> String.upcase()
+
+          if normalized != "" && normalized not in ["N/A", "NOT RATED", "UNRATED", "NR"] do
+            [
+              %{
+                movie_id: movie_id,
+                source: "omdb",
+                metric_type: "content_rating",
+                text_value: rated,
+                fetched_at: now
+              }
+              | metrics
+            ]
+          else
+            metrics
+          end
+
+        _ ->
+          metrics
       end
 
     # Rotten Tomatoes page URL (tomatoURL field — populated by OMDb Basic plan)

@@ -9,7 +9,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   alias CinegraphWeb.MovieLive.IndexV2Components.ParamHelpers
   alias CinegraphWeb.MovieLive.IndexV2Components.SortLabels
 
-  @basic_filter_keys ~w(search genres decade lists festivals companies people rating_preset show_unreleased)
+  @basic_filter_keys ~w(search genres decade lists festivals companies people rating_preset max_age show_unreleased)
 
   attr :params, :map, required: true
   attr :filter_options, :map, required: true
@@ -115,6 +115,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
   defp label_for("people"), do: "Cast & Crew"
   defp label_for("people_ids"), do: "Cast & Crew"
   defp label_for("rating_preset"), do: "Rating"
+  defp label_for("max_age"), do: "Age"
   defp label_for("show_unreleased"), do: "Unreleased"
   defp label_for(other), do: other |> String.replace("_", " ") |> String.capitalize()
 
@@ -166,6 +167,16 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.ActiveChips do
       "well_reviewed" -> "Well reviewed (6.0+)"
       "critically_acclaimed" -> "Critically acclaimed"
       other -> other
+    end
+  end
+
+  defp value_label_for("max_age", value, _opts) do
+    case to_string(value) do
+      "6" -> "All ages"
+      "12" -> "7+"
+      "16" -> "13+"
+      "99" -> "17+"
+      other -> "up to #{other}"
     end
   end
 
