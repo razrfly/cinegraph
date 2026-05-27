@@ -117,7 +117,7 @@ The sweeper cron block runs 5:30–7:30 AM UTC daily. Maintenance modules are sa
 
 V2 LiveViews split into nested modules rather than monolithic files:
 
-```
+```text
 live/movie_live/
   show_v2.ex                    # mount, handle_event, render
   show_v2/
@@ -159,7 +159,7 @@ Kamal shell aliases: `kamal shell`, `kamal logs`, `kamal console` (remote IEx).
 
 ## Oban Queues & Concurrency
 
-```
+```text
 tmdb: 5    omdb: 5    collaboration: 3    scraping: 3
 festival_discovery: 1    metrics: 2    maintenance: 1
 ```
@@ -193,7 +193,7 @@ The `movie_lists` table is the single source of truth. Add via:
 
 ## Environment Variables
 
-```
+```text
 TMDB_API_KEY           TMDb API access
 OMDB_API_KEY           OMDb API (Basic plan = 100k req/day)
 DATABASE_URL           Production DB connection

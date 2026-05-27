@@ -68,8 +68,8 @@ defmodule Mix.Tasks.Cinegraph.Audit.ImdbEventId do
       :ok ->
         Mix.shell().info("Fetch: ok (#{r.bytes} bytes)")
 
-      {:error, reason} ->
-        Mix.shell().info("Fetch: error — #{inspect(reason)}")
+      %{error: reason} ->
+        Mix.shell().info("Fetch: error — #{reason}")
     end
 
     Mix.shell().info("Parser status: #{r.parser_status}")

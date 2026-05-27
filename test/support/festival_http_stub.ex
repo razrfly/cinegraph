@@ -35,19 +35,37 @@ defmodule Cinegraph.Scrapers.FestivalHttpStub do
     :ets.insert(@table, {url_contains, response})
   end
 
-  @doc "Clear all registered responses."
+  @doc "Clear all registered responses and reset captured opts."
   def reset! do
     :ets.delete_all_objects(@table)
   end
 
-  @doc "Implements the same interface as `Cinegraph.Scrapers.Http.Client.fetch/2`."
-  def fetch(url, _mode) do
+  @doc """
+  Implements the same interface as `Cinegraph.Scrapers.Http.Client.fetch/3`.
+
+  Stores `opts` in ETS under `:__last_opts__` so tests can assert on them
+  via `last_opts/0` regardless of which process called `fetch/3`. This is
+  necessary because `ApiTracker.track_lookup/5` wraps calls in a spawned
+  task, so `Process.put/2` would not be visible to the test process.
+  """
+  def fetch(url, _source, opts \\ []) do
+    :ets.insert(@table, {:__last_opts__, opts})
+
     :ets.tab2list(@table)
+    |> Enum.reject(fn {key, _} -> key == :__last_opts__ end)
     |> Enum.sort_by(fn {key, _} -> -byte_size(key) end)
     |> Enum.find(fn {key, _} -> String.contains?(url, key) end)
     |> case do
       {_key, response} -> response
       nil -> {:error, :stub_no_match}
+    end
+  end
+
+  @doc "Return the opts passed to the most recent `fetch/3` call (any process)."
+  def last_opts do
+    case :ets.lookup(@table, :__last_opts__) do
+      [{:__last_opts__, opts}] -> opts
+      [] -> []
     end
   end
 end
