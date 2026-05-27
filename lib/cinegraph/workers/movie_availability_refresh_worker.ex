@@ -4,7 +4,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
   """
 
   use Oban.Worker,
-    queue: :tmdb,
+    queue: :movie_availability,
     max_attempts: 5,
     unique: [
       fields: [:args],

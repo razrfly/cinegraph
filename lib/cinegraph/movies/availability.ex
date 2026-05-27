@@ -397,8 +397,17 @@ defmodule Cinegraph.Movies.Availability do
 
     replace_region_rows(movie.id, region, source)
 
+    # Sort by provider_id before upserting so all concurrent transactions acquire
+    # ShareLocks on watch_providers in the same order. Without this, two workers
+    # processing different movies with overlapping providers (e.g., Netflix, Amazon)
+    # can deadlock if they encounter providers in different orders within their
+    # long-running Repo.transaction. See: GitHub #999.
     availabilities =
-      Enum.map(provider_entries, fn {monetization_type, provider_data} ->
+      provider_entries
+      |> Enum.sort_by(fn {_monetization_type, provider_data} ->
+        provider_data["provider_id"] || 0
+      end)
+      |> Enum.map(fn {monetization_type, provider_data} ->
         provider = upsert_provider!(provider_data, source, fetched_at)
 
         attrs = %{

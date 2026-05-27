@@ -533,6 +533,41 @@ defmodule Cinegraph.Movies.AvailabilityTest do
     |> Repo.insert!()
   end
 
+  # #999 — concurrent MovieAvailabilityRefreshWorker jobs deadlock when they
+  # upsert shared watch_providers (Netflix, Amazon, etc.) in inconsistent order.
+  # store_region/6 now sorts provider_entries by provider_id before upserting so
+  # all transactions acquire ShareLocks in the same order, preventing cycles.
+  test "stores providers correctly when payload lists providers in reverse id order" do
+    movie = insert_movie!()
+
+    # Deliberately reverse-ordered by provider_id (350 → 9 → 8) to exercise the sort.
+    payload = %{
+      "results" => %{
+        "US" => %{
+          "link" => "https://www.themoviedb.org/movie/1/watch?locale=US",
+          "flatrate" => [
+            provider(350, "Apple TV+", 3),
+            provider(9, "Amazon Prime", 2),
+            provider(8, "Netflix", 1)
+          ]
+        }
+      }
+    }
+
+    assert {:ok, [%{region: "US", status: "success", providers: provider_ids}]} =
+             Availability.store_tmdb_watch_providers(movie, payload)
+
+    assert length(provider_ids) == 3
+
+    stored_names =
+      WatchProvider
+      |> Repo.all()
+      |> Enum.map(& &1.name)
+      |> Enum.sort()
+
+    assert stored_names == ["Amazon Prime", "Apple TV+", "Netflix"]
+  end
+
   defp watch_payload do
     %{
       "results" => %{

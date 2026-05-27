@@ -90,6 +90,9 @@ defmodule Cinegraph.Health.QueuesTest do
       assert :tmdb in queues
       assert :omdb in queues
       assert :maintenance in queues
+      # #999 — :movie_availability must stay in config so workers don't silently
+      # fall back to :tmdb queue with concurrency 5 and recreate deadlocks.
+      assert :movie_availability in queues
     end
   end
 
