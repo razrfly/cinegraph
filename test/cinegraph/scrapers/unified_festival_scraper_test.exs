@@ -1,6 +1,10 @@
 defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
-  use ExUnit.Case, async: false
+  # DataCase (instead of ExUnit.Case) is required for fetch_festival_data/2
+  # tests, which query the DB for the festival event record.
+  use Cinegraph.DataCase, async: false
 
+  alias Cinegraph.Events.FestivalEvent
+  alias Cinegraph.Repo
   alias Cinegraph.Scrapers.{FestivalHttpStub, UnifiedFestivalScraper}
 
   setup do
@@ -137,6 +141,18 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
                UnifiedFestivalScraper.fetch_available_years("ev0000001", max_attempts: 3)
     end
 
+    # #994 — IMDb event pages require JS rendering to bypass Cloudflare WAF.
+    # Verify the stub receives mode: :javascript so the correct Crawlbase API
+    # key (JS) is used in production.
+    test "passes mode: :javascript to the HTTP client" do
+      current = Date.utc_today().year
+      FestivalHttpStub.set_response("/#{current}/", {:ok, next_data_html([current, current - 1])})
+
+      assert {:ok, _years} = UnifiedFestivalScraper.fetch_available_years("ev0000147")
+
+      assert FestivalHttpStub.last_opts() |> Keyword.get(:mode) == :javascript
+    end
+
     test "known_good_year hint is tried first and short-circuits" do
       FestivalHttpStub.set_response("/2018/", {:ok, next_data_html([2018, 2017, 2016])})
 
@@ -166,6 +182,49 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
                )
 
       assert (current - 1) in years
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # fetch_festival_data/2  (uses HTTP stub via http_client/0 injection)
+  # ---------------------------------------------------------------------------
+
+  describe "fetch_festival_data/2" do
+    # ApiTracker.track_lookup/5 spawns a Task to write metrics. The shared
+    # sandbox mode lets that task use the test's DB connection rather than
+    # failing with a DBConnection.ConnectionError.
+    setup do
+      Ecto.Adapters.SQL.Sandbox.mode(Cinegraph.Repo, {:shared, self()})
+      :ok
+    end
+
+    # #994 — both IMDb event-page fetch paths must use mode: :javascript.
+    # This test verifies the festival-import path mirrors the year-discovery path.
+    test "passes mode: :javascript to the HTTP client" do
+      # source_config must carry "event_id" — to_scraper_config/1 reads from
+      # there, not from the top-level imdb_event_id column.
+      event_id = "ev0000147"
+      year = 2024
+
+      festival =
+        insert_festival!(
+          source_key: "cannes_test",
+          imdb_event_id: event_id,
+          source_config: %{"event_id" => event_id, "imdb_event_id" => event_id}
+        )
+
+      # Stub the URL build_festival_url/2 will construct.
+      FestivalHttpStub.set_response(
+        "/event/#{event_id}/#{year}/",
+        {:ok, next_data_html([year, year - 1])}
+      )
+
+      # The result may be a parse error (we haven't stubbed full award HTML),
+      # but we only need to verify the fetch opts — the stub records them
+      # regardless of what the parser does with the response.
+      UnifiedFestivalScraper.fetch_festival_data(festival.source_key, year)
+
+      assert FestivalHttpStub.last_opts() |> Keyword.get(:mode) == :javascript
     end
   end
 
@@ -210,6 +269,19 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraperTest do
   # ---------------------------------------------------------------------------
   # Helpers
   # ---------------------------------------------------------------------------
+
+  defp insert_festival!(opts) do
+    %FestivalEvent{}
+    |> FestivalEvent.changeset(%{
+      source_key: Keyword.fetch!(opts, :source_key),
+      name: Keyword.get(opts, :name, "Test Festival #{Keyword.fetch!(opts, :source_key)}"),
+      imdb_event_id: Keyword.get(opts, :imdb_event_id),
+      source_config: Keyword.get(opts, :source_config, %{}),
+      active: true,
+      primary_source: "imdb"
+    })
+    |> Repo.insert!()
+  end
 
   defp next_data_html(years) do
     editions = Enum.map(years, &%{"year" => &1})

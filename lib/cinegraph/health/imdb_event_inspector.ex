@@ -14,6 +14,10 @@ defmodule Cinegraph.Health.ImdbEventInspector do
   (this tool's home).
   """
 
+  # The public `inspect/2` function shadows `Kernel.inspect/1`. Exclude the
+  # auto-import so Elixir doesn't complain; use Kernel.inspect/1 explicitly.
+  import Kernel, except: [inspect: 1, inspect: 2]
+
   require Logger
 
   alias Cinegraph.Scrapers.Http.Client
@@ -37,7 +41,7 @@ defmodule Cinegraph.Health.ImdbEventInspector do
       %{
         event_id: String.t(),
         url: String.t(),
-        fetch_status: :ok | {:error, term()},
+        fetch_status: :ok | %{error: String.t()},
         bytes: non_neg_integer() | nil,
         parser_status:
           :ok | :no_next_data | :no_editions | :editions_parser_breakage | :json_failed | :fetch_error,
@@ -61,7 +65,7 @@ defmodule Cinegraph.Health.ImdbEventInspector do
         %{
           event_id: event_id,
           url: url,
-          fetch_status: {:error, reason},
+          fetch_status: %{error: Kernel.inspect(reason)},
           bytes: nil,
           parser_status: :fetch_error,
           has_next_data: false,
@@ -201,7 +205,9 @@ defmodule Cinegraph.Health.ImdbEventInspector do
       :miss ->
         Logger.info("ImdbEventInspector: fetching #{url}")
 
-        case Client.fetch(url, :imdb) do
+        # Use JS mode to match UnifiedFestivalScraper (#994): static/normal
+        # Crawlbase is blocked by IMDb's Cloudflare WAF on /event/ paths.
+        case Client.fetch(url, :imdb, mode: :javascript) do
           {:ok, html} = ok ->
             cache_put(cache_key, html, now)
             ok

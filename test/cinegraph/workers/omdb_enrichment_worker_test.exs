@@ -10,8 +10,19 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorkerTest do
 
   # Swap the OMDb HTTP client for a stub so no live API calls are made.
   setup do
+    previous_client = Application.fetch_env(:cinegraph, :omdb_http_client)
     Application.put_env(:cinegraph, :omdb_http_client, ClientStub)
-    on_exit(fn -> Application.delete_env(:cinegraph, :omdb_http_client) end)
+    ClientStub.reset()
+
+    on_exit(fn ->
+      ClientStub.reset()
+
+      case previous_client do
+        {:ok, client} -> Application.put_env(:cinegraph, :omdb_http_client, client)
+        :error -> Application.delete_env(:cinegraph, :omdb_http_client)
+      end
+    end)
+
     :ok
   end
 

@@ -133,6 +133,11 @@ defmodule Cinegraph.Health.YearDiscovery do
       :flaky_network
 
       iex> Cinegraph.Health.YearDiscovery.classify_error(
+      ...>   ~s|** (Oban.PerformError) ... failed with {:error, :no_year_with_editions}|
+      ...> )
+      :source_unavailable
+
+      iex> Cinegraph.Health.YearDiscovery.classify_error(
       ...>   ~s|** (Oban.PerformError) ... failed with {:error, "something nobody anticipated"}|
       ...> )
       :other
@@ -145,6 +150,12 @@ defmodule Cinegraph.Health.YearDiscovery do
   def classify_error(text) when is_binary(text) do
     cond do
       String.contains?(text, "No years found in historyEventEditions") ->
+        :source_unavailable
+
+      # All candidate years exhausted without finding usable editions data.
+      # Covers the case where individual fetch failures (e.g. Crawlbase WAF
+      # block) bubble up as the aggregate :no_year_with_editions atom.
+      String.contains?(text, ":no_year_with_editions") ->
         :source_unavailable
 
       String.contains?(text, "No __NEXT_DATA__ found") ->

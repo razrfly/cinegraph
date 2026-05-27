@@ -47,8 +47,14 @@ defmodule Cinegraph.Scrapers.Http.Client do
     try_adapters(adapters, url, merged_opts)
   end
 
-  # IMDb pages are Next.js SSR — __NEXT_DATA__ is present in static HTML.
-  # Crawlbase confirmed Normal token has higher success rate for this domain.
+  # IMDb movie/person pages (/title/, /name/) are Next.js SSR — __NEXT_DATA__
+  # is present in static HTML. Crawlbase support (2026-05-18) confirmed Normal
+  # token has a higher success rate for these high-volume paths.
+  #
+  # Exception: IMDb /event/ paths go through a stricter Cloudflare WAF policy
+  # that blocks Normal/TCP with 520s. Verified 2026-05-27: JS mode succeeds
+  # (2MB with __NEXT_DATA__ + historyEventEditions), Normal mode fails (520).
+  # UnifiedFestivalScraper overrides to mode: :javascript at its call sites.
   defp source_default_opts(:imdb), do: [mode: :normal]
   defp source_default_opts(_), do: []
 

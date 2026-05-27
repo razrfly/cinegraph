@@ -38,7 +38,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
 
           # Track the festival scraping operation
           ApiTracker.track_lookup("festival_scraper", "fetch_#{festival_key}", "#{year}", fn ->
-            case HttpClient.fetch(url, :imdb) do
+            case http_client().fetch(url, :imdb, mode: :javascript) do
               {:ok, html} ->
                 parse_festival_html(html, year, festival_config)
 
@@ -137,7 +137,7 @@ defmodule Cinegraph.Scrapers.UnifiedFestivalScraper do
     url = "https://www.imdb.com/event/#{event_id}/#{year}/1/"
     Logger.debug("YearDiscovery: trying #{url}")
 
-    with {:ok, html} <- http_client().fetch(url, :imdb),
+    with {:ok, html} <- http_client().fetch(url, :imdb, mode: :javascript),
          {:ok, years} <- extract_available_years(html, event_id) do
       {:ok, years}
     else
