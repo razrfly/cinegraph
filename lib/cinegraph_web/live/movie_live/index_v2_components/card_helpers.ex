@@ -59,7 +59,8 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components.CardHelpers do
       lens_components: lens_components,
       reason: reason,
       poster_url: tmdb_poster_url(movie.poster_path, "w500"),
-      href: movie_href(movie)
+      href: movie_href(movie),
+      cert_label: movie.cert_label
     }
   end
 

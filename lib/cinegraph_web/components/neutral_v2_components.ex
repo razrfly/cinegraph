@@ -771,6 +771,12 @@ defmodule CinegraphWeb.NeutralV2Components do
             </div>
           <% true -> %>
         <% end %>
+        <span
+          :if={@film[:cert_label]}
+          class="absolute bottom-2 left-2 px-[6px] py-[2px] bg-black/[0.72] text-white text-[9.5px] font-bold rounded tracking-[.02em]"
+        >
+          {@film[:cert_label]}
+        </span>
       </div>
       <div class="pt-[10px]">
         <div class="flex items-baseline justify-between gap-2">

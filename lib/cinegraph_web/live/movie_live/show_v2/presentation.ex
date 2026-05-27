@@ -1,6 +1,7 @@
 defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
   @moduledoc false
   import CinegraphWeb.PersonHelpers, only: [person_slug_or_id: 1]
+  alias Cinegraph.Movies.ContentRating
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.MovieLive.CollaborationHelpers
   @dept_priority ~w(Directing Writing Camera Editing Sound Production Art)
@@ -350,4 +351,87 @@ defmodule CinegraphWeb.MovieLive.ShowV2.Presentation do
 
     if pair, do: "#{pair.person_a.name} + #{pair.person_b.name}", else: nil
   end
+
+  @doc """
+  Returns the most conservative `{age, cert, source}` tuple across all available
+  rating sources, or nil when no ratings are present.
+  `source` is `:omdb` for the OMDb MPAA rating, or a country code string for TMDb.
+  """
+  def age_rating_badge(metrics, release_dates)
+      when is_list(metrics) and is_list(release_dates) do
+    omdb_entry =
+      case find_metric(metrics, "omdb", "content_rating") do
+        %{text_value: v} when is_binary(v) and v != "" ->
+          case ContentRating.to_min_age(v, "US") do
+            nil -> nil
+            age -> {age, v, :omdb}
+          end
+
+        _ ->
+          nil
+      end
+
+    tmdb_entries =
+      Enum.flat_map(release_dates, fn rd ->
+        case ContentRating.to_min_age(rd.certification, rd.country_code) do
+          nil -> []
+          age -> [{age, rd.certification, rd.country_code}]
+        end
+      end)
+
+    all_entries = List.wrap(omdb_entry) ++ tmdb_entries
+    if all_entries == [], do: nil, else: Enum.max_by(all_entries, &elem(&1, 0))
+  end
+
+  def age_rating_badge(_, _), do: nil
+
+  @doc "Human-readable label for an age_rating_badge tuple, e.g. \"17+\" or \"All ages\"."
+  def age_label({0, _, _}), do: "All ages"
+  def age_label({age, _, _}), do: "#{age}+"
+  def age_label(_), do: nil
+
+  @doc "All rated sources sorted by age descending, for popover display."
+  def age_rating_sources(metrics, release_dates)
+      when is_list(metrics) and is_list(release_dates) do
+    omdb_entries =
+      case find_metric(metrics, "omdb", "content_rating") do
+        %{text_value: v} when is_binary(v) and v != "" ->
+          case ContentRating.to_min_age(v, "US") do
+            nil -> []
+            age -> [{age, v, :omdb}]
+          end
+
+        _ ->
+          []
+      end
+
+    tmdb_entries =
+      release_dates
+      |> Enum.reduce(%{}, fn rd, acc ->
+        case ContentRating.to_min_age(rd.certification, rd.country_code) do
+          nil ->
+            acc
+
+          age ->
+            Map.update(
+              acc,
+              rd.country_code,
+              {age, rd.certification, rd.country_code},
+              fn {curr_age, _, _} = curr ->
+                if age > curr_age, do: {age, rd.certification, rd.country_code}, else: curr
+              end
+            )
+        end
+      end)
+      |> Map.values()
+
+    (omdb_entries ++ tmdb_entries)
+    |> Enum.sort_by(&(-elem(&1, 0)))
+  end
+
+  def age_rating_sources(_, _), do: []
+
+  def source_label(:omdb), do: "MPAA (via OMDb)"
+  def source_label(country_code) when is_binary(country_code), do: "TMDb · #{country_code}"
+  def source_label(_), do: "Unknown"
 end
