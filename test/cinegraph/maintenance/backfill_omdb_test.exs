@@ -40,14 +40,47 @@ defmodule Cinegraph.Maintenance.BackfillOmdbTest do
       assert_raise ArgumentError, fn -> BackfillOmdb.run(limit: 0) end
       assert_raise ArgumentError, fn -> BackfillOmdb.run(limit: -1) end
     end
+
+    # #993 — movies without imdb_id must be excluded; OMDb has no alternative
+    # identifier and these jobs would cycle through the backlog forever.
+    test "excludes movies with nil imdb_id" do
+      insert_movie!(imdb_id: nil, omdb: false)
+
+      assert {:ok, %{found: 0}} = BackfillOmdb.run(dry_run: true)
+    end
+
+    test "excludes movies with blank imdb_id" do
+      insert_movie!(imdb_id: "", omdb: false)
+
+      assert {:ok, %{found: 0}} = BackfillOmdb.run(dry_run: true)
+    end
+
+    test "includes movies with a valid imdb_id" do
+      insert_movie!(imdb_id: "tt1234567", omdb: false)
+
+      assert {:ok, %{found: 1}} = BackfillOmdb.run(dry_run: true)
+    end
   end
 
+  # Generate a valid IMDb ID (tt + 7+ digits) matching the format checked by
+  # valid_imdb_id?/1 in OMDb.ApiProcessors: ~r/^tt\d{7,}$/
+  defp generate_imdb_id do
+    n = System.unique_integer([:positive]) |> rem(9_000_000) |> Kernel.+(1_000_000)
+    "tt#{n}"
+  end
+
+  # opts:
+  #   :imdb_id  - explicit IMDb ID (default: auto-generated valid ID; pass nil to test exclusion)
+  #   :omdb     - whether to insert a matching external_metrics row (default: false)
   defp insert_movie!(opts) do
+    {imdb_id, opts} = Keyword.pop(opts, :imdb_id, generate_imdb_id())
+
     movie =
       %Movie{}
       |> Movie.changeset(%{
         tmdb_id: System.unique_integer([:positive]),
-        title: "Movie #{System.unique_integer([:positive])}"
+        title: "Movie #{System.unique_integer([:positive])}",
+        imdb_id: imdb_id
       })
       |> Repo.insert!()
 

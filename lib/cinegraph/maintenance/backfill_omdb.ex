@@ -9,8 +9,12 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
   - `Cinegraph.Workers.OmdbBackfillSweeper` (Oban Cron, prod)
   - `bin/cinegraph eval "Cinegraph.Maintenance.BackfillOmdb.run([])"` (one-shot)
 
-  Canonical-list movies are prioritised first, then by `popularity` desc,
-  then by id desc — so daily runs always advance the highest-value subset.
+  Only movies with a non-blank `imdb_id` are eligible — OMDb requires an
+  IMDb ID and has no alternative identifier. Movies without one are skipped
+  to avoid burning the daily cap on permanently-ineligible entries.
+
+  Canonical-list movies are prioritised first, then by id desc — so daily
+  runs always advance the highest-value subset.
 
   See #745 Phase 1.1.
 
@@ -41,13 +45,18 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
     # `popularity` column; popularity lives in the `tmdb_data` JSONB blob and
     # isn't worth a JSONB cast for ordering when canonical-membership already
     # encodes priority.)
+    #
+    # Only imdb_id-bearing movies are selected. OMDb requires an IMDb ID; movies
+    # without one return :invalid_imdb_id immediately and never produce an
+    # external_metrics row, so they would re-enter this backlog on every sweep.
     base =
       from m in "movies",
         where:
           not fragment(
             "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb')",
             m.id
-          ),
+          ) and
+            not is_nil(m.imdb_id) and m.imdb_id != "",
         order_by: [
           desc: fragment("? != '{}'::jsonb", m.canonical_sources),
           desc: m.id
