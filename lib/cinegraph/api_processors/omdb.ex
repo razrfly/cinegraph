@@ -116,15 +116,23 @@ defmodule Cinegraph.ApiProcessors.OMDb do
     end
   end
 
+  # Indirects through Application config so tests can swap in a stub without
+  # live HTTP calls. Production default: Cinegraph.Services.OMDb.Client.
+  # Test override: config :cinegraph, :omdb_http_client, MyStub
+  defp omdb_client, do: Application.get_env(:cinegraph, :omdb_http_client, OMDb.Client)
+
   defp fetch_and_store_omdb_data(movie) do
-    case OMDb.Client.get_movie_by_imdb_id(movie.imdb_id) do
+    case omdb_client().get_movie_by_imdb_id(movie.imdb_id) do
       {:ok, omdb_data} ->
         store_omdb_data(omdb_data, movie)
 
       {:error, "Movie not found!"} ->
         Logger.warning("Movie not found in OMDb: #{movie.title} (#{movie.imdb_id})")
-        # Not really an error, just no data available
-        {:ok, movie}
+        # Return an error so the worker records a fetch_attempt metric, which
+        # removes this movie from the BackfillOmdb backlog and applies a 90-day
+        # cooldown before the next attempt. Returning {:ok, movie} here would
+        # leave no external_metrics row, causing the sweeper to re-queue forever.
+        {:error, "Movie not found!"}
 
       {:error, reason} ->
         {:error, reason}

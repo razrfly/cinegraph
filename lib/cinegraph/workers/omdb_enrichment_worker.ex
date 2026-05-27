@@ -49,7 +49,8 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
         # Retry in 1 hour
         {:snooze, 3600}
 
-      {:error, reason} when reason in ["Error getting data.", "Incorrect IMDb ID."] ->
+      {:error, reason}
+      when reason in ["Error getting data.", "Incorrect IMDb ID.", "Movie not found!"] ->
         Logger.info("OMDb unavailable for movie #{movie_id} (#{reason}), recording fetch attempt")
         record_fetch_attempt(movie_id, reason)
         :ok
