@@ -21,7 +21,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraperTest do
 
     assert {:ok, movies} = ImdbCanonicalScraper.parse_single_page(html, 2, false)
 
-    assert Enum.map(movies, & &1.position) == [101, 102]
+    assert Enum.map(movies, & &1.position) == [76, 77]
   end
 
   test "parse_single_page/3 preserves absolute positions on alternative parser path" do
@@ -38,6 +38,6 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraperTest do
 
     assert {:ok, movies} = ImdbCanonicalScraper.parse_single_page(html, 2, false)
 
-    assert Enum.map(movies, & &1.position) == [101, 102]
+    assert Enum.map(movies, & &1.position) == [76, 77]
   end
 end

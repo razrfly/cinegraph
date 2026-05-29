@@ -31,64 +31,50 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
     Logger.info("Processing canonical list: #{list_name}")
     Logger.info("List ID: #{list_id}, Source Key: #{source_key}")
 
-    # First, determine how many pages we need to process
-    case ImdbCanonicalScraper.get_total_pages(list_id) do
-      {:ok, total_pages} ->
-        Logger.info("List has #{total_pages} page(s) to process")
+    # Modern IMDb IPC lists must be fetched from the bare `/list/<id>/` URL — any query
+    # string (`?start=`/`?page=`) returns a 403 (see ImdbCanonicalScraper.build_imdb_list_url/2).
+    # The bare URL lazy-loads, so scrape_list_items/2 unions a few bounded renders toward the
+    # full list instead of the old unbounded `get_total_pages` × `fetch_single_page` loop over
+    # the same bare URL (which re-fetched identical content N times — the cause of hour-long
+    # imports, see #1003).
+    tracks_awards = get_in(metadata, ["tracks_awards"]) == true
 
-        # Process page by page to avoid timeouts
-        results =
-          1..total_pages
-          |> Enum.reduce([], fn page, acc ->
-            Logger.info("Processing page #{page} of #{total_pages}...")
-
-            case ImdbCanonicalScraper.fetch_single_page(list_id, page) do
-              {:ok, movie_data} ->
-                Logger.info("Found #{length(movie_data)} movies on page #{page}")
-
-                # Process each movie on this page
-                page_results =
-                  movie_data
-                  |> Enum.map(fn movie ->
-                    process_canonical_movie(movie, source_key, list_name, options, metadata)
-                  end)
-
-                # Prepend to avoid O(n) concatenation
-                page_results ++ acc
-
-              {:error, reason} ->
-                Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
-                acc
-            end
-          end)
-          # Reverse to maintain correct order
-          |> Enum.reverse()
+    case ImdbCanonicalScraper.scrape_list_items(list_id, tracks_awards) do
+      {:ok, [], _expected} ->
+        Logger.error("Failed to fetch any movies for #{list_name} (#{list_id})")
 
         %{
           list_id: list_id,
           source_key: source_key,
           list_name: list_name,
+          error: "No movies fetched",
+          movies_created: 0,
+          movies_updated: 0,
+          movies_queued: 0,
+          movies_skipped: 0,
+          total_movies: 0
+        }
+
+      {:ok, movie_data, expected_count} ->
+        Logger.info("Found #{length(movie_data)}/#{expected_count || "?"} movies after union")
+
+        results =
+          movie_data
+          |> Enum.map(fn movie ->
+            process_canonical_movie(movie, source_key, list_name, options, metadata)
+          end)
+
+        %{
+          list_id: list_id,
+          source_key: source_key,
+          list_name: list_name,
+          expected_count: expected_count,
           movies_created: Enum.count(results, &(&1.action == :created)),
           movies_updated: Enum.count(results, &(&1.action == :updated)),
           movies_queued: Enum.count(results, &(&1.action == :queued)),
           movies_skipped: Enum.count(results, &(&1.action == :skipped)),
           total_movies: Enum.count(results),
           results: results
-        }
-
-      {:error, reason} ->
-        Logger.error("Failed to determine pages for #{list_name}: #{inspect(reason)}")
-
-        %{
-          list_id: list_id,
-          source_key: source_key,
-          list_name: list_name,
-          error: reason,
-          movies_created: 0,
-          movies_updated: 0,
-          movies_queued: 0,
-          movies_skipped: 0,
-          total_movies: 0
         }
     end
   end

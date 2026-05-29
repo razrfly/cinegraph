@@ -17,10 +17,11 @@ defmodule Cinegraph.Scrapers.Http.Client do
 
   require Logger
 
-  alias Cinegraph.Scrapers.Http.Adapters.{Crawlbase, Direct}
+  alias Cinegraph.Scrapers.Http.Adapters.{Crawlbase, CrawlbaseSmartProxy, Direct}
 
   @adapter_modules %{
     crawlbase: Crawlbase,
+    crawlbase_smart_proxy: CrawlbaseSmartProxy,
     direct: Direct
   }
 
@@ -47,15 +48,18 @@ defmodule Cinegraph.Scrapers.Http.Client do
     try_adapters(adapters, url, merged_opts)
   end
 
-  # IMDb movie/person pages (/title/, /name/) are Next.js SSR — __NEXT_DATA__
-  # is present in static HTML. Crawlbase support (2026-05-18) confirmed Normal
-  # token has a higher success rate for these high-volume paths.
-  #
-  # Exception: IMDb /event/ paths go through a stricter Cloudflare WAF policy
-  # that blocks Normal/TCP with 520s. Verified 2026-05-27: JS mode succeeds
-  # (2MB with __NEXT_DATA__ + historyEventEditions), Normal mode fails (520).
-  # UnifiedFestivalScraper overrides to mode: :javascript at its call sites.
-  defp source_default_opts(:imdb), do: [mode: :normal]
+  # Crawlbase mode history for IMDb:
+  #   2026-05-18: Normal mode confirmed higher success rate for /title/ and /name/
+  #   2026-05-28: IMDb tightened Cloudflare WAF — Normal mode now returns pc_status=207
+  #               with empty body for ALL paths. JS mode is the only working path for
+  #               /title/ and /name/ (520 + pc=200 + real HTML). JS mode is still hard-
+  #               blocked (403) on /list/ pages specifically — see GitHub issue #965.
+  #               Default switched to :javascript.
+  defp source_default_opts(:imdb), do: [mode: :javascript]
+  # IMDb /list/ pages: JS mode required so Crawlbase's headless browser solves the AWS WAF
+  # challenge. The hard 403 documented in #1002/#1003 lifted on 2026-05-29 — JS mode now
+  # returns 520 + pc_status=200 + full rendered HTML for /list/ pages again.
+  defp source_default_opts(:imdb_list), do: [mode: :javascript]
   defp source_default_opts(_), do: []
 
   defp resolve_adapter_chain(source) do
