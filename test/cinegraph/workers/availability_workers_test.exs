@@ -117,6 +117,29 @@ defmodule Cinegraph.Workers.AvailabilityWorkersTest do
     end
   end
 
+  # #999 — queue isolation is the primary deadlock prevention mechanism.
+  # These tests lock down the queue contract so a stale worker/config can't
+  # silently revert to :tmdb concurrency 5 and recreate the deadlock storm.
+  describe "queue contract" do
+    test "MovieAvailabilityRefreshWorker.new/1 targets movie_availability queue" do
+      job = MovieAvailabilityRefreshWorker.new(%{"movie_id" => 1})
+      assert job.changes.queue == "movie_availability"
+    end
+
+    test ":movie_availability queue is present in Oban config" do
+      queues = Application.fetch_env!(:cinegraph, Oban) |> Keyword.fetch!(:queues)
+      assert Keyword.has_key?(queues, :movie_availability),
+             "Expected :movie_availability in Oban queues, got: #{inspect(Keyword.keys(queues))}"
+    end
+
+    test "AvailabilityRefreshSweeper targets :maintenance queue, not :tmdb" do
+      # The sweeper has always been on :maintenance — the registry had a stale :tmdb label.
+      # Verify the module-level queue matches the cron schedule expectation.
+      job = AvailabilityRefreshSweeper.new(%{})
+      assert job.changes.queue == "maintenance"
+    end
+  end
+
   defp insert_movie!(attrs \\ %{}) do
     defaults = %{
       tmdb_id: System.unique_integer([:positive]),

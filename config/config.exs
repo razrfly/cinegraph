@@ -173,6 +173,11 @@ config :cinegraph, Oban,
     # Festival discovery processing - very low concurrency to prevent overwhelming the system
     # Each ceremony queues many child jobs, so limit to 1 concurrent ceremony
     festival_discovery: 1,
+    # Movie watch-provider availability refresh — concurrency 1 to prevent deadlocks.
+    # Multiple concurrent workers all upsert the same shared global watch_providers rows
+    # (Netflix, Amazon, etc.) inside a long Repo.transaction, causing PostgreSQL ShareLock
+    # deadlocks on the watch_providers unique index. See: GitHub #999.
+    movie_availability: 1,
     # All metrics/calculations (person quality scores, predictions, CRI)
     metrics: 2,
     # Background maintenance tasks (cache warming, sitemap, backfills)

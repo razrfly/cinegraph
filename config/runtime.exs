@@ -220,12 +220,12 @@ if config_env() == :prod do
     hostname: hostname,
     port: port_num,
     database: database,
-    # Pool sized to cover the sum of Oban queue concurrencies (currently 23:
+    # Pool sized to cover the sum of Oban queue concurrencies (currently 24:
     # tmdb 5 + omdb 5 + collaboration 3 + scraping 3 + metrics 2 + maintenance 4
-    # + festival_discovery 1) plus headroom for Phoenix request handlers and
-    # ad-hoc admin queries. Bump alongside oban_queues below if concurrencies
-    # change. Was 10, raised to 25 in #897 Phase B after MovieAvailabilityRefreshWorker
-    # logged 1,578 DBConnection pool-exhaustion discards.
+    # + festival_discovery 1 + movie_availability 1) plus headroom for Phoenix
+    # request handlers and ad-hoc admin queries. Bump alongside oban_queues below
+    # if concurrencies change. Was 10, raised to 25 in #897 Phase B after
+    # MovieAvailabilityRefreshWorker logged 1,578 DBConnection pool-exhaustion discards.
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "25"),
     socket_options: socket_opts,
     connect_timeout: 30_000,
@@ -290,6 +290,10 @@ if config_env() == :prod do
     collaboration: parse_oban_limit.("OBAN_COLLABORATION_LIMIT", 3),
     scraping: parse_oban_limit.("OBAN_SCRAPING_LIMIT", 3),
     festival_discovery: parse_oban_limit.("OBAN_FESTIVAL_DISCOVERY_LIMIT", 1),
+    # Concurrency 1 prevents ShareLock deadlocks on the shared watch_providers unique
+    # index when concurrent workers upsert the same global providers (Netflix, Amazon,
+    # etc.) inside a long Repo.transaction. See: GitHub #999.
+    movie_availability: parse_oban_limit.("OBAN_MOVIE_AVAILABILITY_LIMIT", 1),
     metrics: parse_oban_limit.("OBAN_METRICS_LIMIT", 2),
     # `:maintenance` runs cron-fired sweepers + cache warmers (HealthCacheWarmer
     # every 4 min, MoviesCacheWarmer, etc.). Was `1` until #897 Phase A turned up
