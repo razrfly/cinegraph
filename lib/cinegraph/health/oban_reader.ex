@@ -232,9 +232,15 @@ defmodule Cinegraph.Health.ObanReader do
   end
 
   @doc """
-  Discarded jobs in `[start_dt, end_dt)` for a queue and/or worker filter.
-  Returns rows with worker, attempt, discarded_at, and the most recent
-  `errors[].error` text. The caller groups by error pattern.
+  Terminal jobs (`state = "discarded"` or `state = "cancelled"`) in
+  `[start_dt, end_dt)` for a queue and/or worker filter. Returns rows with
+  worker, attempt, discarded_at (mapped from `cancelled_at` for cancelled
+  jobs), and the most recent `errors[].error` text. The caller groups by
+  error pattern.
+
+  Cancelled jobs are included so that `{:cancel, reason}` returns from
+  workers (e.g. `TmdbDetailsWorker` for `no_tmdb_match`) appear in failure
+  audits alongside normally-discarded jobs.
 
   At least one of `:queue` or `:worker` must be provided.
   """
@@ -246,10 +252,10 @@ defmodule Cinegraph.Health.ObanReader do
       raise ArgumentError, "discards_for_queue/3 requires :queue or :worker"
     end
 
-    base =
+    # discarded jobs — state="discarded", timestamp field: discarded_at
+    discarded_base =
       from(j in Oban.Job,
         where: j.state == "discarded" and j.discarded_at >= ^start_dt,
-        order_by: [asc: j.discarded_at, asc: j.id],
         select: %{
           id: j.id,
           worker: j.worker,
@@ -265,12 +271,56 @@ defmodule Cinegraph.Health.ObanReader do
         }
       )
 
-    base = if queue, do: from(j in base, where: j.queue == ^to_string(queue)), else: base
-    base = if worker, do: from(j in base, where: j.worker == ^worker), else: base
+    # cancelled jobs — state="cancelled", cancelled_at mapped to discarded_at for uniform shape
+    cancelled_base =
+      from(j in Oban.Job,
+        where: j.state == "cancelled" and j.cancelled_at >= ^start_dt,
+        select: %{
+          id: j.id,
+          worker: j.worker,
+          attempt: j.attempt,
+          discarded_at: j.cancelled_at,
+          last_error:
+            fragment(
+              "CASE WHEN array_length(?, 1) > 0 THEN ?[array_upper(?, 1)] ->> 'error' ELSE NULL END",
+              j.errors,
+              j.errors,
+              j.errors
+            )
+        }
+      )
 
-    base = if end_dt, do: from(j in base, where: j.discarded_at < ^end_dt), else: base
+    discarded_base =
+      if queue,
+        do: from(j in discarded_base, where: j.queue == ^to_string(queue)),
+        else: discarded_base
 
-    Repo.replica().all(base)
+    discarded_base =
+      if worker, do: from(j in discarded_base, where: j.worker == ^worker), else: discarded_base
+
+    discarded_base =
+      if end_dt,
+        do: from(j in discarded_base, where: j.discarded_at < ^end_dt),
+        else: discarded_base
+
+    cancelled_base =
+      if queue,
+        do: from(j in cancelled_base, where: j.queue == ^to_string(queue)),
+        else: cancelled_base
+
+    cancelled_base =
+      if worker, do: from(j in cancelled_base, where: j.worker == ^worker), else: cancelled_base
+
+    cancelled_base =
+      if end_dt,
+        do: from(j in cancelled_base, where: j.cancelled_at < ^end_dt),
+        else: cancelled_base
+
+    discarded_rows = Repo.replica().all(discarded_base)
+    cancelled_rows = Repo.replica().all(cancelled_base)
+
+    (discarded_rows ++ cancelled_rows)
+    |> Enum.sort_by(&{&1.discarded_at, &1.id})
   end
 
   @doc """

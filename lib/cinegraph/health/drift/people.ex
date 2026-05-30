@@ -3,8 +3,8 @@ defmodule Cinegraph.Health.Drift.People do
   People drift checks — the headliner domain (#722).
 
   Each public function returns `Cinegraph.Health.Drift.result/5`. All
-  reads use `Repo.replica()`. Cached in `:health_cache` (5 min for
-  cheap checks, 15 min for `pqs_stale` which is expensive).
+  reads use `Repo.replica()`. Cached in `:health_cache` for 35 min
+  (`@cache_ttl` and `@pqs_cache_ttl` are both `:timer.minutes(35)`).
 
   ## Population scoping
 

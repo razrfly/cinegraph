@@ -116,7 +116,7 @@ defmodule Cinegraph.Health.QueueFailures do
       :crawlbase
 
       iex> Cinegraph.Health.QueueFailures.classify_error(
-      ...>   ~s|** (Oban.PerformError) ... failed with {:error, "Movie 'Foo' (tt12345) not found in TMDb"} (no_tmdb_match)|
+      ...>   ~s|** (Oban.CancelError) ... cancelled with "no_tmdb_match — Foo (tt12345)"|
       ...> )
       :no_tmdb_match
 
