@@ -24,6 +24,8 @@ defmodule Cinegraph.Workers.RecallCalibrationWorker do
           "threshold" => threshold
         }
       }) do
+    # Route all Repo.replica() calls through the dedicated worker pool (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("RecallCalibrationWorker starting: #{list_slug} / #{profile_name} @ #{threshold}")
 
     broadcast(%{

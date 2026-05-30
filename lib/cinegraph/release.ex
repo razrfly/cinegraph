@@ -19,9 +19,13 @@ defmodule Cinegraph.Release do
       end
     end
 
-    # Run seeds after migrations
-    seed()
-
+    # NOTE: Seeds are intentionally NOT run here. `migrate/0` runs synchronously
+    # on every deploy before the server boots; running the full idempotent
+    # seeds.exs (plus a second repo pool) on every deploy added Postgres load
+    # during the most fragile part of the deploy window and contributed to
+    # health-check timeouts. Run seeds manually instead:
+    #
+    #     bin/cinegraph eval Cinegraph.Release.seed
     :ok
   end
 

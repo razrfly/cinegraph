@@ -22,6 +22,11 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"person_id" => person_id}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    # Note: the Repo.get(Person, person_id) below intentionally uses the primary (not replica)
+    # to avoid replica-lag false negatives — that call is unaffected by this routing key.
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("PersonTmdbRefreshWorker refreshing person #{person_id}")
 
     # Read from the *primary* repo here. `People.get_person/1` hits the read

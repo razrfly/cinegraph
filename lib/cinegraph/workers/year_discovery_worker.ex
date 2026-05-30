@@ -51,6 +51,9 @@ defmodule Cinegraph.Workers.YearDiscoveryWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"source_key" => source_key}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("YearDiscoveryWorker: Starting discovery for #{source_key}")
 
     case Events.get_active_by_source_key(source_key) do
@@ -65,6 +68,9 @@ defmodule Cinegraph.Workers.YearDiscoveryWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "discover_all"}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("YearDiscoveryWorker: Starting discovery for all festivals")
 
     festivals = Events.list_active_events()

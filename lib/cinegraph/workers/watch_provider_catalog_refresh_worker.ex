@@ -17,6 +17,9 @@ defmodule Cinegraph.Workers.WatchProviderCatalogRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     regions = Map.get(args, "regions", [Availability.default_region()])
 
     stats = refresh_catalog(regions: regions)

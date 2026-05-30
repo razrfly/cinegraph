@@ -30,6 +30,9 @@ defmodule Cinegraph.Workers.DailyYearImportWorker do
   """
   @impl Oban.Worker
   def perform(%Oban.Job{args: args}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     # Check if a specific year was requested
     year = Map.get(args, "year") || get_next_year_to_import()
     force = Map.get(args, "force", false)

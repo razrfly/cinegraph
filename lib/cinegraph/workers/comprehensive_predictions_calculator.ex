@@ -19,6 +19,8 @@ defmodule Cinegraph.Workers.ComprehensivePredictionsCalculator do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"profile_id" => profile_id}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("Starting comprehensive predictions calculation for profile #{profile_id}")
 
     profile = Repo.get!(MetricWeightProfile, profile_id)

@@ -43,6 +43,8 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "sync_all_missing"}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("AwardImportOrchestratorWorker: Starting sync_all_missing")
 
     # Get all organizations
@@ -95,6 +97,8 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "discover_gaps"}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("AwardImportOrchestratorWorker: Starting discover_gaps")
 
     # Get all import statuses with gaps (not_started, failed, etc.)
@@ -139,6 +143,8 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "get_import_summary"}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("AwardImportOrchestratorWorker: Getting import summary")
 
     # Get comprehensive summary using the Festivals context
@@ -178,6 +184,8 @@ defmodule Cinegraph.Workers.AwardImportOrchestratorWorker do
   # Handle retry of failed imports for a specific organization
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "retry_failed", "organization_id" => org_id}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info(
       "AwardImportOrchestratorWorker: Retrying failed imports for organization #{org_id}"
     )
