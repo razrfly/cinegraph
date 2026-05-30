@@ -41,6 +41,9 @@ defmodule Cinegraph.DataCase do
     # Allow replica repo to use the same sandbox connection
     # This ensures replica reads see the same test data as primary writes
     Ecto.Adapters.SQL.Sandbox.allow(Cinegraph.Repo.Replica, self(), pid)
+    # Allow worker repo (background job pool) to see the same test data.
+    # Required now that Oban workers set :cinegraph_job_repo → Repo.Worker.
+    Ecto.Adapters.SQL.Sandbox.allow(Cinegraph.Repo.Worker, self(), pid)
 
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
   end

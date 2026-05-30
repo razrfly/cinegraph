@@ -18,7 +18,10 @@ defmodule Cinegraph.Movies.Cache do
 
   @cache_name :movies_cache
   @filter_options_key "filter_options"
-  @filter_options_ttl :timer.hours(1)
+  # 24h TTL: genres, countries, languages, festivals change at most daily.
+  # Previously 1h — the short TTL caused stampede bursts on the replica after
+  # every deploy restart and every hour thereafter. (#1007)
+  @filter_options_ttl :timer.hours(24)
   @search_cache_version 2
   @query_results_ttl :timer.minutes(15)
   # Warmer TTL must exceed the cron interval (30 min) so skip-warm-keys logic fires on the next run.
@@ -28,33 +31,26 @@ defmodule Cinegraph.Movies.Cache do
   @doc """
   Get cached filter options, or fetch and cache if not present.
   Returns the same structure as Search.get_filter_options/0.
+
+  Uses Cachex.fetch/3 for single-flight behaviour: concurrent cache misses
+  collapse into one DB call via Cachex's internal Courier, preventing the
+  post-deploy stampede where every concurrent PersonLive.Movies mount fires
+  separate replica queries. (#1007)
   """
   def get_filter_options(fetch_fn) do
-    case Cachex.get(@cache_name, @filter_options_key) do
-      {:ok, nil} ->
-        # Cache miss - fetch and store
-        Logger.debug("[Movies.Cache] Filter options cache miss, fetching from database")
-        options = fetch_fn.()
-
-        case Cachex.put(@cache_name, @filter_options_key, options, ttl: @filter_options_ttl) do
-          {:ok, true} ->
-            :ok
-
-          {:error, reason} ->
-            Logger.warning("[Movies.Cache] Failed to cache filter options: #{inspect(reason)}")
-        end
-
+    case Cachex.fetch(@cache_name, @filter_options_key, fn _key ->
+      Logger.debug("[Movies.Cache] Filter options cache miss, fetching from database")
+      {:commit, fetch_fn.(), ttl: @filter_options_ttl}
+    end) do
+      {status, options} when status in [:ok, :commit] ->
         options
 
-      {:ok, cached_options} ->
-        # Cache hit
-        Logger.debug("[Movies.Cache] Filter options cache hit")
-        cached_options
+      {:commit, options, _opts} ->
+        options
 
       {:error, reason} ->
-        # Cache error - fall back to direct fetch
         Logger.warning(
-          "[Movies.Cache] Error reading from cache: #{inspect(reason)}, falling back to database"
+          "[Movies.Cache] Cachex.fetch error: #{inspect(reason)}, falling back to database"
         )
 
         fetch_fn.()
