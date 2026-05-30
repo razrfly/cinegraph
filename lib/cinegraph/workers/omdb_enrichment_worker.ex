@@ -23,6 +23,9 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
   # OMDb.process_movie/2 owns the skip decision: it selects omdb_data
   # explicitly AND verifies a matching external_metrics row exists.
   def perform(%Oban.Job{args: %{"movie_id" => movie_id} = args}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("OMDb Enrichment Worker processing movie #{movie_id}")
     force = Map.get(args, "force", false)
     process_omdb_data(movie_id, force)

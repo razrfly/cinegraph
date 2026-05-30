@@ -13,7 +13,10 @@ proxy:
     path: /health
     interval: 3
 
-deploy_timeout: 120
+# Raised from 120 → 300 (#1008 follow-up): synchronous migrate runs CONCURRENTLY
+# index builds on movies/external_metrics, which stall behind the old container's
+# in-flight Oban transactions and can exceed 120s, timing out the deploy.
+deploy_timeout: 300
 
 registry:
   server: ghcr.io

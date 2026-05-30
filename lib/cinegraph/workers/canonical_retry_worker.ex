@@ -24,6 +24,9 @@ defmodule Cinegraph.Workers.CanonicalRetryWorker do
           "canonical_data" => canonical_data
         }
       }) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("Retrying canonical source addition for movie #{movie_id}, source: #{source_key}")
 
     case Repo.get(Movies.Movie, movie_id) do

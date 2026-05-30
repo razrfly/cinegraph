@@ -39,9 +39,9 @@ defmodule Cinegraph.Movies.Cache do
   """
   def get_filter_options(fetch_fn) do
     case Cachex.fetch(@cache_name, @filter_options_key, fn _key ->
-      Logger.debug("[Movies.Cache] Filter options cache miss, fetching from database")
-      {:commit, fetch_fn.(), ttl: @filter_options_ttl}
-    end) do
+           Logger.debug("[Movies.Cache] Filter options cache miss, fetching from database")
+           {:commit, fetch_fn.(), ttl: @filter_options_ttl}
+         end) do
       {status, options} when status in [:ok, :commit] ->
         options
 

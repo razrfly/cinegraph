@@ -14,6 +14,9 @@ defmodule Cinegraph.Workers.TMDbDiscoveryWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"page" => page} = args}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("Processing discovery page #{page}")
 
     # Build query params

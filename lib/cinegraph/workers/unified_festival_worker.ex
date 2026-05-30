@@ -17,6 +17,9 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"festival" => festival, "year" => year}}) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("Starting #{festival} import for year #{year}")
 
     with {:ok, festival_config} <- get_festival_config(festival),
@@ -51,6 +54,9 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
   # Handle multiple years import
   def perform(%Oban.Job{args: %{"festival" => festival, "years" => years} = args})
       when is_list(years) do
+    # Route all Repo.replica() calls through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("Starting #{festival} import for #{length(years)} years: #{inspect(years)}")
 
     max_concurrency = Map.get(args, "max_concurrency", 3)
