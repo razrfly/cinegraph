@@ -5,7 +5,7 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalLists do
   """
 
   alias Cinegraph.Health.CanonicalListsAudit
-  alias Cinegraph.Workers.CanonicalImportOrchestrator
+  alias Cinegraph.Workers.CanonicalImportWorker
 
   require Logger
 
@@ -109,12 +109,12 @@ defmodule Cinegraph.Maintenance.RefreshCanonicalLists do
   defp enqueue_each(lists, trigger) do
     Enum.reduce(lists, {0, 0, 0}, fn list, {ok, already, failed} ->
       args = %{
-        "action" => "orchestrate_import",
+        "action" => "import_canonical_list",
         "list_key" => list.source_key,
         "trigger" => trigger
       }
 
-      case CanonicalImportOrchestrator.new(args) |> Oban.insert() do
+      case CanonicalImportWorker.new(args) |> Oban.insert() do
         {:ok, %Oban.Job{conflict?: true}} ->
           {ok, already + 1, failed}
 

@@ -12,7 +12,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
   alias Cinegraph.Metrics.ApiTracker
   alias Cinegraph.Cache.DashboardStats
   require Logger
-  alias Cinegraph.Workers.{CanonicalImportOrchestrator, OscarImportWorker, DailyYearImportWorker}
+  alias Cinegraph.Workers.{OscarImportWorker, DailyYearImportWorker}
   alias Cinegraph.Cultural
   alias Cinegraph.Repairs
 
@@ -38,7 +38,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
       |> assign(:oscar_import_progress, nil)
       |> assign(:festival_import_running, false)
       |> assign(:festival_import_progress, nil)
-      |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+      |> assign(:canonical_lists, MovieLists.all_as_config())
       |> assign(:oscar_decades, generate_oscar_decades())
       |> assign(:festival_list, generate_festival_list())
       |> assign(:festival_years, generate_festival_years())
@@ -386,10 +386,10 @@ defmodule CinegraphWeb.ImportDashboardLive do
       MovieLists.all_as_config()
       |> Enum.map(fn {list_key, _config} ->
         %{
-          "action" => "orchestrate_import",
+          "action" => "import_canonical_list",
           "list_key" => list_key
         }
-        |> Cinegraph.Workers.CanonicalImportOrchestrator.new()
+        |> Cinegraph.Workers.CanonicalImportWorker.new()
       end)
 
     # Insert all jobs
@@ -410,12 +410,12 @@ defmodule CinegraphWeb.ImportDashboardLive do
   end
 
   def handle_event("import_canonical_list", %{"list_key" => list_key}, socket) do
-    # Queue the canonical import orchestrator job
+    # Queue the canonical import job
     %{
-      "action" => "orchestrate_import",
+      "action" => "import_canonical_list",
       "list_key" => list_key
     }
-    |> Cinegraph.Workers.CanonicalImportOrchestrator.new()
+    |> Cinegraph.Workers.CanonicalImportWorker.new()
     |> Oban.insert()
     |> case do
       {:ok, _job} ->
@@ -741,7 +741,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
           socket
           |> put_flash(:info, "List '#{list.name}' added successfully!")
           |> assign(:all_movie_lists, get_movie_list_with_real_counts())
-          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+          |> assign(:canonical_lists, MovieLists.all_as_config())
           |> assign(:show_modal, false)
 
         {:noreply, socket}
@@ -775,7 +775,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
           socket
           |> put_flash(:info, "List '#{updated_list.name}' updated successfully!")
           |> assign(:all_movie_lists, get_movie_list_with_real_counts())
-          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+          |> assign(:canonical_lists, MovieLists.all_as_config())
           |> assign(:show_modal, false)
           |> assign(:editing_list, nil)
 
@@ -798,7 +798,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
           socket
           |> put_flash(:info, "List '#{list.name}' deleted successfully!")
           |> assign(:all_movie_lists, get_movie_list_with_real_counts())
-          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+          |> assign(:canonical_lists, MovieLists.all_as_config())
 
         {:noreply, socket}
 
@@ -821,7 +821,7 @@ defmodule CinegraphWeb.ImportDashboardLive do
             "List #{if list.active, do: "disabled", else: "enabled"} successfully"
           )
           |> assign(:all_movie_lists, get_movie_list_with_real_counts())
-          |> assign(:canonical_lists, CanonicalImportOrchestrator.available_lists())
+          |> assign(:canonical_lists, MovieLists.all_as_config())
 
         {:noreply, socket}
 

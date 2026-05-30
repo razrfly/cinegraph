@@ -40,23 +40,16 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
     tracks_awards = get_in(metadata, ["tracks_awards"]) == true
 
     case ImdbCanonicalScraper.scrape_list_items(list_id, tracks_awards) do
-      {:ok, [], _expected} ->
-        Logger.error("Failed to fetch any movies for #{list_name} (#{list_id})")
+      {:error, reason} ->
+        Logger.error("Failed to fetch list #{list_name} (#{list_id}): #{inspect(reason)}")
+        empty_result(list_id, source_key, list_name, "fetch failed: #{inspect(reason)}")
 
-        %{
-          list_id: list_id,
-          source_key: source_key,
-          list_name: list_name,
-          error: "No movies fetched",
-          movies_created: 0,
-          movies_updated: 0,
-          movies_queued: 0,
-          movies_skipped: 0,
-          total_movies: 0
-        }
+      {:ok, [], _expected} ->
+        Logger.error("No movies parsed for #{list_name} (#{list_id})")
+        empty_result(list_id, source_key, list_name, "No movies parsed")
 
       {:ok, movie_data, expected_count} ->
-        Logger.info("Found #{length(movie_data)}/#{expected_count || "?"} movies after union")
+        Logger.info("Found #{length(movie_data)}/#{expected_count || "?"} movies")
 
         results =
           movie_data
@@ -77,6 +70,24 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
           results: results
         }
     end
+  end
+
+  # Consistent map shape for the no-movies / fetch-failure cases so callers that read
+  # `:results` / `:expected_count` via dot access don't hit a KeyError.
+  defp empty_result(list_id, source_key, list_name, error) do
+    %{
+      list_id: list_id,
+      source_key: source_key,
+      list_name: list_name,
+      error: error,
+      expected_count: 0,
+      movies_created: 0,
+      movies_updated: 0,
+      movies_queued: 0,
+      movies_skipped: 0,
+      total_movies: 0,
+      results: []
+    }
   end
 
   @doc """

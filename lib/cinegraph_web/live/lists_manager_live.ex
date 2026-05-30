@@ -7,7 +7,7 @@ defmodule CinegraphWeb.ListsManagerLive do
 
   alias Cinegraph.Repo
   alias Cinegraph.Movies.MovieLists
-  alias Cinegraph.Workers.CanonicalImportOrchestrator
+  alias Cinegraph.Workers.CanonicalImportWorker
   alias CinegraphWeb.ListsManager.Params, as: ListParams
   require Logger
 
@@ -674,10 +674,10 @@ defmodule CinegraphWeb.ListsManagerLive do
 
   defp trigger_list_import(list) do
     %{
-      "action" => "orchestrate_import",
+      "action" => "import_canonical_list",
       "list_key" => list.source_key
     }
-    |> CanonicalImportOrchestrator.new()
+    |> CanonicalImportWorker.new()
     |> Oban.insert()
   end
 
