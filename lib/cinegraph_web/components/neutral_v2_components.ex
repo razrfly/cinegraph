@@ -521,18 +521,40 @@ defmodule CinegraphWeb.NeutralV2Components do
               />
             </svg>
           </button>
-          <button
-            type="button"
-            class="h-[34px] px-3 rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 text-[12.5px] font-semibold text-mist-950 dark:text-white cursor-pointer max-sm:hidden"
-          >
-            Sign in
-          </button>
-          <a
-            href="#"
-            class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 dark:bg-white px-3 py-1 text-sm/7 font-medium text-mist-100 dark:text-mist-950 hover:bg-mist-800 dark:hover:bg-mist-200"
-          >
-            Get started
-          </a>
+          <%!-- Clerk auth UI (#838). Hydrated client-side by app.js so public
+               pages stay CDN-cacheable; skeleton shows until Clerk resolves. --%>
+          <div data-clerk-auth-ui class="flex items-center gap-2">
+            <div data-clerk-loading class="h-[34px] w-[120px] rounded-[7px] bg-mist-950/[0.04] dark:bg-white/5 animate-pulse">
+            </div>
+            <div data-clerk-signed-out class="hidden items-center gap-2">
+              <a
+                href="/auth/login"
+                class="h-[34px] inline-flex items-center px-3 rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 text-[12.5px] font-semibold text-mist-950 dark:text-white cursor-pointer max-sm:hidden no-underline"
+              >
+                Sign in
+              </a>
+              <a
+                href="/auth/register"
+                class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 dark:bg-white px-3 py-1 text-sm/7 font-medium text-mist-100 dark:text-mist-950 hover:bg-mist-800 dark:hover:bg-mist-200 no-underline"
+              >
+                Get started
+              </a>
+            </div>
+            <div data-clerk-signed-in class="hidden items-center gap-2">
+              <a
+                href="/auth/profile"
+                class="h-[34px] inline-flex items-center px-3 rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 text-[12.5px] font-semibold text-mist-950 dark:text-white cursor-pointer no-underline"
+              >
+                Account
+              </a>
+              <a
+                href="/auth/logout"
+                class="inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-mist-950 dark:bg-white px-3 py-1 text-sm/7 font-medium text-mist-100 dark:text-mist-950 hover:bg-mist-800 dark:hover:bg-mist-200 no-underline"
+              >
+                Log out
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </header>

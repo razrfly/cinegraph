@@ -9,6 +9,7 @@
     </.live_title>
     <CinegraphWeb.SEO.meta_tags assigns={assigns} />
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <.clerk_head />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
   </head>
@@ -40,6 +41,23 @@
                 Disparity
               </.link>
             </nav>
+          </div>
+          <!-- Clerk auth UI (#838) — hydrated client-side by app.js. -->
+          <div data-clerk-auth-ui class="flex items-center gap-3 text-sm font-medium">
+            <div data-clerk-loading class="h-5 w-24 rounded bg-zinc-100 animate-pulse"></div>
+            <div data-clerk-signed-out class="hidden items-center gap-4">
+              <a href="/auth/login" class="text-zinc-700 hover:text-zinc-900">Log in</a>
+              <a
+                href="/auth/register"
+                class="rounded-md bg-zinc-900 px-3 py-1.5 text-white hover:bg-zinc-700"
+              >
+                Sign up
+              </a>
+            </div>
+            <div data-clerk-signed-in class="hidden items-center gap-4">
+              <a href="/auth/profile" class="text-zinc-700 hover:text-zinc-900">Account</a>
+              <a href="/auth/logout" class="text-zinc-700 hover:text-zinc-900">Log out</a>
+            </div>
           </div>
         </div>
       </div>

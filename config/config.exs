@@ -281,6 +281,9 @@ config :cinegraph, Oban,
 # Import movie import configuration
 import_config "import.exs"
 
+# Clerk authentication configuration (credentials loaded at runtime)
+import_config "clerk.exs"
+
 config :appsignal, :config,
   otp_app: :cinegraph,
   name: "cinegraph",

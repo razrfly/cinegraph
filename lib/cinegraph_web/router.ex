@@ -2,10 +2,18 @@ defmodule CinegraphWeb.Router do
   use CinegraphWeb, :router
   use Honeybadger.Plug
 
+  # Clerk auth function plugs (#838): fetch_clerk_user / sync_clerk_user /
+  # require_authenticated_clerk_user, etc.
+  import CinegraphWeb.Plugs.ClerkAuthPlug
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :fetch_live_flash
+    # Clerk auth: assigns @current_user when a valid token is present; no-op for
+    # anonymous requests (no session cookie set, so public pages stay CDN-cacheable).
+    plug :fetch_clerk_user
+    plug :sync_clerk_user
     plug :put_root_layout, html: {CinegraphWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
@@ -54,7 +62,8 @@ defmodule CinegraphWeb.Router do
 
       live_session :v2_design,
         root_layout: {CinegraphWeb.Layouts, :v2_root},
-        layout: false do
+        layout: false,
+        on_mount: [{CinegraphWeb.Live.AuthHooks, :assign_auth_user}] do
         live "/people-v2/:slug_or_id", PersonLive.ShowV2, :show
       end
     end
@@ -102,7 +111,8 @@ defmodule CinegraphWeb.Router do
     # as aliases for open tabs / external V2-pinned links.
     live_session :v2_movies,
       root_layout: {CinegraphWeb.Layouts, :v2_root},
-      layout: false do
+      layout: false,
+      on_mount: [{CinegraphWeb.Live.AuthHooks, :assign_auth_user}] do
       live "/movies", MovieLive.IndexV2, :index
       live "/movies/:slug", MovieLive.ShowV2, :show
       live "/movies-v2", MovieLive.IndexV2, :index
@@ -138,7 +148,8 @@ defmodule CinegraphWeb.Router do
 
     live_session :v2_people,
       root_layout: {CinegraphWeb.Layouts, :v2_root},
-      layout: false do
+      layout: false,
+      on_mount: [{CinegraphWeb.Live.AuthHooks, :assign_auth_user}] do
       live "/people", PersonLive.IndexV2, :index
       live "/people/:slug_or_id/movies", PersonLive.Movies, :index
       live "/people/:slug_or_id/movies/acting", PersonLive.Movies, :acting
@@ -191,7 +202,8 @@ defmodule CinegraphWeb.Router do
     # V2 collection routes use the same root layout as the V2 movie pages.
     live_session :v2_collections,
       root_layout: {CinegraphWeb.Layouts, :v2_root},
-      layout: false do
+      layout: false,
+      on_mount: [{CinegraphWeb.Live.AuthHooks, :assign_auth_user}] do
       live "/now-playing", NowPlayingLive, :index
       live "/video-clerk", VideoClerkLive, :show
       live "/lists", ListLive.Index, :index
@@ -203,6 +215,19 @@ defmodule CinegraphWeb.Router do
       live "/companies", CompanyLive.Index, :index
       live "/companies/:slug_or_id", CompanyLive.Show, :show
     end
+  end
+
+  # Clerk-backed authentication routes (#838). Clerk renders the auth UI via its
+  # frontend components; these routes mount those components + handle redirects.
+  scope "/auth", CinegraphWeb.Auth do
+    pipe_through :browser
+
+    get "/login", ClerkAuthController, :login
+    get "/register", ClerkAuthController, :register
+    get "/callback", ClerkAuthController, :callback
+    get "/logout", ClerkAuthController, :logout
+    post "/logout", ClerkAuthController, :logout
+    get "/profile", ClerkAuthController, :profile
   end
 
   # GraphQL API — read-only, authenticated via Bearer token
