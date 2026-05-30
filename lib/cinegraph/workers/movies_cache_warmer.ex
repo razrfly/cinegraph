@@ -42,6 +42,11 @@ defmodule Cinegraph.Workers.MoviesCacheWarmer do
         Search.search_movies_uncached(params)
       end)
 
+    # Warm filter options (genres, countries, languages, etc.) used by PersonLive.Movies.
+    # Without this, the first burst of page mounts after a deploy hits the replica cold.
+    # Repo.Worker is already set above, so these queries route through the worker pool. (#1007)
+    Search.get_filter_options()
+
     elapsed = System.monotonic_time(:millisecond) - start_time
 
     Logger.info(

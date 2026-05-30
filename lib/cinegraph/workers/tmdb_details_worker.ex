@@ -24,6 +24,9 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
 
   # Handle IMDb ID lookup (e.g., from Oscar import)
   def perform(%Oban.Job{args: %{"imdb_id" => imdb_id} = args} = job) do
+    # Route all Repo.replica() calls in this process through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("Processing movie details for IMDb ID #{imdb_id}")
 
     # Check if movie already exists by IMDb ID
@@ -78,6 +81,9 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
   end
 
   def perform(%Oban.Job{args: %{"tmdb_id" => tmdb_id}} = job) do
+    # Route all Repo.replica() calls in this process through the dedicated worker pool
+    # so this job does not compete with web requests for Repo.Replica connections. (#1007)
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
     Logger.info("Processing movie details for TMDb ID #{tmdb_id}")
     process_tmdb_movie(tmdb_id, job.args, job)
   end

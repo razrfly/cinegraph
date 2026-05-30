@@ -31,6 +31,17 @@ config :cinegraph, Cinegraph.Repo.Replica,
   show_sensitive_data_on_connection_error: true,
   pool_size: 5
 
+# Worker repo for background Oban jobs — isolated from web replica pool.
+# Points to same database as primary in dev; in prod it uses WORKER_POOL_SIZE.
+config :cinegraph, Cinegraph.Repo.Worker,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "cinegraph_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 2
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

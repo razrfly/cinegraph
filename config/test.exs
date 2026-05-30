@@ -37,6 +37,16 @@ config :cinegraph, Cinegraph.Repo.Replica,
   # when both primary + replica pools were created.
   pool_size: 10
 
+# Worker repo for background Oban jobs — isolated from web replica pool.
+# Uses sandbox pool so worker DB calls see the same test data as primary writes.
+config :cinegraph, Cinegraph.Repo.Worker,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "cinegraph_test#{System.get_env("MIX_TEST_PARTITION")}",
+  pool: Ecto.Adapters.SQL.Sandbox,
+  pool_size: 5
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :cinegraph, CinegraphWeb.Endpoint,
