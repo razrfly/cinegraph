@@ -18,7 +18,7 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
   @impl true
   def perform(%Oban.Job{args: %{"movie_id" => movie_id} = args}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     skip_cache_invalidation = Map.get(args, "skip_cache_invalidation", false)
 
     movie = Repo.get!(Movie, movie_id)

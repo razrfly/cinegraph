@@ -22,7 +22,7 @@ defmodule Cinegraph.Workers.FestivalPersonInferenceWorker do
   def perform(%Oban.Job{args: %{"ceremony_id" => ceremony_id, "abbr" => abbr, "year" => year}}) do
     # Route all Repo.replica() calls through the dedicated worker pool
     # so this job does not compete with web requests for Repo.Replica connections. (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.metadata(ceremony_id: ceremony_id, organization: abbr, year: year)
     Logger.info("Running person inference for #{abbr} #{year} (ceremony ##{ceremony_id})")
 

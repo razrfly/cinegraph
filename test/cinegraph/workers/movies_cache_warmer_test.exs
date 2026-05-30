@@ -1,7 +1,6 @@
 defmodule Cinegraph.Workers.MoviesCacheWarmerTest do
   use Cinegraph.DataCase, async: false
 
-  alias Cinegraph.Movies.Cache
   alias Cinegraph.Workers.MoviesCacheWarmer
 
   # #1007 — MoviesCacheWarmer.perform/1 now warms filter options (line 48) in

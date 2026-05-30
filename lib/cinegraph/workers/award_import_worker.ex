@@ -76,7 +76,7 @@ defmodule Cinegraph.Workers.AwardImportWorker do
   def perform(%Oban.Job{args: %{"organization_id" => org_id, "year" => year}} = job) do
     # Route all Repo.replica() calls through the dedicated worker pool
     # so this job does not compete with web requests for Repo.Replica connections. (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("AwardImportWorker: Starting import for organization #{org_id}, year #{year}")
 
     # Handle synthetic negative IDs from the dashboard view
@@ -92,7 +92,7 @@ defmodule Cinegraph.Workers.AwardImportWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"organization_id" => org_id, "action" => "sync_missing"}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("AwardImportWorker: Starting sync_missing for organization #{org_id}")
 
     # Find years with status 'not_started' or 'failed' from the view
@@ -148,7 +148,7 @@ defmodule Cinegraph.Workers.AwardImportWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"organization_id" => org_id, "action" => "resync_all"}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("AwardImportWorker: Starting resync_all for organization #{org_id}")
 
     # Get ALL years for this organization, regardless of status
@@ -206,7 +206,8 @@ defmodule Cinegraph.Workers.AwardImportWorker do
         }
       }) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
+
     Logger.info(
       "AwardImportWorker: Starting resync_recent for organization #{org_id}, last #{year_count} years"
     )

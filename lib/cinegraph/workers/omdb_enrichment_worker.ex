@@ -25,7 +25,7 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
   def perform(%Oban.Job{args: %{"movie_id" => movie_id} = args}) do
     # Route all Repo.replica() calls through the dedicated worker pool
     # so this job does not compete with web requests for Repo.Replica connections. (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("OMDb Enrichment Worker processing movie #{movie_id}")
     force = Map.get(args, "force", false)
     process_omdb_data(movie_id, force)

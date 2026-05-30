@@ -14,7 +14,7 @@ defmodule Cinegraph.Workers.PredictionsOrchestrator do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"action" => "orchestrate", "profile_id" => profile_id}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Orchestrating predictions calculation for profile #{profile_id}")
 
     profile = Repo.get!(MetricWeightProfile, profile_id)

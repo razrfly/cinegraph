@@ -16,7 +16,8 @@ defmodule Cinegraph.Workers.TMDbCompanyMetadataWorker do
   def perform(%Oban.Job{args: %{"company_id" => company_id}}) when is_integer(company_id) do
     # Route all Repo.replica() calls through the dedicated worker pool
     # so this job does not compete with web requests for Repo.Replica connections. (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
+
     case Movies.refresh_production_company_metadata(company_id) do
       {:ok, company} ->
         Logger.info("Refreshed TMDb company metadata for #{company.name} (#{company.id})")

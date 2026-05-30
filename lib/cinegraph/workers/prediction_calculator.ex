@@ -15,7 +15,7 @@ defmodule Cinegraph.Workers.PredictionCalculator do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"decade" => decade, "profile_id" => profile_id}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Starting prediction calculation for decade #{decade}, profile #{profile_id}")
 
     profile = Repo.get!(MetricWeightProfile, profile_id)

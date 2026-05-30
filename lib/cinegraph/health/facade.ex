@@ -49,7 +49,7 @@ defmodule Cinegraph.Health.Facade do
         domains,
         fn {domain, mod} ->
           if Application.get_env(:cinegraph, Cinegraph.Repo.Worker) do
-            Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+            Cinegraph.Repo.route_to_worker()
           end
 
           {domain, mod.all()}

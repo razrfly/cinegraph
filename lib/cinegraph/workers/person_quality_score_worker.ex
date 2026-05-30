@@ -22,7 +22,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"person_id" => person_id}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Calculating universal PQS for person #{person_id}")
 
     case PersonQualityScore.calculate_person_score(person_id) do
@@ -47,7 +47,8 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"batch" => "all_people", "min_credits" => min_credits}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
+
     Logger.info(
       "Starting batch universal PQS calculation for all people with min #{min_credits} credits"
     )
@@ -67,7 +68,7 @@ defmodule Cinegraph.Workers.PersonQualityScoreWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"batch" => "all_directors"}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     # Legacy support - redirect to universal algorithm
     Logger.info("Legacy call: redirecting to universal PQS calculation")
     perform(%Oban.Job{args: %{"batch" => "all_people", "min_credits" => 5}})

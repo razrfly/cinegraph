@@ -72,6 +72,21 @@ defmodule Cinegraph.Repo do
       end
   end
 
+  @doc """
+  Route this process's `replica/0` calls through the dedicated worker pool
+  (`Cinegraph.Repo.Worker`) instead of the web-facing replica pool.
+
+  Call at the start of an Oban worker's `perform/1` so background jobs don't
+  compete with web requests for `Repo.Replica` connections. Centralises the
+  `:cinegraph_job_repo` process-dictionary contract read by `replica/0`, so the
+  routing key lives in exactly one place rather than being copy/pasted across
+  every worker. (#1007)
+  """
+  @spec route_to_worker() :: term()
+  def route_to_worker do
+    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+  end
+
   # Check if replica is enabled via environment variable
   # Defaults to true (replica enabled) if not set
   defp replica_enabled? do
