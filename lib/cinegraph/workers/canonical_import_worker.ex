@@ -28,7 +28,7 @@ defmodule Cinegraph.Workers.CanonicalImportWorker do
   def perform(%Oban.Job{args: %{"action" => "import_canonical_list", "list_key" => list_key}}) do
     # Route all Repo.replica() calls through the dedicated worker pool
     # so this job does not compete with web requests for Repo.Replica connections. (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Starting canonical import for #{list_key}")
 
     case CanonicalLists.get(list_key) do

@@ -21,7 +21,7 @@ defmodule Cinegraph.Workers.PredictionsWorker do
         }
       }) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Calculating #{decade}s predictions for profile #{profile_id}")
 
     profile = Repo.get!(MetricWeightProfile, profile_id)
@@ -76,7 +76,7 @@ defmodule Cinegraph.Workers.PredictionsWorker do
         }
       }) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Calculating validation for decade #{decade}, profile #{profile_id}")
 
     profile = Repo.get!(MetricWeightProfile, profile_id)
@@ -105,7 +105,7 @@ defmodule Cinegraph.Workers.PredictionsWorker do
 
   def perform(%Oban.Job{args: %{"action" => "aggregate_validation", "profile_id" => profile_id}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Aggregating validation results for profile #{profile_id}")
 
     profile = Repo.get!(MetricWeightProfile, profile_id)
@@ -179,7 +179,7 @@ defmodule Cinegraph.Workers.PredictionsWorker do
 
   def perform(%Oban.Job{args: %{"action" => "calculate_comparison", "profile_id" => _profile_id}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Calculating profile comparison")
 
     # Get only ACTIVE profiles to reduce workload

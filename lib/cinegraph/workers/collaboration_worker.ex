@@ -18,7 +18,7 @@ defmodule Cinegraph.Workers.CollaborationWorker do
   def perform(%Oban.Job{args: %{"movie_id" => movie_id}}) do
     # Route all Repo.replica() calls through the dedicated worker pool
     # so this job does not compete with web requests for Repo.Replica connections. (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Processing collaborations for movie #{movie_id}")
 
     case Collaborations.rebuild_movie_collaborations(movie_id) do

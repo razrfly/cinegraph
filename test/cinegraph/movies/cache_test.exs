@@ -64,16 +64,11 @@ defmodule Cinegraph.Movies.CacheTest do
              "Expected TTL <= 24h+1min, got #{ttl_ms}ms"
     end
 
-    test "fetch_fn error falls back to calling fetch_fn directly" do
-      # Simulate Cachex.fetch returning an error by using a cache name that
-      # doesn't exist — the fallback path should call fetch_fn and return its value.
-      # We test the fallback indirectly: patch the Cache module is not practical,
-      # but we can verify that a fetch_fn raising does not propagate (expected
-      # behaviour: it should since fallback calls fetch_fn again, and a raising
-      # fetch_fn would still raise).
-      #
-      # The meaningful contract: when the cache is cold, the return value equals
-      # what fetch_fn returns.
+    test "returns fetch_fn's raw value (unwrapped from Cachex's commit tuple)" do
+      # get_filter_options/1 must hand callers back exactly what fetch_fn
+      # returns, not Cachex.fetch's {:ok | :commit, value} wrapper. This locks
+      # down the unwrapping in both the cold-miss (:commit) branch and the
+      # error-fallback branch, which return the same bare value.
       result = Cache.get_filter_options(fn -> %{genres: ["Horror"]} end)
       assert result == %{genres: ["Horror"]}
     end

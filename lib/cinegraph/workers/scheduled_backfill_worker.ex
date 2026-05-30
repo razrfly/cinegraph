@@ -55,7 +55,7 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
 
     Repo.Worker.checkout(fn ->
       Repo.Worker.query!("SET statement_timeout = '120s'")

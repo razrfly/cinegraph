@@ -25,7 +25,7 @@ defmodule Cinegraph.Workers.YearImportCompletionWorker do
   def perform(%Oban.Job{args: %{"year" => year} = args}) do
     # Route all Repo.replica() calls through the dedicated worker pool
     # so this job does not compete with web requests for Repo.Replica connections. (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     expected_pages = Map.get(args, "expected_pages", 0)
 
     # Count pending/executing jobs for this year

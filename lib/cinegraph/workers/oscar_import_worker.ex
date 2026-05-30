@@ -13,7 +13,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"year" => year, "options" => options}} = job) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     year = ensure_integer(year)
     Logger.info("Starting Oscar import for year #{year} (from Cultural module)")
 
@@ -98,7 +98,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
 
   def perform(%Oban.Job{args: %{"action" => "import_single", "year" => year}} = job) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Starting Oscar import for year #{year}")
 
     # Broadcast start
@@ -183,7 +183,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
         } = job
       ) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     start_year = ensure_integer(start_year)
     end_year = ensure_integer(end_year)
 
@@ -258,7 +258,7 @@ defmodule Cinegraph.Workers.OscarImportWorker do
 
   def perform(%Oban.Job{args: %{"action" => "import_all_years"}}) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("Starting Oscar import for all years (2016-2024)")
 
     # Broadcast start

@@ -25,7 +25,7 @@ defmodule Cinegraph.Workers.RecallCalibrationWorker do
         }
       }) do
     # Route all Repo.replica() calls through the dedicated worker pool (#1007)
-    Process.put(:cinegraph_job_repo, Cinegraph.Repo.Worker)
+    Cinegraph.Repo.route_to_worker()
     Logger.info("RecallCalibrationWorker starting: #{list_slug} / #{profile_name} @ #{threshold}")
 
     broadcast(%{
