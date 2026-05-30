@@ -1110,7 +1110,25 @@ defmodule Cinegraph.Movies do
   Uses read replica for display lookups.
   """
   def get_movie_by_imdb_id(imdb_id) do
-    Repo.replica().get_by(Movie, imdb_id: imdb_id)
+    # Fetch up to 2 rows: avoids Ecto.MultipleResultsError when duplicate imdb_id
+    # rows exist (data quality gap — #1013), while still emitting a warning so the
+    # duplication is visible in logs. Returns the oldest-inserted row deterministically.
+    case Repo.replica().all(
+           from m in Movie, where: m.imdb_id == ^imdb_id, order_by: m.id, limit: 2
+         ) do
+      [] ->
+        nil
+
+      [movie] ->
+        movie
+
+      [movie | _rest] ->
+        Logger.warning(
+          "[Movies] Multiple rows share imdb_id=#{imdb_id} — returning oldest (#1013)"
+        )
+
+        movie
+    end
   end
 
   @doc """

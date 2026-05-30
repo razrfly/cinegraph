@@ -22,6 +22,7 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   alias Cinegraph.Festivals
   alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
   alias Cinegraph.Workers.TMDbDetailsWorker
+  alias Cinegraph.Movies
   alias Cinegraph.Movies.{Credit, Movie, Person}
   alias Cinegraph.People.FestivalPersonInferrer
   alias Cinegraph.Services.TMDb.Extended, as: TMDbExtended
@@ -520,7 +521,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
   end
 
   defp ensure_movie_exists(imdb_id, film_title, film_year) do
-    case Repo.get_by(Movie, imdb_id: imdb_id) do
+    # Delegates to Movies.get_movie_by_imdb_id/1 which uses LIMIT 2 + pattern match so
+    # it never raises Ecto.MultipleResultsError and logs a warning on duplicates (#1013).
+    case Movies.get_movie_by_imdb_id(imdb_id) do
       nil ->
         # Movie doesn't exist, queue TMDbDetailsWorker
         Logger.info(

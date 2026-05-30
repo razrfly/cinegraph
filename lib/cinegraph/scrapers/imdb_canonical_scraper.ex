@@ -1906,7 +1906,8 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       "   Final metadata has extracted_awards: #{Map.has_key?(metadata, "extracted_awards")}"
     )
 
-    case Repo.get_by(Movies.Movie, imdb_id: movie_data.imdb_id) do
+    # Movies.get_movie_by_imdb_id/1 uses LIMIT 1 — avoids Ecto.MultipleResultsError on duplicate rows (#1013).
+    case Movies.get_movie_by_imdb_id(movie_data.imdb_id) do
       nil ->
         # Movie doesn't exist, queue for import
         Logger.info("   🆕 Movie not found, queuing for import")

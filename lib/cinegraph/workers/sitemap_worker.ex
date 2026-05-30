@@ -14,7 +14,14 @@ defmodule Cinegraph.Workers.SitemapWorker do
   use Oban.Worker,
     queue: :maintenance,
     max_attempts: 3,
-    priority: 3
+    priority: 3,
+    # Prevent a retrying prior run from stacking with the next cron fire — both hold
+    # a long-lived Repo.transaction while streaming the full movie/people/lists/awards
+    # catalog. One sitemap job per 24h is sufficient given the daily cron. (#1011 Phase 1a)
+    #
+    # Exclude :completed from states so a successful manual run doesn't block the next
+    # day's cron fire (Oban's default unique states include :completed).
+    unique: [period: 86_400, states: [:available, :scheduled, :executing, :retryable]]
 
   require Logger
 

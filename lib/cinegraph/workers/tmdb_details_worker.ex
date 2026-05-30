@@ -29,8 +29,9 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     Cinegraph.Repo.route_to_worker()
     Logger.info("Processing movie details for IMDb ID #{imdb_id}")
 
-    # Check if movie already exists by IMDb ID
-    case Repo.get_by(Movies.Movie, imdb_id: imdb_id) do
+    # Use Movies.get_movie_by_imdb_id/1 (LIMIT 1) instead of Repo.get_by to avoid
+    # Ecto.MultipleResultsError when duplicate imdb_id rows exist (#1013).
+    case Movies.get_movie_by_imdb_id(imdb_id) do
       nil ->
         # Use fallback search to find movie by IMDb ID with progressive strategies
         # For festival imports, title and year are in metadata
@@ -387,8 +388,13 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       metadata: metadata
     })
 
-    Logger.warning("Movie '#{title}' (#{imdb_id}) not found in TMDb")
-    {:error, "Movie '#{title}' (#{imdb_id}) not found in TMDb"}
+    Logger.warning(
+      "Movie '#{title}' (#{imdb_id}) not found in TMDb after all fallback strategies"
+    )
+
+    # {:cancel, ...} tells Oban to discard the job immediately (no retries), which is correct
+    # here — if every TMDb strategy failed, retrying won't find the movie (#1014).
+    {:cancel, "no_tmdb_match — #{title} (#{imdb_id})"}
   end
 
   defp update_job_meta(job, meta) do

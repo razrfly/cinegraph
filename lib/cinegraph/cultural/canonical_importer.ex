@@ -4,8 +4,7 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
   Follows the same pattern as OscarImporter for consistency.
   """
 
-  alias Cinegraph.{Repo, Movies}
-  alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies
   alias Cinegraph.Scrapers.ImdbCanonicalScraper
   alias Cinegraph.Workers.TMDbDetailsWorker
   require Logger
@@ -165,8 +164,9 @@ defmodule Cinegraph.Cultural.CanonicalImporter do
   end
 
   defp process_movie(imdb_id, movie_data, source_key, list_name, options, base_metadata) do
-    # Check if movie exists
-    existing_movie = Repo.get_by(Movie, imdb_id: imdb_id)
+    # Use Movies.get_movie_by_imdb_id/1 (LIMIT 1) instead of Repo.get_by to avoid
+    # Ecto.MultipleResultsError when duplicate imdb_id rows exist (#1013).
+    existing_movie = Movies.get_movie_by_imdb_id(imdb_id)
 
     if existing_movie do
       # Update existing movie with canonical data
