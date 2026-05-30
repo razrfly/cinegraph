@@ -19,6 +19,12 @@ config :cinegraph,
     # Direct always fails for IMDb (AWS WAF returns 202). Crawlbase-only means
     # failures surface as real Crawlbase errors, not the misleading "HTTP 202".
     imdb: [:crawlbase],
+    # IMDb /list/ pages: as of 2026-05-29 the Crawlbase JS Crawling API once again solves
+    # IMDb's AWS WAF challenge (520 + pc_status=200 + full rendered HTML) on /list/ pages —
+    # the hard 403 documented in #1002/#1003 has lifted. Crawlbase JS is tried first; Smart
+    # AI Proxy stays as a fallback (datacenter-IP-only on the free tier, so mostly 613/202 —
+    # kept only in case the JS path regresses again). See GitHub issue #1003.
+    imdb_list: [:crawlbase, :crawlbase_smart_proxy],
     default: [:direct]
   }
 

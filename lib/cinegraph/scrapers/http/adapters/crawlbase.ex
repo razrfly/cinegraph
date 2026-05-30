@@ -10,6 +10,11 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
   - `:javascript` (default) — Browser rendering via `CRAWLBASE_JS_API_KEY` (2 credits)
   - `:normal` — Static HTML via `CRAWLBASE_API_KEY` (1 credit)
 
+  ## Additional opts
+
+  - `cookies:` — Cookie header string passed to the target site (`"name1=val1; name2=val2"`)
+  - `country:` — Route request through a specific country's IPs (`"US"`, `"GB"`, etc.)
+
   ## Configuration
 
       # config/runtime.exs
@@ -58,12 +63,8 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
     mode = Keyword.get(opts, :mode, :javascript)
     timeout = Keyword.get(opts, :timeout, @default_timeout)
     recv_timeout = Keyword.get(opts, :recv_timeout, @default_recv_timeout)
-    page_wait = Keyword.get(opts, :page_wait, @default_page_wait)
-    ajax_wait = Keyword.get(opts, :ajax_wait, true)
-    scroll = Keyword.get(opts, :scroll, false)
-    scroll_interval = Keyword.get(opts, :scroll_interval)
 
-    request_url = build_request_url(url, mode, page_wait, ajax_wait, scroll, scroll_interval)
+    request_url = build_request_url(url, opts)
 
     http_opts = [
       timeout: timeout,
@@ -110,34 +111,38 @@ defmodule Cinegraph.Scrapers.Http.Adapters.Crawlbase do
     end
   end
 
-  defp build_request_url(url, mode, page_wait, ajax_wait, scroll, scroll_interval) do
+  defp build_request_url(url, opts) do
+    mode = Keyword.get(opts, :mode, :javascript)
+    page_wait = Keyword.get(opts, :page_wait, @default_page_wait)
+    ajax_wait = Keyword.get(opts, :ajax_wait, true)
+    scroll = Keyword.get(opts, :scroll, false)
+    scroll_interval = Keyword.get(opts, :scroll_interval)
+    cookies = Keyword.get(opts, :cookies)
+    country = Keyword.get(opts, :country)
+
     token = get_token_for_mode(mode)
 
-    query_params = %{
-      "token" => token,
-      "url" => url
-    }
+    query_params = %{"token" => token, "url" => url}
 
     query_params =
       if mode == :javascript do
         query_params
         |> Map.put("page_wait", to_string(page_wait))
-        |> then(fn params ->
-          if ajax_wait, do: Map.put(params, "ajax_wait", "true"), else: params
-        end)
-        |> then(fn params ->
-          if scroll, do: Map.put(params, "scroll", "true"), else: params
-        end)
-        |> then(fn params ->
-          if scroll_interval,
-            do: Map.put(params, "scroll_interval", to_string(scroll_interval)),
-            else: params
-        end)
+        |> then(&if ajax_wait, do: Map.put(&1, "ajax_wait", "true"), else: &1)
+        |> then(&if scroll, do: Map.put(&1, "scroll", "true"), else: &1)
+        |> then(
+          &if scroll_interval,
+            do: Map.put(&1, "scroll_interval", to_string(scroll_interval)),
+            else: &1
+        )
       else
         query_params
       end
 
-    "#{@crawlbase_api_url}?#{URI.encode_query(query_params)}"
+    query_params
+    |> then(&if cookies, do: Map.put(&1, "set_cookies", cookies), else: &1)
+    |> then(&if country, do: Map.put(&1, "country", country), else: &1)
+    |> then(&"#{@crawlbase_api_url}?#{URI.encode_query(&1)}")
   end
 
   defp handle_success_response(response_body, mode, start_time, url, pc_status \\ nil) do

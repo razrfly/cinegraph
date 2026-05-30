@@ -12,6 +12,12 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   and it will handle the scraping automatically.
   """
 
+  # IMDb list pages render 75 titles per start= window (confirmed by pagination audit
+  # and production data: Nov 2025 imports used 100 but IMDb migrated new lists to IPC
+  # format which renders 75/page. Old lister-format lists still render 100/page but
+  # switching to 75 here is safe — overlapping windows are deduplicated by imdb_id.)
+  @imdb_window_size 75
+
   require Logger
   alias Cinegraph.{Repo, Movies}
   alias Cinegraph.Workers.TMDbDetailsWorker
@@ -47,12 +53,10 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
     Logger.info("Scraping IMDb list: #{list_name} (#{list_id})")
 
-    # First, get the expected count from the first page
-    expected_count = get_expected_movie_count(list_id)
+    # Single fetch: the IPC render gives us both the movie items and the "N titles"
+    # total-count header, so we parse both from one request instead of fetching twice.
+    {all_movies, expected_count} = scrape_all_pages(list_id, list_config)
     Logger.info("Expected movie count: #{expected_count || "unknown"}")
-
-    # Scrape all pages
-    all_movies = scrape_all_pages(list_id, list_config)
 
     Logger.info("Total movies found: #{length(all_movies)}")
 
@@ -175,6 +179,63 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end
   end
 
+  # Single fetch only. Empirically (issue #1003), re-fetching the bare IPC URL within one run
+  # returns the SAME ~75 DOM `.ipc-metadata-list-summary-item` elements every time — items
+  # beyond ~75 are never DOM-rendered (they load client-side via a GraphQL cursor), so a union
+  # of consecutive renders can't get past ~75. Keeping this at 1 avoids wasting fetches/credits.
+  #
+  # The full first page (~250 items) DOES live in the page's embedded hydration JSON; parsing
+  # that (or the IMDb GraphQL cursor API) is the real path to complete lists >75 items and is
+  # the tracked follow-up. Until then, lists ≤~75 import complete; larger lists are capped.
+  @max_render_fetches 1
+
+  @doc """
+  Fetch an IMDb list's items, unioning a few IPC renders to work around lazy-loading.
+
+  Returns `{:ok, movies, expected_count}`. `movies` are deduped by `imdb_id`;
+  `expected_count` is the list's "N titles" header (nil if not found). Stops early once
+  the union reaches the expected count (capped) or two consecutive fetches add nothing new.
+  """
+  def scrape_list_items(list_id, tracks_awards \\ false) do
+    {acc, expected, _no_gain} =
+      Enum.reduce_while(1..@max_render_fetches, {%{}, nil, 0}, fn attempt, {acc, expected, no_gain} ->
+        url = build_imdb_list_url(list_id, 1)
+
+        case fetch_html(url) do
+          {:ok, html} ->
+            expected = expected || extract_total_count(html)
+
+            movies =
+              case parse_single_page(html, 1, tracks_awards) do
+                {:ok, ms} -> ms
+                _ -> []
+              end
+
+            new_acc = Enum.reduce(movies, acc, fn m, a -> Map.put_new(a, m.imdb_id, m) end)
+            gained = map_size(new_acc) - map_size(acc)
+            cap = if expected, do: min(expected, 1500), else: nil
+
+            Logger.info(
+              "List #{list_id} render #{attempt}: parsed #{length(movies)}, union #{map_size(new_acc)}" <>
+                "#{if expected, do: "/#{expected}", else: ""} (+#{gained})"
+            )
+
+            no_gain = if gained == 0, do: no_gain + 1, else: 0
+
+            cond do
+              cap && map_size(new_acc) >= cap -> {:halt, {new_acc, expected, no_gain}}
+              no_gain >= 2 -> {:halt, {new_acc, expected, no_gain}}
+              true -> {:cont, {new_acc, expected, no_gain}}
+            end
+
+          {:error, _reason} ->
+            {:cont, {acc, expected, no_gain}}
+        end
+      end)
+
+    {:ok, Map.values(acc), expected}
+  end
+
   @doc """
   Get total number of pages for a list.
   Fetches first page and checks for pagination info.
@@ -262,8 +323,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
       |> String.trim()
       |> String.to_integer()
 
-    # IMDb list pages currently expose 100 titles per start offset.
-    div(total - 1, 100) + 1
+    div(total - 1, @imdb_window_size) + 1
   end
 
   @doc """
@@ -311,14 +371,12 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
 
   defp estimate_pages_from_first_page(document) do
-    # Count movies on first page
     movie_count = count_movies_on_page(document)
 
-    if movie_count >= 100 do
-      # For known lists, use hardcoded values
-      # This is a fallback - in production, we'd want better detection
-      # Default for 1001 Movies list
-      11
+    if movie_count >= @imdb_window_size do
+      # Count detection failed but first page is full — assume up to 1500 items (20 windows).
+      # Empty tail pages are cheap; this covers Criterion-sized lists without blowing up small ones.
+      20
     else
       1
     end
@@ -441,85 +499,53 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
   # Private functions
 
-  defp scrape_all_pages(list_id, list_config, page \\ 1, accumulated_movies \\ []) do
-    url = build_imdb_list_url(list_id, page)
+  # IMDb's modern IPC list server-renders all items it will give us in a single bare-URL
+  # render (the first ~250). The legacy `start=`/`page=` window pagination now returns 403
+  # (see build_imdb_list_url/2), so there is no second page to fetch — we make one request
+  # and parse everything from it. Lists larger than ~250 are capped here; completing them
+  # requires GraphQL cursor pagination (issue #1003).
+  # Returns `{movies, expected_count}` from a single IPC render. expected_count is the
+  # "N titles" header value (or nil if not found); movies is the parsed list (may be
+  # capped below expected_count — see build_imdb_list_url/2).
+  defp scrape_all_pages(list_id, list_config, _page \\ 1, _accumulated \\ []) do
+    url = build_imdb_list_url(list_id, 1)
 
-    Logger.info("Scraping page #{page} from: #{url}")
+    Logger.info("Scraping single IPC render from: #{url}")
 
     case fetch_html(url) do
       {:ok, html} ->
-        case parse_imdb_list_html(html, list_config, page) do
+        expected_count = extract_total_count(html)
+
+        case parse_imdb_list_html(html, list_config, 1) do
           {:ok, movies} when movies != [] ->
-            new_accumulated = accumulated_movies ++ movies
-
-            # Check if there are more pages by looking for pagination links
-            if has_next_page?(html) do
-              Logger.info(
-                "Found #{length(movies)} movies on page #{page}, continuing to page #{page + 1}..."
-              )
-
-              # Add a small delay to be respectful
-              Process.sleep(1000)
-              scrape_all_pages(list_id, list_config, page + 1, new_accumulated)
-            else
-              Logger.info("Found #{length(movies)} movies on page #{page} (last page)")
-              new_accumulated
-            end
+            Logger.info("Found #{length(movies)} movies in IPC render")
+            {movies, expected_count}
 
           _ ->
-            Logger.info("No movies found on page #{page}, stopping pagination")
-            accumulated_movies
+            Logger.info("No movies parsed from IPC render")
+            {[], expected_count}
         end
 
       {:error, reason} ->
-        Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
-        accumulated_movies
+        Logger.error("Failed to fetch list: #{inspect(reason)}")
+        {[], nil}
     end
   end
 
-  defp has_next_page?(html) do
-    # For IMDb lists, check if we have the expected number of items.
-    # Modern IMDb list URLs page by `start=` in 100-title windows.
-
-    # Check if there's a "Next" button or if we haven't reached the end
+  # Parse the "N titles" total-count header out of already-fetched IPC HTML.
+  defp extract_total_count(html) do
     document = Floki.parse_document!(html)
+    count_text = find_total_count_text(document)
 
-    # Look for any next/load more buttons
-    next_indicators = [
-      # Check text content separately
-      "button",
-      "a.next-page",
-      "a[aria-label='Next']",
-      ".pagination a",
-      ".list-pagination a",
-      "a.lister-page-next",
-      ".ipc-see-more"
-    ]
-
-    has_next =
-      Enum.any?(next_indicators, fn selector ->
-        elements = Floki.find(document, selector)
-
-        if selector == "button" || String.contains?(selector, ".pagination") ||
-             String.contains?(selector, ".list-pagination") do
-          # Check if any element contains "Next" in its text
-          Enum.any?(elements, fn element ->
-            text = Floki.text(element) |> String.downcase()
-            String.contains?(text, "next")
-          end)
-        else
-          length(elements) > 0
-        end
-      end)
-
-    if has_next do
-      true
+    with text when is_binary(text) <- count_text,
+         [_, total] <- Regex.run(~r/([\d,]+)\s+titles?/i, text) ||
+                          Regex.run(~r/of\s+([\d,]+)/i, text) do
+      total |> String.replace(",", "") |> String.trim() |> String.to_integer()
     else
-      # If no explicit next button, check if we got a full page of results
-      # which might indicate there are more pages
-      movie_count = count_movies_on_page(document)
-      movie_count >= 100
+      _ -> nil
     end
+  rescue
+    _ -> nil
   end
 
   defp count_movies_on_page(document) do
@@ -530,13 +556,34 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     max(length(lister_items), length(ipc_items))
   end
 
-  defp build_imdb_list_url(list_id, page) do
-    start_index = (page - 1) * 100 + 1
-    "https://www.imdb.com/list/#{list_id}/?sort=list_order,asc&start=#{start_index}&mode=detail"
+  # As of 2026-05-29, IMDb returns a 403 "Forbidden" page to ANY /list/ URL carrying a
+  # query string (`?sort=...`, `?start=...`, `?page=...`, `mode=detail`) when fetched through
+  # Crawlbase — even though Crawlbase solves the AWS WAF challenge (pc_status=200). The bare
+  # `/list/<id>/` URL returns the real list HTML. So we always request the bare URL.
+  #
+  # The bare URL renders IMDb's modern IPC list, which server-renders only the first ~250
+  # items (the rest load client-side via a GraphQL cursor — `pageInfo`/`endCursor` — that
+  # Crawlbase's headless browser cannot reliably page through: scrolling large lists exceeds
+  # Crawlbase's render budget and 504s). Lists ≤250 items import fully; larger lists are
+  # capped at the first ~250 until GraphQL cursor pagination is implemented. See issue #1003.
+  defp build_imdb_list_url(list_id, _page) do
+    "https://www.imdb.com/list/#{list_id}/"
   end
 
-  defp fetch_html(url) do
-    Logger.info("Fetching HTML from: #{url}")
+  # Crawlbase's WAF-solving for IMDb is probabilistic — a single fetch can come back as a
+  # transient 520/pc_status error (594, 576, 530, 504, 613) or an unsolved WAF challenge,
+  # while the next attempt succeeds. Crawlbase's own error body says "try the request again,
+  # as this one is not charged." Retry with backoff before giving up on a page.
+  # 3 attempts, not more: the Crawlbase JS adapter already waits up to 150s per attempt for
+  # heavy pages (tspdt's render is ~4 MB), so each extra retry can add ~150s. 3 × ~150s is a
+  # sane ceiling — beyond that the page is genuinely failing, not just transiently flaky.
+  @fetch_max_attempts 3
+  @fetch_retry_base_ms 3_000
+
+  defp fetch_html(url), do: fetch_html(url, 1)
+
+  defp fetch_html(url, attempt) do
+    Logger.info("Fetching HTML from: #{url} (attempt #{attempt}/#{@fetch_max_attempts})")
 
     # Extract list ID from URL for tracking
     list_id =
@@ -561,9 +608,31 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
           "unknown"
       end
 
-    ApiTracker.track_lookup("imdb_scraper", "fetch_list", list_id, fn ->
-      HttpClient.fetch(url, :imdb)
-    end)
+    result =
+      ApiTracker.track_lookup("imdb_scraper", "fetch_list", list_id, fn ->
+        HttpClient.fetch(url, :imdb_list)
+      end)
+
+    case result do
+      {:ok, _body} = ok ->
+        ok
+
+      {:error, reason} when attempt < @fetch_max_attempts ->
+        backoff = @fetch_retry_base_ms * attempt
+        Logger.warning(
+          "IMDb list fetch failed (attempt #{attempt}/#{@fetch_max_attempts}): #{inspect(reason)} — retrying in #{backoff}ms"
+        )
+
+        Process.sleep(backoff)
+        fetch_html(url, attempt + 1)
+
+      {:error, reason} = err ->
+        Logger.error(
+          "IMDb list fetch failed after #{@fetch_max_attempts} attempts: #{inspect(reason)}"
+        )
+
+        err
+    end
   end
 
   defp parse_imdb_list_html(html, list_config, page) do
@@ -583,8 +652,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
       Logger.info("Found #{length(list_items)} potential movie items")
 
-      # Calculate base position based on IMDb's 100-title `start=` windows.
-      base_position = (page - 1) * 100
+      base_position = (page - 1) * @imdb_window_size
 
       movies =
         list_items
@@ -652,7 +720,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
 
   defp alternative_parse(document, list_config, page) do
-    base_position = (page - 1) * 100
+    base_position = (page - 1) * @imdb_window_size
 
     Logger.info("Trying alternative parsing methods for #{list_config.name}")
 
