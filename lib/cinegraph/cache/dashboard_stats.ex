@@ -29,7 +29,7 @@ defmodule Cinegraph.Cache.DashboardStats do
 
   alias Cinegraph.Metrics.{ApiTracker, ApiLookupMetric}
   alias Cinegraph.Imports.{TMDbImporter, ImportStateV2}
-  alias Cinegraph.Workers.{CanonicalImportOrchestrator, DailyYearImportWorker}
+  alias Cinegraph.Workers.DailyYearImportWorker
   import Ecto.Query
 
   @table_name :dashboard_stats_cache
@@ -350,7 +350,7 @@ defmodule Cinegraph.Cache.DashboardStats do
     movie_lists = safe_compute("movie_lists", &compute_movie_lists_with_counts/0)
 
     canonical_lists =
-      safe_compute("canonical_lists", fn -> CanonicalImportOrchestrator.available_lists() end)
+      safe_compute("canonical_lists", fn -> MovieLists.all_as_config() end)
 
     Logger.info("DashboardStats: All stats computed successfully")
 

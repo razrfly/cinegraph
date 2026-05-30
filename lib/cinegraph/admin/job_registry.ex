@@ -274,7 +274,8 @@ defmodule Cinegraph.Admin.JobRegistry do
       args: %{},
       trigger_action: :enqueue_now,
       mutating: true,
-      description: "Watch availability refresh: 5,000/day — sweeper on :maintenance, child jobs on :movie_availability",
+      description:
+        "Watch availability refresh: 5,000/day — sweeper on :maintenance, child jobs on :movie_availability",
       destination: :availability,
       doc_url: nil
     },
@@ -445,7 +446,8 @@ defmodule Cinegraph.Admin.JobRegistry do
       args: %{},
       trigger_action: :enqueue_now,
       mutating: true,
-      description: "Refresh watch availability for one movie on :movie_availability (concurrency 1)",
+      description:
+        "Refresh watch availability for one movie on :movie_availability (concurrency 1)",
       destination: :availability,
       doc_url: nil
     },
@@ -573,54 +575,15 @@ defmodule Cinegraph.Admin.JobRegistry do
 
     # Canonical lists
     %{
-      id: :canonical_import_orchestrator,
-      label: "Canonical import orchestrator",
-      worker: Workers.CanonicalImportOrchestrator,
-      queue: :tmdb,
-      schedule: nil,
-      args: %{},
-      trigger_action: :enqueue_now,
-      mutating: true,
-      description: "Orchestrate import of one canonical IMDb list",
-      destination: :imports,
-      doc_url: nil
-    },
-    %{
       id: :canonical_import_worker,
       label: "Canonical import",
       worker: Workers.CanonicalImportWorker,
-      queue: :tmdb,
+      queue: :scraping,
       schedule: nil,
       args: %{},
       trigger_action: :enqueue_now,
       mutating: true,
-      description: "Import a single canonical-list page",
-      destination: :imports,
-      doc_url: nil
-    },
-    %{
-      id: :canonical_import_completion_worker,
-      label: "Canonical import completion",
-      worker: Workers.CanonicalImportCompletionWorker,
-      queue: :tmdb,
-      schedule: nil,
-      args: %{},
-      trigger_action: :enqueue_now,
-      mutating: true,
-      description: "Finalize a canonical-list import",
-      destination: :imports,
-      doc_url: nil
-    },
-    %{
-      id: :canonical_page_worker,
-      label: "Canonical page worker",
-      worker: Workers.CanonicalPageWorker,
-      queue: :tmdb,
-      schedule: nil,
-      args: %{},
-      trigger_action: :enqueue_now,
-      mutating: true,
-      description: "Per-page worker for canonical-list import",
+      description: "Import a single canonical IMDb list",
       destination: :imports,
       doc_url: nil
     },

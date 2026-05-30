@@ -18,6 +18,29 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   # switching to 75 here is safe — overlapping windows are deduplicated by imdb_id.)
   @imdb_window_size 75
 
+  # IMDb's public GraphQL endpoint serves list items via a cursor. It is a different host
+  # than the WAF-blocked web pages, is reachable directly from our servers (no Crawlbase),
+  # works anonymously, and is free — so it's the path for lists larger than the ~250-item
+  # first page embedded in the HTML. Contract captured live from imdb.com (issue #1004).
+  @graphql_url "https://api.graphql.imdb.com/"
+  @graphql_page_size 250
+  # Safety cap on cursor follows: 40 × 250 = 10,000 items, far beyond any real list.
+  @graphql_max_pages 40
+  @list_items_query """
+  query ListItems($id: ID!, $first: Int!, $after: String) {
+    list(id: $id) {
+      titleListItemSearch(first: $first, after: $after) {
+        total
+        pageInfo { hasNextPage endCursor }
+        edges {
+          node { absolutePosition }
+          title { id titleText { text } originalTitleText { text } releaseYear { year } }
+        }
+      }
+    }
+  }
+  """
+
   require Logger
   alias Cinegraph.{Repo, Movies}
   alias Cinegraph.Workers.TMDbDetailsWorker
@@ -159,127 +182,141 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
 
   @doc """
-  Fetch a single page of an IMDb list.
-  Returns just the movie data without processing.
-  """
-  def fetch_single_page(list_id, page \\ 1, tracks_awards \\ false) do
-    url = build_imdb_list_url(list_id, page)
+  Fetch an IMDb list's items.
 
-    Logger.info(
-      "Fetching page #{page} from IMDb list #{list_id} (tracks_awards: #{tracks_awards})"
-    )
+  Returns `{:ok, movies, expected_count}` when the page is fetched (movies parsed from the
+  embedded JSON first page, deduped by `imdb_id`; `expected_count` is the authoritative
+  `total`, or nil if not found), or `{:error, reason}` when the page fetch itself fails — so
+  a real scraper outage is distinguishable from a genuinely empty list and keeps its reason.
 
-    with {:ok, html} <- fetch_html(url),
-         {:ok, movies} <- parse_single_page(html, page, tracks_awards) do
-      {:ok, movies}
-    else
-      {:error, reason} ->
-        Logger.error("Failed to fetch page #{page}: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
-  # Single fetch only. Empirically (issue #1003), re-fetching the bare IPC URL within one run
-  # returns the SAME ~75 DOM `.ipc-metadata-list-summary-item` elements every time — items
-  # beyond ~75 are never DOM-rendered (they load client-side via a GraphQL cursor), so a union
-  # of consecutive renders can't get past ~75. Keeping this at 1 avoids wasting fetches/credits.
-  #
-  # The full first page (~250 items) DOES live in the page's embedded hydration JSON; parsing
-  # that (or the IMDb GraphQL cursor API) is the real path to complete lists >75 items and is
-  # the tracked follow-up. Until then, lists ≤~75 import complete; larger lists are capped.
-  @max_render_fetches 1
-
-  @doc """
-  Fetch an IMDb list's items, unioning a few IPC renders to work around lazy-loading.
-
-  Returns `{:ok, movies, expected_count}`. `movies` are deduped by `imdb_id`;
-  `expected_count` is the list's "N titles" header (nil if not found). Stops early once
-  the union reaches the expected count (capped) or two consecutive fetches add nothing new.
+  Lists whose `total` exceeds the embedded first page (~250) are completed by following IMDb's
+  GraphQL cursor (issue #1004), gated by `:imdb_graphql_pagination` (default true).
   """
   def scrape_list_items(list_id, tracks_awards \\ false) do
-    {acc, expected, _no_gain} =
-      Enum.reduce_while(1..@max_render_fetches, {%{}, nil, 0}, fn attempt, {acc, expected, no_gain} ->
-        url = build_imdb_list_url(list_id, 1)
-
-        case fetch_html(url) do
-          {:ok, html} ->
-            expected = expected || extract_total_count(html)
-
-            movies =
-              case parse_single_page(html, 1, tracks_awards) do
-                {:ok, ms} -> ms
-                _ -> []
-              end
-
-            new_acc = Enum.reduce(movies, acc, fn m, a -> Map.put_new(a, m.imdb_id, m) end)
-            gained = map_size(new_acc) - map_size(acc)
-            cap = if expected, do: min(expected, 1500), else: nil
-
-            Logger.info(
-              "List #{list_id} render #{attempt}: parsed #{length(movies)}, union #{map_size(new_acc)}" <>
-                "#{if expected, do: "/#{expected}", else: ""} (+#{gained})"
-            )
-
-            no_gain = if gained == 0, do: no_gain + 1, else: 0
-
-            cond do
-              cap && map_size(new_acc) >= cap -> {:halt, {new_acc, expected, no_gain}}
-              no_gain >= 2 -> {:halt, {new_acc, expected, no_gain}}
-              true -> {:cont, {new_acc, expected, no_gain}}
-            end
-
-          {:error, _reason} ->
-            {:cont, {acc, expected, no_gain}}
-        end
-      end)
-
-    {:ok, Map.values(acc), expected}
-  end
-
-  @doc """
-  Get total number of pages for a list.
-  Fetches first page and checks for pagination info.
-  """
-  def get_total_pages(list_id) do
     url = build_imdb_list_url(list_id, 1)
 
     case fetch_html(url) do
       {:ok, html} ->
-        document = Floki.parse_document!(html)
+        expected = extract_total_count(html)
 
-        # Try to find total count or pagination info
-        # Look for patterns like "1-250 of 1,260" or pagination links
-        total_pages = detect_total_pages(document)
+        movies =
+          case parse_single_page(html, 1, tracks_awards) do
+            {:ok, ms} -> ms
+            _ -> []
+          end
 
-        Logger.info("Detected #{total_pages} pages for list #{list_id}")
-        {:ok, total_pages}
+        movies = maybe_paginate(list_id, movies, expected)
+        log_shortfall(list_id, length(movies), expected)
+
+        {:ok, movies, expected}
 
       {:error, reason} ->
+        Logger.error("Failed to fetch list #{list_id}: #{inspect(reason)}")
         {:error, reason}
     end
   end
 
-  defp detect_total_pages(document) do
-    # Try to find total count from various possible locations
-    count_text = find_total_count_text(document)
+  # Lists larger than the embedded first page (~250) are completed by following IMDb's
+  # GraphQL cursor directly. Enabled by default; can be switched off via config (tests do).
+  defp maybe_paginate(list_id, movies, expected) do
+    enabled? = Application.get_env(:cinegraph, :imdb_graphql_pagination, true)
 
-    if count_text do
-      # Parse patterns like "1-250 of 1,260" or "1,260 titles"
-      case Regex.run(~r/of\s+([\d,]+)|(\d+,?\d*)\s+titles?/i, count_text) do
-        [_, total] ->
-          parse_total_count(total)
-
-        [_, _, total] ->
-          parse_total_count(total)
-
-        _ ->
-          estimate_pages_from_first_page(document)
-      end
+    if enabled? && is_integer(expected) && length(movies) < expected do
+      fetch_remaining_via_graphql(list_id, movies)
     else
-      estimate_pages_from_first_page(document)
+      movies
     end
   end
 
+  # Collect the full list via the GraphQL cursor and union it with the embedded first page
+  # (deduped by imdb_id, ordered by absolute position). On any GraphQL failure, degrade
+  # gracefully to the first-page items so the import still succeeds (partial).
+  defp fetch_remaining_via_graphql(list_id, movies) do
+    seed = Enum.reduce(movies, %{}, fn m, acc -> Map.put_new(acc, m.imdb_id, m) end)
+
+    case graphql_collect(list_id, nil, seed, 0) do
+      {:ok, by_id} when map_size(by_id) > map_size(seed) ->
+        by_id |> Map.values() |> Enum.sort_by(&(&1.position || 1_000_000))
+
+      _ ->
+        Logger.warning("GraphQL pagination yielded nothing new for #{list_id}; using first page")
+        movies
+    end
+  end
+
+  # Follow pageInfo.endCursor until hasNextPage is false (bounded). Accumulates by imdb_id.
+  defp graphql_collect(_list_id, _after, acc, page) when page >= @graphql_max_pages,
+    do: {:ok, acc}
+
+  defp graphql_collect(list_id, after_cursor, acc, page) do
+    body =
+      Jason.encode!(%{
+        "query" => @list_items_query,
+        "variables" => %{"id" => list_id, "first" => @graphql_page_size, "after" => after_cursor}
+      })
+
+    headers = [{"content-type", "application/json"}, {"x-imdb-user-language", "en-US"}]
+
+    with {:ok, %HTTPoison.Response{status_code: 200, body: resp}} <-
+           HTTPoison.post(@graphql_url, body, headers, timeout: 30_000, recv_timeout: 30_000),
+         {:ok, %{"data" => %{"list" => %{"titleListItemSearch" => search}}}} when is_map(search) <-
+           Jason.decode(resp) do
+      acc =
+        Enum.reduce(search["edges"] || [], acc, fn edge, a ->
+          case graphql_edge_to_movie(edge) do
+            nil -> a
+            movie -> Map.put_new(a, movie.imdb_id, movie)
+          end
+        end)
+
+      page_info = search["pageInfo"] || %{}
+
+      if page_info["hasNextPage"] && is_binary(page_info["endCursor"]) do
+        graphql_collect(list_id, page_info["endCursor"], acc, page + 1)
+      else
+        {:ok, acc}
+      end
+    else
+      other ->
+        Logger.warning("GraphQL list fetch for #{list_id} page #{page} failed: #{inspect(other)}")
+        {:ok, acc}
+    end
+  rescue
+    exception ->
+      Logger.warning("GraphQL list fetch crashed for #{list_id}: #{inspect(exception)}")
+      {:ok, acc}
+  end
+
+  # GraphQL edge → canonical movie map. The edge's `title` field holds the Title object
+  # (the embedded SSR JSON aliases this same field as `listItem`).
+  defp graphql_edge_to_movie(edge) do
+    title = edge["title"] || %{}
+    imdb_id = title["id"]
+
+    name =
+      get_in(title, ["originalTitleText", "text"]) || get_in(title, ["titleText", "text"])
+
+    if is_binary(imdb_id) and is_binary(name) and name != "" do
+      %{
+        imdb_id: imdb_id,
+        title: name,
+        year: get_in(title, ["releaseYear", "year"]),
+        position: get_in(edge, ["node", "absolutePosition"])
+      }
+    else
+      nil
+    end
+  end
+
+  defp log_shortfall(list_id, count, expected) when is_integer(expected) and count < expected do
+    Logger.warning(
+      "List #{list_id}: imported #{count}/#{expected} items — pagination shortfall (issue #1004)"
+    )
+  end
+
+  defp log_shortfall(_list_id, _count, _expected), do: :ok
+
+  # Reads the rendered "N titles" header text from the page (fallback for extract_total_count/1).
   defp find_total_count_text(document) do
     # Target the specific element that contains the total count
     # Based on HTML: <ul data-testid="list-page-mc-total-items"><li>297 titles</li></ul>
@@ -313,73 +350,6 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
           end)
       end
     end)
-  end
-
-  defp parse_total_count(total_str) do
-    # Remove commas and parse
-    total =
-      total_str
-      |> String.replace(",", "")
-      |> String.trim()
-      |> String.to_integer()
-
-    div(total - 1, @imdb_window_size) + 1
-  end
-
-  @doc """
-  Get the expected movie count for a list by checking the first page.
-  Returns the count or nil if unable to determine.
-  """
-  def get_expected_movie_count(list_id) do
-    url = build_imdb_list_url(list_id, 1)
-
-    case fetch_html(url) do
-      {:ok, html} ->
-        document = Floki.parse_document!(html)
-        count_text = find_total_count_text(document)
-
-        if count_text do
-          # Parse patterns looking for title counts
-          # First try to find "X titles" pattern directly
-          case Regex.run(~r/(\d+,?\d*)\s+titles?/i, count_text) do
-            [_, total] when is_binary(total) ->
-              total
-              |> String.replace(",", "")
-              |> String.trim()
-              |> String.to_integer()
-
-            _ ->
-              # Try "of X" pattern
-              case Regex.run(~r/of\s+([\d,]+)/i, count_text) do
-                [_, total] when is_binary(total) ->
-                  total
-                  |> String.replace(",", "")
-                  |> String.trim()
-                  |> String.to_integer()
-
-                _ ->
-                  nil
-              end
-          end
-        else
-          nil
-        end
-
-      {:error, _reason} ->
-        nil
-    end
-  end
-
-  defp estimate_pages_from_first_page(document) do
-    movie_count = count_movies_on_page(document)
-
-    if movie_count >= @imdb_window_size do
-      # Count detection failed but first page is full — assume up to 1500 items (20 windows).
-      # Empty tail pages are cheap; this covers Criterion-sized lists without blowing up small ones.
-      20
-    else
-      1
-    end
   end
 
   @doc """
@@ -473,30 +443,6 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end) || ""
   end
 
-  @doc """
-  DEPRECATED: Scrape and parse a list returning all pages.
-  Use fetch_single_page for better control.
-  """
-  def scrape_and_parse_list(list_id, list_name) do
-    Logger.warning(
-      "scrape_and_parse_list is deprecated. Use fetch_single_page for better control."
-    )
-
-    # For backward compatibility, fetch just the first page
-    case fetch_single_page(list_id, 1) do
-      {:ok, movies} ->
-        Logger.info(
-          "Successfully parsed #{list_name}: #{length(movies)} movies found (first page only)"
-        )
-
-        {:ok, movies}
-
-      {:error, reason} ->
-        Logger.error("Failed to scrape and parse #{list_name}: #{inspect(reason)}")
-        {:error, reason}
-    end
-  end
-
   # Private functions
 
   # IMDb's modern IPC list server-renders all items it will give us in a single bare-URL
@@ -533,27 +479,48 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   end
 
   # Parse the "N titles" total-count header out of already-fetched IPC HTML.
+  # Authoritative list size. Prefer the __NEXT_DATA__ `total` field (exact); fall back to the
+  # rendered "N titles" header.
   defp extract_total_count(html) do
+    extract_total_from_json(html) || extract_total_from_dom(html)
+  end
+
+  defp extract_total_from_json(html) do
+    with [_, json] <-
+           Regex.run(
+             ~r/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s,
+             html
+           ),
+         {:ok, data} <- Jason.decode(json),
+         total when is_integer(total) <-
+           get_in(data, [
+             "props",
+             "pageProps",
+             "mainColumnData",
+             "list",
+             "titleListItemSearch",
+             "total"
+           ]) do
+      total
+    else
+      _ -> nil
+    end
+  end
+
+  defp extract_total_from_dom(html) do
     document = Floki.parse_document!(html)
     count_text = find_total_count_text(document)
 
     with text when is_binary(text) <- count_text,
-         [_, total] <- Regex.run(~r/([\d,]+)\s+titles?/i, text) ||
-                          Regex.run(~r/of\s+([\d,]+)/i, text) do
+         [_, total] <-
+           Regex.run(~r/([\d,]+)\s+titles?/i, text) ||
+             Regex.run(~r/of\s+([\d,]+)/i, text) do
       total |> String.replace(",", "") |> String.trim() |> String.to_integer()
     else
       _ -> nil
     end
   rescue
     _ -> nil
-  end
-
-  defp count_movies_on_page(document) do
-    # Count movies using both old and new selectors
-    lister_items = Floki.find(document, ".lister-item")
-    ipc_items = Floki.find(document, ".ipc-title-link-wrapper")
-
-    max(length(lister_items), length(ipc_items))
   end
 
   # As of 2026-05-29, IMDb returns a 403 "Forbidden" page to ANY /list/ URL carrying a
@@ -568,6 +535,12 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
   # capped at the first ~250 until GraphQL cursor pagination is implemented. See issue #1003.
   defp build_imdb_list_url(list_id, _page) do
     "https://www.imdb.com/list/#{list_id}/"
+  end
+
+  # HTTP client is injectable so tests can stub the fetch (config/test.exs points this at
+  # FestivalHttpStub). Defaults to the real adapter chain.
+  defp http_client do
+    Application.get_env(:cinegraph, :imdb_list_http_client, HttpClient)
   end
 
   # Crawlbase's WAF-solving for IMDb is probabilistic — a single fetch can come back as a
@@ -610,7 +583,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
     result =
       ApiTracker.track_lookup("imdb_scraper", "fetch_list", list_id, fn ->
-        HttpClient.fetch(url, :imdb_list)
+        http_client().fetch(url, :imdb_list)
       end)
 
     case result do
@@ -619,6 +592,7 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
 
       {:error, reason} when attempt < @fetch_max_attempts ->
         backoff = @fetch_retry_base_ms * attempt
+
         Logger.warning(
           "IMDb list fetch failed (attempt #{attempt}/#{@fetch_max_attempts}): #{inspect(reason)} — retrying in #{backoff}ms"
         )
@@ -635,40 +609,36 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
     end
   end
 
+  # Parse a list page into movie maps via a 3-strategy cascade, taking the first strategy
+  # that yields a non-empty list:
+  #   1. __NEXT_DATA__ embedded JSON — the authoritative first-page list (~250 items).
+  #   2. ld+json ItemList — clean SEO fallback (localized titles, no year).
+  #   3. DOM parsing — legacy last resort, capped at the ~75 server-rendered nodes.
+  # Award-tracking lists run the DOM path FIRST (the JSON edges carry no per-item award
+  # text and those lists are ≤75, so the cap doesn't bite). See GitHub #1004.
   defp parse_imdb_list_html(html, list_config, page) do
     Logger.info("Parsing IMDb list HTML for #{list_config.name} (page #{page})")
-
-    # Check if this list tracks awards
     tracks_awards = get_in(list_config.metadata, ["tracks_awards"]) == true
-    Logger.info("=== parse_imdb_list_html: tracks_awards = #{tracks_awards} ===")
 
-    try do
-      # Parse with Floki
-      document = Floki.parse_document!(html)
+    strategy_order =
+      if tracks_awards, do: [:dom, :next_data, :ld_json], else: [:next_data, :ld_json, :dom]
 
-      # Find all list items with movie data
-      # IMDb lists can have different layouts - try multiple selectors
-      list_items = find_movie_items(document)
+    movies =
+      Enum.find_value(strategy_order, fn strategy ->
+        case parse_with_strategy(strategy, html, list_config, page, tracks_awards) do
+          list when is_list(list) and list != [] -> list
+          _ -> nil
+        end
+      end)
 
-      Logger.info("Found #{length(list_items)} potential movie items")
+    case movies do
+      nil ->
+        Logger.error("No movies found with any parsing method for #{list_config.name}")
+        {:error, "No movies found with any parsing method"}
 
-      base_position = (page - 1) * @imdb_window_size
+      movies ->
+        Logger.info("Parsed #{length(movies)} unique movies from #{list_config.name}")
 
-      movies =
-        list_items
-        |> Enum.with_index(1)
-        |> Enum.map(fn {item, index} ->
-          position = base_position + index
-          parse_movie_from_list_item(item, position, tracks_awards)
-        end)
-        |> Enum.reject(&is_nil/1)
-        # Remove duplicates
-        |> Enum.uniq_by(& &1.imdb_id)
-
-      Logger.info("Parsed #{length(movies)} unique movies from #{list_config.name}")
-
-      if length(movies) > 0 do
-        # Log first few for verification
         movies
         |> Enum.take(3)
         |> Enum.each(fn movie ->
@@ -676,15 +646,130 @@ defmodule Cinegraph.Scrapers.ImdbCanonicalScraper do
         end)
 
         {:ok, movies}
-      else
-        Logger.warning("No movies found with primary parsing, trying alternative methods...")
-        alternative_parse(document, list_config, page)
-      end
-    rescue
-      exception ->
-        Logger.error("Failed to parse HTML for #{list_config.name}: #{inspect(exception)}")
-        {:error, "HTML parsing failed: #{inspect(exception)}"}
     end
+  end
+
+  # Each strategy returns a plain list ([] on miss) so the cascade can pick the first hit.
+  defp parse_with_strategy(:next_data, html, _list_config, _page, _tracks_awards),
+    do: parse_next_data_json(html)
+
+  defp parse_with_strategy(:ld_json, html, _list_config, _page, _tracks_awards),
+    do: parse_ld_json(html)
+
+  defp parse_with_strategy(:dom, html, list_config, page, tracks_awards),
+    do: parse_dom_items(html, list_config, page, tracks_awards)
+
+  # Embedded Next.js hydration JSON — the full first-page list (~250 items), versus the ~75
+  # the page renders as DOM nodes. Cleanly scoped to the list (no recommendation carousels).
+  defp parse_next_data_json(html) do
+    with [_, json] <-
+           Regex.run(
+             ~r/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s,
+             html
+           ),
+         {:ok, data} <- Jason.decode(json),
+         edges when is_list(edges) <- next_data_edges(data) do
+      edges
+      |> Enum.map(&edge_to_movie/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq_by(& &1.imdb_id)
+    else
+      _ -> []
+    end
+  end
+
+  defp next_data_edges(data) do
+    get_in(data, [
+      "props",
+      "pageProps",
+      "mainColumnData",
+      "list",
+      "titleListItemSearch",
+      "edges"
+    ])
+  end
+
+  # Map a titleListItemSearch edge to the canonical movie map shape used downstream.
+  # absolutePosition is already list-wide/1-based, so no page offset is applied.
+  defp edge_to_movie(edge) do
+    list_item = edge["listItem"] || %{}
+    imdb_id = list_item["id"]
+
+    title =
+      get_in(list_item, ["originalTitleText", "text"]) ||
+        get_in(list_item, ["titleText", "text"])
+
+    if is_binary(imdb_id) and is_binary(title) and title != "" do
+      %{
+        imdb_id: imdb_id,
+        title: title,
+        year: get_in(list_item, ["releaseYear", "year"]),
+        position: get_in(edge, ["node", "absolutePosition"])
+      }
+    else
+      nil
+    end
+  end
+
+  # Fallback: the SEO ld+json ItemList. Cleanly ordered, but `name` is localized (no
+  # original-title field) and year is unavailable — only used when __NEXT_DATA__ is absent.
+  defp parse_ld_json(html) do
+    Regex.scan(~r/<script type="application\/ld\+json">(.*?)<\/script>/s, html)
+    |> Enum.find_value(fn [_, json] ->
+      case Jason.decode(json) do
+        {:ok, %{"@type" => "ItemList", "itemListElement" => elements}} when is_list(elements) ->
+          elements
+          |> Enum.map(&ld_element_to_movie/1)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.uniq_by(& &1.imdb_id)
+
+        _ ->
+          false
+      end
+    end) || []
+  end
+
+  defp ld_element_to_movie(%{"item" => %{} = item} = element) do
+    imdb_id = extract_imdb_id(item["url"] || "")
+    title = item["name"]
+
+    if is_binary(imdb_id) and is_binary(title) and title != "" do
+      %{imdb_id: imdb_id, title: title, year: nil, position: element["position"]}
+    else
+      nil
+    end
+  end
+
+  defp ld_element_to_movie(_), do: nil
+
+  # Last-resort DOM parsing (the legacy path). Returns a plain list ([] on miss/error).
+  defp parse_dom_items(html, list_config, page, tracks_awards) do
+    document = Floki.parse_document!(html)
+    list_items = find_movie_items(document)
+    Logger.info("Found #{length(list_items)} potential DOM movie items")
+    base_position = (page - 1) * @imdb_window_size
+
+    movies =
+      list_items
+      |> Enum.with_index(1)
+      |> Enum.map(fn {item, index} ->
+        parse_movie_from_list_item(item, base_position + index, tracks_awards)
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq_by(& &1.imdb_id)
+
+    if movies != [] do
+      movies
+    else
+      case alternative_parse(document, list_config, page) do
+        {:ok, alt_movies} -> alt_movies
+        _ -> []
+      end
+    end
+  rescue
+    exception ->
+      Logger.error("DOM parse failed for #{list_config.name}: #{inspect(exception)}")
+      []
   end
 
   defp find_movie_items(document) do

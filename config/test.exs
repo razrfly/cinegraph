@@ -78,6 +78,15 @@ config :cinegraph, :r2_client, Cinegraph.Images.R2Stub
 # cases via FestivalHttpStub.reset!/0.
 config :cinegraph, :festival_http_client, Cinegraph.Scrapers.FestivalHttpStub
 
+# Stub HTTP client for IMDb canonical-list import tests (#1004). Reuses the same
+# ETS-backed FestivalHttpStub (URL→response). The scraper reads this via
+# Application.get_env(:cinegraph, :imdb_list_http_client, HttpClient).
+config :cinegraph, :imdb_list_http_client, Cinegraph.Scrapers.FestivalHttpStub
+
+# Disable live IMDb GraphQL cursor pagination in tests so no real network call is made
+# (the importer tests use lists whose total == item count, but keep this explicit).
+config :cinegraph, :imdb_graphql_pagination, false
+
 # Provide deterministic R2 config so configured?/0 returns true in tests
 # that exercise the rehost path. Stub never makes a real call.
 config :cinegraph, :r2,

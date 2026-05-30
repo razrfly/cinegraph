@@ -58,7 +58,7 @@ defmodule Cinegraph.Workers.CanonicalListRefreshSweeperTest do
 
   defp canonical_job_count do
     Repo.aggregate(
-      from(j in Oban.Job, where: j.worker == "Cinegraph.Workers.CanonicalImportOrchestrator"),
+      from(j in Oban.Job, where: j.worker == "Cinegraph.Workers.CanonicalImportWorker"),
       :count,
       :id
     )

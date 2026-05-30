@@ -96,38 +96,21 @@ defmodule Cinegraph.Scrapers.Http.Adapters.CrawlbaseSmartProxy do
            connect_timeout
          ) do
       {:ok, tcp} ->
-        connect_req =
-          "CONNECT #{target_host}:#{target_port} HTTP/1.1\r\n" <>
-            "Host: #{target_host}:#{target_port}\r\n" <>
-            "Proxy-Authorization: Basic #{auth}\r\n\r\n"
-
-        :gen_tcp.send(tcp, connect_req)
-
-        case :gen_tcp.recv(tcp, 0, connect_timeout) do
-          {:ok, _connect_resp} ->
-            ssl_opts = [verify: :verify_none, versions: [:"tlsv1.2"], active: false]
-
-            case :ssl.connect(tcp, ssl_opts, connect_timeout) do
-              {:ok, ssl} ->
-                get_req =
-                  "GET #{path} HTTP/1.1\r\n" <>
-                    "Host: #{target_host}\r\n" <>
-                    "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36\r\n" <>
-                    "Accept: text/html,application/xhtml+xml\r\n" <>
-                    "Accept-Encoding: identity\r\n" <>
-                    extra_headers <>
-                    "Connection: close\r\n\r\n"
-
-                :ssl.send(ssl, get_req)
-                raw = read_ssl(ssl, recv_timeout, <<>>)
-                parse_http_response(raw)
-
-              {:error, reason} ->
-                {:error, reason}
-            end
-
-          {:error, reason} ->
-            {:error, reason}
+        # Always close the TCP socket; otherwise descriptors leak under the consumer's
+        # retry/backoff loop (the `Connection: close` only closes the remote end).
+        try do
+          tunnel_and_get(
+            tcp,
+            target_host,
+            target_port,
+            path,
+            auth,
+            extra_headers,
+            connect_timeout,
+            recv_timeout
+          )
+        after
+          :gen_tcp.close(tcp)
         end
 
       {:error, reason} ->
@@ -135,11 +118,86 @@ defmodule Cinegraph.Scrapers.Http.Adapters.CrawlbaseSmartProxy do
     end
   end
 
+  defp tunnel_and_get(
+         tcp,
+         target_host,
+         target_port,
+         path,
+         auth,
+         extra_headers,
+         connect_timeout,
+         recv_timeout
+       ) do
+    connect_req =
+      "CONNECT #{target_host}:#{target_port} HTTP/1.1\r\n" <>
+        "Host: #{target_host}:#{target_port}\r\n" <>
+        "Proxy-Authorization: Basic #{auth}\r\n\r\n"
+
+    # Read the proxy's CONNECT reply until the header terminator (`\r\n\r\n`) — the headers
+    # may arrive split across packets, and leftover bytes would corrupt the TLS handshake.
+    with :ok <- :gen_tcp.send(tcp, connect_req),
+         {:ok, connect_resp} <- recv_until_headers(tcp, connect_timeout, <<>>),
+         :ok <- check_connect_status(connect_resp),
+         ssl_opts = [verify: :verify_none, versions: [:"tlsv1.2"], active: false],
+         {:ok, ssl} <- :ssl.connect(tcp, ssl_opts, connect_timeout) do
+      # ssl owns the underlying socket now; close it once the body is read.
+      try do
+        get_req =
+          "GET #{path} HTTP/1.1\r\n" <>
+            "Host: #{target_host}\r\n" <>
+            "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36\r\n" <>
+            "Accept: text/html,application/xhtml+xml\r\n" <>
+            "Accept-Encoding: identity\r\n" <>
+            extra_headers <>
+            "Connection: close\r\n\r\n"
+
+        with :ok <- :ssl.send(ssl, get_req),
+             {:ok, raw} <- read_ssl(ssl, recv_timeout, <<>>) do
+          parse_http_response(raw)
+        end
+      after
+        :ssl.close(ssl)
+      end
+    end
+  end
+
+  # Accumulate the proxy CONNECT response until the end of its HTTP headers. CONNECT replies
+  # carry no body, so the header terminator marks the full response.
+  defp recv_until_headers(socket, timeout, acc) do
+    if String.contains?(acc, "\r\n\r\n") do
+      {:ok, acc}
+    else
+      case :gen_tcp.recv(socket, 0, timeout) do
+        {:ok, data} -> recv_until_headers(socket, timeout, acc <> data)
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  # The proxy answers CONNECT with its own status line. Only a 2xx means the tunnel was
+  # established; 407/403/502 etc. must surface as errors instead of being TLS-upgraded (which
+  # would either fail cryptically or feed the proxy's error page to the body parser).
+  defp check_connect_status(connect_resp) do
+    case Regex.run(~r{^HTTP/\d\.\d (\d+)}, connect_resp) do
+      [_, code] ->
+        case String.to_integer(code) do
+          status when status in 200..299 -> :ok
+          status -> {:error, {:proxy_connect_failed, status}}
+        end
+
+      _ ->
+        {:error, {:proxy_connect_failed, :unparseable}}
+    end
+  end
+
+  # `:closed` is a legitimate EOF for `Connection: close`. Any other error (notably
+  # `:timeout`) must surface so the consumer's retry logic sees a real failure rather than a
+  # silently truncated body.
   defp read_ssl(ssl, timeout, acc) do
     case :ssl.recv(ssl, 0, timeout) do
       {:ok, data} -> read_ssl(ssl, timeout, acc <> data)
-      {:error, :closed} -> acc
-      {:error, _} -> acc
+      {:error, :closed} -> {:ok, acc}
+      {:error, reason} -> {:error, reason}
     end
   end
 
