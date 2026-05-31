@@ -62,6 +62,37 @@ defmodule CinegraphWeb.Layouts do
   }
 
   @doc """
+  Renders the Clerk.js `<head>` tags (#838).
+
+  Emits the publishable-key meta tag + the Clerk.js loader, but only when Clerk
+  auth is enabled (both keys configured). Public page HTML is identical for every
+  visitor — the auth UI hydrates client-side — so pages stay CDN-cacheable.
+  """
+  def clerk_head(assigns) do
+    assigns = assign(assigns, :clerk_publishable_key, clerk_publishable_key())
+
+    ~H"""
+    <%= if @clerk_publishable_key do %>
+      <meta name="clerk-publishable-key" content={@clerk_publishable_key} />
+      <script
+        async
+        crossorigin="anonymous"
+        data-clerk-publishable-key={@clerk_publishable_key}
+        src="https://cdn.jsdelivr.net/npm/@clerk/clerk-js@5/dist/clerk.browser.js"
+        type="text/javascript"
+      >
+      </script>
+    <% end %>
+    """
+  end
+
+  defp clerk_publishable_key do
+    if Cinegraph.Auth.AuthProvider.clerk_enabled?() do
+      Cinegraph.Auth.AuthProvider.clerk_publishable_key()
+    end
+  end
+
+  @doc """
   Renders a sidebar navigation item with active-state styling.
 
   ## Examples

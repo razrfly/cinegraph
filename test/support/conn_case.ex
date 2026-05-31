@@ -36,5 +36,40 @@ defmodule CinegraphWeb.ConnCase do
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 
-  # User authentication functions removed as this project doesn't use user accounts
+  @doc """
+  Creates a user (Clerk-backed accounts, #838) and returns it.
+  """
+  def user_fixture(attrs \\ %{}) do
+    attrs =
+      Enum.into(attrs, %{
+        email: "user#{System.unique_integer([:positive])}@example.com",
+        name: "Test User"
+      })
+
+    {:ok, user} = Cinegraph.Accounts.create_user(attrs)
+    user
+  end
+
+  @doc """
+  Setup helper that registers and logs in a user.
+
+  Mirrors the Clerk plug behavior by seeding `current_user_id` in the session.
+
+      setup :register_and_log_in_user
+  """
+  def register_and_log_in_user(%{conn: conn}) do
+    user = user_fixture()
+    %{conn: log_in_user(conn, user), user: user}
+  end
+
+  @doc """
+  Logs the given user into the connection by seeding the session, the same way
+  `CinegraphWeb.Plugs.ClerkAuthPlug.sync_clerk_user/2` does.
+  """
+  def log_in_user(conn, user) do
+    conn
+    |> Phoenix.ConnTest.init_test_session(%{})
+    |> Plug.Conn.put_session("current_user_id", user.id)
+    |> Plug.Conn.assign(:current_user, user)
+  end
 end

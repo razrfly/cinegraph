@@ -158,6 +158,69 @@ api_key =
 
 config :cinegraph, :api_key, api_key
 
+# Clerk authentication (#838) — credentials + derived domain/JWKS loaded here.
+# Cinegraph uses its own dedicated Clerk application (NOT the shared Wombi tenant).
+clerk_publishable_key =
+  if config_env() == :dev,
+    do: env!("CLERK_PUBLISHABLE_KEY", :string, nil),
+    else: System.get_env("CLERK_PUBLISHABLE_KEY")
+
+clerk_secret_key =
+  if config_env() == :dev,
+    do: env!("CLERK_SECRET_KEY", :string, nil),
+    else: System.get_env("CLERK_SECRET_KEY")
+
+# Clerk publishable keys encode the frontend API domain:
+#   pk_test_<base64url(domain <> "$")>  ->  e.g. "clerk.example.com"
+clerk_domain =
+  case clerk_publishable_key do
+    "pk_" <> _ = key ->
+      key
+      |> String.split("_", parts: 3)
+      |> List.last()
+      |> Base.decode64(padding: false)
+      |> case do
+        {:ok, decoded} -> decoded |> String.trim_trailing("$") |> String.trim()
+        :error -> nil
+      end
+
+    _ ->
+      nil
+  end
+
+clerk_jwks_url = if clerk_domain, do: "https://#{clerk_domain}/.well-known/jwks.json"
+
+# Expected JWT issuer — Clerk signs tokens with iss = "https://<frontend-api-domain>".
+clerk_issuer = System.get_env("CLERK_ISSUER") || if clerk_domain, do: "https://#{clerk_domain}"
+
+clerk_authorized_parties =
+  [
+    System.get_env("CLERK_AUTHORIZED_PARTIES"),
+    cinegraph_base_url,
+    # Local dev runs on :4001 (config/dev.exs); :4000 is the sister project (Wombi).
+    "http://localhost:4001",
+    "http://localhost:4000",
+    "https://cinegraph.org",
+    "https://www.cinegraph.org"
+  ]
+  |> Enum.flat_map(fn
+    nil -> []
+    val -> String.split(val, ",", trim: true)
+  end)
+  |> Enum.map(&String.trim/1)
+  |> Enum.reject(&(&1 == ""))
+  |> Enum.uniq()
+
+config :cinegraph, :clerk,
+  enabled: not is_nil(clerk_publishable_key) and not is_nil(clerk_secret_key),
+  publishable_key: clerk_publishable_key,
+  secret_key: clerk_secret_key,
+  domain: clerk_domain,
+  jwks_url: clerk_jwks_url,
+  issuer: clerk_issuer,
+  authorized_parties: clerk_authorized_parties,
+  jwks_cache_ttl: 3_600_000
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -337,7 +400,10 @@ if config_env() == :prod do
       # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
       # for details about using IPv6 vs IPv4 and loopback vs public addresses.
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: port
+      port: port,
+      # Clerk sets sizeable __session (JWT) + __client_uat cookies. Raise Bandit's
+      # default header cap (~10KB) so requests carrying them aren't rejected (#838).
+      http_1_options: [max_header_length: 16_384]
     ],
     check_origin: [
       "https://cinegraph.org",

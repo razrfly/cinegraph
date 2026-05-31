@@ -64,6 +64,11 @@ env:
     - CLOUDFLARE_SECRET_ACCESS_KEY
     - R2_BUCKET
     - R2_CDN_URL
+    # Clerk auth (#838) — PRODUCTION keys (pk_live_/sk_live_) from the Clerk
+    # production instance. Sourced from .env.prod (NOT .env) in .kamal/secrets so
+    # prod uses a different Clerk tenant than local dev.
+    - CLERK_PUBLISHABLE_KEY
+    - CLERK_SECRET_KEY
 
 ssh:
   user: holden

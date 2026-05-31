@@ -24,15 +24,67 @@ import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 import GlobalSearch from "./hooks/global_search"
 import ThemeToggle from "./hooks/theme_toggle"
+import { initClerkClient, ClerkAuthHandler } from "./auth/clerk-manager"
+import ClerkAuthUI from "./hooks/clerk-auth-ui"
 
 window.Alpine = Alpine
 Alpine.start()
 
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 
+// ---------------------------------------------------------------------------
+// Clerk token plumbing (#838)
+// LiveView auth reads a fresh Clerk JWT via connect_params. Clerk JWTs expire
+// quickly (~60s), so we cache + refresh the token for WebSocket reconnections.
+// ---------------------------------------------------------------------------
+function getCookie(name) {
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; ${name}=`)
+  if (parts.length === 2) return parts.pop().split(";").shift()
+  return null
+}
+
+let cachedClerkToken = null
+let clerkTokenRefreshInterval = null
+let clerkVisibilityHandler = null
+
+async function refreshClerkToken() {
+  try {
+    const session = window.Clerk?.session
+    if (session) cachedClerkToken = await session.getToken()
+  } catch (e) {
+    console.warn("Failed to refresh Clerk token:", e)
+    cachedClerkToken = getCookie("__session") || null
+  }
+}
+
+function startClerkTokenRefresh() {
+  refreshClerkToken()
+  if (clerkTokenRefreshInterval) clearInterval(clerkTokenRefreshInterval)
+  clerkTokenRefreshInterval = setInterval(refreshClerkToken, 30000)
+
+  // Use a named, de-duplicated handler so repeated init (e.g. HMR) doesn't stack
+  // listeners that each re-fetch the token on every visibility change.
+  if (clerkVisibilityHandler) {
+    document.removeEventListener("visibilitychange", clerkVisibilityHandler)
+  }
+  clerkVisibilityHandler = () => {
+    if (document.visibilityState === "visible") refreshClerkToken()
+  }
+  document.addEventListener("visibilitychange", clerkVisibilityHandler)
+}
+
+// Prefer the cached fresh token; fall back to the __session cookie on first load.
+function getClerkToken() {
+  if (window.currentUser) return null
+  return cachedClerkToken || getCookie("__session") || null
+}
+
 const Hooks = {
   GlobalSearch,
   ThemeToggle,
+  ClerkAuthUI,
+  ClerkAuthHandler,
   SectionNav: {
     mounted() {
       const links = this.el.querySelectorAll("[data-section-id]")
@@ -59,12 +111,15 @@ const Hooks = {
 
 let liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: {
+  // Function form: clerk_token is read fresh on every (re)connect (#838).
+  params: () => ({
     _csrf_token: csrfToken,
+    clerk_token: getClerkToken(),
+    current_path: window.location.pathname,
     browser_locale: navigator.language || null,
     browser_locales: navigator.languages || [navigator.language].filter(Boolean),
     browser_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null
-  },
+  }),
   hooks: Hooks
 })
 
@@ -105,6 +160,58 @@ window.addEventListener("phx:page-loading-stop", syncNavActive)
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
+
+// ---------------------------------------------------------------------------
+// Clerk nav hydration (#838)
+// The top-nav lives in the root layout (outside the LiveView-managed DOM), so we
+// toggle its signed-in / signed-out affordances imperatively rather than via a
+// phx-hook. Server-side auth (window.currentUser) wins; otherwise we use Clerk.
+// ---------------------------------------------------------------------------
+function hydrateClerkNav(user) {
+  document.querySelectorAll("[data-clerk-auth-ui]").forEach(el => {
+    const loading = el.querySelector("[data-clerk-loading]")
+    const signedIn = el.querySelector("[data-clerk-signed-in]")
+    const signedOut = el.querySelector("[data-clerk-signed-out]")
+    if (loading) loading.classList.add("hidden")
+    if (user) {
+      signedIn?.classList.remove("hidden")
+      signedIn?.classList.add("flex")
+      signedOut?.classList.add("hidden")
+    } else {
+      signedOut?.classList.remove("hidden")
+      signedOut?.classList.add("flex")
+      signedIn?.classList.add("hidden")
+    }
+  })
+}
+
+// Re-hydrate after live navigation (root layout is static, but a cross-session
+// full reload re-renders the skeleton).
+window.addEventListener("phx:page-loading-stop", () => {
+  if (window.currentUser) hydrateClerkNav(window.currentUser)
+})
+
+if (document.querySelector('meta[name="clerk-publishable-key"]')) {
+  // Server already knows the user (rendered into window.currentUser): hydrate now.
+  if (window.currentUser) {
+    hydrateClerkNav(window.currentUser)
+  }
+  // Initialize Clerk in the background; the __session cookie covers the first
+  // LiveView connect, this keeps a fresh token cached for later reconnects.
+  initClerkClient()
+    .then(() => {
+      startClerkTokenRefresh()
+      if (!window.currentUser) hydrateClerkNav(window.Clerk?.user || null)
+      window.addEventListener("clerk:auth-change", e => hydrateClerkNav(e.detail.user))
+    })
+    .catch(err => {
+      console.warn("Clerk init failed:", err)
+      hydrateClerkNav(window.currentUser || null)
+    })
+} else {
+  // Clerk disabled — show the signed-out affordances instead of the skeleton.
+  hydrateClerkNav(window.currentUser || null)
+}
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
