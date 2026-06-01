@@ -53,45 +53,44 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
   # Minimum popularity for imports - set to 0 to import ALL movies
   @min_popularity 0.0
 
+  # Per-query bound for this worker's DB reads. Replaces a session-level
+  # `SET statement_timeout` (removed in #1018 — not PgBouncer-transaction-pool safe,
+  # since session state doesn't persist across transactions). Applied per query so
+  # there's no pinned connection or session state.
+  @query_timeout :timer.seconds(120)
+
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
     Cinegraph.Repo.route_to_worker()
 
-    Repo.Worker.checkout(fn ->
-      Repo.Worker.query!("SET statement_timeout = '120s'")
+    Logger.info("ScheduledBackfill: Starting hourly health check...")
 
-      try do
-        Logger.info("ScheduledBackfill: Starting hourly health check...")
+    # Update baseline from TMDb export if stale (daily). Does external I/O — kept
+    # outside any DB transaction.
+    maybe_update_baseline()
 
-        # Update baseline from TMDb export if stale (daily)
-        maybe_update_baseline()
+    pending = count_pending_tmdb_jobs()
 
-        pending = count_pending_tmdb_jobs()
+    total_pending =
+      pending.available + pending.scheduled + pending.executing + pending.retryable
 
-        total_pending =
-          pending.available + pending.scheduled + pending.executing + pending.retryable
+    Logger.info(
+      "ScheduledBackfill: Queue status - #{total_pending} total pending " <>
+        "(#{pending.available} available, #{pending.scheduled} scheduled, " <>
+        "#{pending.executing} executing, #{pending.retryable} retryable)"
+    )
 
+    cond do
+      total_pending >= @pending_threshold ->
         Logger.info(
-          "ScheduledBackfill: Queue status - #{total_pending} total pending " <>
-            "(#{pending.available} available, #{pending.scheduled} scheduled, " <>
-            "#{pending.executing} executing, #{pending.retryable} retryable)"
+          "ScheduledBackfill: Queue healthy (#{total_pending} >= #{@pending_threshold}), skipping batch"
         )
 
-        cond do
-          total_pending >= @pending_threshold ->
-            Logger.info(
-              "ScheduledBackfill: Queue healthy (#{total_pending} >= #{@pending_threshold}), skipping batch"
-            )
+        :ok
 
-            :ok
-
-          true ->
-            queue_batch(total_pending)
-        end
-      after
-        Repo.Worker.query!("SET statement_timeout = DEFAULT")
-      end
-    end)
+      true ->
+        queue_batch(total_pending)
+    end
   end
 
   # Update baseline if it's stale (older than 24 hours)
@@ -204,7 +203,7 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
         group_by: j.state
       )
 
-    results = Repo.all(query)
+    results = Repo.all(query, timeout: @query_timeout)
 
     # Build counts map with defaults
     Enum.reduce(results, %{available: 0, scheduled: 0, executing: 0, retryable: 0}, fn r, acc ->

@@ -278,6 +278,10 @@ if config_env() == :prod do
   # Primary database configuration
   # Connects to local Postgres on Mac Mini via host.docker.internal
   config :cinegraph, Cinegraph.Repo,
+    # prepare: :unnamed → Postgrex uses one-shot prepared statements, required under
+    # PgBouncer transaction pooling (named statements collide across pooled clients).
+    # Harmless while connecting directly to Postgres. #1018
+    prepare: :unnamed,
     username: username,
     password: password,
     hostname: hostname,
@@ -304,6 +308,8 @@ if config_env() == :prod do
   # this pool large enough for concurrent crawlers/browsing bursts; otherwise
   # ordinary page loads fail with DBConnection queue drops before query timeout.
   config :cinegraph, Cinegraph.Repo.Replica,
+    # PgBouncer transaction-pooling safe (see Cinegraph.Repo). #1018
+    prepare: :unnamed,
     username: username,
     password: password,
     hostname: hostname,
@@ -321,6 +327,8 @@ if config_env() == :prod do
   # Keeps job DB usage off the Replica pool so slow workers can't starve page loads.
   # Routes via Repo.replica() when :cinegraph_job_repo is set in the process dict.
   config :cinegraph, Cinegraph.Repo.Worker,
+    # PgBouncer transaction-pooling safe (see Cinegraph.Repo). #1018
+    prepare: :unnamed,
     username: username,
     password: password,
     hostname: hostname,
