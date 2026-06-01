@@ -409,7 +409,15 @@ if config_env() == :prod do
       "https://cinegraph.org",
       "https://www.cinegraph.org"
     ],
-    force_ssl: [rewrite_on: [:x_forwarded_proto], hsts: true],
+    # See the matching note in config/prod.exs: exclude kamal-proxy's plain-HTTP
+    # /health probe so Plug.SSL doesn't 301-redirect it and fail the deploy
+    # health check. Passing :exclude overrides the default localhost entries, so
+    # they're re-listed here. Real traffic still gets the HTTPS redirect + HSTS.
+    force_ssl: [
+      rewrite_on: [:x_forwarded_proto],
+      hsts: true,
+      exclude: [hosts: ["localhost", "127.0.0.1"], paths: ["/health"]]
+    ],
     secret_key_base: secret_key_base
 
   # ## SSL Support

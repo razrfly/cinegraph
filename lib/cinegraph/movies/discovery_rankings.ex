@@ -9,6 +9,7 @@ defmodule Cinegraph.Movies.DiscoveryRankings do
 
   import Ecto.Query
 
+  alias Cinegraph.Database.MaterializedViews
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Movies.Query.Params
   alias Cinegraph.Repo
@@ -145,23 +146,11 @@ defmodule Cinegraph.Movies.DiscoveryRankings do
       end
   end
 
-  defp do_refresh!(true) do
-    Ecto.Adapters.SQL.query!(
-      Repo,
-      "REFRESH MATERIALIZED VIEW CONCURRENTLY #{@view_name}",
-      [],
-      timeout: :infinity
-    )
-
-    :ok
-  end
-
-  defp do_refresh!(false) do
-    Ecto.Adapters.SQL.query!(Repo, "REFRESH MATERIALIZED VIEW #{@view_name}", [],
-      timeout: :infinity
-    )
-
-    :ok
+  # Route the actual REFRESH through the centralized safe path so it runs under a
+  # server-side statement_timeout (#1019). This module keeps its own concurrent?
+  # control and unpopulated-view fallback (see refresh/1) layered on top.
+  defp do_refresh!(concurrently?) do
+    MaterializedViews.refresh_statement!(@view_name, concurrently?)
   end
 
   defp count_all do

@@ -547,12 +547,16 @@ defmodule Cinegraph.Collaborations do
   end
 
   @doc """
-  Refreshes the materialized view for collaboration trends.
+  Refreshes the `person_collaboration_trends` materialized view.
+
+  Delegates to the single safe refresh path
+  (`Cinegraph.Database.MaterializedViews.refresh!/2`): CONCURRENTLY (non-blocking)
+  plus a server-side `statement_timeout`. The scheduled
+  `Cinegraph.Workers.MaterializedViewRefreshSweeper` is the normal driver; this is
+  the on-demand entry point.
   """
-  def refresh_collaboration_trends do
-    # TODO: Uncomment when materialized view is created
-    # Repo.query!("REFRESH MATERIALIZED VIEW CONCURRENTLY person_collaboration_trends")
-    :ok
+  def refresh_collaboration_trends(opts \\ []) do
+    Cinegraph.Database.MaterializedViews.refresh!("person_collaboration_trends", opts)
   end
 
   @doc """

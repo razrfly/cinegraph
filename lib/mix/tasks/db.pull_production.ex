@@ -48,8 +48,6 @@ defmodule Mix.Tasks.Db.PullProduction do
   use Mix.Task
   require Logger
 
-  alias Cinegraph.Database.Utils, as: DatabaseUtils
-
   @shortdoc "Pull production DB locally via SSH (cinegraph_prod → cinegraph_dev)"
 
   # Static configuration (compile-time)
@@ -846,42 +844,37 @@ defmodule Mix.Tasks.Db.PullProduction do
   defp refresh_materialized_views do
     verbose_info("  → Refreshing materialized views...")
 
-    # Find all materialized views in `public`. We fetch the bare matviewname
-    # (for the unique-index lookup) plus the quote_ident-safe qualified form
-    # (for interpolation into REFRESH MATERIALIZED VIEW).
-    query = """
-    SELECT matviewname,
-           quote_ident(schemaname) || '.' || quote_ident(matviewname)
-    FROM pg_matviews
-    WHERE schemaname = 'public'
-    """
+    # Single safe refresh path (CONCURRENTLY when possible + a server-side
+    # statement_timeout). Per-view rescue keeps a failure on one view from
+    # aborting the rest of the post-import refresh.
+    views = Cinegraph.Database.MaterializedViews.list_public()
 
-    case Cinegraph.Repo.query(query) do
-      {:ok, %{rows: rows}} ->
-        Enum.each(rows, fn [matviewname, qualified] ->
-          stmt =
-            if DatabaseUtils.has_unique_index?(matviewname) do
-              "REFRESH MATERIALIZED VIEW CONCURRENTLY #{qualified}"
-            else
-              "REFRESH MATERIALIZED VIEW #{qualified}"
-            end
+    {ok_count, failed} =
+      Enum.reduce(views, {0, []}, fn name, {ok_count, failed} ->
+        verbose_info("    REFRESH public.#{name}...")
 
-          verbose_info("    #{stmt}...")
-
-          case Cinegraph.Repo.query(stmt) do
-            {:ok, _} -> :ok
-            {:error, reason} -> verbose_info("    Warning: #{inspect(reason)}")
-          end
-        end)
-
-        if length(rows) > 0 do
-          info("  ✓ Refreshed #{length(rows)} materialized views")
-        else
-          verbose_info("  → No materialized views to refresh")
+        try do
+          Cinegraph.Database.MaterializedViews.refresh!(name)
+          {ok_count + 1, failed}
+        rescue
+          e ->
+            verbose_info("    Warning: #{Exception.message(e)}")
+            {ok_count, [name | failed]}
         end
+      end)
 
-      {:error, reason} ->
-        verbose_info("  ⚠ Could not refresh views: #{inspect(reason)}")
+    cond do
+      views == [] ->
+        verbose_info("  → No materialized views to refresh")
+
+      failed == [] ->
+        info("  ✓ Refreshed #{ok_count} materialized views")
+
+      true ->
+        info(
+          "  ⚠ Refreshed #{ok_count}/#{length(views)} materialized views; " <>
+            "failed=#{inspect(Enum.reverse(failed))}"
+        )
     end
 
     :ok

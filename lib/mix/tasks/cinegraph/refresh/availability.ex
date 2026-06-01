@@ -26,7 +26,9 @@ defmodule Mix.Tasks.Cinegraph.Refresh.Availability do
 
     case Actions.queue_availability_refresh(ids) do
       {:ok, n} ->
-        Mix.shell().info("Enqueued #{n} MovieAvailabilityRefreshWorker job(s) on queue :movie_availability")
+        Mix.shell().info(
+          "Enqueued #{n} MovieAvailabilityRefreshWorker job(s) on queue :movie_availability"
+        )
 
       {:error, errors} ->
         Mix.shell().error("Enqueue failed: #{inspect(errors)}")

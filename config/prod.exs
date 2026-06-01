@@ -7,7 +7,17 @@ import Config
 # before starting your production server.
 config :cinegraph, CinegraphWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json",
-  force_ssl: [rewrite_on: [:x_forwarded_proto], hsts: true]
+  # kamal-proxy health-checks /health over plain HTTP. Without excluding it,
+  # Plug.SSL 301-redirects the probe to https, the proxy never sees a 2xx, and
+  # the container is marked unhealthy and killed (→ Cloudflare 502 with no
+  # backend). Excluding the health path lets the probe through while real
+  # traffic still gets the HTTPS redirect + HSTS. NOTE: passing :exclude
+  # overrides the default, so localhost/127.0.0.1 must be re-listed explicitly.
+  force_ssl: [
+    rewrite_on: [:x_forwarded_proto],
+    hsts: true,
+    exclude: [hosts: ["localhost", "127.0.0.1"], paths: ["/health"]]
+  ]
 
 # Configures Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: Cinegraph.Finch

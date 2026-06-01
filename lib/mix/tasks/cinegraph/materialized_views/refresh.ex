@@ -4,10 +4,12 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
   Phase 4.3).
 
   Used standalone (e.g. after a partial `mix db.pull_production` failure
-  where pgsql_tmp ran out of disk and a view's refresh errored). The
-  same `pg_matviews`-driven loop runs as part of the post-import step in
-  `Mix.Tasks.Db.PullProduction` — this task re-runs it without redoing
-  the multi-minute import.
+  where pgsql_tmp ran out of disk and a view's refresh errored).
+
+  Refresh behaviour (CONCURRENTLY when a unique index exists + a server-side
+  `statement_timeout`) lives in `Cinegraph.Database.MaterializedViews`, the single
+  safe refresh path shared with `db.pull_production`, the scheduled sweeper, and
+  `Cinegraph.Collaborations.refresh_collaboration_trends/0`.
 
   ## Usage
 
@@ -19,8 +21,7 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
   """
   use Mix.Task
 
-  alias Cinegraph.Database.Utils, as: DatabaseUtils
-  alias Cinegraph.Repo
+  alias Cinegraph.Database.MaterializedViews
 
   @shortdoc "Refresh PostgreSQL materialized views in the public schema"
 
@@ -30,63 +31,28 @@ defmodule Mix.Tasks.Cinegraph.MaterializedViews.Refresh do
 
     {opts, _, _} = OptionParser.parse(args, strict: [view: :string])
 
-    views = list_views()
-
     views =
       case opts[:view] do
         nil ->
-          views
+          MaterializedViews.list_public()
 
         name ->
-          if name in views do
+          if name in MaterializedViews.list_public() do
             [name]
           else
             Mix.raise("Unknown materialized view public.#{name}")
           end
       end
 
-    Enum.each(views, &refresh_view!/1)
+    Enum.each(views, fn name ->
+      Mix.shell().info("Refreshing public.#{name}...")
+
+      case MaterializedViews.refresh!(name) do
+        :ok -> :ok
+        {:skipped, reason} -> Mix.shell().info("  skipped (#{reason})")
+      end
+    end)
 
     Mix.shell().info("✓ Refreshed #{length(views)} view(s)")
-  end
-
-  defp list_views do
-    %{rows: rows} =
-      Repo.query!(
-        "SELECT matviewname FROM pg_matviews WHERE schemaname = 'public' ORDER BY matviewname",
-        []
-      )
-
-    Enum.map(rows, fn [name] -> name end)
-  end
-
-  # Refresh a single matview, using CONCURRENTLY when a unique index on the
-  # view is present (#897 Phase B). CONCURRENTLY is non-blocking for readers
-  # but requires a unique index. Falls back to plain REFRESH otherwise.
-  defp refresh_view!(name) do
-    qualified = quoted_public_name(name)
-
-    if DatabaseUtils.has_unique_index?(name) do
-      Mix.shell().info("Refreshing public.#{name} (CONCURRENTLY)...")
-
-      Repo.query!(
-        "REFRESH MATERIALIZED VIEW CONCURRENTLY #{qualified}",
-        [],
-        timeout: :infinity
-      )
-    else
-      Mix.shell().info("Refreshing public.#{name} (locking — no unique index)...")
-      Repo.query!("REFRESH MATERIALIZED VIEW #{qualified}", [], timeout: :infinity)
-    end
-  end
-
-  defp quoted_public_name(name) do
-    %{rows: [[qualified]]} =
-      Repo.query!(
-        "SELECT quote_ident('public') || '.' || quote_ident($1)",
-        [name]
-      )
-
-    qualified
   end
 end

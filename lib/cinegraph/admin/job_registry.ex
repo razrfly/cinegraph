@@ -306,6 +306,19 @@ defmodule Cinegraph.Admin.JobRegistry do
       doc_url: nil
     },
     %{
+      id: :materialized_view_refresh_sweeper,
+      label: "Materialized view refresh",
+      worker: Workers.MaterializedViewRefreshSweeper,
+      queue: :maintenance,
+      schedule: "0 8 * * *",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: true,
+      description: "Refresh all public matviews (CONCURRENTLY-only) daily",
+      destination: :system,
+      doc_url: nil
+    },
+    %{
       id: :zero_credits_cleanup_sweeper,
       label: "Zero-credits cleanup (Sun: refetch)",
       worker: Workers.ZeroCreditsCleanupSweeper,
