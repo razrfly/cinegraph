@@ -522,11 +522,22 @@ defmodule CinegraphWeb.NeutralV2Components do
             </svg>
           </button>
           <%!-- Clerk auth UI (#838). Hydrated client-side by app.js so public
-               pages stay CDN-cacheable; skeleton shows until Clerk resolves. --%>
-          <div data-clerk-auth-ui class="flex items-center gap-2">
-            <div data-clerk-loading class="h-[34px] w-[120px] rounded-[7px] bg-mist-950/[0.04] dark:bg-white/5 animate-pulse">
+               pages stay CDN-cacheable. The wrapper reserves the resolved
+               width (sm:min-w-[176px]) so swapping the skeleton for the real
+               buttons never reflows the nav; the skeleton mimics the button
+               shapes and is visible (not a near-invisible tint); resolved
+               states fade in via `clerk-fade-in` (see oatmeal.css). --%>
+          <div data-clerk-auth-ui class="flex items-center justify-end gap-2 sm:min-w-[176px]">
+            <div
+              data-clerk-loading
+              aria-hidden="true"
+              class="flex items-center justify-end gap-2 animate-pulse"
+            >
+              <div class="h-[34px] w-[70px] rounded-[7px] bg-mist-950/10 dark:bg-white/10 max-sm:hidden">
+              </div>
+              <div class="h-[30px] w-[96px] rounded-full bg-mist-950/10 dark:bg-white/10"></div>
             </div>
-            <div data-clerk-signed-out class="hidden items-center gap-2">
+            <div data-clerk-signed-out class="clerk-fade-in hidden items-center justify-end gap-2">
               <a
                 href="/auth/login"
                 class="h-[34px] inline-flex items-center px-3 rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 text-[12.5px] font-semibold text-mist-950 dark:text-white cursor-pointer max-sm:hidden no-underline"
@@ -540,7 +551,7 @@ defmodule CinegraphWeb.NeutralV2Components do
                 Get started
               </a>
             </div>
-            <div data-clerk-signed-in class="hidden items-center gap-2">
+            <div data-clerk-signed-in class="clerk-fade-in hidden items-center justify-end gap-2">
               <a
                 href="/auth/profile"
                 class="h-[34px] inline-flex items-center px-3 rounded-[7px] border border-mist-950/10 dark:border-white/10 bg-mist-50 dark:bg-white/5 text-[12.5px] font-semibold text-mist-950 dark:text-white cursor-pointer no-underline"

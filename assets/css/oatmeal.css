@@ -33,3 +33,23 @@
     box-shadow: inset 2px 0 0 theme('colors.white');
   }
 }
+
+/* Clerk nav auth hydration (#838). When app.js swaps the reserved-width
+   skeleton for the resolved signed-in/out state (display:none -> flex), this
+   animation plays once on reveal so the state fades in instead of popping.
+   A CSS animation (not a transition) is used because transitions don't fire
+   on a display change. Honors reduced-motion. */
+@keyframes clerk-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.clerk-fade-in {
+  animation: clerk-fade-in 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clerk-fade-in {
+    animation: none;
+  }
+}

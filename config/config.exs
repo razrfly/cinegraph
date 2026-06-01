@@ -259,6 +259,11 @@ config :cinegraph, Oban,
        # Sweeper itself runs on :maintenance; the per-movie rebuilds it
        # enqueues run on :collaboration (concurrency 3).
        {"30 7 * * *", Cinegraph.Workers.CollaborationRepairSweeper},
+       # Materialized-view refresh (#1019) — daily at 08:00 UTC, just after the
+       # 5:30–7:30 maintenance window (incl. collaboration-graph repair at 07:30,
+       # which feeds person_collaboration_trends). CONCURRENTLY-only + server-side
+       # statement_timeout; never takes a blocking lock on cron.
+       {"0 8 * * *", Cinegraph.Workers.MaterializedViewRefreshSweeper},
        # Zero-credits cleanup — two phases. Sunday 04:00 enqueues TMDb
        # refetches for orphan people; Monday 04:00 deletes those that
        # remained orphaned (gives the refetches 24h to land).

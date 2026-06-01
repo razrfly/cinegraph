@@ -128,6 +128,7 @@ defmodule Cinegraph.Workers.AvailabilityWorkersTest do
 
     test ":movie_availability queue is present in Oban config" do
       queues = Application.fetch_env!(:cinegraph, Oban) |> Keyword.fetch!(:queues)
+
       assert Keyword.has_key?(queues, :movie_availability),
              "Expected :movie_availability in Oban queues, got: #{inspect(Keyword.keys(queues))}"
     end

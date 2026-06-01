@@ -4,12 +4,16 @@ defmodule CinegraphWeb.Admin.ScheduledLiveTest do
   import Phoenix.LiveViewTest
 
   describe "GET /admin/scheduled" do
-    test "renders the scheduled jobs table with all 22 cron entries", %{conn: conn} do
+    test "renders the scheduled jobs table with every cron entry", %{conn: conn} do
       {:ok, _live, html} = live(conn, ~p"/admin/scheduled")
 
-      # Page header + subtitle reference all 22 entries
+      # Derive the count from the registry so adding a cron entry can't silently
+      # drift this assertion (the JobRegistry ↔ config.exs parity test guards sync).
+      scheduled_count = length(Cinegraph.Admin.JobRegistry.scheduled())
+
+      # Page header + subtitle reference every entry
       assert html =~ "Scheduled jobs"
-      assert html =~ "22 cron entries"
+      assert html =~ "#{scheduled_count} cron entries"
 
       # A representative entry from each section
       assert html =~ "Biography refresh sweeper"

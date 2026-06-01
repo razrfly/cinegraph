@@ -86,9 +86,57 @@ All backfills run automatically via `Oban.Plugins.Cron` (`config/config.exs`):
 | `0 1 1-7 * SUN` | `PersonQualityScoreWorker` (`monthly_deep`) | PQS monthly deep recalc | (worker-paged) |
 | `0 */6 * * *` | `PersonQualityScoreWorker` (`health_check`) | PQS health check | — |
 | `0 */12 * * *` | `PersonQualityScoreWorker` (`stale_cleanup`) | PQS stale rows | — |
+| `0 8 * * *` | `MaterializedViewRefreshSweeper` | refresh all public matviews (CONCURRENTLY-only) | — |
 
 You don't need to run the one-shot mix tasks unless you want to drain faster
 than the daily caps allow, or you want to debug a specific batch.
+
+## Materialized views (#1019)
+
+All refreshes go through one safe path, `Cinegraph.Database.MaterializedViews.refresh!/2`:
+CONCURRENTLY when the view has a unique index (non-blocking for readers) + a
+server-side `statement_timeout` (default 60 min) so a stuck refresh self-aborts.
+The daily `MaterializedViewRefreshSweeper` runs it `concurrently_only: true`, so a
+scheduled job can **never** take an `ACCESS EXCLUSIVE` lock.
+
+```bash
+# Refresh on demand (safe path):
+bin/cinegraph eval 'Cinegraph.Database.MaterializedViews.refresh_all!()'
+mix cinegraph.materialized_views.refresh --view person_collaboration_trends
+```
+
+### ⚠️ Never run a raw blocking refresh by hand
+A plain `REFRESH MATERIALIZED VIEW <name>` (no `CONCURRENTLY`) on a populated view
+holds an `ACCESS EXCLUSIVE` lock for its whole duration. This is what saturated the
+shared Postgres instance in #1019 (a 19.5 h `person_collaboration_trends` refresh
+blocked 40 connections). `holden` is a Postgres **superuser**, so nothing in the
+app can *prevent* this — it is a discipline/runbook control. Always use the safe
+path above.
+
+### Rebuilding `person_collaboration_trends` (definition change / cutover)
+Changing the view definition is an out-of-band maintenance-window step (a synchronous
+migration would exceed `deploy_timeout`). Build-new → validate → zero-downtime swap:
+
+```bash
+# 1. Dry run first — builds _new, validates, drops it WITHOUT swapping. Confirms
+#    the build completes in minutes and all invariants pass.
+bin/cinegraph eval 'IO.inspect Cinegraph.Maintenance.RebuildCollaborationTrends.run(dry_run: true)'
+
+# 2. Real cutover (window with temp-disk headroom — this refresh once filled pgsql_tmp).
+bin/cinegraph eval 'IO.inspect Cinegraph.Maintenance.RebuildCollaborationTrends.run()'
+```
+
+### Monitoring (catch the next stuck refresh)
+```elixir
+# Active queries running > 5 min (would have flagged the 19.5 h refresh):
+Cinegraph.Database.Monitoring.long_running_queries(300)
+# Per-database backend counts (shared 100-connection ceiling, #1018):
+Cinegraph.Database.Monitoring.connection_counts()
+```
+If the DB is too saturated for `psql`, reconstruct from the host process list:
+`ps -axo command | grep '^postgres: ' | awk '{print $2,$3}' | sort | uniq -c | sort -rn`.
+To cancel a stuck refresh when you can't get a SQL connection, send **SIGINT** (=
+`pg_cancel_backend`, not SIGKILL) to that backend PID.
 
 ## Drain timelines (#896 Phase 3 — captured 2026-05-07)
 
