@@ -2,13 +2,13 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
   @moduledoc """
   Cron-based worker for continuous movie backfill.
 
-  Runs every hour as a health check and queues new movies for import
+  Runs every 15 minutes as a health check and queues new movies for import
   based on the current queue state. This replaces the self-scheduling
   ContinuousBackfillWorker with a simpler, more robust approach.
 
   ## How It Works
 
-  1. Cron triggers this worker every hour
+  1. Cron triggers this worker every 15 minutes
   2. Worker checks how many TMDB jobs are pending
   3. If pending < threshold, queue more movies from the gap analysis
   4. If pending >= threshold, skip (queue is still processing)
@@ -63,7 +63,7 @@ defmodule Cinegraph.Workers.ScheduledBackfillWorker do
   def perform(%Oban.Job{}) do
     Cinegraph.Repo.route_to_worker()
 
-    Logger.info("ScheduledBackfill: Starting hourly health check...")
+    Logger.info("ScheduledBackfill: Starting 15-minute health check...")
 
     # Update baseline from TMDb export if stale (daily). Does external I/O — kept
     # outside any DB transaction.
