@@ -138,6 +138,28 @@ If the DB is too saturated for `psql`, reconstruct from the host process list:
 To cancel a stuck refresh when you can't get a SQL connection, send **SIGINT** (=
 `pg_cancel_backend`, not SIGKILL) to that backend PID.
 
+## Connection monitoring (#1018 Session 5)
+
+`/admin/connections` shows a live `pg_stat_activity` snapshot: total backends vs
+`max_connections` (300), per-database counts (cinegraph reads its bounded PgBouncer
+pool, ~16–25), and any long-running queries. `Cinegraph.Workers.ConnectionMonitorWorker`
+runs the same check every 5 min and escalates: `:warn` (>70%) → `Logger.warning`,
+`:crit` (>90% or stuck query) → `Logger.error` → Honeybadger/AppSignal.
+
+**PgBouncer pool stats are host-only** — its admin console isn't queryable from the
+app (Postgrex can't bootstrap against the `pgbouncer` virtual DB). Check pools and
+client queueing (`cl_waiting`) directly on the host:
+
+```bash
+psql "host=127.0.0.1 port=6432 user=holden dbname=pgbouncer" -c "SHOW POOLS"
+psql "host=127.0.0.1 port=6432 user=holden dbname=pgbouncer" -c "SHOW CLIENTS"
+```
+
+Sustained `cl_waiting > 0` means cinegraph's client pools exceed PgBouncer's
+`default_pool_size` (25) — bump the per-db `pool_size` in `/opt/homebrew/etc/pgbouncer.ini`
++ `brew services restart pgbouncer`. Client queueing also surfaces app-side as
+`DBConnection` "connection not available" timeouts.
+
 ## Drain timelines (#896 Phase 3 — captured 2026-05-07)
 
 The two RED checks remaining after #896 Phase 1+2 have predictable drain

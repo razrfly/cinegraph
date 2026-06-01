@@ -270,6 +270,10 @@ config :cinegraph, Oban,
        # which feeds person_collaboration_trends). CONCURRENTLY-only + server-side
        # statement_timeout; never takes a blocking lock on cron.
        {"0 8 * * *", Cinegraph.Workers.MaterializedViewRefreshSweeper},
+       # Connection-health monitor (#1018 Session 5) — every 5 min, logs a
+       # pg_stat_activity snapshot and escalates (warn/error → Honeybadger/AppSignal)
+       # on backend saturation or long-running queries.
+       {"*/5 * * * *", Cinegraph.Workers.ConnectionMonitorWorker},
        # Zero-credits cleanup — two phases. Sunday 04:00 enqueues TMDb
        # refetches for orphan people; Monday 04:00 deletes those that
        # remained orphaned (gives the refetches 24h to land).

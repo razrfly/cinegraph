@@ -273,6 +273,9 @@ defmodule CinegraphWeb.Router do
       # Homeostasis dashboard (#723) — replaces the import-era trio
       live "/health", AdminHealthLive.Show, :show
 
+      # Shared-Postgres connection health (#1018 Session 5)
+      live "/connections", Admin.ConnectionsLive, :index
+
       # Scheduled jobs (#880 Phase 1) — registry-driven cron table
       live "/scheduled", Admin.ScheduledLive, :index
       live "/scheduled/:id", Admin.ScheduledShowLive, :show
