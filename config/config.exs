@@ -165,6 +165,12 @@ config :phoenix, :filter_parameters, ["password", "key", "api_key", "access_key"
 # Configure Oban
 config :cinegraph, Oban,
   repo: Cinegraph.Repo,
+  # PgBouncer transaction pooling does not support LISTEN/NOTIFY (the default
+  # Oban.Notifiers.Postgres). Use the Erlang :pg notifier — correct for this
+  # single-node deploy — so cinegraph can route through PgBouncer (#1018). Also
+  # frees the dedicated LISTEN connection the Postgres notifier held. The default
+  # peer (Oban.Peers.Database) is pooler-safe; no peer override needed.
+  notifier: Oban.Notifiers.PG,
   queues: [
     # DB-protective defaults for native Postgres. Production may override these
     # with OBAN_*_LIMIT env vars in runtime.exs after measuring capacity.
