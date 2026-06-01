@@ -4,10 +4,18 @@ if [ "${1}" == "/app/bin/server" ]; then
   # Default: run synchronously to guarantee schema compatibility before serving.
   # Set MIGRATE_ASYNC=true for deploys with long CONCURRENTLY index builds on
   # large tables where additive-only migrations make background startup safe.
+  #
+  # #1018: migrations must bypass PgBouncer — CONCURRENTLY index builds and Ecto's
+  # session-level migration advisory lock are incompatible with transaction pooling.
+  # Run `migrate` with DATABASE_PORT pointed at the DIRECT Postgres port; runtime.exs
+  # then configures the migration repo on that port. The server below (exec "${@}")
+  # keeps the unmodified DATABASE_PORT (PgBouncer). No-op when DATABASE_DIRECT_PORT
+  # is unset (dev / non-pooled deploys).
+  MIGRATE_DB_PORT="${DATABASE_DIRECT_PORT:-${DATABASE_PORT}}"
   if [ "${MIGRATE_ASYNC:-false}" == "true" ]; then
-    /app/bin/migrate &
+    DATABASE_PORT="${MIGRATE_DB_PORT}" /app/bin/migrate &
   else
-    /app/bin/migrate
+    DATABASE_PORT="${MIGRATE_DB_PORT}" /app/bin/migrate
   fi
 fi
 

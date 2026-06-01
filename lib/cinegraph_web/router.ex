@@ -51,6 +51,10 @@ defmodule CinegraphWeb.Router do
     # Redirect "/" to "/movies" until the homepage can be optimized.
     get "/", PageController, :redirect_to_movies
 
+    # Marketing manifesto — "Film discovery is broken. Their agenda is not yours."
+    # Self-contained page (oatmeal theme, no app layout). See issue #1020.
+    get "/manifesto", PageController, :manifesto
+
     if Mix.env() != :prod do
       get "/design-preview", DesignPreviewController, :show
       get "/design-preview-v2", DesignPreviewController, :show_v2
