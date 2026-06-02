@@ -559,12 +559,14 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         get_in(sample, ["prediction", "criteria_scores"]) ||
         %{}
 
-    Map.has_key?(criteria, :technical_innovation) or
-      Map.has_key?(criteria, "technical_innovation") or
-      Map.has_key?(criteria, :ivory_tower) or
-      Map.has_key?(criteria, "ivory_tower") or
-      Map.has_key?(criteria, :people_quality) or
-      Map.has_key?(criteria, "people_quality")
+    # Any pre-six-lens criterion key means the cache predates the current vocabulary
+    # (older ivory_tower era, or the 5-criterion cultural_impact/auteur_recognition era).
+    stale_keys =
+      ~w(technical_innovation ivory_tower people_quality cultural_impact auteur_recognition)
+
+    Enum.any?(stale_keys, fn key ->
+      Map.has_key?(criteria, key) or Map.has_key?(criteria, String.to_atom(key))
+    end)
   end
 
   defp stale_cache?(_), do: false
