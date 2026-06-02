@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-mist-100">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <title>Cinegraph — Film discovery is broken. Their agenda is not yours.</title>
+    <meta
+      name="description"
+      content="Every mainstream movie rating is owned by someone who profits from your answer — and rigged by bots. Cinegraph is independent, evidence-based, and has nothing to sell you."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='2' width='20' height='20' rx='4' fill='%2314120f'/%3E%3Cpath d='M7 12 L11 8 L15 14 L17 11' fill='none' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <style>
+      html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
+
+      /* JetBrains Mono for the few mono labels (oatmeal.css has no mono mapping) */
+      .font-mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      /* Film-grain noise — lifted from the Cinegraph Oatmeal theme */
+      .grain {
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'250'%20height%3D'250'%20viewBox%3D'0%200%20100%20100'%3E%3Cfilter%20id%3D'n'%3E%3CfeTurbulence%20type%3D'turbulence'%20baseFrequency%3D'1.4'%20numOctaves%3D'1'%20seed%3D'2'%20stitchTiles%3D'stitch'%20result%3D'n'%2F%3E%3CfeComponentTransfer%20result%3D'g'%3E%3CfeFuncR%20type%3D'linear'%20slope%3D'4'%20intercept%3D'1'%2F%3E%3CfeFuncG%20type%3D'linear'%20slope%3D'4'%20intercept%3D'1'%2F%3E%3CfeFuncB%20type%3D'linear'%20slope%3D'4'%20intercept%3D'1'%2F%3E%3C%2FfeComponentTransfer%3E%3CfeColorMatrix%20type%3D'saturate'%20values%3D'0'%20in%3D'g'%2F%3E%3C%2Ffilter%3E%3Crect%20width%3D'100%25'%20height%3D'100%25'%20filter%3D'url(%23n)'%2F%3E%3C%2Fsvg%3E");
+        background-position: center;
+      }
+
+      /* Scroll-reveal */
+      .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s cubic-bezier(.2,.6,.2,1), transform .6s cubic-bezier(.2,.6,.2,1); }
+      .reveal.in { opacity: 1; transform: none; }
+      @media (prefers-reduced-motion: reduce) { .reveal { opacity:1; transform:none; transition:none; } }
+
+      /* Marquee */
+      @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      .marquee-track { display: flex; width: max-content; animation: marquee 38s linear infinite; }
+      .marquee-slow .marquee-track { animation-duration: 60s; }
+      .marquee:hover .marquee-track { animation-play-state: paused; }
+      @media (prefers-reduced-motion: reduce) { .marquee-track { animation: none; } }
+
+      /* Wordmark base — typographic logo stand-ins (editorial use) */
+      .wm { font-weight: 700; letter-spacing: -.02em; white-space: nowrap; display: inline-flex; align-items: center; gap: .28em; line-height: 1; }
+      .wm-imdb-badge { background:#F5C518; color:#000; border-radius:4px; padding:.12em .34em; font-weight:800; letter-spacing:-.03em; }
+      .wm-dot { width:.42em; height:.42em; border-radius:9999px; display:inline-block; }
+
+      /* Provenance bars */
+      .prov-fill { width: 0; transition: width 1.1s cubic-bezier(.2,.7,.2,1); }
+      .prov.in .prov-fill { width: var(--w); }
+
+      /* Citation tooltip */
+      .cite-pop { opacity:0; visibility:hidden; transform: translateY(4px); transition: opacity .14s, transform .14s; }
+      .cite-host:hover .cite-pop, .cite-host:focus-within .cite-pop { opacity:1; visibility:visible; transform: translateY(0); }
+    </style>
+  </head>
+  <body class="bg-mist-100 text-mist-950 font-sans antialiased">
+    <!-- ============================ NAV ============================ -->
+    <header class="sticky top-0 z-30 bg-mist-100/[0.92] backdrop-blur-md border-b border-mist-950/10">
+      <div class="mx-auto flex w-full max-w-2xl items-center gap-4 px-6 py-[14px] md:max-w-3xl lg:max-w-7xl lg:px-10">
+        <a href="#top" class="inline-flex items-center gap-2 no-underline">
+          <svg width="20" height="20" viewBox="0 0 24 24" class="shrink-0" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="4" class="fill-mist-950" />
+            <path
+              d="M7 12 L11 8 L15 14 L17 11"
+              fill="none"
+              stroke="#fff"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <circle cx="7" cy="12" r="1.4" fill="#fff" /><circle
+              cx="11"
+              cy="8"
+              r="1.4"
+              fill="#fff"
+            />
+            <circle cx="15" cy="14" r="1.4" fill="#fff" /><circle
+              cx="17"
+              cy="11"
+              r="1.4"
+              fill="#fff"
+            />
+          </svg>
+          <span class="text-[19px] font-semibold tracking-[-.018em] text-mist-950">
+            Cinegraph
+          </span>
+        </a>
+        <nav class="ml-3 hidden gap-[2px] md:flex">
+          <a
+            href="#ownership"
+            class="rounded-md px-3 py-[7px] text-[13.5px] font-medium text-mist-700 no-underline hover:text-mist-950"
+          >
+            Who owns it
+          </a>
+          <a
+            href="#scoreboard"
+            class="rounded-md px-3 py-[7px] text-[13.5px] font-medium text-mist-700 no-underline hover:text-mist-950"
+          >
+            The scoreboard
+          </a>
+          <a
+            href="#different"
+            class="rounded-md px-3 py-[7px] text-[13.5px] font-medium text-mist-700 no-underline hover:text-mist-950"
+          >
+            How we differ
+          </a>
+        </nav>
+        <div class="ml-auto flex items-center gap-2">
+          <a
+            href="/auth/login"
+            class="hidden h-[34px] items-center whitespace-nowrap rounded-[7px] border border-mist-950/10 bg-mist-50 px-3 text-[12.5px] font-semibold text-mist-950 no-underline hover:bg-mist-950/[0.04] sm:inline-flex"
+          >
+            Sign in
+          </a>
+          <a
+            href="/movies"
+            class="inline-flex shrink-0 items-center justify-center rounded-full bg-mist-950 px-3.5 py-1.5 text-[13px] font-medium text-mist-100 no-underline hover:bg-mist-800"
+          >
+            Explore films
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main id="top" class="overflow-clip">
+      <!-- ============================ HERO — PARADOX ============================ -->
+      <section class="relative isolate overflow-hidden bg-mist-950 text-white">
+        <div class="grain pointer-events-none absolute inset-0 opacity-[0.06] mix-blend-screen">
+        </div>
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_50%_-10%,rgba(253,79,0,0.10),transparent_55%)]">
+        </div>
+
+        <div class="relative">
+          <!-- streaming logo wall (marquee) -->
+          <div class="border-b border-white/10 py-5">
+            <div class="marquee marquee-slow relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)]">
+              <div class="marquee-track items-center gap-12 pr-12 text-white/45">
+                <span class="wm text-[19px]" style="color:#E50914">NETFLIX</span>
+                <span class="wm text-[17px]">
+                  prime <span class="font-light opacity-70">video</span>
+                </span>
+                <span class="wm text-[22px] font-extrabold tracking-[-.04em]">max</span>
+                <span class="wm text-[18px]">Disney<span style="color:#3fb7ff">+</span></span>
+                <span class="wm text-[16px]">
+                  tv<span class="opacity-60">+</span>
+                  <span class="font-normal opacity-60">Apple</span>
+                </span>
+                <span class="wm text-[18px]" style="color:#1ce783">hulu</span>
+                <span class="wm text-[16px]">Paramount<span style="color:#0064ff">+</span></span>
+                <span class="wm text-[16px]">peacock</span>
+                <span class="wm font-display text-[22px] not-italic" style="letter-spacing:.18em">
+                  MUBI
+                </span>
+                <span class="wm text-[15px] tracking-[.34em] font-semibold">CRITERION</span>
+                <span class="wm text-[14px] font-medium italic text-white/35">
+                  …and a dozen more
+                </span>
+                <!-- duplicate for seamless loop -->
+                <span class="wm text-[19px]" style="color:#E50914">NETFLIX</span>
+                <span class="wm text-[17px]">
+                  prime <span class="font-light opacity-70">video</span>
+                </span>
+                <span class="wm text-[22px] font-extrabold tracking-[-.04em]">max</span>
+                <span class="wm text-[18px]">Disney<span style="color:#3fb7ff">+</span></span>
+                <span class="wm text-[16px]">
+                  tv<span class="opacity-60">+</span>
+                  <span class="font-normal opacity-60">Apple</span>
+                </span>
+                <span class="wm text-[18px]" style="color:#1ce783">hulu</span>
+                <span class="wm text-[16px]">Paramount<span style="color:#0064ff">+</span></span>
+                <span class="wm text-[16px]">peacock</span>
+                <span class="wm font-display text-[22px] not-italic" style="letter-spacing:.18em">
+                  MUBI
+                </span>
+                <span class="wm text-[15px] tracking-[.34em] font-semibold">CRITERION</span>
+                <span class="wm text-[14px] font-medium italic text-white/35">
+                  …and a dozen more
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="mx-auto w-full max-w-2xl px-6 py-20 md:max-w-3xl lg:max-w-7xl lg:px-10 lg:py-28">
+            <div class="text-[11px] font-semibold uppercase tracking-[.2em] text-white/55">
+              The paradox
+            </div>
+            <h1 class="mt-5 max-w-5xl text-balance font-display text-[44px] leading-[1.02] tracking-[-.02em] sm:text-[64px] lg:text-[78px]">
+              It's never been <em class="text-brand not-italic">easier</em>
+              to watch a film.<br class="hidden sm:block" /> It's never been
+              <em class="not-italic underline decoration-white/30 underline-offset-[6px]">
+                harder
+              </em>
+              to find a good one.
+            </h1>
+            <p class="mt-6 max-w-2xl text-[16px] leading-relaxed text-white/80 sm:text-[18px]">
+              A century of cinema, one tap away — and 40 minutes of scrolling later, you settle for the same sequel everyone else did.
+            </p>
+            <p class="mt-5 max-w-2xl text-[15px] leading-relaxed text-white/55">
+              They solved distribution. They broke discovery.
+              <span class="text-white">Cinegraph is the choosing part.</span>
+            </p>
+            <div class="mt-8 flex flex-wrap items-center gap-3">
+              <a
+                href="/movies"
+                class="inline-flex h-11 items-center rounded-[7px] bg-white px-5 text-[14px] font-semibold text-mist-950 no-underline hover:bg-mist-50"
+              >
+                Find something great →
+              </a>
+              <a
+                href="#different"
+                class="inline-flex h-11 items-center rounded-[7px] border border-white/20 px-5 text-[14px] font-semibold text-white no-underline hover:bg-white/10"
+              >
+                See how we're different
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+<!-- ============================ ANALOGY BAND ============================ -->
+      <section class="border-b border-mist-950/10 bg-mist-50">
+        <div class="mx-auto grid w-full max-w-2xl items-center gap-10 px-6 py-16 md:max-w-3xl lg:max-w-7xl lg:grid-cols-[1.1fr_0.9fr] lg:px-10 lg:py-20">
+          <div class="reveal">
+            <div class="text-[11px] font-semibold uppercase tracking-[.18em] text-mist-500">
+              The conflict of interest
+            </div>
+            <h2 class="mt-4 max-w-xl font-display text-[34px] italic leading-[1.08] tracking-[-.01em] text-mist-950 sm:text-[46px]">
+              It's the restaurant writing its own reviews.
+            </h2>
+            <p class="mt-5 max-w-xl text-[15px] leading-relaxed text-mist-700">
+              Amazon owns IMDb <em class="italic">and</em>
+              makes the movies. Asking IMDb whether an Amazon film is good is asking the restaurant to rate its own kitchen. The scoreboard isn't neutral — it's a player who also keeps score.
+            </p>
+            <p class="mt-5 font-display text-[22px] italic text-mist-950">
+              They aren't a referee. They're a player who also keeps score.
+            </p>
+          </div>
+          <div class="reveal grid grid-cols-2 gap-3">
+            <div class="rounded-[10px] border border-mist-950/10 bg-mist-100 p-5">
+              <div class="font-mono text-[11px] uppercase tracking-[.12em] text-mist-500">
+                Their kitchen
+              </div>
+              <div class="mt-3 font-display text-[40px] italic leading-none text-mist-950">
+                ★★★★★
+              </div>
+              <p class="mt-3 text-[12.5px] leading-snug text-mist-600">
+                The rating is marketing wearing a referee's jersey.
+              </p>
+            </div>
+            <div class="rounded-[10px] border border-mist-950/10 bg-mist-950 p-5 text-white">
+              <div class="font-mono text-[11px] uppercase tracking-[.12em] text-white/50">
+                Cinegraph
+              </div>
+              <div class="mt-3 font-display text-[40px] italic leading-none">Evidence</div>
+              <p class="mt-3 text-[12.5px] leading-snug text-white/65">
+                No kitchen to protect. No film to push. Nothing to sell you.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+<!-- ============================ OWNERSHIP WALL ============================ -->
+      <section id="ownership" class="scroll-mt-20 border-b border-mist-950/10 py-16 lg:py-24">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
+          <div class="reveal max-w-3xl">
+            <div class="text-[11px] font-semibold uppercase tracking-[.18em] text-mist-500">
+              Follow the money
+            </div>
+            <h2 class="mt-4 font-display text-[34px] italic leading-[1.08] tracking-[-.01em] text-mist-950 sm:text-[48px]">
+              Who really owns your movie ratings?
+            </h2>
+            <p class="mt-4 max-w-2xl text-[15px] leading-relaxed text-mist-700">
+              Every mainstream rating platform answers to either a mega-corporation that <em class="italic">sells you the movie</em>, or to Wall Street money that
+              <em class="italic">cashes out on the exit.</em>
+              Read it top to bottom: owned, owned, owned — for sale. Then one clean break.
+            </p>
+          </div>
+
+          <div class="reveal mt-10">
+            <!-- Mega-corp bucket -->
+            <div class="mb-3 flex items-center gap-3">
+              <span class="text-[18px]">🏢</span>
+              <h3 class="text-[13px] font-semibold uppercase tracking-[.12em] text-mist-900">
+                Captured by mega-corporations
+              </h3>
+              <span class="text-[12.5px] text-mist-500">— they make &amp; sell the movies</span>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <div class="flex items-center justify-between gap-4 rounded-[10px] border border-mist-950/10 bg-mist-50 px-5 py-4">
+                <span class="wm text-[20px] text-mist-950">
+                  <span class="wm-imdb-badge">IMDb</span>
+                </span>
+                <span class="text-mist-300">──►</span>
+                <span class="wm text-[16px] text-mist-700">
+                  amazon<span class="text-brand">.</span>
+                </span>
+              </div>
+              <div class="flex items-center justify-between gap-4 rounded-[10px] border border-mist-950/10 bg-mist-50 px-5 py-4">
+                <span class="wm text-[15px] text-mist-950">
+                  <span class="wm-dot" style="background:#FA320A"></span>Rotten Tomatoes
+                </span>
+                <span class="text-mist-300">──►</span>
+                <span class="wm text-right text-[13px] leading-tight text-mist-700">
+                  Comcast / NBCU<br />+ Warner Bros.
+                </span>
+              </div>
+            </div>
+            <p class="mt-2 px-1 text-[12.5px] italic text-mist-500">
+              These owners profit when you watch <em>their</em> movie.
+            </p>
+            
+<!-- PE bucket -->
+            <div class="mb-3 mt-8 flex items-center gap-3">
+              <span class="text-[18px]">💰</span>
+              <h3 class="text-[13px] font-semibold uppercase tracking-[.12em] text-mist-900">
+                Captured by private equity / Wall St.
+              </h3>
+              <span class="text-[12.5px] text-mist-500">— they cash out on the exit</span>
+            </div>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <div class="flex items-center justify-between gap-4 rounded-[10px] border border-mist-950/10 bg-mist-50 px-5 py-4">
+                <span class="wm text-[16px] text-mist-950">
+                  <span class="inline-block h-3 w-3 rounded-[2px]" style="background:#ffcc34">
+                  </span><span
+                    class="inline-block h-3 w-3 rounded-[2px]"
+                    style="background:#66cc33"
+                  ></span><span
+                    class="inline-block h-3 w-3 rounded-[2px]"
+                    style="background:#fc4f30"
+                  ></span>
+                  Metacritic
+                </span>
+                <span class="text-mist-300">──►</span>
+                <span class="wm text-right text-[13px] leading-tight text-mist-700">
+                  Fandom, Inc.<br /><span class="text-[11px] text-mist-500">
+                    ◂ Red Ventures (PE)
+                  </span>
+                </span>
+              </div>
+              <div class="flex items-center justify-between gap-4 rounded-[10px] border border-brand/40 bg-brand/[0.05] px-5 py-4">
+                <span class="wm text-[15px] text-mist-950">
+                  <span class="wm-dot" style="background:#FF8000"></span><span
+                    class="wm-dot"
+                    style="background:#00E054"
+                  ></span><span class="wm-dot" style="background:#40BCF4"></span>
+                  Letterboxd
+                </span>
+                <span class="text-mist-300">──►</span>
+                <span class="wm text-right text-[12.5px] leading-tight text-mist-700">
+                  Tiny ──► <span class="font-bold text-brand">FOR SALE</span>
+                  <br /><span class="text-[11px] text-mist-500">PE, 2026</span>
+                </span>
+              </div>
+            </div>
+            <p class="mt-2 px-1 text-[12.5px] italic text-mist-500">
+              These owners profit when the <em>asset</em>
+              sells. Your taste is engagement to be flipped.
+            </p>
+            
+<!-- chant -->
+            <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 font-display text-[22px] italic text-mist-400">
+              <span>owned.</span><span>owned.</span><span>owned.</span><span class="text-brand">for sale.</span>
+            </div>
+            
+<!-- the break -->
+            <div class="mt-8 border-t border-dashed border-mist-950/20 pt-8">
+              <div class="mb-3 flex items-center gap-3">
+                <span class="text-[18px]">🌱</span>
+                <h3 class="text-[13px] font-semibold uppercase tracking-[.12em] text-mist-900">
+                  Open · no film business · no conflict
+                </h3>
+              </div>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <div class="flex items-center justify-between gap-4 rounded-[10px] border border-mist-950/10 bg-mist-50 px-5 py-4">
+                  <span class="wm text-[15px] text-mist-950">
+                    TMDb <span class="text-[11px] font-medium text-mist-500">(our data)</span>
+                  </span>
+                  <span class="text-mist-300">──►</span>
+                  <span class="wm text-right text-[12.5px] leading-tight text-mist-700">
+                    Xperi / TiVo<br /><span class="text-[11px] text-mist-500">
+                      metadata co · open data
+                    </span>
+                  </span>
+                </div>
+                <div class="flex items-center justify-between gap-4 rounded-[10px] border border-mist-950 bg-mist-950 px-5 py-4 text-white">
+                  <span class="inline-flex items-center gap-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="2" y="2" width="20" height="20" rx="4" fill="#fff" /><path
+                        d="M7 12 L11 8 L15 14 L17 11"
+                        fill="none"
+                        stroke="#14120f"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      /><circle cx="7" cy="12" r="1.4" fill="#14120f" /><circle
+                        cx="11"
+                        cy="8"
+                        r="1.4"
+                        fill="#14120f"
+                      /><circle cx="15" cy="14" r="1.4" fill="#14120f" /><circle
+                        cx="17"
+                        cy="11"
+                        r="1.4"
+                        fill="#14120f"
+                      />
+                    </svg>
+                    <span class="wm text-[15px]">Cinegraph</span>
+                  </span>
+                  <span class="text-white/30">──►</span>
+                  <span class="text-right text-[12.5px] leading-tight text-white/80">
+                    Independent. Unaligned.<br /><span class="text-white/55">
+                      Nothing to sell you.
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <p class="mt-6 font-display text-[28px] italic text-mist-950">
+                Your agenda is not theirs.
+              </p>
+            </div>
+          </div>
+
+          <p class="mt-8 max-w-3xl text-[12.5px] leading-relaxed text-mist-500">
+            The dividing line isn't "owned vs. unowned" — almost everything is owned. The line is:
+            <em class="italic text-mist-700">does the owner profit from your answer?</em>
+            Amazon, Comcast/WB and the PE firms do. Xperi and Cinegraph don't. Wordmarks shown for editorial comparison; ownership facts are cited in the table below.
+          </p>
+        </div>
+      </section>
+      
+<!-- ============================ SCOREBOARD TABLE ============================ -->
+      <section
+        id="scoreboard"
+        class="scroll-mt-20 border-b border-mist-950/10 bg-mist-50 py-16 lg:py-24"
+      >
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
+          <div class="reveal max-w-3xl">
+            <div class="text-[11px] font-semibold uppercase tracking-[.18em] text-mist-500">
+              The receipts
+            </div>
+            <h2 class="mt-4 font-display text-[34px] italic leading-[1.08] tracking-[-.01em] text-mist-950 sm:text-[48px]">
+              Who owns the scoreboard?
+            </h2>
+            <p class="mt-4 max-w-2xl text-[15px] leading-relaxed text-mist-700">
+              The killer column is the second one. Hover any cell with a dotted underline for the citation.
+            </p>
+          </div>
+
+          <div class="reveal mt-10 overflow-x-auto rounded-[12px] border border-mist-950/10 bg-mist-100">
+            <table class="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr class="border-b border-mist-950/10 text-[11px] font-semibold uppercase tracking-[.1em] text-mist-500">
+                  <th class="px-5 py-4">Platform</th>
+                  <th class="px-5 py-4">Owned by</th>
+                  <th class="px-5 py-4">Also sells you films?</th>
+                  <th class="px-5 py-4">Signal</th>
+                  <th class="px-5 py-4 text-center">Trust</th>
+                </tr>
+              </thead>
+              <tbody class="text-[14px]" id="scoreboard-body">
+                <tr class="scorerow border-b border-mist-950/10">
+                  <td class="px-5 py-4 font-semibold text-mist-950">
+                    <span class="wm-imdb-badge text-[13px]">IMDb</span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span
+                      class="cite-host relative inline-block cursor-help border-b border-dotted border-mist-400 text-mist-800"
+                      tabindex="0"
+                    >
+                      Amazon
+                      <span class="cite-pop absolute left-0 top-full z-20 mt-2 w-64 rounded-[8px] border border-mist-950/10 bg-white p-3 text-left text-[12px] font-normal leading-snug text-mist-700 shadow-xl">
+                        Amazon owns IMDb, runs Amazon MGM Studios, and distributes via Prime Video.
+                        <a
+                          href="https://en.wikipedia.org/wiki/IMDb"
+                          class="font-semibold text-mist-950 underline"
+                        >
+                          Source ↗
+                        </a>
+                      </span>
+                    </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span class="inline-flex items-center gap-1.5 text-rose-700">
+                      <span class="text-[15px]">✅</span> Prime / MGM
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 text-mist-700">Anonymous votes</td>
+                  <td class="px-5 py-4 text-center text-[16px] text-rose-600">✗</td>
+                </tr>
+                <tr class="scorerow border-b border-mist-950/10">
+                  <td class="px-5 py-4 font-semibold text-mist-950">
+                    <span class="wm text-[14px] text-mist-950">
+                      <span class="wm-dot" style="background:#FA320A"></span>Rotten Tomatoes
+                    </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span
+                      class="cite-host relative inline-block cursor-help border-b border-dotted border-mist-400 text-mist-800"
+                      tabindex="0"
+                    >
+                      Comcast + Warner Bros.
+                      <span class="cite-pop absolute left-0 top-full z-20 mt-2 w-64 rounded-[8px] border border-mist-950/10 bg-white p-3 text-left text-[12px] font-normal leading-snug text-mist-700 shadow-xl">
+                        Fandango is a joint venture of Comcast/NBCUniversal and Warner Bros. Discovery — the studios themselves.
+                        <a
+                          href="https://en.wikipedia.org/wiki/Fandango_Media"
+                          class="font-semibold text-mist-950 underline"
+                        >
+                          Source ↗
+                        </a>
+                      </span>
+                    </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span class="inline-flex items-center gap-1.5 text-rose-700">
+                      <span class="text-[15px]">✅</span> Tickets
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 text-mist-700">Studio spin</td>
+                  <td class="px-5 py-4 text-center text-[16px] text-rose-600">✗</td>
+                </tr>
+                <tr class="scorerow border-b border-mist-950/10">
+                  <td class="px-5 py-4 font-semibold text-mist-950">Metacritic</td>
+                  <td class="px-5 py-4">
+                    <span
+                      class="cite-host relative inline-block cursor-help border-b border-dotted border-mist-400 text-mist-800"
+                      tabindex="0"
+                    >
+                      Fandom, Inc. (PE)
+                      <span class="cite-pop absolute left-0 top-full z-20 mt-2 w-64 rounded-[8px] border border-mist-950/10 bg-white p-3 text-left text-[12px] font-normal leading-snug text-mist-700 shadow-xl">
+                        Fandom, a PE-backed roll-up, bought Metacritic from Red Ventures in 2022 (~$55M) with TV Guide &amp; GameSpot.
+                        <a
+                          href="https://techcrunch.com/2022/10/03/fandom-acquires-seven-brands-from-red-ventures-gamespot-tv-guide/"
+                          class="font-semibold text-mist-950 underline"
+                        >
+                          Source ↗
+                        </a>
+                      </span>
+                    </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span class="inline-flex items-center gap-1.5 text-amber-700">
+                      <span class="text-[15px]">⚠️</span> Ad traffic
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 text-mist-700">Thin aggregation</td>
+                  <td class="px-5 py-4 text-center text-[16px] text-rose-600">✗</td>
+                </tr>
+                <tr class="scorerow border-b border-mist-950/10 bg-brand/[0.04]">
+                  <td class="px-5 py-4 font-semibold text-mist-950">
+                    <span class="wm text-[14px]">
+                      <span class="wm-dot" style="background:#FF8000"></span><span
+                        class="wm-dot"
+                        style="background:#00E054"
+                      ></span><span class="wm-dot" style="background:#40BCF4"></span>
+                      Letterboxd
+                    </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span
+                      class="cite-host relative inline-block cursor-help border-b border-dotted border-brand/60 font-semibold text-brand"
+                      tabindex="0"
+                    >
+                      Tiny → FOR SALE (PE)
+                      <span class="cite-pop absolute left-0 top-full z-20 mt-2 w-64 rounded-[8px] border border-mist-950/10 bg-white p-3 text-left text-[12px] font-normal leading-snug text-mist-700 shadow-xl">
+                        Tiny bought the majority in 2023 (~$50M). In 2026 ~60% is reported for sale; the community is crowdfunding a buy-back.
+                        <a
+                          href="https://deadline.com/2026/05/letterboxd-for-sale-1236921783/"
+                          class="font-semibold text-mist-950 underline"
+                        >
+                          Source ↗
+                        </a>
+                      </span>
+                    </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span class="inline-flex items-center gap-1.5 text-amber-700">
+                      <span class="text-[15px]">⚠️</span> The exit
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 text-mist-700">Anonymous votes</td>
+                  <td class="px-5 py-4 text-center text-[16px] text-rose-600">✗</td>
+                </tr>
+                <tr class="scorerow border-b border-mist-950/10 bg-emerald-50/50">
+                  <td class="px-5 py-4 font-semibold text-mist-950">
+                    TMDb <span class="text-[11px] font-medium text-mist-500">(our data)</span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span
+                      class="cite-host relative inline-block cursor-help border-b border-dotted border-mist-400 text-mist-800"
+                      tabindex="0"
+                    >
+                      TiVo / Xperi
+                      <span class="cite-pop absolute left-0 top-full z-20 mt-2 w-64 rounded-[8px] border border-mist-950/10 bg-white p-3 text-left text-[12px] font-normal leading-snug text-mist-700 shadow-xl">
+                        TMDb is community-built with an open API; owner Xperi is a metadata company that makes no films.
+                        <a
+                          href="https://www.themoviedb.org/about"
+                          class="font-semibold text-mist-950 underline"
+                        >
+                          Source ↗
+                        </a>
+                      </span>
+                    </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <span class="inline-flex items-center gap-1.5 text-emerald-700">
+                      <span class="text-[15px]">❌</span> None — open
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 text-mist-700">Facts, not votes</td>
+                  <td class="px-5 py-4 text-center text-[16px] text-emerald-600">✓</td>
+                </tr>
+                <tr class="scorerow bg-mist-950 text-white">
+                  <td class="px-5 py-4 font-semibold">
+                    <span class="inline-flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="2" y="2" width="20" height="20" rx="4" fill="#fff" /><path
+                          d="M7 12 L11 8 L15 14 L17 11"
+                          fill="none"
+                          stroke="#14120f"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                      </svg>
+                      Cinegraph
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 text-white/85">Independent</td>
+                  <td class="px-5 py-4">
+                    <span class="inline-flex items-center gap-1.5 font-semibold text-emerald-300">
+                      <span class="text-[15px]">❌</span> Nothing
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 text-white/85">6-lens evidence</td>
+                  <td class="px-5 py-4 text-center text-[16px] font-bold text-emerald-300">✓✓</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mt-4 text-[12px] text-mist-500">
+            Honest, not absolute: TMDb and Metacritic <em>are</em>
+            owned — the conflict-of-interest framing is sharper because it's true.
+          </p>
+        </div>
+      </section>
+      
+<!-- ============================ TWO FAILURES + PROVENANCE ============================ -->
+      <section id="different" class="scroll-mt-20 py-16 lg:py-24">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
+          <div class="reveal max-w-3xl">
+            <div class="text-[11px] font-semibold uppercase tracking-[.18em] text-mist-500">
+              Two failures, one moment
+            </div>
+            <h2 class="mt-4 font-display text-[34px] italic leading-[1.08] tracking-[-.01em] text-mist-950 sm:text-[48px]">
+              The number is broken. The owner isn't yours.
+            </h2>
+          </div>
+
+          <div class="reveal mt-10 grid gap-3 lg:grid-cols-2">
+            <div class="rounded-[12px] border border-mist-950/10 bg-mist-50 p-6 lg:p-8">
+              <div class="font-mono text-[11px] uppercase tracking-[.14em] text-mist-500">
+                Failure 01 — the signal
+              </div>
+              <h3 class="mt-3 font-display text-[26px] italic text-mist-950">
+                Rigged by AI and bots.
+              </h3>
+              <p class="mt-4 text-[14px] leading-relaxed text-mist-700">
+                Every mainstream rating is an average of anonymous, unverifiable strangers. In 2026 that "crowd" plausibly includes bots, review-farms, brigades and AI agents that generate unlimited plausible reviews on demand.
+              </p>
+              <ul class="mt-5 space-y-2.5 text-[13.5px] text-mist-700">
+                <li class="flex gap-3">
+                  <span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-rose-500"></span>You can't tell a cinephile's half-star from a botnet's.
+                </li>
+                <li class="flex gap-3">
+                  <span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-rose-500"></span>Review-bombing and astroturf are routine, not edge cases.
+                </li>
+                <li class="flex gap-3">
+                  <span class="mt-2 h-1 w-1 shrink-0 rounded-full bg-rose-500"></span>LLM-written reviews are indistinguishable from human ones, free, at scale.
+                </li>
+              </ul>
+              <p class="mt-5 border-l-2 border-mist-950/30 pl-3 font-display text-[18px] italic text-mist-950">
+                A 7.4 across 100,000 votes measures whoever — or whatever — showed up.
+              </p>
+            </div>
+            <div class="rounded-[12px] border border-mist-950/10 bg-mist-50 p-6 lg:p-8">
+              <div class="font-mono text-[11px] uppercase tracking-[.14em] text-mist-500">
+                Failure 02 — the ownership
+              </div>
+              <h3 class="mt-3 font-display text-[26px] italic text-mist-950">
+                Their agenda is not yours.
+              </h3>
+              <p class="mt-4 text-[14px] leading-relaxed text-mist-700">
+                The platforms holding these ratings are owned by the same giants whose products those ratings are meant to evaluate. There's no church and state — there's just the store.
+              </p>
+              <p class="mt-4 text-[14px] leading-relaxed text-mist-700">
+                Most started honestly — a fan database, a scrappy critic aggregator, a cinephile community. Then, one by one, they decided they loved money more than film, and they sold out.
+              </p>
+              <p class="mt-5 border-l-2 border-brand pl-3 font-display text-[18px] italic text-mist-950">
+                Independence here is a phase, not a property. It lasts until the term sheet arrives.
+              </p>
+            </div>
+          </div>
+          
+<!-- positive turn -->
+          <div class="reveal mt-14 max-w-3xl">
+            <div class="text-[11px] font-semibold uppercase tracking-[.18em] text-mist-500">
+              How Cinegraph is different
+            </div>
+            <h3 class="mt-4 font-display text-[28px] italic leading-tight text-mist-950 sm:text-[36px]">
+              We don't trust random strangers. We show the evidence.
+            </h3>
+            <p class="mt-4 text-[15px] leading-relaxed text-mist-700">
+              A bot can manufacture a million ratings. It cannot manufacture a Cannes selection, a 40-year cultural footprint, or a place in the canon. Our evidence is expensive to fake. Theirs is free to fake.
+            </p>
+          </div>
+          
+<!-- provenance panel -->
+          <div class="reveal prov mt-8 grid gap-6 rounded-[14px] border border-mist-950/10 bg-mist-50 p-6 lg:grid-cols-[1fr_1.2fr] lg:p-8">
+            <div>
+              <div class="flex items-center justify-between">
+                <div class="font-mono text-[11px] uppercase tracking-[.12em] text-mist-500">
+                  How we know
+                </div>
+                <div class="inline-flex items-center gap-2 text-[12px] font-semibold text-mist-900">
+                  Cinegraph signal
+                  <span class="inline-flex gap-1">
+                    <span class="h-2 w-2 rounded-full bg-mist-950"></span><span class="h-2 w-2 rounded-full bg-mist-950"></span><span class="h-2 w-2 rounded-full bg-mist-950"></span><span class="h-2 w-2 rounded-full bg-mist-950"></span><span class="h-2 w-2 rounded-full border border-mist-400"></span>
+                  </span>
+                  <span class="text-mist-500">high</span>
+                </div>
+              </div>
+              <p class="mt-4 text-[13.5px] leading-relaxed text-mist-700">
+                On every movie page, instead of one borrowed digit, we show
+                <em class="italic">where the judgment comes from</em>
+                — six independent lenses, each with the evidence behind it. No anonymous vote averages. No bot-fillable score.
+              </p>
+              <p class="mt-4 rounded-[8px] border border-mist-950/10 bg-mist-100 p-3 text-[12.5px] leading-snug text-mist-600">
+                ⓘ Thin evidence? We qualify or hide the number instead of faking authority. Want the raw numbers? <a
+                  href="/movies"
+                  class="font-semibold text-mist-950 underline"
+                >Show the work</a>.
+              </p>
+            </div>
+            <div class="space-y-3.5">
+              <div class="prov-row" data-pct="78">
+                <div class="mb-1 flex items-center justify-between text-[12.5px]">
+                  <span class="font-medium text-mist-900">🎭 Critics</span><span class="text-mist-500">38 sources</span>
+                </div>
+                <div class="h-2 rounded-full bg-mist-200">
+                  <div class="prov-fill h-2 rounded-full bg-blue-500" style="--w:78%"></div>
+                </div>
+              </div>
+              <div class="prov-row" data-pct="56">
+                <div class="mb-1 flex items-center justify-between text-[12.5px]">
+                  <span class="font-medium text-mist-900">🏆 Festivals</span><span class="text-mist-500">Cannes '04 · 2 noms</span>
+                </div>
+                <div class="h-2 rounded-full bg-mist-200">
+                  <div class="prov-fill h-2 rounded-full bg-amber-500" style="--w:56%"></div>
+                </div>
+              </div>
+              <div class="prov-row" data-pct="88">
+                <div class="mb-1 flex items-center justify-between text-[12.5px]">
+                  <span class="font-medium text-mist-900">📚 Canon / lists</span><span class="text-mist-500">1001 Movies · Sight &amp; Sound</span>
+                </div>
+                <div class="h-2 rounded-full bg-mist-200">
+                  <div class="prov-fill h-2 rounded-full bg-purple-500" style="--w:88%"></div>
+                </div>
+              </div>
+              <div class="prov-row" data-pct="67">
+                <div class="mb-1 flex items-center justify-between text-[12.5px]">
+                  <span class="font-medium text-mist-900">🎬 Auteurs</span><span class="text-mist-500">Director + DP track record</span>
+                </div>
+                <div class="h-2 rounded-full bg-mist-200">
+                  <div class="prov-fill h-2 rounded-full bg-orange-500" style="--w:67%"></div>
+                </div>
+              </div>
+              <div class="prov-row" data-pct="74">
+                <div class="mb-1 flex items-center justify-between text-[12.5px]">
+                  <span class="font-medium text-mist-900">⏳ Cultural pull</span><span class="text-mist-500">Durable over 20 yrs</span>
+                </div>
+                <div class="h-2 rounded-full bg-mist-200">
+                  <div class="prov-fill h-2 rounded-full bg-emerald-500" style="--w:74%"></div>
+                </div>
+              </div>
+              <div class="prov-row" data-pct="31">
+                <div class="mb-1 flex items-center justify-between text-[12.5px]">
+                  <span class="font-medium text-mist-900">👥 Box office</span><span class="text-mist-500">Modest — and we say so</span>
+                </div>
+                <div class="h-2 rounded-full bg-mist-200">
+                  <div class="prov-fill h-2 rounded-full bg-mist-500" style="--w:31%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+<!-- three differentiators -->
+          <div class="reveal mt-3 grid gap-3 sm:grid-cols-3">
+            <div class="rounded-[12px] border border-mist-950/10 bg-mist-50 p-5">
+              <div class="font-display text-[30px] italic text-mist-950">01</div>
+              <h4 class="mt-1 text-[15px] font-semibold text-mist-950">Evidence, not votes</h4>
+              <p class="mt-2 text-[13px] leading-relaxed text-mist-600">
+                Six named lenses, canon membership, festival lineage, durability over time — attributable and confidence-aware.
+              </p>
+            </div>
+            <div class="rounded-[12px] border border-mist-950/10 bg-mist-50 p-5">
+              <div class="font-display text-[30px] italic text-mist-950">02</div>
+              <h4 class="mt-1 text-[15px] font-semibold text-mist-950">We didn't sell out</h4>
+              <p class="mt-2 text-[13px] leading-relaxed text-mist-600">
+                No studio, streamer, retailer or PE roll-up. No movies to push, no tickets to sell. Nothing you could rate well that makes us money.
+              </p>
+            </div>
+            <div class="rounded-[12px] border border-mist-950/10 bg-mist-50 p-5">
+              <div class="font-display text-[30px] italic text-mist-950">03</div>
+              <h4 class="mt-1 text-[15px] font-semibold text-mist-950">
+                One honest source: TMDb
+              </h4>
+              <p class="mt-2 text-[13px] leading-relaxed text-mist-600">
+                Open, community-built factual data, owned by a party with no horse in the race. That's the bar. Amazon and Fandom don't clear it.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+<!-- ============================ AGENDA STRIP ============================ -->
+      <section class="relative isolate border-y border-mist-950/10 bg-mist-950 py-16 text-white lg:py-20">
+        <div class="grain pointer-events-none absolute inset-0 opacity-[0.05]"></div>
+        <div class="relative mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
+          <div class="reveal grid gap-px overflow-hidden rounded-[14px] border border-white/10 bg-white/10 md:grid-cols-2">
+            <div class="bg-mist-950 p-7 lg:p-9">
+              <div class="text-[11px] font-semibold uppercase tracking-[.16em] text-rose-300/80">
+                What IMDb / RT / Letterboxd want
+              </div>
+              <ul class="mt-5 space-y-3 text-[15px] text-white/75">
+                <li class="flex gap-3">
+                  <span class="text-rose-400">✕</span>
+                  You to watch <em class="italic">their</em>
+                  movie
+                </li>
+                <li class="flex gap-3">
+                  <span class="text-rose-400">✕</span> Engagement &amp; ad traffic
+                </li>
+                <li class="flex gap-3">
+                  <span class="text-rose-400">✕</span> A number that looks legit
+                </li>
+                <li class="flex gap-3">
+                  <span class="text-rose-400">✕</span> Whoever — or whatever — showed up to vote
+                </li>
+              </ul>
+            </div>
+            <div class="bg-mist-900 p-7 lg:p-9">
+              <div class="text-[11px] font-semibold uppercase tracking-[.16em] text-emerald-300/80">
+                What Cinegraph wants
+              </div>
+              <ul class="mt-5 space-y-3 text-[15px] text-white">
+                <li class="flex gap-3">
+                  <span class="text-emerald-400">✓</span>
+                  You to find a <em class="italic">good</em>
+                  movie
+                </li>
+                <li class="flex gap-3">
+                  <span class="text-emerald-400">✓</span> Nothing to sell you
+                </li>
+                <li class="flex gap-3">
+                  <span class="text-emerald-400">✓</span> Evidence you can inspect
+                </li>
+                <li class="flex gap-3">
+                  <span class="text-emerald-400">✓</span> Sources we can name and cite
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p class="reveal mt-7 text-center font-display text-[26px] italic text-white sm:text-[34px]">
+            Their agenda is not yours. Ours is the film.
+          </p>
+        </div>
+      </section>
+      
+<!-- ============================ SOLIDARITY + CTA ============================ -->
+      <section class="py-16 lg:py-24">
+        <div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10">
+          <div class="reveal mb-10 rounded-[12px] border border-mist-950/10 bg-mist-50 p-6 lg:p-7">
+            <div class="flex items-start gap-4">
+              <span class="text-[22px]">🌱</span>
+              <div>
+                <h3 class="font-display text-[20px] italic text-mist-950">
+                  In solidarity with the Letterboxd community.
+                </h3>
+                <p class="mt-2 max-w-3xl text-[14px] leading-relaxed text-mist-700">
+                  The people crowdfunding a buy-back are the good guys — allies, not targets. The villain is the structure: corporate and PE capture plus a bot-fillable signal. Community-funded film culture beats PE-owned film culture every time.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="reveal text-center">
+            <h2 class="mx-auto max-w-3xl font-display text-[34px] italic leading-[1.06] tracking-[-.01em] text-mist-950 sm:text-[52px]">
+              They gave you every movie ever made and no good way to choose one.
+            </h2>
+            <p class="mx-auto mt-5 max-w-2xl text-[15px] leading-relaxed text-mist-700">
+              We think film deserves better evidence — and owners who didn't sell out.
+            </p>
+            <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+              <a
+                href="/movies"
+                class="inline-flex h-12 items-center rounded-[7px] bg-mist-950 px-6 text-[14px] font-semibold text-mist-50 no-underline hover:bg-mist-800"
+              >
+                Start exploring →
+              </a>
+              <a
+                href="#scoreboard"
+                class="inline-flex h-12 items-center rounded-[7px] border border-mist-950/15 bg-mist-50 px-6 text-[14px] font-semibold text-mist-950 no-underline hover:bg-mist-950/[0.025]"
+              >
+                See who owns the scoreboard
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    
+<!-- ============================ FOOTER ============================ -->
+    <footer class="border-t border-mist-950/10 bg-mist-50">
+      <div class="mx-auto flex w-full max-w-2xl flex-col gap-8 px-6 py-12 md:max-w-3xl lg:max-w-7xl lg:flex-row lg:items-center lg:justify-between lg:px-10">
+        <div class="inline-flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="4" class="fill-mist-950" /><path
+              d="M7 12 L11 8 L15 14 L17 11"
+              fill="none"
+              stroke="#fff"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            /><circle cx="7" cy="12" r="1.4" fill="#fff" /><circle
+              cx="11"
+              cy="8"
+              r="1.4"
+              fill="#fff"
+            /><circle cx="15" cy="14" r="1.4" fill="#fff" /><circle
+              cx="17"
+              cy="11"
+              r="1.4"
+              fill="#fff"
+            />
+          </svg>
+          <span class="text-[15px] font-semibold text-mist-950">Cinegraph</span>
+        </div>
+        <p class="font-display text-[20px] italic text-mist-700">
+          Film discovery is broken. Your agenda is not theirs.
+        </p>
+        <div class="text-[12.5px] text-mist-500">
+          Independent · evidence-based · nothing to sell you
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // Cinegraph manifesto — interactivity (self-contained; no LiveSocket on this page)
+      (function () {
+        "use strict";
+
+        /* Scroll reveal */
+        var reveal = document.querySelectorAll(".reveal");
+        if ("IntersectionObserver" in window) {
+          var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+              if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+            });
+          }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+          reveal.forEach(function (el) { io.observe(el); });
+        } else {
+          reveal.forEach(function (el) { el.classList.add("in"); });
+        }
+
+        /* Provenance bars fill when in view */
+        var prov = document.querySelector(".prov");
+        if (prov) {
+          if ("IntersectionObserver" in window) {
+            var pio = new IntersectionObserver(function (entries) {
+              entries.forEach(function (e) {
+                if (e.isIntersecting) { prov.classList.add("in"); pio.unobserve(e.target); }
+              });
+            }, { threshold: 0.3 });
+            pio.observe(prov);
+          } else {
+            prov.classList.add("in");
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>

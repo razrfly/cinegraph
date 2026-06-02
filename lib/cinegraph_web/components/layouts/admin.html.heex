@@ -26,6 +26,12 @@
             assigns={assigns}
           />
           <.sidebar_item
+            path="/admin/connections"
+            label="Connections"
+            icon={:server}
+            assigns={assigns}
+          />
+          <.sidebar_item
             path="/admin/queues"
             label="Queues"
             icon={:document_chart}
@@ -268,6 +274,7 @@
 
           <.mobile_sidebar_section title="Observability">
             <.mobile_sidebar_item path="/admin/health" label="Health" />
+            <.mobile_sidebar_item path="/admin/connections" label="Connections" />
             <.mobile_sidebar_item path="/admin/queues" label="Queues" />
             <.mobile_sidebar_item path="/admin/jobs" label="Jobs" />
             <.mobile_sidebar_item path="/admin/scheduled" label="Scheduled" />

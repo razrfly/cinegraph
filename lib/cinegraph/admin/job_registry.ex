@@ -319,6 +319,19 @@ defmodule Cinegraph.Admin.JobRegistry do
       doc_url: nil
     },
     %{
+      id: :connection_monitor_worker,
+      label: "Connection monitor",
+      worker: Workers.ConnectionMonitorWorker,
+      queue: :maintenance,
+      schedule: "*/5 * * * *",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: false,
+      description: "pg_stat_activity snapshot + saturation/long-query alerts (every 5 min)",
+      destination: :system,
+      doc_url: nil
+    },
+    %{
       id: :zero_credits_cleanup_sweeper,
       label: "Zero-credits cleanup (Sun: refetch)",
       worker: Workers.ZeroCreditsCleanupSweeper,
