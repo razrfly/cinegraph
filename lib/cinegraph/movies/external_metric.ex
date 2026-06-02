@@ -74,6 +74,8 @@ defmodule Cinegraph.Movies.ExternalMetric do
       "popularity_score",
       "trending_rank",
       "popularity_rank",
+      # Count of TMDb user/curated list appearances (#1036: own key, was colliding with popularity_score)
+      "list_appearances",
 
       # Awards
       "awards_summary",

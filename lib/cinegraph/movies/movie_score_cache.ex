@@ -24,6 +24,8 @@ defmodule Cinegraph.Movies.MovieScoreCache do
     # Cache metadata
     field :calculated_at, :utc_datetime
     field :calculation_version, :string
+    # Which lens configuration produced this row (#1036 staleness traceability).
+    field :lens_config_hash, :string
 
     timestamps()
   end
@@ -44,7 +46,8 @@ defmodule Cinegraph.Movies.MovieScoreCache do
       :disparity_category,
       :unpredictability_score,
       :calculated_at,
-      :calculation_version
+      :calculation_version,
+      :lens_config_hash
     ])
     |> validate_required([
       :movie_id,

@@ -7,7 +7,66 @@ defmodule Cinegraph.Metrics do
   import Ecto.Query, warn: false
   alias Cinegraph.Repo
   alias Cinegraph.Movies.{Movie, ExternalMetric, MovieRecommendation}
+  alias Cinegraph.Metrics.MetricDefinition
   require Logger
+
+  # ── Metric-definition catalog (Layer 0, #1036) ─────────────────────────────
+  # The authoritative data-point catalog. Scoring (FeatureResolver) and the admin
+  # UI read through these instead of querying metric_definitions inline.
+
+  @doc """
+  List metric definitions. Options:
+    * `:active` (default `true`) — only active rows
+    * `:kind` — `"raw"` | `"derived"`
+    * `:only_available` (default `false`) — exclude `is_available == false`
+  """
+  def list_metric_definitions(opts \\ []) do
+    active = Keyword.get(opts, :active, true)
+
+    MetricDefinition
+    |> then(fn q -> if active, do: where(q, [m], m.active == true), else: q end)
+    |> then(fn q ->
+      case Keyword.get(opts, :kind) do
+        nil -> q
+        kind -> where(q, [m], m.kind == ^kind)
+      end
+    end)
+    |> then(fn q ->
+      if Keyword.get(opts, :only_available, false),
+        do: where(q, [m], m.is_available == true),
+        else: q
+    end)
+    |> order_by([m], asc: m.category, asc: m.name)
+    |> Repo.all()
+  end
+
+  @doc "Fetch a single metric definition by its `code` (nil if absent)."
+  def get_metric_definition(code) when is_binary(code) do
+    Repo.get_by(MetricDefinition, code: code)
+  end
+
+  @doc """
+  Active metric definitions grouped by lens (the `category` column).
+  Returns `%{lens_string => [%MetricDefinition{}]}`.
+  """
+  def metric_definitions_by_lens(opts \\ []) do
+    list_metric_definitions(Keyword.put(opts, :active, true))
+    |> Enum.group_by(& &1.category)
+  end
+
+  @doc """
+  The data points that feed a lens in `:absolute` mode: active, available, raw,
+  and `weight_within_lens > 0`. The registry side of the registry↔feed contract.
+  """
+  def absolute_lens_members(lens) when is_binary(lens) do
+    MetricDefinition
+    |> where([m], m.active == true and m.is_available == true)
+    |> where([m], m.category == ^lens)
+    |> where([m], m.kind == "raw")
+    |> where([m], m.weight_within_lens > 0.0)
+    |> order_by([m], asc: m.code)
+    |> Repo.all()
+  end
 
   @doc """
   Stores metrics from TMDb data.
@@ -191,7 +250,11 @@ defmodule Cinegraph.Metrics do
       })
     end
 
-    # Store list appearances as popularity metric
+    # Store list appearances under their OWN metric key.
+    # NOTE (#1036): this used to write metric_type "popularity_score", colliding with
+    # ExternalMetric.from_tmdb's real TMDb popularity under the unique (movie,source,type)
+    # index (last-writer-wins corrupted 81% of popularity rows). It now writes the distinct
+    # "list_appearances" key so tmdb_popularity_score holds only the real TMDb popularity.
     if lists_data && lists_data["results"] do
       list_count = length(lists_data["results"])
 
@@ -219,7 +282,7 @@ defmodule Cinegraph.Metrics do
       upsert_metric(%{
         movie_id: movie.id,
         source: "tmdb",
-        metric_type: "popularity_score",
+        metric_type: "list_appearances",
         value: list_count,
         metadata: %{
           "type" => "list_appearances",

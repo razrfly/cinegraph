@@ -328,9 +328,6 @@ defmodule CinegraphWeb.Router do
       live "/festival", FestivalAuditLive, :index
       live "/festival/:org_slug", FestivalAuditLive, :organization
       live "/festival/:org_slug/:year", FestivalAuditLive, :ceremony
-
-      # Score Calibration Admin (Issue #518)
-      live "/score-calibration", ScoreCalibrationLive, :index
     end
 
     # Oban dashboard is a forwarded plug, not a LiveView, so it cannot live

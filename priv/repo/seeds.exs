@@ -1321,14 +1321,4 @@ rescue
     reraise e, __STACKTRACE__
 end
 
-Logger.info("Seeding calibration system...")
-
-try do
-  Code.eval_file(Application.app_dir(:cinegraph, "priv/repo/seeds/calibration_seeds.exs"))
-rescue
-  e ->
-    Logger.error("Failed seeding calibration system: #{Exception.message(e)}")
-    reraise e, __STACKTRACE__
-end
-
 Logger.info("Seeds completed!")

@@ -2009,6 +2009,7 @@ defmodule Cinegraph.Movies do
       where: m.import_status == "full",
       select: %Movie{
         id: m.id,
+        title: m.title,
         release_date: m.release_date,
         tmdb_data:
           fragment(

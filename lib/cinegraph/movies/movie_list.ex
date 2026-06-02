@@ -36,7 +36,11 @@ defmodule Cinegraph.Movies.MovieList do
     # Metadata
     field :metadata, :map, default: %{}
 
-    # ML-trained weights (nil until mix predictions.train --save is run)
+    # Trained-model store (#1036 Session 2). The active prediction_models artifact is the
+    # source of truth; `trained_weights` is a derived read-cache of its weights (kept for
+    # back-compat with LensScoring.get_trained_weights / predictions.backtest).
+    belongs_to :active_prediction_model, Cinegraph.Predictions.Model
+    field :backtest_strategy, :string
     field :trained_weights, :map, default: nil
 
     # Display fields (for public-facing pages)
@@ -67,6 +71,9 @@ defmodule Cinegraph.Movies.MovieList do
       :last_import_status,
       :total_imports,
       :metadata,
+      :trained_weights,
+      :active_prediction_model_id,
+      :backtest_strategy,
       :slug,
       :short_name,
       :icon,

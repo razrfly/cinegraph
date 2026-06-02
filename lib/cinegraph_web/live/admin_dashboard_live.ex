@@ -427,7 +427,7 @@ defmodule CinegraphWeb.AdminDashboardLive do
       },
       %{
         title: "Quality",
-        description: "Scoring, calibration, predictions.",
+        description: "Scoring and predictions.",
         cards: [
           %{
             title: "Metrics",
@@ -438,11 +438,6 @@ defmodule CinegraphWeb.AdminDashboardLive do
             title: "Predictions",
             path: "/admin/predictions",
             description: "1001-2020s movie prediction candidate list."
-          },
-          %{
-            title: "Score calibration",
-            path: "/admin/score-calibration",
-            description: "Compare Cinegraph scores vs reference datasets."
           }
         ]
       }

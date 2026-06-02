@@ -8,7 +8,7 @@ defmodule Cinegraph.Movies.MovieScoring do
 
   alias Cinegraph.Movies.ExternalMetric
   alias Cinegraph.Repo
-  alias Cinegraph.Scoring.{LensFormulas, Lenses}
+  alias Cinegraph.Scoring.{FeatureResolver, LensFormulas, Lenses}
   alias Cinegraph.Metrics.ScoringService
 
   # Helper to normalize DB numerics to floats
@@ -31,111 +31,21 @@ defmodule Cinegraph.Movies.MovieScoring do
   - The Box Office (revenue and budget data)
   """
   def calculate_movie_scores(movie) do
-    # Get external metrics for this movie
-    query = """
-    SELECT
-      MAX(CASE WHEN source = 'imdb' AND metric_type = 'rating_average' THEN value END) as imdb_rating,
-      MAX(CASE WHEN source = 'imdb' AND metric_type = 'rating_votes' THEN value END) as imdb_votes,
-      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'rating_average' THEN value END) as tmdb_rating,
-      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'rating_votes' THEN value END) as tmdb_votes,
-      MAX(CASE WHEN source = 'metacritic' AND metric_type = 'metascore' THEN value END) as metacritic,
-      MAX(CASE WHEN source = 'rotten_tomatoes' AND metric_type = 'tomatometer' THEN value END) as rt_tomatometer,
-      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'popularity_score' THEN value END) as popularity,
-      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'budget' THEN value END) as budget,
-      MAX(CASE WHEN source = 'tmdb' AND metric_type = 'revenue_worldwide' THEN value END) as revenue
-    FROM external_metrics
-    WHERE movie_id = $1
-    """
-
-    metrics =
-      case Repo.query(query, [movie.id]) do
-        {:ok, %{rows: [row]}} ->
-          Enum.zip(
-            [
-              :imdb_rating,
-              :imdb_votes,
-              :tmdb_rating,
-              :tmdb_votes,
-              :metacritic,
-              :rt_tomatometer,
-              :popularity,
-              :budget,
-              :revenue
-            ],
-            row
-          )
-          |> Map.new(fn {k, v} -> {k, normalize_number(v)} end)
-
-        _ ->
-          %{}
-      end
-
-    # Get festival data (win_score/nom_score enable DB-backed prestige tiers)
-    festival_query = """
-    SELECT fo.abbreviation, fc.name, fnom.won, fo.win_score, fo.nom_score
-    FROM festival_nominations fnom
-    JOIN festival_categories fc ON fnom.category_id = fc.id
-    JOIN festival_ceremonies fcer ON fnom.ceremony_id = fcer.id
-    JOIN festival_organizations fo ON fcer.organization_id = fo.id
-    WHERE fnom.movie_id = $1
-    """
-
-    festival_data =
-      case Repo.query(festival_query, [movie.id]) do
-        {:ok, %{rows: rows}} -> rows
-        _ -> []
-      end
-
-    # Get average person quality — role-weighted, deduplicated top-10
-    person_query = """
-    SELECT SUM(max_score * role_weight) / NULLIF(SUM(role_weight), 0) as avg_quality
-    FROM (
-      SELECT
-        mc.person_id,
-        MAX(pm.score) as max_score,
-        MAX(CASE mc.department
-          WHEN 'Directing'  THEN 3.0
-          WHEN 'Writing'    THEN 1.5
-          WHEN 'Production' THEN 1.0
-          ELSE
-            CASE WHEN mc.cast_order <= 3  THEN 2.0
-                 WHEN mc.cast_order <= 10 THEN 1.5
-                 ELSE 1.0
-            END
-        END) as role_weight
-      FROM movie_credits mc
-      JOIN person_metrics pm ON pm.person_id = mc.person_id
-      WHERE mc.movie_id = $1 AND pm.metric_type = 'quality_score'
-      GROUP BY mc.person_id
-      ORDER BY MAX(pm.score) * MAX(CASE mc.department
-          WHEN 'Directing'  THEN 3.0
-          WHEN 'Writing'    THEN 1.5
-          WHEN 'Production' THEN 1.0
-          ELSE
-            CASE WHEN mc.cast_order <= 3  THEN 2.0
-                 WHEN mc.cast_order <= 10 THEN 1.5
-                 ELSE 1.0
-            END
-        END) DESC
-      LIMIT 10
-    ) top_talent
-    """
-
-    person_quality =
-      case Repo.query(person_query, [movie.id]) do
-        {:ok, %{rows: [[avg]]}} -> normalize_number(avg) || 0.0
-        _ -> 0.0
-      end
+    # Layer 0 → Layer 1 (#1036): the FeatureResolver loads inputs from the catalog;
+    # mob/critics are catalog-driven weighted means of their members, the rest are the
+    # bespoke :custom formulas. Output is byte-stable vs the prior path.
+    %{inputs: inputs, lens_members: lens_members, festival_rows: festival_data} =
+      FeatureResolver.resolve(movie, :absolute)
 
     # Calculate component scores (0-10 scale)
-    mob = calculate_mob_score(metrics)
-    critics = calculate_critics_score(metrics)
-    festival_recognition = calculate_festival_recognition(festival_data)
-    time_machine = calculate_time_machine_score(movie, metrics)
+    mob = LensFormulas.weighted_mean(lens_members.mob)
+    critics = LensFormulas.weighted_mean(lens_members.critics)
+    festival_recognition = LensFormulas.festival(festival_data, :absolute)
+    time_machine = LensFormulas.time_machine(inputs, :absolute)
     # Intrinsic person quality (0-100) → auteurs lens on 0-10 scale
-    auteurs_score = LensFormulas.auteurs(%{person_quality: person_quality}, :absolute)
+    auteurs_score = LensFormulas.auteurs(inputs, :absolute)
     # Calculate box office score
-    box_office = calculate_box_office_score(metrics)
+    box_office = LensFormulas.box_office(inputs, :absolute)
 
     # Calculate overall score using Cinegraph Editorial weights
     weights = get_editorial_weights(ScoringService.get_profile("Cinegraph Editorial"))
@@ -150,7 +60,7 @@ defmodule Cinegraph.Movies.MovieScoring do
 
     %{
       overall_score: Float.round(overall, 1),
-      score_confidence: calculate_score_confidence(metrics),
+      score_confidence: calculate_score_confidence(inputs),
       components: %{
         mob: mob && Float.round(mob, 1),
         critics: critics && Float.round(critics, 1),
@@ -159,7 +69,8 @@ defmodule Cinegraph.Movies.MovieScoring do
         auteurs: Float.round(auteurs_score, 1),
         box_office: Float.round(box_office, 1)
       },
-      raw_metrics: metrics
+      # Preserve the prior raw_metrics shape (the external-metrics pivot only).
+      raw_metrics: Map.drop(inputs, [:canonical_count, :person_quality])
     }
   end
 

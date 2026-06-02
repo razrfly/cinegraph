@@ -1,4 +1,6 @@
-ExUnit.start(exclude: [:integration])
+# :scoring_db tests require a seeded + cache-populated DB (the metric_definitions
+# catalog + movie_score_caches). Run them with `mix test --only scoring_db`.
+ExUnit.start(exclude: [:integration, :scoring_db])
 Ecto.Adapters.SQL.Sandbox.mode(Cinegraph.Repo, :manual)
 
 # Force Cinegraph.Repo.replica() to return the primary in tests so writes via

@@ -22,8 +22,25 @@ defmodule Mix.Tasks.Predictions.Train do
     * `--save` - persist learned weights to movie_lists.trained_weights in DB
     * `--json` - output raw JSON
 
+  ## Integrity-protocol mode (#1036 Session 3)
+
+  With `--integrity`, training runs under the Prediction Integrity Protocol via
+  `Cinegraph.Predictions.Trainer`: it pre-registers a hypothesis, trains on all-but-the-latest
+  decade, scores the **sacred holdout** (latest decade) exactly once through the Layer-2 bus,
+  calibrates, and reports recall@K / precision@K / Brier / baselines with an honest pass/fail.
+
+      mix predictions.train --integrity --list-key 1001_movies                  # data-point, dry-run
+      mix predictions.train --integrity --list-key 1001_movies --granularity lens
+      mix predictions.train --integrity --list-key cult_movies_400 --save --threshold 0.25
+
+    * `--integrity`   - use the integrity protocol + bus (else the legacy 6-lens path)
+    * `--granularity` - data_point (default) | lens
+    * `--strategy`    - temporal (default) | static  (recorded on the model)
+    * `--threshold`   - pre-registered min holdout recall@K (default 0.20)
   """
   use Mix.Task
+
+  alias Cinegraph.Predictions.{PreRegistration, Trainer}
 
   @shortdoc "Train ML weights for a movie list via logistic regression"
 
@@ -37,20 +54,140 @@ defmodule Mix.Tasks.Predictions.Train do
           list_key: :string,
           sample_ratio: :integer,
           save: :boolean,
-          json: :boolean
+          json: :boolean,
+          integrity: :boolean,
+          granularity: :string,
+          strategy: :string,
+          threshold: :float
         ]
       )
 
+    if opts[:integrity] do
+      run_integrity(opts)
+    else
+      run_legacy(opts)
+    end
+  end
+
+  # ── integrity protocol (#1036 Session 3) ─────────────────────────────────────
+
+  defp run_integrity(opts) do
+    list = Keyword.get(opts, :list_key, "1001_movies")
+    granularity = parse_granularity(Keyword.get(opts, :granularity, "data_point"))
+    strategy = parse_strategy(Keyword.get(opts, :strategy, "temporal"))
+    threshold = Keyword.get(opts, :threshold, 0.20)
+    save? = Keyword.get(opts, :save, false)
+
+    prereg =
+      if save? do
+        {:ok, p} =
+          PreRegistration.register(%{
+            source_key: list,
+            expected_top_features: %{
+              "note" => "auto-registered by mix predictions.train --integrity"
+            },
+            expected_accuracy_range: %{"min" => threshold, "max" => 1.0},
+            failure_threshold: :erlang.float_to_binary(threshold, decimals: 2)
+          })
+
+        p
+      end
+
+    Mix.shell().info(
+      "Integrity training #{granularity} for #{list} (strategy=#{strategy}, save=#{save?})…"
+    )
+
+    case Trainer.train(list,
+           granularity: granularity,
+           save: save?,
+           prereg: prereg,
+           backtest_strategy: strategy
+         ) do
+      {:ok, summary} -> print_integrity(summary, Keyword.get(opts, :json, false))
+      {:error, reason} -> Mix.raise("Integrity training failed: #{inspect(reason)}")
+    end
+  end
+
+  defp print_integrity(summary, true) do
+    IO.puts(
+      Jason.encode!(Map.take(summary, [:integrity_report, :calibration, :verdict]), pretty: true)
+    )
+  end
+
+  defp print_integrity(summary, _) do
+    i = summary.integrity_report
+    v = summary.verdict
+    b = i["baselines"]
+
+    top =
+      summary.weights
+      |> Enum.sort_by(fn {_k, w} -> w end, :desc)
+      |> Enum.take(5)
+      |> Enum.map_join(", ", fn {k, w} -> "#{k}=#{Float.round(w, 3)}" end)
+
+    Mix.shell().info("""
+
+    ── #{summary.source_key} (#{summary.granularity}) ──────────────────────────
+    evaluation      : #{eval_label(i)}  (n=#{i["n_evaluated"]}, positives=#{i["n_positives"]})
+    recall@K        : #{ifmt(i["recall_at_k"])}
+    precision@K     : #{ifmt(i["precision_at_k"])}
+    Brier           : #{ifmt(i["brier"])}
+    baselines       : popularity #{ifmt(b["popularity"])} · random #{ifmt(b["random"])} · prior #{ifmt(b["prior_rate"])}
+    calibration     : #{summary.calibration["method"]}
+    top features    : #{top}
+    VERDICT         : #{verdict_line(v)}
+    """)
+
+    if summary[:model_id],
+      do: Mix.shell().info("persisted model id=#{summary.model_id} (holdout spent)")
+  end
+
+  defp verdict_line(%{"passed" => true} = v),
+    do:
+      "PASS — recall@K #{ifmt(v["recall_at_k"])} ≥ threshold #{ifmt(v["failure_threshold"])}, beats popularity #{ifmt(v["popularity_baseline"])}"
+
+  defp verdict_line(%{"passed" => false} = v),
+    do:
+      "FAIL — recall@K #{ifmt(v["recall_at_k"])} (beats_popularity=#{v["beats_popularity"]}, clears_threshold=#{v["clears_failure_threshold"]})"
+
+  defp parse_granularity(g) when g in ~w(data_point lens), do: String.to_atom(g)
+
+  defp parse_granularity(g),
+    do: Mix.raise("invalid --granularity #{inspect(g)} (expected data_point | lens)")
+
+  defp parse_strategy(s) when s in ~w(temporal static), do: s
+
+  defp parse_strategy(s),
+    do: Mix.raise("invalid --strategy #{inspect(s)} (expected temporal | static)")
+
+  defp eval_label(%{"backtest_strategy" => "static"} = i),
+    do: "static #{i["k_folds"]}-fold (seed #{i["seed"]})"
+
+  defp eval_label(i), do: "temporal holdout #{inspect(i["holdout_decades"])}"
+
+  defp ifmt(nil), do: "—"
+  defp ifmt(n) when is_float(n), do: n |> Float.round(4) |> to_string()
+  defp ifmt(n), do: to_string(n)
+
+  # ── legacy 6-lens path ───────────────────────────────────────────────────────
+
+  defp run_legacy(opts) do
     list_key = Keyword.get(opts, :list_key, "1001_movies")
     sample_ratio = Keyword.get(opts, :sample_ratio, 5)
-    save? = Keyword.get(opts, :save, false)
     json? = Keyword.get(opts, :json, false)
+
+    if Keyword.get(opts, :save, false) do
+      Mix.shell().info(
+        "NOTE: legacy mode is analysis-only and no longer persists. To train + save an active " <>
+          "model, use: mix predictions.train --integrity --list-key #{list_key} --save"
+      )
+    end
 
     unless json? do
       Mix.shell().info("""
 
       ═══════════════════════════════════
-      TRAINING — #{list_key}
+      TRAINING (analysis-only) — #{list_key}
       ═══════════════════════════════════
       """)
 
@@ -59,10 +196,7 @@ defmodule Mix.Tasks.Predictions.Train do
 
     result =
       try do
-        Cinegraph.Predictions.WeightOptimizer.train(list_key,
-          sample_ratio: sample_ratio,
-          save: save?
-        )
+        Cinegraph.Predictions.WeightOptimizer.train(list_key, sample_ratio: sample_ratio)
       rescue
         e ->
           Mix.shell().error("Training failed: #{Exception.message(e)}")
@@ -98,11 +232,11 @@ defmodule Mix.Tasks.Predictions.Train do
 
       IO.puts(Jason.encode!(output, pretty: true))
     else
-      print_results(result, save?)
+      print_results(result)
     end
   end
 
-  defp print_results(result, saved?) do
+  defp print_results(result) do
     Mix.shell().info("""
     Learned Weights:
     """)
@@ -132,12 +266,7 @@ defmodule Mix.Tasks.Predictions.Train do
     end)
 
     Mix.shell().info("")
-
-    if saved? do
-      Mix.shell().info("Weights saved to DB.")
-    else
-      Mix.shell().info("Run with --save to persist weights to database.")
-    end
+    Mix.shell().info("Analysis only. To persist an active model: add --integrity --save.")
 
     case Map.get(result, :timings) do
       nil ->

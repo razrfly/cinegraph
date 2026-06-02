@@ -626,19 +626,6 @@ defmodule Cinegraph.Admin.JobRegistry do
       destination: :imports,
       doc_url: nil
     },
-    %{
-      id: :reference_list_importer,
-      label: "Reference list importer",
-      worker: Workers.ReferenceListImporter,
-      queue: :tmdb,
-      schedule: nil,
-      args: %{},
-      trigger_action: :enqueue_now,
-      mutating: true,
-      description: "Backfill reference-list data",
-      destination: :imports,
-      doc_url: nil
-    },
 
     # Predictions / scoring
     %{
@@ -707,15 +694,15 @@ defmodule Cinegraph.Admin.JobRegistry do
       doc_url: nil
     },
     %{
-      id: :recall_calibration_worker,
-      label: "Recall calibration",
-      worker: Workers.RecallCalibrationWorker,
-      queue: :metrics,
+      id: :tmdb_popularity_fix_sweeper,
+      label: "TMDb popularity fix",
+      worker: Workers.TmdbPopularityFixSweeper,
+      queue: :maintenance,
       schedule: nil,
       args: %{},
       trigger_action: :enqueue_now,
       mutating: true,
-      description: "Compare scores vs reference datasets",
+      description: "Repair tmdb/popularity_score collision from tmdb_data (no API; #1036)",
       destination: :metrics,
       doc_url: nil
     },
