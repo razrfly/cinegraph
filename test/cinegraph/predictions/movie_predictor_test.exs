@@ -1,7 +1,8 @@
 defmodule Cinegraph.Predictions.MoviePredictorTest do
   use Cinegraph.DataCase
 
-  alias Cinegraph.Predictions.{MoviePredictor, CriteriaScoring}
+  alias Cinegraph.Predictions.{MoviePredictor, LensScoring}
+  alias Cinegraph.Metrics.{MetricWeightProfile, ScoringService}
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Repo
 
@@ -22,12 +23,12 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
       # Check algorithm info structure
       assert %{
                weights_used: weights,
-               criteria_count: 5,
+               criteria_count: 6,
                decade: "2020s"
              } = algorithm_info
 
       assert is_map(weights)
-      assert map_size(weights) == 5
+      assert map_size(weights) == 6
     end
 
     test "predictions are properly sorted by likelihood descending" do
@@ -57,15 +58,40 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
       custom_weights = %{
         mob: 0.25,
         critics: 0.25,
-        festival_recognition: 0.35,
-        cultural_impact: 0.15,
-        auteur_recognition: 0.00
+        festival_recognition: 0.30,
+        time_machine: 0.10,
+        auteurs: 0.10,
+        box_office: 0.00
       }
 
       result = MoviePredictor.predict_2020s_movies(10, custom_weights)
 
-      # Custom CriteriaScoring weights should be passed through unchanged
+      # Custom six-lens weights should be passed through unchanged
       assert result.algorithm_info.weights_used == custom_weights
+    end
+
+    test "a DB MetricWeightProfile struct drives scoring (not silently dropped)" do
+      # Regression guard: workers/admin pass %MetricWeightProfile{} structs. A struct
+      # is a map without :festival_recognition, so it must be converted via
+      # ScoringService.profile_to_discovery_weights — NOT fall back to defaults.
+      profile = %MetricWeightProfile{
+        name: "Test Profile",
+        category_weights: %{
+          "mob" => 0.5,
+          "critics" => 0.1,
+          "festival_recognition" => 0.1,
+          "time_machine" => 0.1,
+          "auteurs" => 0.1,
+          "box_office" => 0.1
+        }
+      }
+
+      result = MoviePredictor.predict_2020s_movies(0, profile)
+
+      assert result.algorithm_info.weights_used ==
+               ScoringService.profile_to_discovery_weights(profile)
+
+      refute result.algorithm_info.weights_used == LensScoring.get_default_weights()
     end
 
     test "predictions have valid likelihood percentages" do
@@ -156,12 +182,12 @@ defmodule Cinegraph.Predictions.MoviePredictorTest do
 
   describe "error handling" do
     test "handles invalid weights gracefully" do
-      # Weights without :festival_recognition key fall back to CriteriaScoring defaults
+      # Weights without :festival_recognition key fall back to LensScoring defaults
       invalid_weights = %{mob: 0.50, critics: 0.50}
 
       result = MoviePredictor.predict_2020s_movies(10, invalid_weights)
       assert is_map(result)
-      assert result.algorithm_info.weights_used == CriteriaScoring.get_default_weights()
+      assert result.algorithm_info.weights_used == LensScoring.get_default_weights()
     end
 
     test "handles extremely large limits" do

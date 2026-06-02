@@ -2,8 +2,8 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   @moduledoc """
   Learns optimal prediction weights for a given movie list via logistic regression.
 
-  Uses Scholar.Linear.LogisticRegression on the 5 criteria scores
-  (mob, critics, festival_recognition, cultural_impact, auteur_recognition) as
+  Uses Scholar.Linear.LogisticRegression on the 6 lens scores
+  (mob, critics, festival_recognition, time_machine, auteurs, box_office) as
   features and list membership as the binary label.
 
   ## Usage
@@ -16,15 +16,15 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
   """
 
-  alias Cinegraph.Predictions.{CriteriaScoring, HistoricalValidator}
+  alias Cinegraph.Predictions.{LensScoring, HistoricalValidator}
   alias Cinegraph.Movies.MovieLists
 
   require Logger
 
-  @criteria CriteriaScoring.scoring_criteria()
+  @criteria LensScoring.scoring_criteria()
 
   # Default weights for baseline comparison
-  @default_weights CriteriaScoring.get_default_weights()
+  @default_weights LensScoring.get_default_weights()
 
   @doc """
   Main entry point. Trains logistic regression weights for the given list key.
@@ -108,10 +108,10 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   Build X (feature matrix) and y (labels) from all historical decade data.
 
   For each decade, loads all movies via HistoricalValidator's slim query,
-  scores them with CriteriaScoring.batch_score_movies/2, then undersamples
+  scores them with LensScoring.batch_score_movies/3, then undersamples
   negatives at `sample_ratio`:1 relative to positives.
 
-  Returns `{x_list, y_list}` where each element is a list of 5 floats (0.0–1.0)
+  Returns `{x_list, y_list}` where each element is a list of 6 floats (0.0–1.0)
   and the corresponding 0/1 label.
   """
   def build_feature_matrix(source_key, sample_ratio \\ 5) do
@@ -200,7 +200,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     # Column 1 = positive class weights, one per feature
     pos_coeffs = model.coefficients[[.., 1]]
 
-    # Clamp negatives to 0 — all 5 features should be positively predictive
+    # Clamp negatives to 0 — all 6 features should be positively predictive
     clamped = Nx.max(pos_coeffs, 0.0)
 
     total = Nx.sum(clamped) |> Nx.to_number()
@@ -246,7 +246,7 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
     # Named profiles always included
     named_vectors =
-      CriteriaScoring.get_named_profiles()
+      LensScoring.get_named_profiles()
       |> Enum.map(fn p ->
         vec = Enum.map(@criteria, &Map.get(p.weights, &1, 0.0))
         {vec, p.name}
@@ -480,31 +480,19 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
     query = get_decade_movies_query(decade)
     movies = Cinegraph.Repo.all(query, timeout: :timer.seconds(120))
 
-    # Strip only the target list's own key from canonical_sources before scoring to prevent
-    # data leakage: score_cultural_impact encodes canonical list membership (70/100 points).
-    # Removing only the self-referential entry preserves signal from other canonical lists
-    # (Sight & Sound, Criterion, etc.) while eliminating the circular label encoding.
-    movies_for_scoring =
-      Enum.map(movies, fn m ->
-        Map.update(m, :canonical_sources, %{}, &Map.delete(&1, source_key))
-      end)
+    # LensScoring strips `source_key` internally (canonical count + director track
+    # record), so features are leakage-free. Labels read the movie's REAL
+    # canonical_sources (the scored result carries the original movie struct).
+    scored = LensScoring.batch_score_movies(movies, @default_weights, source_key)
 
-    scored = CriteriaScoring.batch_score_movies(movies_for_scoring, @default_weights)
-
-    # Zip originals back in so labels use real canonical_sources
     {xs, ys} =
-      Enum.zip(movies, scored)
-      |> Enum.reduce({[], []}, fn {original_movie, %{prediction: prediction}}, {xs, ys} ->
+      Enum.reduce(scored, {[], []}, fn %{movie: movie, prediction: prediction}, {xs, ys} ->
         scores = prediction.criteria_scores
 
         feature_row =
-          Enum.map(@criteria, fn crit -> (Map.get(scores, crit, 0.0) || 0.0) / 100.0 end)
+          Enum.map(@criteria, fn lens -> (Map.get(scores, lens, 0.0) || 0.0) / 100.0 end)
 
-        label =
-          case original_movie.canonical_sources do
-            %{^source_key => _} -> 1
-            _ -> 0
-          end
+        label = if Map.has_key?(movie.canonical_sources || %{}, source_key), do: 1, else: 0
 
         {[feature_row | xs], [label | ys]}
       end)

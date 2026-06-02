@@ -7,7 +7,8 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   import Ecto.Query
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
-  alias Cinegraph.Predictions.CriteriaScoring
+  alias Cinegraph.Predictions.LensScoring
+  alias Cinegraph.Metrics.{MetricWeightProfile, ScoringService}
 
   @doc """
   Dynamically get all decades that have movies in the given list.
@@ -75,7 +76,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     %{
       decade_results: decade_results,
       overall_accuracy: overall_accuracy,
-      profile_used: "CriteriaScoring",
+      profile_used: "LensScoring",
       weights_used: weights,
       decades_analyzed: length(valid_results),
       decade_range: "#{min_decade}s-#{max_decade}s"
@@ -95,16 +96,10 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
     all_decade_query = get_decade_movies_query(decade)
     all_decade_movies = Repo.all(all_decade_query, timeout: :timer.seconds(120))
 
-    # Strip the target list's key from canonical_sources before scoring to prevent
-    # data leakage: a movie already on the target list would otherwise get extra points
-    # from score_cultural_impact's canonical_count, encoding the label as a feature.
-    movies_for_scoring =
-      Enum.map(all_decade_movies, fn m ->
-        Map.update(m, :canonical_sources, %{}, &Map.delete(&1, source_key))
-      end)
-
-    # Score all decade movies with CriteriaScoring
-    scored = CriteriaScoring.batch_score_movies(movies_for_scoring, weights)
+    # LensScoring strips `source_key` from canonical_sources internally (and excludes
+    # each movie's own membership from the director track-record), so the backtest is
+    # leakage-free without pre-stripping here.
+    scored = LensScoring.batch_score_movies(all_decade_movies, weights, source_key)
 
     # Sort by score and take top N where N = number of actual 1001 movies
     total_1001_in_decade = length(actual_1001_movies)
@@ -145,7 +140,7 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
       false_positive_count: length(false_positive_ids),
       # Sample for display
       top_predictions: Enum.take(top_predictions, 10),
-      profile_used: "CriteriaScoring"
+      profile_used: "LensScoring"
     }
   end
 
@@ -202,11 +197,11 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   end
 
   @doc """
-  Compare all named CriteriaScoring weight profiles against historical data.
+  Compare all named LensScoring weight profiles against historical data.
   Returns best-performing profile and per-decade winners.
   """
   def compare_profiles do
-    profiles = CriteriaScoring.get_named_profiles()
+    profiles = LensScoring.get_named_profiles()
     decades = get_all_decades()
 
     results =
@@ -247,10 +242,10 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
   end
 
   @doc """
-  Compare all named CriteriaScoring profiles with detailed decade-by-decade breakdown.
+  Compare all named LensScoring profiles with detailed decade-by-decade breakdown.
   """
   def get_comprehensive_comparison do
-    profiles = CriteriaScoring.get_named_profiles()
+    profiles = LensScoring.get_named_profiles()
     decades = get_all_decades()
 
     comparison_data =
@@ -282,18 +277,23 @@ defmodule Cinegraph.Predictions.HistoricalValidator do
 
   # Private functions
 
-  defp get_criteria_weights(nil), do: CriteriaScoring.get_default_weights()
+  defp get_criteria_weights(nil), do: LensScoring.get_default_weights()
+
+  # A DB weight profile struct → convert its category_weights into the six-lens
+  # atom map so the selected profile actually drives the backtest scoring.
+  defp get_criteria_weights(%MetricWeightProfile{} = profile),
+    do: ScoringService.profile_to_discovery_weights(profile)
 
   defp get_criteria_weights(name) when is_binary(name),
-    do: CriteriaScoring.get_profile_weights(name)
+    do: LensScoring.get_profile_weights(name)
 
   defp get_criteria_weights(weights) when is_map(weights) do
     if Map.has_key?(weights, :festival_recognition),
       do: weights,
-      else: CriteriaScoring.get_default_weights()
+      else: LensScoring.get_default_weights()
   end
 
-  defp get_criteria_weights(_), do: CriteriaScoring.get_default_weights()
+  defp get_criteria_weights(_), do: LensScoring.get_default_weights()
 
   defp get_decade_1001_movies(decade, source_key) do
     start_date = Date.new!(decade, 1, 1)

@@ -176,7 +176,7 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
   describe "Predictions opt-in to tmdb_data (#923 — Greptile P1 regression guard)" do
     # PR #924 review caught: get_movie_scoring_details/2 used `Repo.get!(Movie)`
     # without an explicit select_merge, so post-load_in_query the function
-    # silently passed `tmdb_data: nil` to CriteriaScoring.score_cultural_impact/1,
+    # silently passed `tmdb_data: nil` to the Target-mode box_office lens,
     # making budget/revenue/roi_score always 0. This test pins the opt-in.
 
     test "get_movie_scoring_details/1 returns a Movie with tmdb_data loaded" do
@@ -187,7 +187,7 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
       assert details.movie.id == movie.id
 
       refute is_nil(details.movie.tmdb_data),
-             "get_movie_scoring_details/2 must select tmdb_data — score_cultural_impact reads it for budget/revenue"
+             "get_movie_scoring_details/2 must select tmdb_data — the box_office lens reads it for budget/revenue"
 
       assert details.movie.tmdb_data["marker"] == "pr-b-must-be-nilled"
     end

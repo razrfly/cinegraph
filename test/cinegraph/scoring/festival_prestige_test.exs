@@ -24,12 +24,12 @@ defmodule Cinegraph.Scoring.FestivalPrestigeTest do
       assert FestivalPrestige.score_nomination("CFF", "Best Film", true) == 105.0
     end
 
-    test "unknown festival win = 50.0" do
-      assert FestivalPrestige.score_nomination("XYZ", "Best Short", true) == 50.0
+    test "unknown festival win = 0.0 (intentionally suppressed)" do
+      assert FestivalPrestige.score_nomination("XYZ", "Best Short", true) == 0.0
     end
 
-    test "unknown festival nom = 30.0" do
-      assert FestivalPrestige.score_nomination("XYZ", "Best Short", false) == 30.0
+    test "unknown festival nom = 0.0 (intentionally suppressed)" do
+      assert FestivalPrestige.score_nomination("XYZ", "Best Short", false) == 0.0
     end
 
     test "nil category treated as empty string (no boost)" do
@@ -37,7 +37,7 @@ defmodule Cinegraph.Scoring.FestivalPrestigeTest do
     end
   end
 
-  describe "score_nominations/2 — ceiling 100 (CriteriaScoring)" do
+  describe "score_nominations/2 — ceiling 100 (Target mode)" do
     test "empty list = 0.0" do
       assert FestivalPrestige.score_nominations([]) == 0.0
     end
@@ -55,12 +55,13 @@ defmodule Cinegraph.Scoring.FestivalPrestigeTest do
              ]) == 100.0
     end
 
-    test "single minor festival win = 50.0" do
-      assert FestivalPrestige.score_nominations([["XYZ", "Best Short", true]]) == 50.0
+    test "single unknown festival win = 0.0 (suppressed)" do
+      assert FestivalPrestige.score_nominations([["XYZ", "Best Short", true]]) == 0.0
     end
 
-    test "accepts extra tail elements in nomination tuples" do
-      assert FestivalPrestige.score_nominations([["XYZ", "Best Short", true, "extra"]]) == 50.0
+    test "accepts extra tail elements in nomination tuples (known festival)" do
+      # CCA Best Short win = 70.0; extra tail elements are ignored, not parsed as scores.
+      assert FestivalPrestige.score_nominations([["CCA", "Best Short", true, "extra"]]) == 70.0
     end
   end
 
@@ -97,23 +98,23 @@ defmodule Cinegraph.Scoring.FestivalPrestigeTest do
 
   describe "score_nominations/2 — algorithm regression" do
     test "sum beats max — multi-nomination film scores higher than single-nomination film" do
-      # Use sub-ceiling scores: unknown festivals don't hit the 100 cap individually
-      # XYZ win = 50.0, XYZ nom = 30.0; together = 80.0 > 50.0
-      single = [["XYZ", "Best Short", true]]
-      multi = [["XYZ", "Best Short", true], ["XYZ", "Best Documentary", false]]
+      # Use a known festival (CCA: win 70, nom 50) so individual scores are non-zero.
+      # single = 70; multi = 70 + 50 = 120 → capped at 100 > 70.
+      single = [["CCA", "Best Short", true]]
+      multi = [["CCA", "Best Short", true], ["CCA", "Best Documentary", false]]
 
       assert FestivalPrestige.score_nominations(multi) >
                FestivalPrestige.score_nominations(single)
     end
   end
 
-  describe "score_nominations/2 — ceiling 10 (MovieScoring)" do
+  describe "score_nominations/2 — ceiling 10 (Absolute/discovery mode)" do
     test "single Oscar Best Picture win caps at 10.0" do
       assert FestivalPrestige.score_nominations([["AMPAS", "Best Picture", true]], 10.0) == 10.0
     end
 
-    test "single minor festival win = 5.0" do
-      assert FestivalPrestige.score_nominations([["XYZ", "Best Short", true]], 10.0) == 5.0
+    test "single known minor festival win scales by ceiling (CCA 70 → 7.0)" do
+      assert FestivalPrestige.score_nominations([["CCA", "Best Short", true]], 10.0) == 7.0
     end
 
     test "two Oscar nominations = 10.0 (sum 18 → cap)" do
@@ -126,8 +127,8 @@ defmodule Cinegraph.Scoring.FestivalPrestigeTest do
              ) == 10.0
     end
 
-    test "single unknown festival nom = 3.0" do
-      assert FestivalPrestige.score_nominations([["XYZ", "Best Short", false]], 10.0) == 3.0
+    test "single unknown festival nom = 0.0 (suppressed)" do
+      assert FestivalPrestige.score_nominations([["XYZ", "Best Short", false]], 10.0) == 0.0
     end
   end
 end

@@ -6,12 +6,12 @@ defmodule Cinegraph.Predictions.IntegrationTest do
 
   use Cinegraph.DataCase
 
-  alias Cinegraph.Predictions.{MoviePredictor, CriteriaScoring}
+  alias Cinegraph.Predictions.{MoviePredictor, LensScoring}
 
   describe "Movie Prediction System Integration" do
     test "system components work together without crashing" do
       # Test that the core components can be instantiated
-      assert is_map(CriteriaScoring.get_default_weights())
+      assert is_map(LensScoring.get_default_weights())
 
       # Test that predictions can be generated (may return empty if no data)
       result = MoviePredictor.predict_2020s_movies(10)
@@ -58,21 +58,22 @@ defmodule Cinegraph.Predictions.IntegrationTest do
     end
 
     test "weight validation works correctly" do
-      # Valid CriteriaScoring weights (has :festival_recognition) are passed through unchanged
+      # Valid six-lens weights (has :festival_recognition) are passed through unchanged
       valid_weights = %{
         mob: 0.20,
         critics: 0.20,
         festival_recognition: 0.35,
-        cultural_impact: 0.20,
-        auteur_recognition: 0.05
+        time_machine: 0.15,
+        auteurs: 0.05,
+        box_office: 0.05
       }
 
       result = MoviePredictor.predict_2020s_movies(5, valid_weights)
       assert result.algorithm_info.weights_used == valid_weights
     end
 
-    test "all criteria contribute to scoring" do
-      # Test that each criterion actually affects the scoring
+    test "all six lenses contribute to scoring" do
+      # Test that each lens is present in the criteria_scores and is a number
       movie_data = %{
         id: 1,
         title: "Test Movie",
@@ -80,16 +81,15 @@ defmodule Cinegraph.Predictions.IntegrationTest do
         canonical_sources: nil
       }
 
-      # Test individual scoring functions don't crash
-      assert is_nil(CriteriaScoring.score_mob(movie_data)) or
-               is_number(CriteriaScoring.score_mob(movie_data))
+      score = LensScoring.calculate_movie_score(movie_data)
 
-      assert is_nil(CriteriaScoring.score_critics(movie_data)) or
-               is_number(CriteriaScoring.score_critics(movie_data))
+      assert MapSet.new(Map.keys(score.criteria_scores)) ==
+               MapSet.new(LensScoring.scoring_criteria())
 
-      assert is_number(CriteriaScoring.score_festival_recognition(movie_data))
-      assert is_number(CriteriaScoring.score_cultural_impact(movie_data))
-      assert is_number(CriteriaScoring.score_auteur_recognition(movie_data))
+      for {_lens, value} <- score.criteria_scores do
+        assert is_number(value)
+        assert value >= 0.0 and value <= 100.0
+      end
     end
 
     test "batch processing is consistent with individual processing" do
@@ -101,7 +101,7 @@ defmodule Cinegraph.Predictions.IntegrationTest do
       ]
 
       # Batch processing should not crash and should return valid results
-      batch_results = CriteriaScoring.batch_score_movies(test_movies)
+      batch_results = LensScoring.batch_score_movies(test_movies)
 
       assert length(batch_results) == 3
 
@@ -161,7 +161,7 @@ defmodule Cinegraph.Predictions.IntegrationTest do
       ]
 
       for movie <- test_cases do
-        score = CriteriaScoring.calculate_movie_score(movie)
+        score = LensScoring.calculate_movie_score(movie)
 
         # Likelihood should always be between 0 and 100
         assert score.likelihood_percentage >= 0.0
@@ -192,7 +192,7 @@ defmodule Cinegraph.Predictions.IntegrationTest do
       }
 
       # Should not crash
-      score = CriteriaScoring.calculate_movie_score(minimal_movie)
+      score = LensScoring.calculate_movie_score(minimal_movie)
       assert is_map(score)
       assert is_number(score.total_score)
       assert is_number(score.likelihood_percentage)
@@ -224,7 +224,7 @@ defmodule Cinegraph.Predictions.IntegrationTest do
     test "breakdown calculations are mathematically sound" do
       # Test that breakdown math is correct
       movie = %{id: 1, title: "Test", tmdb_data: %{}, canonical_sources: nil}
-      score = CriteriaScoring.calculate_movie_score(movie)
+      score = LensScoring.calculate_movie_score(movie)
 
       # Sum of weighted points should approximately equal total score
       total_from_breakdown =

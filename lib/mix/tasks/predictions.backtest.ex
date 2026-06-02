@@ -18,7 +18,7 @@ defmodule Mix.Tasks.Predictions.Backtest do
 
     * `--all` - backtest all decades (default)
     * `--decade` - backtest a single decade (e.g. 1960 for 1960s)
-    * `--profile` - CriteriaScoring weight profile name (default: "default")
+    * `--profile` - LensScoring weight profile name (default: "default")
       Available: "default", "festival-heavy", "audience-first", "critics-choice", "auteur"
     * `--use-trained` - use ML-trained weights from DB instead of a named profile
     * `--list-key` - source_key to load trained weights from (default: "1001_movies")
@@ -74,7 +74,7 @@ defmodule Mix.Tasks.Predictions.Backtest do
           string_weights ->
             allowed =
               MapSet.new(
-                Cinegraph.Predictions.CriteriaScoring.scoring_criteria(),
+                Cinegraph.Predictions.LensScoring.scoring_criteria(),
                 &Atom.to_string/1
               )
 
@@ -181,9 +181,9 @@ defmodule Mix.Tasks.Predictions.Backtest do
     icon = status_icon(overall_accuracy, threshold)
 
     scoring_desc =
-      case Cinegraph.Predictions.CriteriaScoring.get_profile(profile_name) do
+      case Cinegraph.Predictions.LensScoring.get_profile(profile_name) do
         %{description: desc} -> desc
-        nil -> "CriteriaScoring (#{profile_name})"
+        nil -> "LensScoring (#{profile_name})"
       end
 
     Mix.shell().info("""
