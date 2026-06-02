@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Predictions.Status do
 
   ## Options
 
-    * `--profile` - CriteriaScoring weight profile name (default: "default")
+    * `--profile` - LensScoring weight profile name (default: "default")
       Available: "default", "festival-heavy", "audience-first", "critics-choice", "auteur"
     * `--json` - output raw JSON instead of formatted table
     * `--threshold` - accuracy target percentage (default: 70.0)

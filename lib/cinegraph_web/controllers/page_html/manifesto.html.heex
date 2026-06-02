@@ -20,6 +20,13 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap"
     />
     <link phx-track-static rel="stylesheet" href={~p"/assets/oatmeal.css"} />
+    <noscript>
+      <style>
+        /* No-JS fallback: `.reveal` is opacity:0 until JS adds `.in` via
+           IntersectionObserver — without this, no-JS visitors see blank blocks. */
+        .reveal { opacity: 1 !important; transform: none !important; }
+      </style>
+    </noscript>
     <style>
       html { scroll-behavior: smooth; scroll-padding-top: 5rem; }
 

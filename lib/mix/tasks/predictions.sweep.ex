@@ -94,7 +94,7 @@ defmodule Mix.Tasks.Predictions.Sweep do
   end
 
   defp print_results(results, saved?, list_key) do
-    criteria = Cinegraph.Predictions.CriteriaScoring.scoring_criteria()
+    criteria = Cinegraph.Predictions.LensScoring.scoring_criteria()
 
     Mix.shell().info(
       "  Rank  Accuracy  " <>
@@ -154,7 +154,8 @@ defmodule Mix.Tasks.Predictions.Sweep do
   defp short_name(:mob), do: "mob"
   defp short_name(:critics), do: "critics"
   defp short_name(:festival_recognition), do: "festival"
-  defp short_name(:cultural_impact), do: "cultural"
-  defp short_name(:auteur_recognition), do: "auteur"
+  defp short_name(:time_machine), do: "time_mach"
+  defp short_name(:auteurs), do: "auteurs"
+  defp short_name(:box_office), do: "box_off"
   defp short_name(k), do: Atom.to_string(k)
 end

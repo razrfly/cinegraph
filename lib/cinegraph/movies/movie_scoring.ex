@@ -8,7 +8,7 @@ defmodule Cinegraph.Movies.MovieScoring do
 
   alias Cinegraph.Movies.ExternalMetric
   alias Cinegraph.Repo
-  alias Cinegraph.Scoring.{FestivalPrestige, Lenses}
+  alias Cinegraph.Scoring.{LensFormulas, Lenses}
   alias Cinegraph.Metrics.ScoringService
 
   # Helper to normalize DB numerics to floats
@@ -132,8 +132,8 @@ defmodule Cinegraph.Movies.MovieScoring do
     critics = calculate_critics_score(metrics)
     festival_recognition = calculate_festival_recognition(festival_data)
     time_machine = calculate_time_machine_score(movie, metrics)
-    # Convert from 0-100 to 0-10
-    auteurs_score = person_quality / 10.0
+    # Intrinsic person quality (0-100) → auteurs lens on 0-10 scale
+    auteurs_score = LensFormulas.auteurs(%{person_quality: person_quality}, :absolute)
     # Calculate box office score
     box_office = calculate_box_office_score(metrics)
 
@@ -168,12 +168,7 @@ defmodule Cinegraph.Movies.MovieScoring do
   Returns a 0–10 score.
   """
   def calculate_mob_score(metrics) do
-    imdb = Map.get(metrics, :imdb_rating)
-    tmdb = Map.get(metrics, :tmdb_rating)
-
-    sources = [imdb, tmdb] |> Enum.reject(&is_nil/1) |> Enum.filter(&(&1 > 0))
-
-    if sources == [], do: nil, else: Enum.sum(sources) / length(sources)
+    LensFormulas.mob(metrics, :absolute)
   end
 
   @doc """
@@ -181,15 +176,7 @@ defmodule Cinegraph.Movies.MovieScoring do
   Returns a 0–10 score (normalizes from 0–100 sources).
   """
   def calculate_critics_score(metrics) do
-    rt = Map.get(metrics, :rt_tomatometer)
-    mc = Map.get(metrics, :metacritic)
-
-    sources =
-      [{rt, 100.0}, {mc, 100.0}]
-      |> Enum.reject(fn {v, _} -> is_nil(v) or v == 0 end)
-      |> Enum.map(fn {v, scale} -> v / scale * 10.0 end)
-
-    if sources == [], do: nil, else: Enum.sum(sources) / length(sources)
+    LensFormulas.critics(metrics, :absolute)
   end
 
   @doc """
@@ -219,14 +206,13 @@ defmodule Cinegraph.Movies.MovieScoring do
   Calculate festival recognition based on festival wins and nominations.
   """
   def calculate_festival_recognition(nomination_rows) do
-    FestivalPrestige.score_nominations(nomination_rows, 10.0)
+    LensFormulas.festival(nomination_rows, :absolute)
   end
 
   @doc """
   Calculate time machine score based on canonical sources and popularity.
   """
   def calculate_time_machine_score(movie, metrics) do
-    # Check canonical sources
     canonical_count =
       if movie.canonical_sources && map_size(movie.canonical_sources) > 0 do
         map_size(movie.canonical_sources)
@@ -234,19 +220,10 @@ defmodule Cinegraph.Movies.MovieScoring do
         0
       end
 
-    # Check popularity
-    popularity = Map.get(metrics, :popularity, 0) || 0
-
-    popularity_score =
-      if popularity > 0 do
-        # Normalize on log scale
-        :math.log(popularity + 1) / :math.log(1000)
-      else
-        0
-      end
-
-    # Combine canonical presence and popularity
-    min(10.0, canonical_count * 2.0 + popularity_score * 5.0)
+    LensFormulas.time_machine(
+      %{canonical_count: canonical_count, popularity: Map.get(metrics, :popularity, 0) || 0},
+      :absolute
+    )
   end
 
   @doc """
@@ -256,31 +233,7 @@ defmodule Cinegraph.Movies.MovieScoring do
   - ROI when both budget and revenue are available
   """
   def calculate_box_office_score(metrics) do
-    budget = Map.get(metrics, :budget, 0) || 0
-    revenue = Map.get(metrics, :revenue, 0) || 0
-
-    cond do
-      # If we have both budget and revenue, calculate ROI-based score
-      budget > 0 and revenue > 0 ->
-        # Revenue component (60% weight): log scale normalized to 1B
-        revenue_score = min(1.0, :math.log(revenue + 1) / :math.log(1_000_000_000))
-
-        # ROI component (40% weight): revenue/budget ratio on log scale
-        # Normalizes to 10x ROI = 1.0 to properly differentiate between profitability levels
-        roi_ratio = revenue / budget
-        roi_score = min(1.0, :math.log(roi_ratio + 1) / :math.log(11))
-
-        # Combined score on 0-10 scale
-        (revenue_score * 0.6 + roi_score * 0.4) * 10.0
-
-      # If only revenue, use revenue magnitude
-      revenue > 0 ->
-        min(10.0, :math.log(revenue + 1) / :math.log(1_000_000_000) * 10.0)
-
-      # No financial data
-      true ->
-        0.0
-    end
+    LensFormulas.box_office(metrics, :absolute)
   end
 
   @doc """

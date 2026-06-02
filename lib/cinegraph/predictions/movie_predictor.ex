@@ -7,22 +7,34 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   import Ecto.Query
   alias Cinegraph.Repo
   alias Cinegraph.Movies.Movie
-  alias Cinegraph.Predictions.CriteriaScoring
+  alias Cinegraph.Predictions.LensScoring
+  alias Cinegraph.Metrics.{MetricWeightProfile, ScoringService}
+
+  @default_source_key "1001_movies"
 
   @doc """
   Get top 2020s movies ranked by likelihood of being added to future 1001 Movies lists.
   Uses database weight profiles or custom weights.
   Combines predictions with confirmed additions in proper ranking order.
   """
-  def predict_2020s_movies(limit \\ 100, profile_or_weights \\ nil) do
-    predict_decade_movies(2020, limit, profile_or_weights)
+  def predict_2020s_movies(
+        limit \\ 100,
+        profile_or_weights \\ nil,
+        source_key \\ @default_source_key
+      ) do
+    predict_decade_movies(2020, limit, profile_or_weights, source_key)
   end
 
   @doc """
-  Get top movies from ANY decade ranked by likelihood of being added to 1001 Movies lists.
-  This is the generic version that works for all decades.
+  Get top movies from ANY decade ranked by likelihood of being added to the target list.
+  This is the generic version that works for all decades and any `source_key`.
   """
-  def predict_decade_movies(decade, limit \\ 100, profile_or_weights \\ nil) do
+  def predict_decade_movies(
+        decade,
+        limit \\ 100,
+        profile_or_weights \\ nil,
+        source_key \\ @default_source_key
+      ) do
     weights = get_criteria_weights(profile_or_weights)
 
     # Calculate date range for the decade
@@ -33,10 +45,9 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     # order_by ensures notable films are fetched first; limit keeps worker time bounded.
     # (HistoricalValidator runs unbounded for backtest accuracy — this function is UI-only.)
     # #913 / #923: Movie schema marks tmdb_data as load_in_query: false to
-    # keep multi-MB JSONB out of every default SELECT. CriteriaScoring's
-    # score_cultural_impact/1 still reads movie.tmdb_data for budget /
-    # revenue, so opt back in here. (Long-term: migrate those reads to
-    # external_metrics so this select_merge can come out.)
+    # keep multi-MB JSONB out of every default SELECT. The Target-mode box_office
+    # lens reads movie.tmdb_data for budget / revenue, so opt back in here.
+    # (Long-term: migrate those reads to external_metrics so this can come out.)
     all_movies_query =
       from m in Movie,
         where: m.release_date >= ^start_date,
@@ -47,28 +58,28 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         select_merge: %{tmdb_data: m.tmdb_data}
 
     all_decade_movies = Repo.all(all_movies_query, timeout: :timer.seconds(120))
-    scored = CriteriaScoring.batch_score_movies(all_decade_movies, weights)
+    scored = LensScoring.batch_score_movies(all_decade_movies, weights, source_key)
 
     # Format and sort all movies by score
     all_scored_movies =
       scored
       |> Enum.sort_by(& &1.prediction.total_score, :desc)
       |> Enum.take(limit)
-      |> Enum.map(&format_prediction_result_from_criteria_scored/1)
+      |> Enum.map(&format_prediction_result(&1, source_key))
 
-    # Count candidates (movies not already on 1001 list)
+    # Count candidates (movies not already on the target list)
     total_candidates =
       Enum.count(scored, fn %{movie: movie} ->
-        is_nil(Map.get(movie.canonical_sources || %{}, "1001_movies"))
+        is_nil(Map.get(movie.canonical_sources || %{}, source_key))
       end)
 
     %{
       predictions: all_scored_movies,
       total_candidates: total_candidates,
       algorithm_info: %{
-        profile_used: "CriteriaScoring",
+        profile_used: "LensScoring",
         weights_used: weights,
-        criteria_count: length(CriteriaScoring.scoring_criteria()),
+        criteria_count: length(LensScoring.scoring_criteria()),
         decade: "#{decade}s"
       }
     }
@@ -77,20 +88,27 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   @doc """
   Calculate prediction score for a specific movie using database profiles.
   """
-  def calculate_movie_prediction(movie, profile_or_weights \\ nil) do
+  def calculate_movie_prediction(
+        movie,
+        profile_or_weights \\ nil,
+        source_key \\ @default_source_key
+      ) do
     weights = get_criteria_weights(profile_or_weights)
-    prediction = CriteriaScoring.calculate_movie_score(movie, weights)
-    format_prediction_result_from_criteria_scored(%{movie: movie, prediction: prediction})
+    prediction = LensScoring.calculate_movie_score(movie, weights, source_key)
+    format_prediction_result(%{movie: movie, prediction: prediction}, source_key)
   end
 
   @doc """
   Get detailed scoring breakdown for a specific movie.
   """
-  def get_movie_scoring_details(movie_id, profile_or_weights \\ nil) do
-    # #923: Movie schema marks tmdb_data load_in_query: false. CriteriaScoring's
-    # score_cultural_impact/1 reads movie.tmdb_data for budget/revenue, so the
-    # single-row fetch here must opt back in too — same as the three batch
-    # queries below. Without this, ROI score is silently 0 for every movie.
+  def get_movie_scoring_details(
+        movie_id,
+        profile_or_weights \\ nil,
+        source_key \\ @default_source_key
+      ) do
+    # #923: Movie schema marks tmdb_data load_in_query: false. The box_office lens
+    # reads movie.tmdb_data for budget/revenue in Target mode, so the single-row
+    # fetch here must opt back in. Without this, ROI score is silently 0.
     movie =
       from(m in Movie,
         where: m.id == ^movie_id,
@@ -98,12 +116,12 @@ defmodule Cinegraph.Predictions.MoviePredictor do
       )
       |> Repo.one!()
 
-    prediction = calculate_movie_prediction(movie, profile_or_weights)
+    prediction = calculate_movie_prediction(movie, profile_or_weights, source_key)
 
     %{
       movie: movie,
       prediction: prediction.prediction,
-      status: determine_movie_status(movie),
+      status: determine_movie_status(movie, source_key),
       similar_patterns: find_similar_historical_patterns(prediction.prediction),
       estimated_timeline: estimate_addition_timeline(prediction.prediction)
     }
@@ -112,80 +130,89 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   @doc """
   Get 2020s movies that are already on the 1001 Movies list for validation.
   """
-  def get_confirmed_2020s_additions(profile_or_weights \\ nil) do
+  def get_confirmed_2020s_additions(profile_or_weights \\ nil, source_key \\ @default_source_key) do
     weights = get_criteria_weights(profile_or_weights)
 
-    # #923: opt back in to tmdb_data — CriteriaScoring needs it for
-    # score_cultural_impact's budget/revenue read.
+    # #923: opt back in to tmdb_data — the box_office lens needs it for budget/revenue.
     query =
       from m in Movie,
         where: fragment("EXTRACT(YEAR FROM ?) >= 2020", m.release_date),
-        where: fragment("? \\? ?", m.canonical_sources, "1001_movies"),
+        where: fragment("? \\? ?", m.canonical_sources, ^source_key),
         order_by: [desc: m.release_date],
         limit: 100,
         select_merge: %{tmdb_data: m.tmdb_data}
 
     Repo.all(query, timeout: :timer.seconds(120))
-    |> CriteriaScoring.batch_score_movies(weights)
-    |> Enum.map(&format_prediction_result_from_criteria_scored/1)
+    |> LensScoring.batch_score_movies(weights, source_key)
+    |> Enum.map(&format_prediction_result(&1, source_key))
   end
 
   @doc """
   Get movies that our algorithm predicts with high confidence.
   """
-  def get_high_confidence_predictions(min_score \\ 0.8, profile_or_weights \\ nil) do
+  def get_high_confidence_predictions(
+        min_score \\ 0.8,
+        profile_or_weights \\ nil,
+        source_key \\ @default_source_key
+      ) do
     weights = get_criteria_weights(profile_or_weights)
 
-    # Normalize min_score to 0-100 scale (CriteriaScoring uses 0-100)
+    # Normalize min_score to 0-100 scale (Target-mode scores are 0-100)
     min_score_100 =
       if is_float(min_score) and min_score <= 1.0,
         do: min_score * 100.0,
         else: min_score * 1.0
 
-    # #923: opt back in to tmdb_data for CriteriaScoring budget/revenue.
+    # #923: opt back in to tmdb_data for the box_office budget/revenue read.
     query =
       from m in Movie,
         where: m.release_date >= ^~D[2020-01-01],
         where: m.release_date < ^~D[2030-01-01],
         where: m.import_status == "full",
-        where: is_nil(fragment("? -> ?", m.canonical_sources, "1001_movies")),
+        where: is_nil(fragment("? -> ?", m.canonical_sources, ^source_key)),
         select_merge: %{tmdb_data: m.tmdb_data}
 
     Repo.all(query, timeout: :timer.seconds(120))
-    |> CriteriaScoring.batch_score_movies(weights)
+    |> LensScoring.batch_score_movies(weights, source_key)
     |> Enum.filter(&(&1.prediction.total_score >= min_score_100))
-    |> Enum.map(&format_prediction_result_from_criteria_scored/1)
+    |> Enum.map(&format_prediction_result(&1, source_key))
   end
 
   # Private functions
 
-  defp get_criteria_weights(nil), do: CriteriaScoring.get_default_weights()
+  defp get_criteria_weights(nil), do: LensScoring.get_default_weights()
+
+  # A DB weight profile (passed by the prediction workers and admin) — convert its
+  # category_weights into the six-lens atom map so the selected profile actually
+  # drives prediction scoring.
+  defp get_criteria_weights(%MetricWeightProfile{} = profile),
+    do: ScoringService.profile_to_discovery_weights(profile)
 
   defp get_criteria_weights(name) when is_binary(name),
-    do: CriteriaScoring.get_profile_weights(name)
+    do: LensScoring.get_profile_weights(name)
 
   defp get_criteria_weights(weights) when is_map(weights) do
     if Map.has_key?(weights, :festival_recognition),
       do: weights,
-      else: CriteriaScoring.get_default_weights()
+      else: LensScoring.get_default_weights()
   end
 
-  defp get_criteria_weights(_), do: CriteriaScoring.get_default_weights()
+  defp get_criteria_weights(_), do: LensScoring.get_default_weights()
 
-  defp format_prediction_result_from_criteria_scored(%{movie: movie, prediction: prediction}) do
+  defp format_prediction_result(%{movie: movie, prediction: prediction}, source_key) do
     %{
       id: movie.id,
       title: movie.title,
       release_date: movie.release_date,
       year: extract_year(movie.release_date),
       prediction: prediction,
-      status: determine_movie_status(movie),
+      status: determine_movie_status(movie, source_key),
       movie: movie
     }
   end
 
-  defp determine_movie_status(movie) do
-    if movie.canonical_sources && Map.has_key?(movie.canonical_sources, "1001_movies") do
+  defp determine_movie_status(movie, source_key) do
+    if movie.canonical_sources && Map.has_key?(movie.canonical_sources, source_key) do
       :already_added
     else
       :future_prediction

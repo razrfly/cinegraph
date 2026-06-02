@@ -3,8 +3,8 @@ defmodule Cinegraph.Scoring.FestivalPrestige do
   Single source of truth for festival prestige tiers used across all scoring systems.
 
   Tiers are on a 0–100 scale. The `ceiling` parameter in `score_nominations/2`
-  controls the cap — 100.0 for CriteriaScoring (predictions), 10.0 for MovieScoring
-  (show page). Since CriteriaScoring values are exactly 10× MovieScoring values,
+  controls the cap — 100.0 for Target-mode prediction scoring, 10.0 for Absolute
+  discovery scoring. Since prediction values are exactly 10× discovery values,
   passing `ceiling: 10.0` naturally scales the result.
   """
 
@@ -58,7 +58,7 @@ defmodule Cinegraph.Scoring.FestivalPrestige do
   Score a list of nominations as [[abbrev, category, won | _tail], ...].
 
   `ceiling` controls the cap and scale:
-  - 100.0 (default) for CriteriaScoring/predictions
+  - 100.0 (default) for Target-mode predictions
   - 10.0 for MovieScoring/show page
 
   When rows contain win_score and nom_score at positions 4–5 (from a DB JOIN that
