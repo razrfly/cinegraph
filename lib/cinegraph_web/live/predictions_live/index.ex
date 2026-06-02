@@ -559,14 +559,16 @@ defmodule CinegraphWeb.PredictionsLive.Index do
         get_in(sample, ["prediction", "criteria_scores"]) ||
         %{}
 
-    # Any pre-six-lens criterion key means the cache predates the current vocabulary
-    # (older ivory_tower era, or the 5-criterion cultural_impact/auteur_recognition era).
-    stale_keys =
-      ~w(technical_innovation ivory_tower people_quality cultural_impact auteur_recognition)
+    # Allowlist, not denylist: any key outside the current six-lens vocabulary means
+    # the cache predates it (the ivory_tower era, the 5-criterion cultural_impact era,
+    # or the popular_opinion/industry_recognition/financial_performance era). Sourcing
+    # the current names from Cinegraph.Scoring.Lenses keeps this self-maintaining.
+    current_keys = MapSet.new(Cinegraph.Scoring.Lenses.all_strings())
 
-    Enum.any?(stale_keys, fn key ->
-      Map.has_key?(criteria, key) or Map.has_key?(criteria, String.to_atom(key))
-    end)
+    criteria
+    |> Map.keys()
+    |> Enum.map(&to_string/1)
+    |> Enum.any?(fn key -> not MapSet.member?(current_keys, key) end)
   end
 
   defp stale_cache?(_), do: false
