@@ -13,10 +13,16 @@ defmodule Cinegraph.Repo.Migrations.ClearStaleTrainedWeights do
 
   def up do
     execute("UPDATE movie_lists SET trained_weights = NULL WHERE trained_weights IS NOT NULL")
+
+    # Cached predictions were computed with the old 5-criterion breakdown
+    # (cultural_impact, auteur_recognition). Drop them so the prediction workers
+    # repopulate with the six-lens shape; otherwise stale rows would render after deploy.
+    execute("DELETE FROM prediction_cache")
   end
 
   def down do
-    # One-way: stale 5-key weights are not recoverable and should not be restored.
+    # One-way: stale 5-key weights / 5-criterion cached predictions are not
+    # recoverable and should not be restored.
     :ok
   end
 end
