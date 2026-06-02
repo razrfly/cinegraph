@@ -22,7 +22,8 @@ defmodule Cinegraph.Repo.Migrations.ClearStaleTrainedWeights do
 
   def down do
     # One-way: stale 5-key weights / 5-criterion cached predictions are not
-    # recoverable and should not be restored.
-    :ok
+    # recoverable and should not be restored. Raise so rollback fails loudly
+    # instead of silently appearing to succeed.
+    raise "irreversible migration: stale 5-key weights / cached predictions cannot be restored"
   end
 end
