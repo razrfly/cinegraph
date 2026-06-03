@@ -2,7 +2,8 @@ defmodule Cinegraph.Predictions.Model do
   @moduledoc """
   A trained/measured prediction model artifact (#1036, Layer 2) — the canonical store
   for machine-trained weights and their measurement, one row per
-  `(source_key, weights_hash, model_version)`.
+  `(source_key, weights_hash, model_version, prereg_id)` — each pre-registration scopes its
+  own artifact so re-running a hypothesis can't collide with a prior one.
 
   Distinct from `metric_weight_profiles` (human-authored presets). `feature_set`
   declares the granularity (`"lens"` or `"data_point"`) and which features the model

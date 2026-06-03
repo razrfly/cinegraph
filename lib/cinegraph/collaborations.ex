@@ -22,6 +22,13 @@ defmodule Cinegraph.Collaborations do
   ]
 
   @doc """
+  The crew jobs that, alongside the top-20 cast and directors, define the "key people" scope the
+  collaboration graph (and the `person_collaboration_trends` matview) is built on. Exposed so
+  derived prediction features can reuse the same person scope instead of copying the list.
+  """
+  def key_crew_jobs, do: @key_crew_jobs
+
+  @doc """
   Populates the collaborations table from existing movie credits.
   This should be run after importing movies.
   """

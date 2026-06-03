@@ -20,11 +20,12 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
   end
 
   describe "supported_codes/0 — the routing guard" do
-    test "ships the 4 FeatureResolver-backed features, NOT the deferred prior_collab_density" do
+    test "ships all 5 derived features, including the matview-backed prior_collab_density (#1044)" do
       assert Enum.sort(DerivedFeatures.supported_codes()) ==
-               ~w(auteur_track_record box_office_roi canonical_contribution festival_prestige)
+               ~w(auteur_track_record box_office_roi canonical_contribution festival_prestige
+                  prior_collab_density)
 
-      refute "prior_collab_density" in DerivedFeatures.supported_codes()
+      assert "prior_collab_density" in DerivedFeatures.supported_codes()
     end
   end
 
@@ -33,7 +34,7 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
       m = movie(1, %{"a" => 1, "b" => 1}, 1_000_000, 10_000_000)
       vals = DerivedFeatures.load([m], DerivedFeatures.supported_codes(), @sk) |> Map.fetch!(1)
 
-      assert map_size(vals) == 4
+      assert map_size(vals) == 5
       for {_code, v} <- vals, do: assert(v >= 0.0 and v <= 1.0)
     end
 
@@ -52,10 +53,33 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
       assert DerivedFeatures.load([none], ["box_office_roi"], @sk)[2]["box_office_roi"] == 0.0
     end
 
-    test "only requested supported codes are emitted" do
+    test "unsupported codes are filtered out; only supported requested codes are emitted" do
+      m = movie(1, %{"a" => 1})
+      vals = DerivedFeatures.load([m], ["canonical_contribution", "not_a_real_code"], @sk)[1]
+      assert Map.keys(vals) == ["canonical_contribution"]
+    end
+  end
+
+  describe "prior_collab_density — the matview data path (#1044)" do
+    # These assert the no-signal path against an empty matview (no fixtures): the SQL returns no
+    # rows, so callers default to 0.0. The leakage/aggregation math is covered by the data-backed
+    # PriorCollabDensityTest (non-async, with a REFRESH'd matview).
+    test "emits 0.0 for a movie with no prior collaboration data" do
+      m = movie(1, %{"a" => 1})
+      vals = DerivedFeatures.load([m], ["prior_collab_density"], @sk)[1]
+      assert vals["prior_collab_density"] == 0.0
+    end
+
+    test "handles a movie with no release_date without error (0.0)" do
+      m = %{movie(1, %{"a" => 1}) | release_date: nil}
+      vals = DerivedFeatures.load([m], ["prior_collab_density"], @sk)[1]
+      assert vals["prior_collab_density"] == 0.0
+    end
+
+    test "is emitted alongside the FeatureResolver-backed codes in one assembly" do
       m = movie(1, %{"a" => 1})
       vals = DerivedFeatures.load([m], ["canonical_contribution", "prior_collab_density"], @sk)[1]
-      assert Map.keys(vals) == ["canonical_contribution"]
+      assert Enum.sort(Map.keys(vals)) == ["canonical_contribution", "prior_collab_density"]
     end
   end
 

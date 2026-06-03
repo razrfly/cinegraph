@@ -1,6 +1,6 @@
-# #1046 — Reality check: does the prediction engine actually work, or are we tricking ourselves?
+# #1047 — Reality check: does the prediction engine actually work, or are we tricking ourselves?
 
-**Status:** audit / deep-dive (no code changes in this issue — findings + prioritized follow-ups)
+**Status:** audit / deep-dive + staged execution plan (§5). The diagnosis (§1–4, §6) is the finding; §5 is how we act on it without trying to swallow it in one PR.
 **Date:** 2026-06-03
 **Scope:** everything built in #1027 → #1030 → #1036 → #1039 → #1040 (the Tunable Algorithm Engine: 3-layer substrate, the bus, the credibility/reliability engines, and the iteration loop).
 **Audited against:** the live dev DB (11 trained models, 10 active lists), the algorithm source, and the hardware posture.
@@ -23,7 +23,7 @@ The weakness is not the machinery, it's the **substance of the signal**: most of
 | **Statistical validity (does the signal exist?)** | **C+** | Real lift over baselines on 8/10 lists — but circular, underpowered, and not cross-comparable. |
 | Resource utilization (M3 Studio) | **B−** | Compute is trivial (EXLA is overkill); the real lever is materialization + the ephemeral PG tuning. Cores mostly idle. |
 
-The single most valuable next experiment is **one ablation run** (§5.1). It will tell us, in one number per list, how much of our accuracy is *real independent signal* versus *list overlap*. Until we run it, every headline % is unfalsified on the question that actually matters.
+The single most valuable next experiment is **the ablation harness** — Stage 1 of the plan in §5. It will tell us, in one number per list, how much of our accuracy is *real independent signal* versus *list overlap*. Until we run it, every headline % is unfalsified on the question that actually matters. **Start at §5 if you want the "what do we build" answer.**
 
 ---
 
@@ -103,7 +103,7 @@ Look at the dominant learned weights (top features, live):
 
 The feature set includes **every other canonical list's membership boolean** plus the aggregate `canonical_contribution` count. The target's own code is stripped (no direct leakage — verified), **but the model is overwhelmingly learning "films that critics have already canonized on the other 9 lists tend to be on this one too."** That is true, and it's not strictly leakage, but it is *circular signal*: predicting canon from canon. The `sight_sound_directors ← sight_sound_critics` case is nearly tautological (two cuts of one 2022 poll).
 
-The marketing hook is "we predict the 1001 list." The honest footnote today is "…mostly by checking whether it's already on 8 other best-films lists." We do not currently know how much **independent** predictive power exists from objective features (ratings, votes, box office, festival results, runtime, language). **We have never measured it.** (Fix: the ablation, §5.1 — the single most important next run.)
+The marketing hook is "we predict the 1001 list." The honest footnote today is "…mostly by checking whether it's already on 8 other best-films lists." We do not currently know how much **independent** predictive power exists from objective features (ratings, votes, box office, festival results, runtime, language). **We have never measured it.** (Fix: the ablation harness — §5 Stage 1.)
 
 ### 4.3 🟠 Temporal holdouts are severely underpowered
 
@@ -126,38 +126,76 @@ The marketing hook is "we predict the 1001 list." The honest footnote today is "
 
 ---
 
-## 5. Recommendations (prioritized)
+## 5. Staged execution plan
 
-### 5.1 🥇 Run the ablation. This is the experiment that answers the user's question.
+This issue is a **diagnosis + plan**, not a single PR. Below is the triage first (is anything actually broken?), then four stages in dependency order. Each stage is sized to be its own PR; do **not** implement them as one blob. Where another active issue already owns a piece, this plan defers to it rather than re-speccing it.
 
-For each list, run `run_experiment` twice on identical splits:
-- **Full** feature set (current).
-- **Objective-only**: drop `canonical_contribution`, `list_appearances`, every per-list membership boolean, and `auteur_track_record` — keep ratings, votes, box office, festival, runtime, language, certifications.
+### Triage — the three questions, answered up front
 
-Report `pr_auc_full` vs `pr_auc_objective` per list. The delta is, finally, the honest measure of **independent predictive signal**. If objective-only still beats baseline, we have a real product. If it collapses to baseline, our headline is "we know which films are already famous," and we should say so. `Trainer.run_experiment(features: ...)` already accepts an explicit code list (`trainer.ex:261`), so this is a mix-task wiring job, not new infrastructure. **Do this first.**
+> **Are there any big/major correctness problems?** **No.** Nothing is broken or producing wrong math. The integrity machinery is sound (§2), the train/serve symmetry holds (§1), and the leakage strips are verified. The "C+ on signal" is an *unproven-value* problem, not a *wrong-answer* problem.
+>
+> **Are there safety problems?** **One small one.** A failed model (`national_film_registry` id=11: recall 0, n=5, identity calibration) is still set **active**. Blast radius is low — `Reliability` already suppresses its headline on read and `predictions.candidates` suppresses the fake probability — but an `:insufficient` model should not silently be the active pointer. That's Stage 0.
+>
+> **Are there infrastructure problems?** **One real one, and it's already owned by #1045:** `metric_values_view` is a plain 4-way-UNION view recomputed on every train/eval pass. It is the binding constraint on the whole iteration loop, and #1047's core ask (run *many* ablations/sweeps) is gated by it. This plan does **not** re-spec materialization — it declares the dependency and asks #1045 to be the single speed plan (Stage 3).
+>
+> **Where do we start?** Stage 0 (minutes, safety + cleanup), then **Stage 1 is the real work** — the ablation harness. Stage 1 can run *once, slowly*, without waiting on #1045; #1045 is what turns it into a fast repeatable loop.
 
-### 5.2 🥈 Make headline numbers comparable, or stop presenting them side-by-side.
+```
+Stage 0  safety + cleanup        ─┐ (independent, do now)
+Stage 1  measurement loop ◄───────┤ THE CORE TICKET. needs nothing but existing code.
+Stage 2  honest disclosure ◄──────┘ consumes Stage 1's per-list deltas
+Stage 3  sustained speed = #1045   (parallel; unblocks running Stage 1 at scale)
+#1044  prior_collab_density        (parallel; feeds a new feature into Stage 1's buckets)
+```
 
-Options, cheapest first:
-1. **Always show the baseline next to the headline** ("36% vs 0.01% popularity" vs "58% vs 39% popularity") so the difficulty is visible. Lowest effort, high honesty.
-2. **Lead with the lift, not the raw recall** — a difficulty-normalized "skill over baseline" figure is comparable across strategies in a way raw recall is not.
-3. **Pick one strategy per public claim.** If `/predictions` compares lists, either backtest them all the same way or visually segregate temporal from static. Never sort a single leaderboard by raw headline across mixed strategies.
+---
 
-### 5.3 🥉 State the structural limits in the product copy.
-- Temporal lists are capped at low confidence by holdout size — say it.
-- "Accuracy" is recall-at-K-against-this-universe, not "probability we're right about any one film" — the calibrated per-film probability is the latter and only `:platt` models have it.
+### Stage 0 — Triage & cleanup (quick wins, ~½ day, no dependencies)
 
-### 5.4 Housekeeping
-- Delete orphan model id=3; backfill or drop `movie_lists.backtest_strategy`.
-- Investigate the edition-year-disagreement on the 4 static lists (data freshness).
-- Document the `director_avg_imdb` self-inclusion seam (or strip it).
+The "is anything wrong right now" sweep. Small, safe, unblocks clean measurement.
 
-### 5.5 Resources (M3 Studio) — important reframing
-**The honest finding: this workload does not need the M3's muscle, and "use the cores better" is the wrong optimization.** The logistic regression is tiny (≤~60 features × a few thousand undersampled rows) — EXLA/Metal is overkill and the fit is microseconds. The bottleneck is 100% **Postgres feature-loading**, and the real levers are:
-1. **Materialize `metric_values_view`.** It is a regular 4-way-UNION VIEW recomputed from base tables on every training/eval pass (`priv/repo/migrations/20260602120700_complete_metric_values_view.exs`). A materialized view + concurrent refresh is the single biggest speedup. This is already flagged as #1045's "pinned candidate universe ~45×" direction — make it concrete.
-2. **The PG tuning is ephemeral.** `work_mem`/`effective_cache_size`/`jit`/`shared_buffers` were set via `ALTER SYSTEM` but exist *only in the running instance* — **nothing in version control**, and the `shared_buffers→16GB` restart is still pending. One reinstall and it's gone. Commit a `postgresql.tuning.conf` (or document the `ALTER SYSTEM` in a repo doc) so it survives.
-3. **`config :nx, default_backend: EXLA.Backend` is set in dev/test but NOT prod** — if any prod path ever fits a model it silently falls to the BinaryBackend. Low impact today (training is dev-side) but a one-line fix.
-4. Parallelism is hardcoded to `max_concurrency: 4` in the sweep/CV paths (`trainer.ex:235`, `weight_optimizer.ex:160/338/425`) — ~25% core use. But given the I/O-bound reality, **raising this matters far less than materializing the view.** Only worth touching after #5.5.1.
+- [ ] **Don't leave a failed model active.** Decide the policy: either refuse to set an `:insufficient` model as `active_prediction_model_id`, or keep the pointer but require the serving layer to treat `:insufficient` as "no prediction." `national_film_registry` (id=11) is the live offender.
+- [ ] **Delete orphan model id=3** (`1001_movies`, superseded by id=6 — dead row).
+- [ ] **Resolve `movie_lists.backtest_strategy`** — NULL on all 10 rows. Either backfill from the active model's strategy or drop the column; right now anything reading it gets `nil`.
+- [ ] Log the edition-year disagreement (4 static lists) as a data-freshness task — investigate whether imported edition metadata is stale vs the newest member we hold. (Diagnose only; not a blocker.)
+
+### Stage 1 — The measurement loop (THE core ticket; no new infra)
+
+This is the work the whole audit points at. It answers "is the signal real?" with a number per list. `Trainer.run_experiment/2` already accepts an explicit code list via `resolve_codes/2` (`trainer.ex:153`), so this is feature-bucket plumbing + a report, not new ML.
+
+**1.1 — Define and classify feature buckets.** Add a classifier so a run can select `:full`, `:objective_only`, or `:canon_overlap` (alongside the existing `all|raw|derived`). Proposed taxonomy (review the borderline rows before locking):
+
+| Bucket | Codes |
+|---|---|
+| **canon_overlap** (the "already canonized" crutch) | `canonical_contribution`, `list_appearances`, every other list's membership boolean (the dynamic `list_codes`), `auteur_track_record` (counts the director's OTHER films *on the target list* → canon-derived) |
+| **objective_only** (independent signal) | ratings (`imdb_rating`, `tmdb_rating`, `metacritic_metascore`, `rotten_tomatoes_tomatometer`), `imdb_rating_votes`, box office (`tmdb_budget`, `tmdb_revenue_worldwide`, `box_office_roi`), festival (`festival_prestige` + dynamic festival `*_win`/`*_nom` — juried, not canon-list), metadata (`runtime`, `original_language`, `production_country_count`, `has_official_trailer`, `collection_membership`, `release_year`), `person_quality_score` |
+| **full** | objective_only ∪ canon_overlap (current behavior) |
+
+Borderline calls to decide explicitly (not silently): `person_quality_score` (career quality — counted objective), `festival_prestige` (juried, but prestige correlates with canon — counted objective), and **`prior_collab_density` from #1044** (collaboration-network prestige — default objective *unless* we judge it canon-adjacent; this is the coordination point with #1044).
+
+**1.2 — Expose the buckets in the CLI.** `predictions.experiment` currently only parses `all | raw | derived` (`predictions.experiment.ex:20`). Add `objective_only`, `canon_overlap`, and a `custom:code1,code2,...` form.
+
+**1.3 — Add an ablation report.** A mode that runs `:full`, `:objective_only`, and `:canon_overlap` on the **same seed and split** and prints, per list: PR-AUC, recall@K, and lift for each bucket, plus the **`full − objective_only` delta**. That delta is the honest measure of independent signal. Interpretation rule, stated in advance: if `objective_only` still clears the lift gate, we have a real product; if it collapses to baseline, our headline is "we know which films are already famous," and Stage 2 must say so.
+
+**1.4 — Run it once across all 10 lists and record the table** (in this issue or a results doc). Slow is fine — it's one-time and does not need Stage 3.
+
+### Stage 2 — Honest disclosure (consumes Stage 1's output)
+
+Once we know the real signal, stop the two ways the product would mislead a user (§4.1, §4.2):
+
+- [ ] **Show baseline + lift next to every headline**, never the raw recall alone ("36% vs 0.01% popularity" reads very differently from "58% vs 39%").
+- [ ] **Lead with lift (skill over baseline), not raw recall@K** — it is the only figure comparable across temporal vs static strategies. Surface the strategy + difficulty (base rate / universe size) so a static list isn't visually ranked against a temporal one as if equal.
+- [ ] **Surface the objective-vs-full split** from Stage 1 so we never imply "we understand greatness" when the number is mostly "it's already on other lists."
+- [ ] State structural limits in copy: temporal lists are confidence-capped by holdout size; "accuracy" is recall-at-K-against-this-universe, not per-film probability (only `:platt` models have the latter).
+
+### Stage 3 — Sustained iteration speed (**owned by #1045 — do not duplicate here**)
+
+Stage 1 proves the signal once; making it a *fast repeatable loop* (many sweeps/ablations) needs the speed work. **The reframing matters: this workload does not need the M3's cores — it's 100% Postgres-IO-bound.** The logistic fit is tiny (≤~60 features × a few thousand undersampled rows; EXLA/Metal is overkill). So "use more cores" is the wrong optimization. The real levers, which **belong in #1045 as one speed plan, not two**:
+
+1. **Materialize `metric_values_view`** (`priv/repo/migrations/20260602120700_complete_metric_values_view.exs`) + concurrent refresh — the single biggest speedup, and the prerequisite for running Stage 1 at scale.
+2. **Commit the ephemeral PG tuning to VCS.** `work_mem`/`effective_cache_size`/`jit`/`shared_buffers` were set via `ALTER SYSTEM` and live *only in the running instance* — nothing in version control, `shared_buffers→16GB` restart still pending. One reinstall loses it.
+3. **Set `config :nx, default_backend: EXLA.Backend` in prod** (set in dev/test, not prod) — one line, prevents a silent BinaryBackend fallback.
+4. Raising `max_concurrency` (hardcoded 4 in `trainer.ex:235`, `weight_optimizer.ex:160/338/425`, ~25% core use) is **last** — given the IO-bound reality it matters far less than materialization. Only worth it after #1 lands.
 
 ---
 
@@ -165,7 +203,7 @@ Options, cheapest first:
 
 **Yes, the machinery works, and no, we are not tricking ourselves — *yet*.** The integrity scaffolding is genuinely excellent and is actively catching our own failures (two `:insufficient` grades prove it). The substrate is clean and the train/serve symmetry is real.
 
-**But we have not yet proven the engine has independent predictive value.** We've proven it beats "rank by popularity" on 8/10 lists — which it does largely by exploiting the fact that prestige lists overlap. The honest grade for the *signal* is C+ until the §5.1 ablation tells us what's left when we take the canon-overlap crutch away.
+**But we have not yet proven the engine has independent predictive value.** We've proven it beats "rank by popularity" on 8/10 lists — which it does largely by exploiting the fact that prestige lists overlap. The honest grade for the *signal* is C+ until the Stage 1 ablation (§5) tells us what's left when we take the canon-overlap crutch away.
 
 The two ways the *finished product* would most plausibly mislead a user are both fixable disclosure problems, not modeling bugs:
 1. presenting temporal and static headline %s as if they're comparable (§4.1), and
@@ -175,9 +213,19 @@ Fix the disclosure, run the ablation, and this goes from "rigorous but unproven"
 
 ---
 
-### Follow-ups this issue spawns
-- [ ] **#1046a** — objective-vs-full ablation harness + per-list deltas (§5.1) **← do first**
-- [ ] **#1046b** — comparable headline presentation / lift-forward UI (§5.2–5.3)
-- [ ] **#1046c** — materialize `metric_values_view` + commit PG tuning to VCS (§5.5.1–2)
-- [ ] **#1046d** — housekeeping: delete model id=3, fix `backtest_strategy` column, edition-year data freshness (§4.6)
-- [ ] relates to #1044 (prior_collab_density), #1045 (experiment speed)
+## 7. How this coordinates with the active follow-ups
+
+This issue is the **measurement + disclosure** layer; the other two open tickets are signal and speed. They are complementary, not competing:
+
+- **#1044 (`prior_collab_density`)** — adds one more (independent-ish) signal to the feature surface. When it lands, classify it into Stage 1's buckets: **objective_only by default**, unless we decide collaboration-network prestige is canon-adjacent. It should be live before the "final" ablation so we measure the real surface.
+- **#1045 (experiment speed)** — *is* Stage 3. Materialization + pinned universe + PG-tuning-to-VCS should be **one speed plan there**, not re-specced here. #1047's many-ablations recommendation is gated on it.
+- **#1047 (this issue)** — proves whether the signal is real (Stage 1) and stops the product from misleading users (Stage 2). It does not add signal (#1044) or speed (#1045); it adds the missing *measurement loop and honest reporting*.
+
+**Sequencing:** Stage 0 now → Stage 1 once (slow, no deps) to get the existential answer → Stage 2 to disclose it. #1044 and #1045 proceed in parallel; re-run Stage 1 fast (via #1045) once #1044's signal is in. Only then is the claim "these models are as good as we can currently make them, and here's exactly how good" actually defensible (the #1027 thesis).
+
+### Checklist (by stage — kept in this issue; peel into PRs as you go, don't pre-spawn sub-issues)
+- [ ] **Stage 0** — deactivate/guard insufficient models; delete model id=3; resolve `backtest_strategy` column; log edition-year freshness
+- [ ] **Stage 1** — feature-bucket classifier (`objective_only`/`canon_overlap`/`custom`) → CLI → ablation report → one full run across 10 lists
+- [ ] **Stage 2** — baseline+lift-forward, strategy/difficulty-aware, objective-vs-full disclosure in reliability/candidate output + copy
+- [ ] **Stage 3** — defer to **#1045** (materialize view, commit PG tuning, prod Nx backend, then concurrency)
+- [ ] **Coordinate** — #1044 feeds Stage 1's objective bucket; re-run the ablation once it lands

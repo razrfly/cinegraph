@@ -29,7 +29,7 @@ defmodule Cinegraph.Scoring.LensFormulas do
     * `:metacritic`, `:rt_tomatometer` — 0–100 critic scores
     * `:popularity` — TMDb popularity_score (Absolute `time_machine`)
     * `:budget`, `:revenue` — external_metrics financials (Absolute `box_office`)
-    * `:tmdb_budget`, `:tmdb_revenue` — tmdb_data financials (Target `box_office`)
+    * `:tmdb_budget`, `:tmdb_revenue` — external_metrics financials (Target `box_office`, #1042)
     * `:canonical_count` — `map_size(canonical_sources)` AFTER target-stripping
     * `:release_year` — for era weighting
     * `:person_quality` — role-weighted top-10 quality, 0–100 (Absolute `auteurs`)

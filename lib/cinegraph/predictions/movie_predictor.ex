@@ -44,14 +44,16 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     # Get the most engagement-signaled movies from the decade.
     # order_by ensures notable films are fetched first; limit keeps worker time bounded.
     # (HistoricalValidator runs unbounded for backtest accuracy — this function is UI-only.)
-    # #1042: target box_office now reads budget/revenue from external_metrics, so the
-    # load_in_query:false `tmdb_data` blob no longer needs opting back in for scoring.
+    # #1042: rank by the externalized `tmdb` `rating_votes` signal (left join so movies without a
+    # vote row still appear, sorted last), keeping the volatile signal out of the `tmdb_data` blob.
     all_movies_query =
       from m in Movie,
+        left_join: em in "external_metrics",
+        on: em.movie_id == m.id and em.source == "tmdb" and em.metric_type == "rating_votes",
         where: m.release_date >= ^start_date,
         where: m.release_date <= ^end_date,
         where: m.import_status == "full",
-        order_by: [desc: fragment("COALESCE((? ->> 'vote_count')::numeric, 0)", m.tmdb_data)],
+        order_by: [desc: fragment("COALESCE(?, 0)", em.value)],
         limit: 5000
 
     all_decade_movies = Repo.all(all_movies_query, timeout: :timer.seconds(120))
