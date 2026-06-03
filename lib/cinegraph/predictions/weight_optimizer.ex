@@ -12,12 +12,12 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
       # => %{weights: %{...}, trained_accuracy: 61.2, baseline_accuracy: 55.8, ...}
 
       WeightOptimizer.train("1001_movies", save: true)
-      # also persists weights to movie_lists.trained_weights
+      # also persists a prediction_models artifact, sets movie_lists.active_prediction_model_id,
+      # and refreshes the derived movie_lists.trained_weights cache (#1036 Session 2)
 
   """
 
   alias Cinegraph.Predictions.{LensScoring, HistoricalValidator}
-  alias Cinegraph.Movies.MovieLists
 
   require Logger
 
@@ -31,7 +31,8 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
   ## Options
     * `:sample_ratio` - negatives-to-positives ratio for undersampling (default: 5)
-    * `:save` - if true, persist weights to DB via MovieLists.save_trained_weights/2
+    * (analysis-only: this optimizer no longer persists — use `Cinegraph.Predictions.Trainer`,
+      which enforces pre-registration, to train and save an active model)
 
   Returns a result map with:
     * `:weights` - %{mob: float, critics: float, ...} summing to 1.0
@@ -92,15 +93,9 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
       }
     }
 
-    if Keyword.get(opts, :save, false) do
-      string_weights = Map.new(weights, fn {k, v} -> {Atom.to_string(k), v} end)
-
-      case MovieLists.save_trained_weights(source_key, string_weights) do
-        {:ok, _} -> Logger.info("WeightOptimizer: saved weights to DB for #{source_key}")
-        {:error, reason} -> Logger.error("WeightOptimizer: failed to save — #{inspect(reason)}")
-      end
-    end
-
+    # NOTE: this 6-lens optimizer is now analysis-only. Persisting a model is the integrity
+    # protocol's job (`Cinegraph.Predictions.Trainer`, which requires a pre-registration);
+    # a `:save` option here is intentionally ignored so no path can write a non-protocol model.
     result
   end
 
@@ -124,16 +119,21 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   Fit logistic regression on the feature matrix. Returns weight map with atom keys.
   """
   def fit_model(x_list, y_list) do
+    x_list |> fit_raw(y_list) |> extract_weights()
+  end
+
+  @doc """
+  Fit logistic regression and return the raw Scholar model (coefficients intact), so callers
+  can extract weights over an arbitrary feature list via `extract_weights/2`.
+  """
+  def fit_raw(x_list, y_list) do
     x_tensor = Nx.tensor(x_list, type: :f32)
     y_tensor = Nx.tensor(y_list, type: :u32)
 
-    model =
-      Scholar.Linear.LogisticRegression.fit(x_tensor, y_tensor,
-        num_classes: 2,
-        max_iterations: 1000
-      )
-
-    extract_weights(model)
+    Scholar.Linear.LogisticRegression.fit(x_tensor, y_tensor,
+      num_classes: 2,
+      max_iterations: 1000
+    )
   end
 
   @doc """
@@ -193,30 +193,28 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
   @doc """
   Extract normalized positive-class weights from a fitted logistic regression model.
-  Clamps negatives to 0, normalizes to sum to 1.0.
+  Clamps negatives to 0, normalizes to sum to 1.0. Keyed by the 6 lens atoms.
   """
-  def extract_weights(model) do
-    # coefficients shape: {num_features, num_classes}
-    # Column 1 = positive class weights, one per feature
+  def extract_weights(model), do: extract_weights(model, @criteria)
+
+  @doc """
+  Generalized weight extraction over an arbitrary ordered feature list (atoms or strings,
+  e.g. data-point `metric_code`s). Column order MUST match the feature matrix used to fit.
+  Clamps negative coefficients to 0 and normalizes to sum to 1.0.
+  """
+  def extract_weights(model, feature_names) do
     pos_coeffs = model.coefficients[[.., 1]]
-
-    # Clamp negatives to 0 — all 6 features should be positively predictive
     clamped = Nx.max(pos_coeffs, 0.0)
-
     total = Nx.sum(clamped) |> Nx.to_number()
+    n = length(feature_names)
 
     normalized =
-      if total > 0.0 do
-        Nx.divide(clamped, total)
-      else
-        # fallback: equal weights
-        Nx.broadcast(Nx.tensor(1.0 / length(@criteria)), {length(@criteria)})
-      end
+      if total > 0.0,
+        do: Nx.divide(clamped, total),
+        else: Nx.broadcast(Nx.tensor(1.0 / n), {n})
 
-    values = Nx.to_list(normalized)
-
-    @criteria
-    |> Enum.zip(values)
+    feature_names
+    |> Enum.zip(Nx.to_list(normalized))
     |> Map.new()
   end
 
@@ -226,7 +224,6 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   profiles in the search. Returns results sorted by overall accuracy descending.
 
   ## Options
-    * `:save` - persist the best weights to DB
     * `:top` - how many results to return (default: 20)
 
   ## Example
@@ -280,21 +277,8 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
       |> Enum.with_index(1)
       |> Enum.map(fn {r, i} -> Map.put(r, :rank, i) end)
 
-    if Keyword.get(opts, :save, false) and top_results != [] do
-      best = hd(top_results)
-      string_weights = Map.new(best.weights, fn {k, v} -> {Atom.to_string(k), v} end)
-
-      case MovieLists.save_trained_weights(source_key, string_weights) do
-        {:ok, _} ->
-          Logger.info(
-            "WeightOptimizer.sweep: saved best weights (#{best.accuracy}%) for #{source_key}"
-          )
-
-        {:error, reason} ->
-          Logger.error("WeightOptimizer.sweep: failed to save — #{inspect(reason)}")
-      end
-    end
-
+    # Sweep is exploration-only: it ranks weight vectors but never persists. Promoting a
+    # vector to an active model must go through the integrity protocol (Trainer + prereg).
     top_results
   end
 

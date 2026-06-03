@@ -95,6 +95,39 @@ defmodule Cinegraph.Scoring.LensFormulas do
     if scores == [], do: nil, else: min(Enum.sum(scores) / length(scores), 100.0)
   end
 
+  # ── generic :weighted_mean (catalog-driven; #1036 Layer 1) ─────────────────
+
+  @doc """
+  Generic `:weighted_mean` lens (0–10): the `weight_within_lens`-weighted mean of its
+  catalog members, each normalized to 0–10 via `value / scale_max * 10`.
+
+  Members are `%{value: number | nil, scale_max: number, weight: number}` built from
+  `metric_definitions` (so adding a member to the catalog flows in here with no code
+  change). A member counts only when present (`value` non-nil and `> 0`). Returns nil
+  when no member is present — matching the prior bespoke mob/critics behaviour.
+  """
+  def weighted_mean(members) do
+    present =
+      Enum.filter(members, fn m ->
+        is_number(m.value) and m.value > 0 and is_number(m.scale_max) and m.scale_max > 0 and
+          is_number(m.weight) and m.weight > 0
+      end)
+
+    case present do
+      [] ->
+        nil
+
+      _ ->
+        {weighted_sum, weight_total} =
+          Enum.reduce(present, {0.0, 0.0}, fn m, {ws, wt} ->
+            # Normalize each member to the 0–10 lens scale via its catalog raw_scale_max.
+            {ws + m.value / m.scale_max * 10.0 * m.weight, wt + m.weight}
+          end)
+
+        weighted_sum / weight_total
+    end
+  end
+
   # ── festival_recognition ─────────────────────────────────────────────────
 
   @doc """

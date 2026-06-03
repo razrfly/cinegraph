@@ -306,17 +306,20 @@ defmodule CinegraphWeb.MetricsLive.Index do
     query = from(m in Movie)
     scored_query = ScoringService.apply_scoring(query, profile, %{min_score: 0.0})
 
+    # apply_scoring select_merges discovery_score + score_components onto each movie.
     top_movies =
       scored_query
       |> limit(5)
-      |> select([m], %{
-        id: m.id,
-        title: m.title,
-        year: fragment("EXTRACT(YEAR FROM ?)", m.release_date),
-        score: m.discovery_score,
-        components: m.score_components
-      })
       |> Repo.all()
+      |> Enum.map(fn m ->
+        %{
+          id: m.id,
+          title: m.title,
+          year: m.release_date && m.release_date.year,
+          score: m.discovery_score,
+          components: m.score_components
+        }
+      end)
 
     assign(socket, :profile_examples, top_movies)
   end

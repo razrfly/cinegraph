@@ -25,11 +25,8 @@ defmodule Cinegraph.Predictions.LensScoring do
   6 lens keys. Scores are on a 0–100 scale; `likelihood_percentage` is unchanged.
   """
 
-  import Ecto.Query
-  alias Cinegraph.Repo
-  alias Cinegraph.Movies.Movie
   alias Cinegraph.Metrics.ScoringService
-  alias Cinegraph.Scoring.{LensFormulas, Lenses}
+  alias Cinegraph.Scoring.{FeatureResolver, LensFormulas, Lenses}
 
   @default_source_key "1001_movies"
 
@@ -157,30 +154,14 @@ defmodule Cinegraph.Predictions.LensScoring do
   """
   def batch_score_movies(movies, weights \\ @default_weights, source_key \\ @default_source_key) do
     weights = weights || @default_weights
-    movie_ids = Enum.map(movies, & &1.id)
+    mode = {:target, source_key}
 
-    external_metrics = batch_load_external_metrics(movie_ids)
-    festival_nominations = batch_load_festival_nominations(movie_ids)
-
-    movies_on_target =
-      for m <- movies,
-          Map.has_key?(Map.get(m, :canonical_sources) || %{}, source_key),
-          into: MapSet.new(),
-          do: m.id
-
-    director_info = batch_load_director_info(movie_ids, source_key, movies_on_target)
+    # The FeatureResolver builds the (leakage-stripped) target inputs; the scoring math
+    # below is unchanged (#1036 Session 1).
+    bundles = FeatureResolver.resolve_batch(movies, mode)
 
     Enum.map(movies, fn movie ->
-      prediction =
-        score_one(
-          movie,
-          weights,
-          source_key,
-          external_metrics[movie.id] || [],
-          festival_nominations[movie.id] || [],
-          director_info[movie.id] || {0, nil}
-        )
-
+      prediction = score_one(weights, mode, Map.fetch!(bundles, movie.id))
       %{movie: movie, prediction: prediction}
     end)
   end
@@ -196,10 +177,7 @@ defmodule Cinegraph.Predictions.LensScoring do
 
   # ── scoring ────────────────────────────────────────────────────────────────
 
-  defp score_one(movie, weights, source_key, ext_metrics, festival_rows, director_info) do
-    mode = {:target, source_key}
-    inputs = build_inputs(movie, ext_metrics, director_info, source_key)
-
+  defp score_one(weights, mode, %{inputs: inputs, festival_rows: festival_rows}) do
     scores = %{
       mob: cap100(LensFormulas.mob(inputs, mode)) || 0.0,
       critics: cap100(LensFormulas.critics(inputs, mode)) || 0.0,
@@ -224,40 +202,6 @@ defmodule Cinegraph.Predictions.LensScoring do
       breakdown: calculate_breakdown(scores, weights)
     }
   end
-
-  defp build_inputs(movie, ext_metrics, {director_target_count, director_avg_imdb}, source_key) do
-    tmdb_data = Map.get(movie, :tmdb_data) || %{}
-
-    # Strip the target list before counting canonical presence (leakage guard).
-    canonical_count =
-      (Map.get(movie, :canonical_sources) || %{})
-      |> Map.delete(source_key)
-      |> map_size()
-
-    %{
-      imdb_rating: metric(ext_metrics, "imdb", "rating_average"),
-      tmdb_rating: metric(ext_metrics, "tmdb", "rating_average"),
-      imdb_votes: metric(ext_metrics, "imdb", "rating_votes") || 0.0,
-      metacritic: metric(ext_metrics, "metacritic", "metascore"),
-      rt_tomatometer: metric(ext_metrics, "rotten_tomatoes", "tomatometer"),
-      canonical_count: canonical_count,
-      release_year: movie_release_year(movie),
-      tmdb_budget: get_in(tmdb_data, ["budget"]) || 0,
-      tmdb_revenue: get_in(tmdb_data, ["revenue"]) || 0,
-      director_target_count: director_target_count,
-      director_avg_imdb: director_avg_imdb
-    }
-  end
-
-  defp metric(ext_metrics, source, metric_type) do
-    Enum.find_value(ext_metrics, fn
-      [^source, ^metric_type, value] -> value
-      _ -> nil
-    end)
-  end
-
-  defp movie_release_year(%{release_date: %Date{year: y}}), do: y
-  defp movie_release_year(_), do: 2000
 
   defp cap100(nil), do: nil
   defp cap100(score), do: min(score, 100.0)
@@ -287,150 +231,4 @@ defmodule Cinegraph.Predictions.LensScoring do
       }
     end)
   end
-
-  # ── batch loaders ────────────────────────────────────────────────────────
-
-  defp batch_by_chunks(movie_ids, query_fn, chunk_size \\ 500) do
-    movie_ids
-    |> Enum.chunk_every(chunk_size)
-    |> Enum.reduce(%{}, fn chunk_ids, acc -> Map.merge(acc, query_fn.(chunk_ids)) end)
-  end
-
-  defp batch_load_external_metrics(movie_ids) do
-    batch_by_chunks(movie_ids, fn chunk_ids ->
-      from(em in "external_metrics",
-        where: em.movie_id in ^chunk_ids,
-        select: [em.movie_id, em.source, em.metric_type, em.value]
-      )
-      |> Repo.all(timeout: :timer.seconds(30))
-      |> Enum.group_by(&hd/1, fn [_movie_id, source, metric_type, value] ->
-        [source, metric_type, value]
-      end)
-    end)
-  end
-
-  defp batch_load_festival_nominations(movie_ids) do
-    batch_by_chunks(movie_ids, fn chunk_ids ->
-      from(fnom in "festival_nominations",
-        join: fc in "festival_categories",
-        on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies",
-        on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations",
-        on: fcer.organization_id == fo.id,
-        where: fnom.movie_id in ^chunk_ids,
-        select: [
-          fnom.movie_id,
-          fo.abbreviation,
-          fc.name,
-          fnom.won,
-          fcer.year,
-          fo.win_score,
-          fo.nom_score
-        ]
-      )
-      |> Repo.all(timeout: :timer.seconds(30))
-      |> Enum.group_by(&hd/1, fn [_movie_id, festival, category, won, year, win_score, nom_score] ->
-        [festival, category, won, year, win_score, nom_score]
-      end)
-    end)
-  end
-
-  # Returns %{movie_id => {director_target_count, director_avg_imdb}} where the count
-  # excludes the movie's own membership in `source_key` (leakage guard for `auteurs`).
-  defp batch_load_director_info(movie_ids, source_key, movies_on_target) do
-    director_map =
-      batch_by_chunks(movie_ids, fn chunk_ids ->
-        from(mc in "movie_credits",
-          where: mc.movie_id in ^chunk_ids,
-          where: mc.credit_type == "crew",
-          where: mc.department == "Directing",
-          select: [mc.movie_id, mc.person_id]
-        )
-        |> Repo.all(timeout: :timer.seconds(30))
-        |> Enum.group_by(&hd/1, fn [_movie_id, person_id] -> person_id end)
-      end)
-
-    all_director_ids = director_map |> Map.values() |> List.flatten() |> Enum.uniq()
-
-    director_target_counts = director_target_counts(all_director_ids, source_key)
-    director_avg_ratings = director_avg_ratings(all_director_ids)
-
-    Map.new(director_map, fn {movie_id, director_ids} ->
-      raw_count =
-        director_ids
-        |> Enum.map(&Map.get(director_target_counts, &1, 0))
-        |> Enum.sum()
-
-      # Exclude this movie's own contribution to its directors' counts.
-      self_adjust =
-        if MapSet.member?(movies_on_target, movie_id), do: length(director_ids), else: 0
-
-      target_count = max(raw_count - self_adjust, 0)
-
-      avg_imdb =
-        director_ids
-        |> Enum.map(&Map.get(director_avg_ratings, &1))
-        |> Enum.reject(&is_nil/1)
-        |> then(fn ratings ->
-          if ratings == [], do: nil, else: Enum.sum(ratings) / length(ratings)
-        end)
-
-      {movie_id, {target_count, avg_imdb}}
-    end)
-  end
-
-  defp director_target_counts([], _source_key), do: %{}
-
-  defp director_target_counts(director_ids, source_key) do
-    director_ids
-    |> Enum.chunk_every(500)
-    |> Enum.reduce(%{}, fn chunk_ids, acc ->
-      rows =
-        from(m in Movie,
-          join: mc in "movie_credits",
-          on: m.id == mc.movie_id,
-          where: fragment("? \\? ?", m.canonical_sources, ^source_key),
-          where: mc.person_id in ^chunk_ids,
-          where: mc.credit_type == "crew",
-          where: mc.department == "Directing",
-          group_by: mc.person_id,
-          select: {mc.person_id, count()}
-        )
-        |> Repo.all(timeout: :timer.seconds(30))
-        |> Map.new()
-
-      Map.merge(acc, rows)
-    end)
-  end
-
-  defp director_avg_ratings([]), do: %{}
-
-  defp director_avg_ratings(director_ids) do
-    director_ids
-    |> Enum.chunk_every(500)
-    |> Enum.reduce(%{}, fn chunk_ids, acc ->
-      rows =
-        from(mc in "movie_credits",
-          join: em in "external_metrics",
-          on: em.movie_id == mc.movie_id,
-          where: em.source == "imdb",
-          where: em.metric_type == "rating_average",
-          where: mc.person_id in ^chunk_ids,
-          where: mc.credit_type == "crew",
-          where: mc.department == "Directing",
-          group_by: mc.person_id,
-          select: {mc.person_id, avg(em.value)}
-        )
-        |> Repo.all(timeout: :timer.seconds(30))
-        |> Map.new(fn {id, avg_val} -> {id, to_rounded_float(avg_val)} end)
-
-      Map.merge(acc, rows)
-    end)
-  end
-
-  defp to_rounded_float(nil), do: nil
-  defp to_rounded_float(%Decimal{} = d), do: d |> Decimal.to_float() |> Float.round(2)
-  defp to_rounded_float(f) when is_float(f), do: Float.round(f, 2)
-  defp to_rounded_float(i) when is_integer(i), do: Float.round(i * 1.0, 2)
 end

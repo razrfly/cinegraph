@@ -8,10 +8,16 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
     Movies.Movie,
     Movies.MovieScoreCache,
     Movies.MovieScoring,
-    Metrics.DisparityCalculator
+    Metrics.DisparityCalculator,
+    Scoring.LensConfig
   }
 
-  @calculation_version "4"
+  # v6 (#1036 Session 2): the tmdb/popularity_score collision was fixed — time_machine now
+  # reads REAL TMDb popularity instead of misfiled list-appearance counts (changed for ~81%
+  # of movies; only time_machine moves). Requires a re-warm:
+  #   mix cinegraph.scoring.rewarm --concurrency 16
+  # v5 (#1036 Session 1): mob/critics became catalog-driven weighted means (≤0.1 vs v4).
+  @calculation_version "6"
 
   def current_version, do: @calculation_version
 
@@ -39,7 +45,8 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
       disparity_category: disparity_attrs.disparity_category,
       unpredictability_score: disparity_attrs.unpredictability_score,
       calculated_at: DateTime.utc_now() |> DateTime.truncate(:second),
-      calculation_version: @calculation_version
+      calculation_version: @calculation_version,
+      lens_config_hash: LensConfig.lens_config_hash()
     }
 
     %MovieScoreCache{}
@@ -49,7 +56,7 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
         {:replace, ~w[mob_score critics_score festival_recognition_score time_machine_score
             auteurs_score box_office_score overall_score score_confidence
             disparity_score disparity_category unpredictability_score
-            calculated_at calculation_version updated_at]a},
+            calculated_at calculation_version lens_config_hash updated_at]a},
       conflict_target: :movie_id
     )
     |> case do

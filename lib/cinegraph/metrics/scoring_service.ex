@@ -159,18 +159,16 @@ defmodule Cinegraph.Metrics.ScoringService do
   def apply_scoring(query, profile_or_name, options \\ %{})
 
   def apply_scoring(query, %MetricWeightProfile{} = profile, options) do
-    discovery_weights = profile_to_discovery_weights(profile)
-    normalized_weights = normalize_weights(discovery_weights)
+    normalized_weights = profile |> profile_to_discovery_weights() |> normalize_weights()
     min_score = Map.get(options, :min_score, 0.0)
 
-    # Use the same query structure as DiscoveryScoringSimple but with database weights
+    # Single lens definition (#1036): score from the precomputed movie_score_caches rather
+    # than re-deriving the lenses inline in SQL. LEFT join keeps movies without a cache row
+    # (discovery_score 0), preserving the prior row set; order by the weighted lens sum.
     query
-    |> join_external_metrics()
-    |> join_festival_data()
-    |> join_person_quality_data()
-    |> select_with_scores(normalized_weights)
-    |> filter_by_min_score(normalized_weights, min_score)
-    |> order_by_score(normalized_weights)
+    |> cache_scored(normalized_weights)
+    |> apply_min_score_filter(normalized_weights, min_score)
+    |> order_by_cache_score(normalized_weights)
   end
 
   def apply_scoring(query, profile_name, options) when is_binary(profile_name) do
@@ -245,16 +243,10 @@ defmodule Cinegraph.Metrics.ScoringService do
   def add_scores_for_display(query, profile_or_name)
 
   def add_scores_for_display(query, %MetricWeightProfile{} = profile) do
-    discovery_weights = profile_to_discovery_weights(profile)
-    normalized_weights = normalize_weights(discovery_weights)
+    normalized_weights = profile |> profile_to_discovery_weights() |> normalize_weights()
 
-    query
-    |> join_external_metrics()
-    |> join_festival_data()
-    |> join_person_quality_data()
-    |> select_with_scores(normalized_weights)
-
-    # Note: No ordering or filtering - just adds the score fields
+    # Adds discovery_score + score_components from the cache; no ordering/filtering.
+    cache_scored(query, normalized_weights)
   end
 
   def add_scores_for_display(query, profile_name) when is_binary(profile_name) do
@@ -334,834 +326,110 @@ defmodule Cinegraph.Metrics.ScoringService do
     end
   end
 
-  defp join_external_metrics(query) do
-    query
-    |> join(:left, [m], em_tmdb in "external_metrics",
-      on:
-        em_tmdb.movie_id == m.id and
-          em_tmdb.source == "tmdb" and
-          em_tmdb.metric_type == "rating_average",
-      as: :tmdb_rating
-    )
-    |> join(:left, [m], em_imdb in "external_metrics",
-      on:
-        em_imdb.movie_id == m.id and
-          em_imdb.source == "imdb" and
-          em_imdb.metric_type == "rating_average",
-      as: :imdb_rating
-    )
-    |> join(:left, [m], em_meta in "external_metrics",
-      on:
-        em_meta.movie_id == m.id and
-          em_meta.source == "metacritic" and
-          em_meta.metric_type == "metascore",
-      as: :metacritic
-    )
-    |> join(:left, [m], em_rt in "external_metrics",
-      on:
-        em_rt.movie_id == m.id and
-          em_rt.source == "rotten_tomatoes" and
-          em_rt.metric_type == "tomatometer",
-      as: :rotten_tomatoes
-    )
-    |> join(:left, [m], em_rta in "external_metrics",
-      on:
-        em_rta.movie_id == m.id and
-          em_rta.source == "rotten_tomatoes" and
-          em_rta.metric_type == "audience_score",
-      as: :rt_audience
-    )
-    |> join(:left, [m], em_pop in "external_metrics",
-      on:
-        em_pop.movie_id == m.id and
-          em_pop.source == "tmdb" and
-          em_pop.metric_type == "popularity_score",
-      as: :popularity
-    )
-    |> join(:left, [m], em_budget in "external_metrics",
-      on:
-        em_budget.movie_id == m.id and
-          em_budget.source == "tmdb" and
-          em_budget.metric_type == "budget",
-      as: :budget
-    )
-    |> join(:left, [m], em_revenue in "external_metrics",
-      on:
-        em_revenue.movie_id == m.id and
-          em_revenue.source == "tmdb" and
-          em_revenue.metric_type == "revenue_worldwide",
-      as: :revenue
-    )
-  end
+  # ── cache-backed scoring (the single lens definition, #1036) ───────────────
+  # Merges discovery_score (weighted sum of the 6 cached lens scores) and
+  # score_components (the 6 cached lens scores as a map) onto each movie, from the
+  # precomputed movie_score_caches. LEFT join so uncached movies survive (score 0).
 
-  defp join_festival_data(query) do
-    festival_subquery =
-      from(fnom in "festival_nominations",
-        join: fc in "festival_categories",
-        on: fnom.category_id == fc.id,
-        join: fcer in "festival_ceremonies",
-        on: fnom.ceremony_id == fcer.id,
-        join: fo in "festival_organizations",
-        on: fcer.organization_id == fo.id,
-        group_by: fnom.movie_id,
-        select: %{
-          movie_id: fnom.movie_id,
-          prestige_score:
-            fragment(
-              """
-              LEAST(10.0, SUM(
-                CASE ?
-                  WHEN 'AMPAS'  THEN (CASE WHEN ? THEN 10.0 ELSE 8.0 END)
-                  WHEN 'CFF'    THEN (CASE WHEN ? THEN 9.5  ELSE 7.5 END)
-                  WHEN 'VIFF'   THEN (CASE WHEN ? THEN 9.0  ELSE 7.0 END)
-                  WHEN 'BIFF'   THEN (CASE WHEN ? THEN 9.0  ELSE 7.0 END)
-                  WHEN 'BAFTA'  THEN (CASE WHEN ? THEN 8.5  ELSE 6.5 END)
-                  WHEN 'HFPA'   THEN (CASE WHEN ? THEN 8.0  ELSE 6.0 END)
-                  WHEN 'SFF'    THEN (CASE WHEN ? THEN 7.5  ELSE 6.0 END)
-                  WHEN 'CCA'    THEN (CASE WHEN ? THEN 7.0  ELSE 5.0 END)
-                  ELSE               (CASE WHEN ? THEN 5.0  ELSE 3.0 END)
-                END +
-                CASE WHEN LOWER(?) LIKE ANY(ARRAY['%picture%','%film%','%director%'])
-                     THEN 1.0 ELSE 0.0 END
-              ))
-              """,
-              fo.abbreviation,
-              fnom.won,
-              fnom.won,
-              fnom.won,
-              fnom.won,
-              fnom.won,
-              fnom.won,
-              fnom.won,
-              fnom.won,
-              fnom.won,
-              fc.name
-            )
-        }
-      )
+  defp cache_scored(query, weights) do
+    {mob, critics, festival, time_m, auteurs, box_office} = lens_weight_tuple(weights)
 
-    join(query, :left, [m], f in subquery(festival_subquery),
-      on: f.movie_id == m.id,
-      as: :festivals
-    )
-  end
-
-  defp join_person_quality_data(query) do
-    # Layer 1: dedup — max score + role weight per (movie, person)
-    deduped =
-      from(mc in "movie_credits",
-        join: pm in "person_metrics",
-        on: pm.person_id == mc.person_id and pm.metric_type == "quality_score",
-        group_by: [mc.movie_id, mc.person_id],
-        select: %{
-          movie_id: mc.movie_id,
-          person_id: mc.person_id,
-          max_score: max(pm.score),
-          role_weight:
-            max(
-              fragment(
-                "CASE ? WHEN 'Directing' THEN 3.0 WHEN 'Writing' THEN 1.5 WHEN 'Production' THEN 1.0 ELSE CASE WHEN ? <= 3 THEN 2.0 WHEN ? <= 10 THEN 1.5 ELSE 1.0 END END",
-                mc.department,
-                mc.cast_order,
-                mc.cast_order
-              )
-            )
-        }
-      )
-
-    # Layer 2: rank by weighted score within each movie
-    ranked =
-      from(d in subquery(deduped),
-        select: %{
-          movie_id: d.movie_id,
-          max_score: d.max_score,
-          role_weight: d.role_weight,
-          rn:
-            fragment(
-              "ROW_NUMBER() OVER (PARTITION BY ? ORDER BY ? * ? DESC)",
-              d.movie_id,
-              d.max_score,
-              d.role_weight
-            )
-        }
-      )
-
-    # Layer 3: top-10, weighted average
-    aggregated =
-      from(r in subquery(ranked),
-        where: r.rn <= 10,
-        group_by: r.movie_id,
-        select: %{
-          movie_id: r.movie_id,
-          avg_person_quality:
-            fragment(
-              "SUM(? * ?) / NULLIF(SUM(?), 0)",
-              r.max_score,
-              r.role_weight,
-              r.role_weight
-            ),
-          total_quality_people: count(r.movie_id)
-        }
-      )
-
-    join(query, :left, [m], pq in subquery(aggregated),
-      on: pq.movie_id == m.id,
-      as: :person_quality
-    )
-  end
-
-  defp select_with_scores(query, weights) do
-    # Check if the query already has a GROUP BY clause (e.g., from genre filtering)
-    # If it does, we need to handle the selection differently
-    if has_group_by?(query) do
-      select_with_scores_grouped(query, weights)
-    else
-      select_with_scores_ungrouped(query, weights)
-    end
-  end
-
-  defp has_group_by?(query) do
-    # Check if the query has a group_by clause
-    query.group_bys != []
-  end
-
-  defp select_with_scores_ungrouped(query, weights) do
-    select_merge(
-      query,
-      [
-        m,
-        tmdb_rating: tr,
-        imdb_rating: ir,
-        metacritic: mc,
-        rotten_tomatoes: rt,
-        rt_audience: ra,
-        popularity: pop,
-        festivals: f,
-        person_quality: pq,
-        budget: b,
-        revenue: r
-      ],
-      %{
+    from m in query,
+      left_join: sc in MovieScoreCache,
+      on: sc.movie_id == m.id,
+      as: :score_cache,
+      select_merge: %{
         discovery_score:
           fragment(
-            """
-            ? * COALESCE(
-              (COALESCE(NULLIF(?, 0), 0) / 10.0 +
-               COALESCE(NULLIF(?, 0), 0) / 10.0 +
-               COALESCE(NULLIF(?, 0), 0) / 100.0) /
-              NULLIF(
-                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END,
-                0
-              ),
-              0.0
-            ) +
-            ? * CASE
-              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
-              ELSE 0.0
-            END +
-            ? * COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0) +
-            ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
-            ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
-            ? * COALESCE(CASE
-              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
-              THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
-              ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
-            END, 0)
-            """,
-            ^Map.get(weights, :mob, 0.0),
-            ir.value,
-            tr.value,
-            ra.value,
-            ir.value,
-            tr.value,
-            ra.value,
-            ^Map.get(weights, :critics, 0.0),
-            rt.value,
-            mc.value,
-            rt.value,
-            mc.value,
-            rt.value,
-            rt.value,
-            mc.value,
-            mc.value,
-            ^weights.festival_recognition,
-            f.prestige_score,
-            ^weights.time_machine,
-            m.canonical_sources,
-            pop.value,
-            pop.value,
-            ^weights.auteurs,
-            pq.avg_person_quality,
-            ^Map.get(weights, :box_office, 0.0),
-            b.value,
-            r.value,
-            r.value,
-            r.value,
-            b.value,
-            r.value
+            "COALESCE(?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0), 0)",
+            ^mob,
+            sc.mob_score,
+            ^critics,
+            sc.critics_score,
+            ^festival,
+            sc.festival_recognition_score,
+            ^time_m,
+            sc.time_machine_score,
+            ^auteurs,
+            sc.auteurs_score,
+            ^box_office,
+            sc.box_office_score
           ),
-        mob_score:
+        score_components:
           fragment(
-            "COALESCE((COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 100.0) / NULLIF(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END, 0), 0.0)",
-            ir.value,
-            tr.value,
-            ra.value,
-            ir.value,
-            tr.value,
-            ra.value
-          ),
-        critics_score:
-          fragment(
-            "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
-            rt.value,
-            mc.value,
-            rt.value,
-            mc.value,
-            rt.value,
-            rt.value,
-            mc.value,
-            mc.value
-          ),
-        score_confidence:
-          fragment(
-            "(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END) / 5.0",
-            ir.value,
-            tr.value,
-            rt.value,
-            mc.value,
-            ra.value
-          ),
-        score_components: %{
-          mob:
-            fragment(
-              "COALESCE((COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 10.0 + COALESCE(NULLIF(?, 0), 0) / 100.0) / NULLIF(CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END, 0), 0.0)",
-              ir.value,
-              tr.value,
-              ra.value,
-              ir.value,
-              tr.value,
-              ra.value
-            ),
-          critics:
-            fragment(
-              "CASE WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0 ELSE 0.0 END",
-              rt.value,
-              mc.value,
-              rt.value,
-              mc.value,
-              rt.value,
-              rt.value,
-              mc.value,
-              mc.value
-            ),
-          festival_recognition:
-            fragment(
-              "COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0)",
-              f.prestige_score
-            ),
-          time_machine:
-            fragment(
-              "COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0)",
-              m.canonical_sources,
-              pop.value,
-              pop.value
-            ),
-          auteurs:
-            fragment(
-              "COALESCE(COALESCE(?, 0) / 100.0, 0)",
-              pq.avg_person_quality
-            ),
-          box_office:
-            fragment(
-              """
-              COALESCE(CASE
-                WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
-                THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
-                ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
-              END, 0)
-              """,
-              b.value,
-              r.value,
-              r.value,
-              r.value,
-              b.value,
-              r.value
-            )
-        }
+            "jsonb_build_object('mob', ?, 'critics', ?, 'festival_recognition', ?, 'time_machine', ?, 'auteurs', ?, 'box_office', ?)",
+            sc.mob_score,
+            sc.critics_score,
+            sc.festival_recognition_score,
+            sc.time_machine_score,
+            sc.auteurs_score,
+            sc.box_office_score
+          )
       }
+  end
+
+  defp order_by_cache_score(query, weights) do
+    {mob, critics, festival, time_m, auteurs, box_office} = lens_weight_tuple(weights)
+
+    order_by(query, [m, score_cache: sc],
+      desc_nulls_last:
+        fragment(
+          "?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0)",
+          ^mob,
+          sc.mob_score,
+          ^critics,
+          sc.critics_score,
+          ^festival,
+          sc.festival_recognition_score,
+          ^time_m,
+          sc.time_machine_score,
+          ^auteurs,
+          sc.auteurs_score,
+          ^box_office,
+          sc.box_office_score
+        )
     )
   end
 
-  defp select_with_scores_grouped(query, weights) do
-    # When using GROUP BY, we need to use aggregate functions or include columns in GROUP BY
-    # Using MAX() here since we're grouping by movie ID, so there's only one value per group
-    select_merge(
+  # Filter on the SAME profile-weighted sum used for ordering/display — not overall_score
+  # (which is the fixed editorial-weighted cache value and would mis-threshold non-balanced
+  # profiles).
+  defp apply_min_score_filter(query, weights, min_score)
+       when is_number(min_score) and min_score > 0 do
+    {mob, critics, festival, time_m, auteurs, box_office} = lens_weight_tuple(weights)
+
+    where(
       query,
-      [
-        m,
-        tmdb_rating: tr,
-        imdb_rating: ir,
-        metacritic: mc,
-        rotten_tomatoes: rt,
-        rt_audience: ra,
-        popularity: pop,
-        festivals: f,
-        person_quality: pq,
-        budget: b,
-        revenue: r
-      ],
-      %{
-        discovery_score:
-          fragment(
-            """
-            ? * COALESCE(
-              (COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
-               COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
-               COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) /
-              NULLIF(
-                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END,
-                0
-              ),
-              0.0
-            ) +
-            ? * CASE
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
-              ELSE 0.0
-            END +
-            ? * COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0) +
-            ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
-            ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
-            ? * COALESCE(CASE
-              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
-              THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
-              ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
-            END, 0)
-            """,
-            ^Map.get(weights, :mob, 0.0),
-            ir.value,
-            tr.value,
-            ra.value,
-            ir.value,
-            tr.value,
-            ra.value,
-            ^Map.get(weights, :critics, 0.0),
-            rt.value,
-            mc.value,
-            rt.value,
-            mc.value,
-            rt.value,
-            rt.value,
-            mc.value,
-            mc.value,
-            ^weights.festival_recognition,
-            f.prestige_score,
-            ^weights.time_machine,
-            m.canonical_sources,
-            pop.value,
-            pop.value,
-            ^weights.auteurs,
-            pq.avg_person_quality,
-            ^Map.get(weights, :box_office, 0.0),
-            b.value,
-            r.value,
-            r.value,
-            r.value,
-            b.value,
-            r.value
-          ),
-        score_components: %{
-          mob:
-            fragment(
-              "COALESCE((COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 + COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 + COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) / NULLIF(CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END + CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END, 0), 0.0)",
-              ir.value,
-              tr.value,
-              ra.value,
-              ir.value,
-              tr.value,
-              ra.value
-            ),
-          critics:
-            fragment(
-              "CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0 WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0 ELSE 0.0 END",
-              rt.value,
-              mc.value,
-              rt.value,
-              mc.value,
-              rt.value,
-              rt.value,
-              mc.value,
-              mc.value
-            ),
-          festival_recognition:
-            fragment(
-              "COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0)",
-              f.prestige_score
-            ),
-          time_machine:
-            fragment(
-              "COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0)",
-              m.canonical_sources,
-              pop.value,
-              pop.value
-            ),
-          auteurs:
-            fragment(
-              "COALESCE(COALESCE(MAX(?), 0) / 100.0, 0)",
-              pq.avg_person_quality
-            ),
-          box_office:
-            fragment(
-              """
-              COALESCE(CASE
-                WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
-                THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
-                ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
-              END, 0)
-              """,
-              b.value,
-              r.value,
-              r.value,
-              r.value,
-              b.value,
-              r.value
-            )
-        }
-      }
+      [m, score_cache: sc],
+      fragment(
+        "(?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0) + ?::float * COALESCE(?, 0)) >= ?",
+        ^mob,
+        sc.mob_score,
+        ^critics,
+        sc.critics_score,
+        ^festival,
+        sc.festival_recognition_score,
+        ^time_m,
+        sc.time_machine_score,
+        ^auteurs,
+        sc.auteurs_score,
+        ^box_office,
+        sc.box_office_score,
+        ^min_score
+      )
     )
   end
 
-  defp filter_by_min_score(query, _weights, nil), do: query
+  defp apply_min_score_filter(query, _weights, _min_score), do: query
 
-  defp filter_by_min_score(query, weights, min_score) do
-    if has_group_by?(query) do
-      # When grouped, use HAVING instead of WHERE and aggregate functions
-      having(
-        query,
-        [
-          m,
-          tmdb_rating: tr,
-          imdb_rating: ir,
-          metacritic: mc,
-          rotten_tomatoes: rt,
-          rt_audience: ra,
-          popularity: pop,
-          festivals: f,
-          person_quality: pq,
-          budget: b,
-          revenue: r
-        ],
-        fragment(
-          """
-          ? * COALESCE(
-            (COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
-             COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
-             COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) /
-            NULLIF(
-              CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
-              CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
-              CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END,
-              0
-            ),
-            0.0
-          ) +
-          ? * CASE
-            WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
-            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
-            WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
-            ELSE 0.0
-          END +
-          ? * COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0) +
-          ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
-          ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
-          ? * COALESCE(CASE
-            WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
-            THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
-            ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
-          END, 0) >= ?
-          """,
-          ^Map.get(weights, :mob, 0.0),
-          ir.value,
-          tr.value,
-          ra.value,
-          ir.value,
-          tr.value,
-          ra.value,
-          ^Map.get(weights, :critics, 0.0),
-          rt.value,
-          mc.value,
-          rt.value,
-          mc.value,
-          rt.value,
-          rt.value,
-          mc.value,
-          mc.value,
-          ^weights.festival_recognition,
-          f.prestige_score,
-          ^weights.time_machine,
-          m.canonical_sources,
-          pop.value,
-          pop.value,
-          ^weights.auteurs,
-          pq.avg_person_quality,
-          ^Map.get(weights, :box_office, 0.0),
-          b.value,
-          r.value,
-          r.value,
-          r.value,
-          b.value,
-          r.value,
-          ^min_score
-        )
-      )
-    else
-      where(
-        query,
-        [
-          m,
-          tmdb_rating: tr,
-          imdb_rating: ir,
-          metacritic: mc,
-          rotten_tomatoes: rt,
-          rt_audience: ra,
-          popularity: pop,
-          festivals: f,
-          person_quality: pq,
-          budget: b,
-          revenue: r
-        ],
-        fragment(
-          """
-          ? * COALESCE(
-            (COALESCE(NULLIF(?, 0), 0) / 10.0 +
-             COALESCE(NULLIF(?, 0), 0) / 10.0 +
-             COALESCE(NULLIF(?, 0), 0) / 100.0) /
-            NULLIF(
-              CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
-              CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
-              CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END,
-              0
-            ),
-            0.0
-          ) +
-          ? * CASE
-            WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
-            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
-            WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
-            ELSE 0.0
-          END +
-          ? * COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0) +
-          ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
-          ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
-          ? * COALESCE(CASE
-            WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
-            THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
-            ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
-          END, 0) >= ?
-          """,
-          ^Map.get(weights, :mob, 0.0),
-          ir.value,
-          tr.value,
-          ra.value,
-          ir.value,
-          tr.value,
-          ra.value,
-          ^Map.get(weights, :critics, 0.0),
-          rt.value,
-          mc.value,
-          rt.value,
-          mc.value,
-          rt.value,
-          rt.value,
-          mc.value,
-          mc.value,
-          ^weights.festival_recognition,
-          f.prestige_score,
-          ^weights.time_machine,
-          m.canonical_sources,
-          pop.value,
-          pop.value,
-          ^weights.auteurs,
-          pq.avg_person_quality,
-          ^Map.get(weights, :box_office, 0.0),
-          b.value,
-          r.value,
-          r.value,
-          r.value,
-          b.value,
-          r.value,
-          ^min_score
-        )
-      )
-    end
-  end
-
-  defp order_by_score(query, weights) do
-    if has_group_by?(query) do
-      order_by(
-        query,
-        [
-          m,
-          tmdb_rating: tr,
-          imdb_rating: ir,
-          metacritic: mc,
-          rotten_tomatoes: rt,
-          rt_audience: ra,
-          popularity: pop,
-          festivals: f,
-          person_quality: pq,
-          budget: b,
-          revenue: r
-        ],
-        desc:
-          fragment(
-            """
-            ? * COALESCE(
-              (COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
-               COALESCE(NULLIF(MAX(?), 0), 0) / 10.0 +
-               COALESCE(NULLIF(MAX(?), 0), 0) / 100.0) /
-              NULLIF(
-                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN 1 ELSE 0 END,
-                0
-              ),
-              0.0
-            ) +
-            ? * CASE
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL AND NULLIF(MAX(?), 0) IS NOT NULL THEN (MAX(?) / 100.0 + MAX(?) / 100.0) / 2.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
-              WHEN NULLIF(MAX(?), 0) IS NOT NULL THEN MAX(?) / 100.0
-              ELSE 0.0
-            END +
-            ? * COALESCE(LEAST(1.0, COALESCE(MAX(?), 0) / 10.0), 0) +
-            ? * COALESCE(LEAST(1.0, COALESCE(MAX((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb)))), 0) * 0.1 + CASE WHEN COALESCE(MAX(?), 0) = 0 THEN 0 ELSE LN(COALESCE(MAX(?), 0) + 1) / LN(1001) END), 0) +
-            ? * COALESCE(COALESCE(MAX(?), 0) / 100.0, 0) +
-            ? * COALESCE(CASE
-              WHEN COALESCE(MAX(?), 0) > 0 AND COALESCE(MAX(?), 0) > 0
-              THEN LEAST(1.0, (LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(MAX(?), 0) / COALESCE(MAX(?), 0)) * 0.4)
-              ELSE COALESCE(LN(COALESCE(MAX(?), 0) + 1) / LN(1000000000), 0)
-            END, 0)
-            """,
-            ^Map.get(weights, :mob, 0.0),
-            ir.value,
-            tr.value,
-            ra.value,
-            ir.value,
-            tr.value,
-            ra.value,
-            ^Map.get(weights, :critics, 0.0),
-            rt.value,
-            mc.value,
-            rt.value,
-            mc.value,
-            rt.value,
-            rt.value,
-            mc.value,
-            mc.value,
-            ^weights.festival_recognition,
-            f.prestige_score,
-            ^weights.time_machine,
-            m.canonical_sources,
-            pop.value,
-            pop.value,
-            ^weights.auteurs,
-            pq.avg_person_quality,
-            ^Map.get(weights, :box_office, 0.0),
-            b.value,
-            r.value,
-            r.value,
-            r.value,
-            b.value,
-            r.value
-          )
-      )
-    else
-      order_by(
-        query,
-        [
-          m,
-          tmdb_rating: tr,
-          imdb_rating: ir,
-          metacritic: mc,
-          rotten_tomatoes: rt,
-          rt_audience: ra,
-          popularity: pop,
-          festivals: f,
-          person_quality: pq,
-          budget: b,
-          revenue: r
-        ],
-        desc:
-          fragment(
-            """
-            ? * COALESCE(
-              (COALESCE(NULLIF(?, 0), 0) / 10.0 +
-               COALESCE(NULLIF(?, 0), 0) / 10.0 +
-               COALESCE(NULLIF(?, 0), 0) / 100.0) /
-              NULLIF(
-                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END +
-                CASE WHEN NULLIF(?, 0) IS NOT NULL THEN 1 ELSE 0 END,
-                0
-              ),
-              0.0
-            ) +
-            ? * CASE
-              WHEN NULLIF(?, 0) IS NOT NULL AND NULLIF(?, 0) IS NOT NULL THEN (? / 100.0 + ? / 100.0) / 2.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
-              WHEN NULLIF(?, 0) IS NOT NULL THEN ? / 100.0
-              ELSE 0.0
-            END +
-            ? * COALESCE(LEAST(1.0, COALESCE(?, 0) / 10.0), 0) +
-            ? * COALESCE(LEAST(1.0, COALESCE((SELECT count(*) FROM jsonb_each(COALESCE(?, '{}'::jsonb))), 0) * 0.1 + CASE WHEN COALESCE(?, 0) = 0 THEN 0 ELSE LN(COALESCE(?, 0) + 1) / LN(1001) END), 0) +
-            ? * COALESCE(COALESCE(?, 0) / 100.0, 0) +
-            ? * COALESCE(CASE
-              WHEN COALESCE(?, 0) > 0 AND COALESCE(?, 0) > 0
-              THEN LEAST(1.0, (LN(COALESCE(?, 0) + 1) / LN(1000000000)) * 0.6 + (COALESCE(?, 0) / COALESCE(?, 0)) * 0.4)
-              ELSE COALESCE(LN(COALESCE(?, 0) + 1) / LN(1000000000), 0)
-            END, 0)
-            """,
-            ^Map.get(weights, :mob, 0.0),
-            ir.value,
-            tr.value,
-            ra.value,
-            ir.value,
-            tr.value,
-            ra.value,
-            ^Map.get(weights, :critics, 0.0),
-            rt.value,
-            mc.value,
-            rt.value,
-            mc.value,
-            rt.value,
-            rt.value,
-            mc.value,
-            mc.value,
-            ^weights.festival_recognition,
-            f.prestige_score,
-            ^weights.time_machine,
-            m.canonical_sources,
-            pop.value,
-            pop.value,
-            ^weights.auteurs,
-            pq.avg_person_quality,
-            ^Map.get(weights, :box_office, 0.0),
-            b.value,
-            r.value,
-            r.value,
-            r.value,
-            b.value,
-            r.value
-          )
-      )
-    end
+  defp lens_weight_tuple(weights) do
+    {
+      Map.get(weights, :mob, 0.0),
+      Map.get(weights, :critics, 0.0),
+      Map.get(weights, :festival_recognition, 0.0),
+      Map.get(weights, :time_machine, 0.0),
+      Map.get(weights, :auteurs, 0.0),
+      Map.get(weights, :box_office, 0.0)
+    }
   end
 end

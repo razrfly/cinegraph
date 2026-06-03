@@ -124,20 +124,16 @@ defmodule CinegraphWeb.MovieMetricsLive.Show do
       query = from(m in Cinegraph.Movies.Movie, where: m.id == ^movie.id)
 
       try do
-        scored_query = ScoringService.apply_scoring(query, profile, %{min_score: 0.0})
-
-        result =
-          scored_query
-          |> select([m], %{
-            discovery_score: m.discovery_score,
-            components: m.score_components
-          })
+        # apply_scoring select_merges discovery_score + score_components onto the movie.
+        movie_scored =
+          query
+          |> ScoringService.apply_scoring(profile, %{min_score: 0.0})
           |> Repo.one()
 
         %{
           profile: profile,
-          total_score: result[:discovery_score] || 0.0,
-          components: result[:components] || %{}
+          total_score: (movie_scored && movie_scored.discovery_score) || 0.0,
+          components: (movie_scored && movie_scored.score_components) || %{}
         }
       rescue
         _ ->

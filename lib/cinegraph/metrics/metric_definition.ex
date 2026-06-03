@@ -41,6 +41,16 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     # '%', '/10', '/100', '$', null
     field :display_unit, :string
 
+    # Layer-0 catalog metadata (#1036 Session 1)
+    # 'raw' (straight from a source) | 'derived' (computed transform)
+    field :kind, :string, default: "raw"
+    # for derived rows: the transform name (e.g. 'canonical_contribution', 'auteur_track_record')
+    field :derivation, :string
+    # the lens's internal sub-weighting of this data point (0.0 excludes it from :absolute)
+    field :weight_within_lens, :float, default: 1.0
+    # false = JSONB-trapped / not-yet-extracted (honest coverage; never fed to a live lens)
+    field :is_available, :boolean, default: true
+
     # Metadata
     field :source_reliability, :float, default: 1.0
     field :active, :boolean, default: true
@@ -48,8 +58,10 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     timestamps()
   end
 
-  @required_fields [:code, :name, :source_table, :category, :normalization_type]
+  @required_fields [:code, :name, :source_table, :normalization_type]
   @optional_fields [
+    # category is nil for ML-only data points (features not rolled up into a human lens, #1036)
+    :category,
     :description,
     :source_type,
     :source_field,
@@ -59,6 +71,10 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     :raw_scale_max,
     :display_format,
     :display_unit,
+    :kind,
+    :derivation,
+    :weight_within_lens,
+    :is_available,
     :source_reliability,
     :active
   ]
@@ -69,7 +85,7 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     |> cast(attrs, @required_fields ++ @optional_fields)
     |> validate_required(@required_fields)
     |> unique_constraint(:code)
-    |> validate_inclusion(:category, Cinegraph.Scoring.Lenses.all_strings())
+    |> validate_category()
     |> validate_inclusion(:normalization_type, [
       "linear",
       "logarithmic",
@@ -77,6 +93,7 @@ defmodule Cinegraph.Metrics.MetricDefinition do
       "boolean",
       "custom"
     ])
+    |> validate_inclusion(:kind, ["raw", "derived"])
     |> validate_display_format()
     |> validate_number(:source_reliability,
       greater_than_or_equal_to: 0.0,
@@ -84,6 +101,14 @@ defmodule Cinegraph.Metrics.MetricDefinition do
     )
     |> validate_raw_scale()
     |> validate_format(:code, ~r/^[a-z0-9_\.]+$/i)
+  end
+
+  # category is optional (ML-only features have none); validate inclusion only when present.
+  defp validate_category(changeset) do
+    case get_field(changeset, :category) do
+      nil -> changeset
+      _ -> validate_inclusion(changeset, :category, Cinegraph.Scoring.Lenses.all_strings())
+    end
   end
 
   # Only validate display_format when present

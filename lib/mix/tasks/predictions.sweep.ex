@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Predictions.Sweep do
 
       mix predictions.sweep
       mix predictions.sweep --n-samples 2000
-      mix predictions.sweep --list-key "1001_movies" --save
+      mix predictions.sweep --list-key "1001_movies"
       mix predictions.sweep --json
 
   ## Options
@@ -19,9 +19,10 @@ defmodule Mix.Tasks.Predictions.Sweep do
     * `--list-key`   - source_key of the target list (default: "1001_movies")
     * `--n-samples`  - number of random weight vectors to evaluate (default: 500)
     * `--top`        - number of top results to display (default: 20)
-    * `--save`       - persist the best weights to movie_lists.trained_weights
     * `--json`       - output raw JSON
 
+  Exploration-only: this never persists. To promote a weighting to an active model, train it
+  under the integrity protocol: `mix predictions.train --integrity --list-key <list> --save`.
   """
   use Mix.Task
 
@@ -37,7 +38,6 @@ defmodule Mix.Tasks.Predictions.Sweep do
           list_key: :string,
           n_samples: :integer,
           top: :integer,
-          save: :boolean,
           json: :boolean
         ]
       )
@@ -45,7 +45,6 @@ defmodule Mix.Tasks.Predictions.Sweep do
     list_key = Keyword.get(opts, :list_key, "1001_movies")
     n_samples = Keyword.get(opts, :n_samples, 500)
     top = Keyword.get(opts, :top, 20)
-    save? = Keyword.get(opts, :save, false)
     json? = Keyword.get(opts, :json, false)
 
     unless json? do
@@ -61,10 +60,7 @@ defmodule Mix.Tasks.Predictions.Sweep do
 
     results =
       try do
-        Cinegraph.Predictions.WeightOptimizer.sweep(list_key, n_samples,
-          save: save?,
-          top: top
-        )
+        Cinegraph.Predictions.WeightOptimizer.sweep(list_key, n_samples, top: top)
       rescue
         e ->
           Mix.shell().error("Sweep failed: #{Exception.message(e)}")
@@ -89,11 +85,11 @@ defmodule Mix.Tasks.Predictions.Sweep do
 
       IO.puts(Jason.encode!(output, pretty: true))
     else
-      print_results(results, save?, list_key)
+      print_results(results)
     end
   end
 
-  defp print_results(results, saved?, list_key) do
+  defp print_results(results) do
     criteria = Cinegraph.Predictions.LensScoring.scoring_criteria()
 
     Mix.shell().info(
@@ -126,13 +122,10 @@ defmodule Mix.Tasks.Predictions.Sweep do
 
         Best: #{best.accuracy}% accuracy
         #{format_weights(best.weights)}
-        """)
 
-        if saved? do
-          Mix.shell().info("Best weights saved to DB for #{list_key}.")
-        else
-          Mix.shell().info("Run with --save to persist best weights.")
-        end
+        Exploration only — to persist, train under the integrity protocol:
+          mix predictions.train --integrity --list-key <list> --save
+        """)
 
       [] ->
         Mix.shell().info("No results to display.")

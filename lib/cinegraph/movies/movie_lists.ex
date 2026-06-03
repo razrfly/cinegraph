@@ -472,27 +472,6 @@ defmodule Cinegraph.Movies.MovieLists do
   def migrate_hardcoded_lists, do: seed_default_lists()
 
   @doc """
-  Persist ML-trained weights for a list. Weights are a map with string keys
-  (e.g. %{"mob" => 0.24, "critics" => 0.19, ...}).
-
-  Returns:
-    * `{:ok, movie_list}` on success
-    * `{:error, {:not_found, source_key}}` if no list exists for the given source_key
-    * `{:error, changeset}` if the database update fails
-  """
-  def save_trained_weights(source_key, weights_map) when is_binary(source_key) do
-    case get_by_source_key(source_key) do
-      nil ->
-        {:error, {:not_found, source_key}}
-
-      %MovieList{} = list ->
-        list
-        |> Ecto.Changeset.change(trained_weights: weights_map)
-        |> Repo.update()
-    end
-  end
-
-  @doc """
   Return the trained_weights map for a list, or nil if not yet trained.
   Keys are strings (as stored in JSONB).
   """
@@ -500,6 +479,25 @@ defmodule Cinegraph.Movies.MovieLists do
     case get_by_source_key(source_key) do
       nil -> nil
       %MovieList{trained_weights: weights} -> weights
+    end
+  end
+
+  @doc """
+  Point a list at its active `prediction_models` artifact and refresh the derived
+  `trained_weights` read-cache from that model's weights (#1036 Session 2).
+  """
+  def set_active_prediction_model(source_key, model_id, weights_map) when is_binary(source_key) do
+    case get_by_source_key(source_key) do
+      nil ->
+        {:error, {:not_found, source_key}}
+
+      %MovieList{} = list ->
+        list
+        |> Ecto.Changeset.change(
+          active_prediction_model_id: model_id,
+          trained_weights: weights_map
+        )
+        |> Repo.update()
     end
   end
 end
