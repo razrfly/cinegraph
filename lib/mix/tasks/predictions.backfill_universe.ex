@@ -82,10 +82,10 @@ defmodule Mix.Tasks.Predictions.BackfillUniverse do
     total = length(ids)
     Mix.shell().info("Fetching OMDb for #{total} movies synchronously (members first)...")
 
-    {ok, err} =
+    {ok, err, halted?} =
       ids
       |> Enum.with_index(1)
-      |> Enum.reduce({0, 0}, fn {id, i}, {ok, err} ->
+      |> Enum.reduce_while({0, 0, false}, fn {id, i}, {ok, err, _} ->
         result =
           try do
             OMDbEnrichmentWorker.perform(%Oban.Job{args: %{"movie_id" => id}})
@@ -93,25 +93,40 @@ defmodule Mix.Tasks.Predictions.BackfillUniverse do
             e -> {:error, Exception.message(e)}
           end
 
-        acc =
-          case result do
-            :ok -> {ok + 1, err}
-            {:ok, _} -> {ok + 1, err}
-            _ -> {ok, err + 1}
-          end
+        case result do
+          # OMDb daily quota hit — the worker returns {:snooze, _}. Stop now rather than burn
+          # through the rest miscounting rate-limits as misses; re-run after the quota resets.
+          # (The maintenance/worker-split + Oban snooze handling is #1053's domain.)
+          {:snooze, _} ->
+            Mix.shell().error(
+              "OMDb rate-limited at #{i}/#{total} — stopping (re-run after quota resets). Stored=#{ok}."
+            )
 
-        if rem(i, 25) == 0 or i == total do
-          Mix.shell().info(
-            "  #{i}/#{total} processed (ok=#{elem(acc, 0)} miss/err=#{elem(acc, 1)})"
-          )
+            {:halt, {ok, err, true}}
+
+          other ->
+            acc =
+              case other do
+                :ok -> {ok + 1, err, false}
+                {:ok, _} -> {ok + 1, err, false}
+                _ -> {ok, err + 1, false}
+              end
+
+            if rem(i, 25) == 0 or i == total do
+              Mix.shell().info(
+                "  #{i}/#{total} processed (ok=#{elem(acc, 0)} miss/err=#{elem(acc, 1)})"
+              )
+            end
+
+            Process.sleep(@sleep_ms)
+            {:cont, acc}
         end
-
-        Process.sleep(@sleep_ms)
-        acc
       end)
 
+    status = if halted?, do: "HALTED (rate-limited)", else: "Done"
+
     Mix.shell().info(
-      "Done. Stored=#{ok}, missing-or-failed=#{err} (the latter recorded as fetch_attempt)."
+      "#{status}. Stored=#{ok}, missing-or-failed=#{err} (the latter recorded as fetch_attempt)."
     )
   end
 end

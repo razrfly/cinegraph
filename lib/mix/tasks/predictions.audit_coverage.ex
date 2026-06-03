@@ -106,7 +106,15 @@ defmodule Mix.Tasks.Predictions.AuditCoverage do
     universe_counts = code_counts_for(universe)
     universe_total = length(universe)
 
-    codes = (Map.keys(full_counts) ++ Map.keys(universe_counts)) |> Enum.uniq()
+    # Union in every catalogued, view-emittable (raw, available) code so a feature that is
+    # catalogued but absent EVERYWHERE shows up as 0.0% rather than vanishing from the report —
+    # that absence is exactly the surface gap this audit is meant to surface (CodeRabbit #1054).
+    catalogued =
+      Cinegraph.Metrics.list_metric_definitions(only_available: true, kind: "raw")
+      |> Enum.map(& &1.code)
+
+    codes =
+      (Map.keys(full_counts) ++ Map.keys(universe_counts) ++ catalogued) |> Enum.uniq()
 
     rows =
       codes
@@ -165,7 +173,9 @@ defmodule Mix.Tasks.Predictions.AuditCoverage do
     {members, negs} = Cinegraph.Predictions.CandidateUniverse.ids_for(source_key)
 
     if members == [] do
-      Mix.shell().error("No members found for source_key=#{source_key}")
+      # Fail hard (non-zero exit, stderr) regardless of --json, so automation never sees a
+      # success exit or non-JSON stdout for a bad source_key (CodeRabbit #1054).
+      Mix.raise("No members found for source_key=#{source_key}")
     else
       member_sets = member_code_sets(members, @confound_codes)
       neg_counts = code_counts_for(negs, @confound_codes)

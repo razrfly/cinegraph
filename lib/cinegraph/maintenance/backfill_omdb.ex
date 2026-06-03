@@ -1,8 +1,16 @@
 defmodule Cinegraph.Maintenance.BackfillOmdb do
   @moduledoc """
   Release-safe maintenance entry point for the OMDb null backfill. Enqueues
-  one `OMDbEnrichmentWorker` job per movie that has no `external_metrics` row
-  with `source = 'omdb'`.
+  one `OMDbEnrichmentWorker` job per movie that still **needs a fetch** — has
+  no stored `omdb_data` blob and no recent `fetch_attempt` marker.
+
+  #1053: the predicate is "needs fetch", NOT "has no `source='omdb'` row". A
+  successful OMDb response may legitimately materialize only an `imdb`/
+  `metacritic`/`rotten_tomatoes` row and no `omdb` row (e.g. a film with an
+  IMDb rating but no Awards/box-office/RT). Keying on the `omdb` row re-fetched
+  those movies forever and, at a raised cap, would waste quota re-downloading
+  blobs we already have. Materializing metrics from existing blobs is
+  `mix cinegraph.metrics.backfill_from_jsonb`'s job (no API), not this one's.
 
   Reachable from:
   - `mix cinegraph.movies.backfill_omdb` (dev)
@@ -64,16 +72,22 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
   exactly the same set the sweeper would enqueue.
   """
   def eligible_ids(opts \\ []) do
-    # Only imdb_id-bearing movies missing an OMDb row are eligible — OMDb requires an IMDb ID,
-    # and movies without one would re-enter this backlog on every sweep.
+    # #1053 "needs fetch" predicate: no stored blob (omdb_data IS NULL), a usable
+    # imdb_id (OMDb requires one), and no recent fetch_attempt (90-day cooldown so
+    # source-absent movies don't churn). NOTE: this intentionally does NOT key on
+    # the presence of a source='omdb' external_metrics row — see the moduledoc.
+    cutoff = DateTime.add(DateTime.utc_now(), -90 * 24 * 3600, :second)
+
     base =
       from m in "movies",
         where:
-          not fragment(
-            "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb')",
-            m.id
-          ) and
-            not is_nil(m.imdb_id) and m.imdb_id != "",
+          is_nil(m.omdb_data) and
+            not is_nil(m.imdb_id) and m.imdb_id != "" and
+            not fragment(
+              "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb' AND em.metric_type = 'fetch_attempt' AND em.fetched_at > ?)",
+              m.id,
+              ^cutoff
+            ),
         order_by: [
           desc: fragment("? != '{}'::jsonb", m.canonical_sources),
           desc: m.id

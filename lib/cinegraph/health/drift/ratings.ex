@@ -15,6 +15,9 @@ defmodule Cinegraph.Health.Drift.Ratings do
     * `omdb_null_backlog`, `omdb_stale` — delegate to
       `Cinegraph.Health.Drift.Movies` and inherit its canonical scope
       (#896 Phase 1.2).
+    * `omdb_materialization_parity` — population-wide (#1053); detects OMDb
+      blobs whose `external_metrics` were never derived. Delegates to
+      `Cinegraph.Metrics.OmdbParity`.
   """
 
   import Ecto.Query
@@ -24,12 +27,13 @@ defmodule Cinegraph.Health.Drift.Ratings do
   @cache_ttl :timer.minutes(35)
   @example_limit 10
 
-  @doc "Run all 3 ratings checks in parallel. Accepts `:limit`."
+  @doc "Run all ratings checks in parallel. Accepts `:limit`."
   def all(opts \\ []) do
     Drift.run_all([
       fn -> omdb_null_backlog(opts) end,
       fn -> omdb_stale(opts) end,
-      fn -> rt_metacritic_gap(opts) end
+      fn -> rt_metacritic_gap(opts) end,
+      fn -> omdb_materialization_parity(opts) end
     ])
   end
 
@@ -96,6 +100,48 @@ defmodule Cinegraph.Health.Drift.Ratings do
         )
 
       Drift.result(:ratings, :rt_metacritic_gap, total, affected, examples)
+    end)
+  end
+
+  @doc """
+  OMDb raw-blob → `external_metrics` materialization parity (#1053). For each
+  OMDb-derived metric family, compares the count of movies whose `omdb_data`
+  blob carries the field (source) against the derived `external_metrics` rows
+  (dest). A positive total `gap` means we have stored OMDb responses whose
+  metrics were never materialized — the orphaned-blob debt the JSONB backfill
+  closes (no API). `affected_pct` is the gap as a fraction of available
+  blob-fields.
+
+  Population-wide (NOT canonical-scoped): the orphaned-blob defect is
+  independent of canonical status, and the watchdog must catch it anywhere.
+  Delegates to `Cinegraph.Metrics.OmdbParity` — the same logic the
+  `mix cinegraph.metrics.backfill_from_jsonb --dry-run` parity report uses.
+  """
+  def omdb_materialization_parity(opts \\ []) do
+    limit = Keyword.get(opts, :limit, @example_limit)
+
+    Drift.cached({:ratings, :omdb_materialization_parity, limit}, @cache_ttl, fn ->
+      gaps = Cinegraph.Metrics.OmdbParity.gaps(Repo.replica())
+
+      total_source = gaps |> Enum.map(& &1.source) |> Enum.sum()
+      total_gap = gaps |> Enum.map(& &1.gap) |> Enum.sum()
+
+      examples =
+        gaps
+        |> Enum.filter(&(&1.gap > 0))
+        |> Enum.sort_by(& &1.gap, :desc)
+        |> Enum.take(limit)
+        |> Enum.map(fn g ->
+          %{
+            label: g.label,
+            source: g.source,
+            dest: g.dest,
+            gap: g.gap,
+            reason: "#{g.gap} OMDb blobs not yet materialized into external_metrics"
+          }
+        end)
+
+      Drift.result(:ratings, :omdb_materialization_parity, total_source, total_gap, examples)
     end)
   end
 end
