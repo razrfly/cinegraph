@@ -166,10 +166,10 @@ defmodule CinegraphWeb.Admin.AuditsLive do
     ~H"""
     <div :if={@active.id == :people_scores} class="mb-4 text-xs">
       <.link
-        navigate={~p"/admin/predictions"}
+        navigate={~p"/admin/metrics"}
         class="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
       >
-        <span>← Back to predictions (auteurs criterion)</span>
+        <span>← Back to metrics</span>
       </.link>
     </div>
     """

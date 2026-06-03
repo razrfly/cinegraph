@@ -113,6 +113,8 @@ defmodule Cinegraph.Predictions.TrainerTest do
       assert is_integer(i["seed"])
       assert i["holdout_fraction"] == 0.25
       assert Map.has_key?(i["baselines"], "popularity")
+      # Honesty rule (#1051): the objective-only recall is measured + stored on the same holdout.
+      assert Map.has_key?(i, "objective_recall_at_k")
       # Static is a seeded member holdout scored against the full member-decade pool, not a
       # decade holdout and no longer k-fold.
       refute Map.has_key?(i, "holdout_decades")

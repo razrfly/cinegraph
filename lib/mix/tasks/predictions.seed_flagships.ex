@@ -7,6 +7,12 @@ defmodule Mix.Tasks.Predictions.SeedFlagships do
   higher-grading valid one. The honest full-pool metric (#1055) means the right strategy is no
   longer obvious per list — so we measure instead of hardcoding.
 
+  The strategy PICK is **sampled by default** (`--sample 25000`): the exact full-member-decade pool
+  is ≈ the whole catalog for broad static lists, so an exact pick across 10 lists is hours. Sampling
+  preserves the relative temporal-vs-static ranking; projected grades read OPTIMISTIC (fewer
+  competitors). The **committed** model's stored grade is always **exact** — `Trainer.train` never
+  samples. Pass `--sample 0` to pick on the exact pool (slow).
+
   **Default is a dry-run that spends nothing** — it prints the standings (recommended strategy +
   projected grade). With `--commit` it registers a fresh pre-registration per list (honest
   `failure_threshold` = the popularity baseline) and runs `Trainer.train(save: true)` once on the
@@ -14,10 +20,10 @@ defmodule Mix.Tasks.Predictions.SeedFlagships do
   the new model. Lists that grade `:insufficient` are saved-but-not-activated by the activation
   guard (correct, not a bug).
 
-      mix predictions.seed_flagships                    # dry-run standings for all 10 lists
-      mix predictions.seed_flagships --sample 25000     # fast dry-run (approx; --commit ignores it)
+      mix predictions.seed_flagships                    # fast sampled dry-run, all 10 lists
+      mix predictions.seed_flagships --sample 0         # exact pick (slow)
       mix predictions.seed_flagships --only criterion,afi_100
-      mix predictions.seed_flagships --commit           # SPEND holdouts + promote (exact, full pool)
+      mix predictions.seed_flagships --commit           # pick (sampled) + train chosen EXACT, spend holdouts
       mix predictions.seed_flagships --commit --only national_film_registry --json
   """
   use Mix.Task
@@ -51,9 +57,11 @@ defmodule Mix.Tasks.Predictions.SeedFlagships do
       )
 
     commit = opts[:commit] || false
-    # --commit must be exact: the recommendation + threshold drive a real holdout spend. --sample
-    # only speeds the read-only dry-run.
-    sample = if commit, do: 0, else: Keyword.get(opts, :sample, 0)
+    # The strategy PICK is sampled by default (the exact full-member-decade pool ≈ the whole catalog
+    # for broad static lists — minutes→hours). Sampling preserves the relative temporal-vs-static
+    # ranking; the COMMITTED model's stored grade is always exact (`Trainer.train` never samples).
+    # Pass `--sample 0` to assess on the exact pool (slow). Projected grades are optimistic.
+    sample = Keyword.get(opts, :sample, 25_000)
 
     targets =
       case opts[:only] do
