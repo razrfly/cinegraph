@@ -99,20 +99,22 @@ defmodule Cinegraph.ApiProcessors.OMDb do
   end
 
   defp should_skip_processing?(movie, force_refresh) do
+    # #1053: the terminal test is "did we already fetch & store a response",
+    # i.e. the presence of the raw blob — NOT the presence of a source='omdb'
+    # external_metrics row. ExternalMetric.from_omdb/2 writes under four
+    # sources (imdb/metacritic/rotten_tomatoes/omdb); a sparse OMDb response
+    # (e.g. only an imdbRating) legitimately yields an `imdb` row and NO
+    # `omdb` row, so gating on a source='omdb' row re-fetched those movies
+    # from the API on every pass. Materialization of metrics from an existing
+    # blob is handled idempotently on write (atomic store_omdb_data/2) and by
+    # the JSONB backfill — not by re-hitting the API here.
+    #
+    # get_movie/1 opts omdb_data back in via select_merge (load_in_query:
+    # false), so has_data?/1 sees the real blob. Keep that opt-in (#923).
     if force_refresh do
       false
     else
-      # Check if we have the JSON data and metrics
-      has_json = has_data?(movie)
-
-      # Check if we have metrics in the new external_metrics table
-      has_metrics =
-        Repo.exists?(
-          from m in Cinegraph.Movies.ExternalMetric,
-            where: m.movie_id == ^movie.id and m.source == "omdb"
-        )
-
-      has_json and has_metrics
+      has_data?(movie)
     end
   end
 
@@ -134,6 +136,16 @@ defmodule Cinegraph.ApiProcessors.OMDb do
         # leave no external_metrics row, causing the sweeper to re-queue forever.
         {:error, "Movie not found!"}
 
+      # #1053: OMDb returns the literal string "Request limit reached!" when the
+      # daily quota is exhausted. Map it to :rate_limited so OMDbEnrichmentWorker's
+      # existing {:error, :rate_limited} -> {:snooze, 3600} branch fires. Without
+      # this it falls through to {:error, reason} -> retry -> discard, which would
+      # burn quota-exhausted jobs into the discarded state during an aggressive
+      # backfill instead of rescheduling them.
+      {:error, "Request limit reached!"} ->
+        Logger.warning("OMDb daily request limit reached while processing #{movie.title}")
+        {:error, :rate_limited}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -145,11 +157,25 @@ defmodule Cinegraph.ApiProcessors.OMDb do
       omdb_data: omdb_data
     }
 
-    # First, update the movie with the raw OMDb data
-    with {:ok, updated_movie} <- update_movie(movie, movie_updates),
-         # Then store all metrics using the new Metrics module
-         :ok <- Metrics.store_omdb_metrics(updated_movie, omdb_data) do
-      {:ok, updated_movie}
+    # #1053: commit the raw blob and its derived external_metrics ATOMICALLY.
+    # These used to be two independent commits — `update_movie` (blob) then
+    # `store_omdb_metrics` (rows). A failure/crash/deploy between them left an
+    # orphaned blob (omdb_data set, no metrics), which is the root cause of the
+    # ~339k materialization gap. Wrapping in a transaction makes it all-or-nothing.
+    # Both calls use Cinegraph.Repo, so they enlist in the same transaction.
+    txn =
+      Repo.transaction(fn ->
+        with {:ok, updated_movie} <- update_movie(movie, movie_updates),
+             :ok <- Metrics.store_omdb_metrics(updated_movie, omdb_data) do
+          updated_movie
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+
+    case txn do
+      {:ok, updated_movie} -> {:ok, updated_movie}
+      {:error, reason} -> {:error, reason}
     end
   end
 

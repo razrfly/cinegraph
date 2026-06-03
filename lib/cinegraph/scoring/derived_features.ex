@@ -12,9 +12,11 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
   lives here, deterministically, and is shared by training and serving via
   `DataPointFeatures.load_for/3`).
 
-  Ships **5** features. Four are FeatureResolver-backed; `prior_collab_density` (#1044) uses a
-  separate data path — the per-(person, year) `person_collaboration_trends` matview — so it is
-  computed by `load_prior_collab_density/1` and merged into the same shared assembly.
+  Ships **5** canon-taste features (four FeatureResolver-backed; `prior_collab_density` (#1044) via
+  the per-(person, year) `person_collaboration_trends` matview) PLUS a **missingness-indicator**
+  family (#1051 A4): `has_metacritic`, `has_budget`, … each computed from `metric_values_view`
+  presence and merged into the same shared assembly. Indicators are gated by catalog
+  `is_available` until the keep-criterion (`mix predictions.eval_indicators`) admits them.
   """
 
   alias Cinegraph.Collaborations
@@ -35,8 +37,22 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
   @chunk 1500
   @timeout :timer.seconds(60)
 
+  # Missingness indicators (#1051 A4): `has_X` = 1.0 when the movie has a non-null value for the
+  # underlying objective field, else 0.0. These make field-level *source-absence* an explicit,
+  # honestly-vetted feature (canon films are disproportionately the kind mainstream critics never
+  # scored), instead of letting the model silently infer canon from a null. Not target-aware, so
+  # no leakage concern. Gated by catalog `is_available` until the keep-criterion admits them.
+  @indicator_map %{
+    "has_imdb_rating" => "imdb_rating",
+    "has_metacritic" => "metacritic_metascore",
+    "has_rotten_tomatoes" => "rotten_tomatoes_tomatometer",
+    "has_budget" => "tmdb_budget",
+    "has_revenue" => "tmdb_revenue_worldwide"
+  }
+  @indicator_codes Map.keys(@indicator_map)
+
   @supported ~w(canonical_contribution auteur_track_record box_office_roi festival_prestige
-                prior_collab_density)
+                prior_collab_density) ++ @indicator_codes
 
   @doc "The derived codes this module emits — the routing guard for `DataPointFeatures.load_for/3`."
   def supported_codes, do: @supported
@@ -62,9 +78,11 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
     if movies == [] or codes == [] do
       %{}
     else
-      # `prior_collab_density` comes from the person×year matview, not the FeatureResolver bundle —
-      # resolve each from its own source, then merge into the shared per-movie vector.
-      {pcd_codes, resolver_codes} = Enum.split_with(codes, &(&1 == "prior_collab_density"))
+      # Three sources: FeatureResolver bundle (canon/auteur/roi/festival), the person×year matview
+      # (prior_collab_density), and metric_values_view presence (the has_* indicators). Resolve each
+      # independently, then merge into the shared per-movie vector.
+      {indicator_codes, rest} = Enum.split_with(codes, &(&1 in @indicator_codes))
+      {pcd_codes, resolver_codes} = Enum.split_with(rest, &(&1 == "prior_collab_density"))
 
       bundles =
         if resolver_codes == [],
@@ -72,6 +90,11 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
           else: FeatureResolver.resolve_batch(movies, {:target, source_key})
 
       densities = if pcd_codes == [], do: %{}, else: load_prior_collab_density(movies)
+
+      indicators =
+        if indicator_codes == [],
+          do: %{},
+          else: load_missingness_indicators(movies, indicator_codes)
 
       Map.new(movies, fn m ->
         bundle = Map.get(bundles, m.id, %{inputs: %{}, festival_rows: []})
@@ -81,6 +104,8 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
           if pcd_codes == [],
             do: vals,
             else: Map.put(vals, "prior_collab_density", Map.get(densities, m.id, 0.0))
+
+        vals = Map.merge(vals, Map.get(indicators, m.id, %{}))
 
         {m.id, vals}
       end)
@@ -163,6 +188,50 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
     WHERE t.year < EXTRACT(YEAR FROM m.release_date)
     GROUP BY kp.movie_id
     """
+  end
+
+  # ── missingness indicators — metric_values_view presence (#1051 A4) ───────────────
+  #
+  # `has_X` = 1.0 iff the movie has a non-null `normalized_value` for the underlying objective code.
+  # Emitted for EVERY movie (1.0 or 0.0), so it's a dense 0/1 feature, not sparse.
+  defp load_missingness_indicators(movies, indicator_codes) do
+    underlying = indicator_codes |> Enum.map(&@indicator_map[&1]) |> Enum.uniq()
+    present = presence_sets(Enum.map(movies, & &1.id), underlying)
+
+    Map.new(movies, fn m ->
+      vals =
+        Map.new(indicator_codes, fn ind ->
+          has? = MapSet.member?(Map.get(present, @indicator_map[ind], MapSet.new()), m.id)
+          {ind, if(has?, do: 1.0, else: 0.0)}
+        end)
+
+      {m.id, vals}
+    end)
+  end
+
+  # %{underlying_code => MapSet of movie_ids that have a non-null normalized_value}. Batched.
+  defp presence_sets([], _underlying), do: %{}
+  defp presence_sets(_ids, []), do: %{}
+
+  defp presence_sets(ids, underlying) do
+    ids
+    |> Enum.chunk_every(@chunk)
+    |> Enum.reduce(%{}, fn chunk, acc ->
+      {:ok, %{rows: rows}} =
+        Repo.query(
+          """
+          SELECT metric_code, movie_id
+          FROM metric_values_view
+          WHERE movie_id = ANY($1) AND metric_code = ANY($2) AND normalized_value IS NOT NULL
+          """,
+          [chunk, underlying],
+          timeout: @timeout
+        )
+
+      Enum.reduce(rows, acc, fn [code, id], a ->
+        Map.update(a, code, MapSet.new([id]), &MapSet.put(&1, id))
+      end)
+    end)
   end
 
   # log(1+x) / log(1+cap), clamped to [0,1] — smooth, saturating, 0 at x=0.

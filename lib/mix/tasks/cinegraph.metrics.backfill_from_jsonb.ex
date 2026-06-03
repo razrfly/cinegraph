@@ -131,125 +131,41 @@ defmodule Mix.Tasks.Cinegraph.Metrics.BackfillFromJsonb do
   end
 
   defp parity_specs do
-    [
-      %{
-        side: :omdb,
-        label: "OMDb imdbRating → imdb/rating_average",
-        source_query:
-          from(m in "movies",
-            where:
-              not is_nil(fragment("?->>'imdbRating'", m.omdb_data)) and
-                fragment("?->>'imdbRating'", m.omdb_data) not in ["N/A", ""],
-            select: count(m.id)
-          ),
-        dest_query:
-          from(e in "external_metrics",
-            where: e.source == "imdb" and e.metric_type == "rating_average",
-            select: count(e.id)
-          )
-      },
-      %{
-        side: :omdb,
-        label: "OMDb Metascore → metacritic/metascore",
-        source_query:
-          from(m in "movies",
-            where:
-              not is_nil(fragment("?->>'Metascore'", m.omdb_data)) and
-                fragment("?->>'Metascore'", m.omdb_data) not in ["N/A", ""],
-            select: count(m.id)
-          ),
-        dest_query:
-          from(e in "external_metrics",
-            where: e.source == "metacritic" and e.metric_type == "metascore",
-            select: count(e.id)
-          )
-      },
-      %{
-        side: :omdb,
-        label: "OMDb Awards → omdb/awards_summary",
-        source_query:
-          from(m in "movies",
-            where:
-              not is_nil(fragment("?->>'Awards'", m.omdb_data)) and
-                fragment("?->>'Awards'", m.omdb_data) not in ["N/A", ""],
-            select: count(m.id)
-          ),
-        dest_query:
-          from(e in "external_metrics",
-            where: e.source == "omdb" and e.metric_type == "awards_summary",
-            select: count(e.id)
-          )
-      },
-      %{
-        side: :omdb,
-        label: "OMDb Rated → omdb/content_rating",
-        source_query:
-          from(m in "movies",
-            where:
-              not is_nil(fragment("?->>'Rated'", m.omdb_data)) and
-                fragment("?->>'Rated'", m.omdb_data) not in [
-                  "N/A",
-                  "NOT RATED",
-                  "UNRATED",
-                  "NR",
-                  ""
-                ],
-            select: count(m.id)
-          ),
-        dest_query:
-          from(e in "external_metrics",
-            where: e.source == "omdb" and e.metric_type == "content_rating",
-            select: count(e.id)
-          )
-      },
-      %{
-        side: :omdb,
-        label: "OMDb Ratings[Rotten Tomatoes] → rotten_tomatoes/tomatometer",
-        source_query:
-          from(m in "movies",
-            where:
-              fragment("jsonb_typeof(?->'Ratings') = 'array'", m.omdb_data) and
-                fragment(
-                  "EXISTS (SELECT 1 FROM jsonb_array_elements(?->'Ratings') r WHERE r->>'Source' = 'Rotten Tomatoes')",
-                  m.omdb_data
-                ),
-            select: count(m.id)
-          ),
-        dest_query:
-          from(e in "external_metrics",
-            where: e.source == "rotten_tomatoes" and e.metric_type == "tomatometer",
-            select: count(e.id)
-          )
-      },
-      %{
-        side: :tmdb,
-        label: "TMDb revenue → tmdb/revenue_worldwide",
-        source_query:
-          from(m in "movies",
-            where: fragment("(?->>'revenue')::bigint > 0", m.tmdb_data),
-            select: count(m.id)
-          ),
-        dest_query:
-          from(e in "external_metrics",
-            where: e.source == "tmdb" and e.metric_type == "revenue_worldwide",
-            select: count(e.id)
-          )
-      },
-      %{
-        side: :tmdb,
-        label: "TMDb vote_average → tmdb/rating_average",
-        source_query:
-          from(m in "movies",
-            where: fragment("(?->>'vote_average')::numeric > 0", m.tmdb_data),
-            select: count(m.id)
-          ),
-        dest_query:
-          from(e in "external_metrics",
-            where: e.source == "tmdb" and e.metric_type == "rating_average",
-            select: count(e.id)
-          )
-      }
-    ]
+    # OMDb specs live in Cinegraph.Metrics.OmdbParity (single source of truth,
+    # shared with the #1053 health watchdog). Tag them with side: :omdb here.
+    omdb_specs = Enum.map(Cinegraph.Metrics.OmdbParity.specs(), &Map.put(&1, :side, :omdb))
+
+    omdb_specs ++
+      [
+        %{
+          side: :tmdb,
+          label: "TMDb revenue → tmdb/revenue_worldwide",
+          source_query:
+            from(m in "movies",
+              where: fragment("(?->>'revenue')::bigint > 0", m.tmdb_data),
+              select: count(m.id)
+            ),
+          dest_query:
+            from(e in "external_metrics",
+              where: e.source == "tmdb" and e.metric_type == "revenue_worldwide",
+              select: count(e.id)
+            )
+        },
+        %{
+          side: :tmdb,
+          label: "TMDb vote_average → tmdb/rating_average",
+          source_query:
+            from(m in "movies",
+              where: fragment("(?->>'vote_average')::numeric > 0", m.tmdb_data),
+              select: count(m.id)
+            ),
+          dest_query:
+            from(e in "external_metrics",
+              where: e.source == "tmdb" and e.metric_type == "rating_average",
+              select: count(e.id)
+            )
+        }
+      ]
   end
 
   # -- formatting -------------------------------------------------------------

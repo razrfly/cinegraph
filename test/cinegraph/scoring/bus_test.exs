@@ -112,6 +112,13 @@ defmodule Cinegraph.Scoring.BusTest do
           weights: %{"imdb_rating" => 1.0},
           weights_hash: "h1",
           model_version: 1,
+          # Sufficient out-of-sample evidence so the activation guard (#1051 Stage 0) admits it.
+          integrity_report: %{
+            "recall_at_k" => 0.5,
+            "n_positives" => 20,
+            "n_evaluated" => 100,
+            "baselines" => %{"popularity" => 0.0}
+          },
           prereg_id: prereg.id
         })
         |> Repo.insert()

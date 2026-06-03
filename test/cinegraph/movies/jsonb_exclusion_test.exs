@@ -134,8 +134,10 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
       now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
       now_utc = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      # should_skip_processing? requires BOTH has_data?(movie) AND a matching
-      # external_metrics row — seed one for source="omdb".
+      # #1053: should_skip_processing? now keys on the blob alone (has_data?/1).
+      # The external_metrics row below is no longer required for the skip, but is
+      # kept so this test still reproduces the original #923 enriched-movie
+      # scenario (blob + metrics present) and pins the select_merge opt-in.
       Repo.insert_all(Cinegraph.Movies.ExternalMetric, [
         %{
           movie_id: movie.id,

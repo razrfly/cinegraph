@@ -6,11 +6,28 @@
 
 ---
 
+## How to execute this (parent epic → sub-issues)
+
+This is a **parent epic.** Each stage becomes its own implementation sub-issue when it starts — keep this issue as the north star, don't implement it as one PR.
+
+| Sub-issue | Ready to start? |
+|---|---|
+| **0** — Hygiene / baseline trust | ✅ ready |
+| **A1** — Enrich `predictions.audit_coverage` (by-code / by-universe / by-list) | ✅ ready |
+| **A2** — Candidate-universe backfill (OMDb/TMDb sweepers, members-first) | ✅ ready |
+| **A3+A4** — Festival densification + missingness indicators (w/ strict keep-criterion) | ✅ ready (A4 measured against A1) |
+| **B** — Model-architecture spike + ADR (interaction features → pooling → EXGBoost) | ⏳ **after Stage A green** (it's a design spike; EXGBoost not yet a dep) |
+| **C** — Ablation + iterate + disclose | ⏳ after A (and B's decision) |
+
+**Are we ready?** Yes for **Stage 0 and all of Stage A** — those are fully specified and use existing machinery. **Stage B is a design spike, not yet implementable** (no GBM in Scholar; EXGBoost would be a new dependency). Stage C follows A. Net: we can start immediately and correctly; we just shouldn't pretend B is shovel-ready.
+
+---
+
 ## Where we are (live evidence, dev DB)
 
 ### 1. The surface area is the binding constraint — and it's bad
 
-Coverage of the 61 feature codes over the **914,274** `import_status='full'` movies:
+Coverage of the feature codes over the **914,274** `import_status='full'` movies (61 distinct codes in `metric_values_view`; `Trainer.data_point_codes/1` yields ~62 *trainable* per list = raw-available-non-custom + 5 derived − the target's own code):
 
 | feature | % populated | | feature | % populated |
 |---|--:|---|---|--:|
@@ -30,7 +47,7 @@ Coverage of the 61 feature codes over the **914,274** `import_status='full'` mov
 
 ### 2. The models — linear-only, 10 independent, architecturally locked
 
-- The only model type in the codebase is `Scholar.Linear.LogisticRegression` (deps: `nx`/`exla`/`scholar` — no trees, no gradient boosting, no ensembles).
+- The only model type in the codebase is `Scholar.Linear.LogisticRegression` (deps: `nx`/`exla`/`scholar`). **Scholar 0.4 itself has no supervised tree/GBM/ensemble** (only linear, KNN, naive-bayes; its "forest" modules are KNN structures). So a nonlinear model means **adding a new dependency** (e.g. `EXGBoost`) — *not currently in `mix.exs`/`mix.lock`*. This makes Stage B a feasibility spike, not a config change.
 - **10 models = one per list.** The weak lists can't support that — `national_film_registry` has **5** positives; you cannot train a real model on 5 examples.
 - **The serving architecture is committed to linear.** The "bus" *is* `Σ wᵢ·featureᵢ` (a weight vector). A nonlinear model cannot be expressed as a weight map, so adopting one is an **architectural fork**, not a flag.
 - Honest read: on today's thin surface, logistic regression is *fine* — a fancier model won't find signal that isn't there. Model class only becomes a lever **after** the surface densifies. **Models = C.**
@@ -82,24 +99,29 @@ Make the baseline trustworthy before measuring against it.
 
 The candidate universe is only ~5K movies. Densifying *those* is tractable with the project's existing OMDb/TMDb backfill-sweeper pattern.
 
-- [ ] **A1 — Repeatable coverage audit as a mix task** (`mix predictions.coverage`): per-feature coverage over (a) full population, (b) candidate universe, (c) per-list members. This is how we *track densification progress* and define "done."
-- [ ] **A2 — Backfill the candidate universe.** Run OMDb/TMDb enrichment on the ~5K candidate movies, **prioritizing list members** (the confounded, under-covered side). Targets: metacritic, rotten_tomatoes, budget, revenue. Many are simply un-fetched, not truly absent.
-- [ ] **A3 — Densify festival/award coverage** where source data exists (only 46% of candidates have a nomination row).
-- [ ] **A4 — Handle irreducible absence honestly.** Old/foreign/arthouse films genuinely lack budget/metacritic at the source. Add explicit **missingness-indicator features** (`has_metacritic`, `has_budget`, …) so the model uses absence *as a declared feature*, not as a hidden confound — and measure objective-only lift with and without them to confirm we're not just re-learning the confound.
+- [ ] **A1 — Enrich the EXISTING coverage task, don't fork one.** `mix predictions.audit_coverage` already exists (per-decade; imdb/RT/metacritic/festival; `--json`). **Extend that task** (don't create a separate `predictions.coverage`) to also report per-`metric_code` coverage over (a) full population, (b) the candidate universe, and (c) per-list members — the three lenses we need to track densification progress and define "done." Keep the decade view; add the by-code/by-universe modes.
+- [ ] **A2 — Backfill the candidate universe** using the project's existing machinery — **do not write a new fetch path:**
+  - Use `Cinegraph.ApiProcessors.OMDb` via the existing OMDb backfill **maintenance module + sweeper** pattern (CLAUDE.md §4), scoped to the ~5K candidate universe, **members first** (the confounded, under-covered side). Targets: metacritic, rotten_tomatoes, budget, revenue (OMDb carries metacritic/RT; budget/revenue come from TMDb via `ApiProcessors.TMDb`).
+  - Assumptions to confirm in the ticket: `OMDB_API_KEY` (Basic = 100k/day) and `TMDB_API_KEY` present; respect the Oban `omdb`/`tmdb` queue limits (concurrency 5, ~250ms spacing) — a one-off run over ~5K movies is well within a day's quota.
+  - **Record source-absent with the existing `fetch_attempt` marker** (an `external_metrics` `fetch_attempt` row = "tried, API returned nothing", 90-day cooldown). That is how we distinguish *not-yet-fetched* from *genuinely-absent* — no new convention needed.
+- [ ] **A3 — Densify festival/award coverage** where source data exists (only 46% of candidates have a nomination row) — via the existing festival import flow.
+- [ ] **A4 — Handle irreducible absence honestly, with a strict keep-criterion.** Old/foreign/arthouse films genuinely lack budget/metacritic at source. Add explicit **missingness-indicator features** (`has_metacritic`, `has_budget`, …) so absence is a *declared* feature, not a hidden confound. **Acceptance criterion (strict): an indicator is kept ONLY IF it raises objective-only lift on a held-out split AND the gain survives a coverage-matched control** (e.g. evaluated within the densified/coverage-balanced subsample) — i.e. it must add real signal, not merely re-learn "missing data ⇒ canon." Indicators that only encode the confound are dropped.
 
-**Exit gate:** coverage audit shows the candidate universe's *fetchable* gaps closed (member coverage of metacritic/RT/budget/revenue materially up, or documented as source-absent); median candidate feature density rises from ~17/61; the absence-confound is either removed (by backfill) or made explicit (by indicators) and measured. **Re-run the scoreboard — expect movement here before any algorithm change.**
+**Exit gate:** the enriched `audit_coverage` shows the candidate universe's *fetchable* gaps closed (member coverage of metacritic/RT/budget/revenue materially up, with the remainder marked `fetch_attempt`/source-absent); median candidate feature density rises from ~17/61; the absence-confound is either removed (by backfill) or made explicit (by indicators) **and shown to pass A4's keep-criterion**. **Re-run the scoreboard — expect movement here before any algorithm change.**
 
 ---
 
 ## Stage B — Decide the model architecture ("combine the models")
 
-With a denser surface, decide — explicitly, with measurement — whether linear-one-per-list is still right.
+With a denser surface, decide — explicitly, with measurement — whether linear-one-per-list is still right. **This stage is a design spike + ADR, not directly implementable yet** (see the dependency reality below); it produces a recorded decision, then its own implementation sub-issue.
 
-- [ ] **B1 — Headroom test.** In the experiment harness, prototype a **nonlinear model** (e.g. EXGBoost / a Scholar tree) against logistic regression on the densified candidate universe. Measure the PR-AUC/lift gap. If a tree materially beats linear, that's the headroom interactions are leaving on the table.
-- [ ] **B2 — Pool the weak lists.** Prototype a **multi-task / pooled model** (all lists, list-as-feature, or a shared representation) to rescue tiny-positive lists (NFR, 1001) that can't train standalone. Compare against per-list.
-- [ ] **B3 — Decide and record.** Options: keep the linear bus (serving-simple, honesty-machinery intact); add a nonlinear model behind a **new serving path**; and/or adopt a pooled model for weak lists. Whatever wins, document the serving contract — the bus currently *cannot* hold a nonlinear model, so this is a real architectural decision, not a tweak.
+Options, cheapest-first:
+- [ ] **B0 — Interaction/polynomial features (no new dep, no new serving path).** The cheapest way to capture nonlinearity is to feed *interaction* and binned features to the **existing linear model** — the bus stays `Σ w·feature`, the honesty/calibration machinery is untouched. Try this first; it may close much of the gap for free.
+- [ ] **B1 — Nonlinear-model headroom test.** Scholar 0.4 has **no** supervised GBM/tree, so this requires adding **`EXGBoost`** (a new hex dep with native xgboost) — feasibility-check the build on the M3/CI first. Then prototype it in the experiment harness vs logistic regression on the densified universe and measure the PR-AUC/lift gap. Only worth the dependency + new serving path if the gap is material AND B0 didn't already capture it.
+- [ ] **B2 — Pool the weak lists.** Prototype a **multi-task / pooled model** (all lists, list-as-feature) to rescue tiny-positive lists (NFR, 1001) that can't train standalone. Compare against per-list. (Doable with the existing linear stack — list-as-feature in one logistic regression — so no new dep.)
+- [ ] **B3 — Decide and record (ADR).** Whatever wins, document the serving contract: the bus currently *cannot* hold a nonlinear model, so adopting EXGBoost means a new serving path that `Reliability`/`ProbabilityCalibration` must still apply to. B0 and B2 keep the existing contract.
 
-**Exit gate:** a recorded decision backed by the B1/B2 measurements; if a nonlinear/pooled model is adopted, its serving path is specified (and the reliability/calibration machinery still applies to it).
+**Exit gate:** an ADR recorded, backed by B0/B1/B2 measurements on the densified surface; if a new dep or serving path is adopted, a follow-up implementation sub-issue is filed with the contract spelled out. **Do not start Stage B until Stage A's exit gate is green** — a headroom test on the thin surface would mismeasure.
 
 ---
 
@@ -133,3 +155,8 @@ The old #1047 content — now meaningful, because the surface (A) and model clas
 ---
 
 *Supersedes #1047 (audit + measurement plan) and #1050 (Stage-0 hygiene), both closed. The hygiene is folded in as Stage 0 above.*
+
+---
+
+*Review pass applied (2026-06-03): reframed as a parent epic with a sub-issue breakdown; reconciled A1 with the existing `mix predictions.audit_coverage` (extend, don't fork); corrected the feature-code count (61 view codes vs ~62 trainable/list); added Stage A operational detail (OMDb/TMDb sweepers, `fetch_attempt` as the source-absent marker, quota/rate assumptions); tightened A4's missingness keep-criterion (must beat a coverage-matched control); corrected Stage B's dependency reality (Scholar has no GBM; EXGBoost is a new dep) and added the no-new-dep options (interaction features, list-as-feature pooling), reframing B as a spike+ADR gated on Stage A.*
+

@@ -46,6 +46,13 @@ defmodule Cinegraph.Predictions.SourceOfTruthTest do
       weights_hash: "hash-#{source_key}",
       model_version: 1,
       lens_config_hash: "lc-1",
+      # Sufficient out-of-sample evidence so the activation guard (#1051 Stage 0) admits it.
+      integrity_report: %{
+        "recall_at_k" => 0.5,
+        "n_positives" => 20,
+        "n_evaluated" => 100,
+        "baselines" => %{"popularity" => 0.0}
+      },
       prereg_id: prereg!(source_key).id
     })
     |> Repo.insert!()
@@ -77,6 +84,31 @@ defmodule Cinegraph.Predictions.SourceOfTruthTest do
 
     # trained weights are still the model's — presets are a separate store
     assert MovieLists.get_trained_weights("sot_list2") == model.weights
+  end
+
+  test "an :insufficient model is refused as a list's active prediction pointer (#1051 Stage 0)" do
+    insert_list("sot_insuf")
+
+    # Degenerate out-of-sample evidence (no positives) → Reliability grades :insufficient.
+    model =
+      %Model{}
+      |> Model.changeset(%{
+        source_key: "sot_insuf",
+        feature_set: %{"granularity" => "lens", "features" => ["mob"]},
+        weights: %{"mob" => 1.0},
+        weights_hash: "hash-sot_insuf",
+        model_version: 1,
+        integrity_report: %{"recall_at_k" => 0.0, "n_positives" => 1, "n_evaluated" => 100},
+        prereg_id: prereg!("sot_insuf").id
+      })
+      |> Repo.insert!()
+
+    assert {:error, {:insufficient_reliability, id}} =
+             MovieLists.set_active_prediction_model("sot_insuf", model.id, model.weights)
+
+    assert id == model.id
+    # The list's pointer must remain unset.
+    assert MovieLists.get_by_source_key("sot_insuf").active_prediction_model_id == nil
   end
 
   test "WeightOptimizer is analysis-only — it no longer persists models (Rule 1)" do

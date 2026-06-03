@@ -1,8 +1,16 @@
 defmodule Cinegraph.Maintenance.BackfillOmdb do
   @moduledoc """
   Release-safe maintenance entry point for the OMDb null backfill. Enqueues
-  one `OMDbEnrichmentWorker` job per movie that has no `external_metrics` row
-  with `source = 'omdb'`.
+  one `OMDbEnrichmentWorker` job per movie that still **needs a fetch** — has
+  no stored `omdb_data` blob and no recent `fetch_attempt` marker.
+
+  #1053: the predicate is "needs fetch", NOT "has no `source='omdb'` row". A
+  successful OMDb response may legitimately materialize only an `imdb`/
+  `metacritic`/`rotten_tomatoes` row and no `omdb` row (e.g. a film with an
+  IMDb rating but no Awards/box-office/RT). Keying on the `omdb` row re-fetched
+  those movies forever and, at a raised cap, would waste quota re-downloading
+  blobs we already have. Materializing metrics from existing blobs is
+  `mix cinegraph.metrics.backfill_from_jsonb`'s job (no API), not this one's.
 
   Reachable from:
   - `mix cinegraph.movies.backfill_omdb` (dev)
@@ -21,6 +29,8 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
   ## Options
     * `:limit` (positive integer) — cap the number of jobs enqueued.
     * `:dry_run` (boolean) — count only; do not enqueue.
+    * `:movie_ids` (list of ids) — restrict the backlog to this set (e.g. the prediction
+      candidate universe, #1051 Stage A2). Canonical-list members still sort first.
 
   ## Returns
   `{:ok, %{found: integer, enqueued: integer, failed: integer, dry_run: boolean}}`
@@ -41,42 +51,7 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
              dry_run: boolean()
            }}
   def run(opts \\ []) when is_list(opts) do
-    # Order: canonical-list movies first, then by id desc. (Movies have no
-    # `popularity` column; popularity lives in the `tmdb_data` JSONB blob and
-    # isn't worth a JSONB cast for ordering when canonical-membership already
-    # encodes priority.)
-    #
-    # Only imdb_id-bearing movies are selected. OMDb requires an IMDb ID; movies
-    # without one return :invalid_imdb_id immediately and never produce an
-    # external_metrics row, so they would re-enter this backlog on every sweep.
-    base =
-      from m in "movies",
-        where:
-          not fragment(
-            "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb')",
-            m.id
-          ) and
-            not is_nil(m.imdb_id) and m.imdb_id != "",
-        order_by: [
-          desc: fragment("? != '{}'::jsonb", m.canonical_sources),
-          desc: m.id
-        ],
-        select: m.id
-
-    capped =
-      case Keyword.get(opts, :limit) do
-        nil ->
-          base
-
-        n when is_integer(n) and n > 0 ->
-          from(q in base, limit: ^n)
-
-        other ->
-          raise ArgumentError,
-                ":limit must be a positive integer or nil, got: #{inspect(other)}"
-      end
-
-    ids = Repo.replica().all(capped)
+    ids = eligible_ids(opts)
     found = length(ids)
     dry_run? = Keyword.get(opts, :dry_run, false)
 
@@ -88,6 +63,58 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
       Logger.info("BackfillOmdb: enqueued #{enqueued} jobs on :omdb (#{failed} failed)")
       {:ok, %{found: found, enqueued: enqueued, failed: failed, dry_run: false}}
     end
+  end
+
+  @doc """
+  The movie ids this backfill targets, in priority order (canonical-list members first,
+  then by id desc). Accepts the same `:movie_ids` and `:limit` options as `run/1`. Exposed so
+  a synchronous runner (e.g. the #1051 Stage A2 candidate-universe densification) can process
+  exactly the same set the sweeper would enqueue.
+  """
+  def eligible_ids(opts \\ []) do
+    # #1053 "needs fetch" predicate: no stored blob (omdb_data IS NULL), a usable
+    # imdb_id (OMDb requires one), and no recent fetch_attempt (90-day cooldown so
+    # source-absent movies don't churn). NOTE: this intentionally does NOT key on
+    # the presence of a source='omdb' external_metrics row — see the moduledoc.
+    cutoff = DateTime.add(DateTime.utc_now(), -90 * 24 * 3600, :second)
+
+    base =
+      from m in "movies",
+        where:
+          is_nil(m.omdb_data) and
+            not is_nil(m.imdb_id) and m.imdb_id != "" and
+            not fragment(
+              "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb' AND em.metric_type = 'fetch_attempt' AND em.fetched_at > ?)",
+              m.id,
+              ^cutoff
+            ),
+        order_by: [
+          desc: fragment("? != '{}'::jsonb", m.canonical_sources),
+          desc: m.id
+        ],
+        select: m.id
+
+    # Optional id-set scoping (#1051 Stage A2) — restrict to e.g. the candidate universe.
+    scoped =
+      case Keyword.get(opts, :movie_ids) do
+        nil -> base
+        ids when is_list(ids) -> from(q in base, where: q.id in ^ids)
+      end
+
+    capped =
+      case Keyword.get(opts, :limit) do
+        nil ->
+          scoped
+
+        n when is_integer(n) and n > 0 ->
+          from(q in scoped, limit: ^n)
+
+        other ->
+          raise ArgumentError,
+                ":limit must be a positive integer or nil, got: #{inspect(other)}"
+      end
+
+    Repo.replica().all(capped)
   end
 
   # Per-job inserts so the worker's :unique config is honoured —

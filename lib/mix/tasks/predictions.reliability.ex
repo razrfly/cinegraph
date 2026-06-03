@@ -25,7 +25,7 @@ defmodule Mix.Tasks.Predictions.Reliability do
 
   @impl Mix.Task
   def run(args) do
-    Mix.Task.run("app.start")
+    Cinegraph.Predictions.TaskSupport.start_lean()
 
     {opts, _, _} = OptionParser.parse(args, strict: [json: :boolean, all: :boolean])
 

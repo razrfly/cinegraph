@@ -469,116 +469,143 @@ defmodule Cinegraph.Metrics.CatalogSeed do
   end
 
   # ── ML-only features (category nil; usable by models, not in a human lens) ──
-  defp ml_only do
+  # Missingness indicators (#1051 A4): ML-only derived 0/1 features marking field-level
+  # source-absence. Computed by `Cinegraph.Scoring.DerivedFeatures` from metric_values_view
+  # presence. Catalogued `is_available: false` — gated out of the default feature set until the
+  # keep-criterion (`mix predictions.eval_indicators`) admits them per-indicator.
+  defp missingness_indicators do
     [
-      # TMDb user/curated list appearances. ML-only (category nil) — a cultural-penetration
-      # signal available to model feature sets, deliberately NOT a time_machine lens member
-      # so the lens config (and lens_config_hash) is unchanged by the #1036 popularity fix.
-      def_(%{
-        code: "list_appearances",
-        name: "TMDb List Appearances",
-        source_type: "tmdb",
-        source_field: "list_appearances",
-        normalization_type: "logarithmic",
-        normalization_params: %{"threshold" => 50},
-        raw_scale_min: 0.0,
-        source_reliability: 0.6
-      }),
-      def_(%{
-        code: "runtime",
-        name: "Runtime (minutes)",
-        source_table: "movies",
-        source_field: "runtime",
-        normalization_type: "linear",
-        raw_scale_min: 0.0,
-        raw_scale_max: 240.0,
-        source_reliability: 0.9
-      }),
-      def_(%{
-        code: "release_year",
-        name: "Release Year",
-        source_table: "movies",
-        source_field: "release_date",
-        normalization_type: "custom",
-        source_reliability: 1.0
-      }),
-      def_(%{
-        code: "original_language",
-        name: "Original Language",
-        source_table: "movies",
-        source_field: "original_language",
-        normalization_type: "custom",
-        source_reliability: 1.0
-      }),
-      def_(%{
-        code: "genre_ids",
-        name: "Genres",
-        source_table: "movie_genres",
-        source_field: "genre_id",
-        normalization_type: "custom",
-        source_reliability: 0.9
-      }),
-      def_(%{
-        code: "keyword_ids",
-        name: "Keywords",
-        source_table: "movie_keywords",
-        source_field: "keyword_id",
-        normalization_type: "custom",
-        source_reliability: 0.7
-      }),
-      def_(%{
-        code: "content_rating",
-        name: "Content Rating",
-        source_type: "omdb",
-        source_field: "content_rating",
-        normalization_type: "custom",
-        source_reliability: 0.8
-      }),
-      def_(%{
-        code: "collection_membership",
-        name: "Belongs to Collection",
-        source_table: "movies",
-        source_field: "collection_id",
-        normalization_type: "boolean",
-        source_reliability: 0.9
-      }),
-      def_(%{
-        code: "production_country_count",
-        name: "Production Country Count",
-        source_table: "movie_production_countries",
-        source_field: "movie_id",
-        normalization_type: "linear",
-        raw_scale_min: 0.0,
-        raw_scale_max: 10.0,
-        source_reliability: 0.8
-      }),
-      def_(%{
-        code: "has_official_trailer",
-        name: "Has Official Trailer",
-        source_table: "movie_videos",
-        source_field: "official",
-        normalization_type: "boolean",
-        source_reliability: 0.7
-      }),
-      def_(%{
-        code: "prior_collab_density",
-        name: "Prior Collaboration Density",
-        source_table: "derived",
-        normalization_type: "logarithmic",
-        # Single source of truth in `DerivedFeatures` (which does the actual log-normalization);
-        # mirrored here so the catalog metadata can't drift from the computed cap (#1044).
-        normalization_params: %{"threshold" => DerivedFeatures.prior_collab_cap()},
-        source_reliability: 0.7,
-        kind: "derived",
-        derivation: "prior_collab_density",
-        # #1044: wired. `Cinegraph.Scoring.DerivedFeatures` sums each film's key people's distinct
-        # prior-to-release collaborators (SUM(new_collaborators) from the person×year
-        # `person_collaboration_trends` matview, leakage-stripped at year < release_year) and
-        # log-normalizes at this threshold. Now emitted by the data-point surface and in
-        # `DerivedFeatures.supported_codes/0`.
-        is_available: true
-      })
+      {"has_imdb_rating", "Has IMDb Rating"},
+      {"has_metacritic", "Has Metacritic Score"},
+      {"has_rotten_tomatoes", "Has Rotten Tomatoes Score"},
+      {"has_budget", "Has Budget"},
+      {"has_revenue", "Has Revenue"}
     ]
+    |> Enum.map(fn {code, name} ->
+      def_(%{
+        code: code,
+        name: name,
+        source_table: "derived",
+        normalization_type: "custom",
+        kind: "derived",
+        derivation: "missingness_indicator",
+        source_reliability: 0.5,
+        is_available: false
+      })
+    end)
+  end
+
+  defp ml_only do
+    missingness_indicators() ++
+      [
+        # TMDb user/curated list appearances. ML-only (category nil) — a cultural-penetration
+        # signal available to model feature sets, deliberately NOT a time_machine lens member
+        # so the lens config (and lens_config_hash) is unchanged by the #1036 popularity fix.
+        def_(%{
+          code: "list_appearances",
+          name: "TMDb List Appearances",
+          source_type: "tmdb",
+          source_field: "list_appearances",
+          normalization_type: "logarithmic",
+          normalization_params: %{"threshold" => 50},
+          raw_scale_min: 0.0,
+          source_reliability: 0.6
+        }),
+        def_(%{
+          code: "runtime",
+          name: "Runtime (minutes)",
+          source_table: "movies",
+          source_field: "runtime",
+          normalization_type: "linear",
+          raw_scale_min: 0.0,
+          raw_scale_max: 240.0,
+          source_reliability: 0.9
+        }),
+        def_(%{
+          code: "release_year",
+          name: "Release Year",
+          source_table: "movies",
+          source_field: "release_date",
+          normalization_type: "custom",
+          source_reliability: 1.0
+        }),
+        def_(%{
+          code: "original_language",
+          name: "Original Language",
+          source_table: "movies",
+          source_field: "original_language",
+          normalization_type: "custom",
+          source_reliability: 1.0
+        }),
+        def_(%{
+          code: "genre_ids",
+          name: "Genres",
+          source_table: "movie_genres",
+          source_field: "genre_id",
+          normalization_type: "custom",
+          source_reliability: 0.9
+        }),
+        def_(%{
+          code: "keyword_ids",
+          name: "Keywords",
+          source_table: "movie_keywords",
+          source_field: "keyword_id",
+          normalization_type: "custom",
+          source_reliability: 0.7
+        }),
+        def_(%{
+          code: "content_rating",
+          name: "Content Rating",
+          source_type: "omdb",
+          source_field: "content_rating",
+          normalization_type: "custom",
+          source_reliability: 0.8
+        }),
+        def_(%{
+          code: "collection_membership",
+          name: "Belongs to Collection",
+          source_table: "movies",
+          source_field: "collection_id",
+          normalization_type: "boolean",
+          source_reliability: 0.9
+        }),
+        def_(%{
+          code: "production_country_count",
+          name: "Production Country Count",
+          source_table: "movie_production_countries",
+          source_field: "movie_id",
+          normalization_type: "linear",
+          raw_scale_min: 0.0,
+          raw_scale_max: 10.0,
+          source_reliability: 0.8
+        }),
+        def_(%{
+          code: "has_official_trailer",
+          name: "Has Official Trailer",
+          source_table: "movie_videos",
+          source_field: "official",
+          normalization_type: "boolean",
+          source_reliability: 0.7
+        }),
+        def_(%{
+          code: "prior_collab_density",
+          name: "Prior Collaboration Density",
+          source_table: "derived",
+          normalization_type: "logarithmic",
+          # Single source of truth in `DerivedFeatures` (which does the actual log-normalization);
+          # mirrored here so the catalog metadata can't drift from the computed cap (#1044).
+          normalization_params: %{"threshold" => DerivedFeatures.prior_collab_cap()},
+          source_reliability: 0.7,
+          kind: "derived",
+          derivation: "prior_collab_density",
+          # #1044: wired. `Cinegraph.Scoring.DerivedFeatures` sums each film's key people's distinct
+          # prior-to-release collaborators (SUM(new_collaborators) from the person×year
+          # `person_collaboration_trends` matview, leakage-stripped at year < release_year) and
+          # log-normalizes at this threshold. Now emitted by the data-point surface and in
+          # `DerivedFeatures.supported_codes/0`.
+          is_available: true
+        })
+      ]
   end
 
   # ── dynamic (DB-driven) ML-only data points ────────────────────────────────
