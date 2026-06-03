@@ -473,7 +473,8 @@ defmodule Cinegraph.Scoring.CatalogContractTest do
   end
 
   defp active_codes do
-    Metrics.list_metric_definitions() |> Enum.map(& &1.code)
+    # active: true is explicit — the forward contract's "catalogued" set is active-only.
+    Metrics.list_metric_definitions(active: true) |> Enum.map(& &1.code)
   end
 
   defp dynamic_family_context do

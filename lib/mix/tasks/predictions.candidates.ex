@@ -39,7 +39,7 @@ defmodule Mix.Tasks.Predictions.Candidates do
   import Ecto.Query
 
   alias Cinegraph.Movies.{Movie, MovieLists}
-  alias Cinegraph.Predictions.{ListFrontier, ProbabilityCalibration}
+  alias Cinegraph.Predictions.{ListFrontier, PreRegistration, ProbabilityCalibration, Reliability}
   alias Cinegraph.Repo
   alias Cinegraph.Scoring.Bus
 
@@ -76,6 +76,11 @@ defmodule Mix.Tasks.Predictions.Candidates do
     frontier = ListFrontier.resolve(list)
     cutoff = if mode == "predictions", do: opts[:since] || frontier.cutoff_year
 
+    # Reliability gates the predictions: when it's Insufficient or the model is only
+    # identity-calibrated, the per-row probability is a fake `score/100` and must NOT be shown.
+    reliability = reliability_for(model, frontier)
+    show_prob? = reliability.grade != :insufficient and reliability.calibration != "identity"
+
     candidates = candidate_movies(list, min_votes, mode, cutoff)
     scores = Bus.score(candidates, model)
 
@@ -89,7 +94,8 @@ defmodule Mix.Tasks.Predictions.Candidates do
           title: m.title,
           year: year(m),
           score: score,
-          prob: ProbabilityCalibration.apply_calibration(model.calibration, score),
+          prob:
+            if(show_prob?, do: ProbabilityCalibration.apply_calibration(model.calibration, score)),
           member?: Map.has_key?(m.canonical_sources || %{}, list),
           also_on: also_on(m, list)
         }
@@ -102,6 +108,7 @@ defmodule Mix.Tasks.Predictions.Candidates do
       mode: mode,
       model: model,
       frontier: frontier,
+      reliability: reliability,
       cutoff: cutoff,
       members: member_count(list),
       base_rate: nil,
@@ -115,13 +122,45 @@ defmodule Mix.Tasks.Predictions.Candidates do
     if opts[:json] do
       IO.puts(
         Jason.encode!(
-          %{list: list, mode: mode, model_id: model.id, frontier: frontier, rows: ranked},
+          %{
+            list: list,
+            mode: mode,
+            model_id: model.id,
+            frontier: frontier,
+            reliability: reliability_json(reliability),
+            rows: ranked
+          },
           pretty: true
         )
       )
     else
       print(ctx)
     end
+  end
+
+  # Reliability via the pure core, reusing the already-resolved frontier (no second DB resolve).
+  # `Bus.active_model/1` does not preload the prereg, so load it here for the threshold cap.
+  defp reliability_for(model, frontier) do
+    prereg = Repo.preload(model, :pre_registration).pre_registration
+
+    Reliability.score(model.integrity_report, model.calibration, %{
+      is_stale: model.is_stale,
+      frontier: frontier,
+      threshold: prereg && PreRegistration.threshold_value(prereg),
+      prereg?: not is_nil(prereg)
+    })
+  end
+
+  defp reliability_json(r) do
+    {lo, hi} = r.ci
+
+    %{
+      grade: to_string(r.grade),
+      band_grade: to_string(r.band_grade),
+      headline_pct: r.headline_pct,
+      ci: [lo, hi],
+      reasons: r.reasons
+    }
   end
 
   defp parse_mode(nil), do: "predictions"
@@ -150,6 +189,7 @@ defmodule Mix.Tasks.Predictions.Candidates do
     Mix.shell().info("""
 
     "#{name}" — model #{ctx.model.feature_set["granularity"]}, held-out recall@K #{pct(recall)} (vs popularity #{pct(pop)})
+    #{reliability_line(ctx.reliability)}
     known members: #{ctx.members} · base rate ≈ #{pct(ctx.base_rate)} · scanned #{ctx.scanned} films (min votes #{ctx.min_votes})
     #{frontier_line(ctx.frontier)}
     #{mode_intro(ctx.mode, ctx.cutoff)}
@@ -173,6 +213,35 @@ defmodule Mix.Tasks.Predictions.Candidates do
     end)
 
     Mix.shell().info("\n#{mode_footer(ctx.mode)}")
+  end
+
+  defp reliability_line(r) do
+    grade = r.grade |> to_string() |> String.upcase()
+
+    # When caps lowered the grade below what the headline earns, say so — otherwise a LOW next
+    # to a high Wilson headline reads as a contradiction.
+    capped =
+      if r.band_grade != r.grade,
+        do: "capped from #{r.band_grade |> to_string() |> String.upcase()} · ",
+        else: ""
+
+    headline =
+      case r.headline_pct do
+        "—" -> "—"
+        pct -> "headline #{pct}% Wilson-95"
+      end
+
+    reason =
+      cond do
+        r.reasons != [] -> hd(r.reasons)
+        r.grade == :high -> "clears every gate"
+        true -> "no integrity penalties — grade reflects the accuracy lower bound itself"
+      end
+
+    suppressed =
+      unless r.sufficient? and r.calibration != "identity", do: " · per-film probabilities hidden"
+
+    "reliability: #{grade} (#{capped}#{headline}) — #{reason}#{suppressed}"
   end
 
   defp frontier_line(%{cutoff_year: nil}),
