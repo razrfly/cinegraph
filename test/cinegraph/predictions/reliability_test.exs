@@ -77,7 +77,23 @@ defmodule Cinegraph.Predictions.ReliabilityTest do
     test "lift gate fail (below margin over baseline) → :insufficient" do
       r = R.score(high_ir(%{"recall_at_k" => 0.04, "n_positives" => 30}), platt(), high_ctx())
       assert r.grade == :insufficient
-      assert Enum.any?(r.reasons, &(&1 =~ "popularity baseline"))
+      assert Enum.any?(r.reasons, &(&1 =~ "margin"))
+    end
+
+    test "lift gate fail by RATIO (clears margin but barely beats a big baseline) names the ratio" do
+      # recall 0.60 vs popularity 0.50: margin 0.10 ≥ 0.05 (passes) but ratio 1.2× < 1.5× (fails).
+      ir =
+        high_ir(%{
+          "recall_at_k" => 0.60,
+          "n_positives" => 50,
+          "baselines" => %{"popularity" => 0.50}
+        })
+
+      r = R.score(ir, platt(), high_ctx())
+      assert r.grade == :insufficient
+
+      assert Enum.any?(r.reasons, &(&1 =~ "ratio")),
+             "expected a ratio reason, got #{inspect(r.reasons)}"
     end
 
     test "identity calibration → cap :low" do

@@ -35,7 +35,7 @@ defmodule Cinegraph.Predictions.Trainer do
   }
 
   alias Cinegraph.Repo
-  alias Cinegraph.Scoring.{DataPointFeatures, LensConfig}
+  alias Cinegraph.Scoring.{DataPointFeatures, DerivedFeatures, LensConfig}
 
   require Logger
 
@@ -134,6 +134,208 @@ defmodule Cinegraph.Predictions.Trainer do
       end
     end
   end
+
+  @doc """
+  Run a **holdout-free experiment** (#1040 Session 1) — the iteration sandbox.
+
+  Fits on the train decades and evaluates on the **validation** decades, NEVER touching the
+  sacred holdout (the latest decade) and requiring no pre-registration. Returns smooth tuning
+  metrics (PR-AUC, log-loss) alongside recall@K, plus per-feature coverage and importance, so
+  feature/weight variants can be compared without spending the holdout.
+
+  Promotion of a validated winner to an active model stays the separate `train(save: true)` path.
+
+  ## Options
+    * `:granularity` — `:data_point` (default) or `:lens`
+    * `:sample_ratio` — negative undersampling ratio (default 5)
+    * `:min_val_positives` — pool validation decades until ≥ this many positives (default 30)
+  """
+  def run_experiment(source_key, opts \\ []) do
+    granularity = Keyword.get(opts, :granularity, :data_point)
+    ratio = Keyword.get(opts, :sample_ratio, 5)
+    seed = Keyword.get(opts, :seed, 1337)
+    features = Keyword.get(opts, :features, :all)
+    codes = if granularity == :data_point, do: resolve_codes(source_key, features)
+
+    cond do
+      granularity == :data_point and codes == [] ->
+        {:error, :no_data_point_features}
+
+      true ->
+        # Seed the undersample shuffles so sweep variants are compared on the same negative draw.
+        :rand.seed(:exsss, {seed, seed, seed})
+        decades = HistoricalValidator.get_all_decades(source_key) |> Enum.sort()
+
+        case split_train_val_holdout(source_key, decades, opts) do
+          {:error, reason} ->
+            {:error, reason}
+
+          {train_decades, val_decades, holdout_decades} ->
+            Logger.info(
+              "Trainer(experiment): #{granularity}/#{source_key} features=#{inspect(features)} " <>
+                "train #{inspect(train_decades)} val #{inspect(val_decades)} " <>
+                "(holdout #{inspect(holdout_decades)} UNTOUCHED)"
+            )
+
+            labeled = labeled_from_decades(source_key, train_decades)
+
+            {weights, feature_set, names} =
+              fit_weights(granularity, source_key, labeled, ratio, codes)
+
+            spec = {granularity, stringify(weights), source_key}
+
+            report = Credibility.evaluate(spec, source_key, val_decades)
+            pairs = report["pairs"] || []
+            {scores, labels} = if pairs == [], do: {[], []}, else: Enum.unzip(pairs)
+
+            # Smooth tuning metrics. PR-AUC is rank-based (no calibration). Log-loss needs
+            # probabilities, so fit Platt on the validation pairs and apply — in-sample, but
+            # computed identically across experiments, so it is a consistent relative metric.
+            calib = ProbabilityCalibration.fit(scores, labels)
+            probs = Enum.map(scores, &ProbabilityCalibration.apply_calibration(calib, &1))
+
+            {:ok,
+             %{
+               source_key: source_key,
+               granularity: to_string(granularity),
+               features: features,
+               sample_ratio: ratio,
+               seed: seed,
+               backtest_strategy: "temporal-validation",
+               train_decades: train_decades,
+               validation_decades: val_decades,
+               holdout_decades: holdout_decades,
+               weights: stringify(weights),
+               feature_set: feature_set,
+               calibration: calib["method"],
+               metrics: %{
+                 "recall_at_k" => report["recall_at_k"],
+                 "precision_at_k" => report["precision_at_k"],
+                 "pr_auc" => Credibility.pr_auc(scores, labels),
+                 "log_loss" => Credibility.log_loss(probs, labels),
+                 "n_positives" => report["n_positives"],
+                 "n_evaluated" => report["n_evaluated"],
+                 "baselines" => report["baselines"]
+               },
+               feature_coverage: feature_coverage(granularity, source_key, val_decades, names),
+               feature_importance: stringify(weights)
+             }}
+        end
+    end
+  end
+
+  @doc """
+  Run several experiment variants and return them ranked by validation PR-AUC (#1040 Session 3).
+
+  `variants` is a list of keyword lists merged onto `opts` (e.g. `[[features: :raw], [features: :all]]`).
+  Runs concurrently under `Task.async_stream` bounded by `:max_concurrency` (default 4) — this is the
+  loop that exploits the box's cores to search the surface area. Each variant is holdout-free.
+  """
+  def run_sweep(source_key, variants, opts \\ []) do
+    max_conc = Keyword.get(opts, :max_concurrency, 4)
+
+    variants
+    |> Task.async_stream(
+      fn variant -> {variant, run_experiment(source_key, Keyword.merge(opts, variant))} end,
+      max_concurrency: max_conc,
+      timeout: :timer.minutes(15),
+      ordered: false
+    )
+    |> Enum.flat_map(fn
+      {:ok, {variant, {:ok, result}}} -> [Map.put(result, :variant, variant)]
+      {:ok, {_variant, {:error, _}}} -> []
+      {:exit, _} -> []
+    end)
+    |> Enum.sort_by(&(&1.metrics["pr_auc"] || -1.0), :desc)
+  end
+
+  # Map a feature-set selector to data-point codes. `data_point_codes/1` is raw+derived minus target.
+  defp resolve_codes(source_key, :all), do: data_point_codes(source_key)
+
+  defp resolve_codes(source_key, :raw),
+    do: data_point_codes(source_key) -- DerivedFeatures.supported_codes()
+
+  defp resolve_codes(source_key, :derived),
+    do: Enum.filter(data_point_codes(source_key), &(&1 in DerivedFeatures.supported_codes()))
+
+  defp resolve_codes(_source_key, codes) when is_list(codes), do: codes
+
+  # Three-way temporal split (#1040): sacred holdout = latest decade (NEVER returned for use here);
+  # validation = decades just before it, pooled until ≥ min positives; train = the rest. Needs ≥3
+  # decades so train and validation are both non-empty with the holdout reserved.
+  @default_min_val_positives 30
+
+  def split_train_val_holdout(source_key, decades, opts \\ []) do
+    min_pos = Keyword.get(opts, :min_val_positives, @default_min_val_positives)
+    split_decades(decades, member_counts_by_decade(source_key), min_pos)
+  end
+
+  @doc """
+  Pure 3-way split given per-decade member `counts` (DB-free, for testing): holdout = last decade,
+  validation = decades just before it pooled until ≥ `min_pos` positives, train = the rest. Returns
+  `{train, validation, holdout}` or `{:error, :insufficient_decades}` (needs ≥ 3 decades).
+  """
+  def split_decades(decades, counts, min_pos) when length(decades) >= 3 do
+    holdout = [List.last(decades)]
+    rest = Enum.drop(decades, -1)
+    {val, train} = pool_validation(rest, counts, min_pos)
+    if train == [], do: {:error, :insufficient_decades}, else: {train, val, holdout}
+  end
+
+  def split_decades(_decades, _counts, _min_pos), do: {:error, :insufficient_decades}
+
+  # Walk `rest` from its latest decade backward, moving decades into validation until they hold
+  # ≥ min_pos positives — but always leave ≥1 decade for training.
+  defp pool_validation(rest, counts, min_pos) do
+    {val_rev, _acc, _remaining} =
+      rest
+      |> Enum.reverse()
+      |> Enum.reduce_while({[], 0, length(rest)}, fn d, {val, acc, remaining} ->
+        cond do
+          remaining <= 1 -> {:halt, {val, acc, remaining}}
+          acc >= min_pos -> {:halt, {val, acc, remaining}}
+          true -> {:cont, {[d | val], acc + Map.get(counts, d, 0), remaining - 1}}
+        end
+      end)
+
+    val = Enum.sort(val_rev)
+    {val, rest -- val}
+  end
+
+  defp member_counts_by_decade(source_key) do
+    Repo.all(
+      from m in Movie,
+        where: fragment("? \\? ?", m.canonical_sources, ^source_key),
+        where: not is_nil(m.release_date),
+        group_by: fragment("FLOOR(EXTRACT(YEAR FROM ?) / 10) * 10", m.release_date),
+        select: {fragment("FLOOR(EXTRACT(YEAR FROM ?) / 10) * 10", m.release_date), count(m.id)}
+    )
+    |> Map.new(fn {d, c} -> {to_decade_int(d), c} end)
+  end
+
+  defp to_decade_int(%Decimal{} = d), do: Decimal.to_integer(d)
+  defp to_decade_int(n) when is_number(n), do: trunc(n)
+
+  # Per-feature coverage over the evaluated (validation) set: fraction of movies with a nonzero
+  # value for each code. Lens features are always present, so coverage only applies to data_point.
+  defp feature_coverage(:data_point, source_key, val_decades, codes) do
+    movies = Enum.flat_map(val_decades, &decade_movie_structs/1)
+    feats = DataPointFeatures.load_for(movies, codes, source_key)
+    n = length(movies)
+
+    if n == 0 do
+      %{}
+    else
+      Map.new(codes, fn code ->
+        nonzero =
+          Enum.count(movies, fn m -> (get_in(feats, [m.id, code]) || 0.0) != 0.0 end)
+
+        {code, Float.round(nonzero / n, 4)}
+      end)
+    end
+  end
+
+  defp feature_coverage(_granularity, _source_key, _val_decades, _codes), do: %{}
 
   # ── temporal: train on all-but-the-latest decade, score the latest as the sacred holdout ──
 
@@ -265,13 +467,7 @@ defmodule Cinegraph.Predictions.Trainer do
             id: m.id,
             title: m.title,
             release_date: m.release_date,
-            canonical_sources: m.canonical_sources,
-            tmdb_data:
-              fragment(
-                "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
-                m.tmdb_data,
-                m.tmdb_data
-              )
+            canonical_sources: m.canonical_sources
           }
       )
 
@@ -293,13 +489,7 @@ defmodule Cinegraph.Predictions.Trainer do
             id: m.id,
             title: m.title,
             release_date: m.release_date,
-            canonical_sources: m.canonical_sources,
-            tmdb_data:
-              fragment(
-                "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
-                m.tmdb_data,
-                m.tmdb_data
-              )
+            canonical_sources: m.canonical_sources
           }
         ),
         timeout: :timer.seconds(120)
@@ -356,18 +546,23 @@ defmodule Cinegraph.Predictions.Trainer do
 
   # ── fitting (shared by temporal + static) ──
 
-  defp fit_weights(:data_point, source_key, labeled, ratio) do
-    codes = data_point_codes(source_key)
+  # `codes` (#1040 S3) lets a sweep restrict the data-point feature set; nil ⇒ the full default set.
+  defp fit_weights(granularity, source_key, labeled, ratio, codes \\ nil)
+
+  defp fit_weights(:data_point, source_key, labeled, ratio, codes) do
+    codes = codes || data_point_codes(source_key)
     kept = undersample_ids(labeled, ratio)
     ids = Enum.map(kept, &elem(&1, 0))
-    feats = DataPointFeatures.load(ids, codes)
+    # Derived features need movie structs (canonical_sources / tmdb_data / release_date), so load
+    # them for the (small, undersampled) kept set and assemble via the shared load_for path.
+    feats = DataPointFeatures.load_for(load_movie_structs(ids), codes, source_key)
     x = Enum.map(kept, fn {id, _y} -> vectorize(Map.get(feats, id, %{}), codes) end)
     y = Enum.map(kept, &elem(&1, 1))
     weights = WeightOptimizer.fit_raw(x, y) |> WeightOptimizer.extract_weights(codes)
     {weights, %{"granularity" => "data_point", "features" => codes}, codes}
   end
 
-  defp fit_weights(:lens, source_key, labeled, ratio) do
+  defp fit_weights(:lens, source_key, labeled, ratio, _codes) do
     kept = undersample_ids(labeled, ratio)
     preds = lens_predictions(Enum.map(kept, &elem(&1, 0)), source_key)
 
@@ -395,13 +590,7 @@ defmodule Cinegraph.Predictions.Trainer do
       where: m.id in ^ids,
       select: %Movie{
         id: m.id,
-        canonical_sources: m.canonical_sources,
-        tmdb_data:
-          fragment(
-            "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
-            m.tmdb_data,
-            m.tmdb_data
-          )
+        canonical_sources: m.canonical_sources
       }
     )
     |> Repo.all()
@@ -418,16 +607,51 @@ defmodule Cinegraph.Predictions.Trainer do
 
   defp vectorize(vec, codes), do: Enum.map(codes, fn code -> vec[code] || 0.0 end)
 
+  defp decade_movie_structs(decade),
+    do: Repo.all(Cinegraph.Movies.decade_movies_query(decade), timeout: :timer.seconds(120))
+
+  # Movie structs (with the fields DerivedFeatures needs) for an explicit id set — same select
+  # shape as `decade_movies_query`, so the feature assembly matches the training/eval path.
+  defp load_movie_structs([]), do: []
+
+  defp load_movie_structs(ids) do
+    query =
+      from m in Movie,
+        where: m.id in ^ids,
+        select: %Movie{
+          id: m.id,
+          title: m.title,
+          release_date: m.release_date,
+          canonical_sources: m.canonical_sources,
+          tmdb_data:
+            fragment(
+              "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
+              m.tmdb_data,
+              m.tmdb_data
+            )
+        }
+
+    Repo.all(query, timeout: :timer.seconds(120))
+  end
+
   @doc """
-  Data-point feature codes for a list: active, available, raw, cleanly-normalized catalog
-  codes (excludes `custom` normalizations that yield NULL), MINUS the target list's own code
-  (leakage — a model predicting `L` must not see membership in `L`).
+  Data-point feature codes for a list (#1040): the raw, cleanly-normalized catalog codes
+  (excludes `custom` normalizations that yield NULL in the view) PLUS the derived canon-taste
+  codes `DerivedFeatures` emits — MINUS the target list's own code (leakage: a model predicting
+  `L` must not see membership in `L`).
+
+  `canonical_contribution` stays IN despite being "about" canonical membership: it is
+  leakage-stripped (the target list is removed before counting), which is exactly its value.
   """
   def data_point_codes(source_key) do
-    Metrics.list_metric_definitions(only_available: true, kind: "raw")
-    |> Enum.reject(&(&1.normalization_type == "custom"))
-    |> Enum.map(& &1.code)
+    raw =
+      Metrics.list_metric_definitions(only_available: true, kind: "raw")
+      |> Enum.reject(&(&1.normalization_type == "custom"))
+      |> Enum.map(& &1.code)
+
+    (raw ++ DerivedFeatures.supported_codes())
     |> Enum.reject(&(&1 == source_key))
+    |> Enum.uniq()
     |> Enum.sort()
   end
 
@@ -497,7 +721,7 @@ defmodule Cinegraph.Predictions.Trainer do
                :lens_config_hash,
                :updated_at
              ]},
-          conflict_target: [:source_key, :weights_hash, :model_version],
+          conflict_target: [:source_key, :weights_hash, :model_version, :prereg_id],
           returning: true
         )
         |> case do

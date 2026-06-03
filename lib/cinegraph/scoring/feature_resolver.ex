@@ -235,8 +235,6 @@ defmodule Cinegraph.Scoring.FeatureResolver do
          {director_target_count, director_avg_imdb},
          source_key
        ) do
-    tmdb_data = Map.get(movie, :tmdb_data) || %{}
-
     # Strip the target list before counting canonical presence (leakage guard) —
     # the derived canonical_contribution{source_key} feature.
     canonical_count =
@@ -252,8 +250,10 @@ defmodule Cinegraph.Scoring.FeatureResolver do
       rt_tomatometer: target_metric(ext_metrics, "rotten_tomatoes", "tomatometer"),
       canonical_count: canonical_count,
       release_year: movie_release_year(movie),
-      tmdb_budget: get_in(tmdb_data, ["budget"]) || 0,
-      tmdb_revenue: get_in(tmdb_data, ["revenue"]) || 0,
+      # Budget/revenue from the catalogued external-metrics (same source absolute uses), NOT the
+      # raw `tmdb_data` blob (#1042). Coverage matches the blob — both come from TMDb's numbers.
+      tmdb_budget: target_metric(ext_metrics, "tmdb", "budget") || 0,
+      tmdb_revenue: target_metric(ext_metrics, "tmdb", "revenue_worldwide") || 0,
       director_target_count: director_target_count,
       director_avg_imdb: director_avg_imdb
     }

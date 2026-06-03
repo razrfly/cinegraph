@@ -188,8 +188,8 @@ defmodule Cinegraph.Scoring.LensFormulas do
 
   @doc """
   Financial lens. Absolute: log revenue (60%) + log ROI (40%) from external_metrics
-  (0–10). Target: ROI bands from tmdb_data (0–25) — the ROI portion of the old
-  `cultural_impact`.
+  (0–10). Target: ROI bands from external-metrics budget/revenue (0–25) — the ROI
+  portion of the old `cultural_impact` (#1042: was the raw `tmdb_data` blob).
   """
   def box_office(inputs, :absolute) do
     budget = inputs[:budget] || 0

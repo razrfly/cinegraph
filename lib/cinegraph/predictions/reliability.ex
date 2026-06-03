@@ -164,9 +164,20 @@ defmodule Cinegraph.Predictions.Reliability do
   defp lift_reason(%{recall: nil}),
     do: "no recall@K measured (zero positives in holdout) — no skill to report"
 
-  defp lift_reason(%{margin: m}),
-    do:
-      "does not beat the popularity baseline by the required margin (margin #{m} < #{@min_margin})"
+  # Report whichever condition actually failed (margin vs ratio), not a blanket margin message —
+  # a model can clear the absolute margin yet barely beat a large popularity baseline by ratio.
+  defp lift_reason(%{margin: m, ratio: r}) do
+    cond do
+      is_number(m) and m < @min_margin ->
+        "does not beat the popularity baseline by the required margin (#{m} < #{@min_margin})"
+
+      is_number(r) and r < @min_ratio ->
+        "barely beats popularity — lift ratio #{r}× is below the required #{@min_ratio}×"
+
+      true ->
+        "fails the lift gate over the popularity baseline"
+    end
+  end
 
   # ── threshold cap (verdict is NOT persisted — recompute, mirroring Trainer.verdict/2) ──
   defp clears_threshold?(nil, _recall), do: true

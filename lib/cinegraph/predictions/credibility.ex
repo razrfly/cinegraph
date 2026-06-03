@@ -75,6 +75,61 @@ defmodule Cinegraph.Predictions.Credibility do
     brier(probs, labels)
   end
 
+  @doc """
+  Log loss = `-mean(y·log p + (1-y)·log(1-p))` over probabilities (clamped to avoid `log 0`).
+  Lower is better. A smooth, calibration-sensitive metric for tuning on the validation tier —
+  unlike recall@K it reacts to small score changes even when the top-K membership doesn't move.
+  """
+  def log_loss(probs, labels) when length(probs) == length(labels) do
+    n = length(labels)
+
+    if n == 0 do
+      nil
+    else
+      eps = 1.0e-15
+
+      sum =
+        Enum.zip(probs, labels)
+        |> Enum.reduce(0.0, fn {p, y}, acc ->
+          p = min(max(p, eps), 1.0 - eps)
+          acc - (y * :math.log(p) + (1 - y) * :math.log(1.0 - p))
+        end)
+
+      Float.round(sum / n, 4)
+    end
+  end
+
+  @doc """
+  PR-AUC (average precision) from raw scores + 0/1 labels: `Σ Pₖ·(Rₖ − Rₖ₋₁)` over the
+  score-descending ranking. Threshold-free and rank-based (needs no calibration), and far more
+  stable than recall@K on a tiny positive count — the primary tuning metric. `nil` if no positives.
+  """
+  def pr_auc(scores, labels) when length(scores) == length(labels) do
+    total_pos = Enum.count(labels, &(&1 == 1))
+
+    if total_pos == 0 or labels == [] do
+      nil
+    else
+      ranked =
+        Enum.zip(scores, labels)
+        |> Enum.sort_by(&elem(&1, 0), :desc)
+        |> Enum.map(&elem(&1, 1))
+
+      {ap, _tp, _fp, _prev_recall} =
+        Enum.reduce(ranked, {0.0, 0, 0, 0.0}, fn y, {ap, tp, fp, prev_recall} ->
+          tp = tp + if(y == 1, do: 1, else: 0)
+          fp = fp + if(y == 0, do: 1, else: 0)
+          recall = tp / total_pos
+          precision = tp / (tp + fp)
+          # Recall only advances at a positive, so AP accrues precision·Δrecall only there.
+          ap = if y == 1, do: ap + precision * (recall - prev_recall), else: ap
+          {ap, tp, fp, recall}
+        end)
+
+      Float.round(ap, 4)
+    end
+  end
+
   # ── internals ────────────────────────────────────────────────────────────────
 
   defp labeled_movies(decade, source_key) do

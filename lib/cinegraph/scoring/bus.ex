@@ -8,8 +8,9 @@ defmodule Cinegraph.Scoring.Bus do
     * `:lens` — features are the 6 lens scores (0–100). Human presets (`metric_weight_profiles`,
       lens-level) and ML lens-granularity models flow here; this reuses `LensScoring` so it is
       byte-identical to the existing prediction path.
-    * `:data_point` — features are per-`metric_code` normalized values (0–1) from
-      `metric_values_view` (via `DataPointFeatures`). ML data-point models flow here.
+    * `:data_point` — features are per-`metric_code` normalized values (0–1) assembled by
+      `DataPointFeatures.load_for/3`: raw codes from `metric_values_view`, plus target-aware
+      derived codes from `DerivedFeatures` (#1040). ML data-point models flow here.
 
   Both produce a 0–100 score (data-point sums, being over 0–1 features with weights summing to
   ~1, are scaled ×100 to match the lens scale). The bus is the FIRST real reader of
@@ -49,9 +50,9 @@ defmodule Cinegraph.Scoring.Bus do
     |> Map.new(fn %{movie: m, prediction: p} -> {m.id, p.total_score} end)
   end
 
-  def score(movies, {:data_point, weights, _source_key}, _opts) do
+  def score(movies, {:data_point, weights, source_key}, _opts) do
     codes = Map.keys(weights)
-    feats = DataPointFeatures.load(Enum.map(movies, & &1.id), codes)
+    feats = DataPointFeatures.load_for(movies, codes, source_key)
 
     Map.new(movies, fn movie ->
       vec = Map.get(feats, movie.id, %{})

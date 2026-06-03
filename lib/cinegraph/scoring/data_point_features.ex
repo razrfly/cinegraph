@@ -12,11 +12,34 @@ defmodule Cinegraph.Scoring.DataPointFeatures do
   """
 
   alias Cinegraph.Repo
+  alias Cinegraph.Scoring.DerivedFeatures
 
   # A full decade can be tens of thousands of movies; chunk the id list so the view query
   # (filtered by movie_id, pushed down to the base tables) stays well under the pool timeout.
   @chunk 1500
   @timeout :timer.seconds(60)
+
+  @doc """
+  Assemble the full feature map for `movies` over `codes` under target list `source_key` (#1040):
+  raw codes come from `metric_values_view` (`load/2`), derived codes from `DerivedFeatures` (which
+  reuses `FeatureResolver`, leakage-stripped). Returns `%{movie_id => %{code => value}}`.
+
+  This is the **single shared assembly** used by BOTH `Trainer.fit_weights(:data_point)` and
+  `Bus.score(:data_point)`, so a movie's feature vector is identical at train time and inference
+  time (the train/serve symmetry invariant). Takes movie **structs** (not ids) because the derived
+  features need `canonical_sources` / `tmdb_data` / `release_date`.
+  """
+  def load_for(movies, codes, source_key) do
+    {derived_codes, raw_codes} =
+      Enum.split_with(codes, &(&1 in DerivedFeatures.supported_codes()))
+
+    raw = load(Enum.map(movies, & &1.id), raw_codes)
+    derived = DerivedFeatures.load(movies, derived_codes, source_key)
+
+    Map.new(movies, fn m ->
+      {m.id, Map.merge(Map.get(raw, m.id, %{}), Map.get(derived, m.id, %{}))}
+    end)
+  end
 
   @doc """
   Load `%{movie_id => %{code => normalized_value}}` for the given movies and codes.

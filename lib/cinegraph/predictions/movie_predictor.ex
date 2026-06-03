@@ -44,18 +44,15 @@ defmodule Cinegraph.Predictions.MoviePredictor do
     # Get the most engagement-signaled movies from the decade.
     # order_by ensures notable films are fetched first; limit keeps worker time bounded.
     # (HistoricalValidator runs unbounded for backtest accuracy — this function is UI-only.)
-    # #913 / #923: Movie schema marks tmdb_data as load_in_query: false to
-    # keep multi-MB JSONB out of every default SELECT. The Target-mode box_office
-    # lens reads movie.tmdb_data for budget / revenue, so opt back in here.
-    # (Long-term: migrate those reads to external_metrics so this can come out.)
+    # #1042: target box_office now reads budget/revenue from external_metrics, so the
+    # load_in_query:false `tmdb_data` blob no longer needs opting back in for scoring.
     all_movies_query =
       from m in Movie,
         where: m.release_date >= ^start_date,
         where: m.release_date <= ^end_date,
         where: m.import_status == "full",
         order_by: [desc: fragment("COALESCE((? ->> 'vote_count')::numeric, 0)", m.tmdb_data)],
-        limit: 5000,
-        select_merge: %{tmdb_data: m.tmdb_data}
+        limit: 5000
 
     all_decade_movies = Repo.all(all_movies_query, timeout: :timer.seconds(120))
     scored = LensScoring.batch_score_movies(all_decade_movies, weights, source_key)
@@ -106,14 +103,9 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         profile_or_weights \\ nil,
         source_key \\ @default_source_key
       ) do
-    # #923: Movie schema marks tmdb_data load_in_query: false. The box_office lens
-    # reads movie.tmdb_data for budget/revenue in Target mode, so the single-row
-    # fetch here must opt back in. Without this, ROI score is silently 0.
+    # #1042: target box_office reads budget/revenue from external_metrics — no tmdb_data opt-in.
     movie =
-      from(m in Movie,
-        where: m.id == ^movie_id,
-        select_merge: %{tmdb_data: m.tmdb_data}
-      )
+      from(m in Movie, where: m.id == ^movie_id)
       |> Repo.one!()
 
     prediction = calculate_movie_prediction(movie, profile_or_weights, source_key)
@@ -133,14 +125,13 @@ defmodule Cinegraph.Predictions.MoviePredictor do
   def get_confirmed_2020s_additions(profile_or_weights \\ nil, source_key \\ @default_source_key) do
     weights = get_criteria_weights(profile_or_weights)
 
-    # #923: opt back in to tmdb_data — the box_office lens needs it for budget/revenue.
+    # #1042: target box_office reads budget/revenue from external_metrics — no tmdb_data opt-in.
     query =
       from m in Movie,
         where: fragment("EXTRACT(YEAR FROM ?) >= 2020", m.release_date),
         where: fragment("? \\? ?", m.canonical_sources, ^source_key),
         order_by: [desc: m.release_date],
-        limit: 100,
-        select_merge: %{tmdb_data: m.tmdb_data}
+        limit: 100
 
     Repo.all(query, timeout: :timer.seconds(120))
     |> LensScoring.batch_score_movies(weights, source_key)
@@ -163,14 +154,13 @@ defmodule Cinegraph.Predictions.MoviePredictor do
         do: min_score * 100.0,
         else: min_score * 1.0
 
-    # #923: opt back in to tmdb_data for the box_office budget/revenue read.
+    # #1042: target box_office reads budget/revenue from external_metrics — no tmdb_data opt-in.
     query =
       from m in Movie,
         where: m.release_date >= ^~D[2020-01-01],
         where: m.release_date < ^~D[2030-01-01],
         where: m.import_status == "full",
-        where: is_nil(fragment("? -> ?", m.canonical_sources, ^source_key)),
-        select_merge: %{tmdb_data: m.tmdb_data}
+        where: is_nil(fragment("? -> ?", m.canonical_sources, ^source_key))
 
     Repo.all(query, timeout: :timer.seconds(120))
     |> LensScoring.batch_score_movies(weights, source_key)

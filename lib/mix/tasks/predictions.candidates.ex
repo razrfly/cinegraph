@@ -312,13 +312,7 @@ defmodule Mix.Tasks.Predictions.Candidates do
           id: m.id,
           title: m.title,
           release_date: m.release_date,
-          canonical_sources: m.canonical_sources,
-          tmdb_data:
-            fragment(
-              "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
-              m.tmdb_data,
-              m.tmdb_data
-            )
+          canonical_sources: m.canonical_sources
         }
 
     base
