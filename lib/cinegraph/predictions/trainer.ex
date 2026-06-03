@@ -453,97 +453,89 @@ defmodule Cinegraph.Predictions.Trainer do
     end)
   end
 
-  # ── static: seeded k-fold over members against a pinned candidate universe ──
-
-  @default_k 5
+  # ── static: full-pool eval with a seeded member holdout (#1055) ──
+  #
+  # Static lists lack temporal spread, so we can't reserve a holdout decade. Instead hold out a
+  # random fraction of MEMBERS, train on the rest + undersampled non-members, and rank the held-out
+  # members against the FULL pool of the list's member-decades (every eligible film in those decades,
+  # base rate ~1e-4) — the honest, un-gameable metric. Trained members are excluded from the eval
+  # pool (no leakage). Replaces the curated vote-gated k-fold, which a flexible model could game.
+  @default_holdout_fraction 0.25
 
   defp evaluate_static(granularity, source_key, ratio, opts) do
     seed = Keyword.get(opts, :seed, 20_260_603)
-    k = Keyword.get(opts, :k, @default_k)
+    frac = Keyword.get(opts, :holdout_fraction, @default_holdout_fraction)
     :rand.seed(:exsss, {seed, seed, seed})
 
-    {members, negs} = candidate_universe(source_key, opts)
+    members = member_structs(source_key)
+    decades = member_decades(members)
 
-    cond do
-      length(members) < k ->
-        {:error, :insufficient_members}
+    if length(members) < 4 or decades == [] do
+      {:error, :insufficient_members}
+    else
+      member_id_set = MapSet.new(members, & &1.id)
+      non_members = decade_pool_structs(decades) |> Enum.reject(&MapSet.member?(member_id_set, &1.id))
 
-      negs == [] ->
+      if non_members == [] do
         {:error, :empty_candidate_universe}
+      else
+        n_test = max(1, round(length(members) * frac))
+        {test_members, train_members} = members |> Enum.shuffle() |> Enum.split(n_test)
 
-      true ->
         Logger.info(
-          "Trainer(static): #{granularity}/#{source_key} #{length(members)} members, #{length(negs)} negatives, #{k}-fold (seed #{seed})"
+          "Trainer(static): #{granularity}/#{source_key} #{length(members)} members " <>
+            "(#{length(test_members)} held out), full pool #{length(non_members)} non-members " <>
+            "over decades #{inspect(decades)} (seed #{seed})"
         )
 
-        neg_train = Enum.map(negs, &{&1.id, 0})
-        neg_eval = Enum.map(negs, &{&1, 0})
-        member_by_id = Map.new(members, &{&1.id, &1})
-        folds = kfold(Enum.map(members, & &1.id), k)
+        neg_labeled = Enum.map(non_members, &{&1.id, 0})
 
-        fold_results =
-          Enum.map(folds, fn {train_ids, test_ids} ->
-            {weights, _, _} =
-              fit_weights(
-                granularity,
-                source_key,
-                Enum.map(train_ids, &{&1, 1}) ++ neg_train,
-                ratio
-              )
+        # Eval model — trained WITHOUT the held-out members; scored on the full pool.
+        {weights, _, _} =
+          fit_weights(
+            granularity,
+            source_key,
+            Enum.map(train_members, &{&1.id, 1}) ++ neg_labeled,
+            ratio,
+            nil,
+            opts
+          )
 
-            eval = Enum.map(test_ids, &{member_by_id[&1], 1}) ++ neg_eval
+        eval = Enum.map(test_members, &{&1, 1}) ++ Enum.map(non_members, &{&1, 0})
+        scored = Credibility.score_labeled({granularity, stringify(weights), source_key}, eval)
+        rp = Credibility.recall_precision_at_k(scored)
 
-            scored =
-              Credibility.score_labeled({granularity, stringify(weights), source_key}, eval)
-
-            %{rp: Credibility.recall_precision_at_k(scored), scored: scored, n: length(test_ids)}
-          end)
-
-        all_scored = Enum.flat_map(fold_results, & &1.scored)
-
-        hits =
-          Enum.sum(Enum.map(fold_results, fn r -> round((r.rp["recall_at_k"] || 0.0) * r.n) end))
-
-        total = Enum.sum(Enum.map(fold_results, & &1.n))
-        pooled = if total > 0, do: Float.round(hits / total, 4), else: nil
-
-        # Final model for serving: fit on the full membership + negatives.
-        {weights, feature_set, names} =
-          fit_weights(granularity, source_key, Enum.map(members, &{&1.id, 1}) ++ neg_train, ratio)
+        # Serving model — fit on ALL members + undersampled non-members.
+        {fweights, feature_set, names} =
+          fit_weights(
+            granularity,
+            source_key,
+            Enum.map(members, &{&1.id, 1}) ++ neg_labeled,
+            ratio,
+            nil,
+            opts
+          )
 
         report = %{
-          "recall_at_k" => pooled,
-          "precision_at_k" => pooled,
-          "n_positives" => length(members),
-          "n_evaluated" => length(members) + length(negs),
-          "k_folds" => k,
+          "recall_at_k" => rp["recall_at_k"],
+          "precision_at_k" => rp["precision_at_k"],
+          "n_positives" => rp["n_positives"],
+          "n_evaluated" => length(eval),
           "seed" => seed,
-          "by_fold" =>
-            Enum.map(fold_results, fn r -> %{"recall_at_k" => r.rp["recall_at_k"], "n" => r.n} end),
-          "worst_miss" => Credibility.worst_miss(all_scored),
-          "baselines" => static_baselines(source_key, members, negs),
-          "pairs" => Enum.map(all_scored, fn s -> {s.score, s.label} end)
+          "holdout_fraction" => frac,
+          "worst_miss" => Credibility.worst_miss(scored),
+          "baselines" => static_baselines(source_key, test_members, non_members),
+          "pairs" => Enum.map(scored, fn s -> {s.score, s.label} end)
         }
 
-        {:ok, %{weights: weights, feature_set: feature_set, feature_names: names, report: report}}
+        {:ok, %{weights: fweights, feature_set: feature_set, feature_names: names, report: report}}
+      end
     end
   end
 
-  # Curated (vote-gated) candidate universe — list members (positives) + the most-voted non-members.
-  # ⚠️ #1055: this is selection-biased and NOT an honest *evaluation* universe (a flexible model
-  # games it). It is retained ONLY for the static k-fold path (`evaluate_static`), whose grades are
-  # therefore flagged as inflated until the static path is moved to full-pool evaluation. The honest
-  # eval path (`run_experiment`) ranks against the FULL decade pool via `Credibility.evaluate/3`.
-  #
-  # `:decades` restricts BOTH members and negatives to those decades; `nil` ⇒ whole catalog. Derived
-  # features resolve budget/revenue from `external_metrics` via `FeatureResolver` (#1042), so only
-  # `canonical_sources` / `release_date` ride along on the struct.
-  defp candidate_universe(source_key, opts) do
-    min_votes = Keyword.get(opts, :min_votes, 1000)
-    decades = Keyword.get(opts, :decades)
-
-    members =
-      from(m in Movie,
+  defp member_structs(source_key) do
+    Repo.all(
+      from m in Movie,
         where: fragment("? \\? ?", m.canonical_sources, ^source_key),
         where: m.import_status == "full",
         select: %Movie{
@@ -552,33 +544,23 @@ defmodule Cinegraph.Predictions.Trainer do
           release_date: m.release_date,
           canonical_sources: m.canonical_sources
         }
-      )
-      |> maybe_decade_filter(decades)
-      |> Repo.all()
+    )
+  end
 
-    cap = Keyword.get(opts, :universe_cap, max(5000, length(members) * 25))
+  defp member_decades(members) do
+    members
+    |> Enum.reduce([], fn
+      %{release_date: %Date{year: y}}, acc -> [div(y, 10) * 10 | acc]
+      _, acc -> acc
+    end)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
 
-    negs =
-      from(m in Movie,
-        join: em in "external_metrics",
-        on:
-          em.movie_id == m.id and em.source == "tmdb" and em.metric_type == "rating_votes" and
-            em.value >= ^min_votes,
-        where: m.import_status == "full",
-        where: not fragment("? \\? ?", m.canonical_sources, ^source_key),
-        order_by: [desc: em.value, asc: m.id],
-        limit: ^cap,
-        select: %Movie{
-          id: m.id,
-          title: m.title,
-          release_date: m.release_date,
-          canonical_sources: m.canonical_sources
-        }
-      )
-      |> maybe_decade_filter(decades)
-      |> Repo.all(timeout: :timer.seconds(120))
-
-    {members, negs}
+  defp decade_pool_structs(decades) do
+    Enum.flat_map(decades, fn d ->
+      Repo.all(Cinegraph.Movies.decade_movies_query(d), timeout: :timer.seconds(120))
+    end)
   end
 
   defp maybe_decade_filter(query, nil), do: query
@@ -618,28 +600,6 @@ defmodule Cinegraph.Predictions.Trainer do
       "random" => rand,
       "prior_rate" => if(total > 0, do: Float.round(length(members) / total, 4), else: nil)
     }
-  end
-
-  defp kfold(ids, k) do
-    chunks = chunk_into(Enum.shuffle(ids), k)
-
-    Enum.map(0..(k - 1), fn i ->
-      {chunks |> List.delete_at(i) |> List.flatten(), Enum.at(chunks, i)}
-    end)
-  end
-
-  defp chunk_into(list, k) do
-    n = length(list)
-    size = div(n, k)
-    extra = rem(n, k)
-
-    {chunks, _} =
-      Enum.reduce(0..(k - 1), {[], list}, fn i, {acc, remaining} ->
-        {chunk, rest} = Enum.split(remaining, size + if(i < extra, do: 1, else: 0))
-        {[chunk | acc], rest}
-      end)
-
-    Enum.reverse(chunks)
   end
 
   # ── fitting (shared by temporal + static) ──

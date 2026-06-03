@@ -101,21 +101,22 @@ defmodule Cinegraph.Predictions.TrainerTest do
              Trainer.train(@list, granularity: :data_point, save: true)
   end
 
-  describe "static k-fold strategy" do
+  describe "static full-pool strategy (#1055)" do
     test "is seeded/deterministic and yields a static (not temporal) integrity report" do
       opts = [granularity: :data_point, backtest_strategy: "static"]
       assert {:ok, s1} = Trainer.train(@list, opts)
       assert {:ok, s2} = Trainer.train(@list, opts)
 
       i = s1.integrity_report
-      # Same seed → identical metrics (deterministic universe + folds).
+      # Same seed → identical metrics (deterministic member holdout + full-pool eval).
       assert i["recall_at_k"] == s2.integrity_report["recall_at_k"]
-      assert i["k_folds"] == 5
       assert is_integer(i["seed"])
-      assert is_list(i["by_fold"]) and length(i["by_fold"]) == 5
+      assert i["holdout_fraction"] == 0.25
       assert Map.has_key?(i["baselines"], "popularity")
-      # Static is member-k-fold, not a decade holdout.
+      # Static is a seeded member holdout scored against the full member-decade pool, not a
+      # decade holdout and no longer k-fold.
       refute Map.has_key?(i, "holdout_decades")
+      refute Map.has_key?(i, "k_folds")
     end
 
     test "static save persists backtest_strategy=static with prereg + holdout stamp" do
