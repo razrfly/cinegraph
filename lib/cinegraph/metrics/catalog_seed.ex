@@ -567,7 +567,12 @@ defmodule Cinegraph.Metrics.CatalogSeed do
         normalization_params: %{"threshold" => 50},
         source_reliability: 0.7,
         kind: "derived",
-        derivation: "prior_collab_density"
+        derivation: "prior_collab_density",
+        # #1040 Session 2: deferred. Needs per-movie wiring of the person×year
+        # `person_collaboration_trends` matview (prior-to-release collaboration density), a
+        # separate data path from the FeatureResolver-backed features. Marked unavailable so the
+        # catalog doesn't claim a feature the data-point surface doesn't emit (no silent cap).
+        is_available: false
       })
     ]
   end

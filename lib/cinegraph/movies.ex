@@ -2011,12 +2011,6 @@ defmodule Cinegraph.Movies do
         id: m.id,
         title: m.title,
         release_date: m.release_date,
-        tmdb_data:
-          fragment(
-            "jsonb_build_object('budget', ?->'budget', 'revenue', ?->'revenue')",
-            m.tmdb_data,
-            m.tmdb_data
-          ),
         canonical_sources: m.canonical_sources
       }
   end

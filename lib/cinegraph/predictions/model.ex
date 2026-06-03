@@ -51,6 +51,8 @@ defmodule Cinegraph.Predictions.Model do
       :prereg_id
     ])
     |> validate_required([:source_key, :feature_set, :weights, :weights_hash, :model_version])
-    |> unique_constraint([:source_key, :weights_hash, :model_version])
+    |> unique_constraint([:source_key, :weights_hash, :model_version, :prereg_id],
+      name: :prediction_models_artifact_uniq
+    )
   end
 end

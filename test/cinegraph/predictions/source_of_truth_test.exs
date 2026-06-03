@@ -87,6 +87,37 @@ defmodule Cinegraph.Predictions.SourceOfTruthTest do
     refute src =~ "set_active_prediction_model"
   end
 
+  test "distinct preregs with identical weights each keep their own model artifact (#1042)" do
+    insert_list("sot_collide")
+    p1 = prereg!("sot_collide")
+    p2 = prereg!("sot_collide")
+
+    attrs = fn pid ->
+      %{
+        source_key: "sot_collide",
+        feature_set: %{"granularity" => "lens", "features" => ["mob"]},
+        weights: %{"mob" => 1.0},
+        weights_hash: "identical-hash",
+        model_version: 1,
+        integrity_report: %{"recall_at_k" => 0.5},
+        prereg_id: pid
+      }
+    end
+
+    {:ok, m1} = %Model{} |> Model.changeset(attrs.(p1.id)) |> Repo.insert()
+    {:ok, m2} = %Model{} |> Model.changeset(attrs.(p2.id)) |> Repo.insert()
+
+    # Same (source_key, weights_hash, model_version) but different prereg → two preserved rows.
+    refute m1.id == m2.id
+
+    assert Repo.aggregate(from(m in Model, where: m.weights_hash == "identical-hash"), :count) ==
+             2
+
+    # Re-saving the SAME prereg's artifact still collides (idempotent within a prereg).
+    assert {:error, cs} = %Model{} |> Model.changeset(attrs.(p1.id)) |> Repo.insert()
+    assert cs.errors != []
+  end
+
   test "Rule 1 is enforced at the DB level — a model cannot exist without a prereg" do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 

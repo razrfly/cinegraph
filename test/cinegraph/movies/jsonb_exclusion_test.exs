@@ -173,23 +173,30 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
     end
   end
 
-  describe "Predictions opt-in to tmdb_data (#923 — Greptile P1 regression guard)" do
-    # PR #924 review caught: get_movie_scoring_details/2 used `Repo.get!(Movie)`
-    # without an explicit select_merge, so post-load_in_query the function
-    # silently passed `tmdb_data: nil` to the Target-mode box_office lens,
-    # making budget/revenue/roi_score always 0. This test pins the opt-in.
-
-    test "get_movie_scoring_details/1 returns a Movie with tmdb_data loaded" do
+  describe "Predictions box_office sources external-metrics, not the tmdb_data blob (#1042)" do
+    # #1042 moved Target-mode box_office's budget/revenue read from the load_in_query:false
+    # `tmdb_data` blob to the catalogued external-metrics (`tmdb_budget`/`tmdb_revenue_worldwide`).
+    # So get_movie_scoring_details no longer opts the blob back in. Guard: the blob is NOT
+    # loaded, yet box_office still reflects financials (from the substrate) rather than zeroing.
+    test "get_movie_scoring_details/1 reads box_office from external-metrics without loading tmdb_data" do
       movie = insert_movie_with_blobs!("Predictions Detail Blob")
+      now_naive = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      now_utc = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      Repo.insert_all(Cinegraph.Movies.ExternalMetric, [
+        ext_metric(movie.id, "budget", 10_000_000.0, now_utc, now_naive),
+        ext_metric(movie.id, "revenue_worldwide", 500_000_000.0, now_utc, now_naive)
+      ])
+
       details = Cinegraph.Predictions.MoviePredictor.get_movie_scoring_details(movie.id)
 
       assert %Movie{} = details.movie
       assert details.movie.id == movie.id
+      # #1042: the load_in_query:false blob is no longer opted back in for scoring.
+      assert is_nil(details.movie.tmdb_data)
 
-      refute is_nil(details.movie.tmdb_data),
-             "get_movie_scoring_details/2 must select tmdb_data — the box_office lens reads it for budget/revenue"
-
-      assert details.movie.tmdb_data["marker"] == "pr-b-must-be-nilled"
+      # box_office still reflects budget/revenue — from external_metrics, not a 0 from the absent blob.
+      assert details.prediction.criteria_scores.box_office > 0
     end
   end
 
@@ -281,5 +288,17 @@ defmodule Cinegraph.Movies.JsonbExclusionTest do
     %Movie{}
     |> Movie.changeset(Map.merge(base, attrs_map))
     |> Repo.insert!()
+  end
+
+  defp ext_metric(movie_id, metric_type, value, now_utc, now_naive) do
+    %{
+      movie_id: movie_id,
+      source: "tmdb",
+      metric_type: metric_type,
+      value: value,
+      fetched_at: now_utc,
+      inserted_at: now_naive,
+      updated_at: now_naive
+    }
   end
 end
