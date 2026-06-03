@@ -4,7 +4,7 @@ defmodule Cinegraph.Predictions.TrainerTest do
 
   alias Cinegraph.Metrics.CatalogSeed
   alias Cinegraph.Movies.{Movie, MovieLists}
-  alias Cinegraph.Predictions.{Model, PreRegistration, Trainer}
+  alias Cinegraph.Predictions.{Credibility, Model, PreRegistration, Trainer}
   alias Cinegraph.Repo
 
   @list "trainer_test_list"
@@ -132,6 +132,56 @@ defmodule Cinegraph.Predictions.TrainerTest do
       assert model.backtest_strategy == "static"
       assert model.prereg_id != nil
       assert model.holdout_spent_at != nil
+    end
+  end
+
+  describe "sampled fast-mode (#1051 Stage C)" do
+    test "Credibility.evaluate :sample caps non-members per decade, deterministically" do
+      spec = {:data_point, %{"imdb_rating" => 1.0}, @list}
+
+      full = Credibility.evaluate(spec, @list, [1990, 2000])
+      s1 = Credibility.evaluate(spec, @list, [1990, 2000], sample: 3, seed: 7)
+      s2 = Credibility.evaluate(spec, @list, [1990, 2000], sample: 3, seed: 7)
+
+      # sampling shrinks the evaluated pool (members kept, non-members capped at 3/decade)…
+      assert s1["n_evaluated"] < full["n_evaluated"]
+      # …and is deterministic for a fixed seed.
+      assert s1["n_evaluated"] == s2["n_evaluated"]
+      assert s1["recall_at_k"] == s2["recall_at_k"]
+    end
+
+    test "sample: 0 is the full pool (exact — what the promotion path uses)" do
+      spec = {:data_point, %{"imdb_rating" => 1.0}, @list}
+
+      assert Credibility.evaluate(spec, @list, [1990, 2000], sample: 0)["n_evaluated"] ==
+               Credibility.evaluate(spec, @list, [1990, 2000])["n_evaluated"]
+    end
+  end
+
+  describe "evaluate_strategy/3 (#1051 Stage C auto-pick)" do
+    test "static is holdout-free: returns report + calibration, persists nothing" do
+      before = Repo.aggregate(Model, :count)
+
+      assert {:ok, %{report: report, calibration: cal}} =
+               Trainer.evaluate_strategy(@list, "static")
+
+      # No model row written, no holdout spent — pure measurement.
+      assert Repo.aggregate(Model, :count) == before
+      assert is_map(cal)
+      refute Map.has_key?(report, "pairs")
+      assert Map.has_key?(report, "recall_at_k")
+      assert Map.has_key?(report["baselines"], "popularity")
+    end
+
+    test "static :sample reduces the evaluated pool deterministically without persisting" do
+      before = Repo.aggregate(Model, :count)
+      assert {:ok, %{report: full}} = Trainer.evaluate_strategy(@list, "static", sample: 0)
+      assert {:ok, %{report: s1}} = Trainer.evaluate_strategy(@list, "static", sample: 3)
+      assert {:ok, %{report: s2}} = Trainer.evaluate_strategy(@list, "static", sample: 3)
+
+      assert s1["n_evaluated"] < full["n_evaluated"]
+      assert s1["n_evaluated"] == s2["n_evaluated"]
+      assert Repo.aggregate(Model, :count) == before
     end
   end
 

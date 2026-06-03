@@ -195,7 +195,14 @@ defmodule Cinegraph.Predictions.Trainer do
             # Honest evaluation (#1055): rank members against the FULL decade pool over the
             # validation decades — `Credibility.evaluate` scores the whole decade(s) (base rate
             # ~1e-4), with no curated/selection-biased negatives that a flexible model could game.
-            report = Credibility.evaluate(spec, source_key, val_decades)
+            # `:sample` (iteration fast-mode) ranks members against all members + a seeded
+            # non-member sample; defaults to 0 = full pool. The promotion path never sets it.
+            report =
+              Credibility.evaluate(spec, source_key, val_decades,
+                seed: seed,
+                sample: Keyword.get(opts, :sample, 0)
+              )
+
             pairs = report["pairs"] || []
             {scores, labels} = if pairs == [], do: {[], []}, else: Enum.unzip(pairs)
 
@@ -282,6 +289,51 @@ defmodule Cinegraph.Predictions.Trainer do
         []
     end)
     |> Enum.sort_by(&(&1.metrics["pr_auc"] || -1.0), :desc)
+  end
+
+  @doc """
+  Holdout-free evaluation of ONE backtest strategy, for the Stage C strategy auto-pick (#1051).
+
+  Spends no sacred holdout and persists nothing: `"temporal"` uses the validation tier
+  (`run_experiment`, holdout untouched); `"static"` uses the deterministic seeded member holdout
+  (`evaluate_static`). Returns `{:ok, %{report, calibration}}` where `report` carries
+  `recall_at_k`/`n_positives`/`n_evaluated`/`baselines` (calibration-grading shape, no `pairs`),
+  or `{:error, reason}` when the strategy's split is invalid for this list. Pass `:sample` to
+  speed up iteration (approximate); omit it for an exact projection.
+  """
+  def evaluate_strategy(source_key, strategy, opts \\ [])
+
+  def evaluate_strategy(source_key, "static", opts) do
+    ratio = Keyword.get(opts, :sample_ratio, 5)
+
+    with {:ok, %{report: report}} <- evaluate_static(:data_point, source_key, ratio, opts) do
+      pairs = report["pairs"] || []
+      {scores, labels} = if pairs == [], do: {[], []}, else: Enum.unzip(pairs)
+
+      {:ok,
+       %{
+         report: Map.delete(report, "pairs"),
+         calibration: ProbabilityCalibration.fit(scores, labels)
+       }}
+    end
+  end
+
+  def evaluate_strategy(source_key, "temporal", opts) do
+    case run_experiment(source_key, Keyword.put(opts, :granularity, :data_point)) do
+      {:ok, result} ->
+        report = %{
+          "recall_at_k" => result.metrics["recall_at_k"],
+          "precision_at_k" => result.metrics["precision_at_k"],
+          "n_positives" => result.metrics["n_positives"],
+          "n_evaluated" => result.metrics["n_evaluated"],
+          "baselines" => result.metrics["baselines"]
+        }
+
+        {:ok, %{report: report, calibration: %{"method" => result.calibration}}}
+
+      err ->
+        err
+    end
   end
 
   # List members in the validation decades (structs), for the experiment's per-feature coverage
@@ -474,7 +526,13 @@ defmodule Cinegraph.Predictions.Trainer do
       {:error, :insufficient_members}
     else
       member_id_set = MapSet.new(members, & &1.id)
-      non_members = decade_pool_structs(decades) |> Enum.reject(&MapSet.member?(member_id_set, &1.id))
+
+      non_members =
+        decade_pool_structs(decades)
+        |> Enum.reject(&MapSet.member?(member_id_set, &1.id))
+        # `:sample` (iteration fast-mode) caps the non-member pool via the seed set above. 0 = full
+        # pool (exact) — the promotion path passes no sample, so promoted grades stay exact.
+        |> maybe_sample_nonmembers(Keyword.get(opts, :sample, 0))
 
       if non_members == [] do
         {:error, :empty_candidate_universe}
@@ -528,10 +586,16 @@ defmodule Cinegraph.Predictions.Trainer do
           "pairs" => Enum.map(scored, fn s -> {s.score, s.label} end)
         }
 
-        {:ok, %{weights: fweights, feature_set: feature_set, feature_names: names, report: report}}
+        {:ok,
+         %{weights: fweights, feature_set: feature_set, feature_names: names, report: report}}
       end
     end
   end
+
+  # Uses the :rand stream already seeded at the top of evaluate_static, so it's deterministic.
+  defp maybe_sample_nonmembers(nm, sample) when sample in [nil, 0], do: nm
+  defp maybe_sample_nonmembers(nm, sample) when length(nm) <= sample, do: nm
+  defp maybe_sample_nonmembers(nm, sample), do: Enum.take(Enum.shuffle(nm), sample)
 
   defp member_structs(source_key) do
     Repo.all(

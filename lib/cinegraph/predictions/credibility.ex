@@ -26,7 +26,13 @@ defmodule Cinegraph.Predictions.Credibility do
   """
   def evaluate(spec, source_key, decades, opts \\ []) do
     seed = Keyword.get(opts, :seed, 1337)
-    per_decade_movies = Enum.map(decades, fn d -> {d, labeled_movies(d, source_key)} end)
+
+    # `:sample` > 0 → iteration-only fast mode (rank members against all members + a seeded sample
+    # of non-members instead of the whole decade). Approximate; promotion uses sample: 0 (full pool).
+    sample = Keyword.get(opts, :sample, 0)
+
+    per_decade_movies =
+      Enum.map(decades, fn d -> {d, labeled_movies(d, source_key, seed, sample)} end)
 
     decade_reports =
       Enum.map(per_decade_movies, fn {decade, labeled} ->
@@ -132,13 +138,32 @@ defmodule Cinegraph.Predictions.Credibility do
 
   # ── internals ────────────────────────────────────────────────────────────────
 
-  defp labeled_movies(decade, source_key) do
+  defp labeled_movies(decade, source_key, seed, sample) do
     movies = Repo.all(Cinegraph.Movies.decade_movies_query(decade), timeout: :timer.seconds(120))
 
-    Enum.map(movies, fn m ->
-      label = if Map.has_key?(m.canonical_sources || %{}, source_key), do: 1, else: 0
-      {m, label}
-    end)
+    labeled =
+      Enum.map(movies, fn m ->
+        label = if Map.has_key?(m.canonical_sources || %{}, source_key), do: 1, else: 0
+        {m, label}
+      end)
+
+    maybe_sample(labeled, sample, seed, decade)
+  end
+
+  # Fast-mode pool reduction (iteration only): always keep every member; cap non-members at `sample`
+  # via a seeded shuffle so it's deterministic. `sample` of 0/nil or a pool already at/under the cap
+  # returns the full set unchanged — so the promotion path (sample: 0) is exact.
+  defp maybe_sample(labeled, sample, _seed, _decade) when sample in [nil, 0], do: labeled
+
+  defp maybe_sample(labeled, sample, seed, decade) do
+    {members, nonmembers} = Enum.split_with(labeled, fn {_m, label} -> label == 1 end)
+
+    if length(nonmembers) <= sample do
+      labeled
+    else
+      :rand.seed(:exsss, {seed, sample, decade})
+      members ++ Enum.take(Enum.shuffle(nonmembers), sample)
+    end
   end
 
   @doc "Score `[{movie, label}]` via the bus → `[%{movie_id, title, score, label}]`."

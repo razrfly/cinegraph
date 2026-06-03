@@ -39,10 +39,24 @@ defmodule Mix.Tasks.Predictions.Reliability do
       |> Enum.map(fn list ->
         case Bus.active_model(list.source_key) do
           nil ->
-            %{source_key: list.source_key, name: list.name, reliability: nil}
+            %{
+              source_key: list.source_key,
+              name: list.name,
+              reliability: nil,
+              strategy: nil,
+              holdout_spent_at: nil,
+              prereg_id: nil
+            }
 
           model ->
-            %{source_key: list.source_key, name: list.name, reliability: Reliability.score(model)}
+            %{
+              source_key: list.source_key,
+              name: list.name,
+              reliability: Reliability.score(model),
+              strategy: model.backtest_strategy,
+              holdout_spent_at: model.holdout_spent_at,
+              prereg_id: model.prereg_id
+            }
         end
       end)
 
@@ -56,7 +70,7 @@ defmodule Mix.Tasks.Predictions.Reliability do
     PREDICTION RELIABILITY — Wilson-95 lower bound, conservative bands
     (HIGH ≥ 50%  ·  MOD ≥ 30%  ·  LOW < 30%  ·  INSUF = too little evidence)
 
-      GRADE   HEADLINE  CALIB     LIST                            TOP REASON
+      GRADE   HEADLINE  CALIB     STRAT      SPENT  LIST                            TOP REASON
     """)
 
     Enum.each(rows, fn row ->
@@ -66,13 +80,18 @@ defmodule Mix.Tasks.Predictions.Reliability do
     Mix.shell().info("")
   end
 
-  defp format_row(%{reliability: nil, name: name}) do
-    "#{pad("—", 7)} #{pad("—", 9)} #{pad("—", 9)} #{pad(name, 31)} no active prediction model"
+  defp format_row(%{reliability: nil, name: name} = row) do
+    "#{pad("—", 7)} #{pad("—", 9)} #{pad("—", 9)} #{pad(strat(row), 10)} #{pad(spent(row), 6)} #{pad(name, 31)} no active prediction model"
   end
 
-  defp format_row(%{reliability: r, name: name}) do
-    "#{pad(grade_label(r.grade), 7)} #{pad(headline(r.headline_pct), 9)} #{pad(r.calibration || "—", 9)} #{pad(name, 31)} #{top_reason(r)}"
+  defp format_row(%{reliability: r, name: name} = row) do
+    "#{pad(grade_label(r.grade), 7)} #{pad(headline(r.headline_pct), 9)} #{pad(r.calibration || "—", 9)} #{pad(strat(row), 10)} #{pad(spent(row), 6)} #{pad(name, 31)} #{top_reason(r)}"
   end
+
+  defp strat(%{strategy: nil}), do: "—"
+  defp strat(%{strategy: s}), do: s
+  defp spent(%{holdout_spent_at: nil}), do: "—"
+  defp spent(%{holdout_spent_at: _}), do: "✓"
 
   defp top_reason(%{band_grade: b, grade: g, reasons: [first | _]}) when b != g,
     do: "capped from #{grade_label(b)}: #{first}"
@@ -87,7 +106,14 @@ defmodule Mix.Tasks.Predictions.Reliability do
   end
 
   defp jsonable(%{reliability: nil} = row),
-    do: %{source_key: row.source_key, name: row.name, reliability: nil}
+    do: %{
+      source_key: row.source_key,
+      name: row.name,
+      reliability: nil,
+      strategy: row.strategy,
+      holdout_spent_at: row.holdout_spent_at,
+      prereg_id: row.prereg_id
+    }
 
   defp jsonable(%{reliability: r} = row) do
     {lo, hi} = r.ci
@@ -95,6 +121,9 @@ defmodule Mix.Tasks.Predictions.Reliability do
     %{
       source_key: row.source_key,
       name: row.name,
+      strategy: row.strategy,
+      holdout_spent_at: row.holdout_spent_at,
+      prereg_id: row.prereg_id,
       reliability: %{
         grade: to_string(r.grade),
         band_grade: to_string(r.band_grade),
