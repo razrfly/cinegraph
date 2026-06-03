@@ -100,6 +100,22 @@ config :cinegraph, Cinegraph.Mailer, adapter: Swoosh.Adapters.Local
 # in config/test.exs so unit tests don't hit live R2.
 config :cinegraph, :r2_client, Cinegraph.Images.R2
 
+# Prediction model-class lifecycle (#1061 Session 2). Config-only so a retired class still
+# resolves for the leaderboard/explanation even after it's dropped from `:model_classes`.
+# Keys without an entry default to :experimental (runs in the matrix, not promotable).
+# Only :active classes are promotable; activation is further restricted to linear_logreg in S2.
+config :cinegraph, :model_class_lifecycle, %{
+  "linear_logreg" => :active,
+  "pooled_linear" => :experimental
+}
+
+# Registered prediction model classes (#1061). Order matters — the first is the default. Adding a
+# class is a config edit + a module implementing `Cinegraph.Predictions.ModelClass`.
+config :cinegraph, :model_classes, [
+  Cinegraph.Predictions.LinearLogReg,
+  Cinegraph.Predictions.PooledLinear
+]
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",

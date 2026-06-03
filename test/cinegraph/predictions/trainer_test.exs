@@ -4,8 +4,9 @@ defmodule Cinegraph.Predictions.TrainerTest do
 
   alias Cinegraph.Metrics.CatalogSeed
   alias Cinegraph.Movies.{Movie, MovieLists}
-  alias Cinegraph.Predictions.{Credibility, Model, PreRegistration, Trainer}
+  alias Cinegraph.Predictions.{Credibility, ExperimentLedger, Model, PreRegistration, Trainer}
   alias Cinegraph.Repo
+  alias Mix.Tasks.Predictions.Promote
 
   @list "trainer_test_list"
 
@@ -134,6 +135,60 @@ defmodule Cinegraph.Predictions.TrainerTest do
       assert model.backtest_strategy == "static"
       assert model.prereg_id != nil
       assert model.holdout_spent_at != nil
+    end
+
+    test "train replays the feature bucket (#1061 S2): objective_only persists objective codes, not all" do
+      objective = Trainer.data_point_codes(@list) -- Trainer.canon_overlap_codes(@list)
+
+      assert {:ok, summary} =
+               Trainer.train(@list,
+                 granularity: :data_point,
+                 backtest_strategy: "static",
+                 features: :objective_only,
+                 save: true,
+                 prereg: prereg!()
+               )
+
+      model = Repo.get!(Model, summary.model_id)
+      # the persisted model trained the OBJECTIVE bucket, not the full surface.
+      assert Enum.sort(model.feature_set["features"]) == Enum.sort(objective)
+      assert length(model.feature_set["features"]) < length(Trainer.data_point_codes(@list))
+    end
+  end
+
+  describe "ledger-driven promote commit (#1061 S2 PR4)" do
+    test "commits the winning ledger row's EXACT shape (objective bucket replayed, no atom crash)" do
+      # Seed a ledger winner: linear/static/objective_only. (Regression: the live --commit run
+      # crashed here on String.to_existing_atom before the literal-mapping fix.)
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      %ExperimentLedger{}
+      |> ExperimentLedger.changeset(%{
+        source_key: @list,
+        model_class: "linear_logreg",
+        backtest_strategy: "static",
+        feature_bucket: "objective_only",
+        granularity: "data_point",
+        status: "ok",
+        grade: "high",
+        metrics: %{
+          "objective_recall_at_k" => 0.7,
+          "recall_at_k" => 0.7,
+          "baselines" => %{"popularity" => 0.05}
+        },
+        run_at: now
+      })
+      |> Repo.insert!()
+
+      result = Promote.commit(@list)
+      assert result.commit.status == "ok"
+      assert result.commit.feature_bucket == "objective_only"
+
+      model = Repo.get!(Model, result.commit.model_id)
+      assert model.backtest_strategy == "static"
+      # the EXACT bucket was replayed: objective surface, not the full canon-inclusive one.
+      refute "canonical_contribution" in model.feature_set["features"]
+      assert length(model.feature_set["features"]) < length(Trainer.data_point_codes(@list))
     end
   end
 

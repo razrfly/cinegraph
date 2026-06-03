@@ -76,10 +76,10 @@ defmodule Cinegraph.Predictions.LinearLogRegTest do
   end
 
   describe "ModelRegistry" do
-    test "defaults to LinearLogReg" do
-      assert ModelRegistry.all() == [LinearLogReg]
+    test "registers linear + pooled, linear first (the default)" do
+      assert ModelRegistry.all() == [LinearLogReg, Cinegraph.Predictions.PooledLinear]
       assert ModelRegistry.default() == LinearLogReg
-      assert ModelRegistry.keys() == ["linear_logreg"]
+      assert ModelRegistry.keys() == ["linear_logreg", "pooled_linear"]
     end
 
     test "fetch/1 resolves a known key and errors on unknown" do
@@ -103,6 +103,22 @@ defmodule Cinegraph.Predictions.LinearLogRegTest do
 
       assert "fake" in ModelRegistry.keys()
       assert {:ok, FakeClass} = ModelRegistry.fetch("fake")
+    end
+  end
+
+  describe "lifecycle + fit_scope (#1061 Session 2)" do
+    test "fit_scope defaults to :per_cell when the class doesn't export it; pooled is :pooled" do
+      assert ModelRegistry.fit_scope("linear_logreg") == :per_cell
+      assert ModelRegistry.fit_scope("pooled_linear") == :pooled
+    end
+
+    test "status reads config, defaulting :experimental for unknown keys" do
+      assert ModelRegistry.status("linear_logreg") == :active
+      assert ModelRegistry.status("never_registered") == :experimental
+    end
+
+    test "promotable_keys are only :active classes" do
+      assert ModelRegistry.promotable_keys() == ["linear_logreg"]
     end
   end
 end
