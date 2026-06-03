@@ -42,7 +42,9 @@ defmodule Mix.Tasks.Cinegraph.Scoring.CatalogAudit do
     Mix.Task.run("app.start")
 
     emitted = query_set("SELECT DISTINCT metric_code FROM metric_values_view")
-    active = Metrics.list_metric_definitions()
+    # `active: true` is explicit: only ACTIVE definitions count as "catalogued" — an emitted
+    # code backed solely by a deactivated row must be flagged, not silently matched.
+    active = Metrics.list_metric_definitions(active: true)
     active_codes = active |> Enum.map(& &1.code) |> MapSet.new()
 
     raw_available = Metrics.list_metric_definitions(only_available: true, kind: "raw")

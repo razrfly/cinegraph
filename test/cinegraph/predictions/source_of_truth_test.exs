@@ -88,18 +88,23 @@ defmodule Cinegraph.Predictions.SourceOfTruthTest do
   end
 
   test "Rule 1 is enforced at the DB level — a model cannot exist without a prereg" do
-    insert_list("sot_notnull")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    assert_raise Postgrex.Error, fn ->
-      %Model{}
-      |> Model.changeset(%{
-        source_key: "sot_notnull",
-        feature_set: %{"granularity" => "lens", "features" => ["mob"]},
-        weights: %{"mob" => 1.0},
-        weights_hash: "h-notnull",
-        model_version: 1
-      })
-      |> Repo.insert!()
+    # Changeset-free insert so this proves the DATABASE NOT NULL rule, independent of any
+    # application-level validation (prereg_id is not in the changeset's validate_required).
+    assert_raise Postgrex.Error, ~r/null value in column "prereg_id"/, fn ->
+      Repo.insert_all("prediction_models", [
+        %{
+          source_key: "sot_notnull",
+          feature_set: %{"granularity" => "lens", "features" => ["mob"]},
+          weights: %{"mob" => 1.0},
+          weights_hash: "h-notnull",
+          model_version: 1,
+          prereg_id: nil,
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
     end
   end
 end
