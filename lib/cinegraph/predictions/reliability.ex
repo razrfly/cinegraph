@@ -105,7 +105,10 @@ defmodule Cinegraph.Predictions.Reliability do
 
     circularity = circularity(full_recall, objective)
     reasons = Enum.reverse(reasons)
-    reasons = if r = circularity_reason(circularity), do: [r | reasons], else: reasons
+    # APPEND the circularity note (CodeRabbit #1062): it's an explanatory aside, not a cap reason.
+    # `Mix.Tasks.Predictions.Reliability.top_reason/1` reports `reasons` head as the "capped from"
+    # cause — prepending would mask the real cap (stale frontier / calibration / prereg).
+    reasons = if r = circularity_reason(circularity), do: reasons ++ [r], else: reasons
 
     %{
       grade: grade,

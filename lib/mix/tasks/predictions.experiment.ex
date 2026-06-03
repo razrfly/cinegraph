@@ -175,7 +175,7 @@ defmodule Mix.Tasks.Predictions.Experiment do
     end
   end
 
-  defp maybe_sample_caveat(nil), do: :ok
+  defp maybe_sample_caveat(sample) when sample in [nil, 0], do: :ok
 
   defp maybe_sample_caveat(sample) do
     Mix.shell().info(
@@ -185,10 +185,10 @@ defmodule Mix.Tasks.Predictions.Experiment do
 
   defp parse_alpha(s) do
     case Float.parse(s) do
-      {a, _} ->
+      {a, ""} ->
         a
 
-      :error ->
+      _ ->
         Mix.raise("invalid --alpha-sweep value #{inspect(s)} (expected comma-separated floats)")
     end
   end

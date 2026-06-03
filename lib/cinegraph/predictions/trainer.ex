@@ -25,11 +25,15 @@ defmodule Cinegraph.Predictions.Trainer do
 
   alias Cinegraph.Predictions.{
     Credibility,
+    ExperimentLedger,
     HistoricalValidator,
     LensScoring,
+    ListFrontier,
     Model,
+    ModelRegistry,
     PreRegistration,
     ProbabilityCalibration,
+    Reliability,
     WeightOptimizer
   }
 
@@ -124,7 +128,16 @@ defmodule Cinegraph.Predictions.Trainer do
       }
 
       if save do
-        case persist(source_key, weights, feature_set, integrity, calibration, prereg, strategy) do
+        case persist(
+               source_key,
+               weights,
+               feature_set,
+               integrity,
+               calibration,
+               prereg,
+               strategy,
+               "linear_logreg"
+             ) do
           {:ok, model} -> {:ok, Map.put(summary, :model_id, model.id)}
           {:error, reason} -> {:error, reason}
         end
@@ -305,14 +318,23 @@ defmodule Cinegraph.Predictions.Trainer do
   def evaluate_strategy(source_key, "static", opts) do
     ratio = Keyword.get(opts, :sample_ratio, 5)
 
-    with {:ok, %{report: report}} <- evaluate_static(:data_point, source_key, ratio, opts) do
+    with {:ok, %{report: report, weights: weights, feature_names: names}} <-
+           evaluate_static(:data_point, source_key, ratio, opts) do
       pairs = report["pairs"] || []
       {scores, labels} = if pairs == [], do: {[], []}, else: Enum.unzip(pairs)
 
+      report =
+        report
+        |> Map.delete("pairs")
+        # rank-based, calibration-free — gives the ledger a tuning metric for the static path too.
+        |> Map.put("pr_auc", Credibility.pr_auc(scores, labels))
+
       {:ok,
        %{
-         report: Map.delete(report, "pairs"),
-         calibration: ProbabilityCalibration.fit(scores, labels)
+         report: report,
+         calibration: ProbabilityCalibration.fit(scores, labels),
+         weights: stringify(weights),
+         feature_names: names
        }}
     end
   end
@@ -334,16 +356,201 @@ defmodule Cinegraph.Predictions.Trainer do
           %{
             "recall_at_k" => result.metrics["recall_at_k"],
             "precision_at_k" => result.metrics["precision_at_k"],
+            "pr_auc" => result.metrics["pr_auc"],
+            "log_loss" => result.metrics["log_loss"],
             "n_positives" => result.metrics["n_positives"],
             "n_evaluated" => result.metrics["n_evaluated"],
             "baselines" => result.metrics["baselines"]
           }
           |> Map.merge(objective)
 
-        {:ok, %{report: report, calibration: %{"method" => result.calibration}}}
+        {:ok,
+         %{
+           report: report,
+           calibration: %{"method" => result.calibration},
+           weights: result.weights,
+           feature_names: result.feature_set["features"] || Map.keys(result.weights)
+         }}
 
       err ->
         err
+    end
+  end
+
+  @doc """
+  Evaluate ONE cell and (optionally) record it to the experiment ledger (#1061 Session 1).
+
+  A cell = `{source_key, model_class, strategy, feature_bucket, granularity, seed}`. This is the
+  **sole** ledger writer: it wraps `evaluate_strategy/3` (which already unifies temporal + static),
+  grades the result with the pure `Reliability` scorer, normalizes to one metrics shape, and — only
+  when `persist?: true` — inserts exactly one row (`status: "ok"`, or one `status: "failed"` row
+  carrying the reason). Holdout-free; spends nothing; promotes nothing.
+
+  ## Options
+    * `:source_key` (required), `:model_class` (default registry default), `:strategy`
+      (`"temporal"` | `"static"`, default `"temporal"`), `:feature_bucket` (default `:all`),
+      `:granularity` (default `:data_point`), `:seed` (default 1337)
+    * `:persist?` (default `false`) — write the ledger row
+    * `:frontier` — a pre-resolved `ListFrontier` (else resolved here)
+    * passthrough to the strategy: `:sample`, `:alpha`, `:sample_ratio`, `:weight_normalize`,
+      `:min_val_positives`
+
+  Returns `{:ok, row}` (the persisted/persistable attrs map) or `{:error, reason}`.
+  """
+  def evaluate_cell(opts) do
+    source_key = Keyword.fetch!(opts, :source_key)
+    class_key = Keyword.get(opts, :model_class, ModelRegistry.default().key())
+    strategy = Keyword.get(opts, :strategy, "temporal")
+    bucket = Keyword.get(opts, :feature_bucket, :all)
+    gran = Keyword.get(opts, :granularity, :data_point)
+    seed = Keyword.get(opts, :seed, 1337)
+    persist? = Keyword.get(opts, :persist?, false)
+
+    strat_opts =
+      opts
+      |> Keyword.take([:sample, :alpha, :sample_ratio, :weight_normalize, :min_val_positives])
+      |> Keyword.put(:seed, seed)
+      |> Keyword.put(:features, bucket)
+      |> Keyword.put(:granularity, gran)
+
+    base = %{
+      source_key: source_key,
+      model_class: class_key,
+      backtest_strategy: strategy,
+      feature_bucket: to_string(bucket),
+      granularity: to_string(gran),
+      seed: seed,
+      holdout_spent: false,
+      code_version: code_version(),
+      run_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+
+    row =
+      case evaluate_strategy(source_key, strategy, strat_opts) do
+        {:ok, %{report: report, calibration: calibration} = s} ->
+          scorecard =
+            Reliability.score(report, calibration, %{
+              is_stale: false,
+              frontier: opts[:frontier] || ListFrontier.resolve(source_key),
+              threshold: honest_threshold(report),
+              prereg?: true
+            })
+
+          Map.merge(base, %{
+            status: "ok",
+            metrics: normalize_cell_report(report, calibration, scorecard),
+            weights: s[:weights] || %{},
+            grade: to_string(scorecard.grade)
+          })
+
+        {:error, reason} ->
+          Map.merge(base, %{status: "failed", error: inspect(reason), metrics: %{}, weights: %{}})
+      end
+
+    if persist?, do: insert_ledger_row(row)
+
+    case row do
+      %{status: "ok"} -> {:ok, row}
+      %{status: "failed", error: error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  Run many cells concurrently, each persisted to the ledger exactly once (#1061 Session 1).
+
+  `cells` is a list of keyword lists merged onto `opts` (e.g.
+  `[[feature_bucket: :objective_only], [feature_bucket: :all]]`). Mirrors `run_sweep/3` but drives
+  the persisting `evaluate_cell/1` (with `persist?: true`) — so each cell → exactly one row, with no
+  double-write. Returns the successful rows (failed cells are still recorded in the ledger as
+  `status: "failed"`, just dropped from this ranked return).
+  """
+  def run_cells(source_key, cells, opts \\ []) do
+    max_conc = Keyword.get(opts, :max_concurrency, 4)
+    shared = Keyword.drop(opts, [:max_concurrency])
+
+    cells
+    |> Task.async_stream(
+      fn cell ->
+        cell_opts =
+          shared
+          |> Keyword.merge(cell)
+          |> Keyword.put(:source_key, source_key)
+          |> Keyword.put(:persist?, true)
+
+        {cell, evaluate_cell(cell_opts)}
+      end,
+      max_concurrency: max_conc,
+      timeout: :timer.minutes(15),
+      ordered: false
+    )
+    |> Enum.flat_map(fn
+      {:ok, {_cell, {:ok, row}}} ->
+        [row]
+
+      {:ok, {cell, {:error, reason}}} ->
+        Logger.warning("Trainer(run_cells): cell #{inspect(cell)} failed: #{inspect(reason)}")
+        []
+
+      {:exit, reason} ->
+        Logger.warning("Trainer(run_cells): cell worker exited: #{inspect(reason)}")
+        []
+    end)
+  end
+
+  # "Must beat the dumb baseline" — the honest, list-specific failure threshold (mirrors
+  # SeedFlagships). Used only to grade ledger rows; spends nothing.
+  defp honest_threshold(report) do
+    pop = get_in(report, ["baselines", "popularity"])
+    if is_number(pop), do: Float.round(pop, 4), else: 0.0
+  end
+
+  # One canonical metrics map persisted to a ledger row — strategy-agnostic (pr_auc/log_loss are
+  # nil on paths that don't compute them; the leaderboard tolerates that).
+  defp normalize_cell_report(report, calibration, scorecard) do
+    %{
+      "recall_at_k" => report["recall_at_k"],
+      "objective_recall_at_k" => report["objective_recall_at_k"],
+      "precision_at_k" => report["precision_at_k"],
+      "pr_auc" => report["pr_auc"],
+      "log_loss" => report["log_loss"],
+      "n_positives" => report["n_positives"],
+      "n_evaluated" => report["n_evaluated"],
+      "baselines" => report["baselines"],
+      "calibration" => calibration["method"],
+      "headline_pct" => scorecard.headline_pct,
+      "circularity" => scorecard.circularity
+    }
+  end
+
+  defp insert_ledger_row(attrs) do
+    %ExperimentLedger{}
+    |> ExperimentLedger.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, _} = ok ->
+        ok
+
+      {:error, cs} ->
+        Logger.warning("Trainer(ledger): could not persist experiment row: #{inspect(cs.errors)}")
+        {:error, cs}
+    end
+  end
+
+  # Build provenance WITHOUT git (repo policy): app version + optional BUILD_SHA env, else "unknown".
+  defp code_version do
+    vsn =
+      case Application.spec(:cinegraph, :vsn) do
+        v when is_list(v) -> List.to_string(v)
+        _ -> nil
+      end
+
+    sha = System.get_env("BUILD_SHA")
+
+    cond do
+      vsn && sha -> "#{vsn}+#{sha}"
+      vsn -> vsn
+      sha -> sha
+      true -> "unknown"
     end
   end
 
@@ -492,15 +699,26 @@ defmodule Cinegraph.Predictions.Trainer do
         )
 
         labeled = labeled_from_decades(source_key, train_decades)
-        {weights, feature_set, names} = fit_weights(granularity, source_key, labeled, ratio)
+        # One undersampled draw shared by the full + objective fits (CodeRabbit #1062). Data-point
+        # only; the lens path has no objective ablation, so it undersamples internally as before.
+        kept = if granularity == :data_point, do: undersample_ids(labeled, ratio)
+
+        {weights, feature_set, names} =
+          fit_weights(granularity, source_key, labeled, ratio, nil, kept_opt(kept))
+
         spec = {granularity, stringify(weights), source_key}
 
-        # Objective-only recall on the SAME sacred holdout (no extra spend — same slice), so the
-        # grade can be gated on independent signal, not canon-overlap circularity (#1051 closure).
+        # Objective-only recall on the SAME sacred holdout (no extra spend — same slice) AND the same
+        # training rows, so the grade is gated on independent signal, not undersampling/canon noise.
         objective =
-          objective_metrics(granularity, source_key, labeled, ratio, fn obj_spec ->
-            Credibility.evaluate(obj_spec, source_key, holdout_decades)
-          end)
+          objective_metrics(
+            granularity,
+            source_key,
+            labeled,
+            ratio,
+            fn obj_spec -> Credibility.evaluate(obj_spec, source_key, holdout_decades) end,
+            kept
+          )
 
         report =
           Credibility.evaluate(spec, source_key, holdout_decades)
@@ -514,13 +732,19 @@ defmodule Cinegraph.Predictions.Trainer do
   # Fit an objective-only model (full surface minus the canon-overlap crutch) on the same training
   # set and score it via `eval_fn` on the SAME held-out slice. `data_point` only — the lens path has
   # no canon-overlap split, so it falls back to the full grade. Returns `%{}` when not applicable.
-  defp objective_metrics(:data_point, source_key, labeled, ratio, eval_fn) do
+  # `kept` (CodeRabbit #1062): the SAME undersampled draw the full fit used, so the objective fit is
+  # a true feature ablation on identical rows rather than a re-shuffled sample. nil ⇒ undersample.
+  defp objective_metrics(granularity, source_key, labeled, ratio, eval_fn, kept \\ nil)
+
+  defp objective_metrics(:data_point, source_key, labeled, ratio, eval_fn, kept) do
     obj_codes = data_point_codes(source_key) -- canon_overlap_codes(source_key)
 
     if obj_codes == [] do
       %{}
     else
-      {obj_weights, _, _} = fit_weights(:data_point, source_key, labeled, ratio, obj_codes)
+      {obj_weights, _, _} =
+        fit_weights(:data_point, source_key, labeled, ratio, obj_codes, kept_opt(kept))
+
       rp = eval_fn.({:data_point, stringify(obj_weights), source_key})
 
       %{
@@ -530,7 +754,10 @@ defmodule Cinegraph.Predictions.Trainer do
     end
   end
 
-  defp objective_metrics(_granularity, _source_key, _labeled, _ratio, _eval_fn), do: %{}
+  defp objective_metrics(_granularity, _source_key, _labeled, _ratio, _eval_fn, _kept), do: %{}
+
+  defp kept_opt(nil), do: []
+  defp kept_opt(kept), do: [kept: kept]
 
   # Sacred holdout = the latest decade; train on the rest.
   defp split_holdout(decades) when length(decades) >= 2,
@@ -567,6 +794,12 @@ defmodule Cinegraph.Predictions.Trainer do
     else
       member_id_set = MapSet.new(members, & &1.id)
 
+      # Split the held-out members FIRST, so the test split is independent of `:sample` (CodeRabbit
+      # #1059): otherwise the non-member sampling shuffle consumes the RNG stream and would shift
+      # which members are held out, making fast-mode silently change the eval split.
+      n_test = max(1, round(length(members) * frac))
+      {test_members, train_members} = members |> Enum.shuffle() |> Enum.split(n_test)
+
       non_members =
         decade_pool_structs(decades)
         |> Enum.reject(&MapSet.member?(member_id_set, &1.id))
@@ -577,9 +810,6 @@ defmodule Cinegraph.Predictions.Trainer do
       if non_members == [] do
         {:error, :empty_candidate_universe}
       else
-        n_test = max(1, round(length(members) * frac))
-        {test_members, train_members} = members |> Enum.shuffle() |> Enum.split(n_test)
-
         Logger.info(
           "Trainer(static): #{granularity}/#{source_key} #{length(members)} members " <>
             "(#{length(test_members)} held out), full pool #{length(non_members)} non-members " <>
@@ -587,33 +817,38 @@ defmodule Cinegraph.Predictions.Trainer do
         )
 
         neg_labeled = Enum.map(non_members, &{&1.id, 0})
+        eval_train = Enum.map(train_members, &{&1.id, 1}) ++ neg_labeled
+        # One undersampled draw shared by the eval + objective fits (CodeRabbit #1062) so the
+        # objective-vs-full delta is a clean ablation, not undersampling variance. Data-point only.
+        kept = if granularity == :data_point, do: undersample_ids(eval_train, ratio)
 
         # Eval model — trained WITHOUT the held-out members; scored on the full pool.
         {weights, _, _} =
           fit_weights(
             granularity,
             source_key,
-            Enum.map(train_members, &{&1.id, 1}) ++ neg_labeled,
+            eval_train,
             ratio,
             nil,
-            opts
+            Keyword.merge(opts, kept_opt(kept))
           )
 
         eval = Enum.map(test_members, &{&1, 1}) ++ Enum.map(non_members, &{&1, 0})
         scored = Credibility.score_labeled({granularity, stringify(weights), source_key}, eval)
         rp = Credibility.recall_precision_at_k(scored)
 
-        # Objective-only recall on the SAME held-out members + pool (no extra spend), for the
-        # honesty-rule grade gate (#1051 closure). Eval model train set = without held-out members.
+        # Objective-only recall on the SAME held-out members + pool AND the same training rows, for
+        # the honesty-rule grade gate (#1051 closure). Eval train set = without held-out members.
         objective =
           objective_metrics(
             granularity,
             source_key,
-            Enum.map(train_members, &{&1.id, 1}) ++ neg_labeled,
+            eval_train,
             ratio,
             fn obj_spec ->
               Credibility.recall_precision_at_k(Credibility.score_labeled(obj_spec, eval))
-            end
+            end,
+            kept
           )
 
         # Serving model — fit on ALL members + undersampled non-members.
@@ -726,11 +961,12 @@ defmodule Cinegraph.Predictions.Trainer do
   # `codes` (#1040 S3) lets a sweep restrict the data-point feature set; nil ⇒ the full default set.
   # `opts` (#1051 Stage B) carries `:alpha` (L2) + `:weight_normalize` (:simplex|:signed) for the
   # data-point fit; the lens path ignores them (keeps its byte-stable :simplex behavior).
-  defp fit_weights(granularity, source_key, labeled, ratio, codes \\ nil, opts \\ [])
-
   defp fit_weights(:data_point, source_key, labeled, ratio, codes, opts) do
     codes = codes || data_point_codes(source_key)
-    kept = undersample_ids(labeled, ratio)
+    # `:kept` (CodeRabbit #1062) lets the caller pass ONE undersampled draw so the full and
+    # objective-only fits train on the IDENTICAL rows — otherwise each fit reshuffles negatives and
+    # the objective-vs-full delta (which gates the grade) carries undersampling noise, not signal.
+    kept = Keyword.get(opts, :kept) || undersample_ids(labeled, ratio)
     ids = Enum.map(kept, &elem(&1, 0))
     # Derived features need movie structs (canonical_sources / release_date), so load them for the
     # (small, undersampled) kept set and assemble via the shared load_for path.
@@ -868,13 +1104,28 @@ defmodule Cinegraph.Predictions.Trainer do
 
   # ── persistence ──────────────────────────────────────────────────────────────
 
-  defp persist(source_key, weights, feature_set, integrity, calibration, prereg, strategy) do
+  defp persist(
+         source_key,
+         weights,
+         feature_set,
+         integrity,
+         calibration,
+         prereg,
+         strategy,
+         model_class
+       ) do
     string_weights = stringify(weights)
     lens_config_hash = if feature_set["granularity"] == "lens", do: LensConfig.lens_config_hash()
     model_version = 1
 
     weights_hash =
-      LensConfig.weights_hash(feature_set, string_weights, model_version, lens_config_hash)
+      LensConfig.weights_hash(
+        feature_set,
+        string_weights,
+        model_version,
+        lens_config_hash,
+        model_class
+      )
 
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
@@ -889,6 +1140,7 @@ defmodule Cinegraph.Predictions.Trainer do
           model_version: model_version,
           lens_config_hash: lens_config_hash,
           backtest_strategy: strategy,
+          model_class: model_class,
           metrics: Map.take(integrity, ["recall_at_k", "precision_at_k", "brier"]),
           integrity_report: integrity,
           calibration: calibration,

@@ -58,7 +58,10 @@ defmodule Mix.Tasks.Predictions.Ablation do
         sk -> [sk]
       end
 
-    sample_note = if opts[:sample], do: " · sample #{opts[:sample]} (fast-mode, approx)", else: ""
+    sample_note =
+      if opts[:sample] && opts[:sample] > 0,
+        do: " · sample #{opts[:sample]} (fast-mode, approx)",
+        else: ""
 
     Mix.shell().info(
       "Objective-vs-canon ablation over #{length(lists)} lists (seed #{seed})#{sample_note}\n"
@@ -70,21 +73,25 @@ defmodule Mix.Tasks.Predictions.Ablation do
     print_verdicts(rows)
   end
 
-  # %{"objective"|"canon"|"full" => %{pr_auc, recall, pop}} (or %{} if unevaluable).
-  defp eval_list(source_key, seed, sweep_opts) do
-    variants = Enum.map(@buckets, fn {sel, id} -> [id: id, features: sel] end)
+  @bucket_ids %{"objective_only" => "objective", "canon_overlap" => "canon", "all" => "full"}
 
-    Trainer.run_sweep(
+  # %{"objective"|"canon"|"full" => %{pr_auc, recall, pop}} (or %{} if unevaluable).
+  # Runs through `Trainer.run_cells` so each bucket is also RECORDED to the experiment ledger
+  # (#1061) — the ablation is now both a diagnostic print AND a persisted run (one row per bucket).
+  defp eval_list(source_key, seed, sweep_opts) do
+    cells = Enum.map(@buckets, fn {sel, _id} -> [feature_bucket: sel] end)
+
+    Trainer.run_cells(
       source_key,
-      variants,
-      Keyword.merge([seed: seed, max_concurrency: 3], sweep_opts)
+      cells,
+      Keyword.merge([seed: seed, max_concurrency: 3, strategy: "temporal"], sweep_opts)
     )
-    |> Map.new(fn r ->
-      {r.variant[:id],
+    |> Map.new(fn row ->
+      {Map.get(@bucket_ids, row.feature_bucket, row.feature_bucket),
        %{
-         pr_auc: r.metrics["pr_auc"],
-         recall: r.metrics["recall_at_k"],
-         pop: get_in(r.metrics, ["baselines", "popularity"])
+         pr_auc: row.metrics["pr_auc"],
+         recall: row.metrics["recall_at_k"],
+         pop: get_in(row.metrics, ["baselines", "popularity"])
        }}
     end)
   end

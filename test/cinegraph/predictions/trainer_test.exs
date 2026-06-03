@@ -210,6 +210,8 @@ defmodule Cinegraph.Predictions.TrainerTest do
     assert model.holdout_spent_at != nil
     assert model.integrity_report["recall_at_k"] == integ["recall_at_k"]
     assert model.feature_set["granularity"] == "data_point"
+    # #1061 Session 1: promotion records the model class (the only served class today).
+    assert model.model_class == "linear_logreg"
 
     # Active pointer + derived cache set.
     list = MovieLists.get_by_source_key(@list)
