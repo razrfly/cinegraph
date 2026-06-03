@@ -43,10 +43,10 @@ defmodule Mix.Tasks.Predictions.SeedFlagships do
     targets =
       case opts[:only] do
         nil -> Map.keys(@flagships)
-        csv -> String.split(csv, ",", trim: true)
+        csv -> validate_only(String.split(csv, ",", trim: true))
       end
 
-    results = Enum.map(targets, &seed_one(&1, Map.get(@flagships, &1, "static")))
+    results = Enum.map(targets, &seed_one(&1, Map.fetch!(@flagships, &1)))
 
     if opts[:json] do
       IO.puts(Jason.encode!(results, pretty: true))
@@ -55,15 +55,36 @@ defmodule Mix.Tasks.Predictions.SeedFlagships do
     end
   end
 
-  defp seed_one(source_key, strategy) do
-    {:ok, prereg} =
-      PreRegistration.register(%{
-        source_key: source_key,
-        expected_top_features: %{"note" => "auto-registered by mix predictions.seed_flagships"},
-        expected_accuracy_range: %{"min" => @threshold, "max" => 1.0},
-        failure_threshold: :erlang.float_to_binary(@threshold, decimals: 2)
-      })
+  # Keep only known flagship keys; warn (don't silently default) on anything unrecognized so a
+  # typo in `--only` can't quietly seed the wrong strategy.
+  defp validate_only(requested) do
+    {known, unknown} = Enum.split_with(requested, &Map.has_key?(@flagships, &1))
 
+    if unknown != [] do
+      Mix.shell().error("Unknown flagship(s) skipped: #{Enum.join(unknown, ", ")}")
+      Mix.shell().error("Valid flagships: #{Enum.join(Map.keys(@flagships), ", ")}")
+    end
+
+    known
+  end
+
+  defp seed_one(source_key, strategy) do
+    case PreRegistration.register(%{
+           source_key: source_key,
+           expected_top_features: %{"note" => "auto-registered by mix predictions.seed_flagships"},
+           expected_accuracy_range: %{"min" => @threshold, "max" => 1.0},
+           failure_threshold: :erlang.float_to_binary(@threshold, decimals: 2)
+         }) do
+      {:ok, prereg} ->
+        train_one(source_key, strategy, prereg)
+
+      # A prereg failure for one list must not abort the rest of the run — report and move on.
+      {:error, reason} ->
+        %{source_key: source_key, strategy: strategy, status: "error", reason: inspect(reason)}
+    end
+  end
+
+  defp train_one(source_key, strategy, prereg) do
     case Trainer.train(source_key,
            granularity: :data_point,
            save: true,

@@ -19,6 +19,7 @@ defmodule Cinegraph.Scoring.CatalogContractTest do
   alias Cinegraph.Metrics
   alias Cinegraph.Metrics.{CatalogSeed, MetricDefinition}
   alias Cinegraph.Movies.{Credit, Movie, Person}
+  alias Cinegraph.Scoring.DerivedFeatures
 
   alias Cinegraph.Festivals.{
     FestivalCategory,
@@ -88,6 +89,19 @@ defmodule Cinegraph.Scoring.CatalogContractTest do
       ml_only = Metrics.list_metric_definitions() |> Enum.filter(&is_nil(&1.category))
       assert "runtime" in Enum.map(ml_only, & &1.code)
       assert Enum.all?(ml_only, &(&1.kind in ["raw", "derived"]))
+    end
+
+    test "available derived codes exactly match DerivedFeatures.supported_codes/0 (#1044)" do
+      # The catalog's is_available flag is documentary for derived codes (routing gates on
+      # supported_codes/0), but the two must agree: the catalog must not hide a derived feature the
+      # data-point surface emits, nor advertise one it doesn't. prior_collab_density closed the gap.
+      available_derived =
+        Metrics.list_metric_definitions(only_available: true, kind: "derived")
+        |> Enum.map(& &1.code)
+        |> MapSet.new()
+
+      assert available_derived == MapSet.new(DerivedFeatures.supported_codes())
+      assert "prior_collab_density" in available_derived
     end
   end
 
