@@ -25,8 +25,10 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
   @log_cap 10
 
   # `prior_collab_density` saturates later — it sums distinct lifetime collaborators across a film's
-  # whole key-person cast. Mirrors the catalog row's `normalization_params.threshold` (#1044), NOT
-  # the FeatureResolver features' @log_cap.
+  # whole key-person cast, so it needs a higher cap than the FeatureResolver features' @log_cap.
+  # This is the SINGLE source of truth for the threshold: the catalog row's
+  # `normalization_params.threshold` reads it via `prior_collab_cap/0` (#1044), so tuning the
+  # saturation point is a one-line change here. Adjust this to iterate on the feature's signal.
   @prior_collab_cap 50
 
   # Chunk movie_ids for the matview query so a full-decade load stays under the pool timeout.
@@ -38,6 +40,12 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
 
   @doc "The derived codes this module emits — the routing guard for `DataPointFeatures.load_for/3`."
   def supported_codes, do: @supported
+
+  @doc """
+  The log-normalization saturation threshold for `prior_collab_density`. Single source of truth:
+  the catalog's `normalization_params.threshold` mirrors this so the two can't drift (#1044).
+  """
+  def prior_collab_cap, do: @prior_collab_cap
 
   @doc """
   Load derived feature values for `movies` (which must carry `canonical_sources` and
