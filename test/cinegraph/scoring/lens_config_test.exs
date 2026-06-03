@@ -64,5 +64,21 @@ defmodule Cinegraph.Scoring.LensConfigTest do
       refute base == LensConfig.weights_hash(@feature_set, %{"mob" => 1.0}, 2, "lc1")
       refute base == LensConfig.weights_hash(@feature_set, %{"mob" => 1.0}, 1, "lc2")
     end
+
+    # #1061 Session 1: model_class is an optional 5th arg.
+    test "nil model_class reproduces the legacy 4-arg hash byte-for-byte" do
+      assert LensConfig.weights_hash(@feature_set, %{"mob" => 1.0}, 1, "lc") ==
+               LensConfig.weights_hash(@feature_set, %{"mob" => 1.0}, 1, "lc", nil)
+    end
+
+    test "differs by model_class so a linear and an opaque model can't collide" do
+      base = LensConfig.weights_hash(@feature_set, %{"mob" => 1.0}, 1, "lc", "linear_logreg")
+
+      refute base ==
+               LensConfig.weights_hash(@feature_set, %{"mob" => 1.0}, 1, "lc", "gbm_xgboost")
+
+      # …and naming the class differs from the legacy unnamed hash.
+      refute base == LensConfig.weights_hash(@feature_set, %{"mob" => 1.0}, 1, "lc", nil)
+    end
   end
 end

@@ -23,6 +23,10 @@ defmodule Cinegraph.Predictions.Model do
     field :lens_config_hash, :string
     field :is_stale, :boolean, default: false
     field :backtest_strategy, :string
+    # #1061 Session 1: the model-class discriminator + opaque-artifact store. Weight-map classes
+    # (today's only kind) keep using `weights`; `serialized_model` is for opaque classes (Session 2).
+    field :model_class, :string, default: "linear_logreg"
+    field :serialized_model, :map
     field :metrics, :map, default: %{}
     field :calibration, :map, default: %{}
     field :integrity_report, :map, default: %{}
@@ -45,13 +49,22 @@ defmodule Cinegraph.Predictions.Model do
       :lens_config_hash,
       :is_stale,
       :backtest_strategy,
+      :model_class,
+      :serialized_model,
       :metrics,
       :calibration,
       :integrity_report,
       :holdout_spent_at,
       :prereg_id
     ])
-    |> validate_required([:source_key, :feature_set, :weights, :weights_hash, :model_version])
+    |> validate_required([
+      :source_key,
+      :feature_set,
+      :weights,
+      :weights_hash,
+      :model_version,
+      :model_class
+    ])
     |> unique_constraint([:source_key, :weights_hash, :model_version, :prereg_id],
       name: :prediction_models_artifact_uniq
     )

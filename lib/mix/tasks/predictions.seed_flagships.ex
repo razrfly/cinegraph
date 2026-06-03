@@ -57,11 +57,24 @@ defmodule Mix.Tasks.Predictions.SeedFlagships do
       )
 
     commit = opts[:commit] || false
+
+    # --commit can't honor --seed end-to-end (CodeRabbit #1059): the assess seeds
+    # `Trainer.evaluate_strategy/3`, but `Trainer.train/2` has no seed knob, so the committed model
+    # would differ from the seeded assessment. Reject the combination rather than mislead.
+    if commit and opts[:seed],
+      do: Mix.raise("--seed cannot be combined with --commit (train/2 does not accept a seed)")
+
     # The strategy PICK is sampled by default (the exact full-member-decade pool ≈ the whole catalog
     # for broad static lists — minutes→hours). Sampling preserves the relative temporal-vs-static
     # ranking; the COMMITTED model's stored grade is always exact (`Trainer.train` never samples).
     # Pass `--sample 0` to assess on the exact pool (slow). Projected grades are optimistic.
-    sample = Keyword.get(opts, :sample, 25_000)
+    # Reject negatives (CodeRabbit #1062): only 0/nil mean "exact full pool"; a negative would
+    # slip past that check and sample with an invalid pool size instead of the documented behavior.
+    sample =
+      case Keyword.get(opts, :sample, 25_000) do
+        n when is_integer(n) and n >= 0 -> n
+        _ -> Mix.raise("--sample must be a non-negative integer")
+      end
 
     targets =
       case opts[:only] do
@@ -239,7 +252,9 @@ defmodule Mix.Tasks.Predictions.SeedFlagships do
       Mix.shell().error("Valid lists: #{Enum.join(@lists, ", ")}")
     end
 
-    known
+    # Dedup (CodeRabbit #1059): a repeated list under --commit would register two preregs and spend
+    # the same holdout twice (holdout enforcement is per-prereg, not per-list).
+    Enum.uniq(known)
   end
 
   defp maybe_put(kw, _key, nil), do: kw
