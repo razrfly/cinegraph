@@ -143,20 +143,20 @@ defmodule Cinegraph.Predictions.Trainer do
   metrics (PR-AUC, log-loss) alongside recall@K, plus per-feature coverage and importance, so
   feature/weight variants can be compared without spending the holdout.
 
-  Validation is scored against a **pinned candidate universe** restricted to the validation
-  decades (#1045): the list's members in those decades (positives) PLUS the top-N most-voted
-  non-members in those decades (the strongest competitors). This mirrors `evaluate_static` and
-  is ~45× cheaper than scoring the full decade (~5k vs ~223k movies) — and a harder, more
-  meaningful test. Note the consequence: PR-AUC / recall@K are on this candidate-universe
-  denominator, NOT the full-decade one, so re-baseline when comparing to pre-#1045 numbers.
+  Validation is scored against the **full decade pool** over the validation decades (#1055):
+  members are ranked against EVERY movie in those decades (base rate ~1e-4), via
+  `Credibility.evaluate/3`. Curated negative sets (the #1045 vote-gated/era-stratified universes)
+  are selection-biased and gameable — a flexible model trivially separates arthouse canon from
+  the curated competitors — so the honest metric ranks against everything. Training negatives are
+  still undersampled from the train decades; only the *evaluation* uses the full pool.
 
   Promotion of a validated winner to an active model stays the separate `train(save: true)` path.
 
   ## Options
     * `:granularity` — `:data_point` (default) or `:lens`
-    * `:sample_ratio` — negative undersampling ratio (default 5)
+    * `:sample_ratio` — negative undersampling ratio for training (default 5)
     * `:min_val_positives` — pool validation decades until ≥ this many positives (default 30)
-    * `:min_votes` — min `tmdb` `rating_votes` for a non-member to enter the universe (default 1000)
+    * `:weight_normalize` — `:simplex` (default) or `:signed`; `:alpha` — L2 strength (#1051 Stage B)
   """
   def run_experiment(source_key, opts \\ []) do
     granularity = Keyword.get(opts, :granularity, :data_point)
@@ -188,19 +188,14 @@ defmodule Cinegraph.Predictions.Trainer do
             labeled = labeled_from_decades(source_key, train_decades)
 
             {weights, feature_set, names} =
-              fit_weights(granularity, source_key, labeled, ratio, codes)
+              fit_weights(granularity, source_key, labeled, ratio, codes, opts)
 
             spec = {granularity, stringify(weights), source_key}
 
-            # Pinned candidate universe over the validation decades (positives + top-N voted
-            # negatives), shared across sweep variants when run_sweep prebuilds it.
-            {members, negs} =
-              case Keyword.get(opts, :validation_universe) do
-                {m, n} -> {m, n}
-                nil -> candidate_universe(source_key, Keyword.put(opts, :decades, val_decades))
-              end
-
-            report = validation_report(spec, source_key, members, negs)
+            # Honest evaluation (#1055): rank members against the FULL decade pool over the
+            # validation decades — `Credibility.evaluate` scores the whole decade(s) (base rate
+            # ~1e-4), with no curated/selection-biased negatives that a flexible model could game.
+            report = Credibility.evaluate(spec, source_key, val_decades)
             pairs = report["pairs"] || []
             {scores, labels} = if pairs == [], do: {[], []}, else: Enum.unzip(pairs)
 
@@ -233,15 +228,20 @@ defmodule Cinegraph.Predictions.Trainer do
                  "n_evaluated" => report["n_evaluated"],
                  "baselines" => report["baselines"]
                },
-               # Re-baseline transparency: the denominator is now the pinned universe, not the
-               # full decade. `n_evaluated` (above) = positives + negatives.
+               # Honest denominator (#1055): the FULL decade pool, not a curated negative set.
+               # `n_evaluated` (above) = every movie in the validation decades.
                validation_universe: %{
-                 "positives" => length(members),
-                 "negatives" => length(negs),
-                 "min_votes" => Keyword.get(opts, :min_votes, 1000)
+                 "pool" => "full_decade",
+                 "positives" => report["n_positives"],
+                 "evaluated" => report["n_evaluated"]
                },
                feature_coverage:
-                 feature_coverage(granularity, members ++ negs, source_key, names),
+                 feature_coverage(
+                   granularity,
+                   val_decade_members(source_key, val_decades),
+                   source_key,
+                   names
+                 ),
                feature_importance: stringify(weights)
              }}
         end
@@ -258,15 +258,8 @@ defmodule Cinegraph.Predictions.Trainer do
   def run_sweep(source_key, variants, opts \\ []) do
     max_conc = Keyword.get(opts, :max_concurrency, 4)
 
-    # The candidate universe is variant-independent (depends only on source_key, the validation
-    # decades, and :min_votes — not on features/ratio/seed). Build it once and share it across
-    # variants, avoiding one negatives query per variant.
-    opts =
-      case shared_validation_universe(source_key, opts) do
-        {:ok, universe} -> Keyword.put(opts, :validation_universe, universe)
-        :error -> opts
-      end
-
+    # Each variant evaluates against the full decade pool (#1055), so there is no shared curated
+    # universe to prebuild — variants differ only in features/weight_normalize/alpha.
     variants
     |> Task.async_stream(
       fn variant -> {variant, run_experiment(source_key, Keyword.merge(opts, variant))} end,
@@ -291,37 +284,21 @@ defmodule Cinegraph.Predictions.Trainer do
     |> Enum.sort_by(&(&1.metrics["pr_auc"] || -1.0), :desc)
   end
 
-  # Build the shared validation universe once for a sweep. Returns `:error` (rather than raising)
-  # when the split is impossible, so each variant falls back to its own error path.
-  defp shared_validation_universe(source_key, opts) do
-    decades = HistoricalValidator.get_all_decades(source_key) |> Enum.sort()
-
-    case split_train_val_holdout(source_key, decades, opts) do
-      {_train, val_decades, _holdout} ->
-        {:ok, candidate_universe(source_key, Keyword.put(opts, :decades, val_decades))}
-
-      {:error, _} ->
-        :error
-    end
-  end
-
-  # Score the pinned candidate universe and assemble the report keys `run_experiment` consumes.
-  # The baselines (popularity/random/prior_rate) are scored over the SAME universe — this is the
-  # re-baselined denominator (#1045).
-  defp validation_report(spec, source_key, members, negs) do
-    universe = Enum.map(members, &{&1, 1}) ++ Enum.map(negs, &{&1, 0})
-    scored = Credibility.score_labeled(spec, universe)
-    rp = Credibility.recall_precision_at_k(scored)
-
-    %{
-      "recall_at_k" => rp["recall_at_k"],
-      "precision_at_k" => rp["precision_at_k"],
-      "n_positives" => rp["n_positives"],
-      "n_evaluated" => length(universe),
-      "worst_miss" => Credibility.worst_miss(scored),
-      "baselines" => static_baselines(source_key, members, negs),
-      "pairs" => Enum.map(scored, fn s -> {s.score, s.label} end)
-    }
+  # List members in the validation decades (structs), for the experiment's per-feature coverage
+  # diagnostic. The honest recall is computed over the full decade pool by `Credibility.evaluate`.
+  defp val_decade_members(source_key, decades) do
+    from(m in Movie,
+      where: fragment("? \\? ?", m.canonical_sources, ^source_key),
+      where: m.import_status == "full",
+      select: %Movie{
+        id: m.id,
+        title: m.title,
+        release_date: m.release_date,
+        canonical_sources: m.canonical_sources
+      }
+    )
+    |> maybe_decade_filter(decades)
+    |> Repo.all()
   end
 
   # Map a feature-set selector to data-point codes. `data_point_codes/1` is raw+derived minus target.
@@ -552,14 +529,15 @@ defmodule Cinegraph.Predictions.Trainer do
     end
   end
 
-  # Pinned universe: list members (positives) + the most-voted non-members (the strongest
-  # competitors), min-evidence gated + capped. Deterministic (votes-desc order); the only
-  # randomness is the seeded fold split + negative undersampling.
+  # Curated (vote-gated) candidate universe — list members (positives) + the most-voted non-members.
+  # ⚠️ #1055: this is selection-biased and NOT an honest *evaluation* universe (a flexible model
+  # games it). It is retained ONLY for the static k-fold path (`evaluate_static`), whose grades are
+  # therefore flagged as inflated until the static path is moved to full-pool evaluation. The honest
+  # eval path (`run_experiment`) ranks against the FULL decade pool via `Credibility.evaluate/3`.
   #
-  # `:decades` (#1045) restricts BOTH members and negatives to those decades (temporal
-  # validation); `nil` ⇒ the whole catalog (static k-fold). Derived features (e.g.
-  # `box_office_roi`) resolve budget/revenue from `external_metrics` via `FeatureResolver`
-  # (#1042), so only `canonical_sources` / `release_date` need to ride along on the struct.
+  # `:decades` restricts BOTH members and negatives to those decades; `nil` ⇒ whole catalog. Derived
+  # features resolve budget/revenue from `external_metrics` via `FeatureResolver` (#1042), so only
+  # `canonical_sources` / `release_date` ride along on the struct.
   defp candidate_universe(source_key, opts) do
     min_votes = Keyword.get(opts, :min_votes, 1000)
     decades = Keyword.get(opts, :decades)
@@ -588,7 +566,6 @@ defmodule Cinegraph.Predictions.Trainer do
             em.value >= ^min_votes,
         where: m.import_status == "full",
         where: not fragment("? \\? ?", m.canonical_sources, ^source_key),
-        # asc: m.id breaks vote-count ties deterministically (so the universe is reproducible)
         order_by: [desc: em.value, asc: m.id],
         limit: ^cap,
         select: %Movie{
@@ -668,9 +645,11 @@ defmodule Cinegraph.Predictions.Trainer do
   # ── fitting (shared by temporal + static) ──
 
   # `codes` (#1040 S3) lets a sweep restrict the data-point feature set; nil ⇒ the full default set.
-  defp fit_weights(granularity, source_key, labeled, ratio, codes \\ nil)
+  # `opts` (#1051 Stage B) carries `:alpha` (L2) + `:weight_normalize` (:simplex|:signed) for the
+  # data-point fit; the lens path ignores them (keeps its byte-stable :simplex behavior).
+  defp fit_weights(granularity, source_key, labeled, ratio, codes \\ nil, opts \\ [])
 
-  defp fit_weights(:data_point, source_key, labeled, ratio, codes) do
+  defp fit_weights(:data_point, source_key, labeled, ratio, codes, opts) do
     codes = codes || data_point_codes(source_key)
     kept = undersample_ids(labeled, ratio)
     ids = Enum.map(kept, &elem(&1, 0))
@@ -679,11 +658,18 @@ defmodule Cinegraph.Predictions.Trainer do
     feats = DataPointFeatures.load_for(load_movie_structs(ids), codes, source_key)
     x = Enum.map(kept, fn {id, _y} -> vectorize(Map.get(feats, id, %{}), codes) end)
     y = Enum.map(kept, &elem(&1, 1))
-    weights = WeightOptimizer.fit_raw(x, y) |> WeightOptimizer.extract_weights(codes)
+
+    fit_opts = Keyword.take(opts, [:alpha, :max_iterations])
+    normalize = Keyword.get(opts, :weight_normalize, :simplex)
+
+    weights =
+      WeightOptimizer.fit_raw(x, y, fit_opts)
+      |> WeightOptimizer.extract_weights(codes, normalize: normalize)
+
     {weights, %{"granularity" => "data_point", "features" => codes}, codes}
   end
 
-  defp fit_weights(:lens, source_key, labeled, ratio, _codes) do
+  defp fit_weights(:lens, source_key, labeled, ratio, _codes, _opts) do
     kept = undersample_ids(labeled, ratio)
     preds = lens_predictions(Enum.map(kept, &elem(&1, 0)), source_key)
 

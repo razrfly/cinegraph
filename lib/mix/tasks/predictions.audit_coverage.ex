@@ -317,15 +317,17 @@ defmodule Mix.Tasks.Predictions.AuditCoverage do
     end)
   end
 
-  # Movie ids (within `ids`) that have been OMDb-fetched at all — any `source = 'omdb'` row,
-  # including a `fetch_attempt`. A fetched member still missing an OMDb field has a genuinely
-  # source-absent value; an unfetched one is merely not-yet-fetched.
+  # Movie ids (within `ids`) that have been OMDb-fetched at all — i.e. we stored a response blob
+  # (`movies.omdb_data`). This is the correct terminal marker (#1053): a successful OMDb fetch that
+  # yields only an `imdbRating` writes an `imdb` row and NO `source='omdb'` row, so the old
+  # `source='omdb'` test produced ~5% false-negatives. A fetched member still missing an OMDb field
+  # has a genuinely source-absent value; an unfetched one merely has no blob.
   defp omdb_fetched_set(ids) do
     %{rows: rows} =
       Cinegraph.Repo.query!(
         """
-        SELECT DISTINCT movie_id FROM external_metrics
-        WHERE source = 'omdb' AND movie_id = ANY($1)
+        SELECT id FROM movies
+        WHERE id = ANY($1) AND omdb_data IS NOT NULL AND omdb_data <> '{}'::jsonb
         """,
         [ids],
         timeout: :timer.seconds(60)

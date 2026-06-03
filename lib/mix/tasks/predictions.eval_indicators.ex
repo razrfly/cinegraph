@@ -137,6 +137,8 @@ defmodule Mix.Tasks.Predictions.EvalIndicators do
 
   # Coverage-matched control: fraction of each list's candidate universe that's OMDb-fetched.
   # High → a surviving indicator reflects source-absence (field genuinely missing), not fetch-status.
+  # "Fetched" = a stored response blob (`movies.omdb_data`), the correct terminal marker (#1053) —
+  # not `external_metrics.source='omdb'`, which misses imdbRating-only responses (~5% false-neg).
   defp print_control(lists) do
     Mix.shell().info("Coverage-matched control — candidate universe OMDb-fetched %:")
 
@@ -146,9 +148,11 @@ defmodule Mix.Tasks.Predictions.EvalIndicators do
 
       fetched =
         Repo.one(
-          from em in "external_metrics",
-            where: em.source == "omdb" and em.movie_id in ^ids,
-            select: count(em.movie_id, :distinct)
+          from m in "movies",
+            where:
+              m.id in ^ids and not is_nil(m.omdb_data) and
+                fragment("? <> '{}'::jsonb", m.omdb_data),
+            select: count(m.id)
         ) || 0
 
       pct = if ids == [], do: 0.0, else: Float.round(fetched / length(ids) * 100, 1)

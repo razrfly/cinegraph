@@ -124,15 +124,21 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
 
   @doc """
   Fit logistic regression and return the raw Scholar model (coefficients intact), so callers
-  can extract weights over an arbitrary feature list via `extract_weights/2`.
+  can extract weights over an arbitrary feature list via `extract_weights/2,3`.
+
+  ## Options (#1051 Stage B)
+    * `:alpha` — L2 regularization strength passed to `Scholar.Linear.LogisticRegression`
+      (default `1.0`). Higher shrinks all coefficients; lower lets dominant features keep magnitude.
+    * `:max_iterations` — gradient-descent iterations (default `1000`).
   """
-  def fit_raw(x_list, y_list) do
+  def fit_raw(x_list, y_list, opts \\ []) do
     x_tensor = Nx.tensor(x_list, type: :f32)
     y_tensor = Nx.tensor(y_list, type: :u32)
 
     Scholar.Linear.LogisticRegression.fit(x_tensor, y_tensor,
       num_classes: 2,
-      max_iterations: 1000
+      max_iterations: Keyword.get(opts, :max_iterations, 1000),
+      alpha: Keyword.get(opts, :alpha, 1.0)
     )
   end
 
@@ -192,30 +198,56 @@ defmodule Cinegraph.Predictions.WeightOptimizer do
   end
 
   @doc """
-  Extract normalized positive-class weights from a fitted logistic regression model.
-  Clamps negatives to 0, normalizes to sum to 1.0. Keyed by the 6 lens atoms.
+  Extract positive-class weights from a fitted model over the 6 lens atoms (`:simplex` strategy).
   """
-  def extract_weights(model), do: extract_weights(model, @criteria)
+  def extract_weights(model), do: extract_weights(model, @criteria, [])
+
+  def extract_weights(model, feature_names), do: extract_weights(model, feature_names, [])
 
   @doc """
   Generalized weight extraction over an arbitrary ordered feature list (atoms or strings,
   e.g. data-point `metric_code`s). Column order MUST match the feature matrix used to fit.
-  Clamps negative coefficients to 0 and normalizes to sum to 1.0.
+
+  ## `:normalize` (#1051 Stage B)
+    * `:simplex` (default) — clamp negative coefficients to 0, normalize to sum 1.0 (uniform
+      `1/n` if all non-positive). The lens path keeps this for back-compat / byte-stability.
+    * `:signed` — keep raw signed coefficients, scaled by their L2 norm (zeros if the norm is 0).
+      Preserves sign and *relative magnitude*, so a dominant feature isn't diluted by adding many
+      weak ones — the fix for the `full < canon` collapse. The bus serves signed weights directly;
+      recall@K is rank-invariant and Platt calibration absorbs the scale.
   """
-  def extract_weights(model, feature_names) do
+  def extract_weights(model, feature_names, opts) do
     pos_coeffs = model.coefficients[[.., 1]]
-    clamped = Nx.max(pos_coeffs, 0.0)
-    total = Nx.sum(clamped) |> Nx.to_number()
     n = length(feature_names)
 
-    normalized =
-      if total > 0.0,
-        do: Nx.divide(clamped, total),
-        else: Nx.broadcast(Nx.tensor(1.0 / n), {n})
+    weights =
+      case Keyword.get(opts, :normalize, :simplex) do
+        :signed -> signed_l2_weights(pos_coeffs, n)
+        _ -> simplex_weights(pos_coeffs, n)
+      end
 
     feature_names
-    |> Enum.zip(Nx.to_list(normalized))
+    |> Enum.zip(weights)
     |> Map.new()
+  end
+
+  # clamp ≥0, normalize to sum 1.0 (uniform if degenerate)
+  defp simplex_weights(pos_coeffs, n) do
+    clamped = Nx.max(pos_coeffs, 0.0)
+    total = Nx.sum(clamped) |> Nx.to_number()
+
+    if total > 0.0,
+      do: Nx.to_list(Nx.divide(clamped, total)),
+      else: List.duplicate(1.0 / n, n)
+  end
+
+  # raw signed coefficients scaled by L2 norm (zeros if degenerate)
+  defp signed_l2_weights(pos_coeffs, n) do
+    norm = Nx.sum(Nx.multiply(pos_coeffs, pos_coeffs)) |> Nx.to_number() |> :math.sqrt()
+
+    if norm > 0.0,
+      do: Nx.to_list(Nx.divide(pos_coeffs, norm)),
+      else: List.duplicate(0.0, n)
   end
 
   @doc """

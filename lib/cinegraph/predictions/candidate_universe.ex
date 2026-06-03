@@ -16,10 +16,14 @@ defmodule Cinegraph.Predictions.CandidateUniverse do
   @default_min_votes 1000
 
   @doc """
-  `{member_ids, negative_ids}` for one list: members = movies whose `canonical_sources`
-  contains `source_key` (import_status `"full"`); negatives = the most-voted non-members with
-  tmdb `rating_votes >= :min_votes` (default #{@default_min_votes}), capped, votes-desc with an
-  `id` tiebreaker (deterministic, matching the Trainer).
+  `{member_ids, negative_ids}` for one list — a vote-gated candidate set for **coverage diagnostics
+  and backfill targeting** (the `audit_coverage --source-key` confound report, the `eval_indicators`
+  control). Members = movies whose `canonical_sources` contains `source_key` (import_status
+  `"full"`); negatives = the most-voted non-members with tmdb `rating_votes >= :min_votes`, capped.
+
+  NOTE (#1055): this is NOT the model **evaluation** universe. Curated negatives (vote-gated here)
+  are selection-biased and gameable; honest model evaluation ranks members against the FULL decade
+  pool via `Cinegraph.Predictions.Credibility.evaluate/3`. Use `ids_for/2` only for diagnostics.
   """
   def ids_for(source_key, opts \\ []) when is_binary(source_key) do
     min_votes = Keyword.get(opts, :min_votes, @default_min_votes)
@@ -54,10 +58,11 @@ defmodule Cinegraph.Predictions.CandidateUniverse do
   end
 
   @doc """
-  The **global** scored universe across every canonical list: `{member_ids, negative_ids}`
-  where members = movies on ANY canonical list (`canonical_sources <> '{}'`), and negatives =
-  the most-voted off-list movies with tmdb `rating_votes >= :min_votes`, capped. Members are the
-  under-covered, high-value side — callers that densify should process them first.
+  The **global** vote-gated universe across every canonical list: `{member_ids, negative_ids}` where
+  members = movies on ANY canonical list (`canonical_sources <> '{}'`), and negatives = the
+  most-voted off-list movies with tmdb `rating_votes >= :min_votes`, capped.
+
+  For *backfill targeting* (densify the high-value, most-watched movies) — NOT model evaluation.
   """
   def global_ids(opts \\ []) do
     min_votes = Keyword.get(opts, :min_votes, @default_min_votes)

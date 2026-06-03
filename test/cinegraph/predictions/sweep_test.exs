@@ -22,7 +22,7 @@ defmodule Cinegraph.Predictions.SweepTest do
     assert Trainer.run_sweep("nonexistent_list_xyz", variants, max_concurrency: 2) == []
   end
 
-  describe "candidate-universe temporal validation (#1045)" do
+  describe "full-pool temporal validation (#1055)" do
     @list "sweep_test_list"
 
     setup do
@@ -52,7 +52,7 @@ defmodule Cinegraph.Predictions.SweepTest do
       :ok
     end
 
-    test "scores a decade-scoped universe (positives + voted negatives), excluding the holdout" do
+    test "scores the FULL validation-decade pool, excluding the holdout (#1055)" do
       assert {:ok, r} =
                Trainer.run_experiment(@list, granularity: :data_point, min_val_positives: 1)
 
@@ -61,17 +61,22 @@ defmodule Cinegraph.Predictions.SweepTest do
       assert r.validation_decades == [2000]
       assert r.holdout_decades == [2010]
 
-      # The universe is the 2000-decade members (5) + the most-voted 2000-decade non-members (14).
-      # 2010 (holdout) and 1990 (train) movies are NOT scored — proves the decade scoping.
+      # Honest universe = the FULL 2000 decade pool: 5 members + all 14 non-members = 19 (no curated
+      # negatives). 2010 (holdout) and 1990 (train) movies are NOT scored — proves the decade scoping.
       assert r.metrics["n_evaluated"] == 19
       assert r.metrics["n_positives"] == 5
-      assert r.validation_universe == %{"positives" => 5, "negatives" => 14, "min_votes" => 1000}
+
+      assert r.validation_universe == %{
+               "pool" => "full_decade",
+               "positives" => 5,
+               "evaluated" => 19
+             }
 
       assert r.backtest_strategy == "temporal-validation"
       assert is_map(r.metrics["baselines"])
     end
 
-    test "run_sweep applies the shared universe to every variant" do
+    test "run_sweep evaluates every variant on the full decade pool" do
       ranked =
         Trainer.run_sweep(@list, [[features: :all], [features: :raw]], min_val_positives: 1)
 
@@ -103,7 +108,7 @@ defmodule Cinegraph.Predictions.SweepTest do
     Repo.insert_all("external_metrics", [
       ext(movie.id, "imdb", "rating_average", imdb, now),
       ext(movie.id, "tmdb", "popularity_score", pop, now),
-      # ≥ the universe min-votes floor so non-members enter the candidate pool
+      # votes no longer gate the eval pool (#1055 = full decade); kept for realistic features
       ext(movie.id, "tmdb", "rating_votes", 1500.0, now)
     ])
 
