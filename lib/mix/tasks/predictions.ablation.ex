@@ -2,9 +2,9 @@ defmodule Mix.Tasks.Predictions.Ablation do
   @moduledoc """
   The objective-vs-canon ablation (#1051 / #1047's "single most valuable experiment").
 
-  For each list, fits the holdout-free sandbox (`Trainer.run_sweep/3`, shared validation universe)
-  on three feature buckets and reports validation PR-AUC + recall@K + lift over the popularity
-  baseline:
+  For each list, fits the holdout-free sandbox (`Trainer.run_sweep/3`, ranking members against the
+  full decade pool #1055) on three feature buckets and reports validation PR-AUC + recall@K + lift
+  over the popularity baseline:
 
     * **objective** — `:objective_only`: ratings, votes, box office, festival, metadata, the derived
       ROI/prestige/collab features. The honest "independent signal" set.
@@ -20,6 +20,13 @@ defmodule Mix.Tasks.Predictions.Ablation do
   ## Usage
       mix predictions.ablation
       mix predictions.ablation --source-key tspdt_1000
+      mix predictions.ablation --sample 25000      # fast-mode (approx; iterate across all lists quickly)
+
+  Options:
+    --source-key   one list (default: all active lists)
+    --seed         RNG seed (default 1337)
+    --sample       fast-mode non-member pool cap (0 = full pool, the honest default)
+    --alpha        L2 regularization strength applied to all three buckets
   """
   use Mix.Task
   import Ecto.Query
@@ -37,8 +44,13 @@ defmodule Mix.Tasks.Predictions.Ablation do
     # Many tiny fits in one process → route to BinaryBackend to avoid EXLA's :system_limit.
     Application.put_env(:nx, :default_backend, Nx.BinaryBackend)
 
-    {opts, _, _} = OptionParser.parse(args, strict: [source_key: :string, seed: :integer])
+    {opts, _, _} =
+      OptionParser.parse(args,
+        strict: [source_key: :string, seed: :integer, sample: :integer, alpha: :float]
+      )
+
     seed = Keyword.get(opts, :seed, 1337)
+    sweep_opts = Keyword.take(opts, [:sample, :alpha])
 
     lists =
       case Keyword.get(opts, :source_key) do
@@ -46,19 +58,27 @@ defmodule Mix.Tasks.Predictions.Ablation do
         sk -> [sk]
       end
 
-    Mix.shell().info("Objective-vs-canon ablation over #{length(lists)} lists (seed #{seed})\n")
+    sample_note = if opts[:sample], do: " · sample #{opts[:sample]} (fast-mode, approx)", else: ""
 
-    rows = Enum.map(lists, fn sk -> {sk, eval_list(sk, seed)} end)
+    Mix.shell().info(
+      "Objective-vs-canon ablation over #{length(lists)} lists (seed #{seed})#{sample_note}\n"
+    )
+
+    rows = Enum.map(lists, fn sk -> {sk, eval_list(sk, seed, sweep_opts)} end)
 
     print_table(rows)
     print_verdicts(rows)
   end
 
   # %{"objective"|"canon"|"full" => %{pr_auc, recall, pop}} (or %{} if unevaluable).
-  defp eval_list(source_key, seed) do
+  defp eval_list(source_key, seed, sweep_opts) do
     variants = Enum.map(@buckets, fn {sel, id} -> [id: id, features: sel] end)
 
-    Trainer.run_sweep(source_key, variants, seed: seed, max_concurrency: 3)
+    Trainer.run_sweep(
+      source_key,
+      variants,
+      Keyword.merge([seed: seed, max_concurrency: 3], sweep_opts)
+    )
     |> Map.new(fn r ->
       {r.variant[:id],
        %{

@@ -17,13 +17,19 @@ defmodule Mix.Tasks.Predictions.Experiment do
   Options:
     --list                source_key of the list (default 1001_movies)
     --granularity         data_point (default) or lens
-    --features            all (default, raw+derived) | raw | derived  (data_point feature set)
+    --features            all (default) | raw | derived | objective_only | canon_overlap
+    --alpha               L2 regularization strength for the logistic fit (data_point only)
+    --sample              fast-mode pool cap: rank members vs all members + N sampled non-members
+                          (0 = full pool, the honest default; use e.g. 25000 to iterate fast).
+                          NOTE: fewer competitors ⇒ absolute recall reads HIGHER than the full pool;
+                          use it for RELATIVE comparison of variants, not as the headline number.
     --sample-ratio        negative undersampling ratio (default 5)
     --seed                RNG seed for the undersample (default 1337 — deterministic comparison)
     --min-val-positives   pool validation decades until ≥ this many positives (default 30)
     --label               a human tag echoed back in the output (for your own bookkeeping)
     --sweep               run a grid of feature/ratio variants in parallel, ranked by PR-AUC
-    --concurrency         parallel workers for --sweep (default 4)
+    --alpha-sweep         comma-separated alphas (e.g. 0.1,1,10,100) at the current --features
+    --concurrency         parallel workers for --sweep/--alpha-sweep (default 4)
     --json                machine-readable output (redirect to a file to keep a trail)
   """
   use Mix.Task
@@ -42,11 +48,14 @@ defmodule Mix.Tasks.Predictions.Experiment do
           list: :string,
           granularity: :string,
           features: :string,
+          alpha: :float,
+          sample: :integer,
           sample_ratio: :integer,
           seed: :integer,
           min_val_positives: :integer,
           label: :string,
           sweep: :boolean,
+          alpha_sweep: :string,
           concurrency: :integer,
           json: :boolean
         ]
@@ -58,18 +67,29 @@ defmodule Mix.Tasks.Predictions.Experiment do
     run_opts =
       [granularity: granularity]
       |> maybe_put(:features, parse_features(opts[:features]))
+      |> maybe_put(:alpha, opts[:alpha])
+      |> maybe_put(:sample, opts[:sample])
       |> maybe_put(:sample_ratio, opts[:sample_ratio])
       |> maybe_put(:seed, opts[:seed])
       |> maybe_put(:min_val_positives, opts[:min_val_positives])
 
-    if opts[:sweep], do: sweep(list, run_opts, opts), else: single(list, run_opts, opts)
+    cond do
+      opts[:alpha_sweep] -> alpha_sweep(list, run_opts, opts)
+      opts[:sweep] -> sweep(list, run_opts, opts)
+      true -> single(list, run_opts, opts)
+    end
   end
 
   # ── single experiment ────────────────────────────────────────────────────────────
   defp single(list, run_opts, opts) do
     case Trainer.run_experiment(list, run_opts) do
       {:ok, result} ->
-        if opts[:json], do: print_json(result, opts[:label]), else: print(result, opts[:label])
+        if opts[:json] do
+          print_json(result, opts[:label])
+        else
+          print(result, opts[:label])
+          maybe_sample_caveat(opts[:sample])
+        end
 
       {:error, reason} ->
         Mix.raise("experiment failed for #{list}: #{inspect(reason)}")
@@ -107,6 +127,72 @@ defmodule Mix.Tasks.Predictions.Experiment do
     end
   end
 
+  # ── alpha (L2) sweep over the chosen feature set ──────────────────────────────────
+  # `--alpha-sweep 0.1,1,10,100` runs one variant per alpha at the current --features/--sample,
+  # ranked by PR-AUC. Lets you probe regularization on the honest metric without `mix run -e`.
+  defp alpha_sweep(list, run_opts, opts) do
+    alphas =
+      opts[:alpha_sweep]
+      |> String.split(",", trim: true)
+      |> Enum.map(&parse_alpha/1)
+
+    variants = Enum.map(alphas, fn a -> [alpha: a] end)
+    conc = opts[:concurrency] || 4
+    sweep_opts = run_opts |> Keyword.delete(:alpha) |> Keyword.put(:max_concurrency, conc)
+
+    t0 = System.monotonic_time(:millisecond)
+    ranked = Trainer.run_sweep(list, variants, sweep_opts)
+    secs = Float.round((System.monotonic_time(:millisecond) - t0) / 1000, 1)
+
+    if ranked == [], do: Mix.raise("alpha-sweep produced no results for #{list}")
+
+    if opts[:json] do
+      IO.puts(
+        Jason.encode!(%{list: list, alphas: alphas, seconds: secs, ranked: ranked}, pretty: true)
+      )
+    else
+      Mix.shell().info("""
+
+      ALPHA SWEEP — #{list} · features=#{run_opts[:features] || :all} · #{length(alphas)} alphas · #{secs}s
+      ranked by validation PR-AUC (holdout untouched)
+
+        #   ALPHA      PR-AUC   recall@K  n_pos
+      """)
+
+      ranked
+      |> Enum.with_index(1)
+      |> Enum.each(fn {r, i} ->
+        m = r.metrics
+        a = get_in(r, [:variant, :alpha])
+        win = if i == 1, do: " ◀ winner", else: ""
+
+        Mix.shell().info(
+          "  #{pad(i, 3)} #{pad(fmt(a), 10)} #{pad(fmt(m["pr_auc"]), 8)} #{pad(fmt(m["recall_at_k"]), 9)} #{m["n_positives"]}#{win}"
+        )
+      end)
+
+      Mix.shell().info("")
+    end
+  end
+
+  defp maybe_sample_caveat(nil), do: :ok
+
+  defp maybe_sample_caveat(sample) do
+    Mix.shell().info(
+      "  ⚠ sample=#{sample}: fewer competitors ⇒ recall is inflated vs the full pool — relative comparison only.\n"
+    )
+  end
+
+  defp parse_alpha(s) do
+    case Float.parse(s) do
+      {a, _} ->
+        a
+
+      :error ->
+        Mix.raise("invalid --alpha-sweep value #{inspect(s)} (expected comma-separated floats)")
+    end
+  end
+
   defp print_sweep(list, ranked, conc, secs) do
     Mix.shell().info("""
 
@@ -135,9 +221,14 @@ defmodule Mix.Tasks.Predictions.Experiment do
   defp parse_features("all"), do: :all
   defp parse_features("raw"), do: :raw
   defp parse_features("derived"), do: :derived
+  defp parse_features("objective_only"), do: :objective_only
+  defp parse_features("canon_overlap"), do: :canon_overlap
 
   defp parse_features(f),
-    do: Mix.raise("invalid --features #{inspect(f)} (expected all | raw | derived)")
+    do:
+      Mix.raise(
+        "invalid --features #{inspect(f)} (expected all | raw | derived | objective_only | canon_overlap)"
+      )
 
   defp parse_granularity(nil), do: :data_point
   defp parse_granularity("data_point"), do: :data_point
