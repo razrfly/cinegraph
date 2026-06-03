@@ -19,6 +19,7 @@ defmodule Cinegraph.Metrics.CatalogSeed do
   """
 
   alias Cinegraph.Repo
+  alias Cinegraph.Scoring.DerivedFeatures
 
   @catalog_defaults %{kind: "raw", derivation: nil, weight_within_lens: 1.0, is_available: true}
 
@@ -564,7 +565,9 @@ defmodule Cinegraph.Metrics.CatalogSeed do
         name: "Prior Collaboration Density",
         source_table: "derived",
         normalization_type: "logarithmic",
-        normalization_params: %{"threshold" => 50},
+        # Single source of truth in `DerivedFeatures` (which does the actual log-normalization);
+        # mirrored here so the catalog metadata can't drift from the computed cap (#1044).
+        normalization_params: %{"threshold" => DerivedFeatures.prior_collab_cap()},
         source_reliability: 0.7,
         kind: "derived",
         derivation: "prior_collab_density",

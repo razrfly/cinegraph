@@ -17,7 +17,9 @@ defmodule Cinegraph.Scoring.PriorCollabDensityTest do
   alias Cinegraph.Scoring.DerivedFeatures
 
   @sk "1001_movies"
-  @cap 50
+  # Pulled from the single source of truth so tuning the cap doesn't require editing this contract
+  # test (which pins the leakage/aggregation math, not the saturation constant).
+  @cap DerivedFeatures.prior_collab_cap()
 
   defp uniq, do: System.unique_integer([:positive])
 
