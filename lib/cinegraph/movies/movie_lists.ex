@@ -494,10 +494,16 @@ defmodule Cinegraph.Movies.MovieLists do
       %MovieList{} = list ->
         case sufficient_for_activation?(model_id) do
           :ok ->
+            # `trained_weights` is a derived read-cache of the ACTIVE model's weights.
+            # On deactivation (model_id == nil) clear it too — otherwise the list would
+            # have no active model yet still serve stale weights via get_trained_weights/1
+            # (and predictions.backtest / LensScoring). (#1054 review)
+            new_weights = if is_nil(model_id), do: nil, else: weights_map
+
             list
             |> Ecto.Changeset.change(
               active_prediction_model_id: model_id,
-              trained_weights: weights_map
+              trained_weights: new_weights
             )
             |> Repo.update()
 
