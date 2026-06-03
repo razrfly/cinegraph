@@ -668,19 +668,6 @@ defmodule Cinegraph.Admin.JobRegistry do
       doc_url: nil
     },
     %{
-      id: :comprehensive_predictions_calculator,
-      label: "Comprehensive predictions calculator",
-      worker: Workers.ComprehensivePredictionsCalculator,
-      queue: :metrics,
-      schedule: nil,
-      args: %{},
-      trigger_action: :enqueue_now,
-      mutating: true,
-      description: "Batch predictions across the full movie set",
-      destination: :metrics,
-      doc_url: nil
-    },
-    %{
       id: :movie_score_cache_worker,
       label: "Movie score cache",
       worker: Workers.MovieScoreCacheWorker,

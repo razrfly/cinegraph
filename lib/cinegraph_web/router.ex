@@ -296,9 +296,6 @@ defmodule CinegraphWeb.Router do
       live "/metrics", MetricsLive.Index, :index
       live "/metrics/profile/:name", MetricsLive.Index, :profile
 
-      # Movie Predictions for 1001 Movies list
-      live "/predictions", PredictionsLive.Index, :index
-
       # Festivals admin (#880 Phase 2) — primary editor for festival_organizations
       live "/festivals", Admin.FestivalsLive.Index, :index
 

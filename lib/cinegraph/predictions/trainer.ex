@@ -15,8 +15,7 @@ defmodule Cinegraph.Predictions.Trainer do
        The model "passes" only if it beats the popularity baseline AND clears the
        pre-registered `failure_threshold` — otherwise it's recorded as a failure, not hidden.
 
-  Low-level fitting (`fit_model`, `extract_weights`) is reused from `WeightOptimizer`; the
-  6-lens `WeightOptimizer.train/sweep` remain for back-compat.
+  Low-level fitting (`fit_raw`, `extract_weights`) is reused from `WeightOptimizer`.
   """
 
   import Ecto.Query
@@ -319,15 +318,27 @@ defmodule Cinegraph.Predictions.Trainer do
   end
 
   def evaluate_strategy(source_key, "temporal", opts) do
-    case run_experiment(source_key, Keyword.put(opts, :granularity, :data_point)) do
+    base_opts = Keyword.put(opts, :granularity, :data_point)
+
+    case run_experiment(source_key, base_opts) do
       {:ok, result} ->
-        report = %{
-          "recall_at_k" => result.metrics["recall_at_k"],
-          "precision_at_k" => result.metrics["precision_at_k"],
-          "n_positives" => result.metrics["n_positives"],
-          "n_evaluated" => result.metrics["n_evaluated"],
-          "baselines" => result.metrics["baselines"]
-        }
+        # Objective-only validation recall too, so the preview grade is objective-graded like the
+        # committed model (#1051). A failed objective run just omits the field (full-recall fallback).
+        objective =
+          case run_experiment(source_key, Keyword.put(base_opts, :features, :objective_only)) do
+            {:ok, obj} -> %{"objective_recall_at_k" => obj.metrics["recall_at_k"]}
+            _ -> %{}
+          end
+
+        report =
+          %{
+            "recall_at_k" => result.metrics["recall_at_k"],
+            "precision_at_k" => result.metrics["precision_at_k"],
+            "n_positives" => result.metrics["n_positives"],
+            "n_evaluated" => result.metrics["n_evaluated"],
+            "baselines" => result.metrics["baselines"]
+          }
+          |> Map.merge(objective)
 
         {:ok, %{report: report, calibration: %{"method" => result.calibration}}}
 
@@ -484,13 +495,42 @@ defmodule Cinegraph.Predictions.Trainer do
         {weights, feature_set, names} = fit_weights(granularity, source_key, labeled, ratio)
         spec = {granularity, stringify(weights), source_key}
 
+        # Objective-only recall on the SAME sacred holdout (no extra spend — same slice), so the
+        # grade can be gated on independent signal, not canon-overlap circularity (#1051 closure).
+        objective =
+          objective_metrics(granularity, source_key, labeled, ratio, fn obj_spec ->
+            Credibility.evaluate(obj_spec, source_key, holdout_decades)
+          end)
+
         report =
           Credibility.evaluate(spec, source_key, holdout_decades)
           |> Map.merge(%{"train_decades" => train_decades, "holdout_decades" => holdout_decades})
+          |> Map.merge(objective)
 
         {:ok, %{weights: weights, feature_set: feature_set, feature_names: names, report: report}}
     end
   end
+
+  # Fit an objective-only model (full surface minus the canon-overlap crutch) on the same training
+  # set and score it via `eval_fn` on the SAME held-out slice. `data_point` only — the lens path has
+  # no canon-overlap split, so it falls back to the full grade. Returns `%{}` when not applicable.
+  defp objective_metrics(:data_point, source_key, labeled, ratio, eval_fn) do
+    obj_codes = data_point_codes(source_key) -- canon_overlap_codes(source_key)
+
+    if obj_codes == [] do
+      %{}
+    else
+      {obj_weights, _, _} = fit_weights(:data_point, source_key, labeled, ratio, obj_codes)
+      rp = eval_fn.({:data_point, stringify(obj_weights), source_key})
+
+      %{
+        "objective_recall_at_k" => rp["recall_at_k"],
+        "objective_precision_at_k" => rp["precision_at_k"]
+      }
+    end
+  end
+
+  defp objective_metrics(_granularity, _source_key, _labeled, _ratio, _eval_fn), do: %{}
 
   # Sacred holdout = the latest decade; train on the rest.
   defp split_holdout(decades) when length(decades) >= 2,
@@ -563,6 +603,19 @@ defmodule Cinegraph.Predictions.Trainer do
         scored = Credibility.score_labeled({granularity, stringify(weights), source_key}, eval)
         rp = Credibility.recall_precision_at_k(scored)
 
+        # Objective-only recall on the SAME held-out members + pool (no extra spend), for the
+        # honesty-rule grade gate (#1051 closure). Eval model train set = without held-out members.
+        objective =
+          objective_metrics(
+            granularity,
+            source_key,
+            Enum.map(train_members, &{&1.id, 1}) ++ neg_labeled,
+            ratio,
+            fn obj_spec ->
+              Credibility.recall_precision_at_k(Credibility.score_labeled(obj_spec, eval))
+            end
+          )
+
         # Serving model — fit on ALL members + undersampled non-members.
         {fweights, feature_set, names} =
           fit_weights(
@@ -574,17 +627,19 @@ defmodule Cinegraph.Predictions.Trainer do
             opts
           )
 
-        report = %{
-          "recall_at_k" => rp["recall_at_k"],
-          "precision_at_k" => rp["precision_at_k"],
-          "n_positives" => rp["n_positives"],
-          "n_evaluated" => length(eval),
-          "seed" => seed,
-          "holdout_fraction" => frac,
-          "worst_miss" => Credibility.worst_miss(scored),
-          "baselines" => static_baselines(source_key, test_members, non_members),
-          "pairs" => Enum.map(scored, fn s -> {s.score, s.label} end)
-        }
+        report =
+          %{
+            "recall_at_k" => rp["recall_at_k"],
+            "precision_at_k" => rp["precision_at_k"],
+            "n_positives" => rp["n_positives"],
+            "n_evaluated" => length(eval),
+            "seed" => seed,
+            "holdout_fraction" => frac,
+            "worst_miss" => Credibility.worst_miss(scored),
+            "baselines" => static_baselines(source_key, test_members, non_members),
+            "pairs" => Enum.map(scored, fn s -> {s.score, s.label} end)
+          }
+          |> Map.merge(objective)
 
         {:ok,
          %{weights: fweights, feature_set: feature_set, feature_names: names, report: report}}

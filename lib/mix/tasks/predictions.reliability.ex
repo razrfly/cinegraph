@@ -69,8 +69,9 @@ defmodule Mix.Tasks.Predictions.Reliability do
 
     PREDICTION RELIABILITY — Wilson-95 lower bound, conservative bands
     (HIGH ≥ 50%  ·  MOD ≥ 30%  ·  LOW < 30%  ·  INSUF = too little evidence)
+    HEADLINE = objective-graded (independent signal); FULL = canon-inclusive recall the model serves.
 
-      GRADE   HEADLINE  CALIB     STRAT      SPENT  LIST                            TOP REASON
+      GRADE   HEADLINE  FULL    CALIB     STRAT      SPENT  LIST                            TOP REASON
     """)
 
     Enum.each(rows, fn row ->
@@ -81,12 +82,15 @@ defmodule Mix.Tasks.Predictions.Reliability do
   end
 
   defp format_row(%{reliability: nil, name: name} = row) do
-    "#{pad("—", 7)} #{pad("—", 9)} #{pad("—", 9)} #{pad(strat(row), 10)} #{pad(spent(row), 6)} #{pad(name, 31)} no active prediction model"
+    "#{pad("—", 7)} #{pad("—", 9)} #{pad("—", 7)} #{pad("—", 9)} #{pad(strat(row), 10)} #{pad(spent(row), 6)} #{pad(name, 31)} no active prediction model"
   end
 
   defp format_row(%{reliability: r, name: name} = row) do
-    "#{pad(grade_label(r.grade), 7)} #{pad(headline(r.headline_pct), 9)} #{pad(r.calibration || "—", 9)} #{pad(strat(row), 10)} #{pad(spent(row), 6)} #{pad(name, 31)} #{top_reason(r)}"
+    "#{pad(grade_label(r.grade), 7)} #{pad(headline(r.headline_pct), 9)} #{pad(full_pct(r), 7)} #{pad(r.calibration || "—", 9)} #{pad(strat(row), 10)} #{pad(spent(row), 6)} #{pad(name, 31)} #{top_reason(r)}"
   end
+
+  defp full_pct(%{full_recall: f}) when is_number(f), do: "#{round(f * 100)}%"
+  defp full_pct(_), do: "—"
 
   defp strat(%{strategy: nil}), do: "—"
   defp strat(%{strategy: s}), do: s
@@ -128,6 +132,9 @@ defmodule Mix.Tasks.Predictions.Reliability do
         grade: to_string(r.grade),
         band_grade: to_string(r.band_grade),
         headline_pct: r.headline_pct,
+        full_recall: r.full_recall,
+        objective_recall: r.objective_recall,
+        circularity: r.circularity,
         ci: [lo, hi],
         lift: r.lift,
         power: r.power,

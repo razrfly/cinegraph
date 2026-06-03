@@ -427,17 +427,12 @@ defmodule CinegraphWeb.AdminDashboardLive do
       },
       %{
         title: "Quality",
-        description: "Scoring and predictions.",
+        description: "Scoring and metrics.",
         cards: [
           %{
             title: "Metrics",
             path: "/admin/metrics",
             description: "Metric definitions, weight profiles, coverage statistics."
-          },
-          %{
-            title: "Predictions",
-            path: "/admin/predictions",
-            description: "1001-2020s movie prediction candidate list."
           }
         ]
       }

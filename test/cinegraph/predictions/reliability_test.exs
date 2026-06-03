@@ -66,6 +66,33 @@ defmodule Cinegraph.Predictions.ReliabilityTest do
     end
   end
 
+  describe "grades on objective signal (honesty rule #1051)" do
+    test "a circular model (high full recall, low objective) is graded on objective, not full" do
+      r = R.score(high_ir(%{"objective_recall_at_k" => 0.1}), platt(), high_ctx())
+      # full recall would band :high; graded on the 0.1 objective signal it drops.
+      assert r.grade == :low
+      assert r.full_recall == 0.8
+      assert r.objective_recall == 0.1
+      assert r.circularity == Float.round((0.8 - 0.1) / 0.8, 4)
+      assert r.headline_pct < 20.0
+      assert Enum.any?(r.reasons, &(&1 =~ "canon-overlap circularity"))
+    end
+
+    test "falls back to full recall when objective is absent (pre-#1051 models)" do
+      r = R.score(high_ir(), platt(), high_ctx())
+      assert r.grade == :high
+      assert r.objective_recall == nil
+      assert r.circularity == nil
+    end
+
+    test "objective == full → no circularity penalty, grade unchanged" do
+      r = R.score(high_ir(%{"objective_recall_at_k" => 0.8}), platt(), high_ctx())
+      assert r.grade == :high
+      assert r.circularity == nil
+      refute Enum.any?(r.reasons, &(&1 =~ "circularity"))
+    end
+  end
+
   describe "caps fire in isolation" do
     test "n_positives < 10 → :insufficient with em-dash headline" do
       r = R.score(high_ir(%{"n_positives" => 5}), platt(), high_ctx())

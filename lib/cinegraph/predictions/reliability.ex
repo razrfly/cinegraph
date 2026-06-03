@@ -81,7 +81,12 @@ defmodule Cinegraph.Predictions.Reliability do
   """
   def score(integrity_report, calibration, ctx) when is_map(integrity_report) do
     ir = integrity_report
-    recall = num(ir["recall_at_k"])
+    full_recall = num(ir["recall_at_k"])
+    objective = num(ir["objective_recall_at_k"])
+    # The honesty rule (#1051): a grade may only rise via independent (objective) signal, never
+    # canon-overlap circularity. When the objective measurement exists, grade on it; older models
+    # without it fall back to the full recall (preserves prior behavior).
+    recall = objective || full_recall
     n_pos = int(ir["n_positives"])
     pop = num(get_in(ir, ["baselines", "popularity"]))
 
@@ -98,6 +103,10 @@ defmodule Cinegraph.Predictions.Reliability do
         {false, _cap_to, _reason}, acc -> acc
       end)
 
+    circularity = circularity(full_recall, objective)
+    reasons = Enum.reverse(reasons)
+    reasons = if r = circularity_reason(circularity), do: [r | reasons], else: reasons
+
     %{
       grade: grade,
       # The grade the accuracy lower bound earns BEFORE caps. When it outranks `grade`, the model
@@ -107,6 +116,12 @@ defmodule Cinegraph.Predictions.Reliability do
       headline_pct: headline(grade, lower),
       ci: {round_pct(lower), round_pct(upper)},
       lift: lift,
+      # `headline_pct`/`lift` are the GRADED (objective when available) numbers. `full_recall` is
+      # the canon-inclusive recall the served model actually achieves; `circularity` is the fraction
+      # of that recall attributable to canon-overlap (full − objective) / full.
+      full_recall: full_recall,
+      objective_recall: objective,
+      circularity: circularity,
       power: %{n_positives: n_pos, n_evaluated: int(ir["n_evaluated"])},
       calibration: cal_method,
       freshness: %{
@@ -115,12 +130,28 @@ defmodule Cinegraph.Predictions.Reliability do
         warnings: Map.get(frontier, :warnings, [])
       },
       sufficient?: grade != :insufficient,
-      reasons: Enum.reverse(reasons)
+      reasons: reasons
     }
   end
 
   def score(_integrity_report, calibration, ctx),
     do: score(%{}, calibration, ctx)
+
+  # Fraction of full recall that comes from canon-overlap (vs independent signal). nil when there's
+  # no objective measurement or no full recall to attribute.
+  defp circularity(full, objective)
+       when is_number(full) and is_number(objective) and full > 0.0 and full > objective,
+       do: Float.round((full - objective) / full, 4)
+
+  defp circularity(_full, _objective), do: nil
+
+  defp circularity_reason(nil), do: nil
+
+  defp circularity_reason(c) when c >= 0.25,
+    do:
+      "graded on objective signal — #{round(c * 100)}% of full recall is canon-overlap circularity"
+
+  defp circularity_reason(_c), do: nil
 
   # ── caps ───────────────────────────────────────────────────────────────────────
   # Each tuple: {fires?, grade_ceiling_if_it_fires, reason}. The final grade is the lowest
