@@ -4,7 +4,9 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
   # connection is needed — no fixtures.
   use Cinegraph.DataCase, async: true
 
+  alias Cinegraph.Metrics.CatalogSeed
   alias Cinegraph.Movies.Movie
+  alias Cinegraph.Repo
   alias Cinegraph.Scoring.{Bus, DataPointFeatures, DerivedFeatures}
 
   @sk "1001_movies"
@@ -20,9 +22,10 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
   end
 
   describe "supported_codes/0 — the routing guard" do
-    test "ships all 5 derived features, including the matview-backed prior_collab_density (#1044)" do
+    test "ships the 5 canon-taste features + the 5 missingness indicators (#1044, #1051 A4)" do
       assert Enum.sort(DerivedFeatures.supported_codes()) ==
                ~w(auteur_track_record box_office_roi canonical_contribution festival_prestige
+                  has_budget has_imdb_rating has_metacritic has_revenue has_rotten_tomatoes
                   prior_collab_density)
 
       assert "prior_collab_density" in DerivedFeatures.supported_codes()
@@ -34,7 +37,7 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
       m = movie(1, %{"a" => 1, "b" => 1}, 1_000_000, 10_000_000)
       vals = DerivedFeatures.load([m], DerivedFeatures.supported_codes(), @sk) |> Map.fetch!(1)
 
-      assert map_size(vals) == 5
+      assert map_size(vals) == length(DerivedFeatures.supported_codes())
       for {_code, v} <- vals, do: assert(v >= 0.0 and v <= 1.0)
     end
 
@@ -80,6 +83,54 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
       m = movie(1, %{"a" => 1})
       vals = DerivedFeatures.load([m], ["canonical_contribution", "prior_collab_density"], @sk)[1]
       assert Enum.sort(Map.keys(vals)) == ["canonical_contribution", "prior_collab_density"]
+    end
+  end
+
+  describe "missingness indicators (#1051 A4)" do
+    test "routed + emit 0.0 for an in-memory movie with no view presence" do
+      m = movie(1, %{"a" => 1})
+      vals = DerivedFeatures.load([m], ~w(has_imdb_rating has_metacritic), @sk)[1]
+      assert vals == %{"has_imdb_rating" => 0.0, "has_metacritic" => 0.0}
+    end
+
+    test "has_X = 1.0 when the underlying code is present in the view, 0.0 when absent" do
+      CatalogSeed.seed!()
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      m =
+        %Movie{}
+        |> Movie.changeset(%{
+          tmdb_id: System.unique_integer([:positive]),
+          title: "Has IMDb",
+          imdb_id: "tt#{System.unique_integer([:positive])}",
+          canonical_sources: %{}
+        })
+        |> Repo.insert!()
+
+      # imdb/rating_average → metric_values_view emits `imdb_rating` (catalog-mapped) for this movie.
+      Repo.insert_all("external_metrics", [
+        %{
+          movie_id: m.id,
+          source: "imdb",
+          metric_type: "rating_average",
+          value: 7.5,
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
+
+      loaded = %Movie{
+        id: m.id,
+        title: "Has IMDb",
+        release_date: ~D[2015-01-01],
+        canonical_sources: %{}
+      }
+
+      vals = DerivedFeatures.load([loaded], ~w(has_imdb_rating has_metacritic), @sk)[m.id]
+
+      assert vals["has_imdb_rating"] == 1.0
+      assert vals["has_metacritic"] == 0.0
     end
   end
 

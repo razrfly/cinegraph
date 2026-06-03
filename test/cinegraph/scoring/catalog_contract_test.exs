@@ -91,17 +91,31 @@ defmodule Cinegraph.Scoring.CatalogContractTest do
       assert Enum.all?(ml_only, &(&1.kind in ["raw", "derived"]))
     end
 
-    test "available derived codes exactly match DerivedFeatures.supported_codes/0 (#1044)" do
-      # The catalog's is_available flag is documentary for derived codes (routing gates on
-      # supported_codes/0), but the two must agree: the catalog must not hide a derived feature the
-      # data-point surface emits, nor advertise one it doesn't. prior_collab_density closed the gap.
+    test "catalog ↔ DerivedFeatures.supported_codes/0 contract (#1044, #1051 A4)" do
+      # Every code the data-point surface emits must be CATALOGUED (documented), regardless of
+      # availability; and the AVAILABLE derived codes must be a subset of what the surface can emit
+      # (no advertised-but-unemittable code). The gap between them is the intentionally-gated set
+      # (e.g. the missingness indicators, is_available:false until the keep-criterion admits them).
+      all_derived =
+        Metrics.list_metric_definitions(kind: "derived") |> Enum.map(& &1.code) |> MapSet.new()
+
       available_derived =
         Metrics.list_metric_definitions(only_available: true, kind: "derived")
         |> Enum.map(& &1.code)
         |> MapSet.new()
 
-      assert available_derived == MapSet.new(DerivedFeatures.supported_codes())
+      supported = MapSet.new(DerivedFeatures.supported_codes())
+
+      assert MapSet.subset?(supported, all_derived),
+             "surface emits codes the catalog doesn't document: #{inspect(MapSet.difference(supported, all_derived))}"
+
+      assert MapSet.subset?(available_derived, supported),
+             "catalog advertises available derived codes the surface can't emit: #{inspect(MapSet.difference(available_derived, supported))}"
+
       assert "prior_collab_density" in available_derived
+      # Missingness indicators are catalogued but gated off until vetted (#1051 A4).
+      assert "has_metacritic" in all_derived
+      refute "has_metacritic" in available_derived
     end
   end
 

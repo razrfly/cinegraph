@@ -40,7 +40,6 @@ defmodule Cinegraph.Movies.MovieList do
     # source of truth; `trained_weights` is a derived read-cache of its weights (kept for
     # back-compat with LensScoring.get_trained_weights / predictions.backtest).
     belongs_to :active_prediction_model, Cinegraph.Predictions.Model
-    field :backtest_strategy, :string
     field :trained_weights, :map, default: nil
 
     # Display fields (for public-facing pages)
@@ -73,7 +72,6 @@ defmodule Cinegraph.Movies.MovieList do
       :metadata,
       :trained_weights,
       :active_prediction_model_id,
-      :backtest_strategy,
       :slug,
       :short_name,
       :icon,

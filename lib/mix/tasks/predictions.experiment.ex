@@ -34,7 +34,7 @@ defmodule Mix.Tasks.Predictions.Experiment do
 
   @impl Mix.Task
   def run(args) do
-    Mix.Task.run("app.start")
+    Cinegraph.Predictions.TaskSupport.start_lean()
 
     {opts, _, _} =
       OptionParser.parse(args,

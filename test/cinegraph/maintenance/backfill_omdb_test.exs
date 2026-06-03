@@ -60,6 +60,26 @@ defmodule Cinegraph.Maintenance.BackfillOmdbTest do
 
       assert {:ok, %{found: 1}} = BackfillOmdb.run(dry_run: true)
     end
+
+    # #1051 Stage A2 — scope the backlog to a specific id set (the candidate universe).
+    test ":movie_ids restricts the backlog to the given set" do
+      a = insert_movie!(omdb: false)
+      b = insert_movie!(omdb: false)
+      _c = insert_movie!(omdb: false)
+
+      assert {:ok, %{found: 2}} = BackfillOmdb.run(movie_ids: [a.id, b.id], dry_run: true)
+      assert {:ok, %{found: 3}} = BackfillOmdb.run(dry_run: true)
+    end
+  end
+
+  describe "eligible_ids/1 (#1051 Stage A2)" do
+    test "returns only in-scope, OMDb-missing, imdb_id-bearing ids" do
+      a = insert_movie!(omdb: false)
+      _b = insert_movie!(omdb: true)
+      _c = insert_movie!(omdb: false)
+
+      assert BackfillOmdb.eligible_ids(movie_ids: [a.id]) == [a.id]
+    end
   end
 
   # Generate a valid IMDb ID (tt + 7+ digits) matching the format checked by

@@ -33,7 +33,9 @@ defmodule Cinegraph.Predictions.TrainerTest do
 
   defp plant_population do
     # Two decades so split_holdout works: 1990s = train, 2000s = sacred holdout.
-    for {decade, n_members, n_others} <- [{1990, 6, 16}, {2000, 5, 14}] do
+    # The 2000s holdout has ≥10 members so the trained model can clear the reliability
+    # activation guard (#1051 Stage 0) and exercise the full round-trip-to-active path.
+    for {decade, n_members, n_others} <- [{1990, 6, 16}, {2000, 12, 30}] do
       for i <- 1..n_members, do: plant(decade, i, member: true)
       for i <- 1..n_others, do: plant(decade, 100 + i, member: false)
     end
@@ -54,9 +56,11 @@ defmodule Cinegraph.Predictions.TrainerTest do
       |> Repo.insert!()
 
     now = DateTime.utc_now() |> DateTime.truncate(:second)
-    # Members rate higher so a signal exists; everyone has popularity (baseline).
+    # Members rate higher on imdb (the real signal) but are LESS popular than non-members, so
+    # the model must beat the popularity baseline on genuine signal (popular ≠ canon). This lets
+    # a good model clear the reliability lift gate instead of merely tying popularity.
     imdb = if member?, do: 8.5, else: 5.5
-    pop = if member?, do: 80.0, else: 20.0
+    pop = if member?, do: 30.0, else: 50.0
 
     Repo.insert_all("external_metrics", [
       ext(movie.id, "imdb", "rating_average", imdb, now),
@@ -190,6 +194,35 @@ defmodule Cinegraph.Predictions.TrainerTest do
              "expected #{inspect(bad)} to be rejected"
 
       assert Map.has_key?(errors_on(cs), :failure_threshold)
+    end
+  end
+
+  describe "feature surface (#1051 A4)" do
+    test "data_point_codes excludes is_available:false derived codes (missingness indicators)" do
+      codes = Trainer.data_point_codes(@list)
+      indicators = ~w(has_imdb_rating has_metacritic has_rotten_tomatoes has_budget has_revenue)
+
+      # The indicators are catalogued is_available:false until the keep-criterion admits them.
+      refute Enum.any?(indicators, &(&1 in codes))
+      # …while the available canon-taste derived features are present.
+      assert "canonical_contribution" in codes
+    end
+
+    test "objective_only / canon_overlap partition the surface exactly" do
+      all = MapSet.new(Trainer.data_point_codes(@list))
+      canon = Trainer.canon_overlap_codes(@list)
+      canon_in = Enum.filter(all, &(&1 in canon))
+      objective = MapSet.new(MapSet.to_list(all) -- canon_in)
+
+      # canon-overlap ∪ objective == all, and the two are disjoint.
+      assert MapSet.union(MapSet.new(canon_in), objective) == all
+      assert MapSet.disjoint?(MapSet.new(canon_in), objective)
+      # objective carries no canon-overlap code; the derived canon codes are in canon-overlap.
+      refute Enum.any?(objective, &(&1 in canon))
+      assert "canonical_contribution" in canon_in
+      assert "auteur_track_record" in canon_in
+      # the target's own code is never on the surface (leakage).
+      refute @list in MapSet.to_list(all)
     end
   end
 end

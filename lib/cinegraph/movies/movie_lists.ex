@@ -492,12 +492,38 @@ defmodule Cinegraph.Movies.MovieLists do
         {:error, {:not_found, source_key}}
 
       %MovieList{} = list ->
-        list
-        |> Ecto.Changeset.change(
-          active_prediction_model_id: model_id,
-          trained_weights: weights_map
-        )
-        |> Repo.update()
+        case sufficient_for_activation?(model_id) do
+          :ok ->
+            list
+            |> Ecto.Changeset.change(
+              active_prediction_model_id: model_id,
+              trained_weights: weights_map
+            )
+            |> Repo.update()
+
+          {:error, _reason} = err ->
+            err
+        end
+    end
+  end
+
+  # A model graded `:insufficient` by the reliability engine must never become a list's
+  # active prediction pointer (#1051 Stage 0) — its out-of-sample evidence is too weak to
+  # trust, and serving its predictions would be self-deception. `nil` model_id (explicit
+  # deactivation) is always allowed.
+  defp sufficient_for_activation?(nil), do: :ok
+
+  defp sufficient_for_activation?(model_id) do
+    case Repo.get(Cinegraph.Predictions.Model, model_id) do
+      nil ->
+        {:error, {:model_not_found, model_id}}
+
+      model ->
+        if Cinegraph.Predictions.Reliability.score(model).grade == :insufficient do
+          {:error, {:insufficient_reliability, model_id}}
+        else
+          :ok
+        end
     end
   end
 end

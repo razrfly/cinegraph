@@ -21,6 +21,8 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
   ## Options
     * `:limit` (positive integer) — cap the number of jobs enqueued.
     * `:dry_run` (boolean) — count only; do not enqueue.
+    * `:movie_ids` (list of ids) — restrict the backlog to this set (e.g. the prediction
+      candidate universe, #1051 Stage A2). Canonical-list members still sort first.
 
   ## Returns
   `{:ok, %{found: integer, enqueued: integer, failed: integer, dry_run: boolean}}`
@@ -41,14 +43,29 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
              dry_run: boolean()
            }}
   def run(opts \\ []) when is_list(opts) do
-    # Order: canonical-list movies first, then by id desc. (Movies have no
-    # `popularity` column; popularity lives in the `tmdb_data` JSONB blob and
-    # isn't worth a JSONB cast for ordering when canonical-membership already
-    # encodes priority.)
-    #
-    # Only imdb_id-bearing movies are selected. OMDb requires an IMDb ID; movies
-    # without one return :invalid_imdb_id immediately and never produce an
-    # external_metrics row, so they would re-enter this backlog on every sweep.
+    ids = eligible_ids(opts)
+    found = length(ids)
+    dry_run? = Keyword.get(opts, :dry_run, false)
+
+    if dry_run? do
+      Logger.info("BackfillOmdb: dry-run found #{found} movies to enrich")
+      {:ok, %{found: found, enqueued: 0, failed: 0, dry_run: true}}
+    else
+      {enqueued, failed} = enqueue_each(ids)
+      Logger.info("BackfillOmdb: enqueued #{enqueued} jobs on :omdb (#{failed} failed)")
+      {:ok, %{found: found, enqueued: enqueued, failed: failed, dry_run: false}}
+    end
+  end
+
+  @doc """
+  The movie ids this backfill targets, in priority order (canonical-list members first,
+  then by id desc). Accepts the same `:movie_ids` and `:limit` options as `run/1`. Exposed so
+  a synchronous runner (e.g. the #1051 Stage A2 candidate-universe densification) can process
+  exactly the same set the sweeper would enqueue.
+  """
+  def eligible_ids(opts \\ []) do
+    # Only imdb_id-bearing movies missing an OMDb row are eligible — OMDb requires an IMDb ID,
+    # and movies without one would re-enter this backlog on every sweep.
     base =
       from m in "movies",
         where:
@@ -63,31 +80,27 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
         ],
         select: m.id
 
+    # Optional id-set scoping (#1051 Stage A2) — restrict to e.g. the candidate universe.
+    scoped =
+      case Keyword.get(opts, :movie_ids) do
+        nil -> base
+        ids when is_list(ids) -> from(q in base, where: q.id in ^ids)
+      end
+
     capped =
       case Keyword.get(opts, :limit) do
         nil ->
-          base
+          scoped
 
         n when is_integer(n) and n > 0 ->
-          from(q in base, limit: ^n)
+          from(q in scoped, limit: ^n)
 
         other ->
           raise ArgumentError,
                 ":limit must be a positive integer or nil, got: #{inspect(other)}"
       end
 
-    ids = Repo.replica().all(capped)
-    found = length(ids)
-    dry_run? = Keyword.get(opts, :dry_run, false)
-
-    if dry_run? do
-      Logger.info("BackfillOmdb: dry-run found #{found} movies to enrich")
-      {:ok, %{found: found, enqueued: 0, failed: 0, dry_run: true}}
-    else
-      {enqueued, failed} = enqueue_each(ids)
-      Logger.info("BackfillOmdb: enqueued #{enqueued} jobs on :omdb (#{failed} failed)")
-      {:ok, %{found: found, enqueued: enqueued, failed: failed, dry_run: false}}
-    end
+    Repo.replica().all(capped)
   end
 
   # Per-job inserts so the worker's :unique config is honoured —

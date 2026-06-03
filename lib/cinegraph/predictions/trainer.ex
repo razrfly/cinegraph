@@ -333,7 +333,31 @@ defmodule Cinegraph.Predictions.Trainer do
   defp resolve_codes(source_key, :derived),
     do: Enum.filter(data_point_codes(source_key), &(&1 in DerivedFeatures.supported_codes()))
 
+  # The two ablation buckets (#1051 A4/C). `objective_only` = the surface MINUS the canon-overlap
+  # crutch (other lists' membership + canonical_contribution + auteur_track_record + list_appearances);
+  # it's the honest "independent signal" set. `canon_overlap` is that crutch alone.
+  defp resolve_codes(source_key, :canon_overlap),
+    do: Enum.filter(data_point_codes(source_key), &(&1 in canon_overlap_codes(source_key)))
+
+  defp resolve_codes(source_key, :objective_only),
+    do: data_point_codes(source_key) -- canon_overlap_codes(source_key)
+
   defp resolve_codes(_source_key, codes) when is_list(codes), do: codes
+
+  @canon_derived_codes ~w(canonical_contribution auteur_track_record list_appearances)
+
+  @doc """
+  The canon-overlap codes for a target (#1051): every OTHER canonical list's membership code
+  (`source_key` columns in `movie_lists`, the target excluded) plus the derived canon features
+  (`canonical_contribution`, `auteur_track_record`, `list_appearances`). These encode "already
+  canonized elsewhere" — real but circular signal; the ablation measures the surface without them.
+  """
+  def canon_overlap_codes(source_key) do
+    list_codes =
+      Repo.all(from l in "movie_lists", where: not is_nil(l.source_key), select: l.source_key)
+
+    ((list_codes -- [source_key]) ++ @canon_derived_codes) |> Enum.uniq()
+  end
 
   # Three-way temporal split (#1040): sacred holdout = latest decade (NEVER returned for use here);
   # validation = decades just before it, pooled until ≥ min positives; train = the rest. Needs ≥3
@@ -739,7 +763,15 @@ defmodule Cinegraph.Predictions.Trainer do
       |> Enum.reject(&(&1.normalization_type == "custom"))
       |> Enum.map(& &1.code)
 
-    (raw ++ DerivedFeatures.supported_codes())
+    # Derived codes are gated by catalog availability too (#1051 A4): a derived feature catalogued
+    # `is_available: false` (e.g. a not-yet-vetted missingness indicator) must not enter the default
+    # feature set. Intersect available-derived with what DerivedFeatures can actually emit.
+    available_derived =
+      Metrics.list_metric_definitions(only_available: true, kind: "derived")
+      |> Enum.map(& &1.code)
+      |> Enum.filter(&(&1 in DerivedFeatures.supported_codes()))
+
+    (raw ++ available_derived)
     |> Enum.reject(&(&1 == source_key))
     |> Enum.uniq()
     |> Enum.sort()
@@ -820,8 +852,21 @@ defmodule Cinegraph.Predictions.Trainer do
         end
 
       case MovieLists.set_active_prediction_model(source_key, model.id, string_weights) do
-        {:ok, _list} -> model
-        {:error, reason} -> Repo.rollback(reason)
+        {:ok, _list} ->
+          model
+
+        {:error, {:insufficient_reliability, _}} ->
+          # Honest-failure path (#1051 Stage 0): the model is still SAVED as a record of
+          # the attempt, but it must not become the serving pointer. Don't roll back —
+          # just leave the list's active model unchanged and warn.
+          Logger.warning(
+            "Trainer: #{source_key} model #{model.id} graded :insufficient — saved but NOT activated"
+          )
+
+          model
+
+        {:error, reason} ->
+          Repo.rollback(reason)
       end
     end)
   end
