@@ -272,7 +272,7 @@ defmodule CinegraphWeb.DirectorLive.Show do
     FROM movie_credits c1
     JOIN movie_credits c2 ON c1.movie_id = c2.movie_id AND c1.person_id != c2.person_id
     JOIN people p ON c2.person_id = p.id
-    JOIN movies m ON c1.movie_id = m.id
+    JOIN movies_with_metrics m ON c1.movie_id = m.id
     WHERE c1.person_id = $1
       AND c1.job = 'Director'
       AND c2.department IN ('Writing', 'Camera', 'Editing', 'Sound', 'Production')
