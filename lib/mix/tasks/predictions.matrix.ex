@@ -126,10 +126,15 @@ defmodule Mix.Tasks.Predictions.Matrix do
       ProgressLine.write(progress_snapshot(snap, total, conc, avg_ms, started))
     end
 
-    rows = Trainer.run_matrix(Keyword.put(run_opts, :on_progress, on_progress))
-    ProgressLine.clear()
-    Agent.stop(acc)
-    rows
+    # try/after so a raised run still erases the half-drawn status line and stops the accumulator.
+    try do
+      Trainer.run_matrix(Keyword.put(run_opts, :on_progress, on_progress))
+    after
+      ProgressLine.clear()
+      # Guard against :noproc (CodeRabbit #1072): if the agent already died, an unguarded stop in
+      # `after` would raise and MASK the original run failure.
+      if Process.alive?(acc), do: Agent.stop(acc)
+    end
   end
 
   defp progress_snapshot(

@@ -23,22 +23,24 @@ defmodule Cinegraph.Predictions.RunReporter do
   (e.g. a duplicate run_id) is logged and the run still proceeds; observability never blocks a run.
   """
   def start(run_id, kind, total, params) do
-    %Run{}
-    |> Run.changeset(%{
-      run_id: run_id,
-      kind: to_string(kind),
-      status: "running",
-      total_cells: total,
-      params: stringify(params),
-      node: to_string(node()),
-      code_version: code_version(),
-      started_at: utc_now()
-    })
-    |> Repo.insert()
-    |> case do
-      {:ok, _} -> :ok
-      {:error, cs} -> warn("start", run_id, cs.errors)
-    end
+    safe("start", run_id, fn ->
+      %Run{}
+      |> Run.changeset(%{
+        run_id: run_id,
+        kind: to_string(kind),
+        status: "running",
+        total_cells: total,
+        params: stringify(params),
+        node: to_string(node()),
+        code_version: code_version(),
+        started_at: utc_now()
+      })
+      |> Repo.insert()
+      |> case do
+        {:ok, _} -> :ok
+        {:error, cs} -> warn("start", run_id, cs.errors)
+      end
+    end)
   end
 
   @doc """
@@ -52,8 +54,10 @@ defmodule Cinegraph.Predictions.RunReporter do
     inc = if status == :ok, do: [completed_cells: 1], else: [failed_cells: 1]
     current = event[:current_cell]
 
-    from(r in Run, where: r.run_id == ^run_id)
-    |> Repo.update_all(inc: inc, set: [current_cell: current, updated_at: naive_now()])
+    safe("record", run_id, fn ->
+      from(r in Run, where: r.run_id == ^run_id)
+      |> Repo.update_all(inc: inc, set: [current_cell: current, updated_at: naive_now()])
+    end)
 
     broadcast(run_id)
     :ok
@@ -65,21 +69,33 @@ defmodule Cinegraph.Predictions.RunReporter do
   def finish(nil, _status, _error), do: :ok
 
   def finish(run_id, status, error) do
-    from(r in Run, where: r.run_id == ^run_id)
-    |> Repo.update_all(
-      set: [
-        status: to_string(status),
-        error: error && inspect_short(error),
-        finished_at: naive_now(),
-        updated_at: naive_now()
-      ]
-    )
+    safe("finish", run_id, fn ->
+      from(r in Run, where: r.run_id == ^run_id)
+      |> Repo.update_all(
+        set: [
+          status: to_string(status),
+          error: error && inspect_short(error),
+          finished_at: naive_now(),
+          updated_at: naive_now()
+        ]
+      )
+    end)
 
     broadcast(run_id)
     :ok
   end
 
   # ── internals ───────────────────────────────────────────────────────────────────
+
+  # Observability must never block a run: a DB/adapter/connection exception during a counter write is
+  # logged and swallowed, not propagated to the caller (#1065 review).
+  defp safe(op, run_id, fun) do
+    fun.()
+  rescue
+    e -> warn(op, run_id, e)
+  catch
+    kind, reason -> warn(op, run_id, {kind, reason})
+  end
 
   defp broadcast(run_id) do
     Phoenix.PubSub.broadcast(Cinegraph.PubSub, @topic, {:run_progress, run_id})
