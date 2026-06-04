@@ -552,7 +552,12 @@ defmodule Cinegraph.Predictions.Trainer do
   """
   def run_cells(source_key, cells, opts \\ []) do
     max_conc = Keyword.get(opts, :max_concurrency, 4)
-    shared = Keyword.drop(opts, [:max_concurrency])
+
+    # `:cell_timeout` (#1061): a full-pool UNSAMPLED static cell can score 100k–265k+ movies ×3 fits,
+    # which exceeds the old hardcoded 15-min limit on the biggest lists and would be silently
+    # dropped. Default generously (45 min); the matrix can raise it for an unsampled run.
+    cell_timeout = Keyword.get(opts, :cell_timeout, :timer.minutes(45))
+    shared = Keyword.drop(opts, [:max_concurrency, :cell_timeout])
 
     cells
     |> Task.async_stream(
@@ -566,7 +571,7 @@ defmodule Cinegraph.Predictions.Trainer do
         {cell, evaluate_cell(cell_opts)}
       end,
       max_concurrency: max_conc,
-      timeout: :timer.minutes(15),
+      timeout: cell_timeout,
       ordered: false
     )
     |> Enum.flat_map(fn
@@ -604,7 +609,7 @@ defmodule Cinegraph.Predictions.Trainer do
     strategies = Keyword.get(opts, :strategies) || ~w(temporal static)
     buckets = Keyword.get(opts, :buckets) || [:objective_only, :canon_overlap, :all]
     variants = Keyword.get(opts, :weight_variants) || [[]]
-    shared = Keyword.take(opts, [:sample, :alpha, :seed, :max_concurrency])
+    shared = Keyword.take(opts, [:sample, :alpha, :seed, :max_concurrency, :cell_timeout])
 
     {pooled, per_cell} = Enum.split_with(classes, &(ModelRegistry.fit_scope(&1) == :pooled))
 
@@ -1217,12 +1222,17 @@ defmodule Cinegraph.Predictions.Trainer do
       case ModelRegistry.fetch(class) do
         {:ok, mod} ->
           case mod.fit(x, y, codes, opts) do
-            {:ok, w} -> w
-            {:error, reason} -> raise "model_class #{class} fit failed: #{inspect(reason)}"
+            {:ok, w} ->
+              w
+
+            {:error, reason} ->
+              raise "Trainer.fit_weights: model_class #{inspect(class)} fit failed with " <>
+                      "#{inspect(reason)} (#{length(x)} rows, #{length(codes)} features)"
           end
 
-        {:error, reason} ->
-          raise "unknown model_class #{inspect(class)}: #{inspect(reason)}"
+        {:error, _reason} ->
+          raise "Trainer.fit_weights: unknown model_class #{inspect(class)}. " <>
+                  "Registered: #{inspect(ModelRegistry.keys())} (check :cinegraph :model_classes)"
       end
 
     {weights, %{"granularity" => "data_point", "features" => codes}, codes}

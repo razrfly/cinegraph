@@ -3,10 +3,11 @@ defmodule Mix.Tasks.Predictions.Promote do
   Ledger-driven promotion (#1061 Session 2) — pick the best recorded model per list and activate it.
 
   For each list, reads the experiment ledger (`prediction_experiments`) and reports the best `ok`
-  run by **objective full-pool recall** (`COALESCE(objective_recall_at_k, recall_at_k)`). Activation
-  is restricted to **serving-cleared classes** — only `:active`-lifecycle classes, and in Session 2
-  only `linear_logreg` is ever pointed at a list. A non-linear winner (e.g. `pooled_linear`) is
-  reported for transparency but NOT activated.
+  run ranked **grade first, then objective full-pool recall** (`COALESCE(objective_recall_at_k,
+  recall_at_k)`) — the "top-grading entry," so a moderate/high run isn't beaten by a low run with a
+  higher raw recall. Activation is restricted to **serving-cleared classes** — only `:active`-
+  lifecycle classes, and in Session 2 only `linear_logreg` is ever pointed at a list. A non-linear
+  winner (e.g. `pooled_linear`) is reported for transparency but NOT activated.
 
   Activation goes through the existing integrity protocol: a fresh pre-registration (honest
   `failure_threshold` = the popularity baseline) + `Trainer.train(save: true)` on the winning
@@ -29,6 +30,8 @@ defmodule Mix.Tasks.Predictions.Promote do
   def run(args) do
     Cinegraph.Predictions.TaskSupport.start_lean()
     Application.put_env(:nx, :default_backend, Nx.BinaryBackend)
+    # Exact full-pool training per list is query-heavy; quiet dev's :debug logging for the batch.
+    Logger.configure(level: :warning)
 
     {opts, _, _} =
       OptionParser.parse(args, strict: [only: :string, commit: :boolean, json: :boolean])

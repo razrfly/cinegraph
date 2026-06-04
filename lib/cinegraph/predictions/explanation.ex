@@ -79,18 +79,18 @@ defmodule Cinegraph.Predictions.Explanation do
   end
 
   # ── rivals: top OTHER recorded runs for the list ─────────────────────────────────
+  # Exclude the active combo in the WHERE (CodeRabbit #1064): rejecting after a `limit: 6` could
+  # drop genuine rivals ranked below position 6 when the active combo appears in the top 6.
   defp rivals(source_key, model) do
     from(e in ExperimentLedger,
-      where: e.status == "ok" and e.source_key == ^source_key,
+      where:
+        e.status == "ok" and e.source_key == ^source_key and
+          not (e.model_class == ^model.model_class and
+                 e.backtest_strategy == ^model.backtest_strategy),
       order_by: [desc_nulls_last: fragment(@rank_sql, e.metrics, e.metrics)],
-      limit: 6
+      limit: 5
     )
     |> Repo.all()
-    # exclude the active model's own class/strategy combo so rivals are genuine alternatives.
-    |> Enum.reject(
-      &(&1.model_class == model.model_class and &1.backtest_strategy == model.backtest_strategy)
-    )
-    |> Enum.take(5)
     |> Enum.map(fn r ->
       %{
         model_class: r.model_class,
