@@ -10,6 +10,8 @@ defmodule Cinegraph.Predictions.ModelRegistry do
   model class's `key/0` rather than a hardcoded id.
   """
 
+  require Logger
+
   alias Cinegraph.Predictions.LinearLogReg
 
   @doc "All registered model-class modules (config-backed; defaults to `[LinearLogReg]`)."
@@ -44,7 +46,12 @@ defmodule Cinegraph.Predictions.ModelRegistry do
       {:ok, mod} ->
         if function_exported?(mod, :fit_scope, 0), do: mod.fit_scope(), else: :per_cell
 
-      _ ->
+      {:error, _reason} ->
+        # Surface typos/missing keys instead of silently defaulting (CodeRabbit #1064).
+        Logger.warning(
+          "ModelRegistry.fit_scope: unknown key #{inspect(key)}, defaulting :per_cell"
+        )
+
         :per_cell
     end
   end

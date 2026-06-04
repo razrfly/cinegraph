@@ -34,6 +34,9 @@ defmodule Mix.Tasks.Predictions.Matrix do
     Cinegraph.Predictions.TaskSupport.start_lean()
     # Many tiny fits in one process → BinaryBackend avoids EXLA's :system_limit.
     Application.put_env(:nx, :default_backend, Nx.BinaryBackend)
+    # Full-pool scoring issues thousands of queries per cell; dev's :debug query logging would
+    # dominate wall-clock and bloat the log. A matrix run is a batch job — quiet it to :warning.
+    Logger.configure(level: :warning)
 
     {opts, _, _} =
       OptionParser.parse(args,
