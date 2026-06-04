@@ -13,7 +13,10 @@ defmodule Cinegraph.Predictions.ExperimentLedger do
   completed evaluation or `"failed"` (with `error`) when the cell couldn't be evaluated — recorded,
   never silently dropped, so the leaderboard can't be flattered by survivorship.
 
-  `Trainer.evaluate_cell/1` is the SOLE writer (the single-writer rule); reads go through the
+  `Trainer.evaluate_cell/1` is the writer for every cell it completes (the single-writer rule). The
+  one documented exception (#1065 Session 1) is `Trainer.run_cells/3`'s `record_failed_cell/3`: when
+  a worker is killed (per-cell timeout / brutal kill) before `evaluate_cell` can write its own row,
+  `run_cells` attributes a `failed` row for the known cell so no cell vanishes. Reads go through the
   `mix predictions.leaderboard` task. The `metrics` map carries the normalized report
   (recall_at_k, objective_recall_at_k, pr_auc, baselines, …); `weights` carries the model's
   learned weight map for weight-map classes.
@@ -39,6 +42,12 @@ defmodule Cinegraph.Predictions.ExperimentLedger do
     field :code_version, :string
     field :run_at, :utc_datetime
 
+    # Observability (#1065 Session 1): per-cell wall-clock + the run that produced this cell, and
+    # the scored pool size promoted out of `metrics` so the cost model can query it cheaply.
+    field :duration_ms, :integer
+    field :run_id, :string
+    field :n_evaluated, :integer
+
     timestamps()
   end
 
@@ -59,7 +68,10 @@ defmodule Cinegraph.Predictions.ExperimentLedger do
       :error,
       :holdout_spent,
       :code_version,
-      :run_at
+      :run_at,
+      :duration_ms,
+      :run_id,
+      :n_evaluated
     ])
     |> validate_required([:source_key, :model_class, :backtest_strategy, :granularity, :status])
     |> validate_inclusion(:status, @statuses)

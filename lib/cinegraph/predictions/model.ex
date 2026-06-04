@@ -31,6 +31,8 @@ defmodule Cinegraph.Predictions.Model do
     field :calibration, :map, default: %{}
     field :integrity_report, :map, default: %{}
     field :holdout_spent_at, :utc_datetime
+    # #1065 Session 2: the promote run that committed this model (nil for non-promote rows).
+    field :run_id, :string
 
     belongs_to :pre_registration, Cinegraph.Predictions.PreRegistration, foreign_key: :prereg_id
 
@@ -55,7 +57,8 @@ defmodule Cinegraph.Predictions.Model do
       :calibration,
       :integrity_report,
       :holdout_spent_at,
-      :prereg_id
+      :prereg_id,
+      :run_id
     ])
     |> validate_required([
       :source_key,
