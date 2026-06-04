@@ -1,3 +1,45 @@
+# Fake model classes (#1061 PR1) to prove model_class actually CONTROLS the fit, and that a fit
+# exception still records a `failed` ledger row.
+defmodule Cinegraph.Predictions.SentinelClass do
+  @behaviour Cinegraph.Predictions.ModelClass
+  @impl true
+  def key, do: "sentinel"
+  @impl true
+  def label, do: "Sentinel"
+  @impl true
+  def serving_kind, do: :weight_map
+  @impl true
+  def fit(_x, _y, _codes, _opts), do: {:ok, %{"sentinel" => 1.0}}
+  @impl true
+  def score(w, g, sk), do: {g, w, sk}
+  @impl true
+  def serialize(w), do: w
+  @impl true
+  def load(w), do: w
+  @impl true
+  def explain(w), do: w
+end
+
+defmodule Cinegraph.Predictions.BoomClass do
+  @behaviour Cinegraph.Predictions.ModelClass
+  @impl true
+  def key, do: "boom"
+  @impl true
+  def label, do: "Boom"
+  @impl true
+  def serving_kind, do: :weight_map
+  @impl true
+  def fit(_x, _y, _codes, _opts), do: raise("boom during fit")
+  @impl true
+  def score(w, g, sk), do: {g, w, sk}
+  @impl true
+  def serialize(w), do: w
+  @impl true
+  def load(w), do: w
+  @impl true
+  def explain(w), do: w
+end
+
 defmodule Cinegraph.Predictions.ExperimentLedgerTest do
   @moduledoc """
   The experiment ledger + the single-writer `Trainer.evaluate_cell`/`run_cells` (#1061 Session 1):
@@ -223,6 +265,26 @@ defmodule Cinegraph.Predictions.ExperimentLedgerTest do
     end
   end
 
+  # ── matrix runner (PR2) ──────────────────────────────────────────────────────────
+  describe "run_matrix/1" do
+    test "records one row per classes × lists × strategies × buckets cell" do
+      rows =
+        Trainer.run_matrix(
+          lists: [@list],
+          classes: ["linear_logreg"],
+          strategies: ["temporal"],
+          buckets: [:objective_only, :all],
+          max_concurrency: 2
+        )
+
+      assert length(rows) == 2
+      assert Repo.aggregate(ExperimentLedger, :count) == 2
+      buckets = Repo.all(from e in ExperimentLedger, select: e.feature_bucket)
+      assert Enum.sort(buckets) == ~w(all objective_only)
+      assert Enum.all?(rows, &(&1.model_class == "linear_logreg"))
+    end
+  end
+
   # ── leaderboard ranking key ──────────────────────────────────────────────────────
   describe "leaderboard ranking (objective full-pool recall, COALESCE fallback)" do
     setup do
@@ -257,6 +319,70 @@ defmodule Cinegraph.Predictions.ExperimentLedgerTest do
       insert_row(%{"recall_at_k" => 0.99}, "zz", "low", "failed")
       count = Repo.aggregate(from(e in ExperimentLedger, where: e.status == "ok"), :count)
       assert count == 3
+    end
+  end
+
+  # ── PR1 prereq fixes (#1061 Session 2) ──────────────────────────────────────────
+  describe "static feature buckets are honored (PR1 fix 1)" do
+    test "objective_only static cell fits objective codes only (not the full surface)" do
+      {:ok, obj} =
+        Trainer.evaluate_cell(
+          source_key: @list,
+          strategy: "static",
+          feature_bucket: :objective_only
+        )
+
+      {:ok, all} =
+        Trainer.evaluate_cell(source_key: @list, strategy: "static", feature_bucket: :all)
+
+      # canon-overlap derived code is in :all but stripped from :objective_only…
+      assert Map.has_key?(all.weights, "canonical_contribution")
+      refute Map.has_key?(obj.weights, "canonical_contribution")
+      # …and the other list's membership code (canon-overlap) is absent from objective.
+      refute Map.has_key?(obj.weights, @empty_list)
+      # genuinely different fits, not the same full-surface model mislabeled.
+      refute obj.weights == all.weights
+    end
+  end
+
+  describe "model_class controls the fit (PR1 fix 2)" do
+    setup do
+      original = Application.get_env(:cinegraph, :model_classes)
+
+      Application.put_env(:cinegraph, :model_classes, [
+        Cinegraph.Predictions.LinearLogReg,
+        Cinegraph.Predictions.SentinelClass,
+        Cinegraph.Predictions.BoomClass
+      ])
+
+      on_exit(fn ->
+        if original,
+          do: Application.put_env(:cinegraph, :model_classes, original),
+          else: Application.delete_env(:cinegraph, :model_classes)
+      end)
+    end
+
+    test "a registered class's fit produces the ledger weights (not just the label)" do
+      {:ok, row} =
+        Trainer.evaluate_cell(source_key: @list, strategy: "temporal", model_class: "sentinel")
+
+      assert row.model_class == "sentinel"
+      # The sentinel class returns this exact weight map — proves the class drove training.
+      assert row.weights == %{"sentinel" => 1.0}
+    end
+
+    test "a fit exception is recorded as a failed row, not silently dropped (PR1 fix 3)" do
+      assert {:error, _reason} =
+               Trainer.evaluate_cell(
+                 source_key: @list,
+                 strategy: "temporal",
+                 model_class: "boom",
+                 persist?: true
+               )
+
+      assert [row] = Repo.all(from e in ExperimentLedger, where: e.status == "failed")
+      assert row.model_class == "boom"
+      assert row.error =~ "boom"
     end
   end
 

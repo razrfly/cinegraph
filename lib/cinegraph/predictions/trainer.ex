@@ -64,6 +64,14 @@ defmodule Cinegraph.Predictions.Trainer do
     strategy = Keyword.get(opts, :backtest_strategy, "temporal")
     prereg = Keyword.get(opts, :prereg)
 
+    # #1061 Session 2: replay the EXACT training shape of a promoted ledger winner — feature bucket
+    # (`:features`, default `:all`) + weight variant (`:weight_normalize`/`:alpha`). Without this,
+    # promoting a `static/objective_only` winner would silently train `static/all`.
+    fit_opts =
+      opts
+      |> Keyword.take([:weight_normalize, :alpha])
+      |> Keyword.put(:features, Keyword.get(opts, :features, :all))
+
     cond do
       save and is_nil(prereg) ->
         {:error, :prereg_required}
@@ -74,7 +82,7 @@ defmodule Cinegraph.Predictions.Trainer do
         {:error, :holdout_already_spent}
 
       true ->
-        do_train(source_key, granularity, save, sample_ratio, strategy, prereg)
+        do_train(source_key, granularity, save, sample_ratio, strategy, prereg, fit_opts)
     end
   end
 
@@ -86,7 +94,7 @@ defmodule Cinegraph.Predictions.Trainer do
     )
   end
 
-  defp do_train(source_key, granularity, save, sample_ratio, strategy, prereg) do
+  defp do_train(source_key, granularity, save, sample_ratio, strategy, prereg, fit_opts) do
     result =
       cond do
         granularity == :data_point and data_point_codes(source_key) == [] ->
@@ -94,10 +102,10 @@ defmodule Cinegraph.Predictions.Trainer do
           {:error, :no_data_point_features}
 
         strategy == "static" ->
-          evaluate_static(granularity, source_key, sample_ratio, [])
+          evaluate_static(granularity, source_key, sample_ratio, fit_opts)
 
         true ->
-          evaluate_temporal(granularity, source_key, sample_ratio)
+          evaluate_temporal(granularity, source_key, sample_ratio, fit_opts)
       end
 
     with {:ok,
@@ -345,9 +353,15 @@ defmodule Cinegraph.Predictions.Trainer do
     case run_experiment(source_key, base_opts) do
       {:ok, result} ->
         # Objective-only validation recall too, so the preview grade is objective-graded like the
-        # committed model (#1051). A failed objective run just omits the field (full-recall fallback).
+        # committed model (#1051). The objective ablation is ALWAYS the linear baseline (#1061 PR1)
+        # so the honesty grade is class-comparable, not a per-cell nonlinear refit.
+        obj_opts =
+          base_opts
+          |> Keyword.put(:features, :objective_only)
+          |> Keyword.put(:model_class, "linear_logreg")
+
         objective =
-          case run_experiment(source_key, Keyword.put(base_opts, :features, :objective_only)) do
+          case run_experiment(source_key, obj_opts) do
             {:ok, obj} -> %{"objective_recall_at_k" => obj.metrics["recall_at_k"]}
             _ -> %{}
           end
@@ -376,6 +390,51 @@ defmodule Cinegraph.Predictions.Trainer do
         err
     end
   end
+
+  # Score an already-projected weight map on a strategy's eval slice WITHOUT fitting (#1061 PR3,
+  # the pooled path). Temporal only: rank against the full validation-decade pool (#1055). The
+  # weights are objective-only by construction, so objective_recall == recall here.
+  defp evaluate_precomputed_strategy(source_key, "temporal", weights, opts) do
+    decades = HistoricalValidator.get_all_decades(source_key) |> Enum.sort()
+
+    case split_train_val_holdout(source_key, decades, opts) do
+      {:error, reason} ->
+        {:error, reason}
+
+      {_train, val_decades, _holdout} ->
+        spec = {:data_point, weights, source_key}
+
+        rp =
+          Credibility.evaluate(spec, source_key, val_decades,
+            seed: Keyword.get(opts, :seed, 1337),
+            sample: Keyword.get(opts, :sample, 0)
+          )
+
+        pairs = rp["pairs"] || []
+        {scores, labels} = if pairs == [], do: {[], []}, else: Enum.unzip(pairs)
+
+        report =
+          %{
+            "recall_at_k" => rp["recall_at_k"],
+            "precision_at_k" => rp["precision_at_k"],
+            "n_positives" => rp["n_positives"],
+            "n_evaluated" => rp["n_evaluated"],
+            "baselines" => rp["baselines"],
+            "objective_recall_at_k" => rp["recall_at_k"],
+            "pr_auc" => Credibility.pr_auc(scores, labels)
+          }
+
+        {:ok,
+         %{
+           report: report,
+           calibration: ProbabilityCalibration.fit(scores, labels),
+           weights: weights
+         }}
+    end
+  end
+
+  defp evaluate_precomputed_strategy(_source_key, strategy, _weights, _opts),
+    do: {:error, {:precomputed_unsupported_strategy, strategy}}
 
   @doc """
   Evaluate ONE cell and (optionally) record it to the experiment ledger (#1061 Session 1).
@@ -412,6 +471,7 @@ defmodule Cinegraph.Predictions.Trainer do
       |> Keyword.put(:seed, seed)
       |> Keyword.put(:features, bucket)
       |> Keyword.put(:granularity, gran)
+      |> Keyword.put(:model_class, class_key)
 
     base = %{
       source_key: source_key,
@@ -425,8 +485,26 @@ defmodule Cinegraph.Predictions.Trainer do
       run_at: DateTime.utc_now() |> DateTime.truncate(:second)
     }
 
+    # Wrap so a raised exception / exit inside fitting or evaluation still produces a recorded
+    # `failed` row (CodeRabbit/review #1061 PR1): no silent survivorship. `evaluate_cell` stays the
+    # SOLE ledger writer, so run_cells never has to persist on its own.
+    outcome =
+      try do
+        case opts[:precomputed_weights] do
+          # Pooled classes (#1061 PR3) supply an already-projected weight map; score it on the
+          # strategy's slice without fitting, keeping evaluate_cell the sole ledger writer.
+          nil -> evaluate_strategy(source_key, strategy, strat_opts)
+          weights -> evaluate_precomputed_strategy(source_key, strategy, weights, strat_opts)
+        end
+      rescue
+        e -> {:error, {:exception, Exception.message(e)}}
+      catch
+        :exit, reason -> {:error, {:exit, inspect(reason)}}
+        kind, reason -> {:error, {kind, inspect(reason)}}
+      end
+
     row =
-      case evaluate_strategy(source_key, strategy, strat_opts) do
+      case outcome do
         {:ok, %{report: report, calibration: calibration} = s} ->
           scorecard =
             Reliability.score(report, calibration, %{
@@ -438,7 +516,15 @@ defmodule Cinegraph.Predictions.Trainer do
 
           Map.merge(base, %{
             status: "ok",
-            metrics: normalize_cell_report(report, calibration, scorecard),
+            # Record the weight variant alongside metrics so promotion can replay the EXACT training
+            # shape (#1061 Session 2). nil = the defaults (simplex, alpha 1.0).
+            metrics:
+              normalize_cell_report(report, calibration, scorecard)
+              |> Map.merge(%{
+                "weight_normalize" =>
+                  normalize_to_string(Keyword.get(strat_opts, :weight_normalize)),
+                "alpha" => Keyword.get(strat_opts, :alpha)
+              }),
             weights: s[:weights] || %{},
             grade: to_string(scorecard.grade)
           })
@@ -497,6 +583,85 @@ defmodule Cinegraph.Predictions.Trainer do
     end)
   end
 
+  @doc """
+  Run the full model matrix (#1061 Session 2) — `classes × lists × strategies × buckets ×
+  weight_variants` — persisting every evaluated cell to the ledger.
+
+  Holdout-free (drives `run_cells` → `evaluate_cell`, never the sacred holdout). Returns the
+  successful `ok` rows; `failed` rows are still recorded. `:per_cell` classes fan out through
+  `run_cells`; `:pooled` classes (a different training scope) are fit once across all lists and
+  projected per target — see `run_pooled_classes/5`.
+
+  ## Options
+    * `:lists` (default: all active list source_keys), `:classes` (default: every registered
+      class — experimental included; only *promotion* filters by lifecycle), `:strategies`
+      (default `~w(temporal static)`), `:buckets` (default `[:objective_only, :canon_overlap, :all]`),
+      `:weight_variants` (default `[[]]`), plus passthrough `:sample`/`:alpha`/`:seed`/`:max_concurrency`.
+  """
+  def run_matrix(opts \\ []) do
+    lists = Keyword.get(opts, :lists) || MovieLists.get_active_source_keys()
+    classes = Keyword.get(opts, :classes) || ModelRegistry.keys()
+    strategies = Keyword.get(opts, :strategies) || ~w(temporal static)
+    buckets = Keyword.get(opts, :buckets) || [:objective_only, :canon_overlap, :all]
+    variants = Keyword.get(opts, :weight_variants) || [[]]
+    shared = Keyword.take(opts, [:sample, :alpha, :seed, :max_concurrency])
+
+    {pooled, per_cell} = Enum.split_with(classes, &(ModelRegistry.fit_scope(&1) == :pooled))
+
+    per_cell_rows =
+      Enum.flat_map(lists, fn sk ->
+        cells =
+          for class <- per_cell, strat <- strategies, bucket <- buckets, v <- variants do
+            [model_class: class, strategy: strat, feature_bucket: bucket] ++ v
+          end
+
+        run_cells(sk, cells, shared)
+      end)
+
+    per_cell_rows ++ run_pooled_classes(pooled, lists, strategies, buckets, shared)
+  end
+
+  # Pooled classes (#1061 PR3) fit ONCE across all lists, then project to a per-target weight map
+  # which is graded + recorded per list through `evaluate_cell` (the sole ledger writer). Pooled is
+  # objective-only by construction, evaluated on the temporal validation tier.
+  defp run_pooled_classes([], _lists, _strategies, _buckets, _shared), do: []
+
+  defp run_pooled_classes(pooled, lists, _strategies, _buckets, shared) do
+    Enum.flat_map(pooled, fn class ->
+      {:ok, mod} = ModelRegistry.fetch(class)
+
+      case mod.fit_pooled(lists, shared) do
+        {:ok, %{projected: by_list}} ->
+          Enum.flat_map(lists, fn sk ->
+            case Map.get(by_list, sk) do
+              nil ->
+                []
+
+              weights ->
+                cell_opts =
+                  [
+                    source_key: sk,
+                    model_class: class,
+                    strategy: "temporal",
+                    feature_bucket: :objective_only,
+                    precomputed_weights: weights,
+                    persist?: true
+                  ] ++ shared
+
+                case evaluate_cell(cell_opts) do
+                  {:ok, row} -> [row]
+                  {:error, _} -> []
+                end
+            end
+          end)
+
+        {:error, reason} ->
+          Logger.warning("Trainer.run_matrix: #{class} fit_pooled failed: #{inspect(reason)}")
+          []
+      end
+    end)
+  end
+
   # "Must beat the dumb baseline" — the honest, list-specific failure threshold (mirrors
   # SeedFlagships). Used only to grade ledger rows; spends nothing.
   defp honest_threshold(report) do
@@ -521,6 +686,10 @@ defmodule Cinegraph.Predictions.Trainer do
       "circularity" => scorecard.circularity
     }
   end
+
+  defp normalize_to_string(nil), do: nil
+  defp normalize_to_string(v) when is_atom(v), do: Atom.to_string(v)
+  defp normalize_to_string(v), do: v
 
   defp insert_ledger_row(attrs) do
     %ExperimentLedger{}
@@ -686,7 +855,20 @@ defmodule Cinegraph.Predictions.Trainer do
 
   # ── temporal: train on all-but-the-latest decade, score the latest as the sacred holdout ──
 
-  defp evaluate_temporal(granularity, source_key, ratio) do
+  defp evaluate_temporal(granularity, source_key, ratio, fit_opts) do
+    # #1061 Session 2: honor the promoted feature bucket on the holdout path too (it was always
+    # full surface). nil ⇒ lens (codes ignored). Empty bucket → fail clearly.
+    features = Keyword.get(fit_opts, :features, :all)
+    codes = if granularity == :data_point, do: resolve_codes(source_key, features)
+
+    if granularity == :data_point and codes == [] do
+      {:error, :no_data_point_features}
+    else
+      do_evaluate_temporal(granularity, source_key, ratio, fit_opts, codes)
+    end
+  end
+
+  defp do_evaluate_temporal(granularity, source_key, ratio, fit_opts, codes) do
     decades = HistoricalValidator.get_all_decades(source_key) |> Enum.sort()
 
     case split_holdout(decades) do
@@ -704,7 +886,14 @@ defmodule Cinegraph.Predictions.Trainer do
         kept = if granularity == :data_point, do: undersample_ids(labeled, ratio)
 
         {weights, feature_set, names} =
-          fit_weights(granularity, source_key, labeled, ratio, nil, kept_opt(kept))
+          fit_weights(
+            granularity,
+            source_key,
+            labeled,
+            ratio,
+            codes,
+            Keyword.merge(fit_opts, kept_opt(kept))
+          )
 
         spec = {granularity, stringify(weights), source_key}
 
@@ -734,16 +923,23 @@ defmodule Cinegraph.Predictions.Trainer do
   # no canon-overlap split, so it falls back to the full grade. Returns `%{}` when not applicable.
   # `kept` (CodeRabbit #1062): the SAME undersampled draw the full fit used, so the objective fit is
   # a true feature ablation on identical rows rather than a re-shuffled sample. nil ⇒ undersample.
-  defp objective_metrics(granularity, source_key, labeled, ratio, eval_fn, kept \\ nil)
-
   defp objective_metrics(:data_point, source_key, labeled, ratio, eval_fn, kept) do
     obj_codes = data_point_codes(source_key) -- canon_overlap_codes(source_key)
 
     if obj_codes == [] do
       %{}
     else
+      # The objective ablation is ALWAYS the linear baseline (#1061 PR1) — class-comparable honesty
+      # grade, not a per-cell nonlinear refit.
       {obj_weights, _, _} =
-        fit_weights(:data_point, source_key, labeled, ratio, obj_codes, kept_opt(kept))
+        fit_weights(
+          :data_point,
+          source_key,
+          labeled,
+          ratio,
+          obj_codes,
+          [model_class: "linear_logreg"] ++ kept_opt(kept)
+        )
 
       rp = eval_fn.({:data_point, stringify(obj_weights), source_key})
 
@@ -782,6 +978,20 @@ defmodule Cinegraph.Predictions.Trainer do
   @default_holdout_fraction 0.25
 
   defp evaluate_static(granularity, source_key, ratio, opts) do
+    # #1061 PR1: honor the feature bucket on the static path too (it was ignored — every static
+    # cell trained the full surface but was recorded as bucketed). nil ⇒ lens (codes ignored).
+    features = Keyword.get(opts, :features, :all)
+    codes = if granularity == :data_point, do: resolve_codes(source_key, features)
+
+    if granularity == :data_point and codes == [] do
+      # an empty bucket (e.g. :objective_only on an all-canon list) — fail clearly, like run_experiment.
+      {:error, :no_data_point_features}
+    else
+      do_evaluate_static(granularity, source_key, ratio, opts, codes)
+    end
+  end
+
+  defp do_evaluate_static(granularity, source_key, ratio, opts, codes) do
     seed = Keyword.get(opts, :seed, 20_260_603)
     frac = Keyword.get(opts, :holdout_fraction, @default_holdout_fraction)
     :rand.seed(:exsss, {seed, seed, seed})
@@ -829,7 +1039,7 @@ defmodule Cinegraph.Predictions.Trainer do
             source_key,
             eval_train,
             ratio,
-            nil,
+            codes,
             Keyword.merge(opts, kept_opt(kept))
           )
 
@@ -858,7 +1068,7 @@ defmodule Cinegraph.Predictions.Trainer do
             source_key,
             Enum.map(members, &{&1.id, 1}) ++ neg_labeled,
             ratio,
-            nil,
+            codes,
             opts
           )
 
@@ -886,6 +1096,30 @@ defmodule Cinegraph.Predictions.Trainer do
   defp maybe_sample_nonmembers(nm, sample) when sample in [nil, 0], do: nm
   defp maybe_sample_nonmembers(nm, sample) when length(nm) <= sample, do: nm
   defp maybe_sample_nonmembers(nm, sample), do: Enum.take(Enum.shuffle(nm), sample)
+
+  @doc """
+  Labeled movie structs for a list (#1061 Session 2, for pooled training): every member (label 1)
+  plus non-members from the member-decades undersampled at `ratio`:1 (label 0). Returns `[{%Movie{},
+  0 | 1}]`, or `[]` if the list has no members. Reuses the static-path building blocks; the caller
+  seeds `:rand` for determinism.
+  """
+  def labeled_structs_for(source_key, ratio) do
+    members = member_structs(source_key)
+
+    if members == [] do
+      []
+    else
+      decades = member_decades(members)
+      member_ids = MapSet.new(members, & &1.id)
+
+      non_members =
+        decade_pool_structs(decades) |> Enum.reject(&MapSet.member?(member_ids, &1.id))
+
+      n_keep = min(length(members) * ratio, length(non_members))
+      kept = Enum.take(Enum.shuffle(non_members), n_keep)
+      Enum.map(members, &{&1, 1}) ++ Enum.map(kept, &{&1, 0})
+    end
+  end
 
   defp member_structs(source_key) do
     Repo.all(
@@ -974,12 +1208,22 @@ defmodule Cinegraph.Predictions.Trainer do
     x = Enum.map(kept, fn {id, _y} -> vectorize(Map.get(feats, id, %{}), codes) end)
     y = Enum.map(kept, &elem(&1, 1))
 
-    fit_opts = Keyword.take(opts, [:alpha, :max_iterations])
-    normalize = Keyword.get(opts, :weight_normalize, :simplex)
+    # #1061 PR1: the fit is dispatched by `model_class` through the registry, so a recorded class
+    # actually CONTROLS training (not just labels the row). `linear_logreg` is byte-identical to the
+    # pre-#1061 `fit_raw |> extract_weights` path (LinearLogReg.fit is a literal wrapper).
+    class = Keyword.get(opts, :model_class) || ModelRegistry.default().key()
 
     weights =
-      WeightOptimizer.fit_raw(x, y, fit_opts)
-      |> WeightOptimizer.extract_weights(codes, normalize: normalize)
+      case ModelRegistry.fetch(class) do
+        {:ok, mod} ->
+          case mod.fit(x, y, codes, opts) do
+            {:ok, w} -> w
+            {:error, reason} -> raise "model_class #{class} fit failed: #{inspect(reason)}"
+          end
+
+        {:error, reason} ->
+          raise "unknown model_class #{inspect(class)}: #{inspect(reason)}"
+      end
 
     {weights, %{"granularity" => "data_point", "features" => codes}, codes}
   end
