@@ -75,14 +75,19 @@ defmodule Mix.Tasks.Predictions.Promote do
     Enum.map(lists, &assess(&1, promotable))
   end
 
+  # Buckets a model may SERVE (#1068 §6.2): exclude `canon_overlap` (pure circular signal — it
+  # exists for the ablation, not for serving). `all` is allowed (graded on objective recall, and
+  # Explanation discloses its circularity %); only `objective_only`/`all` may be activated.
+  @activatable_buckets ~w(objective_only all)
+
   # ── assessment (reads the ledger; spends nothing) ─────────────────────────────────
   defp assess(source_key, promotable) do
     overall = best_row(source_key, fn _ -> true end)
 
     activatable =
-      best_row(source_key, fn r ->
-        MapSet.member?(promotable, r.model_class) and r.grade != "insufficient"
-      end)
+      source_key
+      |> best_row(&activatable_keep?(&1, promotable))
+      |> prefer_static_if_underpowered(source_key, promotable)
 
     %{
       source_key: source_key,
@@ -92,6 +97,30 @@ defmodule Mix.Tasks.Predictions.Promote do
       _activatable_row: activatable
     }
   end
+
+  # A row is servable iff its class is promotable, it isn't graded insufficient, and its bucket is
+  # serving-cleared (#1068 §6.1/§6.2 — canon_overlap excluded).
+  defp activatable_keep?(r, promotable) do
+    MapSet.member?(promotable, r.model_class) and r.grade != "insufficient" and
+      r.feature_bucket in @activatable_buckets
+  end
+
+  # #1068 §6.4 ("prefer static, else disclose"): the TEMPORAL commit's sacred holdout is the single
+  # latest decade, so a temporal ledger row graded on the pooled validation tier can still commit a
+  # model that grades :insufficient on that one decade → the guard refuses it → the gamed model
+  # persists. When the latest decade is underpowered (<10 members), re-pick the best STATIC
+  # activatable (member-holdout, gradeable). If none qualifies, serve nothing (disclose).
+  defp prefer_static_if_underpowered(nil, _sk, _promotable), do: nil
+
+  defp prefer_static_if_underpowered(%{backtest_strategy: "temporal"} = row, sk, promotable) do
+    if Trainer.temporal_underpowered?(sk) do
+      best_row(sk, &(activatable_keep?(&1, promotable) and &1.backtest_strategy == "static"))
+    else
+      row
+    end
+  end
+
+  defp prefer_static_if_underpowered(row, _sk, _promotable), do: row
 
   @grade_rank %{"high" => 4, "moderate" => 3, "low" => 2, "insufficient" => 1}
 
