@@ -169,16 +169,31 @@ defmodule Mix.Tasks.Predictions.Promote do
     RunReporter.start(run_id, "promote", total, %{only: opts[:only]})
     started = System.monotonic_time(:millisecond)
 
-    {committed, _acc} =
-      Enum.map_reduce(results, %{done: 0, failed: 0}, fn result, acc ->
-        c = commit_one(result, run_id)
-        record_commit(run_id, c)
-        {c, render_progress(acc, c, total, started, render?)}
-      end)
+    # try/rescue/after so a raised commit doesn't leave the run stuck "running" (and still clears the
+    # status line). Mirrors run_matrix's lifecycle guard.
+    try do
+      {committed, _acc} =
+        Enum.map_reduce(results, %{done: 0, failed: 0}, fn result, acc ->
+          c = commit_one(result, run_id)
+          record_commit(run_id, c)
+          {c, render_progress(acc, c, total, started, render?)}
+        end)
 
-    if render?, do: ProgressLine.clear()
-    RunReporter.finish(run_id, "completed")
-    committed
+      RunReporter.finish(run_id, "completed")
+      committed
+    rescue
+      e ->
+        RunReporter.finish(run_id, "failed", e)
+        reraise e, __STACKTRACE__
+    catch
+      # throw/exit also leave the run "running" without this (CodeRabbit #1072): finalize, then
+      # re-raise the original kind/reason so the failure still propagates unchanged.
+      kind, reason ->
+        RunReporter.finish(run_id, "failed", {kind, reason})
+        :erlang.raise(kind, reason, __STACKTRACE__)
+    after
+      if render?, do: ProgressLine.clear()
+    end
   end
 
   # Skipped lists aren't part of the activatable total; don't advance the bar for them.
