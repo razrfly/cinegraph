@@ -5,8 +5,8 @@ defmodule Cinegraph.Predictions.PromoteDemoteTest do
   """
   use Cinegraph.DataCase
 
-  alias Cinegraph.Movies.MovieLists
-  alias Cinegraph.Predictions.{Model, PreRegistration}
+  alias Cinegraph.Movies.{Movie, MovieLists}
+  alias Cinegraph.Predictions.{Model, PreRegistration, Trainer}
   alias Cinegraph.Repo
   alias Mix.Tasks.Predictions.{Demote, Promote}
 
@@ -21,6 +21,9 @@ defmodule Cinegraph.Predictions.PromoteDemoteTest do
       list_row(@other, now)
     ])
 
+    # @list is WELL-POWERED (≥10 members in its latest decade) so `temporal_underpowered?/1` is false
+    # for it — keeps the §6.1/grade tests on the temporal path. §6.4 uses a separate sparse list.
+    plant_members(@list, 2000, 12)
     :ok
   end
 
@@ -63,6 +66,72 @@ defmodule Cinegraph.Predictions.PromoteDemoteTest do
 
     test "no recorded runs → both nil" do
       assert [%{overall_best: nil, activatable: nil}] = Promote.standings([@list])
+    end
+  end
+
+  # ── §6.1/§6.2: canon_overlap is excluded from serving ─────────────────────────────
+  describe "serving-bucket filter (#1068 §6.1/§6.2)" do
+    test "canon_overlap is NOT activatable even at higher grade/recall; `all`/objective wins" do
+      ledger_row(@list, "linear_logreg", "high", 0.90, "canon_overlap")
+      ledger_row(@list, "linear_logreg", "moderate", 0.40, "all")
+
+      [%{overall_best: overall, activatable: activatable}] = Promote.standings([@list])
+
+      # overall_best still REPORTS canon (transparency)…
+      assert overall.feature_bucket == "canon_overlap"
+      assert overall.objective_recall == 0.90
+      # …but only the non-circular bucket is activatable.
+      assert activatable.feature_bucket == "all"
+      assert activatable.objective_recall == 0.40
+    end
+
+    test "objective_only is activatable" do
+      ledger_row(@list, "linear_logreg", "moderate", 0.30, "objective_only")
+      [%{activatable: activatable}] = Promote.standings([@list])
+      assert activatable.feature_bucket == "objective_only"
+    end
+
+    test "only canon_overlap recorded → activatable nil" do
+      ledger_row(@list, "linear_logreg", "high", 0.90, "canon_overlap")
+      [%{overall_best: overall, activatable: activatable}] = Promote.standings([@list])
+      assert overall.feature_bucket == "canon_overlap"
+      assert activatable == nil
+    end
+  end
+
+  # ── §6.4: prefer static when temporal is underpowered ─────────────────────────────
+  describe "power-aware strategy preference (#1068 §6.4)" do
+    test "underpowered temporal → prefer the static run (even at lower grade)" do
+      sparse = make_list("promote_sparse_list")
+      plant_members(sparse, 2020, 3)
+      assert Trainer.temporal_underpowered?(sparse)
+
+      ledger_row(sparse, "linear_logreg", "high", 0.80, "all", "temporal")
+      ledger_row(sparse, "linear_logreg", "moderate", 0.50, "all", "static")
+
+      [%{activatable: activatable}] = Promote.standings([sparse])
+      assert activatable.strategy == "static"
+      assert activatable.objective_recall == 0.50
+    end
+
+    test "well-powered temporal → keep the temporal run" do
+      refute Trainer.temporal_underpowered?(@list)
+
+      ledger_row(@list, "linear_logreg", "high", 0.80, "all", "temporal")
+      ledger_row(@list, "linear_logreg", "moderate", 0.50, "all", "static")
+
+      [%{activatable: activatable}] = Promote.standings([@list])
+      assert activatable.strategy == "temporal"
+      assert activatable.objective_recall == 0.80
+    end
+
+    test "underpowered temporal + no servable static → activatable nil (disclose)" do
+      sparse = make_list("promote_sparse_nostatic")
+      plant_members(sparse, 2020, 2)
+      ledger_row(sparse, "linear_logreg", "high", 0.80, "all", "temporal")
+
+      [%{activatable: activatable}] = Promote.standings([sparse])
+      assert activatable == nil
     end
   end
 
@@ -115,16 +184,16 @@ defmodule Cinegraph.Predictions.PromoteDemoteTest do
   end
 
   # ── helpers ──────────────────────────────────────────────────────────────────────
-  defp ledger_row(sk, model_class, grade, obj) do
+  defp ledger_row(sk, model_class, grade, obj, feature_bucket \\ "all", strategy \\ "temporal") do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     %Cinegraph.Predictions.ExperimentLedger{}
     |> Cinegraph.Predictions.ExperimentLedger.changeset(%{
       source_key: sk,
       model_class: model_class,
-      backtest_strategy: "temporal",
+      backtest_strategy: strategy,
       granularity: "data_point",
-      feature_bucket: "all",
+      feature_bucket: feature_bucket,
       status: "ok",
       grade: grade,
       metrics: %{
@@ -135,6 +204,31 @@ defmodule Cinegraph.Predictions.PromoteDemoteTest do
       run_at: now
     })
     |> Repo.insert!()
+  end
+
+  # Insert a movie_lists row and return its source_key (for §6.4 lists with controlled power).
+  defp make_list(source_key) do
+    Repo.insert_all("movie_lists", [
+      list_row(source_key, DateTime.utc_now() |> DateTime.truncate(:second))
+    ])
+
+    source_key
+  end
+
+  # Plant `n` member movies in `decade` for `source_key` so `temporal_underpowered?/1` (which counts
+  # members in the latest decade) is deterministic.
+  defp plant_members(source_key, decade, n) do
+    for i <- 1..n do
+      %Movie{}
+      |> Movie.changeset(%{
+        tmdb_id: System.unique_integer([:positive]),
+        title: "#{source_key} #{decade} #{i}",
+        release_date: Date.new!(decade + rem(i, 9), 6, 1),
+        import_status: "full",
+        canonical_sources: %{source_key => true}
+      })
+      |> Repo.insert!()
+    end
   end
 
   defp sufficient_ir,

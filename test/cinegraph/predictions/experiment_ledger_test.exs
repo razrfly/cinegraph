@@ -418,6 +418,54 @@ defmodule Cinegraph.Predictions.ExperimentLedgerTest do
       assert is_integer(failed.duration_ms)
     end
 
+    test "in a MIXED run, the slow cell's timeout is attributed to IT, not conflated with the ok cell" do
+      # The gap the single-cell test doesn't cover: when a fast cell and a timing-out cell share a
+      # run_id, attribution must still pin the failure to the slow cell and the success to the fast one.
+      original = Application.get_env(:cinegraph, :model_classes)
+
+      Application.put_env(:cinegraph, :model_classes, [
+        Cinegraph.Predictions.LinearLogReg,
+        Cinegraph.Predictions.SlowClass
+      ])
+
+      on_exit(fn ->
+        if original,
+          do: Application.put_env(:cinegraph, :model_classes, original),
+          else: Application.delete_env(:cinegraph, :model_classes)
+      end)
+
+      rows =
+        Trainer.run_cells(
+          @list,
+          [
+            [model_class: "linear_logreg", feature_bucket: :objective_only],
+            [model_class: "slow", feature_bucket: :all]
+          ],
+          strategy: "temporal",
+          # both run in parallel; 1.5s lets the fast linear fit finish (tiny fixture) but kills the
+          # SlowClass 2s sleep — so we get one ok + one attributed failed row.
+          max_concurrency: 2,
+          cell_timeout: 1500,
+          run_id: "mixed-run"
+        )
+
+      # the fast linear cell returned (one ok row); the slow cell was dropped from the return.
+      assert [%{model_class: "linear_logreg"}] = rows
+
+      all = Repo.all(ExperimentLedger)
+      assert [ok] = Enum.filter(all, &(&1.status == "ok"))
+      assert [failed] = Enum.filter(all, &(&1.status == "failed"))
+
+      assert ok.model_class == "linear_logreg"
+      assert ok.feature_bucket == "objective_only"
+      # the failure is pinned to the SLOW cell — not conflated with the ok cell.
+      assert failed.model_class == "slow"
+      assert failed.feature_bucket == "all"
+      assert failed.run_id == "mixed-run"
+      assert failed.error =~ "cell_timeout"
+      assert is_integer(failed.duration_ms) and failed.duration_ms >= 0
+    end
+
     test "a worker crash mid-fit is attributed via run_cells (not just direct evaluate_cell)" do
       original = Application.get_env(:cinegraph, :model_classes)
 

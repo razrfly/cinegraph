@@ -1001,6 +1001,28 @@ defmodule Cinegraph.Predictions.Trainer do
     {val, rest -- val}
   end
 
+  # Mirror of `Reliability.@min_positives_for_headline` (10) — kept as a literal to avoid a runtime
+  # coupling just for one int; cross-referenced here so the two stay in sync.
+  @temporal_min_holdout_positives 10
+
+  @doc """
+  Is the TEMPORAL commit underpowered for this list (#1068 §6.4)? The temporal commit's sacred
+  holdout is the SINGLE latest decade (`split_holdout/1`), so a ledger temporal row graded on the
+  pooled validation tier can still commit a model that grades `:insufficient` on that one decade.
+  Underpowered when the latest decade holds < #{@temporal_min_holdout_positives} members. Uses the
+  SAME decade source as `split_holdout/1` (`get_all_decades |> Enum.sort |> List.last`).
+  """
+  def temporal_underpowered?(source_key) do
+    case HistoricalValidator.get_all_decades(source_key) |> Enum.sort() do
+      [] ->
+        true
+
+      decades ->
+        latest = List.last(decades)
+        Map.get(member_counts_by_decade(source_key), latest, 0) < @temporal_min_holdout_positives
+    end
+  end
+
   defp member_counts_by_decade(source_key) do
     Repo.all(
       from m in Movie,
