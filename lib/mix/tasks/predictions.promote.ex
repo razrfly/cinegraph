@@ -21,8 +21,16 @@ defmodule Mix.Tasks.Predictions.Promote do
   use Mix.Task
   import Ecto.Query
 
-  alias Cinegraph.Predictions.{ExperimentLedger, ModelRegistry, PreRegistration, Trainer}
+  alias Cinegraph.Predictions.{
+    ExperimentLedger,
+    ModelRegistry,
+    PreRegistration,
+    RunReporter,
+    Trainer
+  }
+
   alias Cinegraph.Repo
+  alias Mix.Tasks.Predictions.ProgressLine
 
   @shortdoc "Promote the best ledger-recorded model per list (linear only; dry-run unless --commit)"
 
@@ -40,7 +48,7 @@ defmodule Mix.Tasks.Predictions.Promote do
     lists = target_lists(opts[:only])
 
     results = standings(lists)
-    results = if commit, do: Enum.map(results, &commit_one/1), else: results
+    results = if commit, do: run_commit(results, opts), else: results
 
     cond do
       # strip the raw Ecto row (kept only to drive --commit) before JSON encoding.
@@ -118,21 +126,92 @@ defmodule Mix.Tasks.Predictions.Promote do
   """
   def commit(source_key) do
     [result] = standings([source_key])
-    commit_one(result)
+    commit_one(result, nil)
+  end
+
+  # Wrap the commit loop in a `prediction_runs` lifecycle (#1065 Session 2): one promote run groups
+  # the per-list `prediction_models` rows it activates (via their `run_id`) so promote shows up in the
+  # unified runs history. `total_cells` counts only the lists that will actually train (activatable);
+  # skipped lists aren't recorded.
+  defp run_commit(results, opts) do
+    run_id = gen_run_id()
+    total = Enum.count(results, & &1._activatable_row)
+    render? = !opts[:json]
+    RunReporter.start(run_id, "promote", total, %{only: opts[:only]})
+    started = System.monotonic_time(:millisecond)
+
+    {committed, _acc} =
+      Enum.map_reduce(results, %{done: 0, failed: 0}, fn result, acc ->
+        c = commit_one(result, run_id)
+        record_commit(run_id, c)
+        {c, render_progress(acc, c, total, started, render?)}
+      end)
+
+    if render?, do: ProgressLine.clear()
+    RunReporter.finish(run_id, "completed")
+    committed
+  end
+
+  # Skipped lists aren't part of the activatable total; don't advance the bar for them.
+  defp render_progress(acc, %{commit: %{status: "skipped"}}, _total, _started, _render?), do: acc
+
+  defp render_progress(acc, %{source_key: sk, commit: c}, total, started, render?) do
+    done = acc.done + 1
+    failed = acc.failed + if(c.status == "error", do: 1, else: 0)
+    elapsed = System.monotonic_time(:millisecond) - started
+    throughput = if elapsed > 0, do: done / (elapsed / 60_000), else: nil
+
+    # Promote has no per-cell cost model; a running-average ETA (remaining lists × mean time/list so
+    # far) is the honest estimate since per-list holdout-train times are roughly uniform.
+    eta_ms = if done > 0, do: round(max(total - done, 0) * (elapsed / done)), else: nil
+
+    if render? do
+      ProgressLine.write(%{
+        label: "promote",
+        done: done,
+        total: total,
+        current: sk,
+        throughput_per_min: throughput,
+        eta_ms: eta_ms,
+        failed: failed
+      })
+    end
+
+    %{done: done, failed: failed}
+  end
+
+  defp record_commit(run_id, %{source_key: sk, commit: %{status: "ok"}}),
+    do: RunReporter.record(run_id, %{status: :ok, current_cell: sk})
+
+  defp record_commit(run_id, %{source_key: sk, commit: %{status: "error"}}),
+    do: RunReporter.record(run_id, %{status: :failed, current_cell: sk})
+
+  # Skipped lists (no activatable run) aren't part of total_cells — don't count them.
+  defp record_commit(_run_id, _skipped), do: :ok
+
+  defp gen_run_id do
+    ms = Integer.to_string(System.system_time(:millisecond), 36)
+    rand = :crypto.strong_rand_bytes(3) |> Base.encode16(case: :lower)
+    "promote-#{ms}-#{rand}"
   end
 
   # ── commit (spends the sacred holdout, one fresh prereg per list) ──────────────────
-  defp commit_one(%{_activatable_row: nil} = r),
+  defp commit_one(%{_activatable_row: nil} = r, _run_id),
     do:
       Map.put(r, :commit, %{status: "skipped", reason: "no activatable (linear, sufficient) run"})
 
-  defp commit_one(%{source_key: sk, _activatable_row: row} = r) do
+  defp commit_one(%{source_key: sk, _activatable_row: row} = r, run_id) do
     threshold = honest_threshold(row)
 
     # Replay the EXACT recorded training shape (#1061): strategy + feature bucket + weight variant.
     # Without this, a `static/objective_only` winner would be committed as `static/all`.
     train_opts =
-      [granularity: :data_point, save: true, backtest_strategy: row.backtest_strategy] ++
+      [
+        granularity: :data_point,
+        save: true,
+        backtest_strategy: row.backtest_strategy,
+        run_id: run_id
+      ] ++
         replay_shape(row)
 
     commit =

@@ -280,6 +280,9 @@ defmodule CinegraphWeb.Router do
       live "/scheduled", Admin.ScheduledLive, :index
       live "/scheduled/:id", Admin.ScheduledShowLive, :show
 
+      # Prediction model runs observability (#1065 Session 2)
+      live "/predictions/runs", Admin.PredictionsRunsLive, :index
+
       # Queues + Jobs (#880 Phase 1)
       live "/queues", Admin.QueuesLive, :index
       live "/jobs", Admin.JobsLive, :index

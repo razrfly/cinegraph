@@ -29,11 +29,13 @@ defmodule Cinegraph.Predictions.Trainer do
     HistoricalValidator,
     LensScoring,
     ListFrontier,
+    MatrixPlanner,
     Model,
     ModelRegistry,
     PreRegistration,
     ProbabilityCalibration,
     Reliability,
+    RunReporter,
     WeightOptimizer
   }
 
@@ -82,7 +84,9 @@ defmodule Cinegraph.Predictions.Trainer do
         {:error, :holdout_already_spent}
 
       true ->
-        do_train(source_key, granularity, save, sample_ratio, strategy, prereg, fit_opts)
+        do_train(source_key, granularity, save, sample_ratio, strategy, prereg, fit_opts,
+          run_id: Keyword.get(opts, :run_id)
+        )
     end
   end
 
@@ -94,7 +98,7 @@ defmodule Cinegraph.Predictions.Trainer do
     )
   end
 
-  defp do_train(source_key, granularity, save, sample_ratio, strategy, prereg, fit_opts) do
+  defp do_train(source_key, granularity, save, sample_ratio, strategy, prereg, fit_opts, meta) do
     result =
       cond do
         granularity == :data_point and data_point_codes(source_key) == [] ->
@@ -144,7 +148,8 @@ defmodule Cinegraph.Predictions.Trainer do
                calibration,
                prereg,
                strategy,
-               "linear_logreg"
+               "linear_logreg",
+               Keyword.get(meta, :run_id)
              ) do
           {:ok, model} -> {:ok, Map.put(summary, :model_id, model.id)}
           {:error, reason} -> {:error, reason}
@@ -473,21 +478,16 @@ defmodule Cinegraph.Predictions.Trainer do
       |> Keyword.put(:granularity, gran)
       |> Keyword.put(:model_class, class_key)
 
-    base = %{
-      source_key: source_key,
-      model_class: class_key,
-      backtest_strategy: strategy,
-      feature_bucket: to_string(bucket),
-      granularity: to_string(gran),
-      seed: seed,
-      holdout_spent: false,
-      code_version: code_version(),
-      run_at: DateTime.utc_now() |> DateTime.truncate(:second)
-    }
+    base = cell_base(opts)
 
     # Wrap so a raised exception / exit inside fitting or evaluation still produces a recorded
-    # `failed` row (CodeRabbit/review #1061 PR1): no silent survivorship. `evaluate_cell` stays the
-    # SOLE ledger writer, so run_cells never has to persist on its own.
+    # `failed` row (CodeRabbit/review #1061 PR1): no silent survivorship. `evaluate_cell` is the
+    # writer for every cell it completes; run_cells only persists when a worker is killed before this
+    # function can write its own row (#1065 — `record_failed_cell/3`).
+    #
+    # `duration_ms` (#1065) wraps just the fit+eval — the cost the ETA model attributes to pool size.
+    t0 = System.monotonic_time(:millisecond)
+
     outcome =
       try do
         case opts[:precomputed_weights] do
@@ -502,6 +502,9 @@ defmodule Cinegraph.Predictions.Trainer do
         :exit, reason -> {:error, {:exit, inspect(reason)}}
         kind, reason -> {:error, {kind, inspect(reason)}}
       end
+
+    duration_ms = System.monotonic_time(:millisecond) - t0
+    base = Map.put(base, :duration_ms, duration_ms)
 
     row =
       case outcome do
@@ -525,6 +528,8 @@ defmodule Cinegraph.Predictions.Trainer do
                   normalize_to_string(Keyword.get(strat_opts, :weight_normalize)),
                 "alpha" => Keyword.get(strat_opts, :alpha)
               }),
+            # First-class pool size for the cost model (#1065) — still mirrored in metrics.
+            n_evaluated: report["n_evaluated"],
             weights: s[:weights] || %{},
             grade: to_string(scorecard.grade)
           })
@@ -551,41 +556,121 @@ defmodule Cinegraph.Predictions.Trainer do
   `status: "failed"`, just dropped from this ranked return).
   """
   def run_cells(source_key, cells, opts \\ []) do
+    # Each cell spec carries its own `source_key` (#1065) so the same streaming engine drives a single
+    # list here and the whole flattened matrix in `run_matrix/1`.
+    cells
+    |> Enum.map(&Keyword.put(&1, :source_key, source_key))
+    |> stream_cells(opts)
+  end
+
+  # The concurrent cell engine (#1065): one global `Task.async_stream` over `cell_specs` (each a
+  # keyword list including `:source_key`). `run_matrix/1` flattens ALL per-cell work across lists into
+  # one call so the worker pool stays saturated end-to-end — which both speeds real runs and makes the
+  # planner's `Σ predicted / concurrency` ETA accurate (no per-list batch-boundary idling).
+  #
+  # `opts` may carry `:on_cell` — a `fn %{source_key, cell, status, duration_ms} -> _ end` invoked
+  # (in this consumer process, sequentially) as each cell resolves, for live progress.
+  defp stream_cells(cell_specs, opts) do
     max_conc = Keyword.get(opts, :max_concurrency, 4)
 
     # `:cell_timeout` (#1061): a full-pool UNSAMPLED static cell can score 100k–265k+ movies ×3 fits,
     # which exceeds the old hardcoded 15-min limit on the biggest lists and would be silently
     # dropped. Default generously (45 min); the matrix can raise it for an unsampled run.
     cell_timeout = Keyword.get(opts, :cell_timeout, :timer.minutes(45))
-    shared = Keyword.drop(opts, [:max_concurrency, :cell_timeout])
+    on_cell = Keyword.get(opts, :on_cell)
+    base = Keyword.drop(opts, [:max_concurrency, :cell_timeout, :on_cell])
 
-    cells
+    cell_specs
     |> Task.async_stream(
-      fn cell ->
-        cell_opts =
-          shared
-          |> Keyword.merge(cell)
-          |> Keyword.put(:source_key, source_key)
-          |> Keyword.put(:persist?, true)
+      fn spec ->
+        cell_opts = base |> Keyword.merge(spec) |> Keyword.put(:persist?, true)
 
-        {cell, evaluate_cell(cell_opts)}
+        # The per-cell timeout is enforced INSIDE the worker (#1065), not at the stream level: a
+        # stream-level kill emits a bare `{:exit, reason}` with no reference to which cell died, so
+        # the cell would vanish (logged, never recorded). By owning the timeout here we always know
+        # the cell, and a timeout/crash still yields an attributed `failed` row. The stream timeout
+        # is therefore `:infinity` (below).
+        #
+        # `async_nolink` (not `async`): the inner task is monitored, NOT linked, so an abnormal cell
+        # crash that `evaluate_cell`'s try/rescue doesn't catch can't take this worker down before
+        # `record_failed_cell/3` runs — `Task.yield` returns `{:exit, reason}` and we attribute it.
+        t0 = System.monotonic_time(:millisecond)
+
+        task =
+          Task.Supervisor.async_nolink(Cinegraph.Predictions.TaskSupervisor, fn ->
+            evaluate_cell(cell_opts)
+          end)
+
+        result =
+          case Task.yield(task, cell_timeout) || Task.shutdown(task, :brutal_kill) do
+            # evaluate_cell already wrote its own row (ok or failed).
+            {:ok, res} -> res
+            # Worker crashed before writing — attribute a failed row for the known cell.
+            {:exit, reason} -> record_failed_cell(cell_opts, reason, t0)
+            # Timed out (yield returned nil, task was shut down) — same, with a clear reason.
+            nil -> record_failed_cell(cell_opts, :cell_timeout, t0)
+          end
+
+        {spec, result, System.monotonic_time(:millisecond) - t0}
       end,
       max_concurrency: max_conc,
-      timeout: cell_timeout,
+      timeout: :infinity,
       ordered: false
     )
     |> Enum.flat_map(fn
-      {:ok, {_cell, {:ok, row}}} ->
+      {:ok, {spec, {:ok, row}, dur}} ->
+        notify_cell(on_cell, spec, :ok, dur)
         [row]
 
-      {:ok, {cell, {:error, reason}}} ->
-        Logger.warning("Trainer(run_cells): cell #{inspect(cell)} failed: #{inspect(reason)}")
+      {:ok, {spec, {:error, reason}, dur}} ->
+        notify_cell(on_cell, spec, :failed, dur)
+        Logger.warning("Trainer(stream_cells): cell #{inspect(spec)} failed: #{inspect(reason)}")
         []
 
+      # Residual defense: with the per-cell timeout owned by the worker above, the stream itself
+      # should never time out or kill a worker. Kept so a truly unexpected exit is still logged.
       {:exit, reason} ->
-        Logger.warning("Trainer(run_cells): cell worker exited: #{inspect(reason)}")
+        Logger.warning("Trainer(stream_cells): cell worker exited: #{inspect(reason)}")
         []
     end)
+  end
+
+  defp notify_cell(nil, _spec, _status, _dur), do: :ok
+
+  defp notify_cell(on_cell, spec, status, duration_ms) do
+    on_cell.(%{
+      source_key: Keyword.get(spec, :source_key),
+      cell: cell_label(spec),
+      status: status,
+      duration_ms: duration_ms
+    })
+
+    :ok
+  end
+
+  # "source/strategy/bucket" — the human handle shown as the run's current cell.
+  defp cell_label(spec) do
+    "#{Keyword.get(spec, :source_key)}/#{Keyword.get(spec, :strategy, "temporal")}/" <>
+      "#{Keyword.get(spec, :feature_bucket, :all)}"
+  end
+
+  # The narrow, documented exception to the single-writer rule (#1065): when a `run_cells` worker is
+  # killed (per-cell timeout / brutal kill) before `evaluate_cell` could persist, attribute a
+  # `failed` row for the KNOWN cell so it never vanishes. Reuses `cell_base/1` for identical
+  # provenance. Returns `{:error, reason}` to match `evaluate_cell`'s failure shape.
+  defp record_failed_cell(cell_opts, reason, t0) do
+    cell_opts
+    |> cell_base()
+    |> Map.merge(%{
+      status: "failed",
+      error: inspect(reason),
+      metrics: %{},
+      weights: %{},
+      duration_ms: System.monotonic_time(:millisecond) - t0
+    })
+    |> insert_ledger_row()
+
+    {:error, reason}
   end
 
   @doc """
@@ -604,26 +689,76 @@ defmodule Cinegraph.Predictions.Trainer do
       `:weight_variants` (default `[[]]`), plus passthrough `:sample`/`:alpha`/`:seed`/`:max_concurrency`.
   """
   def run_matrix(opts \\ []) do
-    lists = Keyword.get(opts, :lists) || MovieLists.get_active_source_keys()
-    classes = Keyword.get(opts, :classes) || ModelRegistry.keys()
-    strategies = Keyword.get(opts, :strategies) || ~w(temporal static)
-    buckets = Keyword.get(opts, :buckets) || [:objective_only, :canon_overlap, :all]
-    variants = Keyword.get(opts, :weight_variants) || [[]]
-    shared = Keyword.take(opts, [:sample, :alpha, :seed, :max_concurrency, :cell_timeout])
+    # One run_id per invocation groups this matrix's cells for progress + history (#1065). Default
+    # resolution + the per-cell/pooled split live in MatrixPlanner so `--plan` and a real run can't
+    # drift (the planner counts the exact same grid this executes).
+    run_id = Keyword.get(opts, :run_id) || gen_run_id()
+    r = MatrixPlanner.resolve(opts)
+    on_progress = Keyword.get(opts, :on_progress)
 
-    {pooled, per_cell} = Enum.split_with(classes, &(ModelRegistry.fit_scope(&1) == :pooled))
+    # Flatten EVERY per-cell cell across lists into one spec list (#1065) → a single saturated stream
+    # (no per-list batch-boundary idle), and the planner's concurrency-divided ETA becomes accurate.
+    per_cell_specs =
+      for sk <- r.lists,
+          class <- r.per_cell_classes,
+          strat <- r.strategies,
+          bucket <- r.buckets,
+          v <- r.variants do
+        [source_key: sk, model_class: class, strategy: strat, feature_bucket: bucket] ++ v
+      end
 
-    per_cell_rows =
-      Enum.flat_map(lists, fn sk ->
-        cells =
-          for class <- per_cell, strat <- strategies, bucket <- buckets, v <- variants do
-            [model_class: class, strategy: strat, feature_bucket: bucket] ++ v
-          end
+    total = length(per_cell_specs) + length(r.pooled_classes) * length(r.lists)
 
-        run_cells(sk, cells, shared)
-      end)
+    # The run lifecycle row (#1065): start → live per-cell counters → finish. Each cell updates both
+    # the DB row (dashboard truth) and the optional CLI `:on_progress` callback.
+    RunReporter.start(run_id, "matrix", total, run_params(opts, r))
 
-    per_cell_rows ++ run_pooled_classes(pooled, lists, strategies, buckets, shared)
+    on_cell = fn event ->
+      RunReporter.record(run_id, %{status: event.status, current_cell: event.cell})
+      if on_progress, do: on_progress.(event)
+    end
+
+    shared =
+      opts
+      |> Keyword.take([:sample, :alpha, :seed, :max_concurrency, :cell_timeout])
+      |> Keyword.put(:run_id, run_id)
+      |> Keyword.put(:on_cell, on_cell)
+
+    try do
+      per_cell_rows = stream_cells(per_cell_specs, shared)
+
+      pooled_rows =
+        run_pooled_classes(r.pooled_classes, r.lists, r.strategies, r.buckets, shared)
+
+      rows = per_cell_rows ++ pooled_rows
+      RunReporter.finish(run_id, "completed")
+      rows
+    rescue
+      e ->
+        RunReporter.finish(run_id, "failed", e)
+        reraise e, __STACKTRACE__
+    end
+  end
+
+  # A run identifier without git/time-of-day collisions: base36 millisecond clock + 3 random bytes.
+  defp gen_run_id do
+    ms = Integer.to_string(System.system_time(:millisecond), 36)
+    rand = :crypto.strong_rand_bytes(3) |> Base.encode16(case: :lower)
+    "matrix-#{ms}-#{rand}"
+  end
+
+  # The reproducibility snapshot stored on the runs row (#1065) — enough to re-derive the planned
+  # grid (and so the dashboard's remaining-cell ETA). `RunReporter` stringifies atoms for jsonb.
+  defp run_params(opts, r) do
+    %{
+      lists: r.lists,
+      classes: Enum.map(r.per_cell_classes ++ r.pooled_classes, &to_string/1),
+      strategies: r.strategies,
+      buckets: r.buckets,
+      sample: Keyword.get(opts, :sample),
+      seed: Keyword.get(opts, :seed),
+      max_concurrency: Keyword.get(opts, :max_concurrency, 4)
+    }
   end
 
   # Pooled classes (#1061 PR3) fit ONCE across all lists, then project to a per-target weight map
@@ -632,39 +767,66 @@ defmodule Cinegraph.Predictions.Trainer do
   defp run_pooled_classes([], _lists, _strategies, _buckets, _shared), do: []
 
   defp run_pooled_classes(pooled, lists, _strategies, _buckets, shared) do
+    on_cell = Keyword.get(shared, :on_cell)
+
     Enum.flat_map(pooled, fn class ->
+      t0 = System.monotonic_time(:millisecond)
       {:ok, mod} = ModelRegistry.fetch(class)
 
       case mod.fit_pooled(lists, shared) do
         {:ok, %{projected: by_list}} ->
           Enum.flat_map(lists, fn sk ->
+            cell_opts = pooled_cell_opts(sk, class, shared)
+            c0 = System.monotonic_time(:millisecond)
+
             case Map.get(by_list, sk) do
+              # A list the pooled fit couldn't project to is still a planned cell — attribute it as
+              # `failed` so it never vanishes (#1065 review), the same promise per-cell runs keep.
               nil ->
+                record_failed_cell(cell_opts, :no_pooled_projection, t0)
+                notify_cell(on_cell, cell_opts, :failed, ms_since(c0))
                 []
 
               weights ->
-                cell_opts =
-                  [
-                    source_key: sk,
-                    model_class: class,
-                    strategy: "temporal",
-                    feature_bucket: :objective_only,
-                    precomputed_weights: weights,
-                    persist?: true
-                  ] ++ shared
+                case evaluate_cell(Keyword.put(cell_opts, :precomputed_weights, weights)) do
+                  {:ok, row} ->
+                    notify_cell(on_cell, cell_opts, :ok, ms_since(c0))
+                    [row]
 
-                case evaluate_cell(cell_opts) do
-                  {:ok, row} -> [row]
-                  {:error, _} -> []
+                  {:error, _} ->
+                    notify_cell(on_cell, cell_opts, :failed, ms_since(c0))
+                    []
                 end
             end
           end)
 
+        # The whole pooled fit failed: every planned (class × list) cell would otherwise vanish.
+        # Attribute a `failed` row to each so the run leaves no cell in an unknown state (#1065).
         {:error, reason} ->
           Logger.warning("Trainer.run_matrix: #{class} fit_pooled failed: #{inspect(reason)}")
+
+          Enum.each(lists, fn sk ->
+            cell_opts = pooled_cell_opts(sk, class, shared)
+            record_failed_cell(cell_opts, {:fit_pooled, reason}, t0)
+            notify_cell(on_cell, cell_opts, :failed, 0)
+          end)
+
           []
       end
     end)
+  end
+
+  defp ms_since(t0), do: System.monotonic_time(:millisecond) - t0
+
+  # The shared shape of a pooled cell (#1061 PR3): objective-only on the temporal validation tier.
+  defp pooled_cell_opts(sk, class, shared) do
+    [
+      source_key: sk,
+      model_class: class,
+      strategy: "temporal",
+      feature_bucket: :objective_only,
+      persist?: true
+    ] ++ shared
   end
 
   # "Must beat the dumb baseline" — the honest, list-specific failure threshold (mirrors
@@ -695,6 +857,23 @@ defmodule Cinegraph.Predictions.Trainer do
   defp normalize_to_string(nil), do: nil
   defp normalize_to_string(v) when is_atom(v), do: Atom.to_string(v)
   defp normalize_to_string(v), do: v
+
+  # The provenance/descriptor half of a ledger row, shared by `evaluate_cell/1` and
+  # `run_cells/3`'s timeout/kill writer so both record byte-identical attribution (#1065).
+  defp cell_base(opts) do
+    %{
+      source_key: Keyword.fetch!(opts, :source_key),
+      model_class: Keyword.get(opts, :model_class, ModelRegistry.default().key()),
+      backtest_strategy: Keyword.get(opts, :strategy, "temporal"),
+      feature_bucket: to_string(Keyword.get(opts, :feature_bucket, :all)),
+      granularity: to_string(Keyword.get(opts, :granularity, :data_point)),
+      seed: Keyword.get(opts, :seed, 1337),
+      holdout_spent: false,
+      code_version: code_version(),
+      run_id: Keyword.get(opts, :run_id),
+      run_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    }
+  end
 
   defp insert_ledger_row(attrs) do
     %ExperimentLedger{}
@@ -1366,7 +1545,8 @@ defmodule Cinegraph.Predictions.Trainer do
          calibration,
          prereg,
          strategy,
-         model_class
+         model_class,
+         run_id
        ) do
     string_weights = stringify(weights)
     lens_config_hash = if feature_set["granularity"] == "lens", do: LensConfig.lens_config_hash()
@@ -1399,7 +1579,8 @@ defmodule Cinegraph.Predictions.Trainer do
           integrity_report: integrity,
           calibration: calibration,
           holdout_spent_at: now,
-          prereg_id: prereg.id
+          prereg_id: prereg.id,
+          run_id: run_id
         })
         |> Repo.insert(
           on_conflict:
@@ -1412,6 +1593,7 @@ defmodule Cinegraph.Predictions.Trainer do
                :prereg_id,
                :feature_set,
                :lens_config_hash,
+               :run_id,
                :updated_at
              ]},
           conflict_target: [:source_key, :weights_hash, :model_version, :prereg_id],

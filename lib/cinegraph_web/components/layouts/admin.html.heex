@@ -50,6 +50,12 @@
             assigns={assigns}
           />
           <.sidebar_item path="/admin/oban" label="Oban" icon={:server} assigns={assigns} />
+          <.sidebar_item
+            path="/admin/predictions/runs"
+            label="Prediction Runs"
+            icon={:chart_bar}
+            assigns={assigns}
+          />
         </.sidebar_section>
 
         <%!-- Data --%>
@@ -267,6 +273,7 @@
             <.mobile_sidebar_item path="/admin/jobs" label="Jobs" />
             <.mobile_sidebar_item path="/admin/scheduled" label="Scheduled" />
             <.mobile_sidebar_item path="/admin/oban" label="Oban" />
+            <.mobile_sidebar_item path="/admin/predictions/runs" label="Prediction Runs" />
           </.mobile_sidebar_section>
 
           <.mobile_sidebar_section title="Data">

@@ -12,6 +12,7 @@ defmodule Mix.Tasks.Predictions.Matrix do
       mix predictions.matrix --classes linear_logreg,pooled_linear --buckets objective_only,all
       mix predictions.matrix --lists afi_100 --sample 20000    # fast-mode (approx)
       mix predictions.matrix --json
+      mix predictions.matrix --plan                            # estimate, don't run (#1065)
 
   Options:
     --lists        comma-separated source_keys (default: all active lists)
@@ -21,11 +22,13 @@ defmodule Mix.Tasks.Predictions.Matrix do
     --sample       fast-mode non-member pool cap (0 = full pool, the honest default)
     --alpha        L2 regularization strength
     --seed         RNG seed (default 1337)
+    --plan         print the planner-generated cell grid + a pool-weighted ETA from history; no run
     --json         machine-readable output
   """
   use Mix.Task
 
-  alias Cinegraph.Predictions.Trainer
+  alias Cinegraph.Predictions.{MatrixPlanner, Trainer}
+  alias Mix.Tasks.Predictions.ProgressLine
 
   @shortdoc "Run classes × lists × strategies × buckets into the experiment ledger (#1061)"
 
@@ -48,6 +51,7 @@ defmodule Mix.Tasks.Predictions.Matrix do
           sample: :integer,
           alpha: :float,
           seed: :integer,
+          plan: :boolean,
           json: :boolean
         ]
       )
@@ -62,14 +66,98 @@ defmodule Mix.Tasks.Predictions.Matrix do
       |> maybe_put(:alpha, opts[:alpha])
       |> maybe_put(:seed, opts[:seed])
 
+    if opts[:plan] do
+      run_plan(run_opts, opts[:json])
+    else
+      run_matrix(run_opts, opts[:json])
+    end
+  end
+
+  # `--plan` (#1065): print the exact grid a real run would execute + a pool-weighted ETA from
+  # Phase-1 `duration_ms` history, without running anything.
+  defp run_plan(run_opts, json?) do
+    est = run_opts |> MatrixPlanner.plan() |> MatrixPlanner.estimate(run_opts)
+
+    if json? do
+      IO.puts(Jason.encode!(plan_json(est), pretty: true))
+    else
+      print_plan(est)
+    end
+  end
+
+  defp run_matrix(run_opts, json?) do
     t0 = System.monotonic_time(:millisecond)
-    rows = Trainer.run_matrix(run_opts)
+
+    # JSON output stays clean (no status line writing to stdout); interactive runs get a live line.
+    rows = if json?, do: Trainer.run_matrix(run_opts), else: run_with_progress(run_opts)
     secs = Float.round((System.monotonic_time(:millisecond) - t0) / 1000, 1)
 
-    if opts[:json] do
+    if json? do
       IO.puts(Jason.encode!(%{seconds: secs, rows: Enum.map(rows, &row_json/1)}, pretty: true))
     else
       print_table(rows, secs)
+    end
+  end
+
+  # Live status line (#1065 Phase 3): a per-cell `:on_progress` callback updates an accumulator and
+  # rewrites one line. ETA = remaining cells × historical avg per-cell ÷ concurrency (the planner's
+  # pool-weighted cost); throughput = cells/min so far.
+  defp run_with_progress(run_opts) do
+    plan = MatrixPlanner.plan(run_opts)
+    total = plan.total
+    conc = Keyword.get(run_opts, :max_concurrency, 4)
+    avg_ms = avg_predicted(MatrixPlanner.price_cells(plan.cells))
+    started = System.monotonic_time(:millisecond)
+
+    {:ok, acc} = Agent.start_link(fn -> %{done: 0, failed: 0, current: nil} end)
+
+    on_progress = fn event ->
+      snap =
+        Agent.get_and_update(acc, fn s ->
+          s = %{
+            done: s.done + 1,
+            failed: s.failed + if(event.status == :failed, do: 1, else: 0),
+            current: event.cell
+          }
+
+          {s, s}
+        end)
+
+      ProgressLine.write(progress_snapshot(snap, total, conc, avg_ms, started))
+    end
+
+    rows = Trainer.run_matrix(Keyword.put(run_opts, :on_progress, on_progress))
+    ProgressLine.clear()
+    Agent.stop(acc)
+    rows
+  end
+
+  defp progress_snapshot(
+         %{done: done, failed: failed, current: current},
+         total,
+         conc,
+         avg_ms,
+         started
+       ) do
+    elapsed_ms = System.monotonic_time(:millisecond) - started
+    throughput = if elapsed_ms > 0, do: done / (elapsed_ms / 60_000), else: nil
+    eta_ms = avg_ms && round(max(total - done, 0) * avg_ms / conc)
+
+    %{
+      label: "matrix",
+      done: done,
+      total: total,
+      current: current,
+      throughput_per_min: throughput,
+      eta_ms: eta_ms,
+      failed: failed
+    }
+  end
+
+  defp avg_predicted(priced) do
+    case Enum.reject(Enum.map(priced, & &1.predicted_ms), &is_nil/1) do
+      [] -> nil
+      ms -> Enum.sum(ms) / length(ms)
     end
   end
 
@@ -95,6 +183,106 @@ defmodule Mix.Tasks.Predictions.Matrix do
 
     Mix.shell().info("\nRead it back: mix predictions.leaderboard --by-class\n")
   end
+
+  defp print_plan(est) do
+    {pooled, per_cell} = Enum.split_with(est.by_class, &(&1.kind == :pooled))
+
+    headline =
+      Enum.map_join(est.by_class, " + ", &"#{&1.class} #{&1.count} #{kind_word(&1.kind)}")
+
+    Mix.shell().info("\nMATRIX PLAN — #{est.total} cells   (#{headline})")
+
+    basis =
+      if est.basis_count > 0,
+        do: "based on #{est.basis_count} historical cells",
+        else: "no history yet — estimate unavailable"
+
+    # State the expected error band (residual RMSE of the cost-model fit) so the ETA is honest about
+    # its uncertainty — the acceptance band an actual run should land within. Only shown when the fit
+    # is trustworthy (r² ≥ 0.5); below that the ETA falls back to empirical medians, so the model's
+    # band wouldn't describe it.
+    band =
+      case est.cost_model do
+        %{rel_err: re, r2: r2} when r2 >= 0.5 -> "±#{round(re * 100)}% · "
+        _ -> ""
+      end
+
+    Mix.shell().info(
+      "estimated wall-clock @ concurrency #{est.concurrency}:  ~#{dur(est.eta_ms)}   (#{band}#{basis})"
+    )
+
+    case est.cost_model do
+      %{k: k, r2: r2, n: n} ->
+        Mix.shell().info(
+          "cost model:  duration ≈ #{Float.round(k, 4)} ms/movie-score · r² #{Float.round(r2, 2)} · n=#{n}\n"
+        )
+
+      _ ->
+        Mix.shell().info("")
+    end
+
+    for c <- per_cell ++ pooled do
+      # Per-class wall-clock contribution (work / concurrency) so the lines sum to the headline ETA;
+      # `heaviest` below shows individual cell cost (undivided).
+      contribution = c.predicted_ms && round(c.predicted_ms / est.concurrency)
+
+      Mix.shell().info(
+        "  #{pad(kind_word(c.kind), 9)} #{pad(c.class, 16)} #{pad("#{c.count} cells", 11)}" <>
+          " ~#{pad(dur(contribution), 9)} (temporal #{c.temporal} · static #{c.static})"
+      )
+    end
+
+    case est.heaviest do
+      [] ->
+        :ok
+
+      heavy ->
+        line = Enum.map_join(heavy, " · ", &"#{shape(&1)} (~#{dur(&1.predicted_ms)})")
+        Mix.shell().info("  heaviest:  #{line}")
+    end
+
+    no_hist =
+      case est.no_history do
+        [] -> "<none>"
+        cells -> cells |> Enum.map(&shape/1) |> Enum.uniq() |> Enum.join(" · ")
+      end
+
+    Mix.shell().info("  no history for:  #{no_hist}\n")
+    Mix.shell().info("Run it: drop --plan.\n")
+  end
+
+  defp plan_json(est) do
+    %{
+      total: est.total,
+      concurrency: est.concurrency,
+      eta_ms: est.eta_ms,
+      basis_count: est.basis_count,
+      cost_model: est.cost_model,
+      by_class:
+        Enum.map(est.by_class, fn c ->
+          %{
+            class: c.class,
+            kind: c.kind,
+            count: c.count,
+            temporal: c.temporal,
+            static: c.static,
+            predicted_ms: c.predicted_ms
+          }
+        end),
+      heaviest: Enum.map(est.heaviest, &%{shape: shape(&1), predicted_ms: &1.predicted_ms}),
+      no_history: est.no_history |> Enum.map(&shape/1) |> Enum.uniq()
+    }
+  end
+
+  defp shape(c), do: "#{c.source_key}/#{c.strategy}/#{c.feature_bucket}"
+
+  defp kind_word(:per_cell), do: "per-cell"
+  defp kind_word(:pooled), do: "pooled"
+
+  # Human wall-clock from milliseconds: "—" when unknown, else seconds under a minute else "Nm".
+  defp dur(nil), do: "—"
+  defp dur(ms) when ms < 60_000, do: "#{round(ms / 1000)}s"
+  defp dur(ms), do: "#{Float.round(ms / 60_000, 1)}m"
 
   defp row_json(r) do
     %{

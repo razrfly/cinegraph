@@ -20,6 +20,32 @@ defmodule Cinegraph.Predictions.SentinelClass do
   def explain(w), do: w
 end
 
+# Sleeps during fit so a per-cell timeout (#1065) fires deterministically regardless of seed size,
+# exercising run_cells' Task.shutdown → record_failed_cell attribution path.
+defmodule Cinegraph.Predictions.SlowClass do
+  @behaviour Cinegraph.Predictions.ModelClass
+  @impl true
+  def key, do: "slow"
+  @impl true
+  def label, do: "Slow"
+  @impl true
+  def serving_kind, do: :weight_map
+  @impl true
+  def fit(_x, _y, _codes, _opts) do
+    Process.sleep(2_000)
+    {:ok, %{"slow" => 1.0}}
+  end
+
+  @impl true
+  def score(w, g, sk), do: {g, w, sk}
+  @impl true
+  def serialize(w), do: w
+  @impl true
+  def load(w), do: w
+  @impl true
+  def explain(w), do: w
+end
+
 defmodule Cinegraph.Predictions.BoomClass do
   @behaviour Cinegraph.Predictions.ModelClass
   @impl true
@@ -30,6 +56,30 @@ defmodule Cinegraph.Predictions.BoomClass do
   def serving_kind, do: :weight_map
   @impl true
   def fit(_x, _y, _codes, _opts), do: raise("boom during fit")
+  @impl true
+  def score(w, g, sk), do: {g, w, sk}
+  @impl true
+  def serialize(w), do: w
+  @impl true
+  def load(w), do: w
+  @impl true
+  def explain(w), do: w
+end
+
+# A pooled class whose pooled fit fails — proves run_pooled_classes attributes a failed row to every
+# planned (class × list) cell instead of letting them vanish (#1065 review).
+defmodule Cinegraph.Predictions.PooledBoomClass do
+  @behaviour Cinegraph.Predictions.ModelClass
+  @impl true
+  def key, do: "pooled_boom"
+  @impl true
+  def label, do: "Pooled Boom"
+  @impl true
+  def serving_kind, do: :weight_map
+  def fit_scope, do: :pooled
+  def fit_pooled(_lists, _opts), do: {:error, :boom_pooled_fit}
+  @impl true
+  def fit(_x, _y, _codes, _opts), do: {:error, :unused}
   @impl true
   def score(w, g, sk), do: {g, w, sk}
   @impl true
@@ -262,6 +312,140 @@ defmodule Cinegraph.Predictions.ExperimentLedgerTest do
 
       buckets = Repo.all(from e in ExperimentLedger, select: e.feature_bucket)
       assert Enum.sort(buckets) == ~w(all canon_overlap objective_only)
+    end
+  end
+
+  # ── observability: duration_ms, run_id, timeout/crash attribution (#1065) ─────────
+  describe "instrumentation (#1065 Phase 1)" do
+    test "evaluate_cell records duration_ms and run_id on a persisted row" do
+      assert {:ok, _} =
+               Trainer.evaluate_cell(
+                 source_key: @list,
+                 strategy: "static",
+                 feature_bucket: :objective_only,
+                 run_id: "run-abc",
+                 persist?: true
+               )
+
+      assert [saved] = Repo.all(ExperimentLedger)
+      assert is_integer(saved.duration_ms) and saved.duration_ms >= 0
+      assert saved.run_id == "run-abc"
+      # n_evaluated is promoted to a first-class column (still mirrored in metrics).
+      assert is_integer(saved.n_evaluated) and saved.n_evaluated > 0
+      assert saved.n_evaluated == saved.metrics["n_evaluated"]
+    end
+
+    test "a failed pooled fit attributes a failed row to every planned (class × list) cell" do
+      original = Application.get_env(:cinegraph, :model_classes)
+
+      Application.put_env(:cinegraph, :model_classes, [
+        Cinegraph.Predictions.LinearLogReg,
+        Cinegraph.Predictions.PooledBoomClass
+      ])
+
+      on_exit(fn ->
+        if original,
+          do: Application.put_env(:cinegraph, :model_classes, original),
+          else: Application.delete_env(:cinegraph, :model_classes)
+      end)
+
+      rows =
+        Trainer.run_matrix(
+          lists: [@list, @empty_list],
+          classes: ["pooled_boom"],
+          max_concurrency: 1
+        )
+
+      assert rows == []
+
+      failed = Repo.all(from e in ExperimentLedger, where: e.model_class == "pooled_boom")
+      assert length(failed) == 2
+      assert Enum.all?(failed, &(&1.status == "failed"))
+      assert Enum.all?(failed, &(&1.error =~ "fit_pooled"))
+      assert Enum.map(failed, & &1.source_key) |> Enum.sort() == Enum.sort([@list, @empty_list])
+      # A run still stamps these vanished-before cells with the shared run_id.
+      assert Enum.all?(failed, &is_binary(&1.run_id))
+    end
+
+    test "run_matrix stamps one shared run_id across every cell" do
+      Trainer.run_matrix(
+        lists: [@list],
+        classes: ["linear_logreg"],
+        strategies: ["temporal"],
+        buckets: [:objective_only, :all],
+        max_concurrency: 2
+      )
+
+      run_ids = Repo.all(from e in ExperimentLedger, select: e.run_id) |> Enum.uniq()
+      assert [run_id] = run_ids
+      assert is_binary(run_id) and String.starts_with?(run_id, "matrix-")
+    end
+
+    test "a per-cell timeout attributes a failed row to the KNOWN cell (the must-fix)" do
+      # SlowClass.fit sleeps 2s; a 50ms cell_timeout makes the worker's own timeout fire and shut it
+      # down. The cell must still be recorded (not silently lost at the stream level).
+      original = Application.get_env(:cinegraph, :model_classes)
+
+      Application.put_env(:cinegraph, :model_classes, [
+        Cinegraph.Predictions.LinearLogReg,
+        Cinegraph.Predictions.SlowClass
+      ])
+
+      on_exit(fn ->
+        if original,
+          do: Application.put_env(:cinegraph, :model_classes, original),
+          else: Application.delete_env(:cinegraph, :model_classes)
+      end)
+
+      rows =
+        Trainer.run_cells(
+          @list,
+          [[model_class: "slow", feature_bucket: :all]],
+          strategy: "temporal",
+          max_concurrency: 1,
+          cell_timeout: 50,
+          run_id: "timeout-run"
+        )
+
+      assert rows == []
+      assert [failed] = Repo.all(ExperimentLedger)
+      assert failed.status == "failed"
+      assert failed.source_key == @list
+      assert failed.model_class == "slow"
+      assert failed.feature_bucket == "all"
+      assert failed.run_id == "timeout-run"
+      assert failed.error =~ "cell_timeout"
+      assert is_integer(failed.duration_ms)
+    end
+
+    test "a worker crash mid-fit is attributed via run_cells (not just direct evaluate_cell)" do
+      original = Application.get_env(:cinegraph, :model_classes)
+
+      Application.put_env(:cinegraph, :model_classes, [
+        Cinegraph.Predictions.LinearLogReg,
+        Cinegraph.Predictions.BoomClass
+      ])
+
+      on_exit(fn ->
+        if original,
+          do: Application.put_env(:cinegraph, :model_classes, original),
+          else: Application.delete_env(:cinegraph, :model_classes)
+      end)
+
+      rows =
+        Trainer.run_cells(
+          @list,
+          [[model_class: "boom", feature_bucket: :all]],
+          strategy: "temporal",
+          max_concurrency: 1,
+          run_id: "crash-run"
+        )
+
+      assert rows == []
+      assert [failed] = Repo.all(from e in ExperimentLedger, where: e.status == "failed")
+      assert failed.model_class == "boom"
+      assert failed.run_id == "crash-run"
+      assert failed.error =~ "boom"
     end
   end
 

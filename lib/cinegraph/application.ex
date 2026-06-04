@@ -36,6 +36,9 @@ defmodule Cinegraph.Application do
         # Task supervisor for health/drift parallel reads — keeps unsupervised
         # Task.async out of the LiveView process tree (#722).
         {Task.Supervisor, name: Cinegraph.Health.TaskSupervisor},
+        # Task supervisor for the prediction matrix's per-cell workers (#1065): async_nolink so an
+        # abnormal cell crash is isolated (monitored, not linked) and can still be attributed.
+        {Task.Supervisor, name: Cinegraph.Predictions.TaskSupervisor},
         # Start Rate Limiter
         Cinegraph.RateLimiter
       ] ++
