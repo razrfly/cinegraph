@@ -1,0 +1,146 @@
+<div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16">
+  <nav class="mb-8 text-[12px] text-mist-600 dark:text-mist-400">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950 dark:hover:text-white">Movies</.link>
+    <span class="mx-2 text-mist-400 dark:text-mist-600">/</span>
+    <span class="font-medium text-mist-950 dark:text-white">Algorithms</span>
+  </nav>
+
+  <section class="mb-8 lg:mb-10">
+    <CinegraphWeb.NeutralV2Components.n_eyebrow>
+      Prediction Reliability
+    </CinegraphWeb.NeutralV2Components.n_eyebrow>
+    <h1 class="mt-2 font-display italic text-[44px] sm:text-[56px] lg:text-[72px] text-mist-950 dark:text-white leading-[1.02]">
+      Algorithms.
+    </h1>
+    <p class="mt-3 max-w-2xl text-[15px] text-mist-700 dark:text-mist-300">
+      How well an honest, objective model predicts each canonical list — graded on the Wilson-95
+      lower bound of held-out recall, on independent signal only. We show the lists we can predict,
+      and honestly label the ones we can't. <a
+        href="#how-we-measure"
+        class="underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
+      >
+        How we measure
+      </a>.
+    </p>
+    <p class="mt-2 text-[13px] text-mist-500 dark:text-mist-400">
+      {@served_count} of {length(@cards)} lists have a reliable enough model to serve a prediction.
+    </p>
+  </section>
+
+  <section class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <.link
+      :for={card <- @cards}
+      navigate={~p"/algorithms/#{card.slug}"}
+      class={[
+        "rounded-xl border p-5 flex flex-col gap-3 transition hover:border-mist-950/30 dark:hover:border-white/30",
+        if(card.served?,
+          do: "border-mist-950/10 bg-white dark:border-white/10 dark:bg-mist-900",
+          else:
+            "border-dashed border-mist-950/15 bg-mist-950/[0.015] dark:border-white/10 dark:bg-mist-950"
+        )
+      ]}
+    >
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <CinegraphWeb.NeutralV2Components.n_eyebrow>
+            {card.archetype}
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <h2 class="mt-1 text-[16px] font-semibold leading-snug text-mist-950 dark:text-white">
+            {card.name}
+          </h2>
+        </div>
+        <CinegraphWeb.NeutralV2Components.n_pill tone={card.tier_tone} size="xs" class="shrink-0">
+          {card.tier}
+        </CinegraphWeb.NeutralV2Components.n_pill>
+      </div>
+
+      <%= if card.served? do %>
+        <div class="flex items-baseline gap-2">
+          <span class="font-display text-[34px] leading-none text-mist-950 dark:text-white tabular-nums">
+            {CinegraphWeb.AlgorithmsLive.Index.headline(card.headline_pct)}
+          </span>
+          <span class="text-[12px] text-mist-500 dark:text-mist-400">
+            recall (95% lower bound)
+          </span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-[12px]">
+          <CinegraphWeb.NeutralV2Components.n_pill
+            tone={if(card.lift_passes?, do: "green", else: "amber")}
+            size="xs"
+            class=""
+          >
+            {CinegraphWeb.AlgorithmsLive.Index.lift_text(card.lift_ratio, card.lift_passes?)}
+          </CinegraphWeb.NeutralV2Components.n_pill>
+          <span :if={card.recall} class="text-mist-500 dark:text-mist-400 tabular-nums">
+            point recall {CinegraphWeb.AlgorithmsLive.Index.pct(card.recall)}
+          </span>
+        </div>
+
+        <p
+          :if={CinegraphWeb.AlgorithmsLive.Index.circularity_pct(card.circularity)}
+          class="text-[11.5px] text-amber-700 dark:text-amber-400"
+        >
+          ⚠ {CinegraphWeb.AlgorithmsLive.Index.circularity_pct(card.circularity)} of recall is canon-overlap circularity
+        </p>
+
+        <div :if={card.top_features != []} class="mt-1">
+          <div class="text-[10.5px] uppercase tracking-wide text-mist-400 dark:text-mist-500 mb-1">
+            Top objective signals
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              :for={f <- card.top_features}
+              class="text-[11px] rounded bg-mist-950/[0.04] px-2 py-[2px] text-mist-700 dark:bg-white/10 dark:text-mist-200"
+            >
+              {f.label}
+            </span>
+          </div>
+        </div>
+
+        <div class="mt-auto pt-1 text-[11px] text-mist-400 dark:text-mist-500">
+          {card.strategy} backtest
+        </div>
+      <% else %>
+        <p class="text-[13px] text-mist-600 dark:text-mist-300">
+          We don't serve a prediction for this list — no model clears the honesty bar. Its membership
+          is taste we can't reliably proxy from objective signal, and saying so is the honest answer.
+        </p>
+        <div class="mt-auto pt-1 text-[11.5px] text-mist-500 dark:text-mist-400">
+          Why some lists can't be predicted →
+        </div>
+      <% end %>
+    </.link>
+  </section>
+
+  <section
+    id="how-we-measure"
+    class="mt-12 max-w-3xl border-t border-mist-950/10 dark:border-white/10 pt-6 scroll-mt-24"
+  >
+    <CinegraphWeb.NeutralV2Components.n_eyebrow>
+      How we measure
+    </CinegraphWeb.NeutralV2Components.n_eyebrow>
+    <ul class="mt-3 space-y-2 text-[13px] text-mist-700 dark:text-mist-300">
+      <li>
+        <strong class="text-mist-950 dark:text-white">Honest, gamed-proof metric.</strong>
+        Recall@K against the full candidate pool (base rate ~0.1%), graded on the
+        <em>Wilson-95 lower bound</em>
+        — a conservative floor, not a point estimate.
+      </li>
+      <li>
+        <strong class="text-mist-950 dark:text-white">Objective signal only.</strong>
+        Graded on independent features; "appears on other lists" circularity is stripped and, where
+        present, disclosed.
+      </li>
+      <li>
+        <strong class="text-mist-950 dark:text-white">Must beat dumb baselines.</strong>
+        A model must clear the popularity baseline by a real margin or it isn't served.
+      </li>
+      <li>
+        <strong class="text-mist-950 dark:text-white">We don't fake it.</strong>
+        Most canonical lists are only weakly predictable from objective metadata; lists we can't
+        honestly predict are labeled "not metadata-predictable" rather than shown a number we don't trust.
+      </li>
+    </ul>
+  </section>
+</div>

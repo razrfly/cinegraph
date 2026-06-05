@@ -59,9 +59,19 @@ defmodule Cinegraph.Predictions.ListFrontier do
       newest_member_title: newest_title,
       last_import_at: last_import,
       fresh?: fresh?,
-      warnings: warnings(edition_year, newest_year, fresh?, last_import, cutoff_source)
+      warnings:
+        warnings(edition_year, newest_year, fresh?, last_import, cutoff_source, frozen?(list))
     }
   end
+
+  # A list explicitly marked non-accreting (`metadata["accretes"] == false`) is a *frozen* edition
+  # (e.g. AFI 100, a fixed 1998 list): its edition year legitimately postdates its newest film, so an
+  # `edition > newest` gap is expected, not a stale import. Used to suppress the false-positive
+  # disagreement warning for such lists (#1049 A0).
+  defp frozen?(%MovieList{metadata: meta}) when is_map(meta),
+    do: Map.get(meta, "accretes") == false
+
+  defp frozen?(_), do: false
 
   # ── internals ────────────────────────────────────────────────────────────────
 
@@ -110,11 +120,12 @@ defmodule Cinegraph.Predictions.ListFrontier do
   defp fresh?(%DateTime{} = dt),
     do: Date.diff(Date.utc_today(), DateTime.to_date(dt)) <= @fresh_days
 
-  defp warnings(edition_year, newest_year, fresh?, last_import, cutoff_source) do
+  defp warnings(edition_year, newest_year, fresh?, last_import, cutoff_source, frozen?) do
     []
     |> add_if(
       is_integer(edition_year) and is_integer(newest_year) and
-        abs(edition_year - newest_year) >= @disagree_years,
+        abs(edition_year - newest_year) >= @disagree_years and
+        not (frozen? and newest_year <= edition_year),
       "edition year #{edition_year} disagrees with newest member year #{newest_year} — possible stale import or data issue"
     )
     |> add_if(

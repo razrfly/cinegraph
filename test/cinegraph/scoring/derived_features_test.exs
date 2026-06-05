@@ -11,6 +11,8 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
 
   @sk "1001_movies"
 
+  defp uniq, do: System.unique_integer([:positive])
+
   defp movie(id, canon, budget \\ 0, revenue \\ 0) do
     %Movie{
       id: id,
@@ -22,13 +24,20 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
   end
 
   describe "supported_codes/0 — the routing guard" do
-    test "ships the 5 canon-taste features + the 5 missingness indicators (#1044, #1051 A4)" do
-      assert Enum.sort(DerivedFeatures.supported_codes()) ==
-               ~w(auteur_track_record box_office_roi canonical_contribution festival_prestige
-                  has_budget has_imdb_rating has_metacritic has_revenue has_rotten_tomatoes
-                  prior_collab_density)
+    test "ships the 5 canon-taste features + 5 missingness indicators + the Tier-0 categoricals" do
+      supported = DerivedFeatures.supported_codes()
 
-      assert "prior_collab_density" in DerivedFeatures.supported_codes()
+      # canon-taste (#1044) + missingness (#1051 A4)
+      for c <- ~w(auteur_track_record box_office_roi canonical_contribution festival_prestige
+                  has_budget has_imdb_rating has_metacritic has_revenue has_rotten_tomatoes
+                  prior_collab_density),
+          do: assert(c in supported)
+
+      # Tier-0 categoricals (#1070): 13 languages + 19 genres + 1 ordinal = 33
+      assert length(DerivedFeatures.categorical_codes()) == 33
+      assert "lang_en" in supported and "lang_other" in supported
+      assert "genre_drama" in supported and "genre_science_fiction" in supported
+      assert "content_rating_age" in supported
     end
   end
 
@@ -131,6 +140,135 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
 
       assert vals["has_imdb_rating"] == 1.0
       assert vals["has_metacritic"] == 0.0
+    end
+  end
+
+  describe "Tier-0 categorical features (#1070)" do
+    test "in-memory movie (no DB rows) → all categorical codes emit 0.0" do
+      m = movie(1, %{"a" => 1})
+      vals = DerivedFeatures.load([m], DerivedFeatures.categorical_codes(), @sk)[1]
+      assert map_size(vals) == 33
+      for {_code, v} <- vals, do: assert(v == 0.0)
+    end
+
+    test "language one-hot, genre multi-hot, and content_rating_age from real DB rows" do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      m =
+        %Movie{}
+        |> Movie.changeset(%{
+          tmdb_id: System.unique_integer([:positive]),
+          title: "Le Film",
+          original_language: "fr",
+          canonical_sources: %{}
+        })
+        |> Repo.insert!()
+
+      # genres + junction (Drama, Science Fiction → genre_drama, genre_science_fiction)
+      {drama_id, scifi_id} = {uniq(), uniq()}
+
+      Repo.insert_all("genres", [
+        %{id: drama_id, tmdb_id: uniq(), name: "Drama", inserted_at: now, updated_at: now},
+        %{
+          id: scifi_id,
+          tmdb_id: uniq(),
+          name: "Science Fiction",
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
+
+      Repo.insert_all("movie_genres", [
+        %{movie_id: m.id, genre_id: drama_id},
+        %{movie_id: m.id, genre_id: scifi_id}
+      ])
+
+      # omdb content_rating "R" → MPAA min age 17 → 17/18
+      Repo.insert_all("external_metrics", [
+        %{
+          movie_id: m.id,
+          source: "omdb",
+          metric_type: "content_rating",
+          text_value: "R",
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
+
+      loaded = %Movie{
+        id: m.id,
+        title: "Le Film",
+        release_date: ~D[2015-01-01],
+        canonical_sources: %{}
+      }
+
+      vals = DerivedFeatures.load([loaded], DerivedFeatures.categorical_codes(), @sk)[m.id]
+
+      assert vals["lang_fr"] == 1.0
+      assert vals["lang_en"] == 0.0
+      assert vals["lang_other"] == 0.0
+      assert vals["genre_drama"] == 1.0
+      assert vals["genre_science_fiction"] == 1.0
+      assert vals["genre_horror"] == 0.0
+      assert_in_delta vals["content_rating_age"], 17.0 / 18.0, 1.0e-6
+    end
+
+    test "lang_other fires for a known language outside the top-N" do
+      m =
+        %Movie{}
+        |> Movie.changeset(%{
+          tmdb_id: System.unique_integer([:positive]),
+          title: "Filmi",
+          # 'fi' (Finnish) is a real code but not in the top-N → lang_other
+          original_language: "fi",
+          canonical_sources: %{}
+        })
+        |> Repo.insert!()
+
+      loaded = %Movie{
+        id: m.id,
+        title: "Filmi",
+        release_date: ~D[2015-01-01],
+        canonical_sources: %{}
+      }
+
+      vals = DerivedFeatures.load([loaded], DerivedFeatures.language_codes(), @sk)[m.id]
+
+      assert vals["lang_other"] == 1.0
+      assert vals["lang_en"] == 0.0
+      assert vals["lang_fr"] == 0.0
+    end
+
+    test "categorical values are leakage-safe (identical with/without target list membership)" do
+      m =
+        %Movie{}
+        |> Movie.changeset(%{
+          tmdb_id: System.unique_integer([:positive]),
+          title: "Member",
+          original_language: "ja",
+          canonical_sources: %{"1001_movies" => 1, "other" => 1}
+        })
+        |> Repo.insert!()
+
+      with_target = %Movie{
+        id: m.id,
+        title: "Member",
+        release_date: ~D[2015-01-01],
+        canonical_sources: %{"1001_movies" => 1}
+      }
+
+      without = %Movie{
+        id: m.id,
+        title: "Member",
+        release_date: ~D[2015-01-01],
+        canonical_sources: %{}
+      }
+
+      codes = DerivedFeatures.categorical_codes()
+
+      assert DerivedFeatures.load([with_target], codes, @sk)[m.id] ==
+               DerivedFeatures.load([without], codes, @sk)[m.id]
     end
   end
 

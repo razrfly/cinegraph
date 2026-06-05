@@ -421,6 +421,7 @@ defmodule CinegraphWeb.NeutralV2Components do
       %{id: "People", href: "/people"},
       %{id: "Lists", href: "/lists"},
       %{id: "Awards", href: "/awards"},
+      %{id: "Algorithms", href: "/algorithms"},
       %{id: "Now Showing", href: "/now-playing"}
     ]
 
