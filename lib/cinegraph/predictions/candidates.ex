@@ -39,7 +39,7 @@ defmodule Cinegraph.Predictions.Candidates do
 
   Options: `:mode` (#{inspect(@modes)}, default `"predictions"`), `:limit` (default 48),
   `:min_sources` (evidence eligibility — distinct external-metric sources required; defaults to
-  2 except in members mode, where members are never gated), `:min_votes` (optional popularity
+  2, and is ignored in members mode, where members are never gated), `:min_votes` (optional popularity
   filter, default 0 = off), `:since` (override the frontier cutoff year; predictions mode only).
 
   Returns `{:ok, result}` with:
@@ -58,7 +58,7 @@ defmodule Cinegraph.Predictions.Candidates do
     mode = validate_mode(Keyword.get(opts, :mode, "predictions"))
     limit = Keyword.get(opts, :limit, 48)
     min_votes = Keyword.get(opts, :min_votes, 0)
-    min_sources = Keyword.get(opts, :min_sources, default_min_sources(mode))
+    min_sources = resolve_min_sources(opts, mode)
 
     case Bus.active_model(source_key) do
       nil ->
@@ -297,7 +297,7 @@ defmodule Cinegraph.Predictions.Candidates do
   def universe_query(source_key, opts \\ []) do
     mode = validate_mode(Keyword.get(opts, :mode, "predictions"))
     min_votes = Keyword.get(opts, :min_votes, 0)
-    min_sources = Keyword.get(opts, :min_sources, default_min_sources(mode))
+    min_sources = resolve_min_sources(opts, mode)
     cutoff = Keyword.get(opts, :cutoff)
 
     base =
@@ -318,8 +318,10 @@ defmodule Cinegraph.Predictions.Candidates do
     |> maybe_min_votes(min_votes)
   end
 
-  defp default_min_sources("members"), do: 0
-  defp default_min_sources(_mode), do: 2
+  # Members mode is NEVER evidence-gated — list membership is the truth, not a candidate — so a
+  # caller-provided :min_sources is ignored there (it would hide actual members).
+  defp resolve_min_sources(_opts, "members"), do: 0
+  defp resolve_min_sources(opts, _mode), do: Keyword.get(opts, :min_sources, 2)
 
   # Fully-imported films, gated by evidence (+ optional votes) and scoped by mode:
   #   predictions → off-list AND release_year ≥ cutoff   candidates → off-list, all eras

@@ -488,6 +488,9 @@ defmodule Cinegraph.Predictions.Trainer do
 
   defp reproduce_static_pairs(model, report) do
     seed = report["seed"]
+
+    # Older reports predate "sample_ratio" being persisted — they were all trained at the default 5.
+    sample_ratio = report["sample_ratio"] || 5
     granularity = String.to_existing_atom(report["granularity"] || "data_point")
     codes = if granularity == :data_point, do: (model.feature_set || %{})["features"]
 
@@ -507,7 +510,7 @@ defmodule Cinegraph.Predictions.Trainer do
               else: o
           end)
 
-        case do_evaluate_static(granularity, model.source_key, 5, opts, codes) do
+        case do_evaluate_static(granularity, model.source_key, sample_ratio, opts, codes) do
           {:ok, %{report: rep}} -> {:ok, rep["pairs"] || [], rep["recall_at_k"]}
           {:error, reason} -> {:error, reason}
         end
@@ -1358,6 +1361,7 @@ defmodule Cinegraph.Predictions.Trainer do
             "n_positives" => rp["n_positives"],
             "n_evaluated" => length(eval),
             "seed" => seed,
+            "sample_ratio" => ratio,
             "holdout_fraction" => frac,
             "worst_miss" => Credibility.worst_miss(scored),
             "baselines" => static_baselines(source_key, test_members, non_members),

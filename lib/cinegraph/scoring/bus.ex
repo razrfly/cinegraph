@@ -95,11 +95,13 @@ defmodule Cinegraph.Scoring.Bus do
         weights
         |> Enum.flat_map(fn {code, w} ->
           v = vec[code] || 0.0
-          c = w * v * 100.0
+          # Filter on the ROUNDED value — a term that would serialize as 0.0 must not count as
+          # a nonzero signal (signals_present = "terms actually moving this score").
+          c = Float.round(w * v * 100.0, 2)
 
           if c == 0.0,
             do: [],
-            else: [%{code: code, value: v, weight: w, contribution: Float.round(c, 2)}]
+            else: [%{code: code, value: v, weight: w, contribution: c}]
         end)
         |> Enum.sort_by(&abs(&1.contribution), :desc)
 

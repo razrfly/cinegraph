@@ -31,20 +31,24 @@ defmodule Mix.Tasks.Predictions.Model.Export do
           Mix.raise("pass --list SOURCE_KEY or --all")
       end
 
-    Enum.each(bundles, fn
-      {sk, {:ok, bundle}} ->
-        path = ModelBundle.write!(bundle)
+    written =
+      Enum.count(bundles, fn
+        {sk, {:ok, bundle}} ->
+          path = ModelBundle.write!(bundle)
 
-        Mix.shell().info(
-          "  #{String.pad_trailing(sk, 26)} #{bundle["model"]["weights_hash"]} → #{Path.relative_to_cwd(path)}"
-        )
+          Mix.shell().info(
+            "  #{String.pad_trailing(sk, 26)} #{bundle["model"]["weights_hash"]} → #{Path.relative_to_cwd(path)}"
+          )
 
-      {sk, {:error, reason}} ->
-        Mix.shell().info("  #{String.pad_trailing(sk, 26)} skipped: #{inspect(reason)}")
-    end)
+          true
+
+        {sk, {:error, reason}} ->
+          Mix.shell().info("  #{String.pad_trailing(sk, 26)} skipped: #{inspect(reason)}")
+          false
+      end)
 
     Mix.shell().info(
-      "\n#{length(bundles)} bundle(s) written. They are reviewable artifacts — commit them."
+      "\n#{written} bundle(s) written. They are reviewable artifacts — commit them."
     )
   end
 end

@@ -103,10 +103,12 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
   defp default_view("all"), do: "list"
   defp default_view(_tab), do: "grid"
 
+  # Rail metadata takes precedence over a served model — same classification order as the
+  # index's build_card/1 and compare's column_type/1 (a rail never surfaces predictive-accuracy UI).
   defp mode_for(list, view) do
     cond do
-      view.served? -> :predictive
       is_map(list.metadata) and list.metadata["rail"] == true -> :rail
+      view.served? -> :predictive
       true -> :unserved
     end
   end
@@ -579,7 +581,7 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
       id: m.id,
       title: m.title,
       year: m.release_date && m.release_date.year,
-      poster_url: poster_url(m.poster_path),
+      poster_url: Presentation.poster_url(m.poster_path),
       href: ~p"/movies/#{m.slug || m.id}"
     }
   end
@@ -604,7 +606,7 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
         signals_present: r.signals_present,
         total_features: total,
         also_on: r.also_on,
-        poster_url: poster_url(r.poster_path),
+        poster_url: Presentation.poster_url(r.poster_path),
         href: ~p"/movies/#{r.slug || r.id}"
       }
     end)
@@ -647,7 +649,7 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
         title: r.title,
         year: r.year,
         rank: i,
-        poster_url: poster_url(r.poster_path),
+        poster_url: Presentation.poster_url(r.poster_path),
         href: ~p"/movies/#{r.slug || r.id}",
         score: if(result.show_prob?, do: Presentation.prob_str(r.prob)),
         reason: why_reason(r[:why] || [], r.also_on)
@@ -670,10 +672,6 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
 
   defp also_on_reason([]), do: nil
   defp also_on_reason(lists), do: "also on: " <> Enum.join(lists, ", ")
-
-  defp poster_url(nil), do: nil
-  defp poster_url("/" <> _ = path), do: "https://image.tmdb.org/t/p/w342#{path}"
-  defp poster_url(path), do: "https://image.tmdb.org/t/p/w342/#{path}"
 
   defp preset_weights do
     Map.new(DiscoveryCommon.get_presets(), fn {name, weights} -> {to_string(name), weights} end)

@@ -9,6 +9,10 @@ defmodule Cinegraph.Embeddings do
   Default model: `sentence-transformers/all-MiniLM-L6-v2` (384-dim, ~90MB, mean-pooled, L2-normalized
   — so cosine similarity is a plain dot product). Override with `EMBEDDING_MODEL`.
 
+  Inputs are truncated to 128 tokens (`compile: [sequence_length: 128]` in the serving) — plenty
+  for movie overviews; longer texts embed only their first ~128 tokens. Raise `sequence_length`
+  if full-text embeddings are ever needed (at recompile + memory cost).
+
   First call downloads the model from the HuggingFace hub into the Bumblebee cache.
   """
 

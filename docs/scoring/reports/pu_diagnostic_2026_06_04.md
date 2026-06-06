@@ -37,7 +37,7 @@ This rules out the **coverage/era/language SAR confound** — Lever C's dominant
 - Tool retained: `mix predictions.pu_diagnostic` (`--source-key`, `--json`) for re-checking if the pool composition changes.
 
 ## Reproduce
-```
+```shell
 mix predictions.pu_diagnostic                      # pooled
 mix predictions.pu_diagnostic --source-key criterion --json
 ```

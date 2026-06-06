@@ -68,8 +68,10 @@ defmodule Mix.Tasks.Predictions.Candidates do
     mode = parse_mode(opts[:mode])
     limit = opts[:limit] || 25
     # Eligibility is evidence-based (min_sources, #1078 §0); --min-votes is an OPTIONAL
-    # popularity filter, off by default.
+    # popularity filter, off by default. The effective min_sources mirrors Candidates.rank/2:
+    # members mode is never gated, otherwise --min-sources or the default 2.
     min_votes = opts[:min_votes] || 0
+    min_sources = if mode == "members", do: 0, else: opts[:min_sources] || 2
 
     rank_opts =
       [mode: mode, limit: limit, min_votes: min_votes, since: opts[:since]]
@@ -96,6 +98,7 @@ defmodule Mix.Tasks.Predictions.Candidates do
           base_rate: Candidates.base_rate(result.member_count),
           scanned: result.scanned,
           min_votes: min_votes,
+          min_sources: min_sources,
           why?: opts[:why] == true,
           ranked: result.rows
         }
@@ -132,8 +135,10 @@ defmodule Mix.Tasks.Predictions.Candidates do
     }
   end
 
-  defp eligibility_label(0), do: "evidence-eligible: ≥2 metric sources"
-  defp eligibility_label(min_votes), do: "evidence-eligible + min votes #{min_votes}"
+  defp eligibility_label(min_sources, 0), do: "evidence-eligible: ≥#{min_sources} metric sources"
+
+  defp eligibility_label(min_sources, min_votes),
+    do: "evidence-eligible: ≥#{min_sources} metric sources + min votes #{min_votes}"
 
   defp signed(c) when is_number(c) and c >= 0,
     do: "+#{:erlang.float_to_binary(c * 1.0, decimals: 1)}"
@@ -159,7 +164,7 @@ defmodule Mix.Tasks.Predictions.Candidates do
 
     "#{name}" — model #{ctx.model.feature_set["granularity"]}, held-out recall@K #{pct(recall)} (vs popularity #{pct(pop)})
     #{reliability_line(ctx.reliability)}
-    known members: #{ctx.members} · base rate ≈ #{pct(ctx.base_rate)} · scanned #{ctx.scanned} films (#{eligibility_label(ctx.min_votes)})
+    known members: #{ctx.members} · base rate ≈ #{pct(ctx.base_rate)} · scanned #{ctx.scanned} films (#{eligibility_label(ctx.min_sources, ctx.min_votes)})
     #{frontier_line(ctx.frontier)}
     #{mode_intro(ctx.mode, ctx.cutoff)}
 

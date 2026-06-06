@@ -74,7 +74,10 @@ defmodule Cinegraph.Predictions.ModelBundle do
   encoded (recursively key-sorted) so the artifact is git-diffable. Returns the path.
   """
   def write!(%{"source_key" => sk, "model" => %{"weights_hash" => hash}} = bundle) do
-    dir = Path.join([:code.priv_dir(:cinegraph), "prediction_models"])
+    # The repo's priv/, not :code.priv_dir (which resolves into _build — only a symlink back to
+    # the source tree under Mix, and the wrong place entirely in a release). Export is a
+    # Studio-side dev task run from the repo root; the artifact must land where git tracks it.
+    dir = Path.join([File.cwd!(), "priv", "prediction_models"])
     File.mkdir_p!(dir)
     path = Path.join(dir, "#{sk}-#{hash}.json")
     File.write!(path, encode_deterministic(bundle))
@@ -113,7 +116,8 @@ defmodule Cinegraph.Predictions.ModelBundle do
     do: {:error, {:unknown_format_version, v}}
 
   def import(%{"format_version" => @format_version} = bundle, _opts) do
-    with :ok <- check_substrate_parity(bundle) do
+    with :ok <- check_source_keys(bundle),
+         :ok <- check_substrate_parity(bundle) do
       Repo.transaction(fn ->
         prereg = find_or_create_prereg!(bundle["pre_registration"])
         {status, model} = upsert_model!(bundle["model"], prereg.id)
@@ -141,6 +145,17 @@ defmodule Cinegraph.Predictions.ModelBundle do
       {:error, %Jason.DecodeError{}} -> {:error, :invalid_json}
     end
   end
+
+  # The bundle's three source_key copies must agree — a tampered/malformed bundle could otherwise
+  # insert a model under one list but flip another list's active pointer in maybe_activate/2.
+  defp check_source_keys(%{"source_key" => root} = bundle) when is_binary(root) do
+    if get_in(bundle, ["model", "source_key"]) == root and
+         get_in(bundle, ["pre_registration", "source_key"]) == root,
+       do: :ok,
+       else: {:error, {:malformed_bundle, :source_key_mismatch}}
+  end
+
+  defp check_source_keys(_bundle), do: {:error, {:malformed_bundle, :missing_source_key}}
 
   # ── Gate 1: substrate parity ─────────────────────────────────────────────────────────
   # A weight vector only means what it meant at train time if the feature surface matches.
