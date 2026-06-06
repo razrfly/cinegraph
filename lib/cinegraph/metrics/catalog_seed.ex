@@ -499,17 +499,18 @@ defmodule Cinegraph.Metrics.CatalogSeed do
   # ordinal. Emitted by `Cinegraph.Scoring.DerivedFeatures` (pre-normalized), so catalogued
   # `kind: "derived"` — which bypasses the `custom`-normalization reject that only applies to the
   # `raw` branch in `Trainer.data_point_codes/1`. Gated `is_available: false` until the keep-
-  # criterion (`mix predictions.eval_features`) admits a group. Codes mirror DerivedFeatures'
-  # @language_codes / @genre_codes (single source of truth there).
-  @categorical_languages ~w(en fr es ja de pt zh ru it ko ar hi other)
-  @categorical_genres ~w(action adventure animation comedy crime documentary drama family fantasy
-                         history horror music mystery romance science_fiction thriller tv_movie war
-                         western)
+  # criterion (`mix predictions.eval_features`) admits a group. Codes come straight from
+  # DerivedFeatures' `language_codes/0` / `genre_codes/0` (single source of truth there).
   defp categorical_features do
-    langs = Enum.map(@categorical_languages, &{"lang_#{&1}", "Language: #{&1}"})
+    langs =
+      Enum.map(DerivedFeatures.language_codes(), fn "lang_" <> code = full ->
+        {full, "Language: #{code}"}
+      end)
 
     genres =
-      Enum.map(@categorical_genres, &{"genre_#{&1}", "Genre: #{String.replace(&1, "_", " ")}"})
+      Enum.map(DerivedFeatures.genre_codes(), fn "genre_" <> slug = full ->
+        {full, "Genre: #{String.replace(slug, "_", " ")}"}
+      end)
 
     rating = [{"content_rating_age", "Content Rating (min age, normalized)"}]
 

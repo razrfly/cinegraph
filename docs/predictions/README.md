@@ -48,7 +48,7 @@ derived, minus the target's own code (leakage strip). `canon_overlap_codes/1` = 
 The whole point: a change can only "win" by adding **real independent signal**, measured against a
 frozen baseline, and the integrity guard refuses untrustworthy models. One lever per trip.
 
-```
+```text
 1. PRE-REGISTER  hypothesis + expected Δ + falsification threshold (before any holdout spend)
 2. BUILD         add feature(s)/model class behind a candidate group — gated is_available:false
 3. RUN (cheap)   mix predictions.eval_features [--sample N]  → Δ PR-AUC vs base (holdout-free)
@@ -75,6 +75,7 @@ All tasks are read-mostly and safe to run in `iex`/dev; only `--commit` paths sp
 or change the served board.
 
 ### Run / iterate
+
 | Command | What it does |
 |---|---|
 | `mix predictions.matrix [--plan] [--only L1,L2] [--sample N]` | Sweep lists × classes × strategies × buckets → ledger. `--plan` prints a pool-weighted ETA (needs `duration_ms` history to estimate). `--sample` collapses the pool for speed. |
@@ -85,6 +86,7 @@ or change the served board.
 | `mix predictions.ablation` | objective vs canon-overlap vs full recall ablation per list. |
 
 ### Promote / serve
+
 | Command | What it does |
 |---|---|
 | `mix predictions.promote [--only …] [--commit]` | Ledger-driven: per list pick the best **servable** row (grade-first; `canon_overlap` excluded; underpowered-temporal → static fallback), train it exact on the sacred holdout (spent once), activate. Dry-run unless `--commit`. |
@@ -99,6 +101,7 @@ or change the served board.
 | `mix predictions.seed_flagships [--commit]` | Legacy per-list strategy auto-pick + honest re-promotion. |
 
 ### Diagnostics & feature de-risk (measurement only — no DB writes, no holdout)
+
 | Command | What it answers |
 |---|---|
 | `mix predictions.pu_diagnostic [--source-key L] [--json]` | Is this a Positive-Unlabeled/SAR problem (is canon *under*-covered vs the pool)? Decides whether PU reweighting (Lever C) applies. **Verdict: NOT-SAR** — canon is *better*-covered. |

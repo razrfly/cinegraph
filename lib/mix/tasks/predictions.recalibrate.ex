@@ -17,7 +17,9 @@ defmodule Mix.Tasks.Predictions.Recalibrate do
   the identity baseline (a calibration worse than no calibration stays gated).
 
   `--commit` updates ONLY `prediction_models.calibration` + `integrity_report["brier"]` —
-  weights, recall, grades, and the serving pointer are untouched.
+  weights, recall, grades, and the serving pointer are untouched. Note `metrics["brier"]` is
+  deliberately NOT touched: it's the train-time snapshot, so after a recalibration the two Brier
+  values legitimately differ (`integrity_report` = the served calibration, `metrics` = at train).
   """
   use Mix.Task
 

@@ -63,7 +63,7 @@ To decide whether the *expensive* embedding pipeline (pgvector + model serving +
 - **Next real test:** integrate hashed-TF-IDF overview features as a feature group → A/B via `eval_features` + the matrix → measure the **real Δ recall@K vs B₀**, kept only if it clears the noise band (same honest protocol). *Separability AUC ≈0.65 is encouraging but is not yet a recall@K result.*
 
 ## Reproduce
-```
+```shell
 mix predictions.text_spike                          # TF-IDF, pooled
 mix predictions.text_spike --source-key criterion --json
 mix predictions.embed_spike --head logistic --json  # real MiniLM embeddings (needs Bumblebee)
