@@ -1,5 +1,5 @@
 <% v = @view %>
-<div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-5xl lg:px-10 pt-6 pb-16">
+<div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16">
   <nav class="mb-8 text-[12px] text-mist-600 dark:text-mist-400">
     <.link navigate={~p"/movies"} class="hover:text-mist-950 dark:hover:text-white">Movies</.link>
     <span class="mx-2 text-mist-400 dark:text-mist-600">/</span>
@@ -14,11 +14,17 @@
     <div class="flex items-start justify-between gap-4">
       <div>
         <CinegraphWeb.NeutralV2Components.n_eyebrow>
-          {@archetype}
+          {if @mode == :predictive, do: "Predictive model", else: @archetype}
         </CinegraphWeb.NeutralV2Components.n_eyebrow>
         <h1 class="mt-2 font-display italic text-[34px] sm:text-[44px] lg:text-[52px] text-mist-950 dark:text-white leading-[1.05]">
           {@list.name}
         </h1>
+        <p
+          :if={@mode == :predictive}
+          class="mt-2 max-w-2xl text-[14px] text-mist-600 dark:text-mist-300"
+        >
+          We trained a model on this list's history and asked: which films make the next edition?
+        </p>
       </div>
       <CinegraphWeb.NeutralV2Components.n_pill
         :if={v.served?}
@@ -39,41 +45,308 @@
     </div>
   </section>
 
-  <%= if v.served? do %>
-    <section class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      <!-- headline + signals -->
-      <div class="lg:col-span-2 space-y-6">
-        <div class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6">
-          <div class="flex items-baseline gap-2">
-            <span class="font-display text-[48px] leading-none text-mist-950 dark:text-white tabular-nums">
-              {CinegraphWeb.AlgorithmsLive.Show.headline(v.headline_pct)}
-            </span>
-            <span class="text-[13px] text-mist-500 dark:text-mist-400">
-              recall@K (95% lower bound)
-            </span>
-          </div>
-          <div class="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
-            <CinegraphWeb.NeutralV2Components.n_pill
-              tone={if(v.lift_passes?, do: "green", else: "amber")}
-              size="xs"
-              class=""
-            >
-              {CinegraphWeb.AlgorithmsLive.Show.lift_text(v.lift_ratio, v.lift_passes?)}
-            </CinegraphWeb.NeutralV2Components.n_pill>
-            <span :if={v.recall} class="text-mist-500 dark:text-mist-400 tabular-nums">
-              point recall {CinegraphWeb.AlgorithmsLive.Show.pct(v.recall)}
-            </span>
-          </div>
-          <p
-            :if={CinegraphWeb.AlgorithmsLive.Show.circularity_pct(v.circularity)}
-            class="mt-3 text-[12px] text-amber-700 dark:text-amber-400"
-          >
-            ⚠ {CinegraphWeb.AlgorithmsLive.Show.circularity_pct(v.circularity)} of recall is canon-overlap circularity (disclosed, not hidden)
-          </p>
+  <%= if @mode == :predictive do %>
+    <!-- accuracy (the credibility anchor) + model facts -->
+    <section class="grid grid-cols-1 gap-6 lg:grid-cols-3 mb-6">
+      <div class="lg:col-span-2 rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6">
+        <div class="flex items-baseline gap-2">
+          <span class="font-display text-[48px] leading-none text-mist-950 dark:text-white tabular-nums">
+            {CinegraphWeb.AlgorithmsLive.Show.headline(v.headline_pct)}
+          </span>
+          <span class="text-[13px] text-mist-500 dark:text-mist-400">
+            recall@K (95% lower bound)
+          </span>
         </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+          <CinegraphWeb.NeutralV2Components.n_pill
+            tone={if(v.lift_passes?, do: "green", else: "amber")}
+            size="xs"
+            class=""
+          >
+            {CinegraphWeb.AlgorithmsLive.Show.lift_text(v.lift_ratio, v.lift_passes?)}
+          </CinegraphWeb.NeutralV2Components.n_pill>
+          <span :if={v.recall} class="text-mist-500 dark:text-mist-400 tabular-nums">
+            point recall {CinegraphWeb.AlgorithmsLive.Show.pct(v.recall)}
+          </span>
+          <span class="text-mist-400 dark:text-mist-500">
+            · {@member_count} known members
+          </span>
+        </div>
+        <p
+          :if={CinegraphWeb.AlgorithmsLive.Show.circularity_pct(v.circularity)}
+          class="mt-3 text-[12px] text-amber-700 dark:text-amber-400"
+        >
+          ⚠ {CinegraphWeb.AlgorithmsLive.Show.circularity_pct(v.circularity)} of recall is canon-overlap circularity (disclosed, not hidden)
+        </p>
+      </div>
+
+      <div class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6 text-[13px]">
+        <CinegraphWeb.NeutralV2Components.n_eyebrow>
+          Model
+        </CinegraphWeb.NeutralV2Components.n_eyebrow>
+        <dl class="mt-3 space-y-2">
+          <div class="flex justify-between gap-3">
+            <dt class="text-mist-500 dark:text-mist-400">Class</dt>
+            <dd class="text-mist-900 dark:text-mist-100 text-right">{v.model_label}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt class="text-mist-500 dark:text-mist-400">Backtest</dt>
+            <dd class="text-mist-900 dark:text-mist-100 text-right">{v.strategy}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt class="text-mist-500 dark:text-mist-400">Grade</dt>
+            <dd class="text-mist-900 dark:text-mist-100 text-right">{v.tier}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+    
+<!-- Dial 2: profile switcher + tuner -->
+    <section class="mb-6 space-y-4">
+      <CinegraphWeb.AlgorithmsLive.ShowComponents.profile_switcher
+        profile={@profile}
+        presets={@presets}
+        trained?={true}
+      />
+      <CinegraphWeb.AlgorithmsLive.ShowComponents.tuner_panel
+        :if={@profile == "custom"}
+        weights={@weights}
+        min_score={@min_score}
+        unvalidated?={true}
+      />
+    </section>
+    
+<!-- unified ranked list: one search box, chips, sections (#1077) -->
+    <section class="mb-6">
+      <form phx-change="list_search" phx-submit="list_search" class="mb-3 max-w-md">
+        <CinegraphWeb.NeutralV2Components.n_filter_input
+          id="list_q"
+          name="q"
+          value={@list_query}
+          placeholder="Search this list — or any film, to score it…"
+          phx-debounce="300"
+        />
+      </form>
+
+      <div :if={@probe} class="mb-4">
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.probe_result probe={@probe} />
+      </div>
+
+      <div :if={@list_results != []} class="mb-4">
+        <div class="text-[11px] uppercase tracking-wide text-mist-400 dark:text-mist-500 mb-1">
+          Not in this view — score it for this list
+        </div>
+        <button
+          :for={f <- @list_results}
+          type="button"
+          phx-click="probe_select"
+          phx-value-slug={f.slug}
+          class="block w-full max-w-md text-left px-3 py-2 rounded-lg text-[13px] text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.04] dark:hover:bg-white/10"
+        >
+          {f.title}
+          <span class="text-mist-400">({f[:year]})</span>
+          <span class="text-mist-400 dark:text-mist-500">· score it →</span>
+        </button>
+      </div>
+
+      <CinegraphWeb.AlgorithmsLive.ShowComponents.chips_bar
+        slug={@list.slug}
+        tab={@tab}
+        view={@display}
+        member_count={@member_count}
+      />
+
+      <div :if={@tab == "all"} class="pt-5">
+        <!-- predicted next additions -->
+        <div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <CinegraphWeb.NeutralV2Components.n_eyebrow>
+            Predicted next additions
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <span :if={is_map(@predictions)} class="text-[11px] text-mist-400 dark:text-mist-500">
+            off-list, {@predictions.cutoff || "any year"}+ · {@predictions.scanned} scanned
+            <span :if={!@predictions.show_prob?} class="text-amber-700 dark:text-amber-400">
+              · rank order only, no percentages
+            </span>
+          </span>
+        </div>
+        <div
+          :if={@predictions == :loading}
+          class="py-8 text-center text-[13px] text-mist-400 animate-pulse"
+        >
+          Scoring the frontier-gated catalog…
+        </div>
+        <div :if={@predictions == :error} class="py-8 text-center text-[13px] text-rose-600">
+          Couldn't load predictions — try reloading.
+        </div>
+        <%= if is_map(@predictions) do %>
+          <% prediction_rows =
+            CinegraphWeb.AlgorithmsLive.Show.filter_rows(@predictions.rows, @list_query) %>
+          <%= if @display == "list" do %>
+            <CinegraphWeb.AlgorithmsLive.ShowComponents.film_row
+              :for={row <- prediction_rows}
+              film={row}
+              rank={row.rank}
+            />
+            <div
+              :if={prediction_rows == []}
+              class="py-6 text-center text-[12.5px] text-mist-400 dark:text-mist-500"
+            >
+              No predictions match the filter.
+            </div>
+          <% else %>
+            <CinegraphWeb.AlgorithmsLive.ShowComponents.film_grid
+              films={
+                CinegraphWeb.AlgorithmsLive.Show.filter_rows(@predictions.films, @list_query)
+              }
+              show_score={@predictions.show_prob?}
+              ranked={true}
+              empty_text="No predictions match the filter."
+            />
+          <% end %>
+        <% end %>
         
-<!-- weight breakdown -->
-        <div class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6">
+<!-- already on the list — same score scale -->
+        <div class="mt-8 mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <CinegraphWeb.NeutralV2Components.n_eyebrow>
+            Already on the list
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <span class="text-[11px] text-mist-400 dark:text-mist-500">
+            the truth the model learns from — same score scale ·
+            <.link
+              navigate={~p"/lists/#{@list.slug}"}
+              class="underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
+            >
+              Browse all {@member_count} →
+            </.link>
+          </span>
+        </div>
+        <div
+          :if={@ranked_members == :loading}
+          class="py-8 text-center text-[13px] text-mist-400 animate-pulse"
+        >
+          Ranking the members…
+        </div>
+        <div :if={@ranked_members == :error} class="py-8 text-center text-[13px] text-rose-600">
+          Couldn't rank the members — try reloading.
+        </div>
+        <%= if is_map(@ranked_members) do %>
+          <% member_rows =
+            CinegraphWeb.AlgorithmsLive.Show.filter_rows(@ranked_members.rows, @list_query) %>
+          <%= if @display == "list" do %>
+            <CinegraphWeb.AlgorithmsLive.ShowComponents.film_row
+              :for={row <- member_rows}
+              film={row}
+            />
+            <div
+              :if={member_rows == []}
+              class="py-6 text-center text-[12.5px] text-mist-400 dark:text-mist-500"
+            >
+              No members match the filter.
+            </div>
+          <% else %>
+            <CinegraphWeb.AlgorithmsLive.ShowComponents.film_grid
+              films={member_rows}
+              empty_text="No members match the filter."
+            />
+          <% end %>
+          <div
+            :if={@list_query == "" and length(@ranked_members.rows) < @ranked_members.total}
+            class="pt-4 text-center"
+          >
+            <button
+              type="button"
+              phx-click="show_more_members"
+              disabled={@members_more_pending}
+              class="px-4 py-1.5 rounded-full text-[12.5px] font-medium border border-mist-950/15 text-mist-700 hover:border-mist-950/40 dark:border-white/15 dark:text-mist-200 dark:hover:border-white/40 disabled:opacity-50"
+            >
+              {if @members_more_pending,
+                do: "Loading…",
+                else: "Show more (#{length(@ranked_members.rows)} of #{@ranked_members.total})"}
+            </button>
+          </div>
+        <% end %>
+
+        <p
+          :if={@profile != "trained"}
+          class="pt-4 text-[11.5px] text-amber-700 dark:text-amber-400"
+        >
+          Custom profiles re-rank the <strong>Predicted next</strong>
+          tab only — members aren't re-ranked through a different engine mid-list.
+        </p>
+      </div>
+
+      <div :if={@tab == "predictions"} class="pt-5">
+        <%= if @profile == "trained" do %>
+          <div
+            :if={@predictions == :loading}
+            class="py-12 text-center text-[13px] text-mist-400 animate-pulse"
+          >
+            Scoring the frontier-gated catalog…
+          </div>
+          <div :if={@predictions == :error} class="py-12 text-center text-[13px] text-rose-600">
+            Couldn't load predictions — try reloading.
+          </div>
+          <%= if is_map(@predictions) do %>
+            <p class="mb-4 text-[12px] text-mist-500 dark:text-mist-400">
+              Off-list films released {@predictions.cutoff || "any year"}+, ranked by the trained
+              model ({@predictions.scanned} scanned).
+              <span :if={!@predictions.show_prob?} class="text-amber-700 dark:text-amber-400">
+                Probabilities aren't certified for this model — rank order only, no percentages.
+              </span>
+            </p>
+            <CinegraphWeb.AlgorithmsLive.ShowComponents.film_grid
+              films={@predictions.films}
+              show_score={@predictions.show_prob?}
+              ranked={true}
+              empty_text="No frontier-gated candidates to rank."
+            />
+          <% end %>
+        <% else %>
+          <p class="mb-4 text-[12px] text-amber-700 dark:text-amber-400">
+            Re-ranked by the <strong>{@profile}</strong>
+            lens profile — an <strong>unvalidated</strong>
+            ranking with no probabilities and no accuracy claim. The
+            accuracy above applies to the trained model only.
+          </p>
+          <CinegraphWeb.AlgorithmsLive.ShowComponents.film_grid
+            films={@tuned || []}
+            ranked={true}
+            empty_text="No films clear the current min-evidence filter."
+          />
+        <% end %>
+      </div>
+
+      <div :if={@tab == "members"} class="pt-5">
+        <p class="mb-4 text-[12px] text-mist-500 dark:text-mist-400">
+          The newest {length(@members)} of {@member_count} members — the known truth the model is
+          judged against.
+          <.link
+            navigate={~p"/lists/#{@list.slug}"}
+            class="underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
+          >
+            Browse all {@member_count} →
+          </.link>
+        </p>
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.film_grid
+          films={@members}
+          empty_text="No members imported yet."
+        />
+      </div>
+    </section>
+    
+<!-- worst misses -->
+    <section :if={is_map(@misses) and map_size(@misses) > 0} class="mb-6 max-w-2xl">
+      <CinegraphWeb.AlgorithmsLive.ShowComponents.worst_misses misses={@misses} />
+    </section>
+    
+<!-- model internals (the explanation slice, collapsed) -->
+    <details class="group rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900">
+      <summary class="cursor-pointer select-none px-6 py-4 text-[13px] font-medium text-mist-700 dark:text-mist-200 flex items-center justify-between">
+        Model internals — what drives the prediction, and the rivals we evaluated
+        <span class="text-mist-400 group-open:rotate-90 transition">▸</span>
+      </summary>
+      <div class="px-6 pb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div class="lg:col-span-2">
           <div class="flex items-baseline justify-between">
             <CinegraphWeb.NeutralV2Components.n_eyebrow>
               What drives the prediction
@@ -116,81 +389,144 @@
             </div>
           </div>
         </div>
-      </div>
-      
-<!-- model facts + rivals -->
-      <div class="space-y-6">
-        <div class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6 text-[13px]">
-          <CinegraphWeb.NeutralV2Components.n_eyebrow>
-            Model
-          </CinegraphWeb.NeutralV2Components.n_eyebrow>
-          <dl class="mt-3 space-y-2">
-            <div class="flex justify-between gap-3">
-              <dt class="text-mist-500 dark:text-mist-400">Class</dt>
-              <dd class="text-mist-900 dark:text-mist-100 text-right">{v.model_label}</dd>
-            </div>
-            <div class="flex justify-between gap-3">
-              <dt class="text-mist-500 dark:text-mist-400">Backtest</dt>
-              <dd class="text-mist-900 dark:text-mist-100 text-right">{v.strategy}</dd>
-            </div>
-            <div class="flex justify-between gap-3">
-              <dt class="text-mist-500 dark:text-mist-400">Grade</dt>
-              <dd class="text-mist-900 dark:text-mist-100 text-right">{v.tier}</dd>
-            </div>
-          </dl>
-        </div>
 
-        <div
-          :if={v.rivals != []}
-          class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6"
-        >
-          <CinegraphWeb.NeutralV2Components.n_eyebrow>
-            Also evaluated
-          </CinegraphWeb.NeutralV2Components.n_eyebrow>
-          <p class="mt-1 text-[11px] text-mist-400 dark:text-mist-500">
-            Rival configurations recorded in the ledger; the served model is the honest best.
-          </p>
-          <ul class="mt-3 space-y-2 text-[12px]">
-            <li :for={r <- v.rivals} class="flex items-center justify-between gap-2">
-              <span class="text-mist-700 dark:text-mist-300">
-                {r.model_class} · {r.strategy} · {r.feature_bucket}
-              </span>
-              <span class="tabular-nums text-mist-500 dark:text-mist-400">
-                {CinegraphWeb.AlgorithmsLive.Show.rival_recall(r.objective_recall)}
-              </span>
-            </li>
-          </ul>
+        <div>
+          <div :if={@by_decade != []} class="mb-6">
+            <CinegraphWeb.NeutralV2Components.n_eyebrow>
+              Held-out recall by decade
+            </CinegraphWeb.NeutralV2Components.n_eyebrow>
+            <p class="mt-1 text-[11px] text-mist-400 dark:text-mist-500">
+              Point estimates per held-out fold — small positive counts mean wide uncertainty.
+            </p>
+            <ul class="mt-3 space-y-2 text-[12px]">
+              <li :for={d <- @by_decade} class="flex items-center justify-between gap-2">
+                <span class="text-mist-700 dark:text-mist-300">
+                  {d["decade"]}s
+                  <span class="text-mist-400 dark:text-mist-500">
+                    ({d["n_positives"]} member{if d["n_positives"] == 1, do: "", else: "s"})
+                  </span>
+                </span>
+                <span class="tabular-nums text-mist-500 dark:text-mist-400">
+                  {CinegraphWeb.AlgorithmsLive.Show.pct(d["recall_at_k"])}
+                </span>
+              </li>
+            </ul>
+          </div>
+
+          <div :if={v.rivals != []}>
+            <CinegraphWeb.NeutralV2Components.n_eyebrow>
+              Also evaluated
+            </CinegraphWeb.NeutralV2Components.n_eyebrow>
+            <p class="mt-1 text-[11px] text-mist-400 dark:text-mist-500">
+              Rival configurations recorded in the ledger; the served model is the honest best.
+            </p>
+            <ul class="mt-3 space-y-2 text-[12px]">
+              <li :for={r <- v.rivals} class="flex items-center justify-between gap-2">
+                <span class="text-mist-700 dark:text-mist-300">
+                  {r.model_class} · {r.strategy} · {r.feature_bucket}
+                </span>
+                <span class="tabular-nums text-mist-500 dark:text-mist-400">
+                  {CinegraphWeb.AlgorithmsLive.Show.rival_recall(r.objective_recall)}
+                </span>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
-    </section>
+    </details>
   <% else %>
-    <section class="max-w-2xl rounded-xl border border-dashed border-mist-950/15 dark:border-white/10 bg-mist-950/[0.015] dark:bg-mist-950 p-8">
-      <p class="text-[16px] text-mist-800 dark:text-mist-200">
-        We don't serve a prediction for this list.
+    <%= if @mode == :rail do %>
+      <!-- recommendation rail (#1038 2b) -->
+      <section class="mb-6">
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.rail_thesis list={@list} />
+      </section>
+
+      <section class="mb-6">
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.seed_picker
+          query={@rail_query}
+          results={@rail_results}
+          seeds={@rail_seeds}
+        />
+      </section>
+
+      <section class="mb-6">
+        <div class="mb-4 flex items-baseline justify-between">
+          <CinegraphWeb.NeutralV2Components.n_eyebrow>
+            {if @rail_seeds == [], do: "The picks", else: "The clerk's picks for your seeds"}
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <span :if={@rail_seeds == []} class="text-[11px] text-mist-400 dark:text-mist-500">
+            shelf ranked by the {@profile} profile — tune below
+          </span>
+        </div>
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.film_grid
+          films={@picks}
+          ranked={@rail_seeds == []}
+          empty_text="No picks yet — try different seeds or loosen the min-evidence filter."
+        />
+      </section>
+
+      <section :if={@rail_seeds == []} class="mb-6 space-y-4">
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.profile_switcher
+          profile={@profile}
+          presets={@presets}
+          trained?={false}
+        />
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.tuner_panel
+          :if={@profile == "custom"}
+          weights={@weights}
+          min_score={@min_score}
+          unvalidated?={false}
+        />
+      </section>
+      <p :if={@rail_seeds != []} class="mb-6 text-[11.5px] text-mist-400 dark:text-mist-500">
+        Clear your seeds to re-rank the full shelf with the lens tuner.
       </p>
-      <p class="mt-3 text-[14px] text-mist-600 dark:text-mist-300">
-        No honest model clears our reliability bar for it. Its membership is taste we can't reliably
-        proxy from objective metadata — and the research is clear that some canonical lists have a
-        genuinely stochastic, socially-constructed core. Rather than show a number we don't trust, we
-        say so plainly: this list is <strong class="text-mist-950 dark:text-white">not metadata-predictable</strong>.
-      </p>
-      <.link
-        navigate={~p"/algorithms"}
-        class="mt-5 inline-block text-[13px] underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
-      >
-        ← Back to all algorithms
-      </.link>
-    </section>
+    <% else %>
+      <section class="max-w-2xl rounded-xl border border-dashed border-mist-950/15 dark:border-white/10 bg-mist-950/[0.015] dark:bg-mist-950 p-8">
+        <p class="text-[16px] text-mist-800 dark:text-mist-200">
+          We don't serve a prediction for this list.
+        </p>
+        <p class="mt-3 text-[14px] text-mist-600 dark:text-mist-300">
+          No honest model clears our reliability bar for it. Its membership is taste we can't reliably
+          proxy from objective metadata — and the research is clear that some canonical lists have a
+          genuinely stochastic, socially-constructed core. Rather than show a number we don't trust, we
+          say so plainly: this list is <strong class="text-mist-950 dark:text-white">not metadata-predictable</strong>.
+        </p>
+        <.link
+          navigate={~p"/algorithms"}
+          class="mt-5 inline-block text-[13px] underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
+        >
+          ← Back to all algorithms
+        </.link>
+      </section>
+
+      <section :if={@members != []} class="mt-8">
+        <div class="mb-4 flex items-baseline justify-between">
+          <CinegraphWeb.NeutralV2Components.n_eyebrow>
+            On the list
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <.link
+            navigate={~p"/lists/#{@list.slug}"}
+            class="text-[12px] underline decoration-mist-300 underline-offset-2 text-mist-500 hover:text-mist-950 dark:hover:text-white"
+          >
+            Browse all {@member_count} →
+          </.link>
+        </div>
+        <CinegraphWeb.AlgorithmsLive.ShowComponents.film_grid films={@members} />
+      </section>
+    <% end %>
   <% end %>
 
   <section class="mt-12 max-w-3xl border-t border-mist-950/10 dark:border-white/10 pt-6 text-[12px] text-mist-500 dark:text-mist-400">
     <p>
       Graded on the Wilson-95 lower bound of held-out recall@K against the full candidate pool, on
       objective signal only. A model is served only if it beats the popularity baseline by a real
-      margin. <.link
+      margin. Per-film percentages render only when the model's probabilities are certified. <.link
         navigate={~p"/algorithms"}
         class="underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
-      >All algorithms</.link>.
+      >
+        All algorithms
+      </.link>.
     </p>
   </section>
 </div>

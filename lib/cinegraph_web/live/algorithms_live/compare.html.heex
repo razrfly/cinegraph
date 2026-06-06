@@ -1,0 +1,182 @@
+<div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-7xl lg:px-10 pt-6 pb-16">
+  <nav class="mb-8 text-[12px] text-mist-600 dark:text-mist-400">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950 dark:hover:text-white">Movies</.link>
+    <span class="mx-2 text-mist-400 dark:text-mist-600">/</span>
+    <.link navigate={~p"/algorithms"} class="hover:text-mist-950 dark:hover:text-white">
+      Algorithms
+    </.link>
+    <span class="mx-2 text-mist-400 dark:text-mist-600">/</span>
+    <span class="font-medium text-mist-950 dark:text-white">Compare</span>
+  </nav>
+
+  <section class="mb-8">
+    <CinegraphWeb.NeutralV2Components.n_eyebrow>
+      Side by side
+    </CinegraphWeb.NeutralV2Components.n_eyebrow>
+    <h1 class="mt-2 font-display italic text-[34px] sm:text-[44px] lg:text-[52px] text-mist-950 dark:text-white leading-[1.05]">
+      Compare algorithms.
+    </h1>
+    <p class="mt-3 max-w-2xl text-[14px] text-mist-600 dark:text-mist-300">
+      Pick a film you love and see how each algorithm answers. Recommendation rails condition on
+      your seed; predictive models rank the list's next edition — honestly labeled, since they
+      predict the list, not your taste.
+    </p>
+  </section>
+  
+<!-- seed picker -->
+  <section class="mb-6 rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6">
+    <CinegraphWeb.NeutralV2Components.n_eyebrow>
+      Seed film
+    </CinegraphWeb.NeutralV2Components.n_eyebrow>
+    <form phx-change="seed_search" phx-submit="seed_search" class="mt-3 relative max-w-md">
+      <CinegraphWeb.NeutralV2Components.n_filter_input
+        id="compare_seed_q"
+        name="q"
+        value={@seed_query}
+        placeholder="Search a film…"
+        phx-debounce="300"
+      />
+      <div
+        :if={@seed_results != []}
+        class="absolute z-10 mt-1 w-full rounded-lg border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 shadow-lg overflow-hidden"
+      >
+        <button
+          :for={f <- @seed_results}
+          type="button"
+          phx-click="seed_select"
+          phx-value-slug={f.slug}
+          class="block w-full text-left px-3 py-2 text-[13px] text-mist-900 dark:text-mist-100 hover:bg-mist-950/[0.04] dark:hover:bg-white/10"
+        >
+          {f.title} <span class="text-mist-400">({f[:year]})</span>
+        </button>
+      </div>
+    </form>
+    <div :if={@seed} class="mt-3 flex flex-wrap items-center gap-2">
+      <span class="inline-flex items-center gap-1.5 rounded-full bg-mist-950/[0.05] dark:bg-white/10 px-3 py-1 text-[13px] text-mist-900 dark:text-mist-100">
+        {@seed.title}
+        <span :if={@seed.release_date} class="text-mist-400">({@seed.release_date.year})</span>
+        <button
+          type="button"
+          phx-click="seed_clear"
+          class="text-mist-400 hover:text-mist-900 dark:hover:text-white"
+        >
+          ✕
+        </button>
+      </span>
+    </div>
+    
+<!-- rail toggles -->
+    <div class="mt-4 flex flex-wrap items-center gap-2">
+      <span class="text-[11px] uppercase tracking-wide text-mist-400 dark:text-mist-500">
+        Columns
+      </span>
+      <button
+        :for={list <- @available}
+        type="button"
+        phx-click="rail_toggle"
+        phx-value-slug={list.slug}
+        class={[
+          "px-3 py-1 rounded-full text-[12px] font-medium transition",
+          if(list.slug in @rail_slugs,
+            do: "bg-mist-950 text-white dark:bg-white dark:text-mist-950",
+            else:
+              "border border-mist-950/15 text-mist-700 hover:border-mist-950/40 dark:border-white/15 dark:text-mist-200 dark:hover:border-white/40"
+          )
+        ]}
+      >
+        {list.name}
+      </button>
+      <span class="text-[11px] text-mist-400 dark:text-mist-500">up to 4</span>
+    </div>
+  </section>
+  
+<!-- columns -->
+  <section class="grid grid-cols-1 gap-6 md:grid-cols-2">
+    <div
+      :for={col <- @columns}
+      class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-5"
+    >
+      <div class="flex items-start justify-between gap-3">
+        <.link
+          navigate={~p"/algorithms/#{col.slug}"}
+          class="text-[15px] font-semibold text-mist-950 dark:text-white hover:underline"
+        >
+          {col.name}
+        </.link>
+        <CinegraphWeb.NeutralV2Components.n_pill
+          tone={CinegraphWeb.AlgorithmsLive.Compare.type_tone(col.type)}
+          size="xs"
+          class="shrink-0"
+        >
+          {CinegraphWeb.AlgorithmsLive.Compare.type_label(col.type)}
+        </CinegraphWeb.NeutralV2Components.n_pill>
+      </div>
+
+      <%= case col.type do %>
+        <% :rail -> %>
+          <p :if={@seed} class="mt-1 text-[11.5px] text-mist-500 dark:text-mist-400">
+            The clerk's picks for <strong>{@seed.title}</strong> — reasons, no scores.
+          </p>
+          <p :if={!@seed} class="mt-1 text-[11.5px] text-mist-500 dark:text-mist-400">
+            Seed-conditioned — pick a seed film above and the clerk will answer.
+          </p>
+        <% :predictive -> %>
+          <p class="mt-1 text-[11.5px] text-amber-700 dark:text-amber-400">
+            Top predicted next additions — <strong>not seed-conditioned</strong>. This model
+            predicts the list's next edition, not similarity to your seed.
+          </p>
+        <% :unserved -> %>
+          <p class="mt-1 text-[11.5px] text-mist-500 dark:text-mist-400">
+            No honest model clears the reliability bar for this list, and it isn't a
+            recommendation rail — there's nothing truthful to put in this column.
+          </p>
+      <% end %>
+
+      <div
+        :if={col.status == :loading}
+        class="py-10 text-center text-[13px] text-mist-400 animate-pulse"
+      >
+        Thinking…
+      </div>
+      <div :if={col.status == :error} class="py-10 text-center text-[13px] text-rose-600">
+        Couldn't load this column — try reloading.
+      </div>
+
+      <div
+        :if={col.status == :ready and col.films != []}
+        class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-[14px]"
+      >
+        <CinegraphWeb.NeutralV2Components.n_film_card
+          :for={film <- col.films}
+          film={film}
+          rank={if(col.type == :predictive, do: film[:rank])}
+          show_score={col[:show_prob?] == true}
+        />
+      </div>
+      <div
+        :if={col.status == :ready and col.films == [] and col.type == :rail and !@seed}
+        class="mt-4 rounded-lg border border-dashed border-mist-950/15 dark:border-white/15 py-10 text-center text-[12.5px] text-mist-400 dark:text-mist-500"
+      >
+        Waiting for a seed film.
+      </div>
+      <div
+        :if={col.status == :ready and col.films == [] and (col.type != :rail or @seed)}
+        class="mt-4 py-10 text-center text-[12.5px] text-mist-400 dark:text-mist-500"
+      >
+        Nothing to show for this column.
+      </div>
+    </div>
+  </section>
+
+  <section class="mt-12 max-w-3xl border-t border-mist-950/10 dark:border-white/10 pt-6 text-[12px] text-mist-500 dark:text-mist-400">
+    <p>
+      Rails carry no percentages — only the clerk's reasons. Predictive columns show per-film
+      probabilities only when the model's calibration is certified; otherwise rank order only. <.link
+        navigate={~p"/algorithms"}
+        class="underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
+      >
+        All algorithms
+      </.link>.
+    </p>
+  </section>
+</div>

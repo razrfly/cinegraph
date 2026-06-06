@@ -64,6 +64,51 @@ defmodule Cinegraph.Scoring.Bus do
     end)
   end
 
+  @doc """
+  Exact per-film contribution breakdown for a **data-point** weight-map model (#1076 P1) —
+  `contribution = weight × feature × 100` per code, mirroring `score/3` term-for-term (same
+  `DataPointFeatures.load_for/3` assembly), so the terms sum to the film's score (pre-clamp).
+  The model is linear; this is the truth, not an approximation.
+
+  Returns `%{movie_id => [%{code, value, weight, contribution}]}` — only nonzero terms,
+  signed, sorted by |contribution| desc. Lens-granularity models return
+  `{:error, :unsupported_granularity}` (the 4 custom lenses are opaque at this layer — see
+  moduledoc).
+  """
+  def contributions(movies, model_or_spec)
+
+  def contributions(movies, %Model{feature_set: fs, weights: weights, source_key: source_key}) do
+    case granularity(fs) do
+      "data_point" -> contributions(movies, {:data_point, weights, source_key})
+      _ -> {:error, :unsupported_granularity}
+    end
+  end
+
+  def contributions(movies, {:data_point, weights, source_key}) do
+    codes = Map.keys(weights)
+    feats = DataPointFeatures.load_for(movies, codes, source_key)
+
+    Map.new(movies, fn movie ->
+      vec = Map.get(feats, movie.id, %{})
+
+      terms =
+        weights
+        |> Enum.flat_map(fn {code, w} ->
+          v = vec[code] || 0.0
+          c = w * v * 100.0
+
+          if c == 0.0,
+            do: [],
+            else: [%{code: code, value: v, weight: w, contribution: Float.round(c, 2)}]
+        end)
+        |> Enum.sort_by(&abs(&1.contribution), :desc)
+
+      {movie.id, terms}
+    end)
+  end
+
+  def contributions(_movies, _spec), do: {:error, :unsupported_granularity}
+
   @doc "Load the active model artifact for a list, or nil. The bus's model source."
   def active_model(source_key) when is_binary(source_key) do
     Repo.one(

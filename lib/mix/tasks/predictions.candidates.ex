@@ -3,9 +3,10 @@ defmodule Mix.Tasks.Predictions.Candidates do
   Show a list's **predicted next additions** — films NOT on the list, ranked by the active
   model's score, with a calibrated probability of belonging (#1036 / #1038 preview).
 
-  This is the CLI preview of the `/algorithms/:slug` predictive show page: known members +
-  predicted next additions + held-out accuracy. It scores via the Layer-2 bus using the list's
-  active `prediction_models` artifact and calibrates the score to a probability.
+  This is the CLI face of `Cinegraph.Predictions.Candidates` — the same read-model that powers the
+  `/algorithms/:slug` predictive show page: known members + predicted next additions + held-out
+  accuracy. It scores via the Layer-2 bus using the list's active `prediction_models` artifact and
+  calibrates the score to a probability.
 
       mix predictions.candidates --list 1001_movies                  # next-edition predictions (default)
       mix predictions.candidates --list 1001_movies --mode candidates # canon-fit, all eras (NOT predictions)
@@ -23,10 +24,14 @@ defmodule Mix.Tasks.Predictions.Candidates do
                      (many older ones were considered over editions and never added)
                    * `members`     — ONLY films already on the list, ranked by the model's score
                    * `all`         — everything together, tagged `[MEMBER]`/`[PREDICT]`
-    --since      override the cutoff year (default: the resolved frontier — see below)
-    --limit      how many rows to show (default 25)
-    --min-votes  only score films with ≥ this many TMDb votes (default 1000). 0 = whole catalog.
-    --json       machine-readable output
+    --since        override the cutoff year (default: the resolved frontier — see below)
+    --limit        how many rows to show (default 25)
+    --min-sources  evidence eligibility (#1078 §0): require ≥ N distinct external-metric sources
+                   (default 2; members mode is never gated). A presence rule — no single metric's
+                   value can ever exclude a film.
+    --min-votes    OPTIONAL popularity filter on any maintained vote source (default 0 = off)
+    --why          print each row's exact model contributions (top terms, signed)
+    --json         machine-readable output (rows include `why` + `signals_present`)
 
   The **frontier cutoff** is resolved per list by `ListFrontier`: the list's edition/published
   year if it has one, else its newest member's release year. Predictions are gated to that year
@@ -36,12 +41,8 @@ defmodule Mix.Tasks.Predictions.Candidates do
   """
   use Mix.Task
 
-  import Ecto.Query
-
-  alias Cinegraph.Movies.{Movie, MovieLists}
-  alias Cinegraph.Predictions.{ListFrontier, PreRegistration, ProbabilityCalibration, Reliability}
-  alias Cinegraph.Repo
-  alias Cinegraph.Scoring.Bus
+  alias Cinegraph.Movies.MovieLists
+  alias Cinegraph.Predictions.Candidates
 
   @shortdoc "Rank off-list films by predicted probability of belonging to a list"
 
@@ -57,6 +58,8 @@ defmodule Mix.Tasks.Predictions.Candidates do
           since: :integer,
           limit: :integer,
           min_votes: :integer,
+          min_sources: :integer,
+          why: :boolean,
           json: :boolean
         ]
       )
@@ -64,91 +67,57 @@ defmodule Mix.Tasks.Predictions.Candidates do
     list = opts[:list] || "1001_movies"
     mode = parse_mode(opts[:mode])
     limit = opts[:limit] || 25
-    min_votes = opts[:min_votes] || 1000
+    # Eligibility is evidence-based (min_sources, #1078 §0); --min-votes is an OPTIONAL
+    # popularity filter, off by default.
+    min_votes = opts[:min_votes] || 0
 
-    model =
-      Bus.active_model(list) ||
+    rank_opts =
+      [mode: mode, limit: limit, min_votes: min_votes, since: opts[:since]]
+      |> then(fn o ->
+        if opts[:min_sources], do: Keyword.put(o, :min_sources, opts[:min_sources]), else: o
+      end)
+
+    case Candidates.rank(list, rank_opts) do
+      {:error, :no_active_model} ->
         Mix.raise(
           "No active model for #{list}. Train one first: " <>
             "mix predictions.train --integrity --list-key #{list} --save"
         )
 
-    frontier = ListFrontier.resolve(list)
-    cutoff = if mode == "predictions", do: opts[:since] || frontier.cutoff_year
-
-    # Reliability gates the predictions: when it's Insufficient or the model is only
-    # identity-calibrated, the per-row probability is a fake `score/100` and must NOT be shown.
-    reliability = reliability_for(model, frontier)
-    show_prob? = reliability.grade != :insufficient and reliability.calibration != "identity"
-
-    candidates = candidate_movies(list, min_votes, mode, cutoff)
-    scores = Bus.score(candidates, model)
-
-    ranked =
-      candidates
-      |> Enum.map(fn m ->
-        score = Map.get(scores, m.id, 0.0)
-
-        %{
-          id: m.id,
-          title: m.title,
-          year: year(m),
-          score: score,
-          prob:
-            if(show_prob?, do: ProbabilityCalibration.apply_calibration(model.calibration, score)),
-          member?: Map.has_key?(m.canonical_sources || %{}, list),
-          also_on: also_on(m, list)
+      {:ok, result} ->
+        ctx = %{
+          list: list,
+          mode: mode,
+          model: result.model,
+          frontier: result.frontier,
+          reliability: result.reliability,
+          cutoff: result.cutoff,
+          members: result.member_count,
+          base_rate: Candidates.base_rate(result.member_count),
+          scanned: result.scanned,
+          min_votes: min_votes,
+          why?: opts[:why] == true,
+          ranked: result.rows
         }
-      end)
-      |> Enum.sort_by(& &1.score, :desc)
-      |> Enum.take(limit)
 
-    ctx = %{
-      list: list,
-      mode: mode,
-      model: model,
-      frontier: frontier,
-      reliability: reliability,
-      cutoff: cutoff,
-      members: member_count(list),
-      base_rate: nil,
-      scanned: length(candidates),
-      min_votes: min_votes,
-      ranked: ranked
-    }
-
-    ctx = %{ctx | base_rate: list_base_rate(ctx.members)}
-
-    if opts[:json] do
-      IO.puts(
-        Jason.encode!(
-          %{
-            list: list,
-            mode: mode,
-            model_id: model.id,
-            frontier: frontier,
-            reliability: reliability_json(reliability),
-            rows: ranked
-          },
-          pretty: true
-        )
-      )
-    else
-      print(ctx)
+        if opts[:json] do
+          IO.puts(
+            Jason.encode!(
+              %{
+                list: list,
+                mode: mode,
+                model_id: result.model.id,
+                frontier: result.frontier,
+                reliability: reliability_json(result.reliability),
+                rows: result.rows
+              },
+              pretty: true
+            )
+          )
+        else
+          print(ctx)
+        end
     end
-  end
-
-  # Reliability via the pure core, reusing the already-resolved frontier (no second DB resolve).
-  # `Bus.active_model/1` does not preload the prereg, so load it here for the threshold cap.
-  defp reliability_for(model, frontier) do
-    prereg = Repo.preload(model, :pre_registration).pre_registration
-
-    Reliability.score(model.integrity_report, model.calibration, %{
-      is_stale: model.is_stale,
-      frontier: frontier,
-      threshold: prereg && PreRegistration.threshold_value(prereg),
-      prereg?: not is_nil(prereg)
-    })
   end
 
   defp reliability_json(r) do
@@ -163,6 +132,14 @@ defmodule Mix.Tasks.Predictions.Candidates do
     }
   end
 
+  defp eligibility_label(0), do: "evidence-eligible: ≥2 metric sources"
+  defp eligibility_label(min_votes), do: "evidence-eligible + min votes #{min_votes}"
+
+  defp signed(c) when is_number(c) and c >= 0,
+    do: "+#{:erlang.float_to_binary(c * 1.0, decimals: 1)}"
+
+  defp signed(c), do: :erlang.float_to_binary(c * 1.0, decimals: 1)
+
   defp parse_mode(nil), do: "predictions"
   defp parse_mode(m) when m in ~w(predictions candidates members all), do: m
 
@@ -171,14 +148,6 @@ defmodule Mix.Tasks.Predictions.Candidates do
       Mix.raise(
         "invalid --mode #{inspect(m)} (expected predictions | candidates | members | all)"
       )
-
-  # Other canonical lists this film is on (target excluded) — supporting evidence.
-  defp also_on(movie, list) do
-    (movie.canonical_sources || %{})
-    |> Map.keys()
-    |> Enum.reject(&(&1 == list))
-    |> Enum.sort()
-  end
 
   defp print(ctx) do
     name = MovieLists.get_by_source_key(ctx.list) |> then(&((&1 && &1.name) || ctx.list))
@@ -190,7 +159,7 @@ defmodule Mix.Tasks.Predictions.Candidates do
 
     "#{name}" — model #{ctx.model.feature_set["granularity"]}, held-out recall@K #{pct(recall)} (vs popularity #{pct(pop)})
     #{reliability_line(ctx.reliability)}
-    known members: #{ctx.members} · base rate ≈ #{pct(ctx.base_rate)} · scanned #{ctx.scanned} films (min votes #{ctx.min_votes})
+    known members: #{ctx.members} · base rate ≈ #{pct(ctx.base_rate)} · scanned #{ctx.scanned} films (#{eligibility_label(ctx.min_votes)})
     #{frontier_line(ctx.frontier)}
     #{mode_intro(ctx.mode, ctx.cutoff)}
 
@@ -210,6 +179,16 @@ defmodule Mix.Tasks.Predictions.Candidates do
       Mix.shell().info(
         "  #{pad(i, 3)}  #{tag}#{pad(Float.round(c.score, 1), 5)}  #{pad(title, 22)}  #{evidence}"
       )
+
+      # --why: the film's exact linear contributions (#1076 P1), top terms signed.
+      if ctx.why? and c[:why] not in [nil, []] do
+        why_line =
+          c.why
+          |> Enum.map(fn t -> "#{t.label} #{signed(t.contribution)}" end)
+          |> Enum.join(" · ")
+
+        Mix.shell().info("        why: #{why_line}")
+      end
     end)
 
     Mix.shell().info("\n#{mode_footer(ctx.mode)}")
@@ -301,73 +280,6 @@ defmodule Mix.Tasks.Predictions.Candidates do
       "Every row is a genuine prediction: off-list AND past the list's frontier. `--mode candidates`\n" <>
         "for all-era canon-fit films; `--mode members` / `all` to validate."
 
-  # Fully-imported films, gated by min votes and scoped by mode:
-  #   predictions → off-list AND release_year ≥ cutoff   candidates → off-list, all eras
-  #   members → only members   all → no filter
-  defp candidate_movies(list, min_votes, mode, cutoff) do
-    base =
-      from m in Movie,
-        where: m.import_status == "full",
-        select: %Movie{
-          id: m.id,
-          title: m.title,
-          release_date: m.release_date,
-          canonical_sources: m.canonical_sources
-        }
-
-    base
-    |> scope_by_mode(list, mode, cutoff)
-    |> maybe_min_votes(min_votes)
-    |> Repo.all(timeout: :timer.seconds(120))
-  end
-
-  defp scope_by_mode(query, list, "predictions", cutoff) do
-    query
-    |> where([m], not fragment("? \\? ?", m.canonical_sources, ^list))
-    |> recency_gate(cutoff)
-  end
-
-  defp scope_by_mode(query, list, "candidates", _cutoff),
-    do: where(query, [m], not fragment("? \\? ?", m.canonical_sources, ^list))
-
-  defp scope_by_mode(query, list, "members", _cutoff),
-    do: where(query, [m], fragment("? \\? ?", m.canonical_sources, ^list))
-
-  defp scope_by_mode(query, _list, "all", _cutoff), do: query
-
-  defp recency_gate(query, nil), do: query
-
-  defp recency_gate(query, cutoff),
-    do: where(query, [m], fragment("EXTRACT(YEAR FROM ?) >= ?", m.release_date, ^cutoff))
-
-  defp maybe_min_votes(query, 0), do: query
-
-  defp maybe_min_votes(query, min_votes) do
-    where(
-      query,
-      [m],
-      fragment(
-        "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'tmdb' AND em.metric_type = 'rating_votes' AND em.value >= ?)",
-        m.id,
-        ^min_votes
-      )
-    )
-  end
-
-  defp member_count(list) do
-    Repo.aggregate(
-      from(m in Movie, where: fragment("? \\? ?", m.canonical_sources, ^list)),
-      :count
-    )
-  end
-
-  defp list_base_rate(members) do
-    total = Repo.aggregate(from(m in Movie, where: m.import_status == "full"), :count)
-    if total > 0, do: members / total, else: nil
-  end
-
-  defp year(%{release_date: %Date{year: y}}), do: y
-  defp year(_), do: nil
   defp year_suffix(nil), do: ""
   defp year_suffix(y), do: " (#{y})"
 

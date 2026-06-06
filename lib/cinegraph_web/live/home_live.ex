@@ -61,7 +61,7 @@ defmodule CinegraphWeb.HomeLive do
     %{
       icon: "🔍",
       title: "Tune your own ranking with the 6-lens discovery dial.",
-      href: "/movies/discover"
+      href: "/algorithms"
     },
     %{
       icon: "🤝",

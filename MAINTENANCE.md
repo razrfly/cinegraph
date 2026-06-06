@@ -352,3 +352,58 @@ When adding a new maintenance task, follow the same shape:
 3. (Optional) `Cinegraph.Workers.<Thing>Sweeper` Oban worker that wraps
    `Maintenance.<Thing>.run([limit: N])` for autonomous draining.
 4. Crontab entry in `config/config.exs` if applicable.
+
+## Prediction model promotion — dev → prod (#1043)
+
+Training is heavy and stays on the Studio; the trained artifact is ~5KB of JSON. Promotion moves
+three coupled rows (prereg → `prediction_models` → the `movie_lists` active pointer) through two
+correctness gates: **substrate parity** (the feature surface must match — never silently activate)
+and **holdout integrity** (`integrity_report`/`holdout_spent_at` travel verbatim; prod never
+re-measures). Deliberately manual — a deploy-time decision, not a sweeper.
+
+### The one-command recipe (from the Studio)
+
+```sh
+# 0. Export the served models as reviewable bundles (commit them — they're the artifacts)
+mix predictions.model.export --all          # → priv/prediction_models/<sk>-<hash>.json
+
+# 1. Read-only substrate preflight against LIVE prod (works on any image age)
+mix predictions.model.push --all --check
+
+# 2. If the preflight reports missing codes / stale schema:
+#    deploy the current image (kamal deploy — runs migrations), then seed the catalog:
+#      bin/cinegraph eval 'Cinegraph.Metrics.CatalogSeed.seed!()'   # idempotent
+#    and re-run step 1 until every list reads ✓.
+
+# 3. Ship + import + activate (idempotent; refuses on parity mismatch or guard failure)
+mix predictions.model.push --all --commit
+
+# 4. Verify in prod (read-only):
+#      bin/cinegraph eval '...weights_hash + grade check...'  — or re-run step 1 (✓s) and
+#      spot-check /algorithms/<slug> on the prod site.
+```
+
+### When to re-train vs re-promote
+
+- **Re-promote** (this recipe): the Studio trained/recalibrated a better artifact for the same
+  substrate. Re-importing an identical bundle is a proven no-op.
+- **Re-train (on the Studio)**: prod's data has diverged enough to doubt the published number, or
+  the substrate changed (new catalog codes, lens-config change → `is_stale` machinery). Prod
+  **never** re-measures — the published accuracy is the train-environment measurement, and
+  re-measuring on prod would re-spend the holdout.
+
+### Preflight findings log
+
+- **2026-06-06** (pre-deploy): channel ✓; prod schema predates the catalog migrations
+  (`metric_definitions.is_available` missing) and 34/50 model codes absent (all festival codes +
+  derived features). Action: deploy + `CatalogSeed.seed!()` before first `--commit`.
+
+### Recalibration reproduction doctrine (#1074 audit, 2026-06-06)
+
+`mix predictions.recalibrate` reproduces holdout pairs exactly **for a fixed DB state**
+(deterministic pool ordering + stored seed; contract-tested in `holdout_pairs_test.exs`). Over a
+living catalog (dev imports ~1k movies/day) the pools grow, recomputed recall legitimately
+drifts, and the recall-match guard **refuses** — that is the guard working. The committed
+calibrations remain valid (they were written when reproduction held). If you need to recalibrate
+after drift: re-train on the Studio (which re-records pairs against the current snapshot), then
+recalibrate inside that window.

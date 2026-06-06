@@ -132,4 +132,49 @@ defmodule Cinegraph.Scoring.BusTest do
       assert id == model.id
     end
   end
+
+  describe "contributions/2 (#1076 P1 — the exact per-film why)" do
+    test "terms mirror score/3: sum == score, nonzero only, sorted by |contribution|" do
+      movie = plant_movie()
+      # imdb_rating: 8.0 → 0.8 · metacritic: 50 → 0.5 · tmdb_rating absent → no term
+      ext!(movie, "imdb", "rating_average", 8.0)
+      ext!(movie, "metacritic", "metascore", 50.0)
+
+      weights = %{"imdb_rating" => 0.6, "metacritic_metascore" => 0.4, "tmdb_rating" => 0.5}
+      spec = {:data_point, weights, "1001_movies"}
+
+      terms = Bus.contributions([movie], spec)[movie.id]
+
+      # only the two present features appear, biggest first
+      assert Enum.map(terms, & &1.code) == ["imdb_rating", "metacritic_metascore"]
+      assert [%{contribution: c1}, %{contribution: c2}] = terms
+      # 0.6*0.8*100 = 48.0 · 0.4*0.5*100 = 20.0
+      assert_in_delta c1, 48.0, 0.05
+      assert_in_delta c2, 20.0, 0.05
+
+      # the breakdown IS the score (pre-clamp)
+      score = Bus.score([movie], spec)[movie.id]
+      assert_in_delta c1 + c2, score, 0.1
+    end
+
+    test "negative weights produce signed terms" do
+      movie = plant_movie()
+      ext!(movie, "imdb", "rating_average", 10.0)
+
+      terms = Bus.contributions([movie], {:data_point, %{"imdb_rating" => -0.2}, "1001_movies"})
+
+      assert [%{contribution: c}] = terms[movie.id]
+      assert_in_delta c, -20.0, 0.05
+    end
+
+    test "lens-granularity models are honestly unsupported (opaque custom lenses)" do
+      model = %Model{
+        source_key: "1001_movies",
+        feature_set: %{"granularity" => "lens"},
+        weights: %{"mob" => 1.0}
+      }
+
+      assert {:error, :unsupported_granularity} = Bus.contributions([], model)
+    end
+  end
 end

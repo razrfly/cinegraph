@@ -464,7 +464,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 How is this score calculated?
               </button>
               <a
-                href={~p"/movies/discover"}
+                href={~p"/algorithms"}
                 class="text-[12.5px] font-semibold text-mist-700 dark:text-mist-300 underline decoration-mist-950/10 dark:decoration-white/15 underline-offset-4"
               >
                 Tune weights →
@@ -1065,7 +1065,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
           </ul>
           <p>
             The overall score is the weighted sum. Custom weights can be tuned in the <a
-              href={~p"/movies/discover"}
+              href={~p"/algorithms"}
               class="underline decoration-mist-950/15 dark:decoration-white/20 underline-offset-4"
             >discovery tuner</a>.
           </p>

@@ -215,6 +215,11 @@ defmodule Mix.Tasks.Predictions.EmbedSpike do
   # L2-normalized mean of the class's (already unit) embedding vectors.
   defp centroid(docs, label) do
     vecs = for d <- docs, d.label == label, do: d.vec
+
+    # A label-empty fold (tiny --limit / extreme imbalance) would make hd/1 raise cryptically.
+    if vecs == [],
+      do: raise("no samples for label #{label} in this fold — increase --limit or check the data")
+
     dim = length(hd(vecs))
 
     sum =
