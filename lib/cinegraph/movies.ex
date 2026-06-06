@@ -2007,6 +2007,9 @@ defmodule Cinegraph.Movies do
     from m in Movie,
       where: m.release_date >= ^start_date and m.release_date <= ^end_date,
       where: m.import_status == "full",
+      # Deterministic order: seeded shuffles downstream (static eval split/undersampling) must see
+      # a stable input sequence, or the same seed reproduces a different split (#1074 audit).
+      order_by: m.id,
       select: %Movie{
         id: m.id,
         title: m.title,

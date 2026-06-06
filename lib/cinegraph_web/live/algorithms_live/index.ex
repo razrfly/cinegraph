@@ -1,48 +1,44 @@
 defmodule CinegraphWeb.AlgorithmsLive.Index do
   @moduledoc """
-  Public `/algorithms` index (#1049 A1) — honest per-list prediction reliability.
+  Public `/algorithms` index (#1049 A1, #1038 Phase A) — honest per-list prediction reliability,
+  split into the spec's two sections (the split *is* the honesty argument):
 
-  One card per canonical list: lists with a served model show their honest grade (Wilson-95 lower
-  bound of objective recall@K), recall, lift vs popularity, circularity flag, and top objective
-  signals; lists that serve no model are shown honestly as **not metadata-predictable**. Data comes
-  from `Cinegraph.Predictions.Explanation.for_list/1` (the read-model) — no number is invented here.
+    * **Predictive models** — lists with a served model: honest grade (Wilson-95 lower bound of
+      objective recall@K), recall, lift vs popularity, circularity flag, top objective signals.
+    * **Recommendation rails** (`metadata["rail"]`) — no %, by design: a descriptor, never a number.
+    * **Not metadata-predictable** — lists that honestly serve nothing.
+
+  Data comes from `Cinegraph.Predictions.Explanation.for_list/1` (the read-model) — no number is
+  invented here. Cards carry a 4-poster member strip (`Candidates.members/2`).
   """
   use CinegraphWeb, :live_view
 
   alias Cinegraph.Movies.MovieLists
-  alias Cinegraph.Predictions.Explanation
+  alias Cinegraph.Predictions.{Candidates, Explanation}
+  alias CinegraphWeb.AlgorithmsLive.Presentation
 
-  # Rough archetype tags (#1070) — purely for honest grouping/context in the UI.
-  @archetype %{
-    "afi_100" => "Consensus",
-    "1001_movies" => "Consensus",
-    "national_film_registry" => "Consensus",
-    "sight_sound_critics_2022" => "Consensus",
-    "sight_sound_directors_2022" => "Consensus",
-    "tspdt_1000" => "Auteur",
-    "criterion" => "Auteur",
-    "ebert_great_movies" => "Auteur",
-    "cult_movies_400" => "Taste",
-    "letterboxd_top_250" => "Taste"
-  }
+  @strip_size 4
 
   @impl true
   def mount(_params, _session, socket) do
     cards = build_cards()
+    groups = Enum.group_by(cards, & &1.kind)
 
     {:ok,
      socket
      |> assign(:page_title, "Algorithms")
      |> assign(:active_nav, "Algorithms")
-     |> assign(:cards, cards)
-     |> assign(:served_count, Enum.count(cards, & &1.served?))}
+     |> assign(:card_count, length(cards))
+     |> assign(:predictive_cards, sort_predictive(groups[:predictive] || []))
+     |> assign(:rail_cards, Enum.sort_by(groups[:rail] || [], & &1.name))
+     |> assign(:unserved_cards, Enum.sort_by(groups[:unserved] || [], & &1.name))
+     |> assign(:served_count, length(groups[:predictive] || []))}
   end
 
-  # ── data assembly (read-only; cheap — ~2 queries/list, no caching needed) ──────────
+  # ── data assembly (read-only; cheap — ~3 queries/list, no caching needed) ──────────
   defp build_cards do
     MovieLists.all_displayable()
     |> Enum.map(&build_card/1)
-    |> Enum.sort_by(&sort_key/1)
   end
 
   defp build_card(list) do
@@ -50,48 +46,68 @@ defmodule CinegraphWeb.AlgorithmsLive.Index do
       name: list.name,
       slug: list.slug,
       source_key: list.source_key,
-      archetype: Map.get(@archetype, list.source_key, "—")
+      archetype: Presentation.archetype(list.source_key),
+      posters: poster_strip(list.source_key)
     }
 
-    case Explanation.for_list(list.source_key) do
-      {:ok, e} ->
-        Map.merge(base, %{
-          served?: true,
-          grade: e.grade,
-          tier: tier(e.grade),
-          tier_tone: tier_tone(e.grade),
-          headline_pct: e.headline_accuracy,
-          recall: e.lift && e.lift.recall,
-          lift_ratio: e.lift && e.lift.ratio,
-          lift_passes?: e.lift && e.lift.passes?,
-          circularity: e.circularity,
-          strategy: e.strategy,
-          top_features: e.weights |> Enum.filter(&(&1.bucket == :objective)) |> Enum.take(4)
-        })
+    cond do
+      # Rails are presented as what they are — a recommendation engine, not a failed prediction.
+      is_map(list.metadata) and list.metadata["rail"] == true ->
+        Map.merge(base, %{kind: :rail, tier: "Recommendation rail", tier_tone: "ink"})
 
-      {:error, :no_active_model} ->
-        Map.merge(base, %{
-          served?: false,
-          grade: nil,
-          tier: "Not metadata-predictable",
-          tier_tone: "default"
-        })
+      true ->
+        case Explanation.for_list(list.source_key) do
+          {:ok, e} ->
+            Map.merge(base, %{
+              kind: :predictive,
+              grade: e.grade,
+              tier: Presentation.tier(e.grade),
+              tier_tone: Presentation.tier_tone(e.grade),
+              headline_pct: e.headline_accuracy,
+              recall: e.lift && e.lift.recall,
+              lift_ratio: e.lift && e.lift.ratio,
+              lift_passes?: e.lift && e.lift.passes?,
+              circularity: e.circularity,
+              strategy: e.strategy,
+              top_features: e.weights |> Enum.filter(&(&1.bucket == :objective)) |> Enum.take(4)
+            })
+
+          {:error, :no_active_model} ->
+            Map.merge(base, %{
+              kind: :unserved,
+              tier: "Not metadata-predictable",
+              tier_tone: "default"
+            })
+        end
     end
   end
 
-  # Served lists first, then by recall (point estimate) desc; unserved last, alphabetical.
-  defp sort_key(%{served?: true, recall: r}), do: {0, -(r || 0.0), ""}
-  defp sort_key(%{served?: false, name: n}), do: {1, 0.0, n}
+  defp poster_strip(source_key) do
+    source_key
+    |> Candidates.members(limit: @strip_size)
+    |> Enum.map(&Presentation.poster_url(&1.poster_path))
+    |> Enum.reject(&is_nil/1)
+  end
 
-  defp tier(:high), do: "Strong"
-  defp tier(:moderate), do: "Moderate"
-  defp tier(:low), do: "Low"
-  defp tier(_), do: "Insufficient"
+  # Predictive cards by recall (point estimate) desc.
+  defp sort_predictive(cards), do: Enum.sort_by(cards, &(-(&1.recall || 0.0)))
 
-  defp tier_tone(:high), do: "green"
-  defp tier_tone(:moderate), do: "blue"
-  defp tier_tone(:low), do: "amber"
-  defp tier_tone(_), do: "default"
+  # ── card components ────────────────────────────────────────────────────────────────
+  attr :posters, :list, required: true
+
+  @doc false
+  def poster_strip_row(assigns) do
+    ~H"""
+    <div :if={@posters != []} class="flex gap-1.5">
+      <div
+        :for={url <- @posters}
+        class="aspect-[2/3] w-0 flex-1 overflow-hidden rounded-[4px] bg-mist-100 dark:bg-mist-800 border border-mist-950/10 dark:border-white/10"
+      >
+        <img src={url} alt="" loading="lazy" class="h-full w-full object-cover" />
+      </div>
+    </div>
+    """
+  end
 
   # ── presentation helpers (used by the template) ───────────────────────────────────
   @doc false

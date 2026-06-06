@@ -1,0 +1,203 @@
+{
+  "active": true,
+  "format_version": 1,
+  "model": {
+    "backtest_strategy": "temporal",
+    "calibration": {
+      "a": 13.2987193945763,
+      "b": -8.76127961820108,
+      "fit_version": 2,
+      "method": "platt",
+      "n": 255316,
+      "n_positives": 32,
+      "scale": 100.0
+    },
+    "feature_set": {
+      "features": [
+        "bafta_nom",
+        "bafta_win",
+        "berlin_golden_bear",
+        "bfi_top_100",
+        "biff_nom",
+        "biff_win",
+        "box_office_roi",
+        "cannes_palme_dor",
+        "cca_nom",
+        "cca_win",
+        "cff_nom",
+        "cff_win",
+        "collection_membership",
+        "festival_prestige",
+        "has_official_trailer",
+        "hfpa_nom",
+        "hfpa_win",
+        "imdb_rating",
+        "imdb_rating_votes",
+        "lff_nom",
+        "lff_win",
+        "metacritic_metascore",
+        "nhiff_nom",
+        "nhiff_win",
+        "nyff_nom",
+        "nyff_win",
+        "omdb_revenue_domestic",
+        "person_quality_score",
+        "prior_collab_density",
+        "production_country_count",
+        "rotten_tomatoes_audience_score",
+        "rotten_tomatoes_tomatometer",
+        "runtime",
+        "sag_nom",
+        "sag_win",
+        "sff_nom",
+        "sff_win",
+        "sxsw_nom",
+        "sxsw_win",
+        "tff_nom",
+        "tff_win",
+        "tiff_nom",
+        "tiff_win",
+        "tmdb_budget",
+        "tmdb_popularity_score",
+        "tmdb_rating",
+        "tmdb_rating_votes",
+        "tmdb_revenue_worldwide",
+        "venice_golden_lion",
+        "viff_nom"
+      ],
+      "granularity": "data_point"
+    },
+    "holdout_spent_at": "2026-06-04T12:19:05Z",
+    "integrity_report": {
+      "backtest_strategy": "temporal",
+      "baselines": {
+        "popularity": 0.0,
+        "prior_rate": 0.0001,
+        "random": 0.0
+      },
+      "brier": 0.0002,
+      "by_decade": [
+        {
+          "decade": 2020,
+          "n_positives": 32,
+          "precision_at_k": 0.1563,
+          "recall_at_k": 0.1563
+        }
+      ],
+      "granularity": "data_point",
+      "holdout_decades": [
+        2020
+      ],
+      "n_evaluated": 255033,
+      "n_positives": 32,
+      "objective_precision_at_k": 0.1563,
+      "objective_recall_at_k": 0.1563,
+      "precision_at_k": 0.1563,
+      "recall_at_k": 0.1563,
+      "train_decades": [
+        1920,
+        1930,
+        1940,
+        1950,
+        1960,
+        1970,
+        1980,
+        1990,
+        2000,
+        2010
+      ],
+      "worst_miss": {
+        "highest_scored_nonmember": {
+          "movie_id": 320,
+          "score": 75.0,
+          "title": "Dune"
+        },
+        "lowest_scored_member": {
+          "movie_id": 3212,
+          "score": 14.2,
+          "title": "Scorsese Shorts"
+        }
+      }
+    },
+    "lens_config_hash": null,
+    "metrics": {
+      "brier": 0.0001,
+      "precision_at_k": 0.1563,
+      "recall_at_k": 0.1563
+    },
+    "model_class": "linear_logreg",
+    "model_version": 1,
+    "run_id": "promote-MPZFTR8Y-bb6545",
+    "serialized_model": null,
+    "source_key": "criterion",
+    "weights": {
+      "bafta_nom": 0.025067012757062912,
+      "bafta_win": 0.012099232524633408,
+      "berlin_golden_bear": 0.0,
+      "bfi_top_100": 0.0,
+      "biff_nom": 0.007301315199583769,
+      "biff_win": 0.008288362063467503,
+      "box_office_roi": 0.021645192056894302,
+      "cannes_palme_dor": 0.0,
+      "cca_nom": 0.004852193407714367,
+      "cca_win": 0.0022170492447912693,
+      "cff_nom": 0.022179877385497093,
+      "cff_win": 0.01767055131494999,
+      "collection_membership": 0.018950285390019417,
+      "festival_prestige": 0.07590922713279724,
+      "has_official_trailer": 0.015022329054772854,
+      "hfpa_nom": 0.021168362349271774,
+      "hfpa_win": 0.009736357256770134,
+      "imdb_rating": 0.07757589221000671,
+      "imdb_rating_votes": 0.07358211278915405,
+      "lff_nom": 6.531545659527183e-4,
+      "lff_win": 0.002292910125106573,
+      "metacritic_metascore": 0.055593185126781464,
+      "nhiff_nom": 0.0,
+      "nhiff_win": 0.0,
+      "nyff_nom": 0.01182001456618309,
+      "nyff_win": 0.01074903178960085,
+      "omdb_revenue_domestic": 0.038460321724414825,
+      "person_quality_score": 0.05060765892267227,
+      "prior_collab_density": 0.022595327347517014,
+      "production_country_count": 0.0,
+      "rotten_tomatoes_audience_score": 0.0,
+      "rotten_tomatoes_tomatometer": 0.11883796751499176,
+      "runtime": 0.0325305312871933,
+      "sag_nom": 0.001185802510008216,
+      "sag_win": 5.144847091287374e-4,
+      "sff_nom": 0.0,
+      "sff_win": 0.001245258143171668,
+      "sxsw_nom": 9.122646588366479e-5,
+      "sxsw_win": 5.355470348149538e-4,
+      "tff_nom": 0.0,
+      "tff_win": 0.0,
+      "tiff_nom": 2.2400318994186819e-4,
+      "tiff_win": 0.0019648391753435135,
+      "tmdb_budget": 0.032730162143707275,
+      "tmdb_popularity_score": 0.01775001920759678,
+      "tmdb_rating": 0.07920564711093903,
+      "tmdb_rating_votes": 0.04291409254074097,
+      "tmdb_revenue_worldwide": 0.03749144822359085,
+      "venice_golden_lion": 0.013605596497654915,
+      "viff_nom": 0.01313638687133789
+    },
+    "weights_hash": "c2ec64b776348ba3475f7bd46fcd23c4"
+  },
+  "pre_registration": {
+    "expected_accuracy_range": {
+      "max": 1.0,
+      "min": 0.0149
+    },
+    "expected_top_features": {
+      "note": "ledger-driven promotion (#1061 Session 2)"
+    },
+    "failure_threshold": "0.0149",
+    "notes": null,
+    "source_key": "criterion"
+  },
+  "source_key": "criterion",
+  "substrate_fingerprint": {
+    "lens_config_hash": "565dff513ebe0a96af970169539b8144"
+  }
+}

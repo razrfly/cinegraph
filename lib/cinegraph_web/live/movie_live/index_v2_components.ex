@@ -25,7 +25,7 @@ defmodule CinegraphWeb.MovieLive.IndexV2Components do
       </p>
       <div class="flex items-center gap-3 mt-1.5 text-[14px] text-mist-700 dark:text-mist-300">
         <a
-          href="/movies/discover"
+          href="/algorithms"
           class="underline decoration-mist-950/15 dark:decoration-white/15 underline-offset-4 hover:text-mist-950 dark:hover:text-white"
         >
           Tunable scoring →

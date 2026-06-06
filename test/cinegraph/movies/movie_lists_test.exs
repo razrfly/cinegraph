@@ -20,22 +20,19 @@ defmodule Cinegraph.Movies.MovieListsTest do
       assert list.display_order == 10
       assert list.tracks_awards == false
 
-      assert list.metadata == %{
-               "source" => "IMDb user list",
-               "use" => "broad cult candidate pool",
-               "issue" => "857"
-             }
+      assert list.metadata["source"] == "IMDb user list"
+      assert list.metadata["use"] == "broad cult candidate pool"
+      assert list.metadata["issue"] == "857"
+      # cult is the recommendation rail (#1038 2b) — /algorithms renders it in rail mode
+      assert list.metadata["rail"] == true
+      assert is_binary(list.metadata["rail_thesis"])
 
       assert MovieLists.all_as_config()["cult_movies_400"] == %{
                list_id: "ls053182933",
                source_key: "cult_movies_400",
                name: "400 Greatest Cult Movies",
                category: "curated",
-               metadata: %{
-                 "source" => "IMDb user list",
-                 "use" => "broad cult candidate pool",
-                 "issue" => "857"
-               }
+               metadata: list.metadata
              }
     end
   end

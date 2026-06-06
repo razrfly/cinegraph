@@ -1,0 +1,203 @@
+{
+  "active": true,
+  "format_version": 1,
+  "model": {
+    "backtest_strategy": "temporal",
+    "calibration": {
+      "a": 12.007284969195995,
+      "b": -8.058265231113648,
+      "fit_version": 2,
+      "method": "platt",
+      "n": 255316,
+      "n_positives": 22,
+      "scale": 100.0
+    },
+    "feature_set": {
+      "features": [
+        "bafta_nom",
+        "bafta_win",
+        "berlin_golden_bear",
+        "bfi_top_100",
+        "biff_nom",
+        "biff_win",
+        "box_office_roi",
+        "cannes_palme_dor",
+        "cca_nom",
+        "cca_win",
+        "cff_nom",
+        "cff_win",
+        "collection_membership",
+        "festival_prestige",
+        "has_official_trailer",
+        "hfpa_nom",
+        "hfpa_win",
+        "imdb_rating",
+        "imdb_rating_votes",
+        "lff_nom",
+        "lff_win",
+        "metacritic_metascore",
+        "nhiff_nom",
+        "nhiff_win",
+        "nyff_nom",
+        "nyff_win",
+        "omdb_revenue_domestic",
+        "person_quality_score",
+        "prior_collab_density",
+        "production_country_count",
+        "rotten_tomatoes_audience_score",
+        "rotten_tomatoes_tomatometer",
+        "runtime",
+        "sag_nom",
+        "sag_win",
+        "sff_nom",
+        "sff_win",
+        "sxsw_nom",
+        "sxsw_win",
+        "tff_nom",
+        "tff_win",
+        "tiff_nom",
+        "tiff_win",
+        "tmdb_budget",
+        "tmdb_popularity_score",
+        "tmdb_rating",
+        "tmdb_rating_votes",
+        "tmdb_revenue_worldwide",
+        "venice_golden_lion",
+        "viff_nom"
+      ],
+      "granularity": "data_point"
+    },
+    "holdout_spent_at": "2026-06-04T12:22:33Z",
+    "integrity_report": {
+      "backtest_strategy": "temporal",
+      "baselines": {
+        "popularity": 0.0,
+        "prior_rate": 0.0001,
+        "random": 0.0
+      },
+      "brier": 0.0001,
+      "by_decade": [
+        {
+          "decade": 2020,
+          "n_positives": 22,
+          "precision_at_k": 0.4091,
+          "recall_at_k": 0.4091
+        }
+      ],
+      "granularity": "data_point",
+      "holdout_decades": [
+        2020
+      ],
+      "n_evaluated": 255033,
+      "n_positives": 22,
+      "objective_precision_at_k": 0.4091,
+      "objective_recall_at_k": 0.4091,
+      "precision_at_k": 0.4091,
+      "recall_at_k": 0.4091,
+      "train_decades": [
+        1920,
+        1930,
+        1940,
+        1950,
+        1960,
+        1970,
+        1980,
+        1990,
+        2000,
+        2010
+      ],
+      "worst_miss": {
+        "highest_scored_nonmember": {
+          "movie_id": 4436,
+          "score": 77.0,
+          "title": "The Brutalist"
+        },
+        "lowest_scored_member": {
+          "movie_id": 1752,
+          "score": 35.3,
+          "title": "Summer of Soul (...Or, When the Revolution Could Not Be Televised)"
+        }
+      }
+    },
+    "lens_config_hash": null,
+    "metrics": {
+      "brier": 0.0001,
+      "precision_at_k": 0.4091,
+      "recall_at_k": 0.4091
+    },
+    "model_class": "linear_logreg",
+    "model_version": 1,
+    "run_id": "promote-MPZFTR8Y-bb6545",
+    "serialized_model": null,
+    "source_key": "1001_movies",
+    "weights": {
+      "bafta_nom": 0.038461118936538696,
+      "bafta_win": 0.02326817810535431,
+      "berlin_golden_bear": 0.0,
+      "bfi_top_100": 0.0,
+      "biff_nom": 0.00415079714730382,
+      "biff_win": 0.005945997312664986,
+      "box_office_roi": 0.04376016929745674,
+      "cannes_palme_dor": 0.0,
+      "cca_nom": 0.013874992728233337,
+      "cca_win": 0.010023907758295536,
+      "cff_nom": 0.015189271420240402,
+      "cff_win": 0.015379560180008411,
+      "collection_membership": 0.011338876560330391,
+      "festival_prestige": 0.07438810914754868,
+      "has_official_trailer": 0.02774549275636673,
+      "hfpa_nom": 0.033731162548065186,
+      "hfpa_win": 0.02063506282866001,
+      "imdb_rating": 0.0511406734585762,
+      "imdb_rating_votes": 0.05888768658041954,
+      "lff_nom": 6.15934724919498e-4,
+      "lff_win": 0.0011792329605668783,
+      "metacritic_metascore": 0.06317143887281418,
+      "nhiff_nom": 0.0,
+      "nhiff_win": 0.0,
+      "nyff_nom": 0.015982521697878838,
+      "nyff_win": 0.014958714134991169,
+      "omdb_revenue_domestic": 0.04960828274488449,
+      "person_quality_score": 0.028905976563692093,
+      "prior_collab_density": 0.013453477062284946,
+      "production_country_count": 8.014367194846272e-4,
+      "rotten_tomatoes_audience_score": 0.0,
+      "rotten_tomatoes_tomatometer": 0.09758259356021881,
+      "runtime": 0.027727898210287094,
+      "sag_nom": 0.006601602304726839,
+      "sag_win": 0.0039202552288770676,
+      "sff_nom": 0.0,
+      "sff_win": 7.627352024428546e-4,
+      "sxsw_nom": 4.0729131433181465e-4,
+      "sxsw_win": 2.618205617181957e-4,
+      "tff_nom": 0.0,
+      "tff_win": 0.0,
+      "tiff_nom": 8.343677618540823e-4,
+      "tiff_win": 0.00293833389878273,
+      "tmdb_budget": 0.051053695380687714,
+      "tmdb_popularity_score": 0.015753038227558136,
+      "tmdb_rating": 0.05243737995624542,
+      "tmdb_rating_votes": 0.03060157783329487,
+      "tmdb_revenue_worldwide": 0.05463148280978203,
+      "venice_golden_lion": 0.009872902184724808,
+      "viff_nom": 0.008014939725399017
+    },
+    "weights_hash": "16348d6d4d64717d5c21dd7dda3f3e3f"
+  },
+  "pre_registration": {
+    "expected_accuracy_range": {
+      "max": 1.0,
+      "min": 0.0614
+    },
+    "expected_top_features": {
+      "note": "ledger-driven promotion (#1061 Session 2)"
+    },
+    "failure_threshold": "0.0614",
+    "notes": null,
+    "source_key": "1001_movies"
+  },
+  "source_key": "1001_movies",
+  "substrate_fingerprint": {
+    "lens_config_hash": "565dff513ebe0a96af970169539b8144"
+  }
+}

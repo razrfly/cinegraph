@@ -128,6 +128,43 @@ defmodule Cinegraph.Movies.MovieLists do
   end
 
   @doc """
+  Every displayable list with its served-model stats — the per-list read-model behind
+  `mix predictions.list` and the `/algorithms` surfaces (#1038 CLI-parity backlog).
+
+  Returns `[%{list, member_count, model, frontier, reliability}]` (the last three nil when the
+  list serves no model — the honest "not metadata-predictable" state).
+  """
+  def list_with_model_stats do
+    alias Cinegraph.Predictions.{Candidates, ListFrontier}
+    alias Cinegraph.Scoring.Bus
+
+    for list <- all_displayable() do
+      base = %{
+        list: list,
+        member_count: Candidates.member_count(list.source_key),
+        model: nil,
+        frontier: nil,
+        reliability: nil
+      }
+
+      case Bus.active_model(list.source_key) do
+        nil ->
+          base
+
+        model ->
+          frontier = ListFrontier.resolve(list.source_key)
+
+          %{
+            base
+            | model: model,
+              frontier: frontier,
+              reliability: Candidates.reliability_for(model, frontier)
+          }
+      end
+    end
+  end
+
+  @doc """
   Returns all slug strings for active lists.
   Used by the sitemap generator.
   """
@@ -414,7 +451,15 @@ defmodule Cinegraph.Movies.MovieLists do
         metadata: %{
           "source" => "IMDb user list",
           "use" => "broad cult candidate pool",
-          "issue" => "857"
+          "issue" => "857",
+          # Recommendation-rail mode on /algorithms/:slug (#1038 2b): no accuracy % (deliberately
+          # not metadata-predictable per #1070) — a seeded Video Clerk rail + tunable shelf instead.
+          "rail" => true,
+          "rail_thesis" =>
+            "Netflix paid $1,000,000 to predict taste and never shipped it. The films that broke " <>
+              "their model — Napoleon Dynamite, Donnie Darko, Lost in Translation — are exactly " <>
+              "the ones this shelf surfaces. We don't use \"people who liked X also liked Y\"; we " <>
+              "read disagreement, unpredictability, the people graph, and cult-list lineage."
         },
         slug: "cult-movies-400",
         short_name: "Cult Movies",

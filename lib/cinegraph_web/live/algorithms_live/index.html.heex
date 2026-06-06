@@ -23,38 +23,51 @@
       </a>.
     </p>
     <p class="mt-2 text-[13px] text-mist-500 dark:text-mist-400">
-      {@served_count} of {length(@cards)} lists have a reliable enough model to serve a prediction.
+      {@served_count} of {@card_count} lists have a reliable enough model to serve a prediction.
+    </p>
+    <p class="mt-3 text-[13.5px]">
+      <.link
+        navigate={~p"/algorithms/compare"}
+        class="font-medium underline decoration-mist-300 underline-offset-2 text-mist-800 hover:text-mist-950 dark:text-mist-200 dark:hover:text-white"
+      >
+        Compare side-by-side →
+      </.link>
     </p>
   </section>
-
-  <section class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-    <.link
-      :for={card <- @cards}
-      navigate={~p"/algorithms/#{card.slug}"}
-      class={[
-        "rounded-xl border p-5 flex flex-col gap-3 transition hover:border-mist-950/30 dark:hover:border-white/30",
-        if(card.served?,
-          do: "border-mist-950/10 bg-white dark:border-white/10 dark:bg-mist-900",
-          else:
-            "border-dashed border-mist-950/15 bg-mist-950/[0.015] dark:border-white/10 dark:bg-mist-950"
-        )
-      ]}
-    >
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <CinegraphWeb.NeutralV2Components.n_eyebrow>
-            {card.archetype}
-          </CinegraphWeb.NeutralV2Components.n_eyebrow>
-          <h2 class="mt-1 text-[16px] font-semibold leading-snug text-mist-950 dark:text-white">
-            {card.name}
-          </h2>
+  
+<!-- predictive models -->
+  <section :if={@predictive_cards != []} class="mb-10">
+    <div class="mb-4 flex items-baseline justify-between">
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        Predictive models
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <span class="text-[11px] text-mist-400 dark:text-mist-500">trained · backtested</span>
+    </div>
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <.link
+        :for={card <- @predictive_cards}
+        navigate={~p"/algorithms/#{card.slug}"}
+        class="rounded-xl border border-mist-950/10 bg-white dark:border-white/10 dark:bg-mist-900 p-5 flex flex-col gap-3 transition hover:border-mist-950/30 dark:hover:border-white/30"
+      >
+        <CinegraphWeb.AlgorithmsLive.Index.poster_strip_row posters={card.posters} />
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <CinegraphWeb.NeutralV2Components.n_eyebrow>
+              {card.archetype}
+            </CinegraphWeb.NeutralV2Components.n_eyebrow>
+            <h2 class="mt-1 text-[16px] font-semibold leading-snug text-mist-950 dark:text-white">
+              {card.name}
+            </h2>
+          </div>
+          <CinegraphWeb.NeutralV2Components.n_pill
+            tone={card.tier_tone}
+            size="xs"
+            class="shrink-0"
+          >
+            {card.tier}
+          </CinegraphWeb.NeutralV2Components.n_pill>
         </div>
-        <CinegraphWeb.NeutralV2Components.n_pill tone={card.tier_tone} size="xs" class="shrink-0">
-          {card.tier}
-        </CinegraphWeb.NeutralV2Components.n_pill>
-      </div>
 
-      <%= if card.served? do %>
         <div class="flex items-baseline gap-2">
           <span class="font-display text-[34px] leading-none text-mist-950 dark:text-white tabular-nums">
             {CinegraphWeb.AlgorithmsLive.Index.headline(card.headline_pct)}
@@ -101,7 +114,92 @@
         <div class="mt-auto pt-1 text-[11px] text-mist-400 dark:text-mist-500">
           {card.strategy} backtest
         </div>
-      <% else %>
+      </.link>
+    </div>
+  </section>
+  
+<!-- recommendation rails -->
+  <section :if={@rail_cards != []} class="mb-10">
+    <div class="mb-4 flex items-baseline justify-between">
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        Recommendation rails
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <span class="text-[11px] text-mist-400 dark:text-mist-500">
+        no single right answer — no %, by design
+      </span>
+    </div>
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <.link
+        :for={card <- @rail_cards}
+        navigate={~p"/algorithms/#{card.slug}"}
+        class="rounded-xl border border-mist-950/10 bg-white dark:border-white/10 dark:bg-mist-900 p-5 flex flex-col gap-3 transition hover:border-mist-950/30 dark:hover:border-white/30"
+      >
+        <CinegraphWeb.AlgorithmsLive.Index.poster_strip_row posters={card.posters} />
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <CinegraphWeb.NeutralV2Components.n_eyebrow>
+              {card.archetype}
+            </CinegraphWeb.NeutralV2Components.n_eyebrow>
+            <h2 class="mt-1 text-[16px] font-semibold leading-snug text-mist-950 dark:text-white">
+              {card.name}
+            </h2>
+          </div>
+          <CinegraphWeb.NeutralV2Components.n_pill tone="ink" size="xs" class="shrink-0">
+            Recommendation rail
+          </CinegraphWeb.NeutralV2Components.n_pill>
+        </div>
+        <p class="text-[13px] text-mist-600 dark:text-mist-300">
+          Seed-conditioned picks from the clerk — disagreement, unpredictability, and the people
+          graph instead of "people who liked X also liked Y."
+        </p>
+        <div class="flex flex-wrap gap-1.5">
+          <span class="text-[11px] rounded bg-mist-950/[0.04] px-2 py-[2px] text-mist-700 dark:bg-white/10 dark:text-mist-200">
+            🌀 unpredictability
+          </span>
+          <span class="text-[11px] rounded bg-mist-950/[0.04] px-2 py-[2px] text-mist-700 dark:bg-white/10 dark:text-mist-200">
+            ⚔ critics vs crowd
+          </span>
+          <span class="text-[11px] rounded bg-mist-950/[0.04] px-2 py-[2px] text-mist-700 dark:bg-white/10 dark:text-mist-200">
+            🕸 people graph
+          </span>
+        </div>
+        <div class="mt-auto pt-1 text-[11px] text-mist-400 dark:text-mist-500">
+          deliberately not metadata-predictable — and that's the point
+        </div>
+      </.link>
+    </div>
+  </section>
+  
+<!-- not metadata-predictable -->
+  <section :if={@unserved_cards != []} class="mb-10">
+    <div class="mb-4 flex items-baseline justify-between">
+      <CinegraphWeb.NeutralV2Components.n_eyebrow>
+        Not metadata-predictable
+      </CinegraphWeb.NeutralV2Components.n_eyebrow>
+      <span class="text-[11px] text-mist-400 dark:text-mist-500">
+        we'd rather say so than fake a number
+      </span>
+    </div>
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      <.link
+        :for={card <- @unserved_cards}
+        navigate={~p"/algorithms/#{card.slug}"}
+        class="rounded-xl border border-dashed border-mist-950/15 bg-mist-950/[0.015] dark:border-white/10 dark:bg-mist-950 p-5 flex flex-col gap-3 transition hover:border-mist-950/30 dark:hover:border-white/30"
+      >
+        <CinegraphWeb.AlgorithmsLive.Index.poster_strip_row posters={card.posters} />
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <CinegraphWeb.NeutralV2Components.n_eyebrow>
+              {card.archetype}
+            </CinegraphWeb.NeutralV2Components.n_eyebrow>
+            <h2 class="mt-1 text-[16px] font-semibold leading-snug text-mist-950 dark:text-white">
+              {card.name}
+            </h2>
+          </div>
+          <CinegraphWeb.NeutralV2Components.n_pill tone="default" size="xs" class="shrink-0">
+            {card.tier}
+          </CinegraphWeb.NeutralV2Components.n_pill>
+        </div>
         <p class="text-[13px] text-mist-600 dark:text-mist-300">
           We don't serve a prediction for this list — no model clears the honesty bar. Its membership
           is taste we can't reliably proxy from objective signal, and saying so is the honest answer.
@@ -109,8 +207,8 @@
         <div class="mt-auto pt-1 text-[11.5px] text-mist-500 dark:text-mist-400">
           Why some lists can't be predicted →
         </div>
-      <% end %>
-    </.link>
+      </.link>
+    </div>
   </section>
 
   <section
@@ -140,6 +238,7 @@
         <strong class="text-mist-950 dark:text-white">We don't fake it.</strong>
         Most canonical lists are only weakly predictable from objective metadata; lists we can't
         honestly predict are labeled "not metadata-predictable" rather than shown a number we don't trust.
+        Recommendation rails carry no percentage at all — there's no single right answer to grade.
       </li>
     </ul>
   </section>

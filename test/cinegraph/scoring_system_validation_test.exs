@@ -226,7 +226,7 @@ defmodule Cinegraph.ScoringSystemValidationTest do
         :box_office
       ]
 
-      # These descriptions should be defined in DiscoveryTuner
+      # These descriptions match the lens labels in AlgorithmsLive.ShowComponents (tuner_panel)
       descriptions = %{
         mob: "Audience ratings (IMDb, TMDb)",
         critics: "Critics scores (RT Tomatometer, Metacritic)",

@@ -70,8 +70,11 @@ defmodule Cinegraph.Predictions.Explanation do
 
   defp tag_weights(_weights, _canon), do: []
 
-  # Human label from the catalog; fall back to the raw code (e.g. lens codes aren't catalogued).
-  defp label_for(code) do
+  @doc """
+  Human label for a metric code from the catalog; falls back to the raw code (e.g. lens codes
+  aren't catalogued). Public because the per-film "why" breakdowns (#1076 P1) label the same codes.
+  """
+  def label_for(code) do
     case Metrics.get_metric_definition(code) do
       %{name: name} when is_binary(name) -> name
       _ -> code

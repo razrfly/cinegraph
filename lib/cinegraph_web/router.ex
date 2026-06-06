@@ -103,7 +103,9 @@ defmodule CinegraphWeb.Router do
     # below — Phoenix dispatches in source order, and /movies/:slug would
     # otherwise capture "/movies/legacy", "/movies/discover", etc.
     live "/movies/legacy", MovieLive.Index, :index
-    live "/movies/discover", MovieLive.DiscoveryTuner, :index
+
+    # Retired (#985 → #1038 2c): the v1 tuner is replaced by the tuner embedded in /algorithms/:slug.
+    get "/movies/discover", RedirectController, :algorithms
 
     # TMDb / IMDb ID lookup routes — programmatic redirects to canonical slug.
     live "/movies/tmdb/:tmdb_id", MovieLive.Show, :show_by_tmdb
@@ -219,6 +221,8 @@ defmodule CinegraphWeb.Router do
       live "/companies", CompanyLive.Index, :index
       live "/companies/:slug_or_id", CompanyLive.Show, :show
       live "/algorithms", AlgorithmsLive.Index, :index
+      # /compare must precede /:slug — Phoenix dispatches in source order.
+      live "/algorithms/compare", AlgorithmsLive.Compare, :index
       live "/algorithms/:slug", AlgorithmsLive.Show, :show
     end
   end

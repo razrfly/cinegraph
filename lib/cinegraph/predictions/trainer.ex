@@ -442,6 +442,79 @@ defmodule Cinegraph.Predictions.Trainer do
     do: {:error, {:precomputed_unsupported_strategy, strategy}}
 
   @doc """
+  Reproduce a served model's holdout `(score, label)` pairs for **calibration refit** (#1074) —
+  no retraining decision, no holdout re-spend (the model is already chosen; this re-derives the
+  evaluation that was already recorded).
+
+  Returns `{:ok, pairs, recomputed_recall}` so the caller can verify `recomputed_recall` against
+  `integrity_report["recall_at_k"]` — a mismatch means the reproduction drifted and the caller
+  must refuse to act on the pairs.
+
+  **Reproduction is exact only for a fixed DB state** (deterministic pool ordering + the stored
+  seed — contract-tested). Over a *living* catalog the pools grow and recall legitimately moves
+  (#1074 audit: ~1.1k movies/36h in dev), so a refusal after data drift is the guard working,
+  not a bug: the served calibration was committed when reproduction held; if drift accumulates,
+  the answer is a Studio re-train, never forcing the refit.
+
+    * `"temporal"` — score the stored `holdout_decades` pool with the served artifact via
+      `Credibility.evaluate/3` (Bus-scored from the artifact's own weights; no feature
+      re-resolution, so robust to catalog drift).
+    * `"static"` — re-run the static evaluation with the stored `seed`/`holdout_fraction` and the
+      model's **stored** feature codes (not re-resolved — features catalogued since promotion must
+      not leak in). The RNG sequence regenerates whole, so the member split and undersampling
+      reproduce exactly when nothing else changed; the recall check is the proof.
+  """
+  def holdout_pairs(%Model{} = model) do
+    report = model.integrity_report || %{}
+
+    case model.backtest_strategy do
+      "temporal" ->
+        case report["holdout_decades"] do
+          [_ | _] = decades ->
+            rep = Credibility.evaluate(model, model.source_key, decades)
+            {:ok, rep["pairs"] || [], rep["recall_at_k"]}
+
+          _ ->
+            {:error, :no_holdout_decades}
+        end
+
+      "static" ->
+        reproduce_static_pairs(model, report)
+
+      other ->
+        {:error, {:unsupported_strategy, other}}
+    end
+  end
+
+  defp reproduce_static_pairs(model, report) do
+    seed = report["seed"]
+    granularity = String.to_existing_atom(report["granularity"] || "data_point")
+    codes = if granularity == :data_point, do: (model.feature_set || %{})["features"]
+
+    cond do
+      not is_integer(seed) ->
+        {:error, :no_seed}
+
+      granularity == :data_point and (codes == nil or codes == []) ->
+        {:error, :no_stored_feature_codes}
+
+      true ->
+        opts =
+          [seed: seed, model_class: model.model_class]
+          |> then(fn o ->
+            if is_number(report["holdout_fraction"]),
+              do: Keyword.put(o, :holdout_fraction, report["holdout_fraction"]),
+              else: o
+          end)
+
+        case do_evaluate_static(granularity, model.source_key, 5, opts, codes) do
+          {:ok, %{report: rep}} -> {:ok, rep["pairs"] || [], rep["recall_at_k"]}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  @doc """
   Evaluate ONE cell and (optionally) record it to the experiment ledger (#1061 Session 1).
 
   A cell = `{source_key, model_class, strategy, feature_bucket, granularity, seed}`. This is the
@@ -1332,6 +1405,9 @@ defmodule Cinegraph.Predictions.Trainer do
       from m in Movie,
         where: fragment("? \\? ?", m.canonical_sources, ^source_key),
         where: m.import_status == "full",
+        # Deterministic order — the seeded member-holdout shuffle needs a stable input
+        # sequence to reproduce the same split for the same seed (#1074 audit).
+        order_by: m.id,
         select: %Movie{
           id: m.id,
           title: m.title,

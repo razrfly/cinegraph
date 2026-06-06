@@ -128,7 +128,7 @@ defmodule Cinegraph.Sitemap do
         lastmod: Date.utc_today()
       },
       %Sitemapper.URL{
-        loc: "#{base_url}/movies/discover",
+        loc: "#{base_url}/algorithms",
         changefreq: :daily,
         priority: 0.9,
         lastmod: Date.utc_today()
