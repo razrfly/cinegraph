@@ -1,0 +1,196 @@
+<% v = @view %>
+<div class="mx-auto w-full max-w-2xl px-6 md:max-w-3xl lg:max-w-5xl lg:px-10 pt-6 pb-16">
+  <nav class="mb-8 text-[12px] text-mist-600 dark:text-mist-400">
+    <.link navigate={~p"/movies"} class="hover:text-mist-950 dark:hover:text-white">Movies</.link>
+    <span class="mx-2 text-mist-400 dark:text-mist-600">/</span>
+    <.link navigate={~p"/algorithms"} class="hover:text-mist-950 dark:hover:text-white">
+      Algorithms
+    </.link>
+    <span class="mx-2 text-mist-400 dark:text-mist-600">/</span>
+    <span class="font-medium text-mist-950 dark:text-white">{@list.name}</span>
+  </nav>
+
+  <section class="mb-8">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <CinegraphWeb.NeutralV2Components.n_eyebrow>
+          {@archetype}
+        </CinegraphWeb.NeutralV2Components.n_eyebrow>
+        <h1 class="mt-2 font-display italic text-[34px] sm:text-[44px] lg:text-[52px] text-mist-950 dark:text-white leading-[1.05]">
+          {@list.name}
+        </h1>
+      </div>
+      <CinegraphWeb.NeutralV2Components.n_pill
+        :if={v.served?}
+        tone={v.tier_tone}
+        size="md"
+        class="shrink-0"
+      >
+        {v.tier}
+      </CinegraphWeb.NeutralV2Components.n_pill>
+      <CinegraphWeb.NeutralV2Components.n_pill
+        :if={!v.served?}
+        tone="default"
+        size="md"
+        class="shrink-0"
+      >
+        Not metadata-predictable
+      </CinegraphWeb.NeutralV2Components.n_pill>
+    </div>
+  </section>
+
+  <%= if v.served? do %>
+    <section class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <!-- headline + signals -->
+      <div class="lg:col-span-2 space-y-6">
+        <div class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6">
+          <div class="flex items-baseline gap-2">
+            <span class="font-display text-[48px] leading-none text-mist-950 dark:text-white tabular-nums">
+              {CinegraphWeb.AlgorithmsLive.Show.headline(v.headline_pct)}
+            </span>
+            <span class="text-[13px] text-mist-500 dark:text-mist-400">
+              recall@K (95% lower bound)
+            </span>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
+            <CinegraphWeb.NeutralV2Components.n_pill
+              tone={if(v.lift_passes?, do: "green", else: "amber")}
+              size="xs"
+              class=""
+            >
+              {CinegraphWeb.AlgorithmsLive.Show.lift_text(v.lift_ratio, v.lift_passes?)}
+            </CinegraphWeb.NeutralV2Components.n_pill>
+            <span :if={v.recall} class="text-mist-500 dark:text-mist-400 tabular-nums">
+              point recall {CinegraphWeb.AlgorithmsLive.Show.pct(v.recall)}
+            </span>
+          </div>
+          <p
+            :if={CinegraphWeb.AlgorithmsLive.Show.circularity_pct(v.circularity)}
+            class="mt-3 text-[12px] text-amber-700 dark:text-amber-400"
+          >
+            ⚠ {CinegraphWeb.AlgorithmsLive.Show.circularity_pct(v.circularity)} of recall is canon-overlap circularity (disclosed, not hidden)
+          </p>
+        </div>
+        
+<!-- weight breakdown -->
+        <div class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6">
+          <div class="flex items-baseline justify-between">
+            <CinegraphWeb.NeutralV2Components.n_eyebrow>
+              What drives the prediction
+            </CinegraphWeb.NeutralV2Components.n_eyebrow>
+            <span class="text-[11px] text-mist-400 dark:text-mist-500">
+              top {v.shown_count} of {v.total_weights} · {v.objective_count} objective<%= if v.canon_count > 0 do %>
+                , {v.canon_count} canon-overlap
+              <% end %>
+            </span>
+          </div>
+          <div class="mt-4 space-y-2.5">
+            <div :for={w <- v.shown_weights} class="grid grid-cols-[1fr_auto] items-center gap-3">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[13px] text-mist-900 dark:text-mist-100">{w.label}</span>
+                  <span
+                    :if={w.bucket == :canon_overlap}
+                    class="text-[9.5px] uppercase tracking-wide rounded bg-amber-100 px-1.5 py-[1px] text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                  >
+                    canon-overlap
+                  </span>
+                </div>
+                <div class="mt-1 h-1.5 w-full rounded-full bg-mist-950/[0.06] dark:bg-white/10 overflow-hidden">
+                  <div
+                    class={[
+                      "h-full rounded-full",
+                      if(w.bucket == :canon_overlap,
+                        do: "bg-amber-400/70",
+                        else: "bg-emerald-500/70"
+                      )
+                    ]}
+                    style={"width: #{CinegraphWeb.AlgorithmsLive.Show.bar_width(w.weight, v.max_abs)}"}
+                  >
+                  </div>
+                </div>
+              </div>
+              <span class="text-[12px] tabular-nums text-mist-500 dark:text-mist-400">
+                {CinegraphWeb.AlgorithmsLive.Show.weight_pct(w.weight)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+<!-- model facts + rivals -->
+      <div class="space-y-6">
+        <div class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6 text-[13px]">
+          <CinegraphWeb.NeutralV2Components.n_eyebrow>
+            Model
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <dl class="mt-3 space-y-2">
+            <div class="flex justify-between gap-3">
+              <dt class="text-mist-500 dark:text-mist-400">Class</dt>
+              <dd class="text-mist-900 dark:text-mist-100 text-right">{v.model_label}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-mist-500 dark:text-mist-400">Backtest</dt>
+              <dd class="text-mist-900 dark:text-mist-100 text-right">{v.strategy}</dd>
+            </div>
+            <div class="flex justify-between gap-3">
+              <dt class="text-mist-500 dark:text-mist-400">Grade</dt>
+              <dd class="text-mist-900 dark:text-mist-100 text-right">{v.tier}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div
+          :if={v.rivals != []}
+          class="rounded-xl border border-mist-950/10 dark:border-white/10 bg-white dark:bg-mist-900 p-6"
+        >
+          <CinegraphWeb.NeutralV2Components.n_eyebrow>
+            Also evaluated
+          </CinegraphWeb.NeutralV2Components.n_eyebrow>
+          <p class="mt-1 text-[11px] text-mist-400 dark:text-mist-500">
+            Rival configurations recorded in the ledger; the served model is the honest best.
+          </p>
+          <ul class="mt-3 space-y-2 text-[12px]">
+            <li :for={r <- v.rivals} class="flex items-center justify-between gap-2">
+              <span class="text-mist-700 dark:text-mist-300">
+                {r.model_class} · {r.strategy} · {r.feature_bucket}
+              </span>
+              <span class="tabular-nums text-mist-500 dark:text-mist-400">
+                {CinegraphWeb.AlgorithmsLive.Show.rival_recall(r.objective_recall)}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  <% else %>
+    <section class="max-w-2xl rounded-xl border border-dashed border-mist-950/15 dark:border-white/10 bg-mist-950/[0.015] dark:bg-mist-950 p-8">
+      <p class="text-[16px] text-mist-800 dark:text-mist-200">
+        We don't serve a prediction for this list.
+      </p>
+      <p class="mt-3 text-[14px] text-mist-600 dark:text-mist-300">
+        No honest model clears our reliability bar for it. Its membership is taste we can't reliably
+        proxy from objective metadata — and the research is clear that some canonical lists have a
+        genuinely stochastic, socially-constructed core. Rather than show a number we don't trust, we
+        say so plainly: this list is <strong class="text-mist-950 dark:text-white">not metadata-predictable</strong>.
+      </p>
+      <.link
+        navigate={~p"/algorithms"}
+        class="mt-5 inline-block text-[13px] underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
+      >
+        ← Back to all algorithms
+      </.link>
+    </section>
+  <% end %>
+
+  <section class="mt-12 max-w-3xl border-t border-mist-950/10 dark:border-white/10 pt-6 text-[12px] text-mist-500 dark:text-mist-400">
+    <p>
+      Graded on the Wilson-95 lower bound of held-out recall@K against the full candidate pool, on
+      objective signal only. A model is served only if it beats the popularity baseline by a real
+      margin. <.link
+        navigate={~p"/algorithms"}
+        class="underline decoration-mist-300 underline-offset-2 hover:text-mist-950 dark:hover:text-white"
+      >All algorithms</.link>.
+    </p>
+  </section>
+</div>

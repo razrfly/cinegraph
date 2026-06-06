@@ -389,7 +389,11 @@ defmodule Cinegraph.Movies.MovieLists do
         tracks_awards: false,
         metadata: %{
           "organization" => "American Film Institute",
-          "edition" => "1998"
+          "edition" => "1998",
+          # Frozen edition (#1049 A0): the 1998 list does not accrete, so its newest film (1996)
+          # legitimately predates the edition year — suppresses the false-positive "stale import"
+          # frontier warning (ListFrontier `frozen?/1`).
+          "accretes" => false
         },
         slug: "afi-100",
         short_name: "AFI 100",

@@ -495,8 +495,63 @@ defmodule Cinegraph.Metrics.CatalogSeed do
     end)
   end
 
+  # Tier-0 categorical features (#1070 Phase 1): language one-hot, genre multi-hot, content-rating
+  # ordinal. Emitted by `Cinegraph.Scoring.DerivedFeatures` (pre-normalized), so catalogued
+  # `kind: "derived"` — which bypasses the `custom`-normalization reject that only applies to the
+  # `raw` branch in `Trainer.data_point_codes/1`. Gated `is_available: false` until the keep-
+  # criterion (`mix predictions.eval_features`) admits a group. Codes mirror DerivedFeatures'
+  # @language_codes / @genre_codes (single source of truth there).
+  @categorical_languages ~w(en fr es ja de pt zh ru it ko ar hi other)
+  @categorical_genres ~w(action adventure animation comedy crime documentary drama family fantasy
+                         history horror music mystery romance science_fiction thriller tv_movie war
+                         western)
+  defp categorical_features do
+    langs = Enum.map(@categorical_languages, &{"lang_#{&1}", "Language: #{&1}"})
+
+    genres =
+      Enum.map(@categorical_genres, &{"genre_#{&1}", "Genre: #{String.replace(&1, "_", " ")}"})
+
+    rating = [{"content_rating_age", "Content Rating (min age, normalized)"}]
+
+    (langs ++ genres ++ rating)
+    |> Enum.map(fn {code, name} ->
+      def_(%{
+        code: code,
+        name: name,
+        source_table: "derived",
+        normalization_type: "custom",
+        kind: "derived",
+        derivation: "categorical_feature",
+        source_reliability: 0.8,
+        is_available: false
+      })
+    end)
+  end
+
+  # Tier-2 content channel (#1070 Lever E): 512 hashed-TF-IDF overview buckets (`txt_000..txt_511`),
+  # emitted by `Cinegraph.Scoring.TextFeatures`. Catalogued `kind: "derived"` (bypasses the raw-branch
+  # `custom` reject), gated `is_available: false` until `mix predictions.eval_features` admits them.
+  defp text_features do
+    for i <- 0..511 do
+      code = "txt_" <> String.pad_leading(Integer.to_string(i), 3, "0")
+
+      def_(%{
+        code: code,
+        name: "Overview text bucket #{i}",
+        source_table: "derived",
+        normalization_type: "custom",
+        kind: "derived",
+        derivation: "text_tfidf",
+        source_reliability: 0.7,
+        is_available: false
+      })
+    end
+  end
+
   defp ml_only do
     missingness_indicators() ++
+      categorical_features() ++
+      text_features() ++
       [
         # TMDb user/curated list appearances. ML-only (category nil) — a cultural-penetration
         # signal available to model feature sets, deliberately NOT a time_machine lens member

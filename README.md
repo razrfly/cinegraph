@@ -54,6 +54,8 @@ To ensure our algorithm captures true cultural relevance:
 
 Before working on the CRI scoring algorithm, weight optimizer, or backtesting system, read this section. See [issue #717](https://github.com/razrfly/cinegraph/issues/717) for full rationale.
 
+> 📘 **Full prediction-system architecture + CLI reference:** [`docs/predictions/README.md`](docs/predictions/README.md) — the layered substrate (data points → lenses → models → the Bus), every `mix predictions.*` command, the honest iteration protocol (B₀ → `eval_features` gate → matrix → `promote`), how to add a feature/model class, the invariants (leakage strip, train/serve symmetry, separability ≠ served-metric lift), and observability. Read this before running or extending the prediction CLI. Active tracking: [#1070](https://github.com/razrfly/cinegraph/issues/1070); experiment reports in [`docs/scoring/reports/`](docs/scoring/reports/).
+
 ### Rule 1: Pre-register hypotheses
 Before running `mix predictions.train` or `mix predictions.sweep`, write down:
 - Which features you expect to matter most and **why** (causal story required)

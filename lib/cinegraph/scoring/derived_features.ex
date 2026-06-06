@@ -20,8 +20,9 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
   """
 
   alias Cinegraph.Collaborations
+  alias Cinegraph.Movies.ContentRating
   alias Cinegraph.Repo
-  alias Cinegraph.Scoring.{FeatureResolver, FestivalPrestige}
+  alias Cinegraph.Scoring.{FeatureResolver, FestivalPrestige, TextFeatures}
 
   # Normalization cap: log-scaled counts saturate at this many (≈ the lens's log(1+10) shape).
   @log_cap 10
@@ -51,11 +52,41 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
   }
   @indicator_codes Map.keys(@indicator_map)
 
+  # Tier-0 categorical features (#1070 Phase 1): dense, leakage-safe signal already in the DB but
+  # never reaching the model (the raw catalog codes are `custom`-normalized → rejected by
+  # `Trainer.data_point_codes/1`). Emitted here as pre-normalized 0/1 (one-hot/multi-hot) or 0..1
+  # (ordinal), exactly like the missingness indicators, and gated `is_available: false` until the
+  # keep-criterion (`mix predictions.eval_features`) admits them. None reference the target list, so
+  # they're leakage-safe (no per-target stripping) and live in the `objective_only` bucket.
+  #
+  # Top-N original languages by corpus frequency; everything else collapses to `lang_other`.
+  @languages ~w(en fr es ja de pt zh ru it ko ar hi)
+  @language_codes Enum.map(@languages, &("lang_" <> &1)) ++ ["lang_other"]
+  # The fixed 19 TMDb genres (slugified to match `genres.name`).
+  @genre_slugs ~w(action adventure animation comedy crime documentary drama family fantasy history
+                  horror music mystery romance science_fiction thriller tv_movie war western)
+  @genre_codes Enum.map(@genre_slugs, &("genre_" <> &1))
+  @categorical_codes @language_codes ++ @genre_codes ++ ["content_rating_age"]
+
+  # Tier-2 content channel (#1070 Lever E): hashed-TF-IDF of the plot overview, 512 buckets
+  # (`txt_000..txt_511`), computed by `Cinegraph.Scoring.TextFeatures`. Generated here (not via a
+  # cross-module attr call) so the routing guard is self-contained at compile time.
+  @text_codes for i <- 0..511, do: "txt_" <> String.pad_leading(Integer.to_string(i), 3, "0")
+
   @supported ~w(canonical_contribution auteur_track_record box_office_roi festival_prestige
-                prior_collab_density) ++ @indicator_codes
+                prior_collab_density) ++ @indicator_codes ++ @categorical_codes ++ @text_codes
 
   @doc "The derived codes this module emits — the routing guard for `DataPointFeatures.load_for/3`."
   def supported_codes, do: @supported
+
+  @doc "Language one-hot codes (`lang_en`, …, `lang_other`) — for the #1070 Phase 1 A/B harness."
+  def language_codes, do: @language_codes
+
+  @doc "Genre multi-hot codes (`genre_action`, …) — for the #1070 Phase 1 A/B harness."
+  def genre_codes, do: @genre_codes
+
+  @doc "All Tier-0 categorical codes (language + genre + `content_rating_age`)."
+  def categorical_codes, do: @categorical_codes
 
   @doc """
   The log-normalization saturation threshold for `prior_collab_density`. Single source of truth:
@@ -78,11 +109,13 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
     if movies == [] or codes == [] do
       %{}
     else
-      # Three sources: FeatureResolver bundle (canon/auteur/roi/festival), the person×year matview
-      # (prior_collab_density), and metric_values_view presence (the has_* indicators). Resolve each
-      # independently, then merge into the shared per-movie vector.
-      {indicator_codes, rest} = Enum.split_with(codes, &(&1 in @indicator_codes))
-      {pcd_codes, resolver_codes} = Enum.split_with(rest, &(&1 == "prior_collab_density"))
+      # Four sources: FeatureResolver bundle (canon/auteur/roi/festival), the person×year matview
+      # (prior_collab_density), metric_values_view presence (the has_* indicators), and the Tier-0
+      # categorical loaders (#1070). Resolve each independently, then merge into the per-movie vector.
+      {indicator_codes, rest0} = Enum.split_with(codes, &(&1 in @indicator_codes))
+      {categorical_codes, rest1} = Enum.split_with(rest0, &(&1 in @categorical_codes))
+      {text_codes, rest2} = Enum.split_with(rest1, &(&1 in @text_codes))
+      {pcd_codes, resolver_codes} = Enum.split_with(rest2, &(&1 == "prior_collab_density"))
 
       bundles =
         if resolver_codes == [],
@@ -96,6 +129,11 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
           do: %{},
           else: load_missingness_indicators(movies, indicator_codes)
 
+      categoricals =
+        if categorical_codes == [], do: %{}, else: load_categorical(movies, categorical_codes)
+
+      texts = if text_codes == [], do: %{}, else: load_text(movies)
+
       Map.new(movies, fn m ->
         bundle = Map.get(bundles, m.id, %{inputs: %{}, festival_rows: []})
         vals = Map.new(resolver_codes, fn code -> {code, compute(code, bundle)} end)
@@ -106,6 +144,8 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
             else: Map.put(vals, "prior_collab_density", Map.get(densities, m.id, 0.0))
 
         vals = Map.merge(vals, Map.get(indicators, m.id, %{}))
+        vals = Map.merge(vals, Map.get(categoricals, m.id, %{}))
+        vals = Map.merge(vals, Map.get(texts, m.id, %{}))
 
         {m.id, vals}
       end)
@@ -233,6 +273,133 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
       end)
     end)
   end
+
+  # ── Tier-0 categorical features — language one-hot / genre multi-hot / rating ordinal (#1070) ──
+  #
+  # Every requested categorical code is emitted for every movie (dense 0/1, or 0..1 for the ordinal),
+  # so coverage (fraction nonzero) is meaningful and a missing source reads as 0.0 — the same
+  # convention as the missingness indicators. None of these touch `canonical_sources`, so they are
+  # leakage-safe and need no per-target stripping.
+  defp load_categorical(movies, codes) do
+    ids = Enum.map(movies, & &1.id)
+    lang_wanted = Enum.filter(codes, &(&1 in @language_codes))
+    genre_wanted = Enum.filter(codes, &(&1 in @genre_codes))
+    rating_wanted? = "content_rating_age" in codes
+
+    langs = if lang_wanted == [], do: %{}, else: load_languages(ids)
+    genres = if genre_wanted == [], do: %{}, else: load_genres(ids)
+    ratings = if rating_wanted?, do: load_content_rating_age(ids), else: %{}
+
+    Map.new(movies, fn m ->
+      vals =
+        Enum.reduce(lang_wanted, %{}, fn code, acc ->
+          Map.put(acc, code, lang_value(code, Map.get(langs, m.id)))
+        end)
+
+      vals =
+        Enum.reduce(genre_wanted, vals, fn code, acc ->
+          slug = String.replace_prefix(code, "genre_", "")
+          has? = MapSet.member?(Map.get(genres, m.id, MapSet.new()), slug)
+          Map.put(acc, code, if(has?, do: 1.0, else: 0.0))
+        end)
+
+      vals =
+        if rating_wanted?,
+          do: Map.put(vals, "content_rating_age", Map.get(ratings, m.id, 0.0)),
+          else: vals
+
+      {m.id, vals}
+    end)
+  end
+
+  # ── Tier-2 content channel — hashed-TF-IDF of the plot overview (#1070 Lever E) ──────
+  # Loads each movie's overview by id (the passed structs don't carry it) and delegates to
+  # `TextFeatures.vectorize/1` (the precomputed-IDF hashing trick). Non-zero buckets only; downstream
+  # defaults the rest to 0.0. Leakage-safe — overview text is intrinsic, never derived from the target.
+  defp load_text(movies) do
+    overviews =
+      movies
+      |> Enum.map(& &1.id)
+      |> Enum.chunk_every(@chunk)
+      |> Enum.reduce(%{}, fn chunk, acc ->
+        Repo.query!("SELECT id, overview FROM movies WHERE id = ANY($1)", [chunk]).rows
+        |> Enum.reduce(acc, fn [id, ov], a -> Map.put(a, id, ov || "") end)
+      end)
+
+    Map.new(movies, fn m -> {m.id, TextFeatures.vectorize(Map.get(overviews, m.id, ""))} end)
+  end
+
+  # One-hot: the movie's language code → its `lang_<iso>`; any known-but-out-of-top-N language →
+  # `lang_other`; a movie with no language is all-zeros (absent, not "other").
+  defp lang_value(_code, nil), do: 0.0
+  defp lang_value("lang_other", lang), do: if(lang in @languages, do: 0.0, else: 1.0)
+  defp lang_value("lang_" <> iso, lang), do: if(lang == iso, do: 1.0, else: 0.0)
+
+  defp load_languages(ids) do
+    ids
+    |> Enum.chunk_every(@chunk)
+    |> Enum.reduce(%{}, fn chunk, acc ->
+      {:ok, %{rows: rows}} =
+        Repo.query(
+          "SELECT id, original_language FROM movies WHERE id = ANY($1) AND original_language IS NOT NULL",
+          [chunk],
+          timeout: @timeout
+        )
+
+      Enum.reduce(rows, acc, fn [id, lang], a -> Map.put(a, id, lang) end)
+    end)
+  end
+
+  # %{movie_id => MapSet of genre slugs}. Slug = lower-cased, whitespace→underscore, matching the
+  # fixed @genre_slugs list (e.g. "Science Fiction" → "science_fiction").
+  defp load_genres(ids) do
+    ids
+    |> Enum.chunk_every(@chunk)
+    |> Enum.reduce(%{}, fn chunk, acc ->
+      {:ok, %{rows: rows}} =
+        Repo.query(
+          """
+          SELECT mg.movie_id, g.name
+          FROM movie_genres mg JOIN genres g ON g.id = mg.genre_id
+          WHERE mg.movie_id = ANY($1)
+          """,
+          [chunk],
+          timeout: @timeout
+        )
+
+      Enum.reduce(rows, acc, fn [id, name], a ->
+        Map.update(a, id, MapSet.new([slugify(name)]), &MapSet.put(&1, slugify(name)))
+      end)
+    end)
+  end
+
+  # Min recommended age (US/MPAA) normalized to [0,1] over 0..18; movies with no/advisory rating
+  # are absent (default 0.0). Source: external_metrics omdb content_rating text_value.
+  defp load_content_rating_age(ids) do
+    ids
+    |> Enum.chunk_every(@chunk)
+    |> Enum.reduce(%{}, fn chunk, acc ->
+      {:ok, %{rows: rows}} =
+        Repo.query(
+          """
+          SELECT movie_id, text_value FROM external_metrics
+          WHERE source = 'omdb' AND metric_type = 'content_rating'
+            AND movie_id = ANY($1) AND text_value IS NOT NULL
+          """,
+          [chunk],
+          timeout: @timeout
+        )
+
+      Enum.reduce(rows, acc, fn [id, text], a ->
+        case ContentRating.to_min_age(text, "US") do
+          age when is_integer(age) -> Map.put(a, id, min(age / 18.0, 1.0))
+          _ -> a
+        end
+      end)
+    end)
+  end
+
+  defp slugify(name), do: name |> String.downcase() |> String.replace(~r/\s+/, "_")
 
   # log(1+x) / log(1+cap), clamped to [0,1] — smooth, saturating, 0 at x=0.
   defp log_norm(x), do: log_norm_cap(x, @log_cap)

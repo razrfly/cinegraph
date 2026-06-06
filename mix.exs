@@ -77,9 +77,12 @@ defmodule Cinegraph.MixProject do
       {:absinthe, "~> 1.10"},
       {:absinthe_plug, "~> 1.5"},
       {:dataloader, "~> 2.0"},
-      {:nx, "~> 0.11"},
-      {:exla, "~> 0.11"},
+      {:nx, "~> 0.12"},
+      {:exla, "~> 0.12"},
       {:scholar, "~> 0.4"},
+      # Local text embeddings for Lever E (#1070) — sentence-transformer inference via the EXLA stack.
+      # (Bumblebee 0.7 requires nx ~> 0.12, hence the nx/exla bump from 0.11.)
+      {:bumblebee, "~> 0.7"},
       {:ex_aws, "~> 2.5"},
       {:ex_aws_s3, "~> 2.5"},
       {:sweet_xml, "~> 0.7"},
