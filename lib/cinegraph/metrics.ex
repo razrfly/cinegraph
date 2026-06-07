@@ -40,9 +40,32 @@ defmodule Cinegraph.Metrics do
     |> Repo.all()
   end
 
-  @doc "Fetch a single metric definition by its `code` (nil if absent)."
+  @doc """
+  Fetch a single metric definition by its `code` (nil if absent).
+
+  Served from a whole-catalog map cached in `:algorithms_cache` (#1084 P0a): the catalog is
+  ~630 static rows that change only at `CatalogSeed.seed!` (which busts) — but `Explanation`
+  labels 50 weights per served list per render, which made this a 300-query N+1 on the
+  `/algorithms` index. `Cachex.fetch/3` gives single-flight on the one build query.
+  """
   def get_metric_definition(code) when is_binary(code) do
-    Repo.get_by(MetricDefinition, code: code)
+    case Cachex.fetch(:algorithms_cache, :metric_definitions_by_code, fn ->
+           map = MetricDefinition |> Repo.all() |> Map.new(&{&1.code, &1})
+           {:commit, map, ttl: :timer.hours(1)}
+         end) do
+      {ok, map} when ok in [:ok, :commit] -> Map.get(map, code)
+      _ -> Repo.get_by(MetricDefinition, code: code)
+    end
+  end
+
+  @doc """
+  Drop the cached catalog map — called by `CatalogSeed.seed!` after any catalog write. Clears
+  the whole `:algorithms_cache`, not just the map: the cached /algorithms rankings embed catalog
+  labels in their why-breakdowns, so a catalog change invalidates them too (#1084).
+  """
+  def bust_catalog_cache do
+    Cachex.clear(:algorithms_cache)
+    :ok
   end
 
   @doc """

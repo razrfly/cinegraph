@@ -549,12 +549,19 @@ defmodule Cinegraph.Movies.MovieLists do
             # (and predictions.backtest / LensScoring). (#1054 review)
             new_weights = if is_nil(model_id), do: nil, else: weights_map
 
-            list
-            |> Ecto.Changeset.change(
-              active_prediction_model_id: model_id,
-              trained_weights: new_weights
-            )
-            |> Repo.update()
+            result =
+              list
+              |> Ecto.Changeset.change(
+                active_prediction_model_id: model_id,
+                trained_weights: new_weights
+              )
+              |> Repo.update()
+
+            # The sole pointer write path (promote/demote/import all land here) — bust the
+            # /algorithms display cache so the public board reflects the change immediately (#1084).
+            with {:ok, _} <- result, do: Cinegraph.Predictions.DisplayCache.bust()
+
+            result
 
           {:error, _reason} = err ->
             err

@@ -31,6 +31,8 @@ defmodule Cinegraph.Application do
         ),
         # Start Cachex for health/drift dashboards (#722)
         Supervisor.child_spec({Cachex, name: :health_cache}, id: :health_cache),
+        # Catalog map + /algorithms display caches (#1084 — busts in DisplayCache/Metrics)
+        Supervisor.child_spec({Cachex, name: :algorithms_cache}, id: :algorithms_cache),
         # Supervised short-lived HTTP fan-out for admin image search.
         {Task.Supervisor, name: Cinegraph.Images.TaskSupervisor},
         # Task supervisor for health/drift parallel reads — keeps unsupervised

@@ -16,7 +16,7 @@ defmodule CinegraphWeb.AlgorithmsLive.Compare do
   use CinegraphWeb, :live_view
 
   alias Cinegraph.Movies.{Movie, MovieLists}
-  alias Cinegraph.Predictions.Candidates
+  alias Cinegraph.Predictions.DisplayCache
   alias Cinegraph.Repo
   alias Cinegraph.Scoring.Bus
   alias Cinegraph.Search
@@ -129,7 +129,7 @@ defmodule CinegraphWeb.AlgorithmsLive.Compare do
   end
 
   defp load_plan(%{type: :predictive, source_key: sk}, _seed) do
-    fn -> {:predictive, Candidates.next_additions(sk, limit: @column_limit)} end
+    fn -> {:predictive, DisplayCache.next_additions(sk, limit: @column_limit)} end
   end
 
   defp load_plan(%{type: :unserved}, _seed), do: nil

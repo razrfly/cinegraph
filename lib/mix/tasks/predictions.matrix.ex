@@ -51,6 +51,7 @@ defmodule Mix.Tasks.Predictions.Matrix do
           sample: :integer,
           alpha: :float,
           seed: :integer,
+          concurrency: :integer,
           plan: :boolean,
           json: :boolean
         ]
@@ -65,6 +66,10 @@ defmodule Mix.Tasks.Predictions.Matrix do
       |> maybe_put(:sample, opts[:sample])
       |> maybe_put(:alpha, opts[:alpha])
       |> maybe_put(:seed, opts[:seed])
+      # Concurrent full-pool cells each run big PG sorts; on memory-pressured boxes the kernel
+      # kills backends (observed 2026-06-06: shared_buffers 16GB + concurrency 4 ⇒ backend SIGTERM
+      # mid-run). --concurrency 2 trades wall-clock for stability.
+      |> maybe_put(:max_concurrency, parse_concurrency(opts[:concurrency]))
 
     if opts[:plan] do
       run_plan(run_opts, opts[:json])
@@ -320,6 +325,13 @@ defmodule Mix.Tasks.Predictions.Matrix do
       Mix.raise(
         "invalid --buckets value #{inspect(b)} (expected #{Enum.join(@valid_buckets, "|")})"
       )
+
+  # `--concurrency 0` would divide-by-zero the ETA math (CodeRabbit #1083) and stall the run.
+  defp parse_concurrency(nil), do: nil
+  defp parse_concurrency(n) when is_integer(n) and n >= 1, do: n
+
+  defp parse_concurrency(n),
+    do: Mix.raise("invalid --concurrency #{inspect(n)} (expected integer >= 1)")
 
   defp maybe_put(kw, _key, nil), do: kw
   defp maybe_put(kw, key, val), do: Keyword.put(kw, key, val)

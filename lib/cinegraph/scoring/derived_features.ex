@@ -73,8 +73,27 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
   # cross-module attr call) so the routing guard is self-contained at compile time.
   @text_codes for i <- 0..511, do: "txt_" <> String.pad_leading(Integer.to_string(i), 3, "0")
 
+  # E1 (#1081): genre×RT interaction — "an RT 92 means different things for horror vs drama."
+  # Pre-registered pick: the 5 most member-frequent narrative genres across the 6 served lists
+  # (drama 1146, comedy 389, romance 364, crime 235, thriller 169 — documentary excluded: rarely
+  # competes in prediction pools) + the 3 RT-inflation genres from the founding face-validity
+  # complaint (horror, action, science_fiction). Hardcoded for train/serve symmetry.
+  @ixn_genres ~w(drama comedy romance crime thriller horror action science_fiction)
+  @ixn_rt_codes Enum.map(@ixn_genres, &("ixn_rt_" <> &1))
+
+  # E2 (#1081): RT−Metacritic disagreement — crowd-pleaser inflation. Encoded as
+  # max(rt − meta, 0) so 0.0 honestly means "no inflation evidence" (agreement, meta ≥ rt, OR a
+  # missing source) — the 0.5-centered variant would make missing read as extreme meta-skew,
+  # violating this module's emit-0.0 convention.
+  @gap_code "rt_meta_gap"
+
   @supported ~w(canonical_contribution auteur_track_record box_office_roi festival_prestige
-                prior_collab_density) ++ @indicator_codes ++ @categorical_codes ++ @text_codes
+                prior_collab_density) ++
+               @indicator_codes ++
+               @categorical_codes ++
+               @text_codes ++
+               @ixn_rt_codes ++
+               [@gap_code]
 
   @doc "The derived codes this module emits — the routing guard for `DataPointFeatures.load_for/3`."
   def supported_codes, do: @supported
@@ -87,6 +106,9 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
 
   @doc "All Tier-0 categorical codes (language + genre + `content_rating_age`)."
   def categorical_codes, do: @categorical_codes
+
+  @doc "E1 genre×RT interaction codes (`ixn_rt_drama`, …) — #1081 gate group `ixn_rt`."
+  def rt_genre_interaction_codes, do: @ixn_rt_codes
 
   @doc """
   The log-normalization saturation threshold for `prior_collab_density`. Single source of truth:
@@ -115,7 +137,8 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
       {indicator_codes, rest0} = Enum.split_with(codes, &(&1 in @indicator_codes))
       {categorical_codes, rest1} = Enum.split_with(rest0, &(&1 in @categorical_codes))
       {text_codes, rest2} = Enum.split_with(rest1, &(&1 in @text_codes))
-      {pcd_codes, resolver_codes} = Enum.split_with(rest2, &(&1 == "prior_collab_density"))
+      {ixn_codes, rest3} = Enum.split_with(rest2, &(&1 in @ixn_rt_codes or &1 == @gap_code))
+      {pcd_codes, resolver_codes} = Enum.split_with(rest3, &(&1 == "prior_collab_density"))
 
       bundles =
         if resolver_codes == [],
@@ -134,6 +157,8 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
 
       texts = if text_codes == [], do: %{}, else: load_text(movies)
 
+      interactions = if ixn_codes == [], do: %{}, else: load_rt_interactions(movies, ixn_codes)
+
       Map.new(movies, fn m ->
         bundle = Map.get(bundles, m.id, %{inputs: %{}, festival_rows: []})
         vals = Map.new(resolver_codes, fn code -> {code, compute(code, bundle)} end)
@@ -146,6 +171,7 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
         vals = Map.merge(vals, Map.get(indicators, m.id, %{}))
         vals = Map.merge(vals, Map.get(categoricals, m.id, %{}))
         vals = Map.merge(vals, Map.get(texts, m.id, %{}))
+        vals = Map.merge(vals, Map.get(interactions, m.id, %{}))
 
         {m.id, vals}
       end)
@@ -370,6 +396,53 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
       Enum.reduce(rows, acc, fn [id, name], a ->
         Map.update(a, id, MapSet.new([slugify(name)]), &MapSet.put(&1, slugify(name)))
       end)
+    end)
+  end
+
+  # ── E1/E2 (#1081): genre×RT interactions + RT−Meta gap ──────────────────────────────
+  # Both ride the catalog-normalized 0–1 values from metric_values_view (via DataPointFeatures.load,
+  # a runtime call — no compile cycle: DataPointFeatures already calls back into this module).
+  defp load_rt_interactions(movies, codes) do
+    ids = Enum.map(movies, & &1.id)
+
+    wanted_metrics =
+      if @gap_code in codes,
+        do: ["rotten_tomatoes_tomatometer", "metacritic_metascore"],
+        else: ["rotten_tomatoes_tomatometer"]
+
+    raw = Cinegraph.Scoring.DataPointFeatures.load(ids, wanted_metrics)
+
+    ixn_wanted = Enum.filter(codes, &(&1 in @ixn_rt_codes))
+    genres = if ixn_wanted == [], do: %{}, else: load_genres(ids)
+
+    Map.new(ids, fn id ->
+      metrics = Map.get(raw, id, %{})
+      rt = metrics["rotten_tomatoes_tomatometer"]
+      meta = metrics["metacritic_metascore"]
+      movie_genres = Map.get(genres, id, MapSet.new())
+
+      vals =
+        Map.new(ixn_wanted, fn code ->
+          slug = String.replace_prefix(code, "ixn_rt_", "")
+
+          value =
+            if is_number(rt) and MapSet.member?(movie_genres, slug), do: rt, else: 0.0
+
+          {code, value}
+        end)
+
+      vals =
+        if @gap_code in codes do
+          # crowd-pleaser inflation: positive only when BOTH present and rt > meta
+          gap =
+            if is_number(rt) and is_number(meta), do: max(rt - meta, 0.0), else: 0.0
+
+          Map.put(vals, @gap_code, Float.round(gap, 4))
+        else
+          vals
+        end
+
+      {id, vals}
     end)
   end
 

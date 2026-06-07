@@ -5,7 +5,7 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
   use Cinegraph.DataCase, async: true
 
   alias Cinegraph.Metrics.CatalogSeed
-  alias Cinegraph.Movies.Movie
+  alias Cinegraph.Movies.{Genre, Movie}
   alias Cinegraph.Repo
   alias Cinegraph.Scoring.{Bus, DataPointFeatures, DerivedFeatures}
 
@@ -303,6 +303,121 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
 
       assert DataPointFeatures.load_for([m], codes, @sk) ==
                DataPointFeatures.load_for([m], codes, @sk)
+    end
+  end
+
+  describe "E1/E2 (#1081): genre×RT interactions + rt_meta_gap" do
+    setup do
+      CatalogSeed.seed!()
+      :ok
+    end
+
+    defp planted_movie!(attrs) do
+      %Movie{}
+      |> Movie.changeset(
+        Map.merge(
+          %{tmdb_id: uniq(), title: "IxnM#{uniq()}", import_status: "full"},
+          Map.new(attrs)
+        )
+      )
+      |> Repo.insert!()
+    end
+
+    defp plant_genre!(movie, name) do
+      genre =
+        Repo.insert!(%Genre{name: name, tmdb_id: uniq()},
+          on_conflict: [set: [name: name]],
+          conflict_target: :tmdb_id,
+          returning: true
+        )
+
+      Repo.insert_all("movie_genres", [%{movie_id: movie.id, genre_id: genre.id}])
+    end
+
+    defp plant_metric!(movie, source, metric_type, value) do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      Repo.insert_all("external_metrics", [
+        %{
+          movie_id: movie.id,
+          source: source,
+          metric_type: metric_type,
+          value: value,
+          fetched_at: now,
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
+    end
+
+    test "the 8 ixn codes + rt_meta_gap are supported and accessor-exposed" do
+      supported = DerivedFeatures.supported_codes()
+      assert length(DerivedFeatures.rt_genre_interaction_codes()) == 8
+
+      for c <- DerivedFeatures.rt_genre_interaction_codes(), do: assert(c in supported)
+      assert "ixn_rt_horror" in supported
+      assert "rt_meta_gap" in supported
+    end
+
+    test "ixn_rt: genre present AND RT present → normalized RT; absent either → 0.0" do
+      m = planted_movie!(%{})
+      plant_genre!(m, "Horror")
+      plant_metric!(m, "rotten_tomatoes", "tomatometer", 86.0)
+
+      vals =
+        DerivedFeatures.load([m], ["ixn_rt_horror", "ixn_rt_drama"], @sk) |> Map.fetch!(m.id)
+
+      assert_in_delta vals["ixn_rt_horror"], 0.86, 1.0e-6
+      # has RT but NOT the drama genre
+      assert vals["ixn_rt_drama"] == 0.0
+    end
+
+    test "ixn_rt: genre present but RT missing → 0.0 (no signal, not a fake zero rating)" do
+      m = planted_movie!(%{})
+      plant_genre!(m, "Drama")
+
+      vals = DerivedFeatures.load([m], ["ixn_rt_drama"], @sk) |> Map.fetch!(m.id)
+      assert vals["ixn_rt_drama"] == 0.0
+    end
+
+    test "rt_meta_gap: the Smile-2 shape (RT 86 / Meta 67) → 0.19; meta ≥ rt → 0.0" do
+      smile = planted_movie!(%{})
+      plant_metric!(smile, "rotten_tomatoes", "tomatometer", 86.0)
+      plant_metric!(smile, "metacritic", "metascore", 67.0)
+
+      prestige = planted_movie!(%{})
+      plant_metric!(prestige, "rotten_tomatoes", "tomatometer", 80.0)
+      plant_metric!(prestige, "metacritic", "metascore", 90.0)
+
+      vals = DerivedFeatures.load([smile, prestige], ["rt_meta_gap"], @sk)
+      assert_in_delta vals[smile.id]["rt_meta_gap"], 0.19, 1.0e-4
+      assert vals[prestige.id]["rt_meta_gap"] == 0.0
+    end
+
+    test "rt_meta_gap: either source missing → 0.0 (no inflation evidence)" do
+      rt_only = planted_movie!(%{})
+      plant_metric!(rt_only, "rotten_tomatoes", "tomatometer", 95.0)
+
+      neither = planted_movie!(%{})
+
+      vals = DerivedFeatures.load([rt_only, neither], ["rt_meta_gap"], @sk)
+      assert vals[rt_only.id]["rt_meta_gap"] == 0.0
+      assert vals[neither.id]["rt_meta_gap"] == 0.0
+    end
+
+    test "all E1/E2 values stay in [0,1]" do
+      m = planted_movie!(%{})
+      plant_genre!(m, "Science Fiction")
+      plant_metric!(m, "rotten_tomatoes", "tomatometer", 100.0)
+      plant_metric!(m, "metacritic", "metascore", 0.0)
+
+      codes = DerivedFeatures.rt_genre_interaction_codes() ++ ["rt_meta_gap"]
+      vals = DerivedFeatures.load([m], codes, @sk) |> Map.fetch!(m.id)
+
+      assert map_size(vals) == 9
+      for {_c, v} <- vals, do: assert(v >= 0.0 and v <= 1.0)
+      assert_in_delta vals["ixn_rt_science_fiction"], 1.0, 1.0e-6
+      assert_in_delta vals["rt_meta_gap"], 1.0, 1.0e-6
     end
   end
 end
