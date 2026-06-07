@@ -59,6 +59,17 @@ defmodule Cinegraph.Database.MaterializedViews do
     concurrent? = DatabaseUtils.has_unique_index?(name)
 
     cond do
+      # A never-populated matview (created WITH NO DATA) cannot be refreshed
+      # CONCURRENTLY — Postgres rejects it. The first populate must be a plain
+      # REFRESH, which is safe here even from cron: an empty matview has no
+      # readers to lock out (the #1019 concern was ACCESS EXCLUSIVE on a view
+      # in active use). Without this branch the sweeper would crash and abort
+      # the rest of its run whenever a new WITH-NO-DATA matview ships.
+      not populated?(name) ->
+        Logger.info("MaterializedViews: first populate of #{name} (plain REFRESH — unpopulated)")
+        refresh_statement!(name, false, opts)
+        :ok
+
       concurrent? ->
         refresh_statement!(name, true, opts)
         :ok
@@ -120,6 +131,17 @@ defmodule Cinegraph.Database.MaterializedViews do
       )
 
     :ok
+  end
+
+  # WITH NO DATA matviews report ispopulated = false until their first REFRESH.
+  defp populated?(name) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT ispopulated FROM pg_matviews WHERE schemaname = 'public' AND matviewname = $1",
+        [name]
+      )
+
+    rows != [[false]]
   end
 
   defp quoted_public_name(name) do

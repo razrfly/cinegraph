@@ -55,7 +55,9 @@ defmodule Cinegraph.Workers.StartupWarmupWorker do
       movies_warmup:
         Cinegraph.Workers.MoviesCacheWarmer.new(%{}, unique: startup_child_unique_opts()),
       health_warmup:
-        Cinegraph.Workers.HealthCacheWarmer.new(%{}, unique: startup_child_unique_opts())
+        Cinegraph.Workers.HealthCacheWarmer.new(%{}, unique: startup_child_unique_opts()),
+      algorithms_warmup:
+        Cinegraph.Workers.AlgorithmsCacheWarmer.new(%{}, unique: startup_child_unique_opts())
     ]
   end
 

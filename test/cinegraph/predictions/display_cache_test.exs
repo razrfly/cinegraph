@@ -102,6 +102,33 @@ defmodule Cinegraph.Predictions.DisplayCacheTest do
     assert cached_again == fresh
   end
 
+  test "canonical-limit slicing: asks ≤ 48 share ONE cache entry, sliced on read" do
+    sk = "dc_slice_#{System.unique_integer([:positive])}"
+    {_model, _member} = served_list!(sk)
+
+    # a second member so the slice is observable
+    %Movie{}
+    |> Movie.changeset(%{
+      tmdb_id: System.unique_integer([:positive]),
+      title: "DC Member 2",
+      import_status: "full",
+      release_date: ~D[2020-01-01],
+      canonical_sources: %{sk => 1}
+    })
+    |> Repo.insert!()
+
+    {:ok, full} = DisplayCache.ranked_members(sk, limit: 48)
+    {:ok, sliced} = DisplayCache.ranked_members(sk, limit: 1)
+
+    assert length(sliced.rows) == 1
+    assert sliced.rows == Enum.take(full.rows, 1)
+
+    # both asks share the single canonical-limit entry — no per-limit keys below 48
+    {:ok, keys} = Cachex.keys(:algorithms_cache)
+    rank_keys = Enum.filter(keys, &match?({:ranked_members, ^sk, _, _, _}, &1))
+    assert [{:ranked_members, ^sk, _, _, 48}] = rank_keys
+  end
+
   test "errors are never cached: an unserved list passes through uncached every call" do
     sk = "dc_unserved_#{System.unique_integer([:positive])}"
     assert {:error, :no_active_model} = DisplayCache.next_additions(sk, limit: 5)
@@ -117,12 +144,13 @@ defmodule Cinegraph.Predictions.DisplayCacheTest do
     # warm a ranking entry
     {:ok, _} = DisplayCache.ranked_members(sk, limit: 5)
     {:ok, keys} = Cachex.keys(:algorithms_cache)
-    assert Enum.any?(keys, &match?({:ranked_members, ^sk, _, _, 5}, &1))
+    # cached at the canonical limit (asks ≤ canonical share one entry, sliced on read)
+    assert Enum.any?(keys, &match?({:ranked_members, ^sk, _, _, 48}, &1))
 
     # demote — the sole write path must clear the cache
     {:ok, _} = MovieLists.set_active_prediction_model(sk, nil, nil)
     {:ok, keys_after} = Cachex.keys(:algorithms_cache)
-    refute Enum.any?(keys_after, &match?({:ranked_members, ^sk, _, _, 5}, &1))
+    refute Enum.any?(keys_after, &match?({:ranked_members, ^sk, _, _, 48}, &1))
     assert DisplayCache.board_version() != v1
 
     # restore for hygiene

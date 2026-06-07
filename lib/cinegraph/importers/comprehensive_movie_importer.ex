@@ -174,38 +174,52 @@ defmodule Cinegraph.Importers.ComprehensiveMovieImporter do
       box_office_domestic: parse_box_office(omdb_data["BoxOffice"])
     }
 
-    # First, store the complete OMDb response and extracted fields in the movie record
-    case movie
-         |> Movie.changeset(movie_updates)
-         |> Repo.update() do
-      {:ok, updated_movie} ->
-        Logger.debug(
-          "Stored complete OMDb response and extracted fields for #{updated_movie.title}"
-        )
+    # Blob + derived ratings commit atomically (#1053): a crash/deploy between the two
+    # writes is exactly how the 339k orphaned-blob debt accumulated (#913 parity gap).
+    # The modern path (ApiProcessors.OMDb) is transactional; this legacy mix-task path
+    # must be too. Individual rating validation failures still only skip that rating.
+    result =
+      Repo.transaction(fn ->
+        case movie
+             |> Movie.changeset(movie_updates)
+             |> Repo.update() do
+          {:ok, updated_movie} ->
+            Logger.debug(
+              "Stored complete OMDb response and extracted fields for #{updated_movie.title}"
+            )
 
-        # Transform and store ratings
-        ratings = OMDb.Transformer.transform_to_ratings(omdb_data, movie.id, omdb_source.id)
+            # Transform and store ratings
+            ratings = OMDb.Transformer.transform_to_ratings(omdb_data, movie.id, omdb_source.id)
 
-        Enum.each(ratings, fn rating_attrs ->
-          case insert_or_update_rating(rating_attrs) do
-            {:ok, rating} ->
-              Logger.debug(
-                "Stored #{rating.rating_type} rating for #{movie.title}: #{rating.value}"
-              )
+            Enum.each(ratings, fn rating_attrs ->
+              case insert_or_update_rating(rating_attrs) do
+                {:ok, rating} ->
+                  Logger.debug(
+                    "Stored #{rating.rating_type} rating for #{movie.title}: #{rating.value}"
+                  )
 
-            {:error, changeset} ->
-              Logger.error("Failed to store rating: #{inspect(changeset.errors)}")
-          end
-        end)
+                {:error, changeset} ->
+                  Logger.error("Failed to store rating: #{inspect(changeset.errors)}")
+              end
+            end)
 
-        # Now we have the complete OMDb data stored, we can parse additional fields later
-        # For example: omdb_data["Plot"], omdb_data["Director"], omdb_data["Actors"], etc.
+            :ok
 
+          {:error, changeset} ->
+            Logger.error(
+              "Failed to store OMDb data for #{movie.title}: #{inspect(changeset.errors)}"
+            )
+
+            Repo.rollback(:omdb_update_failed)
+        end
+      end)
+
+    case result do
+      {:ok, :ok} ->
         Logger.info("Successfully stored OMDb data and ratings for #{movie.title}")
         :ok
 
-      {:error, changeset} ->
-        Logger.error("Failed to store OMDb data for #{movie.title}: #{inspect(changeset.errors)}")
+      {:error, _reason} ->
         :error
     end
   end

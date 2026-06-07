@@ -319,6 +319,20 @@ defmodule Cinegraph.Admin.JobRegistry do
       doc_url: nil
     },
     %{
+      id: :algorithms_cache_warmer,
+      label: "Algorithms rankings warmer",
+      worker: Workers.AlgorithmsCacheWarmer,
+      queue: :maintenance,
+      schedule: "15 */6 * * *",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: false,
+      description:
+        "Warm /algorithms next_additions + ranked_members for served lists (#1084 A.1)",
+      destination: :system,
+      doc_url: "https://github.com/razrfly/cinegraph/issues/1084"
+    },
+    %{
       id: :connection_monitor_worker,
       label: "Connection monitor",
       worker: Workers.ConnectionMonitorWorker,

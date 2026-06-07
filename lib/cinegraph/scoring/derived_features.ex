@@ -287,7 +287,7 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
         Repo.query(
           """
           SELECT metric_code, movie_id
-          FROM metric_values_view
+          FROM #{Cinegraph.Scoring.MetricSource.relation()}
           WHERE movie_id = ANY($1) AND metric_code = ANY($2) AND normalized_value IS NOT NULL
           """,
           [chunk, underlying],

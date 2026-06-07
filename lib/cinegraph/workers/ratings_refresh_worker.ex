@@ -5,9 +5,11 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
   Runs at 3 AM UTC and drains the OMDb null backlog in two phases:
 
   ## Phase A – Gap Fill
-  Queries movies with `omdb_data IS NULL` (and `import_status = 'full'`,
-  `imdb_id IS NOT NULL`) ordered by TMDb popularity DESC and queues them
-  via `OMDbEnrichmentWorker`.
+  Queries movies with `omdb_data IS NULL` and `imdb_id IS NOT NULL` ordered by
+  TMDb popularity DESC and queues them via `OMDbEnrichmentWorker`. Eligibility
+  is the #1053 terminal-state predicate — an IMDb ID is the ONLY requirement.
+  (There is deliberately no `import_status` filter: it once hid an 84k-movie
+  soft-import backlog while the full daily budget went to Phase B re-refreshes.)
 
   ## Phase B – Stale Refresh
   If Phase A fills fewer than `batch_size` slots, tops up with the
@@ -92,9 +94,8 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
 
   defp count_null_backlog do
     from(m in Movie,
-      where: m.import_status == "full",
       where: is_nil(m.omdb_data),
-      where: not is_nil(m.imdb_id),
+      where: not is_nil(m.imdb_id) and m.imdb_id != "",
       where: m.id not in subquery(recently_checked_subquery()),
       select: count(m.id)
     )
@@ -104,9 +105,8 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
   # Phase A0: 1001-list priority — queue movies on the canonical 1001 list first.
   defp fetch_1001_priority(limit) do
     from(m in Movie,
-      where: m.import_status == "full",
       where: is_nil(m.omdb_data),
-      where: not is_nil(m.imdb_id),
+      where: not is_nil(m.imdb_id) and m.imdb_id != "",
       where: fragment("? \\? '1001_movies'", m.canonical_sources),
       where: m.id not in subquery(recently_checked_subquery()),
       order_by: fragment("(tmdb_data->>'popularity')::float DESC NULLS LAST"),
@@ -123,9 +123,8 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
 
   defp fetch_null_backlog(limit, exclude_ids) do
     from(m in Movie,
-      where: m.import_status == "full",
       where: is_nil(m.omdb_data),
-      where: not is_nil(m.imdb_id),
+      where: not is_nil(m.imdb_id) and m.imdb_id != "",
       where: m.id not in ^exclude_ids,
       where: m.id not in subquery(recently_checked_subquery()),
       order_by: fragment("(tmdb_data->>'popularity')::float DESC NULLS LAST"),
@@ -150,12 +149,17 @@ defmodule Cinegraph.Workers.RatingsRefreshWorker do
       )
 
     from(m in Movie,
-      where: m.import_status == "full",
       where: not is_nil(m.omdb_data),
-      where: not is_nil(m.imdb_id),
+      where: not is_nil(m.imdb_id) and m.imdb_id != "",
       left_join: s in subquery(stalest_subquery),
       on: s.movie_id == m.id,
-      order_by: [asc_nulls_first: s.last_fetched],
+      # staleness first; on ties, refresh the established full-import corpus before soft; m.id
+      # is a stable final key so full ties don't churn which movies get picked under `limit`.
+      order_by: [
+        asc_nulls_first: s.last_fetched,
+        desc: fragment("? = 'full'", m.import_status),
+        asc: m.id
+      ],
       limit: ^limit,
       select: m.id
     )

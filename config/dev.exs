@@ -20,6 +20,10 @@ config :cinegraph, Cinegraph.Repo,
 config :cinegraph, :slow_query_logger, true
 config :cinegraph, :slow_query_threshold_ms, 500
 
+# Hot feature loads read the materialized view (#1082/#1084 P1). Refresh after
+# data changes: mix cinegraph.materialized_views.refresh metric_values_matview
+config :cinegraph, :metric_values_relation, "metric_values_matview"
+
 # Read replica configuration for development
 # Points to same database as primary for simplicity
 config :cinegraph, Cinegraph.Repo.Replica,
