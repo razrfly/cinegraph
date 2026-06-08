@@ -23,11 +23,19 @@ defmodule Cinegraph.Workers.MaterializedViewRefreshSweeper do
 
     refreshed = for {name, :ok} <- results, do: name
     skipped = for {name, {:skipped, _reason}} <- results, do: name
+    failed = for {name, {:error, msg}} <- results, do: {name, msg}
 
     Logger.info(
-      "MaterializedViewRefreshSweeper: refreshed=#{length(refreshed)} skipped=#{inspect(skipped)}"
+      "MaterializedViewRefreshSweeper: refreshed=#{length(refreshed)} " <>
+        "skipped=#{inspect(skipped)} failed=#{inspect(Enum.map(failed, &elem(&1, 0)))}"
     )
 
-    {:ok, %{refreshed: refreshed, skipped: skipped}}
+    # Healthy views are already refreshed (refresh_all! isolates per view, #1088). Surface any
+    # failure so it lands in oban_jobs.errors / AppSignal instead of a silent no-op discard —
+    # one broken matview no longer starves the rest.
+    case failed do
+      [] -> {:ok, %{refreshed: refreshed, skipped: skipped}}
+      _ -> {:error, %{refreshed: refreshed, skipped: skipped, failed: failed}}
+    end
   end
 end

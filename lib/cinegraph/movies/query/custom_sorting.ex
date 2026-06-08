@@ -12,7 +12,8 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
                       (votes × votes_weight) + (rating × rating_weight)
 
   Where:
-    - recency = exp(-decay_rate × days_since_release)
+    - recency = exp(-decay_rate × days_since_release), exponent clamped to ≥ -700 so very
+      old / garbage-dated rows can't trigger PostgreSQL's `exp()` underflow error (#1088)
     - popularity = ln(popularity + 1) / ln(max_expected)
     - votes = ln(votes + 1) / ln(max_expected)
     - rating = avg_rating / 10 (only if votes >= min_threshold)
@@ -85,7 +86,7 @@ defmodule Cinegraph.Movies.Query.CustomSorting do
          """
          (
            ?::float * COALESCE(
-             EXP(-1.0 * ?::float * GREATEST(0.0, (CURRENT_DATE - COALESCE(?, CURRENT_DATE))::float)),
+             EXP(GREATEST(-700.0, -1.0 * ?::float * GREATEST(0.0, (CURRENT_DATE - COALESCE(?, CURRENT_DATE))::float))),
              0.5
            )
            +
