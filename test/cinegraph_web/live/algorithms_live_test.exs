@@ -6,6 +6,13 @@ defmodule CinegraphWeb.AlgorithmsLiveTest do
   alias Cinegraph.Movies.MovieList
   alias Cinegraph.Repo
 
+  setup do
+    # The /algorithms pages read through :algorithms_cache (#1084) — clear it so cards/rankings
+    # never leak across tests (the index key is global; sandbox rows differ per test).
+    Cachex.clear(:algorithms_cache)
+    :ok
+  end
+
   defp displayable_list!(attrs) do
     %MovieList{}
     |> MovieList.changeset(

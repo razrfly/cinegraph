@@ -85,6 +85,9 @@ defmodule Cinegraph.Metrics.CatalogSeed do
          ]}
     )
 
+    # The catalog map is cached for the /algorithms label lookups (#1084) — any write busts it.
+    Cinegraph.Metrics.bust_catalog_cache()
+
     length(entries)
   end
 
@@ -661,8 +664,54 @@ defmodule Cinegraph.Metrics.CatalogSeed do
           # `DerivedFeatures.supported_codes/0`.
           is_available: true
         })
-      ]
+      ] ++ ixn_rt_defs() ++ [gap_def()]
   end
+
+  # ── E1 (#1081): genre×RT interaction rows — gated OFF serving until the experiment keeps them.
+  # Codes single-sourced from `DerivedFeatures` so catalog rows can't drift from emitted codes.
+  defp ixn_rt_defs do
+    for code <- DerivedFeatures.rt_genre_interaction_codes() do
+      slug = String.replace_prefix(code, "ixn_rt_", "")
+
+      def_(%{
+        code: code,
+        name: "RT × " <> humanize_genre(slug) <> " interaction",
+        source_table: "derived",
+        normalization_type: "linear",
+        normalization_params: %{"min" => 0, "max" => 1},
+        source_reliability: 0.7,
+        kind: "derived",
+        derivation: "ixn_rt",
+        # #1081 E1: genre_indicator × normalized tomatometer — "RT 92 means different things for
+        # horror vs drama." Stays is_available: false until the eval_features gate keeps it.
+        is_available: false
+      })
+    end
+  end
+
+  # ── E2 (#1081): RT−Metacritic disagreement (crowd-pleaser inflation), gated OFF serving.
+  defp gap_def do
+    def_(%{
+      code: "rt_meta_gap",
+      name: "RT−Metacritic Gap (crowd-pleaser inflation)",
+      source_table: "derived",
+      normalization_type: "linear",
+      normalization_params: %{"min" => 0, "max" => 1},
+      source_reliability: 0.7,
+      kind: "derived",
+      derivation: "rt_meta_gap",
+      # #1081 E2: max(rt − meta, 0), both catalog-normalized; 0.0 = no inflation evidence
+      # (agreement, meta ≥ rt, or a missing source). Gated until the gate keeps it.
+      is_available: false
+    })
+  end
+
+  defp humanize_genre(slug),
+    do:
+      slug
+      |> String.replace("_", " ")
+      |> String.split()
+      |> Enum.map_join(" ", &String.capitalize/1)
 
   # ── dynamic (DB-driven) ML-only data points ────────────────────────────────
   #

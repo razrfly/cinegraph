@@ -59,11 +59,14 @@ defmodule Mix.Tasks.Predictions.EvalFeatures do
       {"genre", DerivedFeatures.genre_codes()},
       {"rating", ["content_rating_age"]},
       {"cat", DerivedFeatures.categorical_codes()},
-      {"text", Cinegraph.Scoring.TextFeatures.codes()}
+      {"text", Cinegraph.Scoring.TextFeatures.codes()},
+      # #1081 E1/E2 — separate groups so each gets an independent keep/kill verdict.
+      {"ixn_rt", DerivedFeatures.rt_genre_interaction_codes()},
+      {"gap", ["rt_meta_gap"]}
     ]
   end
 
-  @group_ids ~w(lang genre rating cat text)
+  @group_ids ~w(lang genre rating cat text ixn_rt gap)
 
   # Rough archetype tags (#1070 §4) — display-only, to read deltas in context.
   @archetype %{

@@ -17,7 +17,7 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
 
   alias Cinegraph.Movies.{DiscoveryCommon, DiscoveryScoringSimple, Movie, MovieLists}
   alias Cinegraph.Movies.MovieScoreCache
-  alias Cinegraph.Predictions.{Candidates, Explanation, ListFrontier}
+  alias Cinegraph.Predictions.{Candidates, DisplayCache, Explanation, ListFrontier}
   alias Cinegraph.Repo
   alias Cinegraph.Scoring.{Bus, Lenses}
   alias Cinegraph.Search
@@ -131,9 +131,9 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
     |> assign(:ranked_members, :loading)
     |> assign(:members_shown, @members_limit)
     |> assign(:members_more_pending, false)
-    |> start_async(:predictions, fn -> Candidates.next_additions(sk, limit: @grid_limit) end)
+    |> start_async(:predictions, fn -> DisplayCache.next_additions(sk, limit: @grid_limit) end)
     |> start_async(:ranked_members, fn ->
-      Candidates.rank(sk, mode: "members", limit: @members_limit)
+      DisplayCache.ranked_members(sk, limit: @members_limit)
     end)
   end
 
@@ -244,7 +244,7 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
      |> assign(:members_shown, shown)
      |> assign(:members_more_pending, true)
      |> start_async(:ranked_members, fn ->
-       Candidates.rank(sk, mode: "members", limit: shown)
+       DisplayCache.ranked_members(sk, limit: shown)
      end)}
   end
 

@@ -21,7 +21,9 @@ defmodule CinegraphWeb.AlgorithmsLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    cards = build_cards()
+    # #1084: cards change only at promotion/catalog/data-drift boundaries — DisplayCache holds
+    # them (single-flight, model-identity keys, 15-min TTL) so dead+live mounts are cache hits.
+    cards = Cinegraph.Predictions.DisplayCache.index_cards(&build_cards/0)
     groups = Enum.group_by(cards, & &1.kind)
 
     {:ok,
