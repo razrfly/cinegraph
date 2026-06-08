@@ -151,6 +151,10 @@ defmodule CinegraphWeb.AlgorithmsLive.Compare do
   defp column_result({:predictive, {:error, :no_active_model}}),
     do: %{status: :ready, films: [], type: :unserved}
 
+  # Any other read-model error renders the column's error state instead of crashing the
+  # async updater on a missed clause (CodeRabbit #1083).
+  defp column_result({:predictive, {:error, _reason}}), do: %{status: :error}
+
   defp update_column(socket, slug, changes) do
     columns =
       Enum.map(socket.assigns.columns, fn

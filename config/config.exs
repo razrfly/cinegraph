@@ -10,6 +10,10 @@ import Config
 config :cinegraph,
   ecto_repos: [Cinegraph.Repo],
   generators: [timestamp_type: :utc_datetime],
+  # Which relation hot feature loads read (#1082/#1084 P1) — see Scoring.MetricSource.
+  # Default = the live view (safe everywhere, required in test: sandboxed fixtures
+  # are invisible to a matview); dev/prod override to metric_values_matview.
+  metric_values_relation: "metric_values_view",
   # Minimum confidence threshold for fuzzy matching movies (0.0 - 1.0)
   # Movies found with confidence below this threshold will be skipped
   fuzzy_match_min_confidence: 0.7,
@@ -244,6 +248,12 @@ config :cinegraph, Oban,
        # they expire. Plus a one-shot warm fires from `Cinegraph.Application`
        # on app boot (so the very first request after deploy is also fast).
        {"*/30 * * * *", Cinegraph.Workers.HealthCacheWarmer},
+       # /algorithms rankings warmer (#1084 A.1) — recomputes every served list's
+       # next_additions + ranked_members server-side. Rankings cost minutes per
+       # list on prod (pools up to 258k movies), so visitors must NEVER pay the
+       # compute: this cron (inside DisplayCache's 12h rank TTL), the boot warm
+       # via StartupWarmupWorker, and the post-bust enqueue are the only writers.
+       {"15 */6 * * *", Cinegraph.Workers.AlgorithmsCacheWarmer},
        # Now Playing sweep (#943) — polls TMDB /movie/now_playing across 5
        # regions (US, GB, DE, FR, PL) and stamps `now_playing_last_seen` on
        # matched movies. Films missing from all regions for >3 days go stale

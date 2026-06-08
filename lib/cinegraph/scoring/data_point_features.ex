@@ -12,7 +12,7 @@ defmodule Cinegraph.Scoring.DataPointFeatures do
   """
 
   alias Cinegraph.Repo
-  alias Cinegraph.Scoring.DerivedFeatures
+  alias Cinegraph.Scoring.{DerivedFeatures, MetricSource}
 
   # A full decade can be tens of thousands of movies; chunk the id list so the view query
   # (filtered by movie_id, pushed down to the base tables) stays well under the pool timeout.
@@ -56,7 +56,7 @@ defmodule Cinegraph.Scoring.DataPointFeatures do
         Repo.query(
           """
           SELECT movie_id, metric_code, normalized_value
-          FROM metric_values_view
+          FROM #{MetricSource.relation()}
           WHERE movie_id = ANY($1) AND metric_code = ANY($2)
             AND normalized_value IS NOT NULL
           """,

@@ -62,12 +62,22 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
       refute_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => movie.id})
     end
 
-    test "skips movies with import_status other than 'full'" do
-      stub = insert_movie(%{omdb_data: nil, import_status: "stub"})
+    test "skips movies with a blank imdb_id (would be rejected by OMDb, never terminal)" do
+      movie = insert_movie(%{omdb_data: nil, imdb_id: ""})
 
       perform_job(RatingsRefreshWorker, %{})
 
-      refute_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => stub.id})
+      refute_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => movie.id})
+    end
+
+    test "queues soft-import movies with an imdb_id (#1053 — eligibility is imdb_id, not import_status)" do
+      # The import_status='full' filter once hid an 84k soft-import backlog while the
+      # full daily budget went to Phase B re-refreshes. Soft movies are eligible.
+      soft = insert_movie(%{omdb_data: nil, import_status: "soft"})
+
+      perform_job(RatingsRefreshWorker, %{})
+
+      assert_enqueued(worker: OMDbEnrichmentWorker, args: %{"movie_id" => soft.id})
     end
 
     test "Phase A jobs do not include the force flag" do
@@ -148,6 +158,27 @@ defmodule Cinegraph.Workers.RatingsRefreshWorkerTest do
       refute_enqueued(
         worker: OMDbEnrichmentWorker,
         args: %{"movie_id" => stale_movie.id, "force" => true}
+      )
+    end
+
+    test "Phase B tie-breaks toward full-import movies when staleness ties" do
+      with_batch_size(1)
+
+      # Both enriched (Phase A queues neither) and equally stale — no external_metrics rows means
+      # NULL last_fetched for both, so the order_by's full-before-soft rule decides the single pick.
+      full = insert_movie(%{omdb_data: %{"Title" => "Full"}, import_status: "full"})
+      soft = insert_movie(%{omdb_data: %{"Title" => "Soft"}, import_status: "soft"})
+
+      perform_job(RatingsRefreshWorker, %{})
+
+      assert_enqueued(
+        worker: OMDbEnrichmentWorker,
+        args: %{"movie_id" => full.id, "force" => true}
+      )
+
+      refute_enqueued(
+        worker: OMDbEnrichmentWorker,
+        args: %{"movie_id" => soft.id, "force" => true}
       )
     end
 

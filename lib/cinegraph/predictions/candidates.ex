@@ -77,13 +77,27 @@ defmodule Cinegraph.Predictions.Candidates do
           reliability.grade != :insufficient and
             ProbabilityCalibration.informative?(model.calibration)
 
-        candidates = candidate_movies(source_key, min_votes, min_sources, mode, cutoff)
-        scores = Bus.score(candidates, model)
+        query =
+          universe_query(source_key,
+            mode: mode,
+            min_votes: min_votes,
+            min_sources: min_sources,
+            cutoff: cutoff
+          )
+
+        # Memory-bounded scoring (#1084 A.1): score the pool in id-keyed batches, keeping only
+        # {id, score} pairs — prod pools reach 258k movies (afi, frontier 1998) and holding the
+        # structs flat would OOM the 16GB serving node. Exactness unchanged: every candidate is
+        # scored; only the top-`limit` structs are re-fetched for row building.
+        {pairs, scanned} = batched_scores(query, model)
+
+        top = pairs |> Enum.sort_by(&elem(&1, 1), :desc) |> Enum.take(limit)
+        top_movies = fetch_movies(query, Enum.map(top, &elem(&1, 0)))
 
         rows =
-          candidates
-          |> Enum.map(fn m ->
-            score = Map.get(scores, m.id, 0.0)
+          top
+          |> Enum.map(fn {id, score} ->
+            m = Map.fetch!(top_movies, id)
 
             %{
               id: m.id,
@@ -100,9 +114,7 @@ defmodule Cinegraph.Predictions.Candidates do
               slug: m.slug
             }
           end)
-          |> Enum.sort_by(& &1.score, :desc)
-          |> Enum.take(limit)
-          |> attach_why(candidates, model)
+          |> attach_why(Map.values(top_movies), model)
 
         {:ok,
          %{
@@ -112,7 +124,7 @@ defmodule Cinegraph.Predictions.Candidates do
            show_prob?: show_prob?,
            model: model,
            cutoff: cutoff,
-           scanned: length(candidates),
+           scanned: scanned,
            member_count: member_count(source_key)
          }}
     end
@@ -323,13 +335,42 @@ defmodule Cinegraph.Predictions.Candidates do
   defp resolve_min_sources(_opts, "members"), do: 0
   defp resolve_min_sources(opts, _mode), do: Keyword.get(opts, :min_sources, 2)
 
-  # Fully-imported films, gated by evidence (+ optional votes) and scoped by mode:
-  #   predictions → off-list AND release_year ≥ cutoff   candidates → off-list, all eras
-  #   members → only members   all → no filter
-  defp candidate_movies(source_key, min_votes, min_sources, mode, cutoff) do
-    source_key
-    |> universe_query(mode: mode, min_votes: min_votes, min_sources: min_sources, cutoff: cutoff)
-    |> Repo.all(timeout: :timer.seconds(120))
+  # ── memory-bounded scoring (#1084 A.1) ──────────────────────────────────────────────
+  @score_batch 2_500
+
+  # Walk the universe in id-keyset batches; per batch, Bus-score and keep only {id, score}.
+  # 258k candidates ⇒ ~8MB of pairs instead of ~hundreds of MB of structs.
+  defp batched_scores(query, model) do
+    Stream.unfold(0, fn last_id ->
+      batch =
+        query
+        |> where([m], m.id > ^last_id)
+        |> order_by([m], asc: m.id)
+        |> limit(@score_batch)
+        |> Repo.all(timeout: :timer.seconds(120))
+
+      case batch do
+        [] ->
+          nil
+
+        movies ->
+          scores = Bus.score(movies, model)
+          pairs = Enum.map(movies, &{&1.id, Map.get(scores, &1.id, 0.0)})
+          {pairs, List.last(movies).id}
+      end
+    end)
+    |> Enum.reduce({[], 0}, fn pairs, {acc, n} -> {pairs ++ acc, n + length(pairs)} end)
+  end
+
+  # Re-fetch the slim structs for the chosen top ids (row building + why need them).
+  defp fetch_movies(_query, []), do: %{}
+
+  defp fetch_movies(query, ids) do
+    query
+    |> exclude(:where)
+    |> where([m], m.id in ^ids)
+    |> Repo.all(timeout: :timer.seconds(60))
+    |> Map.new(&{&1.id, &1})
   end
 
   defp scope_by_mode(query, source_key, "predictions", cutoff) do

@@ -12,6 +12,12 @@ defmodule Cinegraph.Workers.MovieScoreCacheWorker do
     Scoring.LensConfig
   }
 
+  # NOTE (#1082/#1084 P1, 2026-06-07): migration 20260607200000 made the view's
+  # person_quality_score deterministic (AVG of credited people; was last-row-wins roulette).
+  # That did NOT need a version bump here: the lens path computes person quality via its own
+  # role-weighted SQL (FeatureResolver.load_absolute_person_quality), not the view — proven
+  # by `mix cinegraph.scoring.parity_check --limit 2000` → over_tol=0 across every field.
+  # The view change affects only :data_point models, whose re-train is tracked on #1082.
   # v6 (#1036 Session 2): the tmdb/popularity_score collision was fixed — time_machine now
   # reads REAL TMDb popularity instead of misfiled list-appearance counts (changed for ~81%
   # of movies; only time_machine moves). Requires a re-warm:

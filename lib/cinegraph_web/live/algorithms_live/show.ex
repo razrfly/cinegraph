@@ -174,6 +174,11 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
   def handle_async(:predictions, {:ok, {:error, :no_active_model}}, socket),
     do: {:noreply, assign(socket, :predictions, :none)}
 
+  # Any other read-model error reuses the :error render path instead of crashing the socket
+  # on a missed clause (CodeRabbit #1083).
+  def handle_async(:predictions, {:ok, {:error, _reason}}, socket),
+    do: {:noreply, assign(socket, :predictions, :error)}
+
   def handle_async(:predictions, {:exit, _reason}, socket),
     do: {:noreply, assign(socket, :predictions, :error)}
 
@@ -186,6 +191,11 @@ defmodule CinegraphWeb.AlgorithmsLive.Show do
 
   def handle_async(:ranked_members, {:ok, {:error, :no_active_model}}, socket),
     do: {:noreply, assign(socket, :ranked_members, :none)}
+
+  def handle_async(:ranked_members, {:ok, {:error, _reason}}, socket),
+    do:
+      {:noreply,
+       socket |> assign(:ranked_members, :error) |> assign(:members_more_pending, false)}
 
   def handle_async(:ranked_members, {:exit, _reason}, socket),
     do:

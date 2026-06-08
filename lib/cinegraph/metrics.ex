@@ -61,11 +61,11 @@ defmodule Cinegraph.Metrics do
   @doc """
   Drop the cached catalog map — called by `CatalogSeed.seed!` after any catalog write. Clears
   the whole `:algorithms_cache`, not just the map: the cached /algorithms rankings embed catalog
-  labels in their why-breakdowns, so a catalog change invalidates them too (#1084).
+  labels in their why-breakdowns, so a catalog change invalidates them too (#1084). Routed
+  through `DisplayCache.bust/0` so the rankings come back warmer-owned, not visitor-paid.
   """
   def bust_catalog_cache do
-    Cachex.clear(:algorithms_cache)
-    :ok
+    Cinegraph.Predictions.DisplayCache.bust()
   end
 
   @doc """
