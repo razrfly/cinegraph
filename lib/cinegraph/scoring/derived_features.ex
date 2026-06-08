@@ -87,13 +87,54 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
   # violating this module's emit-0.0 convention.
   @gap_code "rt_meta_gap"
 
+  # Band (one-hot) features (#1087): each continuous signal is binned into mutually-exclusive bins so
+  # the linear model can learn ANY shape per list — rising (1001_movies) OR inverted-U (criterion/cult,
+  # where canon-rate peaks at $1–50M then falls). #1086 proved the relationship is list-specific and
+  # non-monotonic; a raw continuous feature with a single (non-negative) weight can't express that.
+  #
+  # Edges are FIXED here (single source of truth → train/serve symmetric, like @log_cap) — NOT
+  # data-derived quantiles, which would need persisted thresholds read identically at train + serve.
+  # Every family emits an explicit `*_missing` bin distinct from the lowest value bin: "no data" must
+  # never read as "scored low" (the silent-inference trap the #1051 missingness indicators address).
+  # All values come from the FeatureResolver target bundle (raw $ / counts / 0–100 / 0–10), so bands
+  # ride the same leakage-stripped path as box_office_roi — no normalized-view round-trip.
+  @edges_money [1.0e6, 1.0e7, 5.0e7, 2.5e8]
+  @edges_count [1.0e3, 1.0e4, 1.0e5, 5.0e5]
+  @edges_pop [5.0, 15.0, 40.0, 100.0]
+  @edges_roi [1.0, 2.0, 5.0, 10.0]
+  @edges_pct100 [20.0, 40.0, 60.0, 80.0]
+  @edges_rating10 [5.0, 6.0, 7.0, 8.0]
+
+  # {prefix, kind, resolver-input key, edges, human label, unit}. kind: :resolver reads
+  # `inputs[key]`; :roi is revenue/budget (present only when both > 0).
+  @band_specs [
+    {"rev_ww", :resolver, :tmdb_revenue, @edges_money, "Worldwide revenue", :dollars},
+    {"rev_dom", :resolver, :omdb_revenue_domestic, @edges_money, "Domestic revenue", :dollars},
+    {"budget", :resolver, :tmdb_budget, @edges_money, "Budget", :dollars},
+    {"roi", :roi, nil, @edges_roi, "Box-office ROI", :ratio},
+    {"imdb_votes", :resolver, :imdb_votes, @edges_count, "IMDb votes", :count},
+    {"tmdb_votes", :resolver, :tmdb_votes, @edges_count, "TMDb votes", :count},
+    {"popularity", :resolver, :tmdb_popularity, @edges_pop, "TMDb popularity", :number},
+    {"rt", :resolver, :rt_tomatometer, @edges_pct100, "Rotten Tomatoes", :pct100},
+    {"meta", :resolver, :metacritic, @edges_pct100, "Metacritic", :pct100},
+    {"imdb_rating", :resolver, :imdb_rating, @edges_rating10, "IMDb rating", :rating10},
+    {"tmdb_rating", :resolver, :tmdb_rating, @edges_rating10, "TMDb rating", :rating10}
+  ]
+
+  # `<prefix>_missing` + `<prefix>_b0..bN` (N = length(edges); E edges ⇒ E+1 value bins). Inlined (a
+  # module attr can't call a same-module function); `family_codes/2` reproduces this shape at runtime.
+  @band_codes Enum.flat_map(@band_specs, fn {prefix, _k, _r, edges, _l, _u} ->
+                ["#{prefix}_missing" | Enum.map(0..length(edges), &"#{prefix}_b#{&1}")]
+              end)
+
   @supported ~w(canonical_contribution auteur_track_record box_office_roi festival_prestige
                 prior_collab_density) ++
                @indicator_codes ++
                @categorical_codes ++
                @text_codes ++
                @ixn_rt_codes ++
-               [@gap_code]
+               [@gap_code] ++
+               @band_codes
 
   @doc "The derived codes this module emits — the routing guard for `DataPointFeatures.load_for/3`."
   def supported_codes, do: @supported
@@ -109,6 +150,35 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
 
   @doc "E1 genre×RT interaction codes (`ixn_rt_drama`, …) — #1081 gate group `ixn_rt`."
   def rt_genre_interaction_codes, do: @ixn_rt_codes
+
+  @doc "All band one-hot codes (#1087) — for `mix predictions.eval_bands` and the catalog seed."
+  def band_codes, do: @band_codes
+
+  @doc "Band one-hot codes for ONE family by prefix (e.g. `\"rev_ww\"`) — for per-family ablation."
+  def band_codes_for(prefix) do
+    case Enum.find(@band_specs, fn {p, _, _, _, _, _} -> p == prefix end) do
+      {_, _, _, edges, _, _} -> family_codes(prefix, edges)
+      nil -> []
+    end
+  end
+
+  @doc "Band prefixes in spec order (`\"rev_ww\"`, `\"budget\"`, …) — for per-family eval groups."
+  def band_prefixes, do: Enum.map(@band_specs, fn {p, _, _, _, _, _} -> p end)
+
+  @doc """
+  `[{code, human_name}]` for every band code (#1087) — single source of truth for the catalog seed's
+  band rows, so band labels render in the prediction "why" via `Explanation.label_for/1`.
+  """
+  def band_labels do
+    Enum.flat_map(@band_specs, fn {prefix, _k, _r, edges, label, unit} ->
+      [
+        {"#{prefix}_missing", "#{label}: missing"}
+        | Enum.map(0..length(edges), fn i ->
+            {"#{prefix}_b#{i}", "#{label}: #{band_range(edges, i, unit)}"}
+          end)
+      ]
+    end)
+  end
 
   @doc """
   The log-normalization saturation threshold for `prior_collab_density`. Single source of truth:
@@ -138,10 +208,13 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
       {categorical_codes, rest1} = Enum.split_with(rest0, &(&1 in @categorical_codes))
       {text_codes, rest2} = Enum.split_with(rest1, &(&1 in @text_codes))
       {ixn_codes, rest3} = Enum.split_with(rest2, &(&1 in @ixn_rt_codes or &1 == @gap_code))
-      {pcd_codes, resolver_codes} = Enum.split_with(rest3, &(&1 == "prior_collab_density"))
+      {band_codes, rest4} = Enum.split_with(rest3, &(&1 in @band_codes))
+      {pcd_codes, resolver_codes} = Enum.split_with(rest4, &(&1 == "prior_collab_density"))
 
+      # Bands (#1087) read the SAME FeatureResolver target bundle as the resolver_codes, so load it
+      # whenever either is requested.
       bundles =
-        if resolver_codes == [],
+        if resolver_codes == [] and band_codes == [],
           do: %{},
           else: FeatureResolver.resolve_batch(movies, {:target, source_key})
 
@@ -172,6 +245,11 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
         vals = Map.merge(vals, Map.get(categoricals, m.id, %{}))
         vals = Map.merge(vals, Map.get(texts, m.id, %{}))
         vals = Map.merge(vals, Map.get(interactions, m.id, %{}))
+
+        vals =
+          if band_codes == [],
+            do: vals,
+            else: Map.merge(vals, compute_bands(band_codes, bundle.inputs))
 
         {m.id, vals}
       end)
@@ -471,6 +549,71 @@ defmodule Cinegraph.Scoring.DerivedFeatures do
       end)
     end)
   end
+
+  # ── band (one-hot) features (#1087) ─────────────────────────────────────────────────
+  #
+  # For each requested family, emit its full one-hot from the target bundle inputs, then keep only
+  # the requested codes. Exactly one bin per family is 1.0 (the `*_missing` bin when the signal is
+  # absent / non-positive). `req` is the requested band codes ∩ `@band_codes`.
+  defp compute_bands(req, inputs) do
+    Enum.reduce(@band_specs, %{}, fn {prefix, kind, ref, edges, _label, _unit}, acc ->
+      if Enum.any?(family_codes(prefix, edges), &(&1 in req)) do
+        {present?, value} = band_source_value(kind, ref, inputs)
+        Map.merge(acc, Map.take(bin_onehot(prefix, edges, present?, value), req))
+      else
+        acc
+      end
+    end)
+  end
+
+  # ROI is present only when BOTH budget and revenue are positive (matches `box_office_roi`).
+  defp band_source_value(:roi, _ref, inputs) do
+    budget = num(inputs[:tmdb_budget])
+    revenue = num(inputs[:tmdb_revenue])
+    if budget > 0.0 and revenue > 0.0, do: {true, revenue / budget}, else: {false, 0.0}
+  end
+
+  # `num/1` maps nil → 0.0, so an absent metric falls into the `*_missing` bin (value not positive).
+  defp band_source_value(:resolver, ref, inputs) do
+    value = num(inputs[ref])
+    {value > 0.0, value}
+  end
+
+  # All-zero family one-hot with exactly one bin set: `*_missing` when absent, else the value bin
+  # `*_b<idx>` where idx = how many ascending edges the value exceeds (b0 = ≤ first edge).
+  defp bin_onehot(prefix, edges, false, _value),
+    do: Map.put(zeros(prefix, edges), "#{prefix}_missing", 1.0)
+
+  defp bin_onehot(prefix, edges, true, value) do
+    idx = Enum.count(edges, &(value > &1))
+    Map.put(zeros(prefix, edges), "#{prefix}_b#{idx}", 1.0)
+  end
+
+  defp zeros(prefix, edges), do: Map.new(family_codes(prefix, edges), &{&1, 0.0})
+
+  defp family_codes(prefix, edges),
+    do: ["#{prefix}_missing" | Enum.map(0..length(edges), &"#{prefix}_b#{&1}")]
+
+  # ── band label formatting (catalog/"why" display only) ────────────────────────────────
+  defp band_range(edges, 0, unit), do: "≤ #{fmt_edge(Enum.at(edges, 0), unit)}"
+
+  defp band_range(edges, idx, unit) do
+    if idx == length(edges),
+      do: "> #{fmt_edge(List.last(edges), unit)}",
+      else: "#{fmt_edge(Enum.at(edges, idx - 1), unit)}–#{fmt_edge(Enum.at(edges, idx), unit)}"
+  end
+
+  defp fmt_edge(v, :dollars), do: "$" <> fmt_magnitude(v)
+  defp fmt_edge(v, :count), do: fmt_magnitude(v)
+  defp fmt_edge(v, :ratio), do: "#{round(v)}×"
+  defp fmt_edge(v, :pct100), do: Integer.to_string(round(v))
+  defp fmt_edge(v, :rating10), do: :erlang.float_to_binary(v, decimals: 1)
+  defp fmt_edge(v, :number), do: Integer.to_string(round(v))
+
+  defp fmt_magnitude(v) when v >= 1.0e9, do: "#{round(v / 1.0e9)}B"
+  defp fmt_magnitude(v) when v >= 1.0e6, do: "#{round(v / 1.0e6)}M"
+  defp fmt_magnitude(v) when v >= 1.0e3, do: "#{round(v / 1.0e3)}k"
+  defp fmt_magnitude(v), do: "#{round(v)}"
 
   defp slugify(name), do: name |> String.downcase() |> String.replace(~r/\s+/, "_")
 

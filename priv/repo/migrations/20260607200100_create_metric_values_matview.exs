@@ -16,7 +16,7 @@ defmodule Cinegraph.Repo.Migrations.CreateMetricValuesMatview do
   # dev/prod = this matview, flipped only alongside the first refresh).
   #
   # The unique index makes it eligible for REFRESH ... CONCURRENTLY, so the daily
-  # MaterializedViewRefreshSweeper (08:00 UTC, refresh_all!(concurrently_only: true))
+  # MaterializedViewRefreshSweeper (08:00 UTC, refresh_all(concurrently_only: true))
   # keeps it fresh automatically. Freshness bound = 24h, same staleness class as the
   # DisplayCache rankings it feeds (warmer-owned, #1084 A.1).
   def up do

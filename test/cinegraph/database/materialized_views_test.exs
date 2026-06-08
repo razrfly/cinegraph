@@ -1,6 +1,6 @@
 defmodule Cinegraph.Database.MaterializedViewsTest do
   @moduledoc """
-  #1088 regression: `refresh_all!/1` must isolate per-view failures. Before the fix, one
+  #1088 regression: `refresh_all/1` must isolate per-view failures. Before the fix, one
   matview whose refresh raised (e.g. an `exp()` underflow in its defining query) aborted the
   ENTIRE sweep — every healthy view went stale and the sweeper discarded silently.
   """
@@ -25,11 +25,11 @@ defmodule Cinegraph.Database.MaterializedViewsTest do
     {good, bad}
   end
 
-  test "refresh_all!/1 isolates a failing view — healthy views still refresh, no raise" do
+  test "refresh_all/1 isolates a failing view — healthy views still refresh, no raise" do
     {good, bad} = create_test_matviews!()
 
     # Must NOT raise even though `bad` underflows on refresh.
-    results = MaterializedViews.refresh_all!()
+    results = MaterializedViews.refresh_all()
 
     assert results[good] == :ok, "a healthy view must refresh despite a sibling failing"
     assert {:error, msg} = results[bad]
