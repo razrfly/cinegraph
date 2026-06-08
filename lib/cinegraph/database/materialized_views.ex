@@ -92,12 +92,30 @@ defmodule Cinegraph.Database.MaterializedViews do
   end
 
   @doc """
-  Refresh every materialized view in `public`. Returns `%{name => result}`.
+  Refresh every materialized view in `public`. Returns `%{name => result}` where each
+  result is `:ok | {:skipped, reason} | {:error, message}`.
+
+  **Per-view isolation (#1088):** a `refresh!` that raises for ONE view must never abort
+  the others. Each view is wrapped here so a single broken matview (e.g. a SQL underflow
+  in its defining query) degrades to one `{:error, _}` entry instead of crashing the whole
+  sweep and leaving every healthy view stale. `refresh!/2` itself still raises — isolation
+  lives only in this aggregate.
 
   Accepts the same options as `refresh!/2`.
   """
   def refresh_all!(opts \\ []) do
-    Map.new(list_public(), fn name -> {name, refresh!(name, opts)} end)
+    Map.new(list_public(), fn name ->
+      result =
+        try do
+          refresh!(name, opts)
+        rescue
+          e ->
+            Logger.error("MaterializedViews: refresh failed for #{name}: #{Exception.message(e)}")
+            {:error, Exception.message(e)}
+        end
+
+      {name, result}
+    end)
   end
 
   @doc """

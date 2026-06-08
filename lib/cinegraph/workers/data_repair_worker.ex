@@ -475,7 +475,10 @@ defmodule Cinegraph.Workers.DataRepairWorker do
   end
 
   defp process_metric_batch(movies, source) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    # `inserted_at`/`updated_at` come from `timestamps()` → :naive_datetime. `insert_all`
+    # does NO casting, so a DateTime here raises Ecto.ChangeError and the whole backfill
+    # discards (this silently broke the #1053 materialization since #1054 — debt never moved).
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     rows =
       movies
@@ -484,6 +487,13 @@ defmodule Cinegraph.Workers.DataRepairWorker do
         |> extract_metric_rows(source)
         |> Enum.map(fn row ->
           row
+          # `from_omdb`/`from_tmdb` shape rows for the CHANGESET path, which casts. `insert_all`
+          # does not — so `value` arrives as an integer (e.g. imdbVotes) against a :float column
+          # and raises. Coerce here so the materialization matches the column types exactly.
+          |> Map.update(:value, nil, fn
+            v when is_integer(v) -> v * 1.0
+            v -> v
+          end)
           |> Map.put(:inserted_at, now)
           |> Map.put(:updated_at, now)
         end)
