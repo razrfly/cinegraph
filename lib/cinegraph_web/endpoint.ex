@@ -40,6 +40,7 @@ defmodule CinegraphWeb.Endpoint do
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
+  plug CinegraphWeb.Plugs.AppsignalSampler
 
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, :json],
