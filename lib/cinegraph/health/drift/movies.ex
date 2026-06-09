@@ -120,21 +120,21 @@ defmodule Cinegraph.Health.Drift.Movies do
   end
 
   @doc """
-  Canonical-list movies with no row in `external_metrics` where
-  `source='omdb'` (#896 Phase 1.2). Scoped to canonical movies — bulk
-  TMDb long-tail entries that never had an OMDb fetch attempt are
-  excluded since we don't intend to enrich them.
+  Canonical-list movies that still **need an OMDb fetch** — the #1053 terminal-state
+  predicate: no stored `omdb_data` blob AND no recent `fetch_attempt` marker (90-day
+  cooldown). Scoped to canonical movies — bulk TMDb long-tail entries we don't intend
+  to enrich are excluded.
 
-  Fetch attempts and failures are both recorded in `external_metrics`,
-  so absence there means we never *attempted* to fetch — this is the
-  actionable backlog signal ("if we never tried, we can try").
+  **#1090 fix:** this previously keyed on the absence of any `source='omdb'`
+  external_metrics row, which **overcounted** ~156k blob-present movies: a sparse OMDb
+  response yields an `imdb` row and no `omdb` row, so those looked "missing" despite
+  having the blob. The predicate now matches `BackfillOmdb.needs_fetch/2` exactly, so
+  drift, `mix cinegraph.surface_area`, and #1053 all agree on one definition of "done."
 
-  Note: `Cinegraph.Health.Completeness.movies_completeness/0` measures
-  OMDb differently — it counts movies where `omdb_data IS NOT NULL`
-  (data present). A movie attempted-and-failed counts as "not missing"
-  here but as "missing" there. Both are intentional: drift = "did we
-  attempt?", completeness = "do we have the data?". Don't try to
-  harmonize them.
+  Note: `Cinegraph.Health.Completeness.movies_completeness/0` measures OMDb differently —
+  it counts movies where `omdb_data IS NOT NULL` (data present). A movie
+  attempted-and-failed counts as "not missing" here but as "missing" there. Both are
+  intentional: drift = "do we still need to try?", completeness = "do we have the data?".
   """
   def missing_omdb(opts \\ []) do
     limit = Keyword.get(opts, :limit, @example_limit)
@@ -142,14 +142,14 @@ defmodule Cinegraph.Health.Drift.Movies do
     Drift.cached({:movies, :missing_omdb, limit}, @cache_ttl, fn ->
       total = Scopes.canonical_movies_count()
 
+      # Shared OMDb needs-fetch predicate (no blob ∧ no recent fetch_attempt) on the canonical
+      # scope, PLUS the OMDb-eligibility filter (a usable imdb_id — OMDb has no other lookup).
+      # Without the imdb_id filter, canonical movies with no IMDb ID would double-count here AND
+      # under `missing_imdb_id`; they belong only to the latter. Matches `BackfillOmdb.eligible_ids/1`.
       missing_base =
-        from(m in Scopes.canonical_movies(),
-          where:
-            fragment(
-              "NOT EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb')",
-              m.id
-            )
-        )
+        Scopes.canonical_movies()
+        |> Cinegraph.Maintenance.BackfillOmdb.needs_fetch()
+        |> where([m], not is_nil(m.imdb_id) and m.imdb_id != "")
 
       affected = Repo.replica().one(from(m in missing_base, select: count(m.id))) || 0
 
@@ -164,7 +164,7 @@ defmodule Cinegraph.Health.Drift.Movies do
           &Map.put(
             &1,
             :reason,
-            "no external_metrics row with source='omdb' (canonical-list scope)"
+            "canonical + has imdb_id, no OMDb blob and no recent fetch attempt"
           )
         )
 

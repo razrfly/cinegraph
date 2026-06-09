@@ -451,6 +451,7 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
 
     test "a present value lands in the correct bin (and missing is distinct from the low bin)" do
       m = planted_movie!(%{})
+
       # revenue $5M → b1 (1–10M]; budget $1M ⇒ ROI 5.0 → b2 (2–5]; RT 92 → b4 (80–100].
       plant_metric!(m, "tmdb", "revenue_worldwide", 5_000_000.0)
       plant_metric!(m, "tmdb", "budget", 1_000_000.0)

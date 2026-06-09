@@ -10,29 +10,39 @@ defmodule Cinegraph.Health.Drift.MoviesTest do
     :ok
   end
 
-  describe "missing_omdb/0 (#896 Phase 1.2 — canonical-list scope)" do
-    test "counts only canonical-list movies with no external_metrics row for omdb" do
-      # Should count: canonical, no OMDb fetch recorded
-      _missing = insert_movie!(canonical: true)
+  describe "missing_omdb/0 (#1090 — terminal-state predicate, canonical-list scope)" do
+    test "counts canonical movies with no blob and no recent fetch attempt; excludes blob-present and tried" do
+      # COUNTS: canonical, has imdb_id, no omdb_data blob, no fetch attempt (genuinely needs a fetch)
+      _needs_fetch = insert_movie!(canonical: true, imdb_id: "tt1001")
 
-      # Should NOT count: not canonical (out of scope)
+      # NOT counted (the #1090 fix): canonical, blob PRESENT but NO source='omdb' row (sparse
+      # response — imdbRating only). The old predicate wrongly counted this as "missing".
+      sparse = insert_movie!(canonical: true, imdb_id: "tt1002")
+      set_omdb_data!(sparse, %{"Response" => "True", "imdbRating" => "7.4"})
+      insert_metric!(sparse, "imdb", "rating_average")
+
+      # NOT counted: canonical, no blob but a recent fetch_attempt (tried, source-absent)
+      tried = insert_movie!(canonical: true, imdb_id: "tt1003")
+      insert_metric!(tried, "omdb", "fetch_attempt")
+
+      # NOT counted (eligibility): canonical, no blob/attempt, but NO imdb_id — OMDb-ineligible,
+      # so it belongs to missing_imdb_id only, not here (P1 regression — was double-counted).
+      _no_imdb = insert_movie!(canonical: true, imdb_id: nil)
+
+      # NOT counted: not canonical (out of scope)
       _excluded_non_canonical = insert_movie!(canonical: false)
-
-      # Should NOT count: canonical but has OMDb fetch
-      with_omdb = insert_movie!(canonical: true)
-      insert_metric!(with_omdb, "omdb", "rating_average")
 
       result = Drift.Movies.missing_omdb()
 
       assert result.check == :missing_omdb
       assert result.blocked_reason == nil
       assert result.affected_count == 1
-      # Total reflects the canonical-list scope, not the full movies table
-      assert result.total_population == 2
+      # canonical-list scope = the 4 canonical movies (non-canonical excluded)
+      assert result.total_population == 4
     end
 
     test "delegates to ratings.omdb_null_backlog with the same scope" do
-      _missing = insert_movie!(canonical: true)
+      _missing = insert_movie!(canonical: true, imdb_id: "tt2001")
       _excluded_non_canonical = insert_movie!(canonical: false)
 
       ratings_result = Drift.Ratings.omdb_null_backlog()
@@ -94,5 +104,9 @@ defmodule Cinegraph.Health.Drift.MoviesTest do
       fetched_at: DateTime.utc_now() |> DateTime.truncate(:second)
     })
     |> Repo.insert!()
+  end
+
+  defp set_omdb_data!(movie, blob) do
+    movie |> Ecto.Changeset.change(omdb_data: blob) |> Repo.update!()
   end
 end
