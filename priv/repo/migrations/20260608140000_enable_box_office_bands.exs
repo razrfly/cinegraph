@@ -30,7 +30,7 @@ defmodule Cinegraph.Repo.Migrations.EnableBoxOfficeBands do
     do: Enum.flat_map(@bo_prefixes, &Cinegraph.Scoring.DerivedFeatures.band_codes_for/1)
 
   defp flip(codes, available?) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
 
     repo().update_all(
       from(d in "metric_definitions", where: d.code in ^codes),
