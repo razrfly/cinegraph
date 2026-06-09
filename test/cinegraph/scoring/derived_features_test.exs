@@ -420,4 +420,50 @@ defmodule Cinegraph.Scoring.DerivedFeaturesTest do
       assert_in_delta vals["rt_meta_gap"], 1.0, 1.0e-6
     end
   end
+
+  describe "band (one-hot) features (#1087)" do
+    test "band codes are routed (supported) and fully labelled" do
+      supported = DerivedFeatures.supported_codes()
+      for c <- DerivedFeatures.band_codes(), do: assert(c in supported)
+
+      # band_labels is the single source of truth for the catalog seed → must cover every code.
+      labelled = Map.new(DerivedFeatures.band_labels()) |> Map.keys() |> MapSet.new()
+      assert labelled == MapSet.new(DerivedFeatures.band_codes())
+
+      # 4 edges ⇒ 5 value bins + 1 missing, ordered missing → b0..b4.
+      assert DerivedFeatures.band_codes_for("rev_ww") ==
+               ~w(rev_ww_missing rev_ww_b0 rev_ww_b1 rev_ww_b2 rev_ww_b3 rev_ww_b4)
+
+      assert "rev_ww" in DerivedFeatures.band_prefixes()
+      assert "roi" in DerivedFeatures.band_prefixes()
+    end
+
+    test "an absent signal falls into the *_missing bin — exactly one-hot per family" do
+      m = planted_movie!(%{})
+      vals = DerivedFeatures.load([m], DerivedFeatures.band_codes(), @sk) |> Map.fetch!(m.id)
+
+      for prefix <- DerivedFeatures.band_prefixes() do
+        fam = DerivedFeatures.band_codes_for(prefix)
+        assert Enum.count(fam, &(vals[&1] == 1.0)) == 1, "#{prefix} not one-hot"
+        assert vals["#{prefix}_missing"] == 1.0, "#{prefix} should be missing"
+      end
+    end
+
+    test "a present value lands in the correct bin (and missing is distinct from the low bin)" do
+      m = planted_movie!(%{})
+      # revenue $5M → b1 (1–10M]; budget $1M ⇒ ROI 5.0 → b2 (2–5]; RT 92 → b4 (80–100].
+      plant_metric!(m, "tmdb", "revenue_worldwide", 5_000_000.0)
+      plant_metric!(m, "tmdb", "budget", 1_000_000.0)
+      plant_metric!(m, "rotten_tomatoes", "tomatometer", 92.0)
+
+      vals = DerivedFeatures.load([m], DerivedFeatures.band_codes(), @sk) |> Map.fetch!(m.id)
+
+      assert vals["rev_ww_b1"] == 1.0
+      assert vals["rev_ww_missing"] == 0.0
+      assert vals["roi_b2"] == 1.0
+      assert vals["rt_b4"] == 1.0
+      # families with no planted metric are missing, never a value bin.
+      assert vals["meta_missing"] == 1.0
+    end
+  end
 end

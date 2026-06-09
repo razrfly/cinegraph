@@ -254,6 +254,12 @@ defmodule Cinegraph.Scoring.FeatureResolver do
       # raw `tmdb_data` blob (#1042). Coverage matches the blob — both come from TMDb's numbers.
       tmdb_budget: target_metric(ext_metrics, "tmdb", "budget") || 0,
       tmdb_revenue: target_metric(ext_metrics, "tmdb", "revenue_worldwide") || 0,
+      # Raw commercial/popularity magnitudes for the #1087 band (one-hot) features — surfaced here so
+      # DerivedFeatures can bin them from real dollars/counts (NOT the normalized view). nil = absent
+      # → the band loader emits the explicit `*_missing` bin (distinct from "scored low").
+      omdb_revenue_domestic: target_metric(ext_metrics, "omdb", "revenue_domestic"),
+      tmdb_votes: target_metric(ext_metrics, "tmdb", "rating_votes"),
+      tmdb_popularity: target_metric(ext_metrics, "tmdb", "popularity_score"),
       director_target_count: director_target_count,
       director_avg_imdb: director_avg_imdb
     }

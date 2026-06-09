@@ -19,7 +19,7 @@ defmodule Cinegraph.Workers.MaterializedViewRefreshSweeper do
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do
-    results = MaterializedViews.refresh_all!(concurrently_only: true)
+    results = MaterializedViews.refresh_all(concurrently_only: true)
 
     refreshed = for {name, :ok} <- results, do: name
     skipped = for {name, {:skipped, _reason}} <- results, do: name
@@ -30,7 +30,7 @@ defmodule Cinegraph.Workers.MaterializedViewRefreshSweeper do
         "skipped=#{inspect(skipped)} failed=#{inspect(Enum.map(failed, &elem(&1, 0)))}"
     )
 
-    # Healthy views are already refreshed (refresh_all! isolates per view, #1088). Surface any
+    # Healthy views are already refreshed (refresh_all isolates per view, #1088). Surface any
     # failure so it lands in oban_jobs.errors / AppSignal instead of a silent no-op discard —
     # one broken matview no longer starves the rest.
     case failed do

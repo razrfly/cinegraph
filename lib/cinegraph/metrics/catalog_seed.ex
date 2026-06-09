@@ -202,6 +202,12 @@ defmodule Cinegraph.Metrics.CatalogSeed do
   # ── financial (box_office) ─────────────────────────────────────────────────
   defp financial do
     [
+      # The three raw box-office codes are `is_available: false` (#1087): the ML data-point surface
+      # uses the box-office BAND one-hots instead (validated: clean per-list holdout win on 6 lists).
+      # This only removes them from `Trainer.data_point_codes/1`; the box_office LENS reads
+      # budget/revenue via `FeatureResolver` named inputs (not `is_available`), so lens scores are
+      # unchanged (only `lens_config_hash`'s fingerprint shifts — `:lens` models go stale, but the
+      # served prediction models are `:data_point`).
       def_(%{
         code: "tmdb_budget",
         name: "Production Budget",
@@ -212,7 +218,8 @@ defmodule Cinegraph.Metrics.CatalogSeed do
         normalization_type: "logarithmic",
         normalization_params: %{"threshold" => 500_000_000},
         raw_scale_min: 0.0,
-        source_reliability: 0.7
+        source_reliability: 0.7,
+        is_available: false
       }),
       def_(%{
         code: "tmdb_revenue_worldwide",
@@ -224,7 +231,8 @@ defmodule Cinegraph.Metrics.CatalogSeed do
         normalization_type: "logarithmic",
         normalization_params: %{"threshold" => 2_000_000_000},
         raw_scale_min: 0.0,
-        source_reliability: 0.7
+        source_reliability: 0.7,
+        is_available: false
       }),
       def_(%{
         code: "omdb_revenue_domestic",
@@ -237,7 +245,8 @@ defmodule Cinegraph.Metrics.CatalogSeed do
         normalization_params: %{"threshold" => 1_000_000_000},
         raw_scale_min: 0.0,
         source_reliability: 0.65,
-        weight_within_lens: 0.0
+        weight_within_lens: 0.0,
+        is_available: false
       })
     ]
   end
@@ -444,6 +453,7 @@ defmodule Cinegraph.Metrics.CatalogSeed do
         kind: "derived",
         derivation: "auteur_track_record"
       }),
+      # `is_available: false` (#1087): replaced on the ML surface by the ROI band one-hots (roi_*).
       def_(%{
         code: "box_office_roi",
         name: "Box Office ROI",
@@ -454,7 +464,8 @@ defmodule Cinegraph.Metrics.CatalogSeed do
         source_reliability: 0.7,
         kind: "derived",
         derivation: "box_office_roi",
-        weight_within_lens: 0.0
+        weight_within_lens: 0.0,
+        is_available: false
       }),
       def_(%{
         code: "festival_prestige",
@@ -552,9 +563,45 @@ defmodule Cinegraph.Metrics.CatalogSeed do
     end
   end
 
+  # Band (one-hot) features (#1087): each continuous signal binned so a list's model can learn a
+  # non-monotonic shape (inverted-U for criterion/cult). Codes + human names come straight from
+  # `DerivedFeatures.band_labels/0` (single source of truth). Catalogued `kind: "derived"` (bypasses
+  # the `custom`-normalization reject in the raw branch of `Trainer.data_point_codes/1`).
+  #
+  # The BOX-OFFICE band families (rev_ww/rev_dom/budget/roi) are `is_available: true` (#1087): a
+  # CLEAN per-list holdout test (raw-vs-band, backtest strategy held fixed) showed they raise the
+  # served recall@K on 6 lists (ss_critics 0.04→0.16, tspdt 0.076→0.121, criterion 0.156→0.188,
+  # letterboxd, ebert, cult) and are neutral on 1001/ss_directors — capturing the list-specific
+  # inverted-U a single monotonic feature can't. They REPLACE the four raw box-office codes
+  # (`is_available: false` in financial/0 + derived/0). (An earlier "regression" verdict was a
+  # `seed_flagships` strategy-auto-pick bug — temporal-with-1-positive vs static — not the bands.)
+  # The other band families (votes/popularity/rt/meta/ratings) stay gated until a clean holdout win.
+  @enabled_band_prefixes ~w(rev_ww rev_dom budget roi)
+
+  defp band_features do
+    enabled =
+      @enabled_band_prefixes
+      |> Enum.flat_map(&DerivedFeatures.band_codes_for/1)
+      |> MapSet.new()
+
+    Enum.map(DerivedFeatures.band_labels(), fn {code, name} ->
+      def_(%{
+        code: code,
+        name: name,
+        source_table: "derived",
+        normalization_type: "custom",
+        kind: "derived",
+        derivation: "band_feature",
+        source_reliability: 0.8,
+        is_available: MapSet.member?(enabled, code)
+      })
+    end)
+  end
+
   defp ml_only do
     missingness_indicators() ++
       categorical_features() ++
+      band_features() ++
       text_features() ++
       [
         # TMDb user/curated list appearances. ML-only (category nil) — a cultural-penetration

@@ -101,9 +101,12 @@ defmodule Cinegraph.Database.MaterializedViews do
   sweep and leaving every healthy view stale. `refresh!/2` itself still raises — isolation
   lives only in this aggregate.
 
+  No bang: per-view failures are returned as `{:error, _}` data, not raised. Callers must
+  inspect the result map to surface failures (see `MaterializedViewRefreshSweeper`).
+
   Accepts the same options as `refresh!/2`.
   """
-  def refresh_all!(opts \\ []) do
+  def refresh_all(opts \\ []) do
     Map.new(list_public(), fn name ->
       result =
         try do

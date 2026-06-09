@@ -210,7 +210,12 @@ defmodule CinegraphWeb.AlgorithmsLive.ShowComponents do
             {format_row_score(@film[:score])}
           </span>
         </div>
-        <div :if={@film[:prob_str]} class="text-[10.5px] text-mist-400 tabular-nums">
+        <%!-- The calibrated % is P(added to the list). It's meaningless for a film already ON the list,
+        so members show the ✓ pill + fit score only — never a "% likely to be added" (#1086/#1087). --%>
+        <div
+          :if={@film[:prob_str] && !@film[:member?]}
+          class="text-[10.5px] text-mist-400 tabular-nums"
+        >
           {@film.prob_str}
         </div>
       </div>
