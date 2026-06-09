@@ -33,7 +33,23 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
     |> Repo.insert!()
   end
 
-  defp omdb_row, do: Enum.find(SurfaceArea.report().sources, &(&1.source == "omdb"))
+  defp avail!(m, status) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    %Cinegraph.Movies.MovieAvailabilityRefresh{}
+    |> Cinegraph.Movies.MovieAvailabilityRefresh.changeset(%{
+      movie_id: m.id,
+      region: "US",
+      source: "tmdb",
+      status: status,
+      fetched_at: now,
+      stale_after: DateTime.add(now, 7, :day)
+    })
+    |> Repo.insert!()
+  end
+
+  defp row_for(source), do: Enum.find(SurfaceArea.report().sources, &(&1.source == source))
+  defp omdb_row, do: row_for("omdb")
 
   test "OMDb row partitions eligible into fetched / source_absent / needs_fetch" do
     # fetched
@@ -56,6 +72,47 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
     assert row.terminal_pct == 66.67
   end
 
+  test "watch_providers splits success / no_results / needs against the full+tmdb_id target" do
+    a = movie!(%{imdb_id: "tt_a", import_status: "full"})
+    avail!(a, "success")
+    b = movie!(%{imdb_id: "tt_b", import_status: "full"})
+    avail!(b, "no_results")
+    _c = movie!(%{imdb_id: "tt_c", import_status: "full"})
+
+    row = row_for("watch_providers")
+    assert row.eligible == 3
+    assert row.fetched == 1
+    assert row.source_absent == 1
+    assert row.needs_fetch == 1
+    assert row.target == 95.0
+  end
+
+  test "fetch rows carry homeostasis targets; biography defers to the substrate" do
+    assert omdb_row().target == 99.5
+    assert row_for("people_profile_path").target == 95.0
+    # biography → terminal once fetch_attempt tracking lands (S3), so no numeric target yet
+    assert row_for("people_biography").target == nil
+    # budget/revenue are derived/ceiling rows — no terminal%/target
+    assert row_for("tmdb_budget").kind == :derived
+    assert row_for("tmdb_budget").terminal_pct == nil
+  end
+
+  test "festival_person_link counts only person-tracked categories (film-only excluded)" do
+    # linked person-tracked nomination → fetched
+    linked = Cinegraph.FestivalFixtures.plant_nomination!(tracks_person: true)
+    linked.nom |> Ecto.Changeset.change(person_id: linked.person.id) |> Repo.update!()
+    # unlinked person-tracked (person_id nil by default) → eligible, not fetched
+    _unlinked = Cinegraph.FestivalFixtures.plant_nomination!(tracks_person: true)
+    # film-only category → must NOT count as a failed person link
+    _film_only = Cinegraph.FestivalFixtures.plant_nomination!(tracks_person: false)
+
+    row = row_for("festival_person_link")
+    assert row.eligible == 2
+    assert row.fetched == 1
+    assert row.needs_fetch == 1
+    assert row.target == 95.0
+  end
+
   test "computed/supplemental sources carry no coverage number" do
     sources = SurfaceArea.report().sources
     collab = Enum.find(sources, &(&1.source == "collaborations"))
@@ -72,8 +129,8 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
 
     # One row per §2 inventory family (#1090 §2) — keep in sync if a source is added.
     expected =
-      ~w(tmdb_details tmdb_metrics people_biography people_profile_path watch_providers
-         now_playing omdb rotten_tomatoes metacritic canonical_lists imdb_id
+      ~w(tmdb_details tmdb_metrics tmdb_budget tmdb_revenue people_biography people_profile_path
+         watch_providers now_playing omdb rotten_tomatoes metacritic canonical_lists imdb_id
          festival_person_link collaborations person_quality_scores stock_images wikidata)
 
     for s <- expected, do: assert(s in sources, "missing source row: #{s}")

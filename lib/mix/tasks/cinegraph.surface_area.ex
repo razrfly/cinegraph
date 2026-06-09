@@ -63,7 +63,8 @@ defmodule Mix.Tasks.Cinegraph.SurfaceArea do
         rpad("absent", 9),
         rpad("needs", 9),
         rpad("debt", 8),
-        rpad("terminal%", 10)
+        rpad("terminal%", 10),
+        rpad("target", 9)
       ]
       |> Enum.join("")
     )
@@ -79,7 +80,8 @@ defmodule Mix.Tasks.Cinegraph.SurfaceArea do
           rpad(num(r.source_absent), 9),
           rpad(num(r.needs_fetch), 9),
           rpad(num(r.materialization_debt), 8),
-          rpad(pct(r.terminal_pct), 10)
+          rpad(pct(r.terminal_pct), 10),
+          rpad(pct(r.target), 9)
         ]
         |> Enum.join("")
       )
