@@ -13,6 +13,7 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
       states: [:available, :scheduled, :executing, :retryable]
     ]
 
+  alias Cinegraph.Freshness
   alias Cinegraph.Movies.{Availability, Movie}
   alias Cinegraph.Repo
   alias Cinegraph.Services.TMDb
@@ -59,10 +60,22 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
         {:ok, payload} ->
           case Availability.store_tmdb_watch_providers(movie, payload, regions: regions) do
             {:ok, results} ->
+              # #1096 Phase B: dual-write the uniform ledger alongside
+              # movie_availability_refreshes (the per-region prototype).
+              Freshness.touch("movie", movie.id, "watch_providers", :ok,
+                base_date: movie.release_date
+              )
+
               {:ok, %{status: "refreshed", movie_id: movie.id, results: results}}
 
             {:error, reason} ->
               Availability.record_availability_error(movie, regions, reason)
+
+              Freshness.touch("movie", movie.id, "watch_providers", :error,
+                base_date: movie.release_date,
+                error_reason: inspect(reason)
+              )
+
               {:ok, %{status: "error", movie_id: movie.id, reason: reason}}
           end
 
@@ -71,6 +84,11 @@ defmodule Cinegraph.Workers.MovieAvailabilityRefreshWorker do
 
           Logger.warning(
             "MovieAvailabilityRefreshWorker: movie_id=#{movie.id} error=#{inspect(reason)}"
+          )
+
+          Freshness.touch("movie", movie.id, "watch_providers", :error,
+            base_date: movie.release_date,
+            error_reason: inspect(reason)
           )
 
           {:ok, %{status: "error", movie_id: movie.id, reason: reason}}

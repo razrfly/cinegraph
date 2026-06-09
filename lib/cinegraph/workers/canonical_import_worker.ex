@@ -151,6 +151,10 @@ defmodule Cinegraph.Workers.CanonicalImportWorker do
           total_imports: (list.total_imports || 0) + 1
         })
 
+        # #1096 Phase B (expansion tier): record list freshness uniformly.
+        fresh_status = if status in ["failed", "error"], do: :error, else: :ok
+        Cinegraph.Freshness.touch("list", list.id, "imdb_list", fresh_status)
+
         status
     end
   end
@@ -175,6 +179,7 @@ defmodule Cinegraph.Workers.CanonicalImportWorker do
           total_imports: (list.total_imports || 0) + 1
         })
 
+        Cinegraph.Freshness.touch("list", list.id, "imdb_list", :error)
         :ok
     end
   end

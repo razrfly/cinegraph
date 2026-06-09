@@ -11,6 +11,22 @@ defmodule Cinegraph.People do
   alias Cinegraph.Metrics.PersonMetric
 
   @doc """
+  The release date of the person's most recent movie credit, or `nil` if they
+  have no dated credits. Used as the age-tier `base_date` for the `tmdb_person`
+  freshness strategy (#1096 Phase B) — a person whose latest work is recent
+  refreshes more often than one whose career ended decades ago.
+  """
+  def latest_credit_date(person_id) do
+    Repo.replica().one(
+      from c in Credit,
+        join: m in Movie,
+        on: m.id == c.movie_id,
+        where: c.person_id == ^person_id and not is_nil(m.release_date),
+        select: max(m.release_date)
+    )
+  end
+
+  @doc """
   Returns the list of people with optional pagination, filtering, and sorting.
   """
   def list_people(params \\ %{}) do

@@ -14,6 +14,7 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
 
   alias Cinegraph.Metrics
   alias Cinegraph.ApiProcessors.OMDb
+  alias Cinegraph.Freshness
   require Logger
 
   @impl Oban.Worker
@@ -35,6 +36,11 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
     case OMDb.process_movie(movie_id, force_refresh: force) do
       {:ok, updated_movie} ->
         Logger.info("Successfully enriched movie #{movie_id} with OMDb data")
+        # #1096 Phase B: record freshness uniformly (additive — values still in omdb_data).
+        Freshness.touch("movie", updated_movie.id, "omdb", :ok,
+          base_date: updated_movie.release_date
+        )
+
         {:ok, updated_movie}
 
       {:error, :movie_not_found} ->
@@ -43,6 +49,8 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
 
       {:error, :invalid_imdb_id} ->
         Logger.info("Invalid IMDb ID for movie #{movie_id}, skipping")
+        # No usable IMDb ID → OMDb can never resolve it (precondition-ineligible, #1010 §6).
+        Freshness.touch("movie", movie_id, "omdb", :ineligible)
         :ok
 
       {:error, :rate_limited} ->
@@ -56,6 +64,8 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
       when reason in ["Error getting data.", "Incorrect IMDb ID.", "Movie not found!"] ->
         Logger.info("OMDb unavailable for movie #{movie_id} (#{reason}), recording fetch attempt")
         record_fetch_attempt(movie_id, reason)
+        # Source had nothing → :empty (the empty-multiplier TTL subsumes the 90-day cooldown).
+        Freshness.touch("movie", movie_id, "omdb", :empty, error_reason: reason)
         :ok
 
       {:error, %Jason.DecodeError{}} ->
@@ -64,10 +74,12 @@ defmodule Cinegraph.Workers.OMDbEnrichmentWorker do
         )
 
         record_fetch_attempt(movie_id, "malformed_response")
+        Freshness.touch("movie", movie_id, "omdb", :empty, error_reason: "malformed_response")
         :ok
 
       {:error, reason} ->
         Logger.error("Failed to enrich movie #{movie_id} with OMDb: #{inspect(reason)}")
+        Freshness.touch("movie", movie_id, "omdb", :error, error_reason: inspect(reason))
         {:error, reason}
     end
   end
