@@ -72,27 +72,15 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
   exactly the same set the sweeper would enqueue.
   """
   def eligible_ids(opts \\ []) do
-    # #1053 "needs fetch" predicate: no stored blob (omdb_data IS NULL), a usable
-    # imdb_id (OMDb requires one), and no recent fetch_attempt (90-day cooldown so
-    # source-absent movies don't churn). NOTE: this intentionally does NOT key on
-    # the presence of a source='omdb' external_metrics row — see the moduledoc.
-    cutoff = DateTime.add(DateTime.utc_now(), -90 * 24 * 3600, :second)
-
     base =
-      from m in "movies",
-        where:
-          is_nil(m.omdb_data) and
-            not is_nil(m.imdb_id) and m.imdb_id != "" and
-            not fragment(
-              "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb' AND em.metric_type = 'fetch_attempt' AND em.fetched_at > ?)",
-              m.id,
-              ^cutoff
-            ),
-        order_by: [
-          desc: fragment("? != '{}'::jsonb", m.canonical_sources),
-          desc: m.id
-        ],
-        select: m.id
+      "movies"
+      |> needs_fetch()
+      |> where([m], not is_nil(m.imdb_id) and m.imdb_id != "")
+      |> order_by([m],
+        desc: fragment("? != '{}'::jsonb", m.canonical_sources),
+        desc: m.id
+      )
+      |> select([m], m.id)
 
     # Optional id-set scoping (#1051 Stage A2) — restrict to e.g. the candidate universe.
     scoped =
@@ -115,6 +103,31 @@ defmodule Cinegraph.Maintenance.BackfillOmdb do
       end
 
     Repo.replica().all(capped)
+  end
+
+  @doc """
+  The #1053 OMDb **needs-fetch** predicate as a composable query, so every caller agrees on
+  one definition of "not yet resolved" (this is the shared source of truth for `eligible_ids/1`,
+  `Cinegraph.Health.Drift.Movies.missing_omdb/1`, and `Cinegraph.Health.SurfaceArea`).
+
+  Adds, to `queryable` (default the `"movies"` table): no stored blob (`omdb_data IS NULL`) AND
+  no recent `omdb`/`fetch_attempt` marker (90-day cooldown so source-absent movies don't churn).
+  It deliberately does NOT key on a `source='omdb'` row — a sparse OMDb response yields only an
+  `imdb` row and no `omdb` row (see the moduledoc). Pass `:cooldown_seconds` to override the
+  90-day window.
+  """
+  def needs_fetch(queryable \\ "movies", opts \\ []) do
+    cooldown = Keyword.get(opts, :cooldown_seconds, 90 * 24 * 3600)
+    cutoff = DateTime.add(DateTime.utc_now(), -cooldown, :second)
+
+    from m in queryable,
+      where:
+        is_nil(m.omdb_data) and
+          not fragment(
+            "EXISTS (SELECT 1 FROM external_metrics em WHERE em.movie_id = ? AND em.source = 'omdb' AND em.metric_type = 'fetch_attempt' AND em.fetched_at > ?)",
+            m.id,
+            ^cutoff
+          )
   end
 
   # Per-job inserts so the worker's :unique config is honoured —
