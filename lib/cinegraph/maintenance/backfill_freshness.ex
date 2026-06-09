@@ -30,6 +30,9 @@ defmodule Cinegraph.Maintenance.BackfillFreshness do
   @sources [:tmdb_details, :omdb, :watch_providers, :tmdb_person, :festivals, :lists]
   @chunk 10_000
   @sleep_ms 50
+  # Postgres caps a statement at 65_535 bind params; each row binds 8 columns.
+  # Keep insert sub-batches well under that (4_000 × 8 = 32_000).
+  @max_insert_rows 4_000
 
   def run(opts \\ []) do
     only = Keyword.get(opts, :only, @sources)
@@ -286,23 +289,41 @@ defmodule Cinegraph.Maintenance.BackfillFreshness do
   end
 
   # Insert one chunk's builder output; ON CONFLICT DO NOTHING makes it idempotent.
+  #
+  # `:min_id`/`:max_id` bound the id window so the heavy sources (omdb ~640k,
+  # tmdb_details ~1.1M) can be backfilled in segments — a single full-table eval
+  # OOM/timeout-kills the constrained prod box (hit 2026-06-09). Segmenting keeps
+  # each run short and low-memory; ON CONFLICT makes segments overlap-safe.
   defp chunk(max_id, opts, builder) do
     step = Keyword.get(opts, :chunk, @chunk)
     sleep = Keyword.get(opts, :sleep_ms, @sleep_ms)
+    lo_start = Keyword.get(opts, :min_id, 0)
+    hi_end = min(max_id, Keyword.get(opts, :max_id) || max_id)
 
-    Enum.reduce(0..max_id//step, 0, fn lo, acc ->
-      rows = builder.(lo, lo + step)
-      inserted = insert_batch(rows)
-      if sleep > 0 and rows != [], do: Process.sleep(sleep)
-      acc + inserted
-    end)
+    if lo_start > hi_end do
+      0
+    else
+      Enum.reduce(lo_start..hi_end//step, 0, fn lo, acc ->
+        rows = builder.(lo, lo + step)
+        inserted = insert_batch(rows)
+        if sleep > 0 and rows != [], do: Process.sleep(sleep)
+        acc + inserted
+      end)
+    end
   end
 
   defp insert_batch([]), do: 0
 
+  # Sub-batch so we never exceed Postgres's 65_535 bind-parameter cap: each row
+  # binds 8 columns, so a full 10k id-chunk would be 80k params and blow up
+  # (hit on prod 2026-06-09). @max_insert_rows × 8 = 32k params, safely under.
   defp insert_batch(rows) do
-    {count, _} = Repo.insert_all("data_refreshes", rows, on_conflict: :nothing)
-    count
+    rows
+    |> Enum.chunk_every(@max_insert_rows)
+    |> Enum.reduce(0, fn batch, acc ->
+      {count, _} = Repo.insert_all("data_refreshes", batch, on_conflict: :nothing)
+      acc + count
+    end)
   end
 
   # table names here are this module's own literals (not user input)

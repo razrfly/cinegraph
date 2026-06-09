@@ -328,7 +328,21 @@ import_config "clerk.exs"
 config :appsignal, :config,
   otp_app: :cinegraph,
   name: "cinegraph",
-  env: config_env()
+  env: config_env(),
+  # Oban errors are captured via Honeybadger.Plug (router.ex:3) — nothing lost. ~54.5% of volume.
+  ignore_namespaces: ["oban"],
+  ignore_actions: [
+    "CinegraphWeb.HealthController#index",
+    "CinegraphWeb.HealthController#database",
+    "CinegraphWeb.HealthController#metrics",
+    "CinegraphWeb.PageController#redirect_to_movies",
+    "CinegraphWeb.PageController#manifesto",
+    "CinegraphWeb.SitemapController#index",
+    "CinegraphWeb.SitemapController#show"
+  ]
+
+# AppSignal request sampler (#1100). Off by default; prod overrides in prod.exs.
+config :cinegraph, CinegraphWeb.Plugs.AppsignalSampler, enabled: false, sample_rate: 1.0
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

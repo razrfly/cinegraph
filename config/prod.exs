@@ -8,6 +8,10 @@ import Config
 # Kept fresh by the daily MaterializedViewRefreshSweeper + explicit refreshes.
 config :cinegraph, :metric_values_relation, "metric_values_matview"
 
+# AppSignal request sampler (#1100). Start at 1.0 (pass-through) to read the clean
+# bot-filtered floor, then lower to land web ≤ ~7,500/day (Starter headroom).
+config :cinegraph, CinegraphWeb.Plugs.AppsignalSampler, enabled: true, sample_rate: 1.0
+
 # which you should run after static files are built and
 # before starting your production server.
 config :cinegraph, CinegraphWeb.Endpoint,

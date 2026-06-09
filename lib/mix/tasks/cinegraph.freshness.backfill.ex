@@ -22,7 +22,13 @@ defmodule Mix.Tasks.Cinegraph.Freshness.Backfill do
   def run(args) do
     {opts, _, _} =
       OptionParser.parse(args,
-        strict: [only: :string, chunk: :integer, sleep: :integer]
+        strict: [
+          only: :string,
+          chunk: :integer,
+          sleep: :integer,
+          min_id: :integer,
+          max_id: :integer
+        ]
       )
 
     Mix.Task.run("app.start")
@@ -32,6 +38,8 @@ defmodule Mix.Tasks.Cinegraph.Freshness.Backfill do
       |> put_only(opts[:only])
       |> maybe_put(:chunk, opts[:chunk])
       |> maybe_put(:sleep_ms, opts[:sleep])
+      |> maybe_put(:min_id, opts[:min_id])
+      |> maybe_put(:max_id, opts[:max_id])
 
     {:ok, results} = BackfillFreshness.run(run_opts)
 
