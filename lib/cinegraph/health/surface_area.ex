@@ -44,11 +44,22 @@ defmodule Cinegraph.Health.SurfaceArea do
         # §2 #4, #5 — availability + theatrical
         watch_providers_row(),
         now_playing_row(),
+        # §2 #2 (cont.) — TMDb budget/revenue (thin at source; their own rows per review)
+        derived_metric_row("tmdb_budget", "tmdb", "budget", fn n ->
+          "#{n} materialized; ~77.8k present in TMDb (≈8.9k recoverable debt), rest source-absent"
+        end),
+        derived_metric_row("tmdb_revenue", "tmdb", "revenue_worldwide", fn n ->
+          "#{n} materialized; ~26.2k present in TMDb (≈done), rest source-absent"
+        end),
         # §2 #6 — OMDb (flagship)
         omdb_row(),
         # §2 #7, #8 — RT + Metacritic (OMDb-derived)
-        derived_metric_row("rotten_tomatoes", "tomatometer"),
-        derived_metric_row("metacritic", "metascore"),
+        derived_metric_row("rotten_tomatoes", "rotten_tomatoes", "tomatometer", fn n ->
+          "via OMDb; #{n} movies have a tomatometer — low coverage is source-absence, not a backlog"
+        end),
+        derived_metric_row("metacritic", "metacritic", "metascore", fn n ->
+          "via OMDb; #{n} movies have a metascore — low coverage is source-absence, not a backlog"
+        end),
         # §2 #9, #10 — canonical lists + IMDb-ID coverage
         canonical_lists_row(),
         imdb_id_row(),
@@ -89,6 +100,7 @@ defmodule Cinegraph.Health.SurfaceArea do
 
     fetch_row("omdb", eligible, fetched, source_absent, needs_fetch,
       debt: debt,
+      target: 99.5,
       note: "ceiling: only IMDb-ID-bearing movies are eligible (#1090 — TMDb long tail has none)"
     )
   end
@@ -115,8 +127,11 @@ defmodule Cinegraph.Health.SurfaceArea do
         )
       ) || 0
 
-    fetch_row("tmdb_metrics", eligible, fetched, nil, max(eligible - fetched, 0),
-      note: "any tmdb metric; budget/revenue specifically are thin (§2)"
+    # The gap is source-absent (voteless films): a one-time scan found only ~205 of the ~230k
+    # "missing" have a vote_count to derive from. So treat the gap as source-absent → ~terminal.
+    fetch_row("tmdb_metrics", eligible, fetched, max(eligible - fetched, 0), 0,
+      note:
+        "gap is voteless films (source-absent; one-time scan: only ~205 derivable) → ~terminal"
     )
   end
 
@@ -126,7 +141,10 @@ defmodule Cinegraph.Health.SurfaceArea do
   end
 
   # ── RT / Metacritic (§2 #7/#8) — OMDb-derived; low coverage is source-absence ──────
-  defp derived_metric_row(source, metric_type) do
+  # A derived/informational row: just the materialized-row count + a characterization note.
+  # No terminal% — these are source-absent-dominated (OMDb-derived RT/Metacritic, TMDb-thin
+  # budget/revenue), so a coverage % would imply a backlog that doesn't exist.
+  defp derived_metric_row(label, source, metric_type, note_fn) do
     have =
       Repo.replica().one(
         from(e in "external_metrics",
@@ -136,7 +154,7 @@ defmodule Cinegraph.Health.SurfaceArea do
       ) || 0
 
     %{
-      source: source,
+      source: label,
       kind: :derived,
       eligible: nil,
       fetched: have,
@@ -144,13 +162,15 @@ defmodule Cinegraph.Health.SurfaceArea do
       needs_fetch: nil,
       materialization_debt: nil,
       terminal_pct: nil,
-      note:
-        "via OMDb; #{have} movies have a #{metric_type} — low coverage is source-absence, not a backlog"
+      target: nil,
+      note: note_fn.(have)
     }
   end
 
   # ── IMDb-ID coverage (§2 #10) — the OMDb-eligibility ceiling ──────────────────────
   defp imdb_id_row do
+    # Denominator PINNED to all movies (1.16M) for dashboard self-consistency. This is a
+    # structural ceiling (TMDb returns null for the long tail) — no target, not a backlog.
     eligible = count(from(m in "movies"))
     fetched = count(from m in "movies", where: not is_nil(m.imdb_id) and m.imdb_id != "")
 
@@ -179,33 +199,82 @@ defmodule Cinegraph.Health.SurfaceArea do
           select: count(p.id, :distinct)
       ) || 0
 
+    # biography → "terminal post-substrate" (needs fetch_attempt tracking, S3) so no numeric
+    # target yet; profile is essentially done → 95.
+    target = if field == :profile_path, do: 95.0, else: nil
+
     fetch_row(label, eligible, fetched, nil, max(eligible - fetched, 0),
-      note: "canonical-scoped (people credited on a canonical-list movie)"
+      target: target,
+      note:
+        "canonical-scoped (credited on a canonical-list movie)" <>
+          if(field == :biography,
+            do: " — target: terminal once fetch_attempt tracking lands (S3)",
+            else: ""
+          )
     )
   end
 
   # ── Festival nomination → person linkage (#873) ───────────────────────────────────
+  # Scoped to person-TRACKED categories only (join festival_categories, tracks_person=true) —
+  # film-only categories (Best Picture, etc.) have no person nominee and must not count as a
+  # failed link. Matches Drift.People.person_required_nomination_missing_person + AwardPersonLinkage.
   defp festival_person_link_row do
-    eligible = count(from(n in "festival_nominations"))
-    fetched = count(from n in "festival_nominations", where: not is_nil(n.person_id))
+    base =
+      from n in "festival_nominations",
+        join: c in "festival_categories",
+        on: n.category_id == c.id,
+        where: c.tracks_person == true
+
+    eligible = count_query(base)
+    fetched = count_query(where(base, [n, _c], not is_nil(n.person_id)))
 
     fetch_row("festival_person_link", eligible, fetched, nil, max(eligible - fetched, 0),
-      note: "person_id linkage (#873)"
+      target: 95.0,
+      note:
+        "person-tracked categories only (#873) — gap is ~100% empty-payload (resolver recovers 0); needs reimport, not resolution"
     )
   end
 
   # ── Watch providers (has its own freshness ledger) ────────────────────────────────
+  # Eligible = the AvailabilityRefreshSweeper's actual target (full + tmdb_id). status semantics:
+  # success = have providers (fetched); no_results = source-absent; error = unresolved. The 914k
+  # target is deliberate (#1096 decision) — most of it is the long tail, so this is a genuine
+  # cap-bound backlog, not a denominator artifact; canonical is the high-value subset.
   defp watch_providers_row do
-    eligible = count(from m in "movies", where: m.import_status == "full")
+    eligible =
+      count(from m in "movies", where: m.import_status == "full" and not is_nil(m.tmdb_id))
 
-    fetched =
+    success = avail_movies(["success"])
+    resolved = avail_movies(["success", "no_results"])
+    source_absent = max(resolved - success, 0)
+    needs = max(eligible - resolved, 0)
+
+    canon_total = Scopes.canonical_movies_count()
+
+    canon_success =
       Repo.replica().one(
-        from(r in "movie_availability_refreshes", select: count(r.movie_id, :distinct))
+        from r in "movie_availability_refreshes",
+          join: m in "movies",
+          on: m.id == r.movie_id,
+          where: r.status == "success" and fragment("? != '{}'::jsonb", m.canonical_sources),
+          select: count(r.movie_id, :distinct)
       ) || 0
 
-    fetch_row("watch_providers", eligible, fetched, nil, max(eligible - fetched, 0),
-      note: "freshness ledger: movie_availability_refreshes (the #1010 prototype)"
+    canon_pct = if canon_total > 0, do: Float.round(canon_success * 100 / canon_total, 1)
+
+    fetch_row("watch_providers", eligible, success, source_absent, needs,
+      target: 95.0,
+      note:
+        "sweeper targets all full+tmdb_id; ~#{needs} unattempted at 5k/day — cap is the bottleneck (#760); canonical subset #{canon_pct}%"
     )
+  end
+
+  defp avail_movies(statuses) do
+    Repo.replica().one(
+      from r in "movie_availability_refreshes",
+        where: r.status in ^statuses,
+        select: count(r.movie_id, :distinct)
+    ) || 0
   end
 
   # ── Canonical lists (list-level coverage, different shape) ─────────────────────────
@@ -248,6 +317,7 @@ defmodule Cinegraph.Health.SurfaceArea do
       needs_fetch: needs_fetch,
       materialization_debt: Keyword.get(opts, :debt),
       terminal_pct: terminal,
+      target: Keyword.get(opts, :target),
       note: Keyword.get(opts, :note)
     }
   end
@@ -265,6 +335,7 @@ defmodule Cinegraph.Health.SurfaceArea do
       needs_fetch: nil,
       materialization_debt: nil,
       terminal_pct: nil,
+      target: nil,
       note: note
     }
   end
