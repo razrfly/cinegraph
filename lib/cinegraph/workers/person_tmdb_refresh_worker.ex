@@ -15,7 +15,7 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorker do
     max_attempts: 3,
     unique: [fields: [:args], keys: [:person_id], period: 3600]
 
-  alias Cinegraph.{Movies, Repo}
+  alias Cinegraph.{Freshness, Movies, People, Repo}
   alias Cinegraph.Movies.Person
 
   require Logger
@@ -40,14 +40,25 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorker do
         {:cancel, :person_not_found}
 
       person ->
+        # #1096 Phase B: age-tier by the person's most recent credit. This is the
+        # tracking that lets the biography backlog reach a terminal state instead of
+        # churning (today people have 0 fetch_attempt rows) — Phase C consumes it.
+        base_date = People.latest_credit_date(person.id)
+
         case Movies.fetch_and_update_person(person.tmdb_id) do
           {:ok, updated} ->
             Logger.info("PersonTmdbRefreshWorker refreshed person #{person.id}")
+            Freshness.touch("person", person.id, "tmdb_person", :ok, base_date: base_date)
             {:ok, updated}
 
           {:error, reason} ->
             Logger.error(
               "PersonTmdbRefreshWorker failed for person #{person.id}: #{inspect(reason)}"
+            )
+
+            Freshness.touch("person", person.id, "tmdb_person", :error,
+              base_date: base_date,
+              error_reason: inspect(reason)
             )
 
             {:error, reason}

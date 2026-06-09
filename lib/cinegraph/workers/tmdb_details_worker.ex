@@ -8,7 +8,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     max_attempts: 5,
     unique: [fields: [:args], keys: [:tmdb_id, :imdb_id, :source_key], period: 300]
 
-  alias Cinegraph.{Repo, Movies}
+  alias Cinegraph.{Freshness, Movies, Repo}
   alias Cinegraph.Workers.OMDbEnrichmentWorker
   alias Cinegraph.Imports.QualityFilter
   alias Cinegraph.Services.TMDb
@@ -143,6 +143,9 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     case Movies.fetch_and_store_movie_comprehensive(tmdb_id) do
       {:ok, movie} ->
         Logger.info("Successfully fully imported movie: #{movie.title} (#{movie.tmdb_id})")
+        # #1096 Phase B: first freshness signal for TMDb details (previously one-shot,
+        # grade-D in the §4b provenance audit).
+        Freshness.touch("movie", movie.id, "tmdb_details", :ok, base_date: movie.release_date)
 
         enrichment_queued =
           if movie.imdb_id do
@@ -183,6 +186,7 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     case Movies.create_soft_import_movie(movie_data) do
       {:ok, movie} ->
         Logger.info("Successfully soft imported movie: #{movie.title} (#{movie.tmdb_id})")
+        Freshness.touch("movie", movie.id, "tmdb_details", :ok, base_date: movie.release_date)
 
         # Update job metadata with soft import details
         update_job_meta(job, %{

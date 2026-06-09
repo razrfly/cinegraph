@@ -28,6 +28,8 @@ defmodule Cinegraph.Workers.UnifiedFestivalWorker do
          {:ok, ceremony} <- create_or_update_ceremony(organization, year, festival_data),
          {:ok, _discovery_job} <- queue_festival_discovery_job(ceremony) do
       Logger.info("Successfully imported #{festival} #{year} ceremony and queued discovery job")
+      # #1096 Phase B (expansion tier): record ceremony freshness uniformly.
+      Cinegraph.Freshness.touch("festival_event", ceremony.id, "year_discovery", :ok)
       :ok
     else
       # HTTP 404 means the page doesn't exist on IMDb - don't retry, just cancel
