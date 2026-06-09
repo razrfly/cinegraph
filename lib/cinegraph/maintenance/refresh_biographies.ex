@@ -40,6 +40,11 @@ defmodule Cinegraph.Maintenance.RefreshBiographies do
              dry_run: boolean()
            }}
   def run(opts \\ []) when is_list(opts) do
+    # Bind Elixir UTC time (not Postgres now()) so the staleness comparison is
+    # timezone-safe against the :utc_datetime column — the 1h error-backoff window
+    # is small enough to be flipped by a non-UTC session timezone (#1101 WS1).
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
     base =
       from p in "people",
         join: mc in "movie_credits",
@@ -49,7 +54,12 @@ defmodule Cinegraph.Maintenance.RefreshBiographies do
         where:
           (is_nil(p.biography) or p.biography == "") and
             fragment("? != '{}'::jsonb", m.canonical_sources) and
-            not is_nil(p.tmdb_id),
+            not is_nil(p.tmdb_id) and
+            fragment(
+              "NOT EXISTS (SELECT 1 FROM data_refreshes dr WHERE dr.entity_type = 'person' AND dr.entity_id = ? AND dr.source = 'tmdb_person' AND (dr.status = 'ineligible' OR (dr.status IN ('ok','empty','error','pending') AND dr.stale_after > ?)))",
+              p.id,
+              ^now
+            ),
         distinct: p.id,
         order_by: [asc: p.id],
         select: p.id

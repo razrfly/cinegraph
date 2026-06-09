@@ -304,7 +304,10 @@ defmodule Cinegraph.Maintenance.BackfillFreshness do
       0
     else
       Enum.reduce(lo_start..hi_end//step, 0, fn lo, acc ->
-        rows = builder.(lo, lo + step)
+        # windows are half-open (id >= lo and id < hi); cap at hi_end + 1 so the
+        # final chunk never reaches past the bounded max (would overshoot by ~step)
+        hi = min(lo + step, hi_end + 1)
+        rows = builder.(lo, hi)
         inserted = insert_batch(rows)
         if sleep > 0 and rows != [], do: Process.sleep(sleep)
         acc + inserted

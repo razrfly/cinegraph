@@ -577,7 +577,9 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
     {nominee_name, person_imdb_ids, people_list}
   end
 
-  defp create_nomination(movie, nominee, category, ceremony) do
+  @doc false
+  # Public for regression testing (#1101 WS3 backfill branch); internal otherwise.
+  def create_nomination(movie, nominee, category, ceremony) do
     is_winner = nominee["winner"] || nominee[:winner] || false
     {nominee_name, person_imdb_ids, people_list} = extract_nominee_person_data(nominee)
 
@@ -625,8 +627,18 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
         "Nomination already exists for #{movie.title} in #{category.name} (found #{existing_count})"
       )
 
-      # Backfill: patch any NULL person_id rows if we resolved one now.
-      if not is_nil(person_id) do
+      # Backfill any NULL-person_id rows (#1101 WS3). Two cases:
+      #   1. We resolved a person_id now → patch person_id + fresh details.
+      #   2. We didn't resolve, but the FRESH scrape carries nominee data → still
+      #      patch details, so the ~10k OLD empty-payload rows (written before the
+      #      #873 shape fix) get repopulated and a later resolver pass can work.
+      #      (Previously details were only patched when person_id resolved, so a
+      #      resolution miss left the empty rows empty forever.)
+      fresh_payload? =
+        person_imdb_ids != [] or (is_binary(nominee_name) and nominee_name != "") or
+          people_list != []
+
+      null_person_rows =
         from(n in FestivalNomination,
           where:
             n.ceremony_id == ^ceremony.id and
@@ -634,7 +646,16 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorker do
               n.movie_id == ^movie.id and
               is_nil(n.person_id)
         )
-        |> Repo.update_all(set: [person_id: person_id, details: attrs.details])
+
+      cond do
+        not is_nil(person_id) ->
+          Repo.update_all(null_person_rows, set: [person_id: person_id, details: attrs.details])
+
+        fresh_payload? ->
+          Repo.update_all(null_person_rows, set: [details: attrs.details])
+
+        true ->
+          :noop
       end
 
       %{action: :existing, movie_id: movie.id, title: movie.title}

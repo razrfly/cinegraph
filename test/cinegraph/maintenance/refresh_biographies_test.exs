@@ -100,10 +100,79 @@ defmodule Cinegraph.Maintenance.RefreshBiographiesTest do
 
       assert {:ok, %{found: 2, enqueued: 2}} = RefreshBiographies.run(limit: 2)
     end
+  end
+
+  describe "ledger-consume — stops churning already-attempted people (#1101 WS1)" do
+    test "skips a person with a fresh tmdb_person ledger row; includes past-due and never-attempted" do
+      now = DateTime.utc_now()
+
+      %{person: skipped} = plant_canonical_person_missing_bio!()
+      ledger_row!(skipped.id, "ok", DateTime.add(now, 86_400, :second))
+
+      %{person: due} = plant_canonical_person_missing_bio!()
+      ledger_row!(due.id, "ok", DateTime.add(now, -86_400, :second))
+
+      # never-attempted (no ledger row)
+      plant_canonical_person_missing_bio!()
+
+      # 3 planted; the fresh-ledger one is skipped → 2 found (past-due + never-attempted)
+      assert {:ok, %{found: 2}} = RefreshBiographies.run(dry_run: true)
+    end
+
+    test "skips an ineligible person regardless of stale_after" do
+      %{person: inelig} = plant_canonical_person_missing_bio!()
+      ledger_row!(inelig.id, "ineligible", nil)
+
+      assert {:ok, %{found: 0}} = RefreshBiographies.run(dry_run: true)
+    end
+
+    test "respects error backoff — skips a person still backing off, retries one past backoff" do
+      now = DateTime.utc_now()
+
+      %{person: backing_off} = plant_canonical_person_missing_bio!()
+      ledger_row!(backing_off.id, "error", DateTime.add(now, 3600, :second))
+
+      %{person: retryable} = plant_canonical_person_missing_bio!()
+      ledger_row!(retryable.id, "error", DateTime.add(now, -3600, :second))
+
+      # only the past-backoff error is retried
+      assert {:ok, %{found: 1}} = RefreshBiographies.run(dry_run: true)
+    end
+
+    test "skips a fresh 'pending' ledger row; retries a past-due one (#1101 WS1)" do
+      now = DateTime.utc_now()
+
+      # a backfill reservation still in its window — not yet due, so skip it
+      %{person: pending_fresh} = plant_canonical_person_missing_bio!()
+      ledger_row!(pending_fresh.id, "pending", DateTime.add(now, 3600, :second))
+
+      # a pending row whose window has elapsed (the backfill marks these due now) → retry
+      %{person: pending_due} = plant_canonical_person_missing_bio!()
+      ledger_row!(pending_due.id, "pending", DateTime.add(now, -3600, :second))
+
+      assert {:ok, %{found: 1}} = RefreshBiographies.run(dry_run: true)
+    end
 
     test "raises ArgumentError for non-positive :limit" do
       assert_raise ArgumentError, fn -> RefreshBiographies.run(limit: 0) end
     end
+  end
+
+  defp ledger_row!(person_id, status, stale_after) do
+    stale_after = stale_after && DateTime.truncate(stale_after, :second)
+    # keep fetched_at < stale_after to satisfy the temporal validation
+    fetched_at = stale_after && DateTime.add(stale_after, -7 * 86_400, :second)
+
+    %Cinegraph.Freshness.DataRefresh{}
+    |> Cinegraph.Freshness.DataRefresh.changeset(%{
+      entity_type: "person",
+      entity_id: person_id,
+      source: "tmdb_person",
+      status: status,
+      stale_after: stale_after,
+      fetched_at: fetched_at
+    })
+    |> Repo.insert!()
   end
 
   defp refresh_job_count do

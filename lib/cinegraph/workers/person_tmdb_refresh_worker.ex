@@ -48,7 +48,13 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorker do
         case Movies.fetch_and_update_person(person.tmdb_id) do
           {:ok, updated} ->
             Logger.info("PersonTmdbRefreshWorker refreshed person #{person.id}")
-            Freshness.touch("person", person.id, "tmdb_person", :ok, base_date: base_date)
+            # #1101 WS1: mark source-absent when TMDb's person record is genuinely
+            # sparse (no bio AND no photo AND no department) so the bio/profile
+            # sweepers stop churning. A fetched record with *any* field is :ok —
+            # the sweepers skip both via the ledger; "fetched-but-blank" is the
+            # terminal source-absent state the surface-area report counts as done.
+            status = if sparse_person?(updated), do: :empty, else: :ok
+            Freshness.touch("person", person.id, "tmdb_person", status, base_date: base_date)
             {:ok, updated}
 
           {:error, reason} ->
@@ -65,4 +71,23 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorker do
         end
     end
   end
+
+  @doc false
+  # A TMDb person record we consider source-absent: no biography, no profile
+  # photo, and no known-for department. Drives the `:empty` vs `:ok` ledger status
+  # so the bio/profile sweepers don't keep re-fetching a person TMDb has nothing
+  # for (#1101 WS1). Public for unit testing the status decision without a network
+  # fetch. (Whole-person-source model: tmdb_person covers bio+profile+known_for,
+  # so we only mark source-absent when ALL are blank — a photo-having-but-bio-less
+  # person is still `:ok`; "fetched-but-bio-blank" is captured by the ledger row's
+  # existence, which the surface-area report counts as terminal.)
+  def sparse_person?(person) do
+    blank?(Map.get(person, :biography)) and
+      blank?(Map.get(person, :profile_path)) and
+      blank?(Map.get(person, :known_for_department))
+  end
+
+  defp blank?(nil), do: true
+  defp blank?(s) when is_binary(s), do: String.trim(s) == ""
+  defp blank?(_), do: false
 end

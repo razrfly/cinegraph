@@ -199,18 +199,33 @@ defmodule Cinegraph.Health.SurfaceArea do
           select: count(p.id, :distinct)
       ) || 0
 
-    # biography → "terminal post-substrate" (needs fetch_attempt tracking, S3) so no numeric
-    # target yet; profile is essentially done → 95.
-    target = if field == :profile_path, do: 95.0, else: nil
+    # #1101 WS1: a canonical person whose field is still blank but who HAS a
+    # `tmdb_person` ledger attempt (ok/empty/ineligible) is source-absent — TMDb
+    # has nothing for them. Counts as terminal so biography converges instead of
+    # reading as a permanent backlog.
+    source_absent =
+      Repo.replica().one(
+        from p in "people",
+          join: mc in "movie_credits",
+          on: mc.person_id == p.id,
+          join: m in "movies",
+          on: m.id == mc.movie_id,
+          where: fragment("? != '{}'::jsonb", m.canonical_sources),
+          where: is_nil(field(p, ^field)) or field(p, ^field) == "",
+          where:
+            fragment(
+              "EXISTS (SELECT 1 FROM data_refreshes dr WHERE dr.entity_type = 'person' AND dr.entity_id = ? AND dr.source = 'tmdb_person' AND dr.status IN ('ok','empty','ineligible'))",
+              p.id
+            ),
+          select: count(p.id, :distinct)
+      ) || 0
 
-    fetch_row(label, eligible, fetched, nil, max(eligible - fetched, 0),
-      target: target,
+    needs = max(eligible - fetched - source_absent, 0)
+
+    fetch_row(label, eligible, fetched, source_absent, needs,
+      target: 99.5,
       note:
-        "canonical-scoped (credited on a canonical-list movie)" <>
-          if(field == :biography,
-            do: " — target: terminal once fetch_attempt tracking lands (S3)",
-            else: ""
-          )
+        "canonical-scoped (credited on a canonical-list movie); source-absent = fetched-but-blank (tmdb_person ledger attempt) — terminal = covered + source-absent (#1101)"
     )
   end
 
@@ -240,32 +255,29 @@ defmodule Cinegraph.Health.SurfaceArea do
   # success = have providers (fetched); no_results = source-absent; error = unresolved. The 914k
   # target is deliberate (#1096 decision) — most of it is the long tail, so this is a genuine
   # cap-bound backlog, not a denominator artifact; canonical is the high-value subset.
+  # #1101 WS2: headline the high-value CANONICAL subset (films users actually look up),
+  # not the full 914k catalog. The full tail is mostly the unstreamable long tail no
+  # provider carries (~48% of checked movies are no_results) + a cap-bound background
+  # drain (#760) — kept as a sub-note, not the headline. (Decision: keep all 139 regions.)
   defp watch_providers_row do
-    eligible =
+    canon_total = Scopes.canonical_movies_count()
+    canon_success = avail_canonical(["success"])
+    canon_resolved = avail_canonical(["success", "no_results"])
+    canon_absent = max(canon_resolved - canon_success, 0)
+    canon_needs = max(canon_total - canon_resolved, 0)
+
+    # Full-catalog figures (the sweeper's literal target) — reported in the note only.
+    full_eligible =
       count(from m in "movies", where: m.import_status == "full" and not is_nil(m.tmdb_id))
 
-    success = avail_movies(["success"])
-    resolved = avail_movies(["success", "no_results"])
-    source_absent = max(resolved - success, 0)
-    needs = max(eligible - resolved, 0)
+    full_resolved = avail_movies(["success", "no_results"])
+    full_needs = max(full_eligible - full_resolved, 0)
+    full_terminal = if full_eligible > 0, do: Float.round(full_resolved * 100 / full_eligible, 1)
 
-    canon_total = Scopes.canonical_movies_count()
-
-    canon_success =
-      Repo.replica().one(
-        from r in "movie_availability_refreshes",
-          join: m in "movies",
-          on: m.id == r.movie_id,
-          where: r.status == "success" and fragment("? != '{}'::jsonb", m.canonical_sources),
-          select: count(r.movie_id, :distinct)
-      ) || 0
-
-    canon_pct = if canon_total > 0, do: Float.round(canon_success * 100 / canon_total, 1)
-
-    fetch_row("watch_providers", eligible, success, source_absent, needs,
+    fetch_row("watch_providers", canon_total, canon_success, canon_absent, canon_needs,
       target: 95.0,
       note:
-        "sweeper targets all full+tmdb_id; ~#{needs} unattempted at 5k/day — cap is the bottleneck (#760); canonical subset #{canon_pct}%"
+        "canonical headline; full catalog #{full_terminal}% terminal (~#{full_needs} unchecked long tail — cap-bound drain #760); ~48% of checked movies are no_results (source ceiling)"
     )
   end
 
@@ -273,6 +285,16 @@ defmodule Cinegraph.Health.SurfaceArea do
     Repo.replica().one(
       from r in "movie_availability_refreshes",
         where: r.status in ^statuses,
+        select: count(r.movie_id, :distinct)
+    ) || 0
+  end
+
+  defp avail_canonical(statuses) do
+    Repo.replica().one(
+      from r in "movie_availability_refreshes",
+        join: m in "movies",
+        on: m.id == r.movie_id,
+        where: r.status in ^statuses and fragment("? != '{}'::jsonb", m.canonical_sources),
         select: count(r.movie_id, :distinct)
     ) || 0
   end
