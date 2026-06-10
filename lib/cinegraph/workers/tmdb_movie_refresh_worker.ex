@@ -2,8 +2,8 @@ defmodule Cinegraph.Workers.TMDbMovieRefreshWorker do
   @moduledoc """
   Unified per-movie TMDb refresh (#1106): ONE `append_to_response` call
   re-hydrates an existing movie's details + ratings/metrics + credits + watch
-  providers, and touches the freshness ledger for `tmdb_details` and
-  `watch_providers` in the same pass. Replaces the siloed per-source TMDb fetches
+  providers, and touches the freshness ledger for `tmdb_details`, `watch_providers`,
+  and `imdb_id` in the same pass. Replaces the siloed per-source TMDb fetches
   and closes the one-shot-details gap (#1010 grade-D).
 
   Enqueued by `TmdbMovieRefreshSweeper` (the floor) selecting via `Freshness.due/2`.
@@ -54,13 +54,17 @@ defmodule Cinegraph.Workers.TMDbMovieRefreshWorker do
     case fetch_fun.(movie.tmdb_id) do
       {:ok, data} ->
         case Movies.refresh_movie_from_tmdb(movie, data) do
-          {:ok, %{watch_present?: present?}} ->
+          {:ok, %{watch_present?: present?, imdb_present?: imdb_present?}} ->
             Freshness.touch("movie", movie.id, "tmdb_details", :ok, base_date: base)
 
             watch_status = if present?, do: :ok, else: :empty
             Freshness.touch("movie", movie.id, "watch_providers", watch_status, base_date: base)
 
-            {:ok, %{movie_id: movie.id, watch_present?: present?}}
+            # imdb_id rides this fetch (#1109): :ok if TMDb carried one, else source-absent.
+            imdb_status = if imdb_present?, do: :ok, else: :empty
+            Freshness.touch("movie", movie.id, "imdb_id", imdb_status, base_date: base)
+
+            {:ok, %{movie_id: movie.id, watch_present?: present?, imdb_present?: imdb_present?}}
 
           {:error, reason} ->
             Logger.error(
@@ -86,5 +90,7 @@ defmodule Cinegraph.Workers.TMDbMovieRefreshWorker do
       base_date: base,
       error_reason: err
     )
+
+    Freshness.touch("movie", movie.id, "imdb_id", :error, base_date: base, error_reason: err)
   end
 end

@@ -183,6 +183,24 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
     assert row.target == 95.0
   end
 
+  test "imdb_id counts null-after-fetch (an imdb_id :empty ledger marker) as source-absent/terminal (#1109)" do
+    # fetched: has an imdb_id
+    movie!(%{imdb_id: "tt100"})
+    # source-absent: null, with an imdb_id :empty marker (we fetched details, TMDb had none)
+    absent = movie!(%{imdb_id: nil})
+    Cinegraph.Freshness.touch("movie", absent.id, "imdb_id", :empty)
+    # needs-fetch: null, no marker (never checked)
+    movie!(%{imdb_id: nil})
+
+    row = row_for("imdb_id")
+    assert row.eligible == 3
+    assert row.fetched == 1
+    assert row.source_absent == 1
+    assert row.needs_fetch == 1
+    # terminal = (fetched + source_absent) / eligible = 2/3
+    assert row.terminal_pct == 66.67
+  end
+
   test "computed/supplemental sources carry no coverage number" do
     sources = SurfaceArea.report().sources
     collab = Enum.find(sources, &(&1.source == "collaborations"))

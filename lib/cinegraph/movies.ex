@@ -1038,8 +1038,9 @@ defmodule Cinegraph.Movies do
   quality/soft-vs-full gating, recommendations/similar/reviews/lists/videos).
 
   Expects `tmdb_data` from `TMDb.get_movie_for_refresh/1` (watch providers under
-  the normalized `"watch_providers"` key). Returns `{:ok, %{watch_present?: bool}}`
-  so the caller can set the `watch_providers` freshness status.
+  the normalized `"watch_providers"` key). Returns
+  `{:ok, %{watch_present?: bool, imdb_present?: bool}}`
+  so the caller can set the `watch_providers` and `imdb_id` freshness statuses.
   """
   def refresh_movie_from_tmdb(%Movie{} = movie, tmdb_data) do
     # Update the structured columns but PRESERVE the raw blob: `Movie.from_tmdb/1`
@@ -1058,7 +1059,7 @@ defmodule Cinegraph.Movies do
          {:ok, _} <- Cinegraph.Movies.Availability.store_tmdb_watch_providers(movie, watch) do
       # Only report presence once the store has actually committed, so the caller's
       # `watch_providers` freshness touch reflects persisted data — not just payload.
-      {:ok, %{watch_present?: watch_present?(watch)}}
+      {:ok, %{watch_present?: watch_present?(watch), imdb_present?: present?(movie.imdb_id)}}
     end
   end
 

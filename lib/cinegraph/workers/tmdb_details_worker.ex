@@ -146,6 +146,10 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
         # #1096 Phase B: first freshness signal for TMDb details (previously one-shot,
         # grade-D in the §4b provenance audit).
         Freshness.touch("movie", movie.id, "tmdb_details", :ok, base_date: movie.release_date)
+        # imdb_id rides the same response (#1109) — :ok if present, else source-absent.
+        Freshness.touch("movie", movie.id, "imdb_id", imdb_status(movie.imdb_id),
+          base_date: movie.release_date
+        )
 
         enrichment_queued =
           if movie.imdb_id do
@@ -187,6 +191,10 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
       {:ok, movie} ->
         Logger.info("Successfully soft imported movie: #{movie.title} (#{movie.tmdb_id})")
         Freshness.touch("movie", movie.id, "tmdb_details", :ok, base_date: movie.release_date)
+
+        Freshness.touch("movie", movie.id, "imdb_id", imdb_status(movie.imdb_id),
+          base_date: movie.release_date
+        )
 
         # Update job metadata with soft import details
         update_job_meta(job, %{
@@ -413,4 +421,10 @@ defmodule Cinegraph.Workers.TMDbDetailsWorker do
     error ->
       Logger.warning("Failed to update job meta: #{inspect(error)}")
   end
+
+  # imdb_id source-absent classification (#1109): present → :ok, null/blank → :empty.
+  defp imdb_status(imdb_id) when is_binary(imdb_id),
+    do: if(String.trim(imdb_id) != "", do: :ok, else: :empty)
+
+  defp imdb_status(_), do: :empty
 end

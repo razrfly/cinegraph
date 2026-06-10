@@ -30,7 +30,11 @@ defmodule Cinegraph.Freshness.Policy do
         {:age_tiered, :release_date, %{new: 7, recent: 30, catalog: 180, old: 365}},
       "omdb" => {:age_tiered, :release_date, %{new: 7, recent: 30, catalog: 90, old: 365}},
       "watch_providers" =>
-        {:age_tiered, :release_date, %{new: 3, recent: 7, catalog: 30, old: 90}}
+        {:age_tiered, :release_date, %{new: 3, recent: 7, catalog: 30, old: 90}},
+      # imdb_id rides the tmdb_details fetch (same TMDb top-level field) — identical
+      # TTL so the two couple and are serviced together. It never independently drives
+      # a refresh; this entry only lets `touch/5` resolve a TTL (#1109).
+      "imdb_id" => {:age_tiered, :release_date, %{new: 7, recent: 30, catalog: 180, old: 365}}
     },
     "person" => %{
       "tmdb_person" =>

@@ -292,6 +292,10 @@ config :cinegraph, Oban,
        {"45 6 * * *", Cinegraph.Workers.AvailabilityRefreshSweeper},
        # IMDb-id repair via TMDb fetches: 5,000/day on :tmdb.
        {"0 7 * * *", Cinegraph.Workers.ImdbIdRepairSweeper},
+       # imdb_id source-absent marking (#1109): weekly belt-and-suspenders on
+       # :maintenance (no API — writes ledger rows only). The inline touch on the
+       # fetch paths is the real steady state; this catches drift. Sun 03:30 UTC.
+       {"30 3 * * 0", Cinegraph.Workers.MarkImdbIdAbsentSweeper},
        # Collaboration graph repair: 5,000 movies/day enqueued.
        # Sweeper itself runs on :maintenance; the per-movie rebuilds it
        # enqueues run on :collaboration (concurrency 3).

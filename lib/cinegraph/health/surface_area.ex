@@ -174,8 +174,28 @@ defmodule Cinegraph.Health.SurfaceArea do
     eligible = count(from(m in "movies"))
     fetched = count(from m in "movies", where: not is_nil(m.imdb_id) and m.imdb_id != "")
 
-    fetch_row("imdb_id", eligible, fetched, nil, max(eligible - fetched, 0),
-      note: "TMDb long tail has no IMDb ID at source — recovery yield ≈ 0 (#1090 ceiling)"
+    # #1109: a movie that's still null but HAS an `imdb_id` ledger `:empty` marker is
+    # source-absent — we fetched TMDb details (which carry the id) and it had none.
+    # Counts as terminal so the structural ceiling reads ~100%, not a 510k backlog.
+    source_absent =
+      count(
+        from m in "movies",
+          where: is_nil(m.imdb_id) or m.imdb_id == "",
+          where:
+            fragment(
+              "EXISTS (SELECT 1 FROM data_refreshes dr WHERE dr.entity_type = 'movie' AND dr.entity_id = ? AND dr.source = 'imdb_id' AND dr.status = 'empty')",
+              m.id
+            )
+      )
+
+    fetch_row(
+      "imdb_id",
+      eligible,
+      fetched,
+      source_absent,
+      max(eligible - fetched - source_absent, 0),
+      note:
+        "TMDb long tail has no IMDb ID at source — null-after-fetch marked source-absent (#1109)"
     )
   end
 

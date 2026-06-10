@@ -67,7 +67,7 @@ defmodule Cinegraph.Admin.JobRegistry do
 
   @entries [
     # =========================================================================
-    # Scheduled entries (25 — must match config.exs crontab exactly)
+    # Scheduled entries (27 — must match config.exs crontab exactly)
     # =========================================================================
 
     %{
@@ -198,6 +198,34 @@ defmodule Cinegraph.Admin.JobRegistry do
       mutating: true,
       description: "Monthly canonical IMDb-list refresh (blank/stale movie_lists)",
       destination: :imports,
+      doc_url: nil
+    },
+    %{
+      id: :tmdb_movie_refresh_sweeper,
+      label: "Unified TMDb movie refresh",
+      worker: Workers.TmdbMovieRefreshSweeper,
+      queue: :maintenance,
+      schedule: "0 4 * * *",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: true,
+      description:
+        "Unified per-movie TMDb refresh (#1106): 5,000/day floor — one call re-hydrates details + metrics + credits + watch + imdb_id",
+      destination: :movies,
+      doc_url: nil
+    },
+    %{
+      id: :mark_imdb_id_absent_sweeper,
+      label: "imdb_id source-absent marker",
+      worker: Workers.MarkImdbIdAbsentSweeper,
+      queue: :maintenance,
+      schedule: "30 3 * * 0",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: true,
+      description:
+        "Weekly (#1109): mark checked-but-null imdb_id movies source-absent in the ledger (no API)",
+      destination: :movies,
       doc_url: nil
     },
     %{

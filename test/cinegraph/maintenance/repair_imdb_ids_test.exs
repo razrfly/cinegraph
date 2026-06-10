@@ -34,6 +34,15 @@ defmodule Cinegraph.Maintenance.RepairImdbIdsTest do
     # The query keeps the predicate defensively in case the constraint is
     # ever relaxed.
 
+    test "skips movies already marked imdb_id source-absent (#1109)" do
+      marked = insert_movie!(imdb_id: nil)
+      _unmarked = insert_movie!(imdb_id: nil)
+      Cinegraph.Freshness.touch("movie", marked.id, "imdb_id", :empty)
+
+      # only the unmarked null-id movie is selected for repair
+      assert {:ok, %{found: 1}} = RepairImdbIds.run(dry_run: true)
+    end
+
     test "respects :limit cap" do
       Enum.each(1..3, fn _ -> insert_movie!(imdb_id: nil) end)
 
