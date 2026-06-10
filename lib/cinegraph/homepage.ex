@@ -109,7 +109,9 @@ defmodule Cinegraph.Homepage do
       subtitle:
         "We score every film six different ways — by critics, audiences, festivals, the canon, the people who made it, and the box office — so you can find what's good by your definition of good.",
       cta_label: "Ask the Video Clerk",
-      cta_href: "/video-clerk",
+      # Repointed to a public page (#1098): the full Video Clerk page is shelved
+      # behind admin auth, so the hero CTA can't route the public there.
+      cta_href: "/now-playing",
       backdrop_url: hero_backdrop(date)
     }
   end

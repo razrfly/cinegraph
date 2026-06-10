@@ -76,7 +76,7 @@ defmodule CinegraphWeb.HomeLive do
     %{
       icon: "🏪",
       title: "Ask the Video Clerk for a pick that explains itself.",
-      href: "/video-clerk"
+      href: "/now-playing"
     }
   ]
 

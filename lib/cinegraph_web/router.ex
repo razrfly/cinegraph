@@ -211,7 +211,6 @@ defmodule CinegraphWeb.Router do
       layout: false,
       on_mount: [{CinegraphWeb.Live.AuthHooks, :assign_auth_user}] do
       live "/now-playing", NowPlayingLive, :index
-      live "/video-clerk", VideoClerkLive, :show
       live "/lists", ListLive.Index, :index
       live "/lists/:slug", ListLive.Show, :show
       live "/awards", AwardsLive.Index, :index
@@ -334,6 +333,18 @@ defmodule CinegraphWeb.Router do
       live "/festival", FestivalAuditLive, :index
       live "/festival/:org_slug", FestivalAuditLive, :organization
       live "/festival/:org_slug/:year", FestivalAuditLive, :ceremony
+    end
+
+    # Video Clerk (#1098): shelved behind admin basic auth — an unfinished public
+    # mock page whose homepage CTA was driving ~9K/day of crawler traffic into a
+    # heavy multi-shelf mount. Kept reachable for dev at /admin/video-clerk; the
+    # public /video-clerk route is gone (404). Keeps the page's own v2 chrome
+    # rather than the admin dashboard layout.
+    live_session :admin_video_clerk,
+      root_layout: {CinegraphWeb.Layouts, :v2_root},
+      layout: false,
+      on_mount: [{CinegraphWeb.Live.AuthHooks, :assign_auth_user}] do
+      live "/video-clerk", VideoClerkLive, :show
     end
 
     # Oban dashboard is a forwarded plug, not a LiveView, so it cannot live

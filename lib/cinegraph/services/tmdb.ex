@@ -53,6 +53,14 @@ defmodule Cinegraph.Services.TMDb do
   end
 
   @doc """
+  Lean per-movie refresh fetch (#1106): details + metrics + credits + watch
+  providers in one `append_to_response` call. See `Extended.get_movie_for_refresh/1`.
+  """
+  def get_movie_for_refresh(movie_id) do
+    Extended.get_movie_for_refresh(movie_id)
+  end
+
+  @doc """
   Gets watch provider information for a movie.
   """
   def get_movie_watch_providers(movie_id) do

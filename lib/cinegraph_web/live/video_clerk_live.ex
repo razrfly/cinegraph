@@ -127,7 +127,7 @@ defmodule CinegraphWeb.VideoClerkLive do
      socket
      |> assign(:search_query, "")
      |> assign(:search_results, [])
-     |> push_patch(to: ~p"/video-clerk")}
+     |> push_patch(to: ~p"/admin/video-clerk")}
   end
 
   def handle_event("load_demo", _params, socket) do
@@ -252,7 +252,7 @@ defmodule CinegraphWeb.VideoClerkLive do
     %{primary: nil, alternates: [], seed_movies: [], route_labels: [], evidence_summary: []}
   end
 
-  defp video_clerk_path([]), do: ~p"/video-clerk"
+  defp video_clerk_path([]), do: ~p"/admin/video-clerk"
 
   defp video_clerk_path(selected) do
     slugs =
@@ -263,7 +263,7 @@ defmodule CinegraphWeb.VideoClerkLive do
       end)
       |> Enum.join(",")
 
-    ~p"/video-clerk?#{%{movies: slugs}}"
+    ~p"/admin/video-clerk?#{%{movies: slugs}}"
   end
 
   defp demo_films do
