@@ -11,6 +11,18 @@ defmodule Cinegraph.Maintenance.RepairImdbIds do
 
   Canonical-list movies are prioritised first.
 
+  #1109: skips movies already marked source-absent (`imdb_id` ledger `:empty`) — the
+  TMDb long tail has no IMDb id, and re-verification now rides the unified refresh
+  (#1106), which re-touches `imdb_id` on the `tmdb_details` cadence. This repair path
+  is therefore reduced to *never-checked* movies. Retirement candidate once #1106 is
+  the proven steady-state (tracked under #760) — not retired here.
+
+  KNOWN LIMITATION (#1109): the enqueued `TMDbDetailsWorker` skips movies that already
+  exist (`process_tmdb_movie/3`), so it cannot *complete* a discovery-only stub that's
+  already in the DB but lacks a full `/movie` fetch. Completing those stubs (so their
+  `imdb_id` resolves to present-or-source-absent) needs a refresh-style fetch, not this
+  create-path worker — a separate pre-existing gap, follow-up under #760/#1108.
+
   See #745 Phase 1.2.
 
   ## Options
@@ -40,7 +52,12 @@ defmodule Cinegraph.Maintenance.RepairImdbIds do
   def run(opts \\ []) when is_list(opts) do
     base =
       from m in "movies",
-        where: (is_nil(m.imdb_id) or m.imdb_id == "") and not is_nil(m.tmdb_id),
+        where:
+          (is_nil(m.imdb_id) or m.imdb_id == "") and not is_nil(m.tmdb_id) and
+            fragment(
+              "NOT EXISTS (SELECT 1 FROM data_refreshes dr WHERE dr.entity_type = 'movie' AND dr.entity_id = ? AND dr.source = 'imdb_id' AND dr.status = 'empty')",
+              m.id
+            ),
         order_by: [
           desc: fragment("? != '{}'::jsonb", m.canonical_sources),
           desc: m.id
