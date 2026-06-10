@@ -774,7 +774,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
                 </h2>
               </div>
               <.link
-                navigate={~p"/video-clerk?#{%{seed: movie_slug_or_id(@movie)}}"}
+                navigate={~p"/now-playing"}
                 class="inline-flex rounded-md bg-mist-950 px-3 py-2 text-[12px] font-semibold text-mist-50 hover:bg-mist-800"
               >
                 Ask the Video Clerk

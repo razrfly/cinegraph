@@ -7,7 +7,7 @@ defmodule CinegraphWeb.VideoClerkLiveTest do
   alias Cinegraph.Repo
 
   test "renders the Video Clerk page with manifesto copy", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/video-clerk")
+    {:ok, _view, html} = live(conn, ~p"/admin/video-clerk")
 
     assert html =~ "The Video Clerk"
     assert html =~ "Three films in. One human-feeling recommendation out."
@@ -22,7 +22,7 @@ defmodule CinegraphWeb.VideoClerkLiveTest do
     cult = insert_movie!("Repo Man", "cult_movies_400", 2)
     canon = insert_movie!("Bicycle Thieves", "1001_movies", 1)
 
-    {:ok, _view, html} = live(conn, ~p"/video-clerk")
+    {:ok, _view, html} = live(conn, ~p"/admin/video-clerk")
 
     assert html =~ cult.title
     assert html =~ canon.title
@@ -34,7 +34,7 @@ defmodule CinegraphWeb.VideoClerkLiveTest do
     seed = insert_movie!("Donnie Darko", "1001_movies", 1)
     pick = insert_movie!("Harold and Maude", "cult_movies_400", 2)
 
-    {:ok, _view, html} = live(conn, ~p"/video-clerk?seed=#{seed.slug}")
+    {:ok, _view, html} = live(conn, ~p"/admin/video-clerk?seed=#{seed.slug}")
 
     assert html =~ seed.title
     assert html =~ pick.title
@@ -45,7 +45,7 @@ defmodule CinegraphWeb.VideoClerkLiveTest do
     seed = insert_movie!("Searchable Clerk Seed", "1001_movies", 1)
     pick = insert_movie!("Searchable Clerk Pick", "cult_movies_400", 2)
 
-    {:ok, view, _html} = live(conn, ~p"/video-clerk")
+    {:ok, view, _html} = live(conn, ~p"/admin/video-clerk")
 
     html = render_change(view, "search_movies", %{"q" => "Searchable Clerk Seed"})
     assert html =~ seed.title

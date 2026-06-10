@@ -1027,9 +1027,43 @@ defmodule Cinegraph.Movies do
   Public wrapper for the internal process_movie_credits function.
   Used by DataRepairWorker to backfill missing credits.
   """
-  def process_movie_credits_public(movie, credits_data) do
-    process_movie_credits(movie, credits_data)
+  def process_movie_credits_public(movie, credits_data, opts \\ []) do
+    process_movie_credits(movie, credits_data, opts)
   end
+
+  @doc """
+  Refresh an EXISTING movie from a fresh TMDb response (#1106) — re-hydrates the
+  core columns, ratings/metrics, cast/crew, and watch providers in one pass,
+  WITHOUT the import-only side effects (canonical_sources, OMDb enqueue,
+  quality/soft-vs-full gating, recommendations/similar/reviews/lists/videos).
+
+  Expects `tmdb_data` from `TMDb.get_movie_for_refresh/1` (watch providers under
+  the normalized `"watch_providers"` key). Returns `{:ok, %{watch_present?: bool}}`
+  so the caller can set the `watch_providers` freshness status.
+  """
+  def refresh_movie_from_tmdb(%Movie{} = movie, tmdb_data) do
+    # Update the structured columns but PRESERVE the raw blob: `Movie.from_tmdb/1`
+    # sets `tmdb_data` to the *lean* refresh response, which would drop the rich
+    # import-only sections (images/videos/recommendations/…) and rewrite a multi-MB
+    # JSONB blob on every refresh. Drop `:tmdb_data` from the update.
+    attrs = tmdb_data |> Movie.from_tmdb() |> Map.delete(:tmdb_data)
+
+    with {:ok, movie} <- movie |> Movie.changeset(attrs) |> Repo.update(),
+         :ok <- Metrics.store_tmdb_metrics(movie, tmdb_data),
+         :ok <-
+           process_movie_credits(movie, tmdb_data["credits"], rebuild_collaborations: :if_changed),
+         :ok <- process_movie_keywords(movie, tmdb_data["keywords"]),
+         :ok <- process_movie_release_dates(movie, tmdb_data["release_dates"]),
+         watch = tmdb_data["watch_providers"],
+         {:ok, _} <- Cinegraph.Movies.Availability.store_tmdb_watch_providers(movie, watch) do
+      # Only report presence once the store has actually committed, so the caller's
+      # `watch_providers` freshness touch reflects persisted data — not just payload.
+      {:ok, %{watch_present?: watch_present?(watch)}}
+    end
+  end
+
+  defp watch_present?(%{"results" => results}) when is_map(results), do: map_size(results) > 0
+  defp watch_present?(_), do: false
 
   @doc """
   Gets credits for a movie.
@@ -1184,10 +1218,17 @@ defmodule Cinegraph.Movies do
 
   # Processing functions for comprehensive movie data
 
-  defp process_movie_credits(_movie, nil), do: :ok
+  defp process_movie_credits(movie, credits, opts \\ [])
+  defp process_movie_credits(_movie, nil, _opts), do: :ok
 
-  defp process_movie_credits(movie, %{"cast" => cast, "crew" => crew}) do
+  defp process_movie_credits(movie, %{"cast" => cast, "crew" => crew}, opts) do
     alias Cinegraph.Imports.QualityFilter
+
+    # #1106: on a refresh, only rebuild the collaboration graph if the credit set
+    # actually changed (avoid a per-refresh rebuild storm). `rebuild_collaborations`:
+    # `true` (default, import behavior) | `:if_changed` (refresh) | `false`.
+    rebuild = Elixir.Keyword.get(opts, :rebuild_collaborations, true)
+    before_ids = if rebuild == :if_changed, do: movie_credit_id_set(movie.id), else: nil
 
     # Process cast
     cast_count =
@@ -1241,11 +1282,25 @@ defmodule Cinegraph.Movies do
         end
       end)
 
-    if cast_count + crew_count > 0 do
-      Collaborations.enqueue_movie_rebuild(movie)
-    end
+    rebuild? =
+      case rebuild do
+        :if_changed -> movie_credit_id_set(movie.id) != before_ids
+        false -> false
+        _ -> cast_count + crew_count > 0
+      end
+
+    if rebuild?, do: Collaborations.enqueue_movie_rebuild(movie)
 
     :ok
+  end
+
+  defp movie_credit_id_set(movie_id) do
+    from(c in "movie_credits",
+      where: c.movie_id == ^movie_id and not is_nil(c.credit_id),
+      select: c.credit_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
   end
 
   defp process_movie_keywords(_movie, nil), do: :ok

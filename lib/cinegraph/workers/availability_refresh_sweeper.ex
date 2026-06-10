@@ -9,7 +9,13 @@ defmodule Cinegraph.Workers.AvailabilityRefreshSweeper do
 
   require Logger
 
-  @per_run_limit 5_000
+  # Bumped 5k → 30k (#1106): full-catalog drain ~76 days → ~25 days. TMDb isn't the
+  # limiter; pair this with OBAN_MOVIE_AVAILABILITY_LIMIT=5 (concurrency of the
+  # :movie_availability queue in runtime.exs, was 1 — separate from :maintenance:1)
+  # on deploy. NOTE: each fetch writes ~139 region rows — at 30k/day that's ~4M
+  # row-writes/day on the shared box. To go faster *safely*, narrow the region set
+  # (see #1106 Part A — the real unlock; gets it to ~15 days at far lower DB load).
+  @per_run_limit 30_000
 
   @impl Oban.Worker
   def perform(%Oban.Job{}) do

@@ -20,6 +20,8 @@ defmodule CinegraphWeb.HomeLiveTest do
     assert html =~ "Cinegraph lets you"
     assert html =~ "Ask the Video Clerk"
     assert html =~ ~s(href="/six-degrees")
-    assert html =~ ~s(href="/video-clerk")
+
+    # Video Clerk shelved behind admin auth (#1098) — homepage CTA now points public to /now-playing.
+    assert html =~ ~s(href="/now-playing")
   end
 end

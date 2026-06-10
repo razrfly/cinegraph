@@ -349,22 +349,45 @@ defmodule Cinegraph.Services.TMDb.Extended do
     case Client.get("/movie/#{movie_id}", %{append_to_response: append}) do
       {:ok, movie} ->
         # Watch providers might need separate call if not in append_to_response
-        movie_with_providers =
-          case movie["watch/providers"] do
-            nil ->
-              case get_movie_watch_providers(movie_id) do
-                {:ok, providers} -> Map.put(movie, "watch_providers", providers)
-                _ -> movie
-              end
-
-            providers ->
-              Map.put(movie, "watch_providers", providers)
-          end
-
-        {:ok, movie_with_providers}
+        {:ok, normalize_watch_providers(movie, movie_id)}
 
       error ->
         error
+    end
+  end
+
+  @doc """
+  Lean per-movie REFRESH fetch (#1106). One call refreshes the volatile data the
+  unified refresh writes (details, metrics, credits, watch providers) without the
+  heavy import-only blocks (images/videos/recommendations/similar/translations/
+  reviews/lists). Normalizes `"watch/providers"` → `"watch_providers"` like
+  `get_movie_ultra_comprehensive/1`.
+  """
+  def get_movie_for_refresh(movie_id) do
+    append = "credits,keywords,external_ids,release_dates,watch/providers"
+
+    case Client.get("/movie/#{movie_id}", %{append_to_response: append}) do
+      {:ok, movie} ->
+        {:ok, normalize_watch_providers(movie, movie_id)}
+
+      error ->
+        error
+    end
+  end
+
+  # Normalize the appended `"watch/providers"` block to the `"watch_providers"`
+  # key the rest of the pipeline expects, falling back to a dedicated fetch when
+  # the append_to_response response omitted it.
+  defp normalize_watch_providers(movie, movie_id) do
+    case movie["watch/providers"] do
+      nil ->
+        case get_movie_watch_providers(movie_id) do
+          {:ok, providers} -> Map.put(movie, "watch_providers", providers)
+          _ -> movie
+        end
+
+      providers ->
+        Map.put(movie, "watch_providers", providers)
     end
   end
 

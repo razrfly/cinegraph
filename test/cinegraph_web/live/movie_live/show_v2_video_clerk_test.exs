@@ -6,7 +6,9 @@ defmodule CinegraphWeb.MovieLive.ShowV2VideoClerkTest do
   alias Cinegraph.Movies.Movie
   alias Cinegraph.Repo
 
-  test "movie show page renders the Video Clerk module and seed link", %{conn: conn} do
+  test "movie show page renders the Video Clerk module linking to the public now-playing page", %{
+    conn: conn
+  } do
     seed = insert_movie!("Clerk Source Movie", %{})
 
     _pick =
@@ -18,7 +20,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2VideoClerkTest do
     html = render_async(view)
 
     assert html =~ "Ask the Video Clerk"
-    assert html =~ ~s(/video-clerk?seed=#{seed.slug})
+    assert html =~ ~s(href="/now-playing")
     assert html =~ "Clerk Candidate Movie"
   end
 

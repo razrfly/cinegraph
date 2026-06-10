@@ -271,6 +271,11 @@ config :cinegraph, Oban,
        # autonomously drain the dashboard's drift backlogs. Capped per-run;
        # idempotent (workers are uniqueness-keyed).
        #
+       # Unified per-movie TMDb refresh (#1106): 5,000/day on :tmdb. One call per
+       # movie re-hydrates details + metrics + credits + watch providers and touches
+       # the tmdb_details + watch_providers freshness ledgers. Capped FLOOR only —
+       # read-through + uncapping are gated on the Phase 4 budget governor (#1090).
+       {"0 4 * * *", Cinegraph.Workers.TmdbMovieRefreshSweeper},
        # Biography refresh: 5,000/day on :tmdb queue.
        {"30 5 * * *", Cinegraph.Workers.BiographyRefreshSweeper},
        # Profile-data refresh (profile_path + known_for_department): 3,000/day
