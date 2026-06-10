@@ -1,5 +1,7 @@
 defmodule CinegraphWeb.Plugs.AppsignalSamplerTest do
-  use ExUnit.Case, async: true
+  # async: false — the call/2 tests mutate global Application env that the
+  # endpoint-wired plug reads, which would race with other async test modules.
+  use ExUnit.Case, async: false
 
   import Plug.Test, only: [conn: 3]
   import Plug.Conn, only: [put_req_header: 3]

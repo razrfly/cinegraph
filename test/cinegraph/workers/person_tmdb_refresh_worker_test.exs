@@ -10,6 +10,38 @@ defmodule Cinegraph.Workers.PersonTmdbRefreshWorkerTest do
     end
   end
 
+  describe "sparse_person?/1 — :empty vs :ok ledger status (#1101 WS1)" do
+    alias Cinegraph.Movies.Person
+
+    test "true (→ :empty) only when bio, profile, and known_for are all blank" do
+      assert PersonTmdbRefreshWorker.sparse_person?(%Person{
+               biography: nil,
+               profile_path: nil,
+               known_for_department: nil
+             })
+
+      assert PersonTmdbRefreshWorker.sparse_person?(%Person{
+               biography: "",
+               profile_path: "",
+               known_for_department: ""
+             })
+    end
+
+    test "false (→ :ok) when any field is present (e.g. a photo but no bio)" do
+      refute PersonTmdbRefreshWorker.sparse_person?(%Person{
+               biography: nil,
+               profile_path: "/x.jpg",
+               known_for_department: nil
+             })
+
+      refute PersonTmdbRefreshWorker.sparse_person?(%Person{
+               biography: "a bio",
+               profile_path: nil,
+               known_for_department: nil
+             })
+    end
+  end
+
   describe "Oban worker config" do
     test "uses :tmdb queue and max_attempts 3" do
       # The Oban worker macro adds these via @meta — the easiest check is to

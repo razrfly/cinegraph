@@ -3,8 +3,15 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
   use Cinegraph.DataCase, async: false
 
   alias Cinegraph.Health.SurfaceArea
-  alias Cinegraph.Movies.{ExternalMetric, Movie}
+  alias Cinegraph.Movies.{Credit, ExternalMetric, Movie, Person}
   alias Cinegraph.Repo
+
+  # Scopes.canonical_*_count are Cachex-cached (35 min) and Cachex is not
+  # sandboxed — clear it per test so canonical-scoped counts are computed fresh.
+  setup do
+    Cachex.clear(:health_cache)
+    :ok
+  end
 
   defp movie!(attrs) do
     %Movie{}
@@ -48,6 +55,50 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
     |> Repo.insert!()
   end
 
+  defp canonical_movie!(attrs \\ %{}) do
+    movie!(Map.merge(%{canonical_sources: %{"1001_movies" => %{"included" => true}}}, attrs))
+  end
+
+  # a person credited on a canonical movie (so canonical_people_count includes them)
+  defp canonical_person!(bio) do
+    person =
+      %Person{}
+      |> Person.changeset(%{
+        tmdb_id: System.unique_integer([:positive]),
+        name: "P#{System.unique_integer([:positive])}",
+        biography: bio
+      })
+      |> Repo.insert!()
+
+    movie = canonical_movie!()
+
+    %Credit{}
+    |> Credit.changeset(%{
+      movie_id: movie.id,
+      person_id: person.id,
+      credit_type: "cast",
+      credit_id: "c#{System.unique_integer([:positive])}"
+    })
+    |> Repo.insert!()
+
+    person
+  end
+
+  defp person_ledger!(person_id, status) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    %Cinegraph.Freshness.DataRefresh{}
+    |> Cinegraph.Freshness.DataRefresh.changeset(%{
+      entity_type: "person",
+      entity_id: person_id,
+      source: "tmdb_person",
+      status: status,
+      fetched_at: now,
+      stale_after: DateTime.add(now, 30, :day)
+    })
+    |> Repo.insert!()
+  end
+
   defp row_for(source), do: Enum.find(SurfaceArea.report().sources, &(&1.source == source))
   defp omdb_row, do: row_for("omdb")
 
@@ -72,12 +123,13 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
     assert row.terminal_pct == 66.67
   end
 
-  test "watch_providers splits success / no_results / needs against the full+tmdb_id target" do
-    a = movie!(%{imdb_id: "tt_a", import_status: "full"})
+  test "watch_providers headlines the canonical subset (#1101 WS2)" do
+    # canonical movies are the headline denominator (not the 914k full catalog)
+    a = canonical_movie!(%{import_status: "full"})
     avail!(a, "success")
-    b = movie!(%{imdb_id: "tt_b", import_status: "full"})
+    b = canonical_movie!(%{import_status: "full"})
     avail!(b, "no_results")
-    _c = movie!(%{imdb_id: "tt_c", import_status: "full"})
+    _c = canonical_movie!(%{import_status: "full"})
 
     row = row_for("watch_providers")
     assert row.eligible == 3
@@ -87,14 +139,32 @@ defmodule Cinegraph.Health.SurfaceAreaTest do
     assert row.target == 95.0
   end
 
-  test "fetch rows carry homeostasis targets; biography defers to the substrate" do
+  test "fetch rows carry homeostasis targets; biography is now terminalizable (#1101 WS1)" do
     assert omdb_row().target == 99.5
-    assert row_for("people_profile_path").target == 95.0
-    # biography → terminal once fetch_attempt tracking lands (S3), so no numeric target yet
-    assert row_for("people_biography").target == nil
+    assert row_for("people_profile_path").target == 99.5
+    # biography now has a terminal target (the substrate makes it terminalizable)
+    assert row_for("people_biography").target == 99.5
     # budget/revenue are derived/ceiling rows — no terminal%/target
     assert row_for("tmdb_budget").kind == :derived
     assert row_for("tmdb_budget").terminal_pct == nil
+  end
+
+  test "people_biography counts fetched-but-blank (a tmdb_person ledger attempt) as source-absent/terminal (#1101 WS1)" do
+    # covered: canonical person with a bio
+    canonical_person!("a real biography")
+    # source-absent: canonical person, blank bio, but a tmdb_person ledger attempt
+    attempted = canonical_person!(nil)
+    person_ledger!(attempted.id, "ok")
+    # needs-fetch: canonical person, blank bio, no ledger attempt
+    canonical_person!(nil)
+
+    row = row_for("people_biography")
+    assert row.eligible == 3
+    assert row.fetched == 1
+    assert row.source_absent == 1
+    assert row.needs_fetch == 1
+    # terminal = (covered + source-absent) / eligible = 2/3
+    assert row.terminal_pct == 66.67
   end
 
   test "festival_person_link counts only person-tracked categories (film-only excluded)" do

@@ -3,7 +3,8 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorkerTest do
 
   import Cinegraph.FestivalFixtures
 
-  alias Cinegraph.Festivals.FestivalNomination
+  alias Cinegraph.Festivals.{FestivalCeremony, FestivalNomination}
+  alias Cinegraph.Repo
   alias Cinegraph.Workers.FestivalDiscoveryWorker
 
   describe "extract_nominee_person_data/1 — scraper payload normalization (#873)" do
@@ -69,6 +70,40 @@ defmodule Cinegraph.Workers.FestivalDiscoveryWorkerTest do
 
       {name, _ids, _} = FestivalDiscoveryWorker.extract_nominee_person_data(nominee)
       assert name == "Explicit Name"
+    end
+  end
+
+  describe "create_nomination/4 — re-import repopulates empty details (#1101 WS3)" do
+    test "patches an existing empty-payload row's details from a fresh scrape even when person_id is unresolved" do
+      # An OLD empty-payload row (written before the #873 shape fix): person_id nil,
+      # details blank. tracks_person: false → resolution is skipped (no network), so
+      # person_id stays nil and the fresh-payload backfill branch is what runs.
+      %{nom: nom, movie: movie, category: category} =
+        plant_nomination!(nominee_name: nil, person_imdb_ids: [], tracks_person: false)
+
+      assert is_nil(nom.person_id)
+      assert is_nil(nom.details["nominee_names"])
+
+      ceremony = Repo.get!(FestivalCeremony, nom.ceremony_id)
+
+      fresh_nominee = %{
+        people: [%{imdb_id: "nm0000225", name: "Christian Slater"}],
+        winner: false
+      }
+
+      FestivalDiscoveryWorker.create_nomination(movie, fresh_nominee, category, ceremony)
+
+      updated = Repo.get!(FestivalNomination, nom.id)
+      assert updated.details["nominee_names"] == "Christian Slater"
+      assert updated.details["person_imdb_ids"] == ["nm0000225"]
+      # JSONB round-trips atom keys to strings
+      assert updated.details["people"] == [
+               %{"imdb_id" => "nm0000225", "name" => "Christian Slater"}
+             ]
+
+      # still unresolved (it's a film-only category here) — but the payload is now
+      # present for a later resolver pass on the real person-tracked rows.
+      assert is_nil(updated.person_id)
     end
   end
 
