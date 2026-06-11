@@ -17,6 +17,13 @@ config :cinegraph,
   # Minimum confidence threshold for fuzzy matching movies (0.0 - 1.0)
   # Movies found with confidence below this threshold will be skipped
   fuzzy_match_min_confidence: 0.7,
+  # Layer 3 read-through refresh (#1108 §10b/§4) — default OFF; flip via READ_THROUGH_ENABLED.
+  read_through_enabled: false,
+  # Per-queue daily completed-job ceilings for the read-through spend-guard.
+  read_through_daily_caps: %{tmdb: 40_000, omdb: 90_000},
+  # Skip read-through enqueue when the target queue is this deep
+  # (available + scheduled + executing + retryable).
+  read_through_queue_limit: 1_000,
   # Scraping adapter chains per source — tried in order until one succeeds
   scraping_strategies: %{
     oscars: [:crawlbase],
@@ -296,6 +303,10 @@ config :cinegraph, Oban,
        # :maintenance (no API — writes ledger rows only). The inline touch on the
        # fetch paths is the real steady state; this catches drift. Sun 03:30 UTC.
        {"30 3 * * 0", Cinegraph.Workers.MarkImdbIdAbsentSweeper},
+       # Surface-area report warmer (#1108 §10c): every 30 min keeps the heavy
+       # SurfaceArea.report() warm in :health_cache (35-min TTL) so /admin/homeostasis
+       # cold-paint is sub-second. Off-minute to avoid the :00 fleet pile-up.
+       {"7,37 * * * *", Cinegraph.Workers.SurfaceAreaCacheWarmer},
        # Collaboration graph repair: 5,000 movies/day enqueued.
        # Sweeper itself runs on :maintenance; the per-movie rebuilds it
        # enqueues run on :collaboration (concurrency 3).

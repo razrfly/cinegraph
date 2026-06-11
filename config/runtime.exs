@@ -380,6 +380,15 @@ if config_env() == :prod do
 
   config :cinegraph, Oban, oban_config
 
+  # Read-through refresh master switch (#1108 §4) — default OFF; flip via env.
+  read_through_enabled =
+    (System.get_env("READ_THROUGH_ENABLED") || "")
+    |> String.trim()
+    |> String.downcase()
+    |> Kernel.in(~w(true 1))
+
+  config :cinegraph, :read_through_enabled, read_through_enabled
+
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
   # want to use a different value for prod and you most likely don't want

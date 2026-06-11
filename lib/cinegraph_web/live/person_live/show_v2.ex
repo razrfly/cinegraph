@@ -18,6 +18,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
   alias Cinegraph.Festivals
   alias CinegraphWeb.Helpers.UrlHelpers
   alias CinegraphWeb.NeutralV2Components
+  alias CinegraphWeb.ReadThroughHook
 
   @impl true
   def mount(_params, _session, socket) do
@@ -64,6 +65,7 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
     |> assign(:role_filter, role_filter)
     |> assign(:params, params)
     |> assign_person_seo(person)
+    |> ReadThroughHook.schedule(%{type: :person, id: person.id})
   end
 
   @impl true
@@ -109,6 +111,9 @@ defmodule CinegraphWeb.PersonLive.ShowV2 do
   defp person_movies_cta_label(_role), do: "Open all films"
 
   @impl true
+  def handle_info({:read_through, entity}, socket),
+    do: {:noreply, ReadThroughHook.run(socket, entity)}
+
   def handle_info({:find_path, target_id}, socket) do
     from_id = socket.assigns.person.id
 

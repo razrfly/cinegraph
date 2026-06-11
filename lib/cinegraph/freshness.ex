@@ -108,6 +108,48 @@ defmodule Cinegraph.Freshness do
     |> Repo.all()
   end
 
+  @doc """
+  The registered sources for `entity_type` that are currently stale for
+  `entity_id` — computed in ONE query (read-through hot path, #1108 §10b).
+  Missing ledger row = stale; `ineligible` = not stale; else `stale_after < now`.
+  """
+  def stale_sources(entity_type, entity_id) do
+    et = to_string(entity_type)
+    sources = Policy.registry() |> Map.get(et, %{}) |> Map.keys()
+    now = DateTime.utc_now()
+
+    tracked =
+      from(r in DataRefresh,
+        where: r.entity_type == ^et and r.entity_id == ^entity_id and r.source in ^sources,
+        select: {r.source, r.status, r.stale_after}
+      )
+      |> Repo.all()
+      |> Map.new(fn {src, status, sa} -> {src, {status, sa}} end)
+
+    Enum.filter(sources, fn src ->
+      case Map.get(tracked, src) do
+        nil -> true
+        {"ineligible", _} -> false
+        {_status, nil} -> true
+        {_status, sa} -> DateTime.compare(sa, now) == :lt
+      end
+    end)
+  end
+
+  @doc "Count of rows currently due for `source` (`stale_after < now AND status <> 'ineligible'`)."
+  def due_count(source) do
+    now = DateTime.utc_now()
+    src = to_string(source)
+
+    from(r in DataRefresh,
+      where:
+        r.source == ^src and r.status != "ineligible" and not is_nil(r.stale_after) and
+          r.stale_after < ^now,
+      select: count(r.id)
+    )
+    |> Repo.one()
+  end
+
   # --- status resolution -----------------------------------------------------
 
   defp resolve(:ok, et, src, base_date, now, _prev, _prev_fetched, meta) do

@@ -77,6 +77,25 @@ defmodule Cinegraph.Health.SurfaceArea do
     }
   end
 
+  @cache :health_cache
+  @cache_key "surface_area:report"
+  @cache_ttl :timer.minutes(35)
+
+  @doc """
+  Cached `report/0` (#1108 §10c). The report is a multi-second replica scan, so
+  the `/admin/homeostasis` dashboard reads it from `:health_cache` (35-min TTL,
+  warmed by `SurfaceAreaCacheWarmer`). `bypass_cache: true` recomputes fresh.
+  """
+  def cached_report(opts \\ []) do
+    if Keyword.get(opts, :bypass_cache, false), do: Cachex.del(@cache, @cache_key)
+
+    case Cachex.fetch(@cache, @cache_key, fn -> {:commit, report(), ttl: @cache_ttl} end) do
+      {:ok, v} -> v
+      {:commit, v} -> v
+      _ -> report()
+    end
+  end
+
   # ── OMDb (the flagship terminal-state source) ─────────────────────────────────────
   defp omdb_row do
     eligible = count(from m in "movies", where: not is_nil(m.imdb_id) and m.imdb_id != "")

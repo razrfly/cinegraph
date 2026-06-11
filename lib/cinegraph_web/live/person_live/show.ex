@@ -4,6 +4,7 @@ defmodule CinegraphWeb.PersonLive.Show do
   alias Cinegraph.People
   alias Cinegraph.Collaborations
   alias Cinegraph.Festivals
+  alias CinegraphWeb.ReadThroughHook
   import CinegraphWeb.CollaborationComponents
   import CinegraphWeb.PersonHelpers, only: [person_slug_or_id: 1]
   import CinegraphWeb.SEOHelpers
@@ -100,6 +101,7 @@ defmodule CinegraphWeb.PersonLive.Show do
     |> assign(:six_degrees_path, nil)
     |> assign(:six_degrees_loading, false)
     |> assign_person_seo(person)
+    |> ReadThroughHook.schedule(%{type: :person, id: person.id})
   end
 
   defp build_revenue_map(person) do
@@ -145,6 +147,9 @@ defmodule CinegraphWeb.PersonLive.Show do
   end
 
   @impl true
+  def handle_info({:read_through, entity}, socket),
+    do: {:noreply, ReadThroughHook.run(socket, entity)}
+
   def handle_info({:find_path, target_id}, socket) do
     from_id = socket.assigns.person.id
 

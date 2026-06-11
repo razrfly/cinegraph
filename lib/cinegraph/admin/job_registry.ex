@@ -67,7 +67,7 @@ defmodule Cinegraph.Admin.JobRegistry do
 
   @entries [
     # =========================================================================
-    # Scheduled entries (27 — must match config.exs crontab exactly)
+    # Scheduled entries (28 — must match config.exs crontab exactly)
     # =========================================================================
 
     %{
@@ -158,6 +158,20 @@ defmodule Cinegraph.Admin.JobRegistry do
       trigger_action: :enqueue_now,
       mutating: false,
       description: "Pre-compute drift checks every 30 minutes (Cachex 35-min TTL)",
+      destination: :system,
+      doc_url: nil
+    },
+    %{
+      id: :surface_area_cache_warmer,
+      label: "Surface-area cache warmer",
+      worker: Workers.SurfaceAreaCacheWarmer,
+      queue: :maintenance,
+      schedule: "7,37 * * * *",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: false,
+      description:
+        "Warm SurfaceArea.report() in :health_cache every 30 min for /admin/homeostasis",
       destination: :system,
       doc_url: nil
     },
