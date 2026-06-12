@@ -36,6 +36,11 @@ config :cinegraph,
     # AI Proxy stays as a fallback (datacenter-IP-only on the free tier, so mostly 613/202 —
     # kept only in case the JS path regresses again). See GitHub issue #1003.
     imdb_list: [:crawlbase, :crawlbase_smart_proxy],
+    # List-membership-event sources (#1115). loc.gov / Wikipedia are public records;
+    # :direct first, Crawlbase as a fallback if a WAF challenge appears (loc.gov 403s
+    # to plain fetches intermittently).
+    loc: [:direct, :crawlbase],
+    wikipedia: [:direct, :crawlbase],
     default: [:direct]
   }
 

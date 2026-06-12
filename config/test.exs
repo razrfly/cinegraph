@@ -96,6 +96,12 @@ config :cinegraph, :festival_http_client, Cinegraph.Scrapers.FestivalHttpStub
 # Application.get_env(:cinegraph, :imdb_list_http_client, HttpClient).
 config :cinegraph, :imdb_list_http_client, Cinegraph.Scrapers.FestivalHttpStub
 
+# Stub HTTP clients for list-membership-event scrapers (#1115). Same ETS-backed
+# FestivalHttpStub; NfrScraper / Movies1001Scraper read these via
+# Application.get_env(:cinegraph, :<key>_http_client, HttpClient).
+config :cinegraph, :loc_http_client, Cinegraph.Scrapers.FestivalHttpStub
+config :cinegraph, :wikipedia_http_client, Cinegraph.Scrapers.FestivalHttpStub
+
 # Disable live IMDb GraphQL cursor pagination in tests so no real network call is made
 # (the importer tests use lists whose total == item count, but keep this explicit).
 config :cinegraph, :imdb_graphql_pagination, false
