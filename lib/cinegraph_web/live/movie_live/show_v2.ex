@@ -21,6 +21,7 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
   alias CinegraphWeb.MovieLive.ShowV2.ProductionDetails
   alias CinegraphWeb.NeutralV2Components
   alias CinegraphWeb.MovieLive.ShowV2Availability
+  alias CinegraphWeb.ReadThroughHook
 
   require Logger
 
@@ -74,7 +75,8 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
          |> maybe_start_video_clerk_recommendation(data.movie.id)
          |> assign(empty_availability_assigns())
          |> start_async_availability(data.movie, socket.assigns[:availability_browser_region])
-         |> assign_movie_seo(data.movie)}
+         |> assign_movie_seo(data.movie)
+         |> ReadThroughHook.schedule(%{type: :movie, id: data.movie.id})}
 
       {:error, :not_found} ->
         {:noreply,
@@ -83,6 +85,10 @@ defmodule CinegraphWeb.MovieLive.ShowV2 do
          |> push_navigate(to: ~p"/movies")}
     end
   end
+
+  @impl true
+  def handle_info({:read_through, entity}, socket),
+    do: {:noreply, ReadThroughHook.run(socket, entity)}
 
   @impl true
   def handle_event("toggle_overview", _, socket),

@@ -13,6 +13,7 @@ defmodule CinegraphWeb.MovieLive.Show do
   alias Cinegraph.Metrics.DisparityCalculator
   alias Cinegraph.Repo
   alias Cinegraph.Workers.MovieScoreCacheWorker
+  alias CinegraphWeb.ReadThroughHook
 
   require Logger
 
@@ -108,10 +109,15 @@ defmodule CinegraphWeb.MovieLive.Show do
           tl = MovieCollaborations.get_collaboration_timelines(loaded_movie, key)
           {key, rel, tl}
         end)
+        |> ReadThroughHook.schedule(%{type: :movie, id: loaded_movie.id})
       end
 
     {:noreply, socket}
   end
+
+  @impl true
+  def handle_info({:read_through, entity}, socket),
+    do: {:noreply, ReadThroughHook.run(socket, entity)}
 
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
