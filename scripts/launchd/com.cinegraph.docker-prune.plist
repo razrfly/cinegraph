@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Weekly Docker image prune for the Cinegraph host (#1122).
+
+  Runs scripts/docker_image_prune.sh every Sunday. Times are host-LOCAL
+  (launchd does not use UTC). RunAtLoad is false so loading it never triggers
+  an immediate prune.
+
+  BEFORE INSTALLING: replace __CINEGRAPH_REPO__ below with the absolute path to
+  this repo's checkout on the host (e.g. /Users/holden/cinegraph). The plist will
+  not run correctly until this placeholder is a real path.
+
+  Install:
+    cp scripts/launchd/com.cinegraph.docker-prune.plist ~/Library/LaunchAgents/
+    # edit the copy to set the real repo path, then:
+    launchctl load -w ~/Library/LaunchAgents/com.cinegraph.docker-prune.plist
+
+  Uninstall:
+    launchctl unload -w ~/Library/LaunchAgents/com.cinegraph.docker-prune.plist
+    rm ~/Library/LaunchAgents/com.cinegraph.docker-prune.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cinegraph.docker-prune</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__CINEGRAPH_REPO__/scripts/docker_image_prune.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/cinegraph-docker-prune.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/cinegraph-docker-prune.err.log</string>
+</dict>
+</plist>

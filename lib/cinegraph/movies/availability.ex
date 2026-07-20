@@ -420,7 +420,9 @@ defmodule Cinegraph.Movies.Availability do
           source: source,
           fetched_at: fetched_at,
           stale_after: stale_after,
-          metadata: %{"provider_payload" => provider_data}
+          # provider_payload dropped (#1122): write-only, no readers in lib/;
+          # movie_watch_providers is churn-heavy (delete-then-insert per region).
+          metadata: %{}
         }
 
         %MovieWatchProvider{}
@@ -445,7 +447,9 @@ defmodule Cinegraph.Movies.Availability do
         tmdb_link: tmdb_link,
         fetched_at: fetched_at,
         stale_after: stale_after,
-        metadata: %{"region_payload" => country_data}
+        # region_payload dropped (#1122): write-only, no readers in lib/;
+        # movie_availability_refreshes is the churn-heaviest table (~4.2M upserts/day).
+        metadata: %{}
       })
 
     %{

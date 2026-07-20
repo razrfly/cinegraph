@@ -128,6 +128,23 @@ defmodule Cinegraph.Movies.AvailabilityTest do
       assert Repo.aggregate(MovieAvailabilityRefresh, :count) == 1
     end
 
+    test "does not write region/provider payloads to the churn tables (#1122)" do
+      movie = insert_movie!()
+
+      assert {:ok, [%{status: "success"}]} =
+               Availability.store_tmdb_watch_providers(movie, watch_payload())
+
+      # movie_availability_refreshes and movie_watch_providers are churn-heavy;
+      # the write-only payloads are dropped, leaving metadata empty.
+      assert Enum.all?(Repo.all(MovieAvailabilityRefresh), &(&1.metadata == %{}))
+      assert Enum.all?(Repo.all(MovieWatchProvider), &(&1.metadata == %{}))
+
+      # The small watch_providers catalog still carries provider_payload (unaffected).
+      catalog = Repo.all(WatchProvider)
+      assert catalog != []
+      assert Enum.all?(catalog, &(&1.metadata["provider_payload"] != nil))
+    end
+
     test "default store normalizes all regions present in the payload" do
       movie = insert_movie!()
 

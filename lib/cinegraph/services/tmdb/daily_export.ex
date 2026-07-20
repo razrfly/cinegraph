@@ -91,6 +91,8 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
       {:ok, _} ->
         with {:ok, _} <- decompress_file(gz_path, json_path) do
           File.rm(gz_path)
+          # Prune older decompressed exports so /tmp doesn't grow unbounded (#1120).
+          prune_old_exports(dest_dir, "movie_ids_*.json")
           Logger.info("Downloaded and decompressed to: #{json_path}")
           {:ok, json_path}
         end
@@ -153,6 +155,8 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
       {:ok, _} ->
         with {:ok, _} <- decompress_file(gz_path, json_path) do
           File.rm(gz_path)
+          # Prune older decompressed exports so /tmp doesn't grow unbounded (#1120).
+          prune_old_exports(dest_dir, "person_ids_*.json")
           Logger.info("Downloaded and decompressed to: #{json_path}")
           {:ok, json_path}
         end
@@ -416,6 +420,37 @@ defmodule Cinegraph.Services.TMDb.DailyExport do
   end
 
   # Private functions
+
+  # Deletes decompressed export files matching `glob` in `dest_dir`, keeping only
+  # the newest `keep` by mtime. TMDb publishes one export per day; without this the
+  # ~120 MB decompressed .json accumulates forever in the container temp dir (#1120).
+  # The .gz is already removed after decompression, so this only ever matches .json.
+  # Public (@doc false) so the retention logic is unit-testable without a network fetch.
+  @keep_exports 2
+  @doc false
+  def prune_old_exports(dest_dir, glob) do
+    dest_dir
+    |> Path.join(glob)
+    |> Path.wildcard()
+    |> Enum.map(fn path -> {path, file_mtime(path)} end)
+    |> Enum.sort_by(fn {_path, mtime} -> mtime end, :desc)
+    |> Enum.drop(@keep_exports)
+    |> Enum.each(fn {path, _mtime} ->
+      case File.rm(path) do
+        :ok -> Logger.info("Pruned old TMDb export: #{path}")
+        {:error, :enoent} -> :ok
+        {:error, reason} -> Logger.warning("Failed to prune #{path}: #{inspect(reason)}")
+      end
+    end)
+  end
+
+  defp file_mtime(path) do
+    case File.stat(path, time: :posix) do
+      {:ok, %File.Stat{mtime: mtime}} -> mtime
+      # Missing/unreadable files sort oldest so they are pruned first.
+      {:error, _} -> 0
+    end
+  end
 
   defp format_filename(date) do
     month = date.month |> Integer.to_string() |> String.pad_leading(2, "0")
