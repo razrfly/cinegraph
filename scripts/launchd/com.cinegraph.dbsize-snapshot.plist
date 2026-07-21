@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Daily DB-size snapshot for the #1122 Session 2 flat-curve verification.
+
+  Appends scripts/db_size_report.sh output (the four #1122 tables + database
+  total + host free disk) to a log once a day, so the 7-day "growth curves stay
+  flat" proof accrues without manual effort. Read-only. Times are host-LOCAL.
+  RunAtLoad is true so loading it records a day-0 snapshot immediately.
+
+  This is a TEMPORARY verification aid — unload it once the week is confirmed
+  flat (the writers are already capped at the source, so nothing needs an
+  ongoing prune). Leaving it loaded is harmless (a tiny append-only log).
+
+  Install (host):
+    cp ~/ops/cinegraph/db_size_report.sh ~/ops/cinegraph/   # already placed there
+    cp scripts/launchd/com.cinegraph.dbsize-snapshot.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.cinegraph.dbsize-snapshot.plist
+
+  Read the accruing series:
+    cat ~/Library/Logs/cinegraph-dbsize-snapshot.log
+
+  Uninstall (after the week):
+    launchctl unload -w ~/Library/LaunchAgents/com.cinegraph.dbsize-snapshot.plist
+    rm ~/Library/LaunchAgents/com.cinegraph.dbsize-snapshot.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cinegraph.dbsize-snapshot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/holden/ops/cinegraph/db_size_report.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>15</integer>
+        <key>Minute</key>
+        <integer>5</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/holden/Library/Logs/cinegraph-dbsize-snapshot.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/holden/Library/Logs/cinegraph-dbsize-snapshot.log</string>
+</dict>
+</plist>
