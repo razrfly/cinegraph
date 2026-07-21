@@ -280,6 +280,25 @@ defmodule Cinegraph.Metrics.ApiTracker do
   Default: 90 days
   """
   def cleanup_old_metrics(days \\ 90) do
+    {deleted, _} = Repo.delete_all(old_metrics_query(days))
+
+    Logger.info("Cleaned up #{deleted} old API metrics (preserved latest import_state records)")
+    deleted
+  end
+
+  @doc """
+  Counts the rows `cleanup_old_metrics/1` would delete, without deleting anything.
+  Used for dry-run reporting (`Cinegraph.Maintenance.CleanupApiMetrics`).
+  """
+  def count_old_metrics(days \\ 90) do
+    Repo.aggregate(old_metrics_query(days), :count)
+  end
+
+  # Rows older than the cutoff, excluding the latest import_state record per
+  # (source, target_identifier) key so that key state is never lost. Shared by
+  # cleanup_old_metrics/1 (delete) and count_old_metrics/1 (dry-run) so the two
+  # never drift.
+  defp old_metrics_query(days) do
     cutoff = DateTime.utc_now() |> DateTime.add(-days * 86400, :second)
 
     # Build a subquery for the latest import_state record per key
@@ -290,23 +309,16 @@ defmodule Cinegraph.Metrics.ApiTracker do
         select: %{max_id: max(mi.id)}
       )
 
-    # Delete old metrics but preserve the latest import_state per key
-    query =
-      from(m in ApiLookupMetric,
-        as: :metric,
-        where: m.inserted_at < ^cutoff,
-        where:
-          not exists(
-            from(ls in subquery(latest_subq),
-              where: ls.max_id == parent_as(:metric).id
-            )
+    from(m in ApiLookupMetric,
+      as: :metric,
+      where: m.inserted_at < ^cutoff,
+      where:
+        not exists(
+          from(ls in subquery(latest_subq),
+            where: ls.max_id == parent_as(:metric).id
           )
-      )
-
-    {deleted, _} = Repo.delete_all(query)
-
-    Logger.info("Cleaned up #{deleted} old API metrics (preserved latest import_state records)")
-    deleted
+        )
+    )
   end
 
   # Import State Tracking Functions

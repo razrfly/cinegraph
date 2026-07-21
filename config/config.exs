@@ -300,7 +300,7 @@ config :cinegraph, Oban,
        {"0 6 * * *", Cinegraph.Workers.FestivalPersonResolverSweeper},
        # OMDb null backfill: 5,000/day on :omdb. Canonical-list movies first.
        {"30 6 * * *", Cinegraph.Workers.OmdbBackfillSweeper},
-       # Watch availability refresh: 5,000/day on :tmdb.
+       # Watch availability refresh: enqueues up to 30,000/day (jobs run on :movie_availability).
        {"45 6 * * *", Cinegraph.Workers.AvailabilityRefreshSweeper},
        # IMDb-id repair via TMDb fetches: 5,000/day on :tmdb.
        {"0 7 * * *", Cinegraph.Workers.ImdbIdRepairSweeper},
@@ -308,6 +308,11 @@ config :cinegraph, Oban,
        # :maintenance (no API — writes ledger rows only). The inline touch on the
        # fetch paths is the real steady state; this catches drift. Sun 03:30 UTC.
        {"30 3 * * 0", Cinegraph.Workers.MarkImdbIdAbsentSweeper},
+       # api_lookup_metrics retention (#1122): weekly on :maintenance, no API —
+       # deletes rows > 90 days while preserving the latest import_state per key.
+       # append-only table (~100K rows/day); first run drops ~62%, then stays
+       # ~90-day capped. Sun 07:15 UTC, clear of the daily :00/:30 sweepers.
+       {"15 7 * * 0", Cinegraph.Workers.ApiMetricsCleanupSweeper},
        # Surface-area report warmer (#1108 §10c): every 30 min keeps the heavy
        # SurfaceArea.report() warm in :health_cache (35-min TTL) so /admin/homeostasis
        # cold-paint is sub-second. Off-minute to avoid the :00 fleet pile-up.

@@ -67,7 +67,7 @@ defmodule Cinegraph.Admin.JobRegistry do
 
   @entries [
     # =========================================================================
-    # Scheduled entries (28 — must match config.exs crontab exactly)
+    # Scheduled entries (29 — must match config.exs crontab exactly)
     # =========================================================================
 
     %{
@@ -240,6 +240,20 @@ defmodule Cinegraph.Admin.JobRegistry do
       description:
         "Weekly (#1109): mark checked-but-null imdb_id movies source-absent in the ledger (no API)",
       destination: :movies,
+      doc_url: nil
+    },
+    %{
+      id: :api_metrics_cleanup_sweeper,
+      label: "api_lookup_metrics retention sweeper",
+      worker: Workers.ApiMetricsCleanupSweeper,
+      queue: :maintenance,
+      schedule: "15 7 * * 0",
+      args: %{},
+      trigger_action: :enqueue_now,
+      mutating: true,
+      description:
+        "Weekly (#1122): delete api_lookup_metrics > 90 days, preserving latest import_state per key (no API)",
+      destination: :metrics,
       doc_url: nil
     },
     %{
