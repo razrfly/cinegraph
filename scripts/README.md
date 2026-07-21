@@ -47,6 +47,48 @@ rm ~/Library/LaunchAgents/com.cinegraph.docker-prune.plist
 Logs: `~/Library/Logs/cinegraph-docker-prune.log` (script) and
 `/tmp/cinegraph-docker-prune.{out,err}.log` (launchd stdout/stderr).
 
+## Database reclaim (#1122 Session 2)
+
+One-time host-side reclaim of the ~8.5–11 GB of dead JSONB payloads left in old rows
+after #1122 Session 1 capped the writers. Both scripts run against the **direct**
+Postgres port 5432 (never PgBouncer 6432) and are safe to pipe in over SSH without a
+host-side git pull:
+
+```bash
+HOST=192.168.1.205
+ssh "$HOST" 'bash -s' < scripts/db_size_report.sh                      # baseline / verification (read-only)
+```
+
+### `strip_availability_payloads.sh`
+
+Batched, idempotent, resumable strip of the write-only `region_payload` /
+`provider_payload` blobs from `metadata`. Nothing in `lib/` reads them; error rows
+(`metadata = {"error": ...}`) and already-stripped rows are preserved because the
+`WHERE metadata ? '<key>'` filter skips them. Models the id-range / half-open-window /
+sleep discipline of `lib/cinegraph/maintenance/backfill_freshness.ex:297`, with a
+periodic `CHECKPOINT` + plain `VACUUM` so the file doesn't balloon before the final
+`VACUUM FULL` compacts it.
+
+```bash
+# Dry-run first (counts only), then the real strip. Smaller table first as a rehearsal.
+ssh "$HOST" 'bash -s' < scripts/strip_availability_payloads.sh -- \
+  --table movie_watch_providers --key provider_payload --dry-run
+ssh "$HOST" 'bash -s' < scripts/strip_availability_payloads.sh -- \
+  --table movie_watch_providers --key provider_payload
+ssh "$HOST" 'bash -s' < scripts/strip_availability_payloads.sh -- \
+  --table movie_availability_refreshes --key region_payload
+```
+
+After each strip: pause the writer queue in `kamal console`
+(`Oban.pause_queue(queue: :movie_availability)`), run
+`VACUUM FULL <table>;` on port 5432 to reclaim the heap, then
+`Oban.resume_queue(queue: :movie_availability)`. Full runbook: issue #1122.
+
+### `db_size_report.sh`
+
+Read-only snapshot of the four #1122 tables + `pg_database_size` + `df -h`. Run daily
+through the 7-day verification window to confirm the curves stay flat.
+
 ## Guidelines
 
 - Keep the project root clean of temporary files
