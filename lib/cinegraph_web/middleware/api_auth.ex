@@ -17,15 +17,24 @@ defmodule CinegraphWeb.Middleware.ApiAuth do
         # No key configured — skip auth (dev convenience)
         resolution
 
-      expected_key ->
-        case resolution.context do
-          %{auth_token: ^expected_key} ->
-            resolution
+      expected_key when is_binary(expected_key) ->
+        if String.trim(expected_key) == "" do
+          resolution
+          |> Absinthe.Resolution.put_result({:error, "unauthorized"})
+        else
+          case resolution.context do
+            %{auth_token: ^expected_key} ->
+              resolution
 
-          _ ->
-            resolution
-            |> Absinthe.Resolution.put_result({:error, "unauthorized"})
+            _ ->
+              resolution
+              |> Absinthe.Resolution.put_result({:error, "unauthorized"})
+          end
         end
+
+      _blank_or_invalid_key ->
+        resolution
+        |> Absinthe.Resolution.put_result({:error, "unauthorized"})
     end
   end
 end

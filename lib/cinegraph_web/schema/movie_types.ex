@@ -83,6 +83,42 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :official, :boolean
   end
 
+  @desc "A TMDb keyword or genre"
+  object :movie_metadata_term do
+    field :tmdb_id, non_null(:integer)
+    field :name, non_null(:string)
+  end
+
+  @desc "A TMDb keyword or genre and its eligible fully imported movie count"
+  object :movie_metadata_vocabulary_term do
+    field :tmdb_id, non_null(:integer)
+    field :name, non_null(:string)
+    field :movie_count, non_null(:integer)
+  end
+
+  @desc "A movie and the requested metadata terms that matched it"
+  object :movie_discovery_result do
+    field :movie, non_null(:movie)
+    field :matched_keywords, non_null(list_of(non_null(:movie_metadata_term)))
+    field :matched_genres, non_null(list_of(non_null(:movie_metadata_term)))
+  end
+
+  object :movie_discovery_edge do
+    field :cursor, non_null(:string)
+    field :node, non_null(:movie_discovery_result)
+  end
+
+  object :movie_discovery_page_info do
+    field :end_cursor, :string
+    field :has_next_page, non_null(:boolean)
+  end
+
+  @desc "A cursor-paginated page of metadata-backed movie discovery results"
+  object :movie_discovery_connection do
+    field :edges, non_null(list_of(non_null(:movie_discovery_edge)))
+    field :page_info, non_null(:movie_discovery_page_info)
+  end
+
   @desc "A region option where watch availability can be displayed"
   object :availability_region_option do
     field :region, :string
@@ -143,6 +179,14 @@ defmodule CinegraphWeb.Schema.MovieTypes do
     field :poster_path, :string
     field :backdrop_path, :string
     field :canonical_sources, :json
+
+    field :keywords, non_null(list_of(non_null(:movie_metadata_term))) do
+      resolve(&MovieResolver.keywords/3)
+    end
+
+    field :genres, non_null(list_of(non_null(:movie_metadata_term))) do
+      resolve(&MovieResolver.genres/3)
+    end
 
     field :cinegraph_url, :string do
       resolve(fn movie, _, _ ->
