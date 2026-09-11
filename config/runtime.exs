@@ -29,7 +29,7 @@ omdb_api_key =
 cinegraph_base_url =
   if config_env() == :dev,
     do: env!("CINEGRAPH_BASE_URL", :string, "http://localhost:4000"),
-    else: System.get_env("CINEGRAPH_BASE_URL") || "https://cinegraph.org"
+    else: System.get_env("CINEGRAPH_BASE_URL") || "https://cinegraph.app"
 
 config :cinegraph, :cinegraph_base_url, cinegraph_base_url
 
@@ -151,17 +151,9 @@ config :cinegraph, :crawlbase_js_api_key, crawlbase_js_api_key
 # test: optional (tests override via Application.put_env)
 api_key =
   cond do
-    config_env() == :dev ->
-      env!("CINEGRAPH_API_KEY", :string, nil)
-
-    config_env() == :prod ->
-      Cinegraph.Configuration.require_non_blank!(
-        "CINEGRAPH_API_KEY",
-        System.fetch_env!("CINEGRAPH_API_KEY")
-      )
-
-    true ->
-      System.get_env("CINEGRAPH_API_KEY")
+    config_env() == :dev -> env!("CINEGRAPH_API_KEY", :string, nil)
+    config_env() == :prod -> System.fetch_env!("CINEGRAPH_API_KEY")
+    true -> System.get_env("CINEGRAPH_API_KEY")
   end
 
 config :cinegraph, :api_key, api_key

@@ -11,7 +11,6 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   alias Cinegraph.Movies.{
     Availability,
     Credit,
-    Discovery,
     ExternalMetric,
     Movie,
     MovieAvailabilityRefresh,
@@ -24,17 +23,6 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   # ---------------------------------------------------------------------------
   # Top-level query resolvers
   # ---------------------------------------------------------------------------
-
-  @doc false
-  def search_movie_keywords(_, %{query: query} = args, _) do
-    Discovery.search_keywords(query, Map.get(args, :limit, 10))
-  end
-
-  @doc false
-  def movie_genres(_, _, _), do: Discovery.list_genres()
-
-  @doc false
-  def discover_movies(_, args, _), do: Discovery.discover(args)
 
   @doc false
   def movie(_, args, _) do
@@ -127,20 +115,6 @@ defmodule CinegraphWeb.Resolvers.MovieResolver do
   # ---------------------------------------------------------------------------
   # Child field resolvers on Movie — batched via Dataloader
   # ---------------------------------------------------------------------------
-
-  @doc false
-  def keywords(%{keywords: keywords}, _, _) when is_list(keywords), do: {:ok, keywords}
-
-  def keywords(movie, args, resolution) do
-    Absinthe.Resolution.Helpers.dataloader(:db, :keywords).(movie, args, resolution)
-  end
-
-  @doc false
-  def genres(%{genres: genres}, _, _) when is_list(genres), do: {:ok, genres}
-
-  def genres(movie, args, resolution) do
-    Absinthe.Resolution.Helpers.dataloader(:db, :genres).(movie, args, resolution)
-  end
 
   @doc false
   def ratings(movie, _, %{context: %{loader: loader}}) do

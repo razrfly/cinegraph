@@ -35,57 +35,7 @@ defmodule CinegraphWeb.Schema do
     [Absinthe.Middleware.Dataloader] ++ Absinthe.Plugin.defaults()
   end
 
-  enum :movie_discovery_match do
-    value(:all, description: "A movie must contain every requested ID in this filter group")
-
-    value(:any,
-      description: "A movie must contain at least one requested ID in this filter group"
-    )
-  end
-
   query do
-    @desc "Search TMDb movie keywords with eligible fully imported movie counts"
-    field :search_movie_keywords,
-          non_null(list_of(non_null(:movie_metadata_vocabulary_term))) do
-      arg(:query, non_null(:string))
-      arg(:limit, :integer, default_value: 10)
-
-      complexity(fn args, child_complexity ->
-        limit = args |> Map.get(:limit, 10) |> max(1) |> min(50)
-        5 + limit * max(child_complexity, 1)
-      end)
-
-      middleware(ApiAuth)
-      resolve(&MovieResolver.search_movie_keywords/3)
-    end
-
-    @desc "List the stable TMDb movie genre vocabulary with eligible movie counts"
-    field :movie_genres,
-          non_null(list_of(non_null(:movie_metadata_vocabulary_term))) do
-      complexity(fn _, child_complexity -> 5 + 50 * max(child_complexity, 1) end)
-
-      middleware(ApiAuth)
-      resolve(&MovieResolver.movie_genres/3)
-    end
-
-    @desc "Discover fully imported movies through stored TMDb keywords and genres"
-    field :discover_movies, :movie_discovery_connection do
-      arg(:keyword_tmdb_ids, list_of(non_null(:integer)))
-      arg(:genre_tmdb_ids, list_of(non_null(:integer)))
-      arg(:keyword_match, :movie_discovery_match, default_value: :all)
-      arg(:genre_match, :movie_discovery_match, default_value: :all)
-      arg(:first, :integer, default_value: 12)
-      arg(:after, :string)
-
-      complexity(fn args, child_complexity ->
-        first = args |> Map.get(:first, 12) |> max(1) |> min(50)
-        15 + first * max(child_complexity, 1)
-      end)
-
-      middleware(ApiAuth)
-      resolve(&MovieResolver.discover_movies/3)
-    end
-
     @desc "Look up a single movie by TMDb ID, IMDb ID, or slug"
     field :movie, :movie do
       arg(:tmdb_id, :integer)

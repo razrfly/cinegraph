@@ -30,7 +30,6 @@ builder:
 env:
   clear:
     PHX_HOST: cinegraph.org
-    CINEGRAPH_BASE_URL: https://cinegraph.org
     PHX_SERVER: "true"
     PORT: "4000"
     # Phase 0 of #910 — the previous default of 5 caused request pile-up,
