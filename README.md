@@ -846,13 +846,16 @@ The result is a living, data-driven understanding of which films truly matter ac
 ## GraphQL API
 
 Cinegraph exposes a read-only GraphQL API for querying movie data, ratings, awards,
-cast/crew, and Cultural Relevance Index (CRI) scores.
+cast/crew, and metadata-backed keyword/genre discovery. The complete discovery
+contract and consumer handoff are in
+[`docs/api/movie-discovery.md`](docs/api/movie-discovery.md).
 
 ### Endpoint
 
 | Environment | URL |
 |---|---|
 | Local dev | `http://localhost:4001/api/graphql` |
+| Public production | `https://cinegraph.org/api/graphql` |
 | Fly.io (internal) | `http://cinegraph.internal:4000/api/graphql` |
 | GraphiQL playground (dev only) | `http://localhost:4001/api/graphiql` |
 
@@ -867,6 +870,8 @@ Authorization: Bearer <your_api_key>
 Set the key via environment variable: `CINEGRAPH_API_KEY=your_secret_key`
 
 In local dev, the key check is skipped if `CINEGRAPH_API_KEY` is not set.
+Production startup rejects a missing or blank key. Keep this credential on the
+calling server, not in a browser bundle.
 
 ### Sample Queries
 
@@ -917,11 +922,13 @@ query {
 }
 ```
 
-### Rate Limiting
+### Request Limits
 
-No hard rate limit currently enforced. Both apps are on Fly.io internal
-networking — use `http://cinegraph.internal:4000/api/graphql` for near-zero
-latency without public DNS or TLS overhead.
+GraphQL operations have a 2,500 complexity budget and a 5,000-token parser limit;
+HTTP transport batches are capped at 10 operations. There is no general per-key
+quota or rate-limiting platform. Co-located first-party apps may use
+`http://cinegraph.internal:4000/api/graphql`; external server-side consumers use
+the public production endpoint above.
 
 ---
 
