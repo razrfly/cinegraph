@@ -177,9 +177,10 @@ curl --fail-with-body \
   --data '{"query":"query Search($query: String!, $limit: Int!) { searchMovieKeywords(query: $query, limit: $limit) { tmdbId name movieCount } }","variables":{"query":"war","limit":10}}'
 ```
 
-The explicit user agent is recommended because the 2026-09-12 live readiness
-audit observed HTTP 403 responses from a default Python user agent, while a named
-user agent reached GraphQL. The cause was not established.
+The explicit user agent is recommended because the live readiness audit on
+2026-09-12 Europe/Warsaw (2026-09-11 UTC) observed HTTP 403 responses from a
+default Python user agent, while a named user agent reached GraphQL. The cause
+was not established.
 
 ## Safety and query cost
 
@@ -195,20 +196,25 @@ request with both filter groups and both Movie metadata fields executes five SQL
 queries regardless of the number of returned movies: two ID-validation queries,
 one page query, and two association preloads.
 
-Implementation-time read-only measurements on local `cinegraph_dev`, 2026-09-12,
-after one warm-up and with 12-result pages (three observations each):
+Implementation-time read-only measurements on local `cinegraph_dev`, run on
+2026-09-12 Europe/Warsaw (2026-09-11 UTC), after one warm-up and with 12-result
+pages (three observations each):
 
 | Probe | Latency (ms) |
 |---|---:|
-| Keyword vocabulary search, `war` | 69.498, 72.059, 52.778 |
-| Keyword discovery, `war` | 11.666, 13.888, 14.849 |
-| Keyword discovery, `nepotism` | 17.026, 12.555, 8.679 |
-| Broad genre discovery, Drama (TMDb 18) | 336.612, 266.179, 379.140 |
-| Combined `war` + Drama | 65.246, 71.827, 67.445 |
+| Keyword vocabulary search, `war` | 46.950, 35.269, 36.642 |
+| Broad keyword vocabulary search, `a` | 69.224, 63.514, 67.270 |
+| Keyword discovery, `war` | 21.474, 20.771, 20.276 |
+| Keyword discovery, `nepotism` | 16.029, 12.735, 8.568 |
+| Broad genre discovery, Drama (TMDb 18) | 330.030, 342.738, 344.238 |
+| Combined `war` + Drama | 66.051, 67.812, 67.720 |
 
 These are single-process local corpus observations, not production service-level
 claims. The development database had not applied the new keyword-first migration
 for this run, so deployment benchmarking should be repeated after migrating.
+Keyword search filters and limits candidates before joining movie associations.
+The 15-minute genre-vocabulary cache measured 872.345 ms for a cold aggregation
+and 0.010, 0.002, and 0.001 ms for the next three local reads (19 genres).
 
 ## Provenance, images, and interpretation
 
@@ -232,7 +238,8 @@ change is deployed.
 
 ## Coverage and freshness limitations
 
-Local `cinegraph_dev` audit on 2026-09-12 (not production):
+Local `cinegraph_dev` audit on 2026-09-12 Europe/Warsaw (2026-09-11 UTC; not
+production):
 
 | Measure | Result |
 |---|---:|
@@ -254,9 +261,10 @@ associations.
 
 ### Pre-deployment live baseline
 
-An authorized 2026-09-12 request to `https://cinegraph.org/api/graphql` verified
-the existing `movie(tmdbId: 667216)` lookup with the configured Bearer token. It
-returned *Infinity Pool*, IMDb `tt10365998`, and
+An authorized request on 2026-09-12 Europe/Warsaw (2026-09-11 UTC) to
+`https://cinegraph.org/api/graphql` verified the existing
+`movie(tmdbId: 667216)` lookup with the configured Bearer token. It returned
+*Infinity Pool*, IMDb `tt10365998`, and
 `https://cinegraph.app/movies/infinity-pool-2023`. Missing and incorrect tokens
 both returned GraphQL `unauthorized` errors. This proves existing endpoint and
 credential access only; it is not evidence that the discovery fields are
@@ -279,21 +287,26 @@ the configured public endpoint without logging the key:
 Until that checklist is executed, live availability of the new fields and
 consumer credential provisioning remain outstanding.
 
-## Release audit fixes and validation (2026-09-12)
+## Release audit fixes and validation (2026-09-12 Europe/Warsaw; 2026-09-11 UTC)
 
-The request guard now checks merged body/query parameters, including decoded
-arrays and JSON-encoded `_json`/`operations` values. Both keys are checked to
-prevent a smaller batch from hiding an oversized one. HTTP regression tests
-cover GET and POST, the 10-operation boundary, and conflicting parameters.
-Canonical movie links now use `.org` in the runtime default and deployment
-configuration. Pagination tests cross equal dates and null dates one result at
-a time.
+The request guard checks merged body/query parameters, including decoded arrays
+and JSON-encoded `_json`/`operations` values. Both keys are checked to prevent a
+smaller batch from hiding an oversized one. HTTP regression tests cover GET and
+POST, the 10-operation boundary, and conflicting parameters. Keyword candidates
+are limited before movie-count aggregation, and genre counts use a short-lived
+single-flight cache. The query-count assertion is scoped to the test process and
+its supervised preload callers. Canonical movie links use `.org` in the runtime
+default and deployment configuration. Pagination tests cross equal dates and
+null dates one result at a time.
 
 Validation: `mix test test/cinegraph_web/controllers/graphql_api_test.exs
-test/cinegraph_web/schema test/cinegraph/configuration_test.exs` — 57 tests,
+test/cinegraph_web/schema test/cinegraph/configuration_test.exs` — 58 tests,
 zero failures. Formatting checks pass for the changed Elixir files.
 
-The pre-deployment live probe still reports `searchMovieKeywords` as an unknown
-field. Deploy the schema, configuration, and index migration before enabling
-Dictionary's production discovery adapter, then complete the smoke checklist
-above. These local checks do not certify a production rollout.
+The pre-deployment live probe was repeated during PR review on 2026-09-12
+Europe/Warsaw (2026-09-11 UTC): `searchMovieKeywords` still returned an unknown
+field error, the historical `.app` movie URL returned HTTP 404, and the configured
+`.org` URL returned HTTP 200. Deploy the schema, configuration, and index migration
+before enabling Dictionary's production discovery adapter, then complete the
+authenticated smoke checklist above. These checks do not certify a production
+rollout.

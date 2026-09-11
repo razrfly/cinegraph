@@ -21,6 +21,9 @@ defmodule Cinegraph.Movies.Discovery do
   @max_first 50
   @default_keyword_limit 10
   @max_keyword_limit 50
+  @genre_cache_name :movies_cache
+  @genre_cache_key {:graphql_movie_discovery, :genre_vocabulary_v1}
+  @genre_cache_ttl :timer.minutes(15)
 
   @type match_mode :: :all | :any
 
@@ -30,16 +33,9 @@ defmodule Cinegraph.Movies.Discovery do
   def search_keywords(query, limit) when is_binary(query) do
     with {:ok, query} <- validate_keyword_query(query),
          :ok <- validate_range("limit", limit, 1, @max_keyword_limit) do
-      keywords =
+      candidates =
         from(keyword in Keyword,
-          left_join: movie_keyword in "movie_keywords",
-          on: field(movie_keyword, :keyword_id) == keyword.id,
-          left_join: movie in Movie,
-          on:
-            movie.id == field(movie_keyword, :movie_id) and
-              movie.import_status == "full",
           where: fragment("strpos(lower(?), lower(?)) > 0", keyword.name, ^query),
-          group_by: [keyword.id, keyword.tmdb_id, keyword.name],
           order_by: [
             asc:
               fragment(
@@ -53,6 +49,31 @@ defmodule Cinegraph.Movies.Discovery do
             asc: keyword.tmdb_id
           ],
           limit: ^limit,
+          select: keyword.id
+        )
+
+      keywords =
+        from(keyword in Keyword,
+          where: keyword.id in subquery(candidates),
+          left_join: movie_keyword in "movie_keywords",
+          on: field(movie_keyword, :keyword_id) == keyword.id,
+          left_join: movie in Movie,
+          on:
+            movie.id == field(movie_keyword, :movie_id) and
+              movie.import_status == "full",
+          group_by: [keyword.id, keyword.tmdb_id, keyword.name],
+          order_by: [
+            asc:
+              fragment(
+                "CASE WHEN lower(?) = lower(?) THEN 0 WHEN strpos(lower(?), lower(?)) = 1 THEN 1 ELSE 2 END",
+                keyword.name,
+                ^query,
+                keyword.name,
+                ^query
+              ),
+            asc: fragment("lower(?)", keyword.name),
+            asc: keyword.tmdb_id
+          ],
           select: %{
             tmdb_id: keyword.tmdb_id,
             name: keyword.name,
@@ -69,23 +90,18 @@ defmodule Cinegraph.Movies.Discovery do
 
   @doc "Lists the stable TMDb genre vocabulary with eligible movie counts."
   def list_genres do
-    genres =
-      from(genre in Genre,
-        left_join: movie_genre in "movie_genres",
-        on: field(movie_genre, :genre_id) == genre.id,
-        left_join: movie in Movie,
-        on: movie.id == field(movie_genre, :movie_id) and movie.import_status == "full",
-        group_by: [genre.id, genre.tmdb_id, genre.name],
-        order_by: [asc: fragment("lower(?)", genre.name), asc: genre.tmdb_id],
-        select: %{
-          tmdb_id: genre.tmdb_id,
-          name: genre.name,
-          movie_count: count(movie.id, :distinct)
-        }
-      )
-      |> Repo.all()
+    case Cachex.fetch(@genre_cache_name, @genre_cache_key, fn _key ->
+           {:commit, query_genres(), ttl: @genre_cache_ttl}
+         end) do
+      {status, genres} when status in [:ok, :commit] -> {:ok, genres}
+      {:commit, genres, _opts} -> {:ok, genres}
+      {:error, _reason} -> {:ok, query_genres()}
+    end
+  end
 
-    {:ok, genres}
+  @doc "Invalidates cached genre vocabulary counts."
+  def invalidate_genre_cache do
+    Cachex.del(@genre_cache_name, @genre_cache_key)
   end
 
   @doc "Discovers fully imported movies matching the requested TMDb metadata IDs."
@@ -159,6 +175,23 @@ defmodule Cinegraph.Movies.Discovery do
       String.length(query) > @max_query_length -> {:error, "query must be at most 100 characters"}
       true -> {:ok, query}
     end
+  end
+
+  defp query_genres do
+    from(genre in Genre,
+      left_join: movie_genre in "movie_genres",
+      on: field(movie_genre, :genre_id) == genre.id,
+      left_join: movie in Movie,
+      on: movie.id == field(movie_genre, :movie_id) and movie.import_status == "full",
+      group_by: [genre.id, genre.tmdb_id, genre.name],
+      order_by: [asc: fragment("lower(?)", genre.name), asc: genre.tmdb_id],
+      select: %{
+        tmdb_id: genre.tmdb_id,
+        name: genre.name,
+        movie_count: count(movie.id, :distinct)
+      }
+    )
+    |> Repo.all()
   end
 
   defp normalize_filters(args) do

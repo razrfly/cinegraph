@@ -1,9 +1,15 @@
 defmodule CinegraphWeb.Schema.MovieDiscoveryTest do
   use Cinegraph.DataCase, async: false
 
-  alias Cinegraph.Movies.{Genre, Keyword, Movie}
+  alias Cinegraph.Movies.{Discovery, Genre, Keyword, Movie}
   alias Cinegraph.Repo
   alias CinegraphWeb.Schema
+
+  setup do
+    Discovery.invalidate_genre_cache()
+    on_exit(&Discovery.invalidate_genre_cache/0)
+    :ok
+  end
 
   defp run_query(query, variables \\ %{}, context \\ %{}) do
     Absinthe.run(query, Schema, variables: variables, context: context)
@@ -120,6 +126,7 @@ defmodule CinegraphWeb.Schema.MovieDiscoveryTest do
       alpha = insert_genre(720_002, "alpha Fixture")
       insert_movie(%{tmdb_id: 721_001}) |> tag_movie([], [alpha])
       insert_movie(%{tmdb_id: 721_002, import_status: "soft"}) |> tag_movie([], [alpha, zulu])
+      Discovery.invalidate_genre_cache()
 
       query = "query { movieGenres { tmdbId name movieCount } }"
 
@@ -128,6 +135,23 @@ defmodule CinegraphWeb.Schema.MovieDiscoveryTest do
 
       assert Enum.map(fixtures, & &1["tmdbId"]) == [alpha.tmdb_id, zulu.tmdb_id]
       assert Enum.map(fixtures, & &1["movieCount"]) == [1, 0]
+    end
+
+    test "reuses the short-lived cached vocabulary" do
+      first = insert_genre(720_011, "Cache Fixture One")
+      Discovery.invalidate_genre_cache()
+
+      assert {:ok, initial} = Discovery.list_genres()
+      assert Enum.any?(initial, &(&1.tmdb_id == first.tmdb_id))
+
+      second = insert_genre(720_012, "Cache Fixture Two")
+
+      assert {:ok, cached} = Discovery.list_genres()
+      refute Enum.any?(cached, &(&1.tmdb_id == second.tmdb_id))
+
+      Discovery.invalidate_genre_cache()
+      assert {:ok, refreshed} = Discovery.list_genres()
+      assert Enum.any?(refreshed, &(&1.tmdb_id == second.tmdb_id))
     end
   end
 
@@ -436,7 +460,14 @@ defmodule CinegraphWeb.Schema.MovieDiscoveryTest do
         :telemetry.attach(
           handler_id,
           [:cinegraph, :repo, :query],
-          fn _, _, _, _ -> send(test_pid, :repo_query) end,
+          fn _, _, _, _ ->
+            emitter = self()
+            ancestors = Process.get(:"$ancestors", [])
+            callers = Process.get(:"$callers", [])
+
+            if emitter == test_pid or test_pid in ancestors or test_pid in callers,
+              do: send(test_pid, :repo_query)
+          end,
           nil
         )
 
