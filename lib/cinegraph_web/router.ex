@@ -30,6 +30,10 @@ defmodule CinegraphWeb.Router do
     plug CinegraphWeb.Plugs.ApiAuthPlug
   end
 
+  pipeline :graphql_api do
+    plug CinegraphWeb.Plugs.GraphQLRequestLimitsPlug, max_batch_size: 10
+  end
+
   pipeline :admin do
     plug :admin_auth
   end
@@ -241,9 +245,13 @@ defmodule CinegraphWeb.Router do
 
   # GraphQL API — read-only, authenticated via Bearer token
   scope "/api" do
-    pipe_through :api
+    pipe_through [:api, :graphql_api]
 
-    forward "/graphql", Absinthe.Plug, schema: CinegraphWeb.Schema
+    forward "/graphql", Absinthe.Plug,
+      schema: CinegraphWeb.Schema,
+      analyze_complexity: true,
+      max_complexity: 2_500,
+      token_limit: 5_000
   end
 
   if Mix.env() == :dev do
