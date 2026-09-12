@@ -10,6 +10,7 @@ credential here.
 |---|---|---|
 | Cinegraph registry implementation | complete locally | migrations, registry auth, lifecycle commands, legacy boundary, docs |
 | Cinegraph focused tests | complete locally | `mix test` command and result below |
+| Cinegraph admin key UI | implemented/tested; walkthrough pending | `/admin/api-credentials`; create clients, issue/copy once, overlap rotation, revoke and disable |
 | Eventasaurus canary companion fix | implemented/tested; deployment pending | [companion branch](https://github.com/razrfly/eventasaurus/tree/codex/cinegraph-1128-auth-cutover); 23 tests pass, including fan-out prevention, cached state/timestamp preservation and auth-error metrics |
 | Dictionary readiness check | implemented/tested; deployment pending | [issue-88 branch](https://github.com/razrfly/dictionary/tree/codex/issue-88), commit `90e81f2`; `mix dd.discovery.check` and 878 passing precommit tests |
 | Cinegraph migration/deploy | not performed | deployed release and migration timestamp |
@@ -32,10 +33,17 @@ mix test test/cinegraph/api_credentials_test.exs \
   test/cinegraph_web/controllers/graphql_api_test.exs \
   test/cinegraph_web/middleware \
   test/cinegraph_web/schema \
-  test/cinegraph_web/plugs/clerk_auth_plug_test.exs
+  test/cinegraph_web/plugs/clerk_auth_plug_test.exs \
+  test/cinegraph_web/live/admin/api_credentials_live_test.exs \
+  test/cinegraph_web/live/admin_dashboard_live_test.exs
 
-98 tests, 0 failures
+106 tests, 0 failures
 ```
+
+`mix assets.build` passes. The admin UI was checked in a disposable local
+test-database preview at desktop and mobile widths. No production credentials
+were issued. The UI lifecycle, one-time display, validation and admin access
+boundary are covered by LiveView tests.
 
 Built an actual test-environment release with `MIX_ENV=test mix release` and
 exercised `bin/cinegraph eval` client creation/list/disable and key

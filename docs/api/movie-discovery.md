@@ -49,6 +49,28 @@ Source availability does not prove that this contract is live.
 
 ## Credential operator workflow
 
+### Admin web UI
+
+Open `/admin/api-credentials` and sign in with the existing admin credentials.
+Create a separate application for each consumer environment, select it, then
+issue a labeled key with an explicit expiry choice: 90 days, one year, or no
+expiry. The issuer is recorded from the authenticated admin username.
+
+Copy the key immediately into the intended consumer's secret store. The UI shows
+it once, clears it after two minutes or when leaving the page, and cannot retrieve
+it later. Listing keys shows metadata only. If the copy button is unavailable,
+select and copy the field manually. Never put a key in an issue or pull request.
+
+For rotation, issue a new key, update and verify the consumer, then revoke the old
+key. Both work during the overlap. Disabling an application denies every one of
+its keys. These actions are restricted to admin authentication; a catalog API key
+does not grant access to this page.
+
+Deployment, the user walkthrough, and production key issuance remain separate
+steps. The commands below remain available for release-console operation.
+
+### Operator commands
+
 The only allowed scope is currently `catalog:read`. Client environment is an
 operational label for the consumer deployment, not a claim about which Cinegraph
 database it can access. Choose `--no-expiry` deliberately or provide a UTC

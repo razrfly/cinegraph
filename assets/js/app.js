@@ -24,6 +24,7 @@ import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 import GlobalSearch from "./hooks/global_search"
 import ThemeToggle from "./hooks/theme_toggle"
+import CopyApiKey from "./hooks/copy_api_key"
 import { initClerkClient, ClerkAuthHandler } from "./auth/clerk-manager"
 import ClerkAuthUI from "./hooks/clerk-auth-ui"
 
@@ -81,6 +82,7 @@ function getClerkToken() {
 }
 
 const Hooks = {
+  CopyApiKey,
   GlobalSearch,
   ThemeToggle,
   ClerkAuthUI,
