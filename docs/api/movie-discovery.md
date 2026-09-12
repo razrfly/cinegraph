@@ -17,7 +17,7 @@ Recommended consumer-side configuration names are:
 
 ```text
 CINEGRAPH_GRAPHQL_URL=https://cinegraph.org/api/graphql
-CINEGRAPH_API_KEY=<provisioned shared secret>
+CINEGRAPH_API_KEY=<one-time provisioned key for this consumer environment>
 ```
 
 Send the key only from the consumer server:
@@ -26,17 +26,164 @@ Send the key only from the consumer server:
 Authorization: Bearer <CINEGRAPH_API_KEY>
 ```
 
-Do not expose this shared credential in browser bundles. No browser CORS change
-is required for this integration. Cinegraph uses its existing shared
-server-to-server key; this change does not rotate it or create a second key.
-Production startup fails if `CINEGRAPH_API_KEY` is missing, empty, or whitespace
-only. Development and test retain the documented no-key bypass when the setting
-is absent. Missing and incorrect request tokens produce a GraphQL `unauthorized`
-error (normally in an HTTP 200 response), so consumers must inspect `errors` and
-not use HTTP status alone as the success signal.
+Do not expose a service credential in a browser bundle or native app. No browser
+CORS change is required for this server-to-server integration. Each deployed
+consumer environment has a distinct client and may have multiple overlapping
+keys during rotation. Application identity never creates a Cinegraph user or
+grants user-only access. A Clerk user token alone does not grant catalog access.
+
+Missing, malformed, expired, revoked, disabled, or incorrect credentials produce
+a GraphQL `unauthorized` error (normally in an HTTP 200 response), so consumers
+must inspect `errors` and not use HTTP status alone as the success signal. A
+registry credential begins `cg_`; any failed credential in that format is denied
+without retrying the legacy, Clerk, or anonymous paths.
+
+No-key access is denied by default everywhere. Local development can opt in with
+`CINEGRAPH_API_AUTH_LOCAL_BYPASS=true`; production refuses to boot with that
+setting. A production registry with zero valid keys boots successfully so the
+first key can be issued through the release command, but all catalog requests are
+denied until one is issued.
 
 Deployment and consumer secret provisioning are separate operational steps.
 Source availability does not prove that this contract is live.
+
+## Credential operator workflow
+
+### Admin web UI
+
+Open `/admin/api-credentials` and sign in with the existing admin credentials.
+Create a separate application for each consumer environment, select it, then
+issue a labeled key with an explicit expiry choice: 90 days, one year, or no
+expiry. The issuer is recorded from the authenticated admin username.
+
+Copy the key immediately into the intended consumer's secret store. The UI shows
+it once, clears it after two minutes or when leaving the page, and cannot retrieve
+it later. Listing keys shows metadata only. If the copy button is unavailable,
+select and copy the field manually. Never put a key in an issue or pull request.
+
+For rotation, issue a new key, update and verify the consumer, then revoke the old
+key. Both work during the overlap. Disabling an application denies every one of
+its keys. These actions are restricted to admin authentication; a catalog API key
+does not grant access to this page.
+
+Deployment, the user walkthrough, and production key issuance remain separate
+steps. The commands below remain available for release-console operation.
+
+### Operator commands
+
+The only allowed scope is currently `catalog:read`. Client environment is an
+operational label for the consumer deployment, not a claim about which Cinegraph
+database it can access. Choose `--no-expiry` deliberately or provide a UTC
+expiration; there is no implicit expiry default.
+
+Local/Mix commands:
+
+```sh
+mix cinegraph.api_credentials client-create \
+  --slug wordhoard-preview \
+  --label "Wordhoard preview" \
+  --owner-contact dictionary-ops@example.com \
+  --environment preview
+
+mix cinegraph.api_credentials client-list
+
+mix cinegraph.api_credentials key-issue \
+  --client wordhoard-preview \
+  --label initial \
+  --created-by operator@example.com \
+  --no-expiry
+
+mix cinegraph.api_credentials key-list --client wordhoard-preview
+mix cinegraph.api_credentials client-disable --slug wordhoard-preview
+mix cinegraph.api_credentials key-revoke --public-id PUBLIC_ID
+```
+
+Rotation deliberately creates the replacement without revoking the old key:
+
+```sh
+mix cinegraph.api_credentials key-rotate \
+  --client wordhoard-preview \
+  --old-public-id OLD_PUBLIC_ID \
+  --label 2026-rotation \
+  --created-by operator@example.com \
+  --expires-at 2027-09-12T00:00:00Z
+```
+
+Capture the plaintext only from the issuance command and place it directly in
+the target deployment's normal secret store. It is not recoverable. Client/key
+list output contains metadata only, and revocation preserves the row.
+
+Run production operations from an authenticated operator checkout. These tasks
+use the project's Kamal connection and execute the release helpers inside the
+primary application container:
+
+```sh
+mix cinegraph.prod.api_credentials client-create --slug wordhoard-preview \
+  --label "Wordhoard preview" --owner-contact dictionary-ops@example.com \
+  --environment preview
+mix cinegraph.prod.api_credentials client-list
+mix cinegraph.prod.api_credentials key-issue --client wordhoard-preview \
+  --label initial --created-by operator@example.com --no-expiry
+mix cinegraph.prod.api_credentials key-list --client wordhoard-preview
+mix cinegraph.prod.api_credentials key-rotate --client wordhoard-preview \
+  --old-public-id OLD_PUBLIC_ID --label rotation \
+  --created-by operator@example.com --expires-at 2027-09-12T00:00:00Z
+mix cinegraph.prod.api_credentials key-revoke --public-id PUBLIC_ID
+mix cinegraph.prod.api_credentials client-disable --slug wordhoard-preview
+```
+
+Key issuance and rotation require an explicit `--expires-at` or `--no-expiry`.
+The tasks return structured JSON-safe results from the release and do not require
+an existing catalog credential. Use `--json` for compact automation output.
+
+### Initial consumer inventory
+
+No secret values belong in this inventory or in tickets/logs.
+
+| Client slug | Consumer deployment | Operational owner | Key ID / verification |
+|---|---|---|---|
+| `wordhoard-preview` | Dictionary/Wordhoard preview | Dictionary deployment owner | record during provisioning |
+| `wordhoard-production` | Dictionary/Wordhoard production | Dictionary deployment owner | record during provisioning |
+| `eventasaurus-production` | Eventasaurus web/jobs production | Eventasaurus deployment owner | record during provisioning |
+
+Add a separate Eventasaurus client for every additional actually deployed
+environment; do not infer one. The database `owner_contact` must be a concrete,
+current contact when each client is created.
+
+### Legacy cutover
+
+During migration only, the previous shared value remains in Cinegraph's
+`CINEGRAPH_API_KEY`. It is accepted only when
+`CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT` is an unexpired ISO 8601 UTC timestamp.
+Missing or blank configuration denies this path. Legacy traffic is attributed as
+`legacy-shared-key`; registry-looking credentials are never considered legacy.
+
+1. Before deploying, set `CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT` in the deployment's
+   normal secret/configuration store to the agreed future UTC cutover deadline.
+   Keep the existing `CINEGRAPH_API_KEY` during the transition. Production refuses
+   to boot with a configured shared key and no deadline. Confirm the old key does
+   not use the reserved `cg_` prefix through the controlled operator workflow.
+   Apply the additive migration and deploy this registry-capable release to every
+   serving instance before issuing a registry key.
+2. Record this release as the oldest safe rollback release. A shared-key-only
+   release is not a safe rollback after cutover because it cannot enforce registry
+   revocation.
+3. Issue a distinct key for every inventoried environment, update that
+   environment's normal secret store, and restart every web/job process.
+4. Verify fresh upstream traffic and the observed client/key attribution. Cached
+   UI data is not verification.
+5. Observe legacy attribution across normal scheduled use. Explicitly exercise
+   Eventasaurus's weekly sweep path if the observation window does not include it.
+6. Revoke superseded keys. After zero legacy traffic across the recorded window,
+   remove both legacy environment variables before their fixed deadline. In one
+   deployment/configuration change, remove both entries from `config/deploy.yml`
+   and both values from the deployment secret store; do not delete secret-store
+   values while the manifest still references them. Never extend the deadline
+   silently or restore a revoked key for rollback.
+
+An auth lookup beginning after a committed disable/revocation reads the primary
+database and denies on every instance; an already authenticated request may
+finish. There is intentionally no auth cache.
 
 ## Contract
 
@@ -188,7 +335,17 @@ The endpoint analyzes each GraphQL operation with a maximum complexity of 2,500,
 limits parsed documents to 5,000 tokens, and caps an HTTP transport batch at 10
 operations. Discovery list complexity scales with `first`; vocabulary list
 complexity is also weighted. These controls complement the field-level bounds.
-They are not a general quota, per-client auditing, or rate-limiting platform.
+They are not a general quota or rate-limiting platform. Authentication telemetry
+attributes the client/key and counts protected top-level fields as request-cost
+units without including bearer tokens; per-consumer quotas remain deferred.
+
+The supervised `Cinegraph.Telemetry.ApiAuthLogger` writes `catalog_api` JSON
+records at info level for authentication outcomes and protected-field counts.
+Filter production logs by that marker and `client_slug: legacy-shared-key` to
+observe legacy traffic; `outcome` distinguishes rejected credentials from success.
+These counts are protected-field units, not calculated GraphQL complexity.
+Retain logs across the entire cutover observation window. No request payloads,
+bearer tokens, secret digests, or arbitrary telemetry metadata enter these records.
 
 Discovery uses a keyword-first `(keyword_id, movie_id)` index, the existing
 genre-first index, grouped metadata matches, and batched metadata loads. A page
@@ -284,8 +441,17 @@ the configured public endpoint without logging the key:
 5. Record the deployed revision, environment, query counts, and representative
    broad/selective latency. Do not label fixture timings as production evidence.
 
-Until that checklist is executed, live availability of the new fields and
-consumer credential provisioning remain outstanding.
+For Wordhoard, start a fresh configured server, visit `war`, `nepotism`, and
+`grief`, and verify keyword lookup → movie discovery → cards, cache reuse, and a
+genuine empty result. Do not invent mappings or films. For Eventasaurus, run a
+fresh known-movie lookup and a single-movie job, verify its persisted result and
+the existing response shape, then exercise the scheduled sweep canary. Record the
+environment, non-secret client ID/key ID, verification time, deployed release,
+and observed attribution.
+
+Code/test completion must not be reported as deployed or provisioned evidence.
+Until this checklist is executed with deployment access, consumer provisioning
+and live verification remain explicit completion gates.
 
 ## Release audit fixes and validation (2026-09-12 Europe/Warsaw; 2026-09-11 UTC)
 

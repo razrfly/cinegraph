@@ -3,8 +3,8 @@ defmodule Cinegraph.Auth.AuthProvider do
   Authentication provider configuration for Clerk.
 
   Clerk is Cinegraph's user-authentication provider. (Admin routes still use
-  basic auth; the GraphQL API still accepts a shared read-only API key — both
-  are independent of this module.)
+  basic auth; the GraphQL API accepts scoped application credentials — both are
+  independent of this module.)
 
   ## Configuration
 

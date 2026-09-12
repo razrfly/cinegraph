@@ -12,8 +12,8 @@ defmodule CinegraphWeb.Middleware.RequireUser do
         resolve &MyResolver.viewer/3
       end
 
-  This is independent of `CinegraphWeb.Middleware.ApiAuth` (the shared read-only
-  API key) — the shared key does NOT grant user-specific access.
+  This is independent of `CinegraphWeb.Middleware.ApiAuth` (scoped application
+  credentials) — a service principal does NOT grant user-specific access.
   """
 
   @behaviour Absinthe.Middleware

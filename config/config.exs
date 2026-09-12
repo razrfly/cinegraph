@@ -8,6 +8,8 @@
 import Config
 
 config :cinegraph,
+  environment: config_env(),
+  api_auth_local_bypass: false,
   ecto_repos: [Cinegraph.Repo],
   generators: [timestamp_type: :utc_datetime],
   # Which relation hot feature loads read (#1082/#1084 P1) — see Scoring.MetricSource.
@@ -173,7 +175,7 @@ config :tailwind,
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id, :api_client_id, :api_key_id, :api_client_slug, :api_auth_kind]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
@@ -184,7 +186,7 @@ config :honeybadger,
   app: :cinegraph,
   environment_name: config_env(),
   exclude_envs: [:dev, :test],
-  filter_keys: [:password, :key, :api_key, :access_key],
+  filter_keys: [:password, :key, :api_key, :access_key, :authorization],
   insights_enabled: true,
   insights_config: %{
     oban: %{telemetry_events: [[:oban, :job, :stop], [:oban, :job, :exception]]}

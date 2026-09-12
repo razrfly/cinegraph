@@ -10,6 +10,7 @@ defmodule Cinegraph.Application do
     children =
       [
         CinegraphWeb.Telemetry,
+        Cinegraph.Telemetry.ApiAuthLogger,
         Cinegraph.Repo,
         # Read replica for PlanetScale - offloads read queries from primary
         # Only started if configured (production with DATABASE_REPLICA_ENABLED=true)

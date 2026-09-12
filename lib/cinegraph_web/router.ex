@@ -282,6 +282,7 @@ defmodule CinegraphWeb.Router do
       on_mount: [{CinegraphWeb.AdminAuthHooks, :admin_layout}] do
       # Admin home (#880 Phase 0)
       live "/", AdminDashboardLive, :index
+      live "/api-credentials", Admin.ApiCredentialsLive, :index
 
       # Homeostasis dashboard (#723) — replaces the import-era trio
       live "/health", AdminHealthLive.Show, :show
@@ -366,12 +367,13 @@ defmodule CinegraphWeb.Router do
   # Basic auth for admin routes
   defp admin_auth(conn, _opts) do
     if Application.get_env(:cinegraph, :admin_auth_disabled, false) do
-      conn
+      put_session(conn, :admin_operator, "local-admin")
     else
       username = System.get_env("ADMIN_USERNAME") || "admin"
       password = System.get_env("ADMIN_PASSWORD") || raise "ADMIN_PASSWORD must be set"
 
-      Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+      conn = Plug.BasicAuth.basic_auth(conn, username: username, password: password)
+      if conn.halted, do: conn, else: put_session(conn, :admin_operator, username)
     end
   end
 

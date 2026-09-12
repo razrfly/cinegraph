@@ -16,4 +16,20 @@ defmodule Cinegraph.ConfigurationTest do
       Configuration.require_non_blank!("SECRET", "  \n\t")
     end
   end
+
+  test "local API auth bypass is explicit and impossible in production" do
+    assert Configuration.api_auth_local_bypass!(:dev, "true")
+    refute Configuration.api_auth_local_bypass!(:dev, nil)
+    refute Configuration.api_auth_local_bypass!(:prod, "false")
+
+    assert_raise ArgumentError,
+                 "CINEGRAPH_API_AUTH_LOCAL_BYPASS is forbidden in production",
+                 fn ->
+                   Configuration.api_auth_local_bypass!(:prod, "true")
+                 end
+
+    assert_raise ArgumentError, "CINEGRAPH_API_AUTH_LOCAL_BYPASS must be true or false", fn ->
+      Configuration.api_auth_local_bypass!(:dev, "sometimes")
+    end
+  end
 end
