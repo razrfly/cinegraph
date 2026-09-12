@@ -94,8 +94,14 @@ defmodule CinegraphWeb.Schema.GlobalSearchTest do
     end
 
     test "rejects requests without an authenticated catalog principal" do
+      previous_bypass = Application.get_env(:cinegraph, :api_auth_local_bypass)
       Application.put_env(:cinegraph, :api_auth_local_bypass, false)
-      on_exit(fn -> Application.put_env(:cinegraph, :api_auth_local_bypass, true) end)
+
+      on_exit(fn ->
+        if is_nil(previous_bypass),
+          do: Application.delete_env(:cinegraph, :api_auth_local_bypass),
+          else: Application.put_env(:cinegraph, :api_auth_local_bypass, previous_bypass)
+      end)
 
       query = """
       query {

@@ -95,7 +95,17 @@ defmodule Mix.Tasks.Cinegraph.ApiCredentials do
       expires_at: expiry!(opts)
     }
 
-    case ApiCredentials.issue_key(required!(opts, :client), attrs) do
+    operation =
+      if rotation?,
+        do:
+          ApiCredentials.rotate_key(
+            required!(opts, :client),
+            required!(opts, :old_public_id),
+            attrs
+          ),
+        else: ApiCredentials.issue_key(required!(opts, :client), attrs)
+
+    case operation do
       {:ok, key, token} ->
         Mix.shell().info("issued key #{key.public_id} for client #{opts.client}")
         Mix.shell().info("CINEGRAPH_API_KEY=#{token}")

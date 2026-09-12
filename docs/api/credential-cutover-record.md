@@ -46,8 +46,10 @@ were issued. The UI lifecycle, one-time display, validation and admin access
 boundary are covered by LiveView tests.
 
 Built an actual test-environment release with `MIX_ENV=test mix release` and
-exercised `bin/cinegraph eval` client creation/list/disable and key
-issue/list/overlapping rotation/revoke. The corrected UTC expiry literal works.
+exercised the structured release helpers for client creation/list/disable and key
+issue/list/overlapping rotation/revoke. The production-facing
+`mix cinegraph.prod.api_credentials` command uses `Cinegraph.ProdRpc` to run those
+helpers through Kamal and accepts an explicit UTC expiry or `--no-expiry`.
 Generated test credentials stayed captured in memory and the local database
 transaction rolled back. This is release-command verification, not a production
 deployment or production provisioning claim.
@@ -73,6 +75,10 @@ deploying while `CINEGRAPH_API_KEY` is configured. Deploy the consumer companion
 fixes first. Retain `catalog_api` info-level JSON logs across the observation
 window; inspect `outcome`, `client_slug`, and protected-field `request_cost` counts.
 Never record raw tokens here. Production gates below are still outstanding.
+When the observation gate is complete, remove `CINEGRAPH_API_KEY` and
+`CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT` atomically from both `config/deploy.yml` and
+the deployment secret store; removing only the secret-store values leaves Kamal
+with unresolved manifest entries.
 
 ## Deployment record
 

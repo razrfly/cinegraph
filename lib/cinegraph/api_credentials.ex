@@ -53,7 +53,17 @@ defmodule Cinegraph.ApiCredentials do
     end
   end
 
-  def rotate_key(client_or_slug, attrs), do: issue_key(client_or_slug, attrs)
+  def rotate_key(client_or_slug, old_public_id, attrs, now \\ DateTime.utc_now()) do
+    now = truncate(now)
+
+    with true <- explicit_expiry?(attrs) || {:error, :expiry_choice_required},
+         {:ok, client} <- resolve_client(client_or_slug),
+         true <- client.enabled || {:error, :client_disabled},
+         {:ok, old_key} <- rotation_key(client, old_public_id),
+         :ok <- active_rotation_key?(old_key, now) do
+      issue_key(client, attrs)
+    end
+  end
 
   def list_keys(client_or_slug) do
     with {:ok, client} <- resolve_client(client_or_slug) do
@@ -119,9 +129,8 @@ defmodule Cinegraph.ApiCredentials do
 
     emit_auth(result, public_id_from(result, token))
   rescue
-    _ -> emit_auth({:error, :registry_unavailable}, nil)
-  catch
-    :exit, _ -> emit_auth({:error, :registry_unavailable}, nil)
+    _error in [DBConnection.ConnectionError, Postgrex.Error] ->
+      emit_auth({:error, :registry_unavailable}, nil)
   end
 
   def authorized?(%Principal{scopes: scopes}, @catalog_scope), do: @catalog_scope in scopes
@@ -153,7 +162,12 @@ defmodule Cinegraph.ApiCredentials do
     end
   end
 
-  defp resolve_client(%ApiClient{} = client), do: {:ok, client}
+  defp resolve_client(%ApiClient{id: id}) do
+    case Repo.get(ApiClient, id) do
+      nil -> {:error, :client_not_found}
+      client -> {:ok, client}
+    end
+  end
 
   defp resolve_client(slug) when is_binary(slug) do
     case get_client_by_slug(slug) do
@@ -168,6 +182,27 @@ defmodule Cinegraph.ApiCredentials do
 
   defp explicit_expiry?(attrs) when is_list(attrs), do: Keyword.has_key?(attrs, :expires_at)
   defp explicit_expiry?(_), do: false
+
+  defp rotation_key(client, public_id) when is_binary(public_id) do
+    case Repo.get_by(ApiKey, api_client_id: client.id, public_id: public_id) do
+      nil -> {:error, :rotation_key_not_found}
+      key -> {:ok, key}
+    end
+  end
+
+  defp rotation_key(_client, _public_id), do: {:error, :rotation_key_not_found}
+
+  defp active_rotation_key?(%ApiKey{revoked_at: revoked_at}, _now)
+       when not is_nil(revoked_at),
+       do: {:error, :rotation_key_revoked}
+
+  defp active_rotation_key?(%ApiKey{expires_at: nil}, _now), do: :ok
+
+  defp active_rotation_key?(%ApiKey{expires_at: expires_at}, now) do
+    if DateTime.compare(now, expires_at) == :lt,
+      do: :ok,
+      else: {:error, :rotation_key_expired}
+  end
 
   defp lookup_key(repo, public_id) do
     query =

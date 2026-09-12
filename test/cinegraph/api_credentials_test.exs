@@ -6,7 +6,11 @@ defmodule Cinegraph.ApiCredentialsTest do
   alias Cinegraph.Repo
 
   defmodule FailingRepo do
-    def one(_query), do: raise("database unavailable")
+    def one(_query), do: raise(DBConnection.ConnectionError, message: "database unavailable")
+  end
+
+  defmodule ProgrammingErrorRepo do
+    def one(_query), do: raise("programming error")
   end
 
   defmodule PolicyRepo do
@@ -40,7 +44,14 @@ defmodule Cinegraph.ApiCredentialsTest do
     second = client_fixture("eventasaurus-production")
 
     {:ok, old_key, old_token} = key_fixture(first, "old")
-    {:ok, new_key, new_token} = key_fixture(first, "rotation")
+
+    {:ok, new_key, new_token} =
+      ApiCredentials.rotate_key(first, old_key.public_id, %{
+        label: "rotation",
+        created_by: "operator@example.com",
+        expires_at: nil
+      })
+
     {:ok, event_key, event_token} = key_fixture(second, "eventasaurus")
 
     assert {:ok, %{client_id: first_id, key_id: old_id}} =
@@ -61,6 +72,35 @@ defmodule Cinegraph.ApiCredentialsTest do
     assert {:ok, _} = ApiCredentials.disable_client(first.slug)
     assert {:error, :disabled} = ApiCredentials.authenticate(new_token)
     assert {:ok, _} = ApiCredentials.authenticate(event_token)
+  end
+
+  test "rotation validates ownership and active state before issuing a replacement" do
+    client = client_fixture("rotation-client")
+    other_client = client_fixture("rotation-other-client")
+    {:ok, active_key, _active_token} = key_fixture(client, "active")
+    {:ok, other_key, _other_token} = key_fixture(other_client, "other")
+    initial_count = Repo.aggregate(ApiKey, :count)
+
+    assert {:error, :rotation_key_not_found} =
+             ApiCredentials.rotate_key(client, other_key.public_id, rotation_attrs())
+
+    assert Repo.aggregate(ApiKey, :count) == initial_count
+
+    assert {:ok, _} = ApiCredentials.revoke_key(active_key.public_id)
+
+    assert {:error, :rotation_key_revoked} =
+             ApiCredentials.rotate_key(client, active_key.public_id, rotation_attrs())
+
+    assert Repo.aggregate(ApiKey, :count) == initial_count
+
+    expiry = DateTime.utc_now() |> DateTime.add(-1) |> DateTime.truncate(:microsecond)
+    {:ok, expired_key, _expired_token} = key_fixture(client, "expired", expiry)
+    count_with_expired = Repo.aggregate(ApiKey, :count)
+
+    assert {:error, :rotation_key_expired} =
+             ApiCredentials.rotate_key(client, expired_key.public_id, rotation_attrs())
+
+    assert Repo.aggregate(ApiKey, :count) == count_with_expired
   end
 
   test "stores only a digest and rejects malformed, public-id-only, and wrong-secret tokens" do
@@ -108,6 +148,13 @@ defmodule Cinegraph.ApiCredentialsTest do
 
     assert {:error, :registry_unavailable} =
              ApiCredentials.authenticate(token, now: DateTime.add(now, -1), repo: FailingRepo)
+
+    assert_raise RuntimeError, "programming error", fn ->
+      ApiCredentials.authenticate(token,
+        now: DateTime.add(now, -1),
+        repo: ProgrammingErrorRepo
+      )
+    end
   end
 
   test "issuance requires an explicit expiry choice, including intentional no-expiry" do
@@ -189,5 +236,9 @@ defmodule Cinegraph.ApiCredentialsTest do
       created_by: "operator@example.com",
       expires_at: expires_at
     })
+  end
+
+  defp rotation_attrs do
+    %{label: "replacement", created_by: "operator@example.com", expires_at: nil}
   end
 end

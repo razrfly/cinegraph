@@ -113,21 +113,28 @@ Capture the plaintext only from the issuance command and place it directly in
 the target deployment's normal secret store. It is not recoverable. Client/key
 list output contains metadata only, and revocation preserves the row.
 
-Production releases do not require Mix. Exact invocation examples are:
+Run production operations from an authenticated operator checkout. These tasks
+use the project's Kamal connection and execute the release helpers inside the
+primary application container:
 
 ```sh
-bin/cinegraph eval 'Cinegraph.Release.api_client_create(%{slug: "wordhoard-preview", label: "Wordhoard preview", owner_contact: "dictionary-ops@example.com", environment: "preview"})'
-bin/cinegraph eval 'Cinegraph.Release.api_client_list()'
-bin/cinegraph eval 'Cinegraph.Release.api_key_issue("wordhoard-preview", %{label: "initial", created_by: "operator@example.com", expires_at: nil})'
-bin/cinegraph eval 'Cinegraph.Release.api_key_list("wordhoard-preview")'
-bin/cinegraph eval 'Cinegraph.Release.api_key_rotate("wordhoard-preview", "OLD_PUBLIC_ID", %{label: "rotation", created_by: "operator@example.com", expires_at: ~U[2027-09-12 00:00:00Z]})'
-bin/cinegraph eval 'Cinegraph.Release.api_key_revoke("PUBLIC_ID")'
-bin/cinegraph eval 'Cinegraph.Release.api_client_disable("wordhoard-preview")'
+mix cinegraph.prod.api_credentials client-create --slug wordhoard-preview \
+  --label "Wordhoard preview" --owner-contact dictionary-ops@example.com \
+  --environment preview
+mix cinegraph.prod.api_credentials client-list
+mix cinegraph.prod.api_credentials key-issue --client wordhoard-preview \
+  --label initial --created-by operator@example.com --no-expiry
+mix cinegraph.prod.api_credentials key-list --client wordhoard-preview
+mix cinegraph.prod.api_credentials key-rotate --client wordhoard-preview \
+  --old-public-id OLD_PUBLIC_ID --label rotation \
+  --created-by operator@example.com --expires-at 2027-09-12T00:00:00Z
+mix cinegraph.prod.api_credentials key-revoke --public-id PUBLIC_ID
+mix cinegraph.prod.api_credentials client-disable --slug wordhoard-preview
 ```
 
-`api_key_issue/2` requires the `expires_at` key even when its intentional value
-is `nil`. Release issuance starts the application directly and does not require
-an existing catalog credential.
+Key issuance and rotation require an explicit `--expires-at` or `--no-expiry`.
+The tasks return structured JSON-safe results from the release and do not require
+an existing catalog credential. Use `--json` for compact automation output.
 
 ### Initial consumer inventory
 
@@ -168,8 +175,11 @@ Missing or blank configuration denies this path. Legacy traffic is attributed as
 5. Observe legacy attribution across normal scheduled use. Explicitly exercise
    Eventasaurus's weekly sweep path if the observation window does not include it.
 6. Revoke superseded keys. After zero legacy traffic across the recorded window,
-   remove both legacy environment variables before their fixed deadline. Never
-   extend the deadline silently or restore a revoked key for rollback.
+   remove both legacy environment variables before their fixed deadline. In one
+   deployment/configuration change, remove both entries from `config/deploy.yml`
+   and both values from the deployment secret store; do not delete secret-store
+   values while the manifest still references them. Never extend the deadline
+   silently or restore a revoked key for rollback.
 
 An auth lookup beginning after a committed disable/revocation reads the primary
 database and denies on every instance; an already authenticated request may

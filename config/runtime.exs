@@ -149,10 +149,16 @@ config :cinegraph, :crawlbase_js_api_key, crawlbase_js_api_key
 # only as a bounded legacy migration credential and is never a startup
 # requirement. A configured legacy key is unusable without an explicit UTC
 # deadline.
-legacy_api_key = System.get_env("CINEGRAPH_API_KEY")
+legacy_api_key =
+  if config_env() == :dev,
+    do: env!("CINEGRAPH_API_KEY", :string, nil),
+    else: System.get_env("CINEGRAPH_API_KEY")
 
 legacy_api_key_expires_at =
-  case System.get_env("CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT") do
+  case if(config_env() == :dev,
+         do: env!("CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT", :string, nil),
+         else: System.get_env("CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT")
+       ) do
     nil ->
       nil
 
@@ -171,9 +177,13 @@ end
 local_auth_bypass =
   Cinegraph.Configuration.api_auth_local_bypass!(
     config_env(),
-    System.get_env(
-      "CINEGRAPH_API_AUTH_LOCAL_BYPASS",
-      if(config_env() == :test, do: "true", else: "false")
+    if(config_env() == :dev,
+      do: env!("CINEGRAPH_API_AUTH_LOCAL_BYPASS", :string, "false"),
+      else:
+        System.get_env(
+          "CINEGRAPH_API_AUTH_LOCAL_BYPASS",
+          if(config_env() == :test, do: "true", else: "false")
+        )
     )
   )
 
