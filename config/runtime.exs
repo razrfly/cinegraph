@@ -145,26 +145,42 @@ config :cinegraph, :omdb_daily_batch_size, omdb_daily_batch_size
 config :cinegraph, :crawlbase_api_key, crawlbase_api_key
 config :cinegraph, :crawlbase_js_api_key, crawlbase_js_api_key
 
-# GraphQL API key — used by CinegraphWeb.Middleware.ApiAuth
-# dev:  optional (nil bypasses auth for convenience)
-# prod: required — raises at startup if missing
-# test: optional (tests override via Application.put_env)
-api_key =
-  cond do
-    config_env() == :dev ->
-      env!("CINEGRAPH_API_KEY", :string, nil)
+# Per-consumer credentials live in the database. CINEGRAPH_API_KEY is accepted
+# only as a bounded legacy migration credential and is never a startup
+# requirement. A configured legacy key is unusable without an explicit UTC
+# deadline.
+legacy_api_key = System.get_env("CINEGRAPH_API_KEY")
 
-    config_env() == :prod ->
-      Cinegraph.Configuration.require_non_blank!(
-        "CINEGRAPH_API_KEY",
-        System.fetch_env!("CINEGRAPH_API_KEY")
-      )
+legacy_api_key_expires_at =
+  case System.get_env("CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT") do
+    nil ->
+      nil
 
-    true ->
-      System.get_env("CINEGRAPH_API_KEY")
+    value ->
+      case DateTime.from_iso8601(value) do
+        {:ok, datetime, 0} -> datetime
+        _ -> raise "CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT must be an ISO 8601 UTC timestamp"
+      end
   end
 
-config :cinegraph, :api_key, api_key
+if config_env() == :prod and is_binary(legacy_api_key) and String.trim(legacy_api_key) != "" and
+     is_nil(legacy_api_key_expires_at) do
+  raise "CINEGRAPH_LEGACY_API_KEY_EXPIRES_AT is required while CINEGRAPH_API_KEY is configured"
+end
+
+local_auth_bypass =
+  Cinegraph.Configuration.api_auth_local_bypass!(
+    config_env(),
+    System.get_env(
+      "CINEGRAPH_API_AUTH_LOCAL_BYPASS",
+      if(config_env() == :test, do: "true", else: "false")
+    )
+  )
+
+config :cinegraph,
+  legacy_api_key: legacy_api_key,
+  legacy_api_key_expires_at: legacy_api_key_expires_at,
+  api_auth_local_bypass: local_auth_bypass
 
 # Clerk authentication (#838) — credentials + derived domain/JWKS loaded here.
 # Cinegraph uses its own dedicated Clerk application (NOT the shared Wombi tenant).

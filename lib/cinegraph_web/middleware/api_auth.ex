@@ -1,40 +1,41 @@
 defmodule CinegraphWeb.Middleware.ApiAuth do
   @moduledoc """
-  Absinthe middleware that validates Bearer token authentication.
+  Authorizes an already authenticated application principal for catalog reads.
 
-  Reads the auth token from the Absinthe context (populated by
-  CinegraphWeb.Plugs.ApiAuthPlug at the connection level) and compares
-  it against the configured CINEGRAPH_API_KEY.
-
-  If CINEGRAPH_API_KEY is not set, auth is bypassed (dev convenience).
+  Authentication and its database lookup happen in `ApiAuthPlug`, once per HTTP
+  request. A Clerk `current_user` alone deliberately does not satisfy this gate.
   """
 
   @behaviour Absinthe.Middleware
 
-  def call(resolution, _) do
-    case Application.get_env(:cinegraph, :api_key) do
-      nil ->
-        # No key configured — skip auth (dev convenience)
-        resolution
+  alias Cinegraph.ApiCredentials
 
-      expected_key when is_binary(expected_key) ->
-        if String.trim(expected_key) == "" do
-          resolution
-          |> Absinthe.Resolution.put_result({:error, "unauthorized"})
-        else
-          case resolution.context do
-            %{auth_token: ^expected_key} ->
-              resolution
+  def call(%{context: %{api_auth_bypass: true}} = resolution, "catalog:read"), do: resolution
 
-            _ ->
-              resolution
-              |> Absinthe.Resolution.put_result({:error, "unauthorized"})
-          end
-        end
+  def call(%{context: %{service_principal: principal}} = resolution, scope)
+      when is_binary(scope) do
+    if ApiCredentials.authorized?(principal, scope) do
+      :telemetry.execute(
+        [:cinegraph, :api_auth, :catalog_field],
+        %{request_cost: 1},
+        %{
+          client_id: principal.client_id,
+          key_id: principal.key_id,
+          client_slug: principal.client_slug,
+          auth_kind: principal.kind,
+          scope: scope
+        }
+      )
 
-      _blank_or_invalid_key ->
-        resolution
-        |> Absinthe.Resolution.put_result({:error, "unauthorized"})
+      resolution
+    else
+      unauthorized(resolution)
     end
+  end
+
+  def call(resolution, _), do: unauthorized(resolution)
+
+  defp unauthorized(resolution) do
+    Absinthe.Resolution.put_result(resolution, {:error, "unauthorized"})
   end
 end

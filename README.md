@@ -867,11 +867,15 @@ Include a Bearer token in the `Authorization` header:
 Authorization: Bearer <your_api_key>
 ```
 
-Set the key via environment variable: `CINEGRAPH_API_KEY=your_secret_key`
-
-In local dev, the key check is skipped if `CINEGRAPH_API_KEY` is not set.
-Production startup rejects a missing or blank key. Keep this credential on the
-calling server, not in a browser bundle.
+Server consumers use separately issued registry credentials in their own
+`CINEGRAPH_API_KEY` environment variable. Manage clients and keys with
+`mix cinegraph.api_credentials`; see `docs/api/movie-discovery.md` for issuance,
+release commands, rotation, and legacy cutover. Missing credentials deny catalog
+access. Local development can explicitly opt in to a no-key bypass with
+`CINEGRAPH_API_AUTH_LOCAL_BYPASS=true`; production forbids that bypass.
+Production can boot with an empty registry, but catalog requests remain denied.
+Keeping the old shared key during cutover requires an explicit legacy expiry.
+Keep consumer credentials on the calling server, not in a browser bundle.
 
 ### Sample Queries
 

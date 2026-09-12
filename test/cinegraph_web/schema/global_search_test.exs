@@ -5,7 +5,13 @@ defmodule CinegraphWeb.Schema.GlobalSearchTest do
   alias Cinegraph.Movies.{Movie, Person}
 
   defp run_query(query, opts \\ []) do
-    context = Keyword.get(opts, :context, %{auth_token: nil})
+    context = Keyword.get(opts, :context, %{})
+
+    context =
+      if Application.get_env(:cinegraph, :api_auth_local_bypass, false),
+        do: Map.put_new(context, :api_auth_bypass, true),
+        else: context
+
     Absinthe.run(query, Schema, context: context)
   end
 
@@ -87,9 +93,9 @@ defmodule CinegraphWeb.Schema.GlobalSearchTest do
       assert result["people"] == []
     end
 
-    test "rejects requests without a valid token when api_key is set" do
-      Application.put_env(:cinegraph, :api_key, "secret-key")
-      on_exit(fn -> Application.delete_env(:cinegraph, :api_key) end)
+    test "rejects requests without an authenticated catalog principal" do
+      Application.put_env(:cinegraph, :api_auth_local_bypass, false)
+      on_exit(fn -> Application.put_env(:cinegraph, :api_auth_local_bypass, true) end)
 
       query = """
       query {

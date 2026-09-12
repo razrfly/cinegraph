@@ -8,6 +8,9 @@ config :bcrypt_elixir, :log_rounds, 1
 # outside the test sandbox and crash the connection pool.
 config :cinegraph, :start_background_children, false
 
+# Explicit local test convenience. Authentication-focused tests turn this off.
+config :cinegraph, :api_auth_local_bypass, true
+
 # MUST stay on the live view: sandboxed test fixtures are invisible to a matview.
 config :cinegraph, :metric_values_relation, "metric_values_view"
 

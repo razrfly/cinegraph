@@ -8,6 +8,26 @@ defmodule CinegraphWeb.Schema do
   alias CinegraphWeb.Resolvers.{MovieResolver, PersonResolver, SearchResolver}
   alias CinegraphWeb.Middleware.ApiAuth
 
+  # A newly added root field must declare its access policy. Forgetting the
+  # middleware must never silently publish a resolver. Introspection is public.
+  def middleware(middleware, field, %{identifier: root})
+      when root in [:query, :mutation, :subscription] do
+    if String.starts_with?(field.name, "__") or
+         Enum.any?(middleware, fn
+           {ApiAuth, "catalog:read"} -> true
+           {{ApiAuth, :call}, "catalog:read"} -> true
+           {CinegraphWeb.Middleware.RequireUser, _} -> true
+           {{CinegraphWeb.Middleware.RequireUser, :call}, _} -> true
+           _ -> false
+         end) do
+      middleware
+    else
+      [{ApiAuth, :undeclared_policy} | middleware]
+    end
+  end
+
+  def middleware(middleware, _field, _object), do: middleware
+
   scalar :json, name: "JSON" do
     description("Arbitrary JSON value (map, list, or scalar)")
     serialize(fn v -> v end)
@@ -55,7 +75,7 @@ defmodule CinegraphWeb.Schema do
         5 + limit * max(child_complexity, 1)
       end)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&MovieResolver.search_movie_keywords/3)
     end
 
@@ -64,7 +84,7 @@ defmodule CinegraphWeb.Schema do
           non_null(list_of(non_null(:movie_metadata_vocabulary_term))) do
       complexity(fn _, child_complexity -> 5 + 50 * max(child_complexity, 1) end)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&MovieResolver.movie_genres/3)
     end
 
@@ -82,7 +102,7 @@ defmodule CinegraphWeb.Schema do
         15 + first * max(child_complexity, 1)
       end)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&MovieResolver.discover_movies/3)
     end
 
@@ -92,7 +112,7 @@ defmodule CinegraphWeb.Schema do
       arg(:imdb_id, :string)
       arg(:slug, :string)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&MovieResolver.movie/3)
     end
 
@@ -100,7 +120,7 @@ defmodule CinegraphWeb.Schema do
     field :movies, list_of(:movie) do
       arg(:tmdb_ids, non_null(list_of(non_null(:integer))))
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&MovieResolver.movies/3)
     end
 
@@ -110,7 +130,7 @@ defmodule CinegraphWeb.Schema do
       arg(:year, :integer)
       arg(:limit, :integer)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&MovieResolver.search_movies/3)
     end
 
@@ -119,7 +139,7 @@ defmodule CinegraphWeb.Schema do
       arg(:tmdb_id, :integer)
       arg(:slug, :string)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&PersonResolver.person/3)
     end
 
@@ -128,7 +148,7 @@ defmodule CinegraphWeb.Schema do
       arg(:q, non_null(:string))
       arg(:limit, :integer, default_value: 5)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&SearchResolver.global_search/3)
     end
 
@@ -138,7 +158,7 @@ defmodule CinegraphWeb.Schema do
       arg(:recency_days, :integer)
       arg(:region, :string)
 
-      middleware(ApiAuth)
+      middleware(ApiAuth, "catalog:read")
       resolve(&MovieResolver.now_playing_movies/3)
     end
   end

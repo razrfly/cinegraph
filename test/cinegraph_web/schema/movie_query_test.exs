@@ -9,6 +9,12 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
   # Helper to run a GraphQL query against the schema directly
   defp run_query(query, opts \\ []) do
     context = Keyword.get(opts, :context, %{})
+
+    context =
+      if Application.get_env(:cinegraph, :api_auth_local_bypass, false),
+        do: Map.put_new(context, :api_auth_bypass, true),
+        else: context
+
     variables = Keyword.get(opts, :variables, %{})
     Absinthe.run(query, Schema, context: context, variables: variables)
   end
@@ -829,8 +835,8 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
 
   describe "authentication" do
     setup do
-      Application.put_env(:cinegraph, :api_key, "secret-key")
-      on_exit(fn -> Application.delete_env(:cinegraph, :api_key) end)
+      Application.put_env(:cinegraph, :api_auth_local_bypass, false)
+      on_exit(fn -> Application.put_env(:cinegraph, :api_auth_local_bypass, true) end)
       :ok
     end
 
@@ -859,7 +865,17 @@ defmodule CinegraphWeb.Schema.MovieQueryTest do
       """
 
       assert {:ok, %{data: %{"movie" => result}}} =
-               run_query(query, context: %{auth_token: "secret-key"})
+               run_query(query,
+                 context: %{
+                   service_principal: %Cinegraph.ApiCredentials.Principal{
+                     client_id: 1,
+                     key_id: 1,
+                     client_slug: "test",
+                     scopes: ["catalog:read"],
+                     kind: :registry
+                   }
+                 }
+               )
 
       assert result["title"] == "Authenticated Movie"
     end

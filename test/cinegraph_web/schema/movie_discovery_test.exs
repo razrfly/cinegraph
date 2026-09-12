@@ -12,7 +12,14 @@ defmodule CinegraphWeb.Schema.MovieDiscoveryTest do
   end
 
   defp run_query(query, variables \\ %{}, context \\ %{}) do
+    context = maybe_local_bypass(context)
     Absinthe.run(query, Schema, variables: variables, context: context)
+  end
+
+  defp maybe_local_bypass(context) do
+    if Application.get_env(:cinegraph, :api_auth_local_bypass, false),
+      do: Map.put_new(context, :api_auth_bypass, true),
+      else: context
   end
 
   defp insert_movie(attrs) do
@@ -484,8 +491,8 @@ defmodule CinegraphWeb.Schema.MovieDiscoveryTest do
     end
 
     test "protects all discovery fields with the existing API auth middleware" do
-      Application.put_env(:cinegraph, :api_key, "discovery-secret")
-      on_exit(fn -> Application.delete_env(:cinegraph, :api_key) end)
+      Application.put_env(:cinegraph, :api_auth_local_bypass, false)
+      on_exit(fn -> Application.put_env(:cinegraph, :api_auth_local_bypass, true) end)
 
       for query <- [
             "query { searchMovieKeywords(query: \"war\") { tmdbId } }",
@@ -498,7 +505,13 @@ defmodule CinegraphWeb.Schema.MovieDiscoveryTest do
 
       assert {:ok, %{data: %{"movieGenres" => genres}}} =
                run_query("query { movieGenres { tmdbId } }", %{}, %{
-                 auth_token: "discovery-secret"
+                 service_principal: %Cinegraph.ApiCredentials.Principal{
+                   client_id: 1,
+                   key_id: 1,
+                   client_slug: "test",
+                   scopes: ["catalog:read"],
+                   kind: :registry
+                 }
                })
 
       assert is_list(genres)
